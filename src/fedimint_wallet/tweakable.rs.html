@@ -49,6 +49,7 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
@@ -60,7 +61,8 @@
     </span><span class="kw">fn </span>encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt;;
 }
 
-<span class="doccomment">/// A key or object containing keys that may be tweaked for pay-to-contract constructions
+<span class="doccomment">/// A key or object containing keys that may be tweaked for pay-to-contract
+/// constructions
 </span><span class="kw">pub trait </span>Tweakable {
     <span class="doccomment">/// Tweak the key with a `tweak` contract
     </span><span class="kw">fn </span>tweak&lt;Ctx: Verification, Ctr: Contract&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>Ctr, secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;) -&gt; <span class="self">Self</span>;

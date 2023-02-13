@@ -415,6 +415,27 @@
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -483,26 +504,29 @@
         module_instance_id: ModuleInstanceId,
     ) -&gt; ConsensusProposal&lt;DynModuleConsensusItem&gt;;
 
-    <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The database transaction will be
-    /// committed to the database after all other modules ran `begin_consensus_epoch`,
-    /// so the results are available when processing transactions.
+    <span class="doccomment">/// This function is called once before transaction processing starts. All
+    /// module consensus items of this round are supplied as
+    /// `consensus_items`. The database transaction will be committed to the
+    /// database after all other modules ran `begin_consensus_epoch`, so the
+    /// results are available when processing transactions.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, DynModuleConsensusItem)&gt;,
     );
 
-    <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
+    <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction
+    /// processing. If the slow part of verification can be modeled as a
+    /// pure function not involving any system state we can build a lookup
+    /// table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
     </span><span class="kw">fn </span>build_verification_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[DynInput]) -&gt; DynVerificationCache;
 
-    <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
@@ -511,13 +535,14 @@
         input: <span class="kw-2">&amp;</span>DynInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
-    <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
-    /// the operation will take no effect.
+    <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will
+    /// be part of the database transaction. On failure (e.g. double spend)
+    /// the database transaction is rolled back and the operation will take
+    /// no effect.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed
     </span><span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
@@ -526,26 +551,29 @@
         verification_cache: <span class="kw-2">&amp;</span>DynVerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
-    <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span>DynOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
-    <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
-    /// database transaction is rolled back and the operation will take no effect.
+    <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
+    /// all necessary updates to the database will be part of the database
+    /// transaction. On failure (e.g. double spend) the database transaction
+    /// is rolled back and the operation will take no effect.
     ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
+    /// note issuance) and can be used to retrieve its outcome later using
+    /// `output_status`.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -553,20 +581,22 @@
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
-    <span class="doccomment">/// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
+    <span class="doccomment">/// This function is called once all transactions have been processed and
+    /// changes were written to the database. This allows running
+    /// finalization code before the next epoch.
     ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
+    /// Passes in the `consensus_peers` that contributed to this epoch and
+    /// returns a list of peers to drop if any are misbehaving.
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 
-    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
+    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this
+    /// might contain data needed by the client to access funds or give an
+    /// estimate of when funds will be available. Returns `None` if the
+    /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -574,15 +604,17 @@
         module_instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;DynOutputOutcome&gt;;
 
-    <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
+    <span class="doccomment">/// Queries the database and returns all assets and liabilities of the
+    /// module.
     ///
-    /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
-    /// and consensus should halt.
+    /// Summing over all modules, if liabilities &gt; assets then an error has
+    /// occurred in the database and consensus should halt.
     </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit);
 
-    <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
+    <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are
+    /// made available both to users as well as to other modules. They thus
+    /// should be deterministic, only dependant on their input and the
+    /// current epoch.
     </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;DynServerModule&gt;&gt;;
 }
 
@@ -624,10 +656,11 @@
             </span>.map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
     }
 
-    <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The database transaction will be
-    /// committed to the database after all other modules ran `begin_consensus_epoch`,
-    /// so the results are available when processing transactions.
+    <span class="doccomment">/// This function is called once before transaction processing starts. All
+    /// module consensus items of this round are supplied as
+    /// `consensus_items`. The database transaction will be committed to the
+    /// database after all other modules ran `begin_consensus_epoch`, so the
+    /// results are available when processing transactions.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -653,9 +686,10 @@
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
+    <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction
+    /// processing. If the slow part of verification can be modeled as a
+    /// pure function not involving any system state we can build a lookup
+    /// table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
     </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>[DynInput]) -&gt; DynVerificationCache {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::build_verification_cache(
@@ -669,10 +703,11 @@
         .into()
     }
 
-    <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
@@ -697,13 +732,14 @@
         </span>.map(Into::into)
     }
 
-    <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
-    /// the operation will take no effect.
+    <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will
+    /// be part of the database transaction. On failure (e.g. double spend)
+    /// the database transaction is rolled back and the operation will take
+    /// no effect.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed
     </span><span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
@@ -728,10 +764,11 @@
         </span>.map(Into::into)
     }
 
-    <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
@@ -748,16 +785,18 @@
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
-    /// database transaction is rolled back and the operation will take no effect.
+    <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
+    /// all necessary updates to the database will be part of the database
+    /// transaction. On failure (e.g. double spend) the database transaction
+    /// is rolled back and the operation will take no effect.
     ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
+    /// note issuance) and can be used to retrieve its outcome later using
+    /// `output_status`.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -776,11 +815,12 @@
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
+    <span class="doccomment">/// This function is called once all transactions have been processed and
+    /// changes were written to the database. This allows running
+    /// finalization code before the next epoch.
     ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
+    /// Passes in the `consensus_peers` that contributed to this epoch and
+    /// returns a list of peers to drop if any are misbehaving.
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
@@ -789,9 +829,10 @@
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::end_consensus_epoch(<span class="self">self</span>, consensus_peers, dbtx).<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
+    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this
+    /// might contain data needed by the client to access funds or give an
+    /// estimate of when funds will be available. Returns `None` if the
+    /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -803,10 +844,11 @@
             </span>.map(|v| DynOutputOutcome::from_typed(module_instance_id, v))
     }
 
-    <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
+    <span class="doccomment">/// Queries the database and returns all assets and liabilities of the
+    /// module.
     ///
-    /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
-    /// and consensus should halt.
+    /// Summing over all modules, if liabilities &gt; assets then an error has
+    /// occurred in the database and consensus should halt.
     </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::audit(<span class="self">self</span>, dbtx, audit).<span class="kw">await
     </span>}

@@ -133,6 +133,9 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, sync::Arc};
 
 <span class="kw">use </span>anyhow::anyhow;
@@ -175,13 +178,15 @@
     <span class="doccomment">/// Attempt to pay an invoice using the lightning node
     </span><span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse&gt;;
 
-    <span class="doccomment">/// Subscribe to intercept htlcs that belong to a specific mint identified by `short_channel_id`
+    <span class="doccomment">/// Subscribe to intercept htlcs that belong to a specific mint identified
+    /// by `short_channel_id`
     </span><span class="kw">async fn </span>subscribe_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;HtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;&gt;;
 
-    <span class="doccomment">/// Request completion of an intercepted htlc after processing and determining an outcome
+    <span class="doccomment">/// Request completion of an intercepted htlc after processing and
+    /// determining an outcome
     </span><span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, outcome: CompleteHtlcsRequest) -&gt; <span class="prelude-ty">Result</span>&lt;CompleteHtlcsResponse&gt;;
 }
 
@@ -197,9 +202,10 @@
     }
 }
 
-<span class="doccomment">/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for convenience,
-/// and makes real RPC requests over the wire to a remote lightning node.
-/// The lightning node is exposed via a corresponding `GatewayLightningServer`.
+<span class="doccomment">/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
+/// convenience, and makes real RPC requests over the wire to a remote lightning
+/// node. The lightning node is exposed via a corresponding
+/// `GatewayLightningServer`.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>NetworkLnRpcClient {
     client: GatewayLightningClient&lt;Channel&gt;,

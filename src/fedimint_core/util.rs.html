@@ -84,17 +84,19 @@
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt::{Debug, Display, Formatter};
 
 <span class="kw">use </span>url::Url;
 
 <span class="comment">// TODO: make fully RFC1738 conformant
-</span><span class="doccomment">/// Wrapper for `Url` that only prints the scheme, domain, port and path portion of a `Url` in its
-/// `Display` implementation. This is useful to hide private information like user names and
-/// passwords in logs or UIs.
+</span><span class="doccomment">/// Wrapper for `Url` that only prints the scheme, domain, port and path portion
+/// of a `Url` in its `Display` implementation. This is useful to hide private
+/// information like user names and passwords in logs or UIs.
 ///
-/// The output is not fully RFC1738 conformant but good enough for our current purposes.
+/// The output is not fully RFC1738 conformant but good enough for our current
+/// purposes.
 </span><span class="kw">pub struct </span>SanitizedUrl&lt;<span class="lifetime">&#39;a</span>&gt;(Cow&lt;<span class="lifetime">&#39;a</span>, Url&gt;);
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; SanitizedUrl&lt;<span class="lifetime">&#39;a</span>&gt; {

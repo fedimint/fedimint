@@ -411,6 +411,7 @@
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, path::PathBuf};
 
 <span class="kw">use </span>erased_serde::Serialize;
@@ -515,8 +516,8 @@
         <span class="macro">println!</span>(<span class="string">&quot;{json}&quot;</span>);
     }
 
-    <span class="doccomment">/// Iterates through all the specified ranges in the database and retrieves the
-    /// data for each range. Prints serialized contents at the end.
+    <span class="doccomment">/// Iterates through all the specified ranges in the database and retrieves
+    /// the data for each range. Prints serialized contents at the end.
     </span><span class="kw">pub async fn </span>dump_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;consensus&quot;</span>.to_string()) {
             <span class="self">self</span>.retrieve_consensus_data().<span class="kw">await</span>;
@@ -547,7 +548,8 @@
             }
         }
 
-        <span class="comment">// TODO: When the client is modularized, these don&#39;t need to be hardcoded anymore
+        <span class="comment">// TODO: When the client is modularized, these don&#39;t need to be hardcoded
+        // anymore
         </span><span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;client&quot;</span>.to_string()) {
             <span class="self">self</span>.retrieve_client_data().<span class="kw">await</span>;
             <span class="self">self</span>.retrieve_ln_client_data().<span class="kw">await</span>;
@@ -558,8 +560,8 @@
         <span class="self">self</span>.print_database();
     }
 
-    <span class="doccomment">/// Iterates through each of the prefixes within the consensus range and retrieves
-    /// the corresponding data.
+    <span class="doccomment">/// Iterates through each of the prefixes within the consensus range and
+    /// retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_consensus_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>consensus: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
         <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span><span class="self">self</span>.read_only;
@@ -634,8 +636,8 @@
             .insert(<span class="string">&quot;Consensus&quot;</span>.to_string(), Box::new(consensus));
     }
 
-    <span class="doccomment">/// Iterates through each of the prefixes within the lightning client range and retrieves
-    /// the corresponding data.
+    <span class="doccomment">/// Iterates through each of the prefixes within the lightning client range
+    /// and retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_ln_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>ln_client: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
         <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span><span class="self">self</span>.read_only;
@@ -701,8 +703,8 @@
             .insert(<span class="string">&quot;Client Lightning&quot;</span>.to_string(), Box::new(ln_client));
     }
 
-    <span class="doccomment">/// Iterates through each of the prefixes within the mint client range and retrieves
-    /// the corresponding data.
+    <span class="doccomment">/// Iterates through each of the prefixes within the mint client range and
+    /// retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_mint_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>mint_client: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
         <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span><span class="self">self</span>.read_only;
@@ -768,8 +770,8 @@
             .insert(<span class="string">&quot;Client Mint&quot;</span>.to_string(), Box::new(mint_client));
     }
 
-    <span class="doccomment">/// Iterates through each of the prefixes within the wallet client range and retrieves
-    /// the corresponding data.
+    <span class="doccomment">/// Iterates through each of the prefixes within the wallet client range and
+    /// retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_wallet_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>wallet_client: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
         <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span><span class="self">self</span>.read_only;
@@ -796,8 +798,8 @@
             .insert(<span class="string">&quot;Client Wallet&quot;</span>.to_string(), Box::new(wallet_client));
     }
 
-    <span class="doccomment">/// Iterates through each of the prefixes within the client range and retrieves
-    /// the corresponding data.
+    <span class="doccomment">/// Iterates through each of the prefixes within the client range and
+    /// retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>client: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
         <span class="kw">let </span>prefix_names = <span class="kw-2">&amp;</span><span class="self">self</span>.prefixes;

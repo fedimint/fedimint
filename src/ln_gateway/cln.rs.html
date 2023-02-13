@@ -350,6 +350,9 @@
 <a href="#350" id="350">350</a>
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -374,7 +377,8 @@
     rpc::GatewayRpcSender,
 };
 
-<span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot; suffix
+<span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot;
+/// suffix
 </span><span class="kw">fn </span>as_fedimint_amount&lt;<span class="lifetime">&#39;de</span>, D&gt;(amount: D) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, D::Error&gt;
 <span class="kw">where
     </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
@@ -429,8 +433,9 @@
 
     <span class="doccomment">/// Creates a new RPC client for a request.
     ///
-    /// This operation is cheap enough to do it for each request since it merely connects to a UNIX
-    /// domain socket without doing any further initialization.
+    /// This operation is cheap enough to do it for each request since it merely
+    /// connects to a UNIX domain socket without doing any further
+    /// initialization.
     </span><span class="kw">async fn </span>rpc_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;cln_rpc::ClnRpc, LightningError&gt; {
         cln_rpc::ClnRpc::new(<span class="kw-2">&amp;</span><span class="self">self</span>.socket).<span class="kw">await</span>.map_err(|err| {
             <span class="macro">error!</span>(<span class="string">&quot;Could not connect to CLN RPC socket: {err}&quot;</span>);
@@ -606,7 +611,8 @@
 <span class="doccomment">/// BOLT 4: &lt;https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages&gt;
 /// 16399 error code reports unknown payment details.
 ///
-/// TODO: We should probably use a more specific error code based on htlc processing fail reason
+/// TODO: We should probably use a more specific error code based on htlc
+/// processing fail reason
 </span><span class="kw">fn </span>htlc_processing_failure() -&gt; serde_json::Value {
     <span class="macro">serde_json::json!</span>({
         <span class="string">&quot;result&quot;</span>: <span class="string">&quot;fail&quot;</span>,
@@ -614,8 +620,8 @@
     </span>})
 }
 
-<span class="doccomment">/// Handle core-lightning &quot;htlc_accepted&quot; events by attempting to buy this preimage from the federation
-/// and completing the payment
+<span class="doccomment">/// Handle core-lightning &quot;htlc_accepted&quot; events by attempting to buy this
+/// preimage from the federation and completing the payment
 </span><span class="kw">async fn </span>htlc_accepted_hook(
     plugin: Plugin&lt;GatewayRpcSender&gt;,
     value: serde_json::Value,
@@ -625,8 +631,8 @@
     <span class="comment">// Filter and process intercepted HTLCs based on `short_channel_id` value.
     //
     // After https://github.com/fedimint/fedimint/pull/1180,
-    // all HTLCs to Fedimint clients should have route hint with `short_channel_id = 0u64`,
-    // unless the gateway is serving multiple federations.
+    // all HTLCs to Fedimint clients should have route hint with `short_channel_id =
+    // 0u64`, unless the gateway is serving multiple federations.
     </span><span class="kw">if </span>htlc_accepted.onion.short_channel_id.as_deref() == <span class="prelude-val">Some</span>(<span class="string">&quot;0x0x0&quot;</span>) {
         <span class="kw">let </span>preimage = <span class="kw">match </span>plugin
             .state()

@@ -1023,6 +1023,15 @@
 <a href="#1023" id="1023">1023</a>
 <a href="#1024" id="1024">1024</a>
 <a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::pin::Pin;
@@ -1158,7 +1167,8 @@
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">pub trait </span>IFederationApi: Debug {
-    <span class="doccomment">/// List of all federation members for the purpose of iterating each member in the federation.
+    <span class="doccomment">/// List of all federation members for the purpose of iterating each member
+    /// in the federation.
     ///
     /// The underlying implementation is resonsible for knowing how many
     /// and `PeerId`s of each. The caller of this interface most probably
@@ -1175,18 +1185,20 @@
     ) -&gt; result::Result&lt;Value, jsonrpsee_core::Error&gt;;
 }
 
-<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when no arguments are passed to the API call
+<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when
+/// no arguments are passed to the API call
 ///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you&#39;ll make it easier
-/// to change it in the future.
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
+/// using this function you&#39;ll make it easier to change it in the future.
 </span><span class="kw">pub fn </span>erased_no_param() -&gt; Vec&lt;JsonValue&gt; {
     <span class="macro">vec!</span>[JsonValue::Null]
 }
 
-<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when one argument are passed to the API call
+<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when
+/// one argument are passed to the API call
 ///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you&#39;ll make it easier
-/// to change it in the future.
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
+/// using this function you&#39;ll make it easier to change it in the future.
 </span><span class="kw">pub fn </span>erased_single_param&lt;Params&gt;(param: <span class="kw-2">&amp;</span>Params) -&gt; Vec&lt;JsonValue&gt;
 <span class="kw">where
     </span>Params: Serialize,
@@ -1197,12 +1209,13 @@
     <span class="macro">vec!</span>[params_raw]
 }
 
-<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when multiple argument are passed to the API call
+<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when
+/// multiple argument are passed to the API call
 ///
 /// Use a tuple as `params`.
 ///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by using this function you&#39;ll make it easier
-/// to change it in the future.
+/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
+/// using this function you&#39;ll make it easier to change it in the future.
 </span><span class="kw">pub fn </span>erased_multi_param&lt;Params&gt;(param: <span class="kw-2">&amp;</span>Params) -&gt; Vec&lt;JsonValue&gt;
 <span class="kw">where
     </span>Params: Serialize,
@@ -1219,9 +1232,11 @@
 
 <span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="doccomment">/// An extension trait allowing to making federation-wide API call on top [`IFederationApi`].
+</span><span class="doccomment">/// An extension trait allowing to making federation-wide API call on top
+/// [`IFederationApi`].
 </span><span class="kw">pub trait </span>FederationApiExt: IFederationApi {
-    <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically merge the responses.
+    <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
+    /// merge the responses.
     </span><span class="kw">async fn </span>request_with_strategy&lt;MemberRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;MemberRet, FedRet&gt; + Send,
@@ -1250,8 +1265,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>member_delay_ms = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>member_errors = BTreeMap::new();
 
-        <span class="comment">// Delegates the response handling to the `QueryStrategy` with an exponential back-off
-        // with every new set of requests
+        <span class="comment">// Delegates the response handling to the `QueryStrategy` with an exponential
+        // back-off with every new set of requests
         </span><span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
         <span class="kw">loop </span>{
             <span class="kw">let </span>response = futures.next().<span class="kw">await</span>;
@@ -1585,9 +1600,9 @@
     }
 }
 
-<span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting equal
-/// results from at least `min_eq_results` of them. Members that return differing results are
-/// returned as a member faults list.
+<span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting
+/// equal results from at least `min_eq_results` of them. Members that return
+/// differing results are returned as a member faults list.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
     peers: BTreeSet&lt;PeerId&gt;,
@@ -1620,7 +1635,8 @@
         }
     }
 
-    <span class="doccomment">/// Construct from a config using only a number of peers where one is expected to be honest
+    <span class="doccomment">/// Construct from a config using only a number of peers where one is
+    /// expected to be honest
     ///
     /// Minimizes the serialized size of the connect info
     </span><span class="kw">pub fn </span>from_honest_peers(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
@@ -1706,7 +1722,8 @@
                 .iter()
                 .enumerate()
                 .map(|(id, url)| {
-                    <span class="comment">// FIXME: potentially wrong could download actual PeerId later, but doesn&#39;t matter in practice
+                    <span class="comment">// FIXME: potentially wrong could download actual PeerId later, but doesn&#39;t
+                    // matter in practice
                     </span><span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16);
                     (peer_id, url.clone())
                 })
@@ -1799,10 +1816,11 @@
     }
 }
 
-<span class="doccomment">/// `jsonrpsee` converts the `Url` to a `&amp;str` internally and then parses it as an `Uri`.
-/// Unfortunately `Url` swallows ports that it considers default ports (e.g. 80 and 443 for HTTP(S))
-/// which makes the `Uri` parsing fail in these cases. This function works around this limitation in
-/// a limited way (not fully standard compliant, but work for our use case).
+<span class="doccomment">/// `jsonrpsee` converts the `Url` to a `&amp;str` internally and then parses it as
+/// an `Uri`. Unfortunately `Url` swallows ports that it considers default ports
+/// (e.g. 80 and 443 for HTTP(S)) which makes the `Uri` parsing fail in these
+/// cases. This function works around this limitation in a limited way (not
+/// fully standard compliant, but work for our use case).
 ///
 /// See &lt;https://github.com/paritytech/jsonrpsee/issues/554#issue-1048646896&gt;
 </span><span class="kw">fn </span>url_to_string_with_default_port(url: <span class="kw-2">&amp;</span>Url) -&gt; String {

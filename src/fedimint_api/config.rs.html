@@ -1084,6 +1084,14 @@
 <a href="#1084" id="1084">1084</a>
 <a href="#1085" id="1085">1085</a>
 <a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -1148,8 +1156,8 @@
     /// When `kind` gets removed and `value` is parsed, it will
     /// parse as `Value::Object` that is empty.
     ///
-    /// Howerver empty module structs, like `struct FooConfigLocal;` (unit struct),
-    /// will fail to deserialize with this value, as they expect
+    /// Howerver empty module structs, like `struct FooConfigLocal;` (unit
+    /// struct), will fail to deserialize with this value, as they expect
     /// `Value::Null`.
     ///
     /// We can turn manually empty object into null, and that&#39;s what
@@ -1189,7 +1197,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>ApiEndpoint {
-    <span class="doccomment">/// The peer&#39;s API websocket network address and port (e.g. `ws://10.42.0.10:5000`)
+    <span class="doccomment">/// The peer&#39;s API websocket network address and port (e.g.
+    /// `ws://10.42.0.10:5000`)
     </span><span class="kw">pub </span>url: Url,
     <span class="doccomment">/// human-readable name
     </span><span class="kw">pub </span>name: String,
@@ -1224,7 +1233,8 @@
     </span><span class="kw">pub </span>client_hash_signature: <span class="prelude-ty">Option</span>&lt;Signature&gt;,
 }
 
-<span class="doccomment">/// The federation id is a copy of the authentication threshold public key of the federation
+<span class="doccomment">/// The federation id is a copy of the authentication threshold public key of
+/// the federation
 ///
 /// Stable id so long as guardians membership does not change
 /// Unique id so long as guardians do not all collude
@@ -1301,11 +1311,13 @@
         }
     }
 
-    <span class="doccomment">/// (soft-deprecated): Get the first instance of a module of a given kind in defined in config
+    <span class="doccomment">/// (soft-deprecated): Get the first instance of a module of a given kind in
+    /// defined in config
     ///
-    /// Since module ids are numerical and for time being we only support 1:1 mint, wallet, ln
-    /// module code in the client, this is useful, but please write any new code that avoids
-    /// assumptions about available modules.
+    /// Since module ids are numerical and for time being we only support 1:1
+    /// mint, wallet, ln module code in the client, this is useful, but
+    /// please write any new code that avoids assumptions about available
+    /// modules.
     </span><span class="kw">pub fn </span>get_first_module_by_kind&lt;T: DeserializeOwned&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         kind: <span class="kw">impl </span>Into&lt;ModuleKind&gt;,
@@ -1404,13 +1416,13 @@
     }
 }
 
-<span class="doccomment">/// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
-/// Returning each `kind` exactly once, so that `LEGACY_HARDCODED_` constants
-/// correspond to correct module kind.
+<span class="doccomment">/// Iterate over module generators in a legacy, hardcoded order: ln, mint,
+/// wallet, rest... Returning each `kind` exactly once, so that
+/// `LEGACY_HARDCODED_` constants correspond to correct module kind.
 ///
-/// We would like to get rid of it eventually, but old client and test code assumes
-/// it in multiple places, and it will take work to fix it, while we want new code
-/// to not assume this 1:1 relationship.
+/// We would like to get rid of it eventually, but old client and test code
+/// assumes it in multiple places, and it will take work to fix it, while we
+/// want new code to not assume this 1:1 relationship.
 </span><span class="kw">pub struct </span>LegacyInitOrderIter {
     <span class="doccomment">/// Counter of what module id will this returned value get assigned
     </span>next_id: ModuleInstanceId,
@@ -1538,7 +1550,8 @@
 </span><span class="kw">pub trait </span>TypedServerModuleConfig: DeserializeOwned + Serialize {
     <span class="doccomment">/// Local non-consensus, not security-sensitive settings
     </span><span class="kw">type </span>Local: DeserializeOwned + Serialize;
-    <span class="doccomment">/// Private for this federation member data that are security sensitive and will be encrypted at rest
+    <span class="doccomment">/// Private for this federation member data that are security sensitive and
+    /// will be encrypted at rest
     </span><span class="kw">type </span>Private: DeserializeOwned + Serialize;
     <span class="doccomment">/// Shared consensus-critical config
     </span><span class="kw">type </span>Consensus: TypedServerModuleConsensusConfig;
@@ -1652,10 +1665,12 @@
     pk_shares: BTreeMap&lt;PeerId, Vec&lt;G&gt;&gt;,
 }
 
-<span class="doccomment">/// Implementation of &quot;Secure Distributed Key Generation for Discrete-Log Based Cryptosystems&quot;
-/// by Rosario Gennaro and Stanislaw Jarecki and Hugo Krawczyk and Tal Rabin
+<span class="doccomment">/// Implementation of &quot;Secure Distributed Key Generation for Discrete-Log Based
+/// Cryptosystems&quot; by Rosario Gennaro and Stanislaw Jarecki and Hugo Krawczyk
+/// and Tal Rabin
 ///
-/// Prevents any manipulation of the secret key, but fails with any non-cooperative peers
+/// Prevents any manipulation of the secret key, but fails with any
+/// non-cooperative peers
 </span><span class="kw">impl</span>&lt;G: DkgGroup&gt; Dkg&lt;G&gt; {
     <span class="doccomment">/// Creates the DKG and the first step of the algorithm
     </span><span class="kw">pub fn </span>new(
@@ -1941,7 +1956,8 @@
         }
 
         <span class="comment">// process steps for each key
-        // TODO: fix error handling here; what do we do on a malfunctining peer when building the federation?
+        // TODO: fix error handling here; what do we do on a malfunctining peer when
+        // building the federation?
         </span><span class="kw">loop </span>{
             <span class="kw">let </span>(peer, msg) = connections.receive(module_id).<span class="kw">await</span><span class="question-mark">?</span>;
 

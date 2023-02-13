@@ -49,6 +49,7 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::Amount;
@@ -75,7 +76,8 @@
     }
 }
 
-<span class="comment">// TODO: should this have some kind of &quot;state&quot; enum - e.g. pending, paid, expired
+<span class="comment">// TODO: should this have some kind of &quot;state&quot; enum - e.g. pending, paid,
+// expired
 </span><span class="doccomment">/// Invoice whose &quot;offer&quot; has been accepted by federation
 </span><span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ConfirmedInvoice {

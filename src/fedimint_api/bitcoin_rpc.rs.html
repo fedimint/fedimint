@@ -67,14 +67,19 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 
 <span class="kw">use </span>url::Url;
 
-<span class="doccomment">/// Name of the env value used for passing bitcoind rpc url to modules that need it
+<span class="doccomment">/// Name of the env value used for passing bitcoind rpc url to modules that need
+/// it
 </span><span class="kw">pub const </span>FM_BITCOIND_RPC_ENV: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BITCOIND_RPC&quot;</span>;
 
-<span class="doccomment">/// Name of the env value used for passing electrum rpc url to modules that need it
+<span class="doccomment">/// Name of the env value used for passing electrum rpc url to modules that need
+/// it
 </span><span class="kw">pub const </span>FM_ELECTRUM_RPC_ENV: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_ELECTRUM_RPC&quot;</span>;
 
 <span class="doccomment">/// Default url that will be used if [`FM_BITCOIND_RPC_ENV`] is not set
@@ -93,7 +98,8 @@
     Electrum,
 }
 
-<span class="doccomment">/// Get the value of url the module would use by reading it from process environemnt
+<span class="doccomment">/// Get the value of url the module would use by reading it from process
+/// environemnt
 ///
 /// Should be used in test code only to mimick prod code behavior
 </span><span class="kw">pub fn </span>read_bitcoin_backend_from_global_env() -&gt; anyhow::Result&lt;BitcoindRpcBackend&gt; {

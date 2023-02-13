@@ -1754,6 +1754,18 @@
 <a href="#1754" id="1754">1754</a>
 <a href="#1755" id="1755">1755</a>
 <a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1869,7 +1881,8 @@
 
 <span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>RoundConsensusItem {
-    <span class="kw">pub </span>block_height: u32, <span class="comment">// FIXME: use block hash instead, but needs more complicated verification logic
+    <span class="kw">pub </span>block_height: u32, <span class="comment">/* FIXME: use block hash instead, but needs more complicated
+                            * verification logic */
     </span><span class="kw">pub </span>fee_rate: Feerate,
     <span class="kw">pub </span>randomness: [u8; <span class="number">32</span>],
 }
@@ -1925,7 +1938,8 @@
     }
 }
 
-<span class="doccomment">/// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`
+<span class="doccomment">/// A PSBT that is awaiting enough signatures from the federation to becoming a
+/// `PendingTransaction`
 </span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>UnsignedTransaction {
     <span class="kw">pub </span>psbt: PartiallySignedTransaction,
@@ -1976,7 +1990,8 @@
     <span class="kw">pub </span>fees: PegOutFees,
 }
 
-<span class="doccomment">/// Contains the Bitcoin transaction id of the transaction created by the withdraw request
+<span class="doccomment">/// Contains the Bitcoin transaction id of the transaction created by the
+/// withdraw request
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>WalletOutputOutcome(<span class="kw">pub </span>bitcoin::Txid);
 
@@ -2274,8 +2289,8 @@
         <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable
         </span><span class="kw">let </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
 
-        <span class="comment">// In case the wallet just got created the height is not committed to the DB yet but will
-        // be set to 0 first, so we can assume that here.
+        <span class="comment">// In case the wallet just got created the height is not committed to the DB yet
+        // but will be set to 0 first, so we can assume that here.
         </span><span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
 
         <span class="kw">let </span>proposed_height = <span class="kw">if </span>our_target_height &gt;= last_consensus_height {
@@ -2316,7 +2331,8 @@
             .collect::&lt;Vec&lt;WalletConsensusItem&gt;&gt;()
             .<span class="kw">await</span>;
 
-        <span class="comment">// We force new epochs only if height changed, or we have peg-outs (more than just round_ci item)
+        <span class="comment">// We force new epochs only if height changed, or we have peg-outs (more than
+        // just round_ci item)
         </span><span class="kw">if </span>last_consensus_height &lt; proposed_height || <span class="number">1 </span>&lt; items.len() {
             ConsensusProposal::Trigger(items)
         } <span class="kw">else </span>{
@@ -2331,8 +2347,9 @@
     ) {
         <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_items, <span class="string">&quot;Received consensus proposals&quot;</span>);
 
-        <span class="comment">// Separate round consensus items from signatures for peg-out tx. While signatures can be
-        // processed separately, all round consensus items need to be available at once.
+        <span class="comment">// Separate round consensus items from signatures for peg-out tx. While
+        // signatures can be processed separately, all round consensus items
+        // need to be available at once.
         </span><span class="kw">let </span>UnzipWalletConsensusItem {
             peg_out_signature: peg_out_signatures,
             round_consensus,
@@ -2590,9 +2607,10 @@
 
             <span class="kw">match </span><span class="self">self</span>.finalize_peg_out_psbt(<span class="kw-2">&amp;mut </span>psbt, change) {
                 <span class="prelude-val">Ok</span>(pending_tx) =&gt; {
-                    <span class="comment">// We were able to finalize the transaction, so we will delete the PSBT and instead keep the
-                    // extracted tx for periodic transmission and to accept the change into our wallet
-                    // eventually once it confirms.
+                    <span class="comment">// We were able to finalize the transaction, so we will delete the PSBT and
+                    // instead keep the extracted tx for periodic transmission
+                    // and to accept the change into our wallet eventually once
+                    // it confirms.
                     </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PendingTransactionKey(key.<span class="number">0</span>), <span class="kw-2">&amp;</span>pending_tx)
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
@@ -2844,9 +2862,10 @@
         psbt: <span class="kw-2">&amp;mut </span>PartiallySignedTransaction,
         change: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PendingTransaction, ProcessPegOutSigError&gt; {
-        <span class="comment">// We need to save the change output&#39;s tweak key to be able to access the funds later on.
-        // The tweak is extracted here because the psbt is moved next and not available anymore
-        // when the tweak is actually needed in the end to be put into the batch on success.
+        <span class="comment">// We need to save the change output&#39;s tweak key to be able to access the funds
+        // later on. The tweak is extracted here because the psbt is moved next
+        // and not available anymore when the tweak is actually needed in the
+        // end to be put into the batch on success.
         </span><span class="kw">let </span>change_tweak: [u8; <span class="number">32</span>] = psbt
             .outputs
             .iter()
@@ -3020,8 +3039,8 @@
         }
     }
 
-    <span class="doccomment">/// Add a change UTXO to our spendable UTXO database after it was included in a block that we
-    /// got consensus on.
+    <span class="doccomment">/// Add a change UTXO to our spendable UTXO database after it was included
+    /// in a block that we got consensus on.
     </span><span class="kw">async fn </span>recognize_change_utxo&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -3131,9 +3150,11 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;UnsignedTransaction&gt; {
         <span class="comment">// When building a transaction we need to take care of two things:
         //  * We need enough input amount to fund all outputs
-        //  * We need to keep an eye on the tx weight so we can factor the fees into out calculation
-        // We then go on to calculate the base size of the transaction `total_weight` and the
-        // maximum weight per added input which we will add every time we select an input.
+        //  * We need to keep an eye on the tx weight so we can factor the fees into out
+        //    calculation
+        // We then go on to calculate the base size of the transaction `total_weight`
+        // and the maximum weight per added input which we will add every time
+        // we select an input.
         </span><span class="kw">let </span>change_script = <span class="self">self</span>.derive_script(change_tweak);
         <span class="kw">let </span>out_weight = (destination.len() * <span class="number">4 </span>+ <span class="number">1 </span>+ <span class="number">32
             </span><span class="comment">// Add change script weight, it&#39;s very likely to be needed if not we just overpay in fees
@@ -3172,7 +3193,8 @@
             </span>}
         }
 
-        <span class="comment">// We always pay ourselves change back to ensure that we don&#39;t lose anything due to dust
+        <span class="comment">// We always pay ourselves change back to ensure that we don&#39;t lose anything due
+        // to dust
         </span><span class="kw">let </span>change = total_selected_value - fees - peg_out_amount;
         <span class="kw">let </span>output: Vec&lt;TxOut&gt; = <span class="macro">vec!</span>[
             TxOut {
@@ -3215,7 +3237,8 @@
         };
         <span class="macro">info!</span>(txid = %transaction.txid(), <span class="string">&quot;Creating peg-out tx&quot;</span>);
 
-        <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization
+        <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only
+        // convert to PSBT for finalization
         </span><span class="kw">let </span>psbt = PartiallySignedTransaction {
             unsigned_tx: transaction,
             version: <span class="number">0</span>,
@@ -3302,7 +3325,8 @@
 
                 <span class="self">self</span>.secret_key
                     .add_tweak(<span class="kw-2">&amp;</span>Scalar::from_be_bytes(tweak).expect(<span class="string">&quot;can&#39;t fail&quot;</span>))
-                    .expect(<span class="string">&quot;Tweaking priv key failed&quot;</span>) <span class="comment">// TODO: why could this happen?
+                    .expect(<span class="string">&quot;Tweaking priv key failed&quot;</span>) <span class="comment">// TODO: why could this
+                                                        // happen?
             </span>};
 
             <span class="kw">let </span>tx_hash = tx_hasher

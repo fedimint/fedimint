@@ -238,6 +238,7 @@
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::SocketAddr, path::PathBuf};
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
@@ -290,7 +291,8 @@
     <span class="doccomment">/// Deposit funds into a gateway federation
     </span>Deposit {
         federation_id: FederationId,
-        <span class="doccomment">/// The TxOutProof which was created from sending BTC to the pegin-address
+        <span class="doccomment">/// The TxOutProof which was created from sending BTC to the
+        /// pegin-address
         </span><span class="attr">#[clap(value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
         <span class="attr">#[clap(value_parser = from_hex::&lt;Transaction&gt;)]

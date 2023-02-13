@@ -135,6 +135,9 @@
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -196,7 +199,8 @@
     ConfigGenParams::new()
         .attach(WalletGenParams {
             network,
-            <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit anyway
+            <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit
+            // anyway
             </span>finality_delay,
         })
         .attach(MintGenParams {
@@ -207,7 +211,8 @@
         })
 }
 
-<span class="doccomment">/// Reads the server from the local, private, and consensus cfg files (private file encrypted)
+<span class="doccomment">/// Reads the server from the local, private, and consensus cfg files (private
+/// file encrypted)
 </span><span class="kw">pub fn </span>read_server_configs(key: <span class="kw-2">&amp;</span>LessSafeKey, path: PathBuf) -&gt; anyhow::Result&lt;ServerConfig&gt; {
     <span class="prelude-val">Ok</span>(ServerConfig {
         consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>,
@@ -232,7 +237,8 @@
     <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>string)<span class="question-mark">?</span>)
 }
 
-<span class="doccomment">/// Writes the server into plaintext json configuration files (private keys not serialized)
+<span class="doccomment">/// Writes the server into plaintext json configuration files (private keys not
+/// serialized)
 </span><span class="kw">pub fn </span>write_nonprivate_configs(
     server: <span class="kw-2">&amp;</span>ServerConfig,
     path: PathBuf,

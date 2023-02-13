@@ -307,7 +307,16 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
-</pre><pre class="rust"><code><span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based one
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+</pre><pre class="rust"><code><span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based
+//! one
 </span><span class="kw">use </span>std::convert::TryInto;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::io::{Read, Write};
@@ -327,7 +336,8 @@
 <span class="doccomment">/// Owned [`FramedTransport`] trait object
 </span><span class="kw">pub type </span>AnyFramedTransport&lt;M&gt; = Box&lt;<span class="kw">dyn </span>FramedTransport&lt;M&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;;
 
-<span class="doccomment">/// A bidirectional framed transport adapter that can be split into its read and write half
+<span class="doccomment">/// A bidirectional framed transport adapter that can be split into its read and
+/// write half
 </span><span class="kw">pub trait </span>FramedTransport&lt;T&gt;:
     Sink&lt;T, Error = anyhow::Error&gt; + Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;&gt;
 {
@@ -348,7 +358,8 @@
     }
 }
 
-<span class="doccomment">/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based [`BidiFramed`] instances
+<span class="doccomment">/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based
+/// [`BidiFramed`] instances
 </span><span class="kw">pub type </span>TcpBidiFramed&lt;T&gt; = BidiFramed&lt;T, OwnedWriteHalf, OwnedReadHalf&gt;;
 
 <span class="doccomment">/// Sink (sending) half of [`BidiFramed`]
@@ -358,9 +369,10 @@
 
 <span class="doccomment">/// Framed transport codec for streams
 ///
-/// Wraps a stream `S` and allows sending packetized data of type `T` over it. Data items are
-/// encoded using [`bincode`] and the bytes are sent over the stream prepended with a length field.
-/// `BidiFramed` implements `Sink&lt;T&gt;` and `Stream&lt;Item=Result&lt;T, _&gt;&gt;`.
+/// Wraps a stream `S` and allows sending packetized data of type `T` over it.
+/// Data items are encoded using [`bincode`] and the bytes are sent over the
+/// stream prepended with a length field. `BidiFramed` implements `Sink&lt;T&gt;` and
+/// `Stream&lt;Item=Result&lt;T, _&gt;&gt;`.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>BidiFramed&lt;T, WH, RH&gt; {
     sink: FramedSink&lt;WH, T&gt;,
@@ -381,7 +393,8 @@
 {
     <span class="doccomment">/// Builds a new `BidiFramed` codec around a stream `stream`.
     ///
-    /// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case the stream is a tokio TCP stream.
+    /// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case
+    /// the stream is a tokio TCP stream.
     </span><span class="kw">pub fn </span>new&lt;S&gt;(stream: S) -&gt; BidiFramed&lt;T, WriteHalf&lt;S&gt;, ReadHalf&lt;S&gt;&gt;
     <span class="kw">where
         </span>S: AsyncRead + AsyncWrite,
@@ -395,8 +408,9 @@
 
     <span class="doccomment">/// Splits the codec in its sending and receiving parts
     ///
-    /// This can be useful in cases where potentially simultaneous read and write operations are
-    /// required. Otherwise a we would need a mutex to guard access.
+    /// This can be useful in cases where potentially simultaneous read and
+    /// write operations are required. Otherwise a we would need a mutex to
+    /// guard access.
     </span><span class="kw">pub fn </span>borrow_parts(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; (<span class="kw-2">&amp;mut </span>FramedSink&lt;WH, T&gt;, <span class="kw-2">&amp;mut </span>FramedStream&lt;RH, T&gt;) {
         (<span class="kw-2">&amp;mut </span><span class="self">self</span>.sink, <span class="kw-2">&amp;mut </span><span class="self">self</span>.stream)
     }
@@ -408,8 +422,9 @@
 {
     <span class="doccomment">/// Special constructor for tokio TCP connections.
     ///
-    /// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient method of splitting the
-    /// stream into a read and a write half this constructor takes advantage of.
+    /// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient
+    /// method of splitting the stream into a read and a write half this
+    /// constructor takes advantage of.
     </span><span class="kw">pub fn </span>new_from_tcp(stream: tokio::net::TcpStream) -&gt; TcpBidiFramed&lt;T&gt; {
         <span class="kw">let </span>(read, write) = stream.into_split();
         BidiFramed {
@@ -503,7 +518,8 @@
             e
         })<span class="question-mark">?</span>;
 
-        <span class="comment">// Lastly we update the length field by counting how many bytes have been written
+        <span class="comment">// Lastly we update the length field by counting how many bytes have been
+        // written
         </span><span class="kw">let </span>new_len = dst.len();
         <span class="kw">let </span>encoded_len = new_len - old_len - <span class="number">8</span>;
         dst[old_len..old_len + <span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>encoded_len.to_le_bytes()[..]);

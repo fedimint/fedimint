@@ -880,6 +880,15 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -962,13 +971,15 @@
     <span class="doccomment">/// Configuration describing the federation and containing our secrets
     </span><span class="kw">pub </span>cfg: ServerConfig,
 
-    <span class="doccomment">/// Cached client config response to be returned with `Self::get_config_with_sig`
+    <span class="doccomment">/// Cached client config response to be returned with
+    /// `Self::get_config_with_sig`
     </span>client_cfg: ConfigResponse,
 
     <span class="kw">pub </span>module_inits: ModuleGenRegistry,
 
     <span class="kw">pub </span>modules: ServerModuleRegistry,
-    <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash
+    <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of
+    /// a crash
     </span><span class="kw">pub </span>db: Database,
 
     <span class="doccomment">/// For sending new transactions to consensus
@@ -1006,7 +1017,8 @@
             .collect()
     }
 
-    <span class="doccomment">/// Returns a new consensus with a receiver for handling submitted transactions
+    <span class="doccomment">/// Returns a new consensus with a receiver for handling submitted
+    /// transactions
     </span><span class="kw">pub async fn </span>new(
         cfg: ServerConfig,
         db: Database,
@@ -1162,12 +1174,14 @@
 
     <span class="doccomment">/// Calculate the result of the `consensus_outcome` and save it/them.
     ///
-    /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is coming from a
-    /// a reference (already signed) `OutcomeHistory`, that contains `rejected_txs`,
-    /// so we can check it against our own `rejected_txs` we calculate in this function.
+    /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is
+    /// coming from a a reference (already signed) `OutcomeHistory`, that
+    /// contains `rejected_txs`, so we can check it against our own
+    /// `rejected_txs` we calculate in this function.
     ///
-    /// **Note**: `reference_rejected_txs` **must** come from a validated/trustworthy
-    /// source and be correct, or it can cause a panic.
+    /// **Note**: `reference_rejected_txs` **must** come from a
+    /// validated/trustworthy source and be correct, or it can cause a
+    /// panic.
     </span><span class="attr">#[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     </span><span class="kw">pub async fn </span>process_consensus_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1232,7 +1246,8 @@
         epoch_history
     }
 
-    <span class="doccomment">/// Calls `begin_consensus_epoch` on all modules, dispatching their consensus items
+    <span class="doccomment">/// Calls `begin_consensus_epoch` on all modules, dispatching their
+    /// consensus items
     </span><span class="kw">async fn </span>process_module_consensus_items(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1254,8 +1269,9 @@
         }
     }
 
-    <span class="doccomment">/// Applies all valid fedimint transactions to the database transaction `dbtx` and returns a set
-    /// of invalid transactions that were filtered out
+    <span class="doccomment">/// Applies all valid fedimint transactions to the database transaction
+    /// `dbtx` and returns a set of invalid transactions that were filtered
+    /// out
     </span><span class="kw">async fn </span>process_transactions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1311,8 +1327,8 @@
         rejected_txs
     }
 
-    <span class="doccomment">/// Saves the epoch history, calls `end_consensus_epoch` on all modules and bans misbehaving
-    /// peers
+    <span class="doccomment">/// Saves the epoch history, calls `end_consensus_epoch` on all modules and
+    /// bans misbehaving peers
     </span><span class="kw">async fn </span>finalize_process_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1346,8 +1362,8 @@
         epoch_history
     }
 
-    <span class="doccomment">/// If the client config hash isn&#39;t already signed, aggregate signature shares from peers
-    /// dropping those that don&#39;t contribute.
+    <span class="doccomment">/// If the client config hash isn&#39;t already signed, aggregate signature
+    /// shares from peers dropping those that don&#39;t contribute.
     </span><span class="kw">async fn </span>save_client_config_sig(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1551,7 +1567,8 @@
             items.push(item);
         };
 
-        <span class="comment">// Add a signature share for the client config hash if we don&#39;t have it signed yet
+        <span class="comment">// Add a signature share for the client config hash if we don&#39;t have it signed
+        // yet
         </span><span class="kw">let </span>client = <span class="self">self</span>.get_config_with_sig(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
         <span class="kw">if </span>client.client_hash_signature.is_none() {
             <span class="kw">let </span>maybe_client_hash = client.client.consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits);
@@ -1689,7 +1706,8 @@
             .cloned()
             .into_group_map_by(|input| input.module_instance_id());
 
-        <span class="comment">// TODO: should probably run in parallel, but currently only the mint does anything at all
+        <span class="comment">// TODO: should probably run in parallel, but currently only the mint does
+        // anything at all
         </span><span class="kw">let </span>caches = module_inputs
             .into_iter()
             .map(|(module_key, inputs)| {

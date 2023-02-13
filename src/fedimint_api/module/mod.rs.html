@@ -732,6 +732,35 @@
 <a href="#732" id="732">732</a>
 <a href="#733" id="733">733</a>
 <a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -770,7 +799,8 @@
 
 <span class="doccomment">/// Information about the amount represented by an input or output.
 ///
-/// * For **inputs** the amount is funding the transaction while the fee is consuming funding
+/// * For **inputs** the amount is funding the transaction while the fee is
+///   consuming funding
 /// * For **outputs** the amount and the fee consume funding
 </span><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 </span><span class="kw">pub struct </span>TransactionItemAmount {
@@ -887,9 +917,10 @@
 
 <span class="doccomment">/// Definition of an API endpoint defined by a module `M`.
 </span><span class="kw">pub struct </span>ApiEndpoint&lt;M&gt; {
-    <span class="doccomment">/// Path under which the API endpoint can be reached. It should start with a `/`
-    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module/module_instance_id/transaction`
-    /// depending on the module name returned by `[FedertionModule::api_base_name]`.
+    <span class="doccomment">/// Path under which the API endpoint can be reached. It should start with a
+    /// `/` e.g. `/transaction`. E.g. this API endpoint would be reachable
+    /// under `/module/module_instance_id/transaction` depending on the
+    /// module name returned by `[FedertionModule::api_base_name]`.
     </span><span class="kw">pub </span>path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
     <span class="doccomment">/// Handler for the API call that takes the following arguments:
     ///   * Reference to the module which defined it
@@ -964,11 +995,13 @@
     </span>Other(<span class="attr">#[from] </span>anyhow::Error),
 }
 
-<span class="doccomment">/// Extension trait with a function to map `Result`s used by modules to `ModuleError`
+<span class="doccomment">/// Extension trait with a function to map `Result`s used by modules to
+/// `ModuleError`
 ///
-/// Currently each module defined it&#39;s own `enum XyzError { ... }` and is not using
-/// `anyhow::Error`. For `?` to work seamlessly two conversion would have to be made:
-/// `enum-Error -&gt; anyhow::Error -&gt; enum-Error`, while `Into`/`From` can only do one.
+/// Currently each module defined it&#39;s own `enum XyzError { ... }` and is not
+/// using `anyhow::Error`. For `?` to work seamlessly two conversion would have
+/// to be made: `enum-Error -&gt; anyhow::Error -&gt; enum-Error`, while `Into`/`From`
+/// can only do one.
 ///
 /// To avoid the boilerplate, this trait defines an easy conversion method.
 </span><span class="kw">pub trait </span>IntoModuleError {
@@ -994,7 +1027,8 @@
 /// - config generation
 /// - config validation
 ///
-/// Once the module configuration is ready, the module can be instantiated via `[Self::init]`.
+/// Once the module configuration is ready, the module can be instantiated via
+/// `[Self::init]`.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IModuleGen: Debug {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder;
@@ -1070,9 +1104,9 @@
 /// upgrade path, similar to a blockchain hard-fork consensus upgrade.
 ///
 /// As of time of writting this comment there are no plans to support any kind
-/// of &quot;soft-forks&quot; which mean a consensus minor version. As the set of federation
-/// member&#39;s is closed and limited, it is always preferable to synchronize
-/// upgrade and avoid cross-version incompatibilities.
+/// of &quot;soft-forks&quot; which mean a consensus minor version. As the set of
+/// federation member&#39;s is closed and limited, it is always preferable to
+/// synchronize upgrade and avoid cross-version incompatibilities.
 ///
 /// For many modules it might be preferable to implement a new [`ModuleKind`]
 /// &quot;versions&quot; (to be implemented at the time of writting this comment), and
@@ -1082,32 +1116,39 @@
 </span><span class="attr">#[derive(Debug, Copy, Clone)]
 </span><span class="kw">pub struct </span>ModuleConsensusVersion(<span class="kw">pub </span>u32);
 
-<span class="doccomment">/// Api version supported by a core server or a client/server module at a given [`ModuleConsensusVersion`]
+<span class="doccomment">/// Api version supported by a core server or a client/server module at a given
+/// [`ModuleConsensusVersion`]
 ///
 /// Changing [`ModuleConsensusVersion`] implies resetting the api versioning.
 ///
 /// For a client and server to be able to communicate with each other:
 ///
-/// * The client needs API version support for the [`ModuleConsensusVersion`] that the server is currently
-///   running with.
-/// * Within that [`ModuleConsensusVersion`] during handshake negotation process client and server must find
-///   at least one `Api::major` version where client&#39;s `minor` is lower or equal server&#39;s `major` version.
+/// * The client needs API version support for the [`ModuleConsensusVersion`]
+///   that the server is currently running with.
+/// * Within that [`ModuleConsensusVersion`] during handshake negotation process
+///   client and server must find at least one `Api::major` version where
+///   client&#39;s `minor` is lower or equal server&#39;s `major` version.
 ///
-/// A practical module implementation needs to implement large range of version backward compatibility
-/// on both client and server side to accomodate end user client devices receiving updates at a
-/// pace hard to control, and technical and coordination challanges of upgrading servers.
+/// A practical module implementation needs to implement large range of version
+/// backward compatibility on both client and server side to accomodate end user
+/// client devices receiving updates at a pace hard to control, and technical
+/// and coordination challanges of upgrading servers.
 </span><span class="attr">#[derive(Debug, Copy, Clone)]
 </span><span class="kw">pub struct </span>ApiVersion {
     <span class="doccomment">/// Major API version
     ///
-    /// Each time [`ModuleConsensusVersion`] is incremented, this number (and `minor` number as well) should be reset to `0`.
+    /// Each time [`ModuleConsensusVersion`] is incremented, this number (and
+    /// `minor` number as well) should be reset to `0`.
     ///
-    /// Should be incremented each time the API was changed in a backward-incompatible ways (while resetting `minor` to `0`).
+    /// Should be incremented each time the API was changed in a
+    /// backward-incompatible ways (while resetting `minor` to `0`).
     </span><span class="kw">pub </span>major: u32,
     <span class="doccomment">/// Minor API version
     ///
-    /// * For clients this means *minimum* supported minor version of the `major` version required by client implementation
-    /// * For servers this means *maximum* supported minor version of the `major` version implemented by the server implementation
+    /// * For clients this means *minimum* supported minor version of the
+    ///   `major` version required by client implementation
+    /// * For servers this means *maximum* supported minor version of the
+    ///   `major` version implemented by the server implementation
     </span><span class="kw">pub </span>minor: u32,
 }
 
@@ -1115,8 +1156,8 @@
 ///
 /// Needs to be implemented by module generation type
 ///
-/// For examples, take a look at one of the `MintConfigGenerator`, `WalletConfigGenerator`, or
-/// `LightningConfigGenerator` structs.
+/// For examples, take a look at one of the `MintConfigGenerator`,
+/// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ModuleGen: Debug + Sized {
     <span class="kw">const </span>KIND: ModuleKind;
@@ -1125,14 +1166,16 @@
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
 
-    <span class="doccomment">/// Version of the module consensus supported by this implementation given a certain
-    /// [`CoreConsensusVersion`].
+    <span class="doccomment">/// Version of the module consensus supported by this implementation given a
+    /// certain [`CoreConsensusVersion`].
     ///
-    /// Refer to [`ModuleConsensusVersion`] for more information about versioning.
+    /// Refer to [`ModuleConsensusVersion`] for more information about
+    /// versioning.
     ///
-    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can potentially
-    /// implement multiple versions of the consensus, and depending on the config module instance
-    /// config, instantiate the desired one. This method should expose all the available
+    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can
+    /// potentially implement multiple versions of the consensus, and
+    /// depending on the config module instance config, instantiate the
+    /// desired one. This method should expose all the available
     /// versions, purely for information, setup UI and sanity checking purposes.
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion];
 
@@ -1270,7 +1313,8 @@
         ConsensusProposal::Contribute(<span class="macro">vec!</span>[])
     }
 
-    <span class="doccomment">/// Trigger new epoch if contains any elements, otherwise contribute nothing.
+    <span class="doccomment">/// Trigger new epoch if contains any elements, otherwise contribute
+    /// nothing.
     </span><span class="kw">pub fn </span>new_auto_trigger(ci: Vec&lt;CI&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">if </span>ci.is_empty() {
             <span class="self">Self</span>::Contribute(<span class="macro">vec!</span>[])
@@ -1322,13 +1366,15 @@
     <span class="kw">type </span>VerificationCache: VerificationCache;
 
     <span class="kw">fn </span>module_kind() -&gt; ModuleKind {
-        <span class="comment">// Note: All modules should define kinds as &amp;&#39;static str, so this doesn&#39;t allocate
+        <span class="comment">// Note: All modules should define kinds as &amp;&#39;static str, so this doesn&#39;t
+        // allocate
         </span><span class="self">Self</span>::Gen::KIND
     }
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
 
-    <span class="doccomment">/// Module consensus version this module is running with and the API versions it supports in it
+    <span class="doccomment">/// Module consensus version this module is running with and the API
+    /// versions it supports in it
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleConsensusVersion, <span class="kw-2">&amp;</span>[ApiVersion]);
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
@@ -1340,29 +1386,32 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConsensusProposal&lt;&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::ConsensusItem&gt;;
 
-    <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The database transaction will be
-    /// committed to the database after all other modules ran `begin_consensus_epoch`,
-    /// so the results are available when processing transactions.
+    <span class="doccomment">/// This function is called once before transaction processing starts. All
+    /// module consensus items of this round are supplied as
+    /// `consensus_items`. The database transaction will be committed to the
+    /// database after all other modules ran `begin_consensus_epoch`, so the
+    /// results are available when processing transactions.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_items: Vec&lt;(PeerId, &lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::ConsensusItem)&gt;,
     );
 
-    <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
+    <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction
+    /// processing. If the slow part of verification can be modeled as a
+    /// pure function not involving any system state we can build a lookup
+    /// table in a hyper-parallelized manner. This function is meant for
     /// constructing such lookup tables.
     </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input&gt; + Send,
     ) -&gt; <span class="self">Self</span>::VerificationCache;
 
-    <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
@@ -1371,13 +1420,14 @@
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
-    <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database transaction. On failure (e.g. double spend) the database transaction is rolled back and
-    /// the operation will take no effect.
+    <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will
+    /// be part of the database transaction. On failure (e.g. double spend)
+    /// the database transaction is rolled back and the operation will take
+    /// no effect.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     </span><span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
@@ -1386,26 +1436,29 @@
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
-    <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
+    <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed
+    /// transaction pool. This function has no side effects and may be
+    /// called at any time. False positives due to outdated database state
+    /// are ok since they get filtered out after consensus has been reached on
+    /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
-    <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the database transaction. On failure (e.g. double spend) the
-    /// database transaction is rolled back and the operation will take no effect.
+    <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
+    /// all necessary updates to the database will be part of the database
+    /// transaction. On failure (e.g. double spend) the database transaction
+    /// is rolled back and the operation will take no effect.
     ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or note issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
+    /// The supplied `out_point` identifies the operation (e.g. a peg-out or
+    /// note issuance) and can be used to retrieve its outcome later using
+    /// `output_status`.
     ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
+    /// This function may only be called after `begin_consensus_epoch` and
+    /// before `end_consensus_epoch`. Data is only written to the database
+    /// once all transactions have been processed.
     </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
@@ -1413,40 +1466,45 @@
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
-    <span class="doccomment">/// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
+    <span class="doccomment">/// This function is called once all transactions have been processed and
+    /// changes were written to the database. This allows running
+    /// finalization code before the next epoch.
     ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
+    /// Passes in the `consensus_peers` that contributed to this epoch and
+    /// returns a list of peers to drop if any are misbehaving.
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 
-    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
+    <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this
+    /// might contain data needed by the client to access funds or give an
+    /// estimate of when funds will be available. Returns `None` if the
+    /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome&gt;;
 
-    <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.
+    <span class="doccomment">/// Queries the database and returns all assets and liabilities of the
+    /// module.
     ///
-    /// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database
-    /// and consensus should halt.
+    /// Summing over all modules, if liabilities &gt; assets then an error has
+    /// occurred in the database and consensus should halt.
     </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit);
 
-    <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
+    <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are
+    /// made available both to users as well as to other modules. They thus
+    /// should be deterministic, only dependant on their input and the
+    /// current epoch.
     </span><span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt;;
 }
 
-<span class="doccomment">/// Creates a struct that can be used to make our module-decodable structs interact with
-/// `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper that holds the data as serialized
+<span class="doccomment">/// Creates a struct that can be used to make our module-decodable structs
+/// interact with `serde`-based APIs (HBBFT, jsonrpsee). It creates a wrapper
+/// that holds the data as serialized
 </span><span class="comment">// bytes internally.
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>SerdeModuleEncoding&lt;T: Encodable + Decodable&gt;(Vec&lt;u8&gt;, <span class="attr">#[serde(skip)] </span>PhantomData&lt;T&gt;);

@@ -406,6 +406,12 @@
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -434,8 +440,8 @@
 
 <span class="kw">pub mod </span>db;
 
-<span class="doccomment">/// Federation module client for the Wallet module. It can both create transaction inputs and
-/// outputs of the wallet (on-chain) type.
+<span class="doccomment">/// Federation module client for the Wallet module. It can both create
+/// transaction inputs and outputs of the wallet (on-chain) type.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>WalletClient {
     <span class="kw">pub </span>config: WalletClientConfig,
@@ -467,15 +473,20 @@
 }
 
 <span class="kw">impl </span>WalletClient {
-    <span class="doccomment">/// Returns a bitcoin-address derived from the federations peg-in-descriptor and a random tweak
+    <span class="doccomment">/// Returns a bitcoin-address derived from the federations peg-in-descriptor
+    /// and a random tweak
     ///
-    /// This function will create a public/secret [keypair](bitcoin::KeyPair). The public key is used to tweak the
-    /// federations peg-in-descriptor resulting in a bitcoin script. Both script and keypair are stored in the DB
-    /// by using the script as part of the key and the keypair as the value. Even though only the public-key is used to tweak
-    /// the descriptor, the secret-key is needed to prove that one actually created the tweak to be able to claim the funds and
+    /// This function will create a public/secret [keypair](bitcoin::KeyPair).
+    /// The public key is used to tweak the federations peg-in-descriptor
+    /// resulting in a bitcoin script. Both script and keypair are stored in the
+    /// DB by using the script as part of the key and the keypair as the
+    /// value. Even though only the public-key is used to tweak
+    /// the descriptor, the secret-key is needed to prove that one actually
+    /// created the tweak to be able to claim the funds and
     /// prevent front-running by a malicious  federation member
-    /// The returned bitcoin-address is derived from the script. Thus sending bitcoin to that address will result in a
-    /// transaction containing the scripts public-key in at least one of it&#39;s outpoints.
+    /// The returned bitcoin-address is derived from the script. Thus sending
+    /// bitcoin to that address will result in a transaction containing the
+    /// scripts public-key in at least one of it&#39;s outpoints.
     </span><span class="kw">pub async fn </span>get_new_pegin_address&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
@@ -768,7 +779,8 @@
         <span class="comment">// combine signatures
         </span>fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 
-        <span class="comment">// FIXME: find out why these extra rounds are necessary (needs tracing improvement), increases latency only negligibly
+        <span class="comment">// FIXME: find out why these extra rounds are necessary (needs tracing
+        // improvement), increases latency only negligibly
         </span>fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
         fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 

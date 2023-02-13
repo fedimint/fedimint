@@ -440,6 +440,11 @@
 <a href="#440" id="440">440</a>
 <a href="#441" id="441">441</a>
 <a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     array::TryFromSliceError, collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr,
     sync::Arc, time::Duration,
@@ -475,8 +480,9 @@
     </span><span class="kw">pub </span>listen: SocketAddr,
 }
 
-<span class="comment">// Note: Once this binary is stable, we should be able to remove current &#39;ln_gateway&#39;
-// Use CLN_PLUGIN_LOG=&lt;log-level&gt; to enable debug logging from within cln-plugin
+<span class="comment">// Note: Once this binary is stable, we should be able to remove current
+// &#39;ln_gateway&#39; Use CLN_PLUGIN_LOG=&lt;log-level&gt; to enable debug logging from
+// within cln-plugin
 </span><span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span>(service, listen) = ClnRpcService::new()
@@ -497,7 +503,8 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot; suffix
+<span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot;
+/// suffix
 </span><span class="kw">fn </span>as_fedimint_amount&lt;<span class="lifetime">&#39;de</span>, D&gt;(amount: D) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, D::Error&gt;
 <span class="kw">where
     </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
@@ -550,8 +557,9 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
                 <span class="string">&quot;listen&quot;</span>,
-                <span class="comment">// Set an invalid default address in the extension to force the extension plugin user
-                // to supply a valid address via an environment variable or cln plugin config option.
+                <span class="comment">// Set an invalid default address in the extension to force the extension plugin
+                // user to supply a valid address via an environment variable or
+                // cln plugin config option.
                 </span>options::Value::String(<span class="string">&quot;default-dont-use&quot;</span>.into()),
                 <span class="string">&quot;gateway cln extension address&quot;</span>,
             ))
@@ -740,7 +748,8 @@
                 }
             };
 
-            <span class="comment">// Send translated response to the HTLC interceptor for submission to the cln rpc
+            <span class="comment">// Send translated response to the HTLC interceptor for submission to the cln
+            // rpc
             </span><span class="kw">match </span>outcome.send(htlca_res) {
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(tonic::Response::new(CompleteHtlcsResponse {}));
@@ -777,7 +786,8 @@
 <span class="comment">// BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
 // 16399 error code reports unknown payment details.
 //
-// TODO: We should probably use a more specific error code based on htlc processing fail reason
+// TODO: We should probably use a more specific error code based on htlc
+// processing fail reason
 </span><span class="kw">fn </span>htlc_processing_failure() -&gt; serde_json::Value {
     <span class="macro">serde_json::json!</span>({
         <span class="string">&quot;result&quot;</span>: <span class="string">&quot;fail&quot;</span>,
@@ -818,8 +828,8 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(subscription) = <span class="self">self</span>.subscriptions.lock().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>short_channel_id) {
             <span class="kw">let </span>payment_hash = payload.htlc.payment_hash.to_vec();
 
-            <span class="comment">// This has a chance of collission since payment_hashes are not guaranteed to be unique
-            // TODO: generate unique id for each intercepted HTLC
+            <span class="comment">// This has a chance of collission since payment_hashes are not guaranteed to be
+            // unique TODO: generate unique id for each intercepted HTLC
             </span><span class="kw">let </span>intercepted_htlc_id = sha256::Hash::hash(<span class="kw-2">&amp;</span>payment_hash);
 
             <span class="kw">match </span>subscription

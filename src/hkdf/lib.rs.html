@@ -380,7 +380,14 @@
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
-</pre><pre class="rust"><code><span class="doccomment">//! This crate implements the [RFC5869] hash based key derivation function using [`bitcoin_hashes`].
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+</pre><pre class="rust"><code><span class="doccomment">//! This crate implements the [RFC5869] hash based key derivation function using
+//! [`bitcoin_hashes`].
 //!
 //! [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
 //! [`bitcoin_hashes`]: https://docs.rs/bitcoin_hashes/latest/bitcoin_hashes/
@@ -401,7 +408,8 @@
     <span class="kw">pub use </span>bitcoin_hashes::siphash24::Hash <span class="kw">as </span>Siphash24;
 }
 
-<span class="doccomment">/// Implements the [RFC5869] hash based key derivation function using the hash function `H`.
+<span class="doccomment">/// Implements the [RFC5869] hash based key derivation function using the hash
+/// function `H`.
 ///
 /// [RFC5869]: https://www.rfc-editor.org/rfc/rfc5869
 </span><span class="attr">#[derive(Clone)]
@@ -410,12 +418,14 @@
 }
 
 <span class="kw">impl</span>&lt;H: BitcoinHash&gt; Hkdf&lt;H&gt; {
-    <span class="doccomment">/// Run HKDF-extract and keep the resulting pseudo random key as internal state
+    <span class="doccomment">/// Run HKDF-extract and keep the resulting pseudo random key as internal
+    /// state
     ///
     /// ## Inputs
-    /// * `ikm`: Input keying material, secret key material our keys will be derived from
-    /// * `salt`: Optional salt value, if not required set to `&amp;[0; H::LEN]`. As noted in the RFC
-    ///   the salt value can also be a secret.
+    /// * `ikm`: Input keying material, secret key material our keys will be
+    ///   derived from
+    /// * `salt`: Optional salt value, if not required set to `&amp;[0; H::LEN]`. As
+    ///   noted in the RFC the salt value can also be a secret.
     </span><span class="kw">pub fn </span>new(ikm: <span class="kw-2">&amp;</span>[u8], salt: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>engine = HmacEngine::new(salt.unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[<span class="number">0x00</span>; H::LEN]));
         engine.input(ikm);
@@ -425,9 +435,10 @@
         }
     }
 
-    <span class="doccomment">/// Construct the HKDF from a pseudo random key that has the correct distribution and length
-    /// already (e.g. because it&#39;s the output of a previous HKDF round), skipping the HKDF-extract
-    /// step. **If in doubt, please use `Hkdf::new` instead!**
+    <span class="doccomment">/// Construct the HKDF from a pseudo random key that has the correct
+    /// distribution and length already (e.g. because it&#39;s the output of a
+    /// previous HKDF round), skipping the HKDF-extract step. **If in doubt,
+    /// please use `Hkdf::new` instead!**
     ///
     /// See also [`Hkdf::derive_hmac`].
     </span><span class="kw">pub fn </span>from_prk(prk: Hmac&lt;H&gt;) -&gt; <span class="self">Self </span>{
@@ -437,9 +448,10 @@
     <span class="doccomment">/// Run HKDF-expand to generate new key material
     ///
     /// ## Inputs
-    /// * `info`: Defines which key to derive. Different values lead to different keys.
-    /// * `LEN`: Defines the length of the key material to generate in octets. Note that
-    ///   `LEN &lt;= H::LEN * 255` has to be true.
+    /// * `info`: Defines which key to derive. Different values lead to
+    ///   different keys.
+    /// * `LEN`: Defines the length of the key material to generate in octets.
+    ///   Note that `LEN &lt;= H::LEN * 255` has to be true.
     ///
     /// ## Panics
     /// If `LEN &gt; H::LEN * 255`.

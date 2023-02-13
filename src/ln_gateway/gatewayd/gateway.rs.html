@@ -405,6 +405,8 @@
 <a href="#405" id="405">405</a>
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     net::SocketAddr,
@@ -590,8 +592,9 @@
         <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
             .map_err(|e| LnGatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid node pubkey {}&quot;</span>, e)))<span class="question-mark">?</span>;
 
-        <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation connected.
-        // TODO: explicitly handle the case where the channel id overflows
+        <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
+        // connected. TODO: explicitly handle the case where the channel id
+        // overflows
         </span><span class="kw">let </span>channel_id = <span class="self">self</span>.channel_id_generator.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
 
         <span class="kw">let </span>gw_client_cfg = <span class="self">self
@@ -640,8 +643,8 @@
         })
     }
 
-    <span class="doccomment">/// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
-    /// a federation user.
+    <span class="doccomment">/// Handles an intercepted HTLC that might be an incoming payment we are
+    /// receiving on behalf of a federation user.
     </span><span class="kw">async fn </span>handle_receive_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: ReceivePaymentPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="prelude-val">Err</span>(LnGatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
             <span class="string">&quot;Not implemented: handle_receive_payment&quot;
@@ -731,7 +734,8 @@
         })
         .<span class="kw">await</span>;
 
-        <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were interrupted
+        <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were
+        // interrupted
         </span><span class="kw">let </span>loop_ctrl = tg.make_handle();
         <span class="kw">loop </span>{
             <span class="comment">// Shut down main loop if requested

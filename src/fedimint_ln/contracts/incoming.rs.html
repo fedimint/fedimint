@@ -105,6 +105,14 @@
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin_hashes::hash_newtype;
@@ -132,29 +140,34 @@
     }
 }
 
-<span class="comment">// FIXME: the protocol currently envisions the use of a pub key as preimage. This is bad for privacy
-// though since pub keys are distinguishable from randomness and the payer would learn the recipient
-// is using a federated mint. Probably best to just hash the key before.
+<span class="comment">// FIXME: the protocol currently envisions the use of a pub key as preimage.
+// This is bad for privacy though since pub keys are distinguishable from
+// randomness and the payer would learn the recipient is using a federated mint.
+// Probably best to just hash the key before.
 
 // FIXME: encrypt preimage to LN gateway?
 
 </span><span class="doccomment">/// Specialized smart contract for incoming payments
 ///
-/// A user generates a private/public keypair that can later be used to claim the incoming funds.
-/// The public key is the defined as the preimage of a payment has and threshold-encrypted to the
-/// federation&#39;s public key. They then put up the encrypted preimage for sale by creating an
+/// A user generates a private/public keypair that can later be used to claim
+/// the incoming funds. The public key is the defined as the preimage of a
+/// payment has and threshold-encrypted to the federation&#39;s public key. They
+/// then put up the encrypted preimage for sale by creating an
 /// [`IncomingContractOffer`].
 ///
-/// A lightning gateway wanting to claim an incoming HTLC can now use the offer to buy the preimage
-/// by transferring funds into the corresponding contract. This activates the threshold decryption
-/// process inside the federation. Since the user could have threshold-encrypted useless data there
-/// are two possible outcomes:
+/// A lightning gateway wanting to claim an incoming HTLC can now use the offer
+/// to buy the preimage by transferring funds into the corresponding contract.
+/// This activates the threshold decryption process inside the federation. Since
+/// the user could have threshold-encrypted useless data there are two possible
+/// outcomes:
 ///
-///   1. The decryption results in a valid preimage which is given to the lightning gateway. The
-///      user can in return claim the funds from the contract. For this they need to be able to sign
-///      with the private key corresponding to the public key which they used as preimage.
-///   2. The decryption results in an invalid preimage, the gateway can claim back the money. For
-///      this to work securely they have to specify a public key when creating the actual contract.
+///   1. The decryption results in a valid preimage which is given to the
+/// lightning gateway. The      user can in return claim the funds from the
+/// contract. For this they need to be able to sign      with the private key
+/// corresponding to the public key which they used as preimage.
+///   2. The decryption results in an invalid preimage, the gateway can claim
+/// back the money. For      this to work securely they have to specify a public
+/// key when creating the actual contract.
 </span><span class="comment">// TODO: don&#39;t duplicate offer, include id instead and fetch offer on mint side
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>IncomingContract {
@@ -162,24 +175,27 @@
     </span><span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
     <span class="doccomment">/// Encrypted preimage as specified in offer
     </span><span class="kw">pub </span>encrypted_preimage: EncryptedPreimage,
-    <span class="doccomment">/// Status of preimage decryption, will either end in failure or contain the preimage
-    /// eventually. In case decryption was successful the preimage is also the public key locking
-    /// the contract, allowing the offer creator to redeem their money.
+    <span class="doccomment">/// Status of preimage decryption, will either end in failure or contain the
+    /// preimage eventually. In case decryption was successful the preimage
+    /// is also the public key locking the contract, allowing the offer
+    /// creator to redeem their money.
     </span><span class="kw">pub </span>decrypted_preimage: DecryptedPreimage,
     <span class="doccomment">/// Key that can unlock contract in case the decrypted preimage was invalid
     </span><span class="kw">pub </span>gateway_key: secp256k1::XOnlyPublicKey,
 }
 
-<span class="doccomment">/// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of it&#39;s creation. Since
-/// this kind of contract can only be funded once this out point is unambiguous. The out point is
-/// used to update the output outcome once decryption finishes.
+<span class="doccomment">/// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of
+/// it&#39;s creation. Since this kind of contract can only be funded once this out
+/// point is unambiguous. The out point is used to update the output outcome
+/// once decryption finishes.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FundedIncomingContract {
     <span class="kw">pub </span>contract: IncomingContract,
-    <span class="doccomment">/// Incoming contracts are funded exactly once, so they have an associated out-point. We use it
-    /// to report the outcome of the preimage decryption started by the funding in the output&#39;s
-    /// outcome (This can already be queried by users, making an additional way of querying contract
-    /// states unnecessary for now).
+    <span class="doccomment">/// Incoming contracts are funded exactly once, so they have an associated
+    /// out-point. We use it to report the outcome of the preimage
+    /// decryption started by the funding in the output&#39;s outcome (This can
+    /// already be queried by users, making an additional way of querying
+    /// contract states unnecessary for now).
     </span><span class="kw">pub </span>out_point: OutPoint,
 }
 

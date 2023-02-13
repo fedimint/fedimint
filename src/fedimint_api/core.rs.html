@@ -565,6 +565,19 @@
 <a href="#565" id="565">565</a>
 <a href="#566" id="566">566</a>
 <a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -598,14 +611,16 @@
 
 <span class="doccomment">/// Module instance ID
 ///
-/// This value uniquely identifies a single instance of a module in a federation.
+/// This value uniquely identifies a single instance of a module in a
+/// federation.
 ///
 /// In case a single [`ModuleKind`] is instantiated twice (rare, but possible),
 /// each instance will have a different id.
 ///
 /// Note: We have used this type differently before, assuming each `u16`
 /// uniquly identifies a type of module in question. This function will move
-/// to a `ModuleKind` type which only identifies type of a module (mint vs wallet vs ln, etc)
+/// to a `ModuleKind` type which only identifies type of a module (mint vs
+/// wallet vs ln, etc)
 </span><span class="comment">// TODO: turn in a newtype
 </span><span class="kw">pub type </span>ModuleInstanceId = u16;
 
@@ -740,7 +755,8 @@
     };
 }
 
-<span class="doccomment">/// Implements the necessary traits for all associated types of a `FederationServer` module.
+<span class="doccomment">/// Implements the necessary traits for all associated types of a
+/// `FederationServer` module.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>plugin_types_trait_impl {
     (<span class="macro-nonterminal">$key</span>:expr, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty, <span class="macro-nonterminal">$cache</span>:ty) =&gt; {
@@ -784,7 +800,8 @@
     };
 }
 
-<span class="doccomment">/// Implementes the `Display` trait for dyn newtypes whose traits implement `Display`
+<span class="doccomment">/// Implementes the `Display` trait for dyn newtypes whose traits implement
+/// `Display`
 </span><span class="macro">macro_rules! </span>newtype_impl_display_passthrough {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
@@ -809,27 +826,32 @@
 ///
 /// Static-polymorphism version of [`IDecoder`]
 ///
-/// All methods are static, as the decoding code is supposed to be instance-independent,
-/// at least until we start to support modules with overriden [`ModuleInstanceId`]s
+/// All methods are static, as the decoding code is supposed to be
+/// instance-independent, at least until we start to support modules with
+/// overriden [`ModuleInstanceId`]s
 </span><span class="kw">pub trait </span>Decoder: Debug + Send + Sync + <span class="lifetime">&#39;static </span>{
     <span class="kw">type </span>Input: Input;
     <span class="kw">type </span>Output: Output;
     <span class="kw">type </span>OutputOutcome: OutputOutcome;
     <span class="kw">type </span>ConsensusItem: ModuleConsensusItem;
 
-    <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix
+    /// was already decoded
     </span><span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Input, DecodeError&gt;;
 
-    <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix
+    /// was already decoded
     </span><span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output, DecodeError&gt;;
 
-    <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key
+    /// prefix was already decoded
     </span><span class="kw">fn </span>decode_output_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::OutputOutcome, DecodeError&gt;;
 
-    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key
+    /// prefix was already decoded
     </span><span class="kw">fn </span>decode_consensus_item(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
@@ -837,28 +859,32 @@
 }
 
 <span class="kw">pub trait </span>IDecoder: Debug {
-    <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix
+    /// was already decoded
     </span><span class="kw">fn </span>decode_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
         instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;DynInput, DecodeError&gt;;
 
-    <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix
+    /// was already decoded
     </span><span class="kw">fn </span>decode_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
         instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutput, DecodeError&gt;;
 
-    <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key
+    /// prefix was already decoded
     </span><span class="kw">fn </span>decode_output_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
         instance_id: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutputOutcome, DecodeError&gt;;
 
-    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key
+    /// prefix was already decoded
     </span><span class="kw">fn </span>decode_consensus_item(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,

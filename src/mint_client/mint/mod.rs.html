@@ -987,6 +987,15 @@
 <a href="#987" id="987">987</a>
 <a href="#988" id="988">988</a>
 <a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -1027,8 +1036,8 @@
 <span class="kw">const </span>MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">1</span>);
 <span class="kw">const </span>MINT_E_CASH_FETCH_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
 
-<span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
-/// of the mint type.
+<span class="doccomment">/// Federation module client for the Mint module. It can both create transaction
+/// inputs and outputs of the mint type.
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintClient {
     <span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
@@ -1088,10 +1097,12 @@
 <span class="doccomment">/// Single [`Note`] issuance request to the mint.f
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
-/// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
+/// mint successfully processed the transaction signing the corresponding
+/// [`BlindNonce`].
 </span><span class="attr">#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>NoteIssuanceRequest {
-    <span class="doccomment">/// Spend key from which the note nonce (corresponding public key) is derived
+    <span class="doccomment">/// Spend key from which the note nonce (corresponding public key) is
+    /// derived
     </span>spend_key: KeyPair,
     <span class="doccomment">/// Key to unblind the blind signature supplied by the mint for this note
     </span>blinding_key: BlindingKey,
@@ -1132,7 +1143,8 @@
     </span>notes: TieredMulti&lt;NoteIssuanceRequest&gt;,
 }
 
-<span class="doccomment">/// A [`Note`] with associated secret key that allows to proof ownership (spend it)
+<span class="doccomment">/// A [`Note`] with associated secret key that allows to proof ownership (spend
+/// it)
 </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableNote {
     <span class="kw">pub </span>note: Note,
@@ -1291,8 +1303,9 @@
         <span class="kw">let </span>note_key_pairs = ecash
             .into_iter()
             .map(|(amt, note)| {
-                <span class="comment">// We check for note validity in case we got it from an untrusted third party. We
-                // don&#39;t want to needlessly create invalid tx and bother the federation with them.
+                <span class="comment">// We check for note validity in case we got it from an untrusted third party.
+                // We don&#39;t want to needlessly create invalid tx and bother the
+                // federation with them.
                 </span><span class="kw">let </span>spend_pub_key = note.spend_key.x_only_public_key().<span class="number">0</span>;
                 <span class="kw">if </span><span class="kw-2">&amp;</span>spend_pub_key == note.note.spend_key() {
                     <span class="prelude-val">Ok</span>((note.spend_key, (amt, note.note)))
@@ -1358,9 +1371,11 @@
         <span class="self">Self</span>::new_note_secret_static(<span class="kw-2">&amp;</span><span class="self">self</span>.secret, amount, new_idx)
     }
 
-    <span class="doccomment">/// Derive the note `DerivableSecret` from the Mint&#39;s `secret` the `amount` tier and `note_idx`
+    <span class="doccomment">/// Derive the note `DerivableSecret` from the Mint&#39;s `secret` the `amount`
+    /// tier and `note_idx`
     ///
-    /// Static to help re-use in other places, that don&#39;t have a whole [`Self`] available
+    /// Static to help re-use in other places, that don&#39;t have a whole [`Self`]
+    /// available
     </span><span class="kw">pub fn </span>new_note_secret_static(
         secret: <span class="kw-2">&amp;</span>DerivableSecret,
         amount: Amount,
@@ -1426,7 +1441,8 @@
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                     <span class="kw">break </span><span class="prelude-val">Ok</span>(<span class="kw-2">*</span>outpoint);
                 }
-                <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use
+                // custom return type instead of error for retrying
                 </span><span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() &amp;&amp; total_time &lt; MINT_E_CASH_FETCH_TIMEOUT =&gt; {
                     <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, e);
                     fedimint_api::task::sleep(retry_duration).<span class="kw">await
@@ -1531,9 +1547,10 @@
 }
 
 <span class="kw">impl </span>NoteIssuanceRequests {
-    <span class="doccomment">/// Finalize the issuance request using a [`MintOutputBlindSignatures`] from the mint containing the blind
-    /// signatures for all notes in this `IssuanceRequest`. It also takes the mint&#39;s
-    /// [`AggregatePublicKey`] to validate the supplied blind signatures.
+    <span class="doccomment">/// Finalize the issuance request using a [`MintOutputBlindSignatures`] from
+    /// the mint containing the blind signatures for all notes in this
+    /// `IssuanceRequest`. It also takes the mint&#39;s [`AggregatePublicKey`]
+    /// to validate the supplied blind signatures.
     </span><span class="kw">pub fn </span>finalize(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         bsigs: MintOutputBlindSignatures,
@@ -1571,8 +1588,8 @@
 }
 
 <span class="kw">impl </span>NoteIssuanceRequest {
-    <span class="doccomment">/// Generate a request session for a single note and returns it plus the corresponding blinded
-    /// message
+    <span class="doccomment">/// Generate a request session for a single note and returns it plus the
+    /// corresponding blinded message
     </span><span class="kw">fn </span>new&lt;C&gt;(ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;, secret: DerivableSecret) -&gt; (NoteIssuanceRequest, BlindNonce)
     <span class="kw">where
         </span>C: Signing,
@@ -1634,7 +1651,8 @@
 }
 
 <span class="kw">impl </span>MintClientError {
-    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later
+    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready
+    /// later
     </span><span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
             MintClientError::OutputOutcomeError(OutputOutcomeError::Federation(e)) =&gt; {

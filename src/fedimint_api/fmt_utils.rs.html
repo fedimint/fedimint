@@ -221,6 +221,9 @@
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::{cmp, ops, thread_local};
 
@@ -262,9 +265,9 @@
 
 <span class="doccomment">/// Use for displaying potentially large `[serde_json::Value]`s in the logs
 ///
-/// Notably, unlike normal `fmt::Debug` for `serde_json::Value` it does not respect
-/// pretty-printing and other formatting settings on the `formatter`. Which for
-/// debugging &amp; logs should be OK.
+/// Notably, unlike normal `fmt::Debug` for `serde_json::Value` it does not
+/// respect pretty-printing and other formatting settings on the `formatter`.
+/// Which for debugging &amp; logs should be OK.
 </span><span class="kw">pub struct </span>AbbreviateJson&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw">pub </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>serde_json::Value);
 
 <span class="comment">// TODO: use `str::floor_char_boundary` instead (when it becomes stable)
@@ -303,7 +306,8 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// Format json array value truncating elements if there&#39;s too many, and values if they are too long
+<span class="doccomment">/// Format json array value truncating elements if there&#39;s too many, and values
+/// if they are too long
 </span><span class="kw">fn </span>fmt_abbreviated_vec(vec: <span class="kw-2">&amp;</span>[Value], formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
     <span class="kw">const </span>ARRAY_ABBR_LEN: usize = <span class="number">64</span>;
     formatter.write_str(<span class="string">&quot;[&quot;</span>)<span class="question-mark">?</span>;
@@ -320,7 +324,8 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// Format json object value truncating keys if there&#39;s too many, and keys and values if they are too long
+<span class="doccomment">/// Format json object value truncating keys if there&#39;s too many, and keys and
+/// values if they are too long
 </span><span class="kw">fn </span>fmt_abbreviated_object(
     map: <span class="kw-2">&amp;</span>serde_json::Map&lt;String, Value&gt;,
     formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter,
@@ -375,7 +380,8 @@
     <span class="kw">fn </span>abbreviated_fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result;
 }
 
-<span class="doccomment">/// A wrapper that causes the inner `T` to be debug-formatted using [`AbbreviatedDebug`]
+<span class="doccomment">/// A wrapper that causes the inner `T` to be debug-formatted using
+/// [`AbbreviatedDebug`]
 ///
 /// Useful in situations where using more specific wrapper is not feasible,
 /// e.g. the value to be abbreviated is nested inside larger struct

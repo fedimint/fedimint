@@ -7,10 +7,12 @@
     required: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>,
     allow_consensus_fallback: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
     verifier: impl <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.reference.html">&amp;R</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'static
-) -&gt; <a class="struct" href="struct.VerifiableResponse.html" title="struct fedimint_server::query::VerifiableResponse">VerifiableResponse</a>&lt;R&gt;</h4></section></summary><div class="docblock"><p>Strategy for returning first response that is verifiable (typically with a signature)</p>
+) -&gt; <a class="struct" href="struct.VerifiableResponse.html" title="struct fedimint_server::query::VerifiableResponse">VerifiableResponse</a>&lt;R&gt;</h4></section></summary><div class="docblock"><p>Strategy for returning first response that is verifiable (typically with
+a signature)</p>
 <ul>
 <li><code>required</code>: How many responses until a failure or success is returned</li>
-<li><code>allow_consensus_fallback</code>: Returns a success if cannot verify but <code>required</code> agree</li>
+<li><code>allow_consensus_fallback</code>: Returns a success if cannot verify but
+<code>required</code> agree</li>
 <li><code>verifier</code>: Function that verifies the data with the public key</li>
 </ul>
 </div></details></div></details></div><h2 id="trait-implementations" class="small-section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-QueryStrategy%3CR,+R%3E-for-VerifiableResponse%3CR%3E" class="impl"><a href="#impl-QueryStrategy%3CR,+R%3E-for-VerifiableResponse%3CR%3E" class="anchor">§</a><h3 class="code-header">impl&lt;R&gt; <a class="trait" href="trait.QueryStrategy.html" title="trait fedimint_server::query::QueryStrategy">QueryStrategy</a>&lt;R, R&gt; for <a class="struct" href="struct.VerifiableResponse.html" title="struct fedimint_server::query::VerifiableResponse">VerifiableResponse</a>&lt;R&gt;<span class="where fmt-newline">where

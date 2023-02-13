@@ -722,6 +722,11 @@
 <a href="#722" id="722">722</a>
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -941,7 +946,8 @@
     <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed
     </span>PegInAddress,
 
-    <span class="doccomment">/// Send direct method call to the API, waiting for all peers to agree on a response
+    <span class="doccomment">/// Send direct method call to the API, waiting for all peers to agree on a
+    /// response
     </span>Api {
         method: String,
         <span class="doccomment">/// JSON args that will be serialized and send with the request
@@ -963,7 +969,8 @@
         </span>notes: TieredMulti&lt;SpendableNote&gt;,
     },
 
-    <span class="doccomment">/// Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
+    <span class="doccomment">/// Validate notes without claiming them (only checks if signatures valid,
+    /// does not check if nonce unspent)
     </span>Validate {
         <span class="attr">#[clap(value_parser = parse_ecash)]
         </span>notes: TieredMulti&lt;SpendableNote&gt;,
@@ -1024,12 +1031,15 @@
     <span class="doccomment">/// Upload the (encrypted) snapshot of mint notes to federation
     </span>Backup,
 
-    <span class="doccomment">/// Restore the previously created backup of mint notes (with `backup` command)
+    <span class="doccomment">/// Restore the previously created backup of mint notes (with `backup`
+    /// command)
     </span>Restore {
-        <span class="doccomment">/// The amount of nonces to look ahead when scanning epoch history (per amount tier)
+        <span class="doccomment">/// The amount of nonces to look ahead when scanning epoch history (per
+        /// amount tier)
         ///
-        /// Larger values might make the restore initialization slower and memory usage
-        /// slightly higher, but help restore all mint notes in some rare situations.
+        /// Larger values might make the restore initialization slower and
+        /// memory usage slightly higher, but help restore all mint
+        /// notes in some rare situations.
         </span><span class="attr">#[clap(long = <span class="string">&quot;gap-limit&quot;</span>, default_value = <span class="string">&quot;100&quot;</span>)]
         </span>gap_limit: usize,
     },

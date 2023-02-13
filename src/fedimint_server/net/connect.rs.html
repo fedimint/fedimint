@@ -619,7 +619,12 @@
 <a href="#619" id="619">619</a>
 <a href="#620" id="620">620</a>
 <a href="#621" id="621">621</a>
-</pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple implementations
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+</pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
+//! implementations
 
 </span><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::convert::TryFrom;
@@ -656,8 +661,8 @@
 
 <span class="doccomment">/// Allows to connect to peers and to listen for incoming connections
 ///
-/// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted
-/// for production deployments.
+/// Connections are message based ([`FramedTransport`]) and should be
+/// authenticated and encrypted for production deployments.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>Connector&lt;M&gt; {
     <span class="doccomment">/// Connect to a `destination`
@@ -666,7 +671,8 @@
     <span class="doccomment">/// Listen for incoming connections on `bind_addr`
     </span><span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: SocketAddr) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt;;
 
-    <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version of itself
+    <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version
+    /// of itself
     </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; AnyConnector&lt;M&gt;
     <span class="kw">where
         </span><span class="self">Self</span>: Sized + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>,
@@ -681,7 +687,8 @@
     our_certificate: rustls::Certificate,
     our_private_key: rustls::PrivateKey,
     peer_certs: Arc&lt;PeerCertStore&gt;,
-    <span class="doccomment">/// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls` understands
+    <span class="doccomment">/// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls`
+    /// understands
     </span>cert_store: RootCertStore,
     peer_names: HashMap&lt;PeerId, String&gt;,
 }
@@ -1094,7 +1101,8 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>connect_success() {
-        <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt; layer :(
+        <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt;
+        // layer :(
         </span><span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>connectors = gen_connector_config(<span class="number">5</span>)

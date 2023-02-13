@@ -49,6 +49,10 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -59,23 +63,27 @@
 
 <span class="doccomment">/// Specialized smart contract for outgoing payments.
 ///
-/// A user locks up funds that can be claimed by a lightning gateway if it pays the invoice and
-/// thus receives the preimage to the payment hash and can thereby prove the payment. If the gateway
-/// is not able to do so before the timelock expires the user can claim back the funds.
+/// A user locks up funds that can be claimed by a lightning gateway if it pays
+/// the invoice and thus receives the preimage to the payment hash and can
+/// thereby prove the payment. If the gateway is not able to do so before the
+/// timelock expires the user can claim back the funds.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingContract {
     <span class="doccomment">/// Hash that can be used to spend the output before the timelock expires
     </span><span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
-    <span class="doccomment">/// Public key of the LN gateway allowed to claim the HTLC before the timelock expires
+    <span class="doccomment">/// Public key of the LN gateway allowed to claim the HTLC before the
+    /// timelock expires
     </span><span class="kw">pub </span>gateway_key: secp256k1::XOnlyPublicKey,
     <span class="doccomment">/// Block height at which the money will be spendable by the pubkey
     </span><span class="kw">pub </span>timelock: u32,
-    <span class="doccomment">/// Public key of the user that can claim the money back after the timelock expires
+    <span class="doccomment">/// Public key of the user that can claim the money back after the timelock
+    /// expires
     </span><span class="kw">pub </span>user_key: secp256k1::XOnlyPublicKey,
     <span class="comment">// FIXME: use pruned, privacy friendly version without description etc.
     </span><span class="doccomment">/// Invoice containing metadata on how to obtain the preimage
     </span><span class="kw">pub </span>invoice: lightning_invoice::Invoice,
-    <span class="doccomment">/// Flag that can be set by the gateway and allows the client to claim an early refund
+    <span class="doccomment">/// Flag that can be set by the gateway and allows the client to claim an
+    /// early refund
     </span><span class="kw">pub </span>cancelled: bool,
 }
 

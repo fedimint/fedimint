@@ -798,6 +798,10 @@
 <a href="#798" id="798">798</a>
 <a href="#799" id="799">799</a>
 <a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
@@ -844,7 +848,8 @@
     </span><span class="kw">pub </span>consensus: ServerConfigConsensus,
     <span class="doccomment">/// Contains all configuration that is locally configurable and not secret
     </span><span class="kw">pub </span>local: ServerConfigLocal,
-    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key material
+    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key
+    /// material
     </span><span class="kw">pub </span>private: ServerConfigPrivate,
 }
 
@@ -994,7 +999,8 @@
 }
 
 <span class="kw">impl </span>ServerConfig {
-    <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key setup
+    <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key
+    /// setup
     </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>from(
         code_version: <span class="kw-2">&amp;</span>str,
@@ -1240,9 +1246,11 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = Default::default();
 
-        <span class="comment">// NOTE: Currently we do not implement user-assisted module-kind to module-instance-id assignment
-        // We assume that user wants one instance of each module that was compiled in. This is how
-        // things were initially, where we consider &quot;module as a code&quot; as &quot;module as an instance at runtime&quot;
+        <span class="comment">// NOTE: Currently we do not implement user-assisted module-kind to
+        // module-instance-id assignment We assume that user wants one instance
+        // of each module that was compiled in. This is how things were
+        // initially, where we consider &quot;module as a code&quot; as &quot;module as an instance at
+        // runtime&quot;
         </span><span class="kw">for </span>(module_instance_id, (_kind, gen)) <span class="kw">in
             </span>module_config_gens.legacy_init_order_iter().enumerate()
         {

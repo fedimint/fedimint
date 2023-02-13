@@ -687,10 +687,15 @@
 <a href="#687" id="687">687</a>
 <a href="#688" id="688">688</a>
 <a href="#689" id="689">689</a>
-</pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+</pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
+//! members
 //!
-//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
-//! [`ReconnectPeerConnections`], see these for details.
+//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its
+//! main implementation is [`ReconnectPeerConnections`], see these for details.
 
 </span><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeSet, HashMap};
@@ -729,10 +734,11 @@
 
 <span class="doccomment">/// Connection manager that automatically reconnects to peers
 ///
-/// `ReconnectPeerConnections` is based on a [`Connector`](crate::net::connect::Connector) object
-/// which is used to open [`FramedTransport`](crate::net::framed::FramedTransport) connections. For
-/// production deployments the `Connector` has to ensure that connections are authenticated and
-/// encrypted.
+/// `ReconnectPeerConnections` is based on a
+/// [`Connector`](crate::net::connect::Connector) object which is used to open
+/// [`FramedTransport`](crate::net::framed::FramedTransport) connections. For
+/// production deployments the `Connector` has to ensure that connections are
+/// authenticated and encrypted.
 </span><span class="kw">pub struct </span>ReconnectPeerConnections&lt;T&gt; {
     connections: HashMap&lt;PeerId, PeerConnection&lt;T&gt;&gt;,
 }
@@ -747,14 +753,15 @@
 </span><span class="kw">pub struct </span>NetworkConfig {
     <span class="doccomment">/// Our federation member&#39;s identity
     </span><span class="kw">pub </span>identity: PeerId,
-    <span class="doccomment">/// Our listen address for incoming connections from other federation members
+    <span class="doccomment">/// Our listen address for incoming connections from other federation
+    /// members
     </span><span class="kw">pub </span>bind_addr: SocketAddr,
     <span class="doccomment">/// Map of all peers&#39; connection information we want to be connected to
     </span><span class="kw">pub </span>peers: HashMap&lt;PeerId, Url&gt;,
 }
 
-<span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
-/// public interface.
+<span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because
+/// it appears in the public interface.
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PeerMessage&lt;M&gt; {
     msg: UniqueMessage&lt;M&gt;,
@@ -795,9 +802,10 @@
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
-    <span class="doccomment">/// Creates a new `ReconnectPeerConnections` connection manager from a network config and a
-    /// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for
-    /// requirements on the `Connector`.
+    <span class="doccomment">/// Creates a new `ReconnectPeerConnections` connection manager from a
+    /// network config and a [`Connector`](crate::net::connect::Connector).
+    /// See [`ReconnectPeerConnections`] for requirements on the
+    /// `Connector`.
     </span><span class="attr">#[instrument(skip_all)]
     </span><span class="kw">pub async fn </span>new(
         cfg: NetworkConfig,
@@ -945,9 +953,9 @@
     <span class="kw">async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: <span class="kw-2">&amp;</span>TaskHandle) {
         <span class="kw">let </span>peer = <span class="self">self</span>.common.peer;
 
-        <span class="comment">// Note: `state_transition` internally uses channel operations (`send` and `recv`)
-        // which will disconnect when other tasks are shutting down returning here,
-        // so we probably don&#39;t need any `timeout` here.
+        <span class="comment">// Note: `state_transition` internally uses channel operations (`send` and
+        // `recv`) which will disconnect when other tasks are shutting down
+        // returning here, so we probably don&#39;t need any `timeout` here.
         </span><span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(new_self) = <span class="self">self</span>.state_transition(task_handle).<span class="kw">await </span>{
                 <span class="self">self </span>= new_self;

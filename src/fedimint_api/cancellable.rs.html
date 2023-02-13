@@ -7,6 +7,7 @@
 <a href="#7" id="7">7</a>
 <a href="#8" id="8">8</a>
 <a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
 </pre><pre class="rust"><code><span class="kw">use </span>thiserror::Error;
 
 <span class="doccomment">/// An error used as a &quot;cancelled&quot; marker in [`Cancellable`].
@@ -14,7 +15,8 @@
 #[error(<span class="string">&quot;Operation cancelled&quot;</span>)]
 </span><span class="kw">pub struct </span>Cancelled;
 
-<span class="doccomment">/// Operation that can potentially get cancelled returning no result (e.g. program shutdown).
+<span class="doccomment">/// Operation that can potentially get cancelled returning no result (e.g.
+/// program shutdown).
 </span><span class="kw">pub type </span>Cancellable&lt;T&gt; = std::result::Result&lt;T, Cancelled&gt;;
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_api" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

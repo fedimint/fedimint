@@ -225,6 +225,11 @@
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -256,7 +261,8 @@
 </span><span class="kw">enum </span>Command {
     <span class="doccomment">/// Print the latest git commit hash this bin. was build with
     </span>VersionHash,
-    <span class="doccomment">/// Creates a connection cert string that must be shared with all other peers
+    <span class="doccomment">/// Creates a connection cert string that must be shared with all other
+    /// peers
     </span>CreateCert {
         <span class="doccomment">/// Directory to output all the generated config files
         </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>, env = <span class="string">&quot;FM_DATA_DIR&quot;</span>)]
@@ -278,7 +284,8 @@
         </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
         </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
-    <span class="doccomment">/// All peers must run distributed key gen at the same time to create configs
+    <span class="doccomment">/// All peers must run distributed key gen at the same time to create
+    /// configs
     </span>Run {
         <span class="doccomment">/// Directory to output all the generated config files
         </span><span class="attr">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
@@ -296,7 +303,8 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hals_trusty_mint&quot;</span>)]
         </span>federation_name: String,
 
-        <span class="doccomment">/// Comma-separated list of connection certs from all peers (including ours)
+        <span class="doccomment">/// Comma-separated list of connection certs from all peers (including
+        /// ours)
         </span><span class="attr">#[arg(long = <span class="string">&quot;certs&quot;</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
         </span>certs: Vec&lt;String&gt;,
 
@@ -309,8 +317,8 @@
         </span><span class="attr">#[arg(long = <span class="string">&quot;network&quot;</span>, default_value = <span class="string">&quot;regtest&quot;</span>)]
         </span>network: bitcoin::network::constants::Network,
 
-        <span class="doccomment">/// The number of confirmations a deposit transaction requires before accepted by the
-        /// federation
+        <span class="doccomment">/// The number of confirmations a deposit transaction requires before
+        /// accepted by the federation
         </span><span class="attr">#[arg(long = <span class="string">&quot;finalty&quot;</span>, default_value = <span class="string">&quot;10&quot;</span>)]
         </span>finality_delay: u32,
 
@@ -326,7 +334,8 @@
         <span class="doccomment">/// Plaintext config file output
         </span><span class="attr">#[arg(long = <span class="string">&quot;out-file&quot;</span>)]
         </span>out_file: PathBuf,
-        <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the in_file directory
+        <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the
+        /// in_file directory
         </span><span class="attr">#[arg(long = <span class="string">&quot;salt-file&quot;</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in
@@ -341,7 +350,8 @@
         <span class="doccomment">/// Encrypted config file output
         </span><span class="attr">#[arg(long = <span class="string">&quot;out-file&quot;</span>)]
         </span>out_file: PathBuf,
-        <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the out_file directory
+        <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the
+        /// out_file directory
         </span><span class="attr">#[arg(long = <span class="string">&quot;salt-file&quot;</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs, will prompt if not passed in

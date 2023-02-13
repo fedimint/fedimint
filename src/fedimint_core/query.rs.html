@@ -298,6 +298,9 @@
 <a href="#298" id="298">298</a>
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -330,10 +333,12 @@
 }
 
 <span class="kw">impl</span>&lt;R&gt; VerifiableResponse&lt;R&gt; {
-    <span class="doccomment">/// Strategy for returning first response that is verifiable (typically with a signature)
+    <span class="doccomment">/// Strategy for returning first response that is verifiable (typically with
+    /// a signature)
     ///
     /// * `required`: How many responses until a failure or success is returned
-    /// * `allow_consensus_fallback`: Returns a success if cannot verify but `required` agree
+    /// * `allow_consensus_fallback`: Returns a success if cannot verify but
+    ///   `required` agree
     /// * `verifier`: Function that verifies the data with the public key
     </span><span class="kw">pub fn </span>new(
         required: usize,
@@ -483,9 +488,10 @@
     }
 }
 
-<span class="doccomment">/// Returns when `required` responses are equal, retrying after every `required` responses
-</span><span class="comment">// FIXME: should be replaced by queries for specific epochs in case we cannot get enough responses
-// FIXME: for any single epoch
+<span class="doccomment">/// Returns when `required` responses are equal, retrying after every `required`
+/// responses
+</span><span class="comment">// FIXME: should be replaced by queries for specific epochs in case we cannot
+// get enough responses FIXME: for any single epoch
 </span><span class="kw">pub struct </span>EventuallyConsistent&lt;R&gt; {
     responses: BTreeSet&lt;PeerId&gt;,
     current: CurrentConsensus&lt;R&gt;,

@@ -548,6 +548,9 @@
 <a href="#548" id="548">548</a>
 <a href="#549" id="549">549</a>
 <a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -628,8 +631,9 @@
 
 <span class="attr">#[allow(dead_code)]
 </span><span class="kw">impl </span>LnClient {
-    <span class="doccomment">/// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
-    /// till the block height defined by `timelock`, after that we can claim our money back.
+    <span class="doccomment">/// Create an output that incentivizes a Lighning gateway to pay an invoice
+    /// for us. It has time till the block height defined by `timelock`,
+    /// after that we can claim our money back.
     </span><span class="kw">pub async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
@@ -702,7 +706,8 @@
     </span><span class="kw">pub async fn </span>is_outgoing_contract_refundable(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
         <span class="kw">let </span>contract = <span class="self">self</span>.get_outgoing_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// If the contract was cancelled by the LN gateway we can get a refund instantly …
+        <span class="comment">// If the contract was cancelled by the LN gateway we can get a refund instantly
+        // …
         </span><span class="kw">if </span>contract.contract.cancelled {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">true</span>);
         }
@@ -832,7 +837,8 @@
         <span class="prelude-val">Ok</span>(confirmed_invoice)
     }
 
-    <span class="doccomment">/// Used by gateway to prematurely return funds to the user if the payment failed
+    <span class="doccomment">/// Used by gateway to prematurely return funds to the user if the payment
+    /// failed
     </span><span class="kw">pub fn </span>create_cancel_outgoing_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract_id: ContractId,

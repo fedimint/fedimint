@@ -555,6 +555,12 @@
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::cmp::min;
@@ -772,7 +778,8 @@
 
     <span class="doccomment">/// Loop `run_conensus_epoch` until shut down
     </span><span class="kw">async fn </span>run_consensus(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: TaskHandle) {
-        <span class="comment">// FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
+        <span class="comment">// FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a
+        // problem for change, but maybe later for other use cases
         </span><span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
         <span class="self">self</span>.start_consensus().<span class="kw">await</span>;
@@ -800,7 +807,8 @@
         <span class="macro">info!</span>(<span class="string">&quot;Consensus task shut down&quot;</span>);
     }
 
-    <span class="doccomment">/// Starts consensus by skipping to the last saved epoch history  and triggering a new epoch
+    <span class="doccomment">/// Starts consensus by skipping to the last saved epoch history  and
+    /// triggering a new epoch
     </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span>db = <span class="self">self</span>.consensus.db.clone();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
@@ -816,7 +824,8 @@
         <span class="self">self</span>.request_rejoin(<span class="number">1</span>).<span class="kw">await</span>;
     }
 
-    <span class="doccomment">/// Returns the next epoch that we need to process, based on our saved history
+    <span class="doccomment">/// Returns the next epoch that we need to process, based on our saved
+    /// history
     </span><span class="kw">fn </span>next_epoch_to_process(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
         <span class="self">self</span>.last_processed_epoch
             .as_ref()
@@ -826,7 +835,8 @@
 
     <span class="doccomment">/// Requests, verifies and processes history from peers
     ///
-    /// `last_outcome` - The consensus outcome (unprocessed), we&#39;re trying to process.
+    /// `last_outcome` - The consensus outcome (unprocessed), we&#39;re trying to
+    /// process.
     </span><span class="kw">pub async fn </span>process_outcome(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         last_outcome: HbbftConsensusOutcome,
@@ -959,8 +969,8 @@
         }
     }
 
-    <span class="doccomment">/// Handles one step of the HBBFT algorithm, sending messages to peers and parsing any
-    /// outcomes contained in the step
+    <span class="doccomment">/// Handles one step of the HBBFT algorithm, sending messages to peers and
+    /// parsing any outcomes contained in the step
     </span><span class="kw">async fn </span>handle_step(<span class="kw-2">&amp;mut </span><span class="self">self</span>, step: EpochStep) -&gt; Cancellable&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
         <span class="kw">for </span>msg <span class="kw">in </span>step.messages {
             <span class="self">self</span>.connections
@@ -1049,9 +1059,10 @@
         }
     }
 
-    <span class="doccomment">/// If we are rejoining and received a threshold of messages from the same epoch, then skip
-    /// to that epoch.  Give ourselves a buffer of `NUM_EPOCHS_REJOIN_AHEAD` so we can ensure
-    /// we receive enough HBBFT messages to produce an outcome.
+    <span class="doccomment">/// If we are rejoining and received a threshold of messages from the same
+    /// epoch, then skip to that epoch.  Give ourselves a buffer of
+    /// `NUM_EPOCHS_REJOIN_AHEAD` so we can ensure we receive enough HBBFT
+    /// messages to produce an outcome.
     </span><span class="kw">async fn </span>rejoin_at_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>, epoch: u64, peer: PeerId) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(epochs) = <span class="self">self</span>.rejoin_at_epoch.as_mut() {
             <span class="kw">let </span>peers = epochs.entry(epoch).or_default();
@@ -1065,7 +1076,8 @@
         }
     }
 
-    <span class="doccomment">/// Sends a rejoin request to all peers, indicating the number of epochs we want them to create
+    <span class="doccomment">/// Sends a rejoin request to all peers, indicating the number of epochs we
+    /// want them to create
     </span><span class="kw">async fn </span>request_rejoin(<span class="kw-2">&amp;mut </span><span class="self">self</span>, epochs_to_run: u64) {
         <span class="self">self</span>.connections
             .send(

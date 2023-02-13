@@ -452,6 +452,13 @@
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
 <a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -466,9 +473,10 @@
 
 <span class="doccomment">/// Represents notes of different denominations.
 ///
-/// **Attention:** care has to be taken when constructing this to avoid overflow when calculating
-/// the total amount represented. As it is prudent to limit both the maximum note amount and maximum
-/// note count per transaction this shouldn&#39;t be a problem in practice though.
+/// **Attention:** care has to be taken when constructing this to avoid overflow
+/// when calculating the total amount represented. As it is prudent to limit
+/// both the maximum note amount and maximum note count per transaction this
+/// shouldn&#39;t be a problem in practice though.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub struct </span>TieredMulti&lt;T&gt;(BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;);
 
@@ -553,10 +561,11 @@
     <span class="doccomment">/// Returns an iterator over every `(Amount, &amp;T)`
     ///
     /// Note: The order of the elements is important:
-    /// from the lowest tier to the highest, then in order of elements in the Vec
+    /// from the lowest tier to the highest, then in order of elements in the
+    /// Vec
     </span><span class="kw">pub fn </span>iter_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>T)&gt; + DoubleEndedIterator {
-        <span class="comment">// Note: If you change the method implementation, make sure that the returned order of the
-        // elements stays consistent.
+        <span class="comment">// Note: If you change the method implementation, make sure that the returned
+        // order of the elements stays consistent.
         </span><span class="self">self</span>.<span class="number">0
             </span>.iter()
             .flat_map(|(amt, notes)| notes.iter().map(<span class="kw">move </span>|c| (<span class="kw-2">*</span>amt, c)))
@@ -565,10 +574,11 @@
     <span class="doccomment">/// Returns an consuming iterator over every `(Amount, T)`
     ///
     /// Note: The order of the elements is important:
-    /// from the lowest tier to the highest, then in order of elements in the Vec
+    /// from the lowest tier to the highest, then in order of elements in the
+    /// Vec
     </span><span class="kw">pub fn </span>into_iter_items(<span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, T)&gt; + DoubleEndedIterator {
-        <span class="comment">// Note: If you change the method implementation, make sure that the returned order of the
-        // elements stays consistent.
+        <span class="comment">// Note: If you change the method implementation, make sure that the returned
+        // order of the elements stays consistent.
         </span><span class="self">self</span>.<span class="number">0
             </span>.into_iter()
             .flat_map(|(amt, notes)| notes.into_iter().map(<span class="kw">move </span>|c| (amt, c)))
@@ -579,7 +589,8 @@
         <span class="self">self</span>.<span class="number">0</span>.values().map(|notes| notes.len()).max().unwrap_or(<span class="number">0</span>)
     }
 
-    <span class="doccomment">/// Verifies that all keys in `self` are present in the keys of the given parameter `Tiered`
+    <span class="doccomment">/// Verifies that all keys in `self` are present in the keys of the given
+    /// parameter `Tiered`
     </span><span class="kw">pub fn </span>all_tiers_exist_in&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, keys: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), InvalidAmountTierError&gt; {
         <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.keys().find(|<span class="kw-2">&amp;</span>amt| keys.get(<span class="kw-2">*</span>amt).is_none()) {
             <span class="prelude-val">Some</span>(amt) =&gt; <span class="prelude-val">Err</span>(InvalidAmountTierError(<span class="kw-2">*</span>amt)),
@@ -592,7 +603,8 @@
         <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>amt)
     }
 
-    <span class="comment">// TODO: Get rid of it. It might be used to break useful invariants (like making sure there are no empty `Vec`s after removal)
+    <span class="comment">// TODO: Get rid of it. It might be used to break useful invariants (like making
+    // sure there are no empty `Vec`s after removal)
     </span><span class="kw">pub fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>Vec&lt;T&gt;&gt; {
         <span class="self">self</span>.<span class="number">0</span>.get_mut(<span class="kw-2">&amp;</span>amt)
     }
@@ -602,9 +614,9 @@
 <span class="kw">where
     </span>C: Clone,
 {
-    <span class="doccomment">/// Select notes with total amount of *at least* `amount`. If more than requested amount of notes
-    /// are returned it was because exact change couldn&#39;t be made, and the next smallest amount will be
-    /// returned.
+    <span class="doccomment">/// Select notes with total amount of *at least* `amount`. If more than
+    /// requested amount of notes are returned it was because exact change
+    /// couldn&#39;t be made, and the next smallest amount will be returned.
     ///
     /// The caller can request change from the federation.
     </span><span class="comment">// TODO: move somewhere else?
@@ -636,8 +648,9 @@
 <span class="kw">impl </span>TieredMulti&lt;()&gt; {
     <span class="doccomment">/// Determines the denominations to use when representing an amount
     ///
-    /// Algorithm tries to leave the user with a target number of `denomination_sets` starting
-    /// at the lowest denomination.  `self` gives the denominations that the user already has.
+    /// Algorithm tries to leave the user with a target number of
+    /// `denomination_sets` starting at the lowest denomination.  `self`
+    /// gives the denominations that the user already has.
     </span><span class="kw">pub fn </span>represent_amount&lt;K, V&gt;(
         amount: Amount,
         current_denominations: <span class="kw-2">&amp;</span>TieredMulti&lt;V&gt;,
@@ -745,8 +758,9 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, I, C&gt; TieredMultiZip&lt;<span class="lifetime">&#39;a</span>, I, C&gt; {
-    <span class="doccomment">/// Creates a new MultiZip Iterator from `Notes` iterators. These have to be checked for
-    /// structural equality! There also has to be at least one iterator in the `iter` vector.
+    <span class="doccomment">/// Creates a new MultiZip Iterator from `Notes` iterators. These have to be
+    /// checked for structural equality! There also has to be at least one
+    /// iterator in the `iter` vector.
     </span><span class="kw">pub fn </span>new(iters: Vec&lt;I&gt;) -&gt; <span class="self">Self </span>{
         <span class="macro">assert!</span>(!iters.is_empty());
 

@@ -292,6 +292,7 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -575,7 +576,8 @@
                 .first()
                 .expect(<span class="string">&quot;Transaction must contain at least one output&quot;</span>);
 
-            <span class="comment">// if transaction is confirmed, we&#39;re going to find the confirmation event in the history of ifs first output
+            <span class="comment">// if transaction is confirmed, we&#39;re going to find the confirmation event in
+            // the history of ifs first output
             </span><span class="prelude-val">Ok</span>(<span class="self">self
                 </span>.<span class="number">0
                 </span>.script_get_history(<span class="kw-2">&amp;</span>output.script_pubkey)<span class="question-mark">?

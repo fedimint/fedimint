@@ -68,6 +68,8 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -82,9 +84,11 @@
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DummyConfig {
-    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key material
+    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key
+    /// material
     </span><span class="kw">pub </span>private: DummyConfigPrivate,
-    <span class="doccomment">/// Contains all configuration that needs to be the same for every federation member
+    <span class="doccomment">/// Contains all configuration that needs to be the same for every
+    /// federation member
     </span><span class="kw">pub </span>consensus: DummyConfigConsensus,
 }
 

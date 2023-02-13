@@ -445,6 +445,7 @@
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
 </pre><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 
 </span><span class="kw">use </span>std::collections::VecDeque;
@@ -476,7 +477,8 @@
 
 <span class="attr">#[derive(Debug, Default)]
 </span><span class="kw">struct </span>TaskGroupInner {
-    <span class="doccomment">/// Was the shutdown requested, either externally or due to any task failure?
+    <span class="doccomment">/// Was the shutdown requested, either externally or due to any task
+    /// failure?
     </span>is_shutting_down: AtomicBool,
     <span class="attr">#[allow(clippy::type_complexity)]
     </span>on_shutdown: Mutex&lt;Vec&lt;Box&lt;<span class="kw">dyn </span>FnOnce() -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, ()&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;&gt;,
@@ -535,9 +537,9 @@
     /// calling [`Self::join_all`] and detecting any panics on just a
     /// subset of tasks.
     ///
-    /// The code create a subgroup is responsible for calling [`Self::join_all`].
-    /// If it won&#39;t, the parent subgroup **will not** detect any panics in the
-    /// tasks spawned by the subgroup.
+    /// The code create a subgroup is responsible for calling
+    /// [`Self::join_all`]. If it won&#39;t, the parent subgroup **will not**
+    /// detect any panics in the tasks spawned by the subgroup.
     </span><span class="kw">pub async fn </span>make_subgroup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskGroup {
         <span class="kw">let </span>new_tg = <span class="self">Self</span>::new();
         <span class="self">self</span>.make_handle()

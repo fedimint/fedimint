@@ -363,6 +363,9 @@
 <a href="#363" id="363">363</a>
 <a href="#364" id="364">364</a>
 <a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
 </pre><pre class="rust"><code><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -424,8 +427,9 @@
 )]
 </span><span class="kw">pub struct </span>PeerId(u16);
 
-<span class="doccomment">/// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
-/// this is also why the amount type from rust-bitcoin isn&#39;t used instead.
+<span class="doccomment">/// Represents an amount of BTC inside the system. The base denomination is
+/// milli satoshi for now, this is also why the amount type from rust-bitcoin
+/// isn&#39;t used instead.
 </span><span class="attr">#[derive(
     Debug,
     Clone,
@@ -491,7 +495,8 @@
 </span><span class="kw">pub struct </span>OutPoint {
     <span class="doccomment">/// The referenced transaction ID
     </span><span class="kw">pub </span>txid: TransactionId,
-    <span class="doccomment">/// As a transaction may have multiple outputs, this refers to the index of the output in a transaction
+    <span class="doccomment">/// As a transaction may have multiple outputs, this refers to the index of
+    /// the output in a transaction
     </span><span class="kw">pub </span>out_idx: u64,
 }
 
@@ -542,7 +547,8 @@
         (<span class="self">self</span>.total() - <span class="number">1</span>) / <span class="number">3
     </span>}
 
-    <span class="doccomment">/// number of peers to select such that one is honest (under our assumptions)
+    <span class="doccomment">/// number of peers to select such that one is honest (under our
+    /// assumptions)
     </span><span class="kw">fn </span>one_honest(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.max_evil() + <span class="number">1
     </span>}

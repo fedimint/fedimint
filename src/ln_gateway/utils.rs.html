@@ -46,14 +46,14 @@
 <span class="kw">use </span>tokio::time::sleep;
 <span class="kw">use </span>tracing::info;
 
-<span class="doccomment">/// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the supplied `Duration`
-/// `interval` between attempts
+<span class="doccomment">/// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the
+/// supplied `Duration` `interval` between attempts
 ///
 /// # Returns
 ///
 /// - If the closure runs successfully, the result is immediately returned
-/// - If the closure did not run successfully for `max_attempts` times, the error of the closure
-///   is returned
+/// - If the closure did not run successfully for `max_attempts` times, the
+///   error of the closure is returned
 </span><span class="kw">pub async fn </span>retry&lt;F, Fut, T&gt;(
     op_name: String,
     op_fn: F,

@@ -23,6 +23,7 @@
 <a href="#23" id="23">23</a>
 <a href="#24" id="24">24</a>
 <a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
 </pre><pre class="rust"><code><span class="kw">use </span>thiserror::Error;
 
 <span class="kw">pub mod </span>api;
@@ -43,7 +44,8 @@
 }
 
 <span class="kw">impl </span>CoreError {
-    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later
+    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready
+    /// later
     </span><span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="macro">matches!</span>(<span class="self">self</span>, CoreError::PendingPreimage)
     }

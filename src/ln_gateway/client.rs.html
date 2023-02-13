@@ -224,6 +224,7 @@
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     fs::File,
@@ -409,7 +410,8 @@
             }
 
             <span class="macro">panic!</span>(<span class="string">&quot;Attempted to overwrite existing gateway client config&quot;</span>)
-            <span class="comment">// TODO: Issue 1057: Safe persistence and migration of gateway federation config
+            <span class="comment">// TODO: Issue 1057: Safe persistence and migration of gateway
+            // federation config
         </span>}
 
         <span class="macro">debug!</span>(<span class="string">&quot;Saving gateway cfg in {}&quot;</span>, path.display());

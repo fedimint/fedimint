@@ -307,10 +307,12 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Threshold Blind Signatures
 //!
-//! This library implements an ad-hoc threshold blind signature scheme based on BLS signatures using
-//! the (unrelated) BLS12-381 curve.
+//! This library implements an ad-hoc threshold blind signature scheme based on
+//! BLS signatures using the (unrelated) BLS12-381 curve.
 
 </span><span class="kw">use </span>std::hash::Hasher;
 
@@ -469,10 +471,12 @@
     BlindedSignatureShare(sig.to_affine())
 }
 
-<span class="doccomment">/// Combines a sufficent amount of valid blinded signature shares to a blinded signature. The
-/// responsibility of verifying the supplied shares lies with the caller.
+<span class="doccomment">/// Combines a sufficent amount of valid blinded signature shares to a blinded
+/// signature. The responsibility of verifying the supplied shares lies with the
+/// caller.
 ///
-/// * `sig_shares`: an iterator yielding pairs of key indices and signature shares from said key
+/// * `sig_shares`: an iterator yielding pairs of key indices and signature
+///   shares from said key
 /// * `threshold`: number of shares needed to combine a signature
 ///
 /// # Panics

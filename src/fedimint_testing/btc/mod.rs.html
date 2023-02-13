@@ -37,6 +37,8 @@
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
 <a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>bitcoind;
 <span class="kw">pub mod </span>fixtures;
 
@@ -56,7 +58,8 @@
 
     <span class="doccomment">/// Prepare funding wallet
     ///
-    /// If needed will mine initial 100 blocks for `send_and_mine_block` to work.
+    /// If needed will mine initial 100 blocks for `send_and_mine_block` to
+    /// work.
     </span><span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>);
 
     <span class="doccomment">/// Send some bitcoin to an address then mine a block to confirm it.
@@ -73,7 +76,8 @@
     <span class="doccomment">/// Returns a new address.
     </span><span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address;
 
-    <span class="doccomment">/// Mine a block to include any pending transactions then get the amount received to an address
+    <span class="doccomment">/// Mine a block to include any pending transactions then get the amount
+    /// received to an address
     </span><span class="kw">async fn </span>mine_block_and_get_received(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; Amount;
 }
 </code></pre></div>

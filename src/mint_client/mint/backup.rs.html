@@ -851,6 +851,27 @@
 <a href="#851" id="851">851</a>
 <a href="#852" id="852">852</a>
 <a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -907,9 +928,10 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>task_group = task_group.make_subgroup().<span class="kw">await</span>;
 
-        <span class="comment">// TODO: If the client attempts any operations between while the recovery is working,
-        // the recovery code will most probably miss them, which might lead to incorrect state.
-        // We should probably lock everything in some way during recovery for corectness.
+        <span class="comment">// TODO: If the client attempts any operations between while the recovery is
+        // working, the recovery code will most probably miss them, which might
+        // lead to incorrect state. We should probably lock everything in some
+        // way during recovery for corectness.
         </span><span class="kw">let </span>snapshot = <span class="kw">match </span><span class="self">self
             </span>.restore_current_state_from_backup(<span class="kw-2">&amp;mut </span>task_group, backup, gap_limit)
             .<span class="kw">await</span><span class="question-mark">?
@@ -959,7 +981,8 @@
 
     <span class="doccomment">/// Delete all the note-related data from the database
     ///
-    /// Useful for cleaning previous data before restoring data recovered from backup.
+    /// Useful for cleaning previous data before restoring data recovered from
+    /// backup.
     </span><span class="kw">async fn </span>wipe_notes_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
         dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -995,7 +1018,8 @@
         <span class="prelude-val">Ok</span>(responses.into_iter().next())
     }
 
-    <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for testing without creating whole `MintClient`
+    <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for
+    /// testing without creating whole `MintClient`
     </span><span class="kw">fn </span>get_derived_backup_encryption_key_static(secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; aead::LessSafeKey {
         aead::LessSafeKey::new(
             secret
@@ -1004,9 +1028,11 @@
         )
     }
 
-    <span class="doccomment">/// Static version of [`Self::get_derived_backup_signing_key`] for testing without creating whole `MintClient`
+    <span class="doccomment">/// Static version of [`Self::get_derived_backup_signing_key`] for testing
+    /// without creating whole `MintClient`
     </span><span class="kw">fn </span>get_derived_backup_signing_key_static(secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; secp256k1_zkp::KeyPair {
-        <span class="comment">// TODO: Do we need that one derivation level? This key is already derived for the mint itself, and internally another kdf will be done with key type tag.
+        <span class="comment">// TODO: Do we need that one derivation level? This key is already derived for
+        // the mint itself, and internally another kdf will be done with key type tag.
         </span>secret
             .child_key(MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID)
             .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::&lt;secp256k1::SignOnly&gt;::gen_new())
@@ -1105,7 +1131,10 @@
                 <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
             }
         };
-        <span class="comment">// TODO: This -1 is probably not necessary, as it should be enough to start from the exact epoch the snapshot was taken, but it is harmless to start from any epoch in the past, and starting a bit earlier makes it more robust in face of some inconsistency that we&#39;ve missed.
+        <span class="comment">// TODO: This -1 is probably not necessary, as it should be enough to start from
+        // the exact epoch the snapshot was taken, but it is harmless to start from any
+        // epoch in the past, and starting a bit earlier makes it more robust in face of
+        // some inconsistency that we&#39;ve missed.
         </span><span class="kw">let </span>start_epoch = backup.epoch_count.saturating_sub(<span class="number">1</span>);
         <span class="kw">let </span>epoch_range = start_epoch..current_epoch_count;
 
@@ -1126,7 +1155,8 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
             }
             <span class="comment">// if `recv` returned `None` that means fetch_epoch finished prematurelly,
-            // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
+            // withouth sending an `Err` which is supposed to mean `is_shutting_down() ==
+            // true`
             </span><span class="macro">info!</span>(epoch, <span class="string">&quot;Awaiting epoch&quot;</span>);
             <span class="kw">let </span>epoch_history = epoch_res<span class="question-mark">?</span>;
             <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
@@ -1240,20 +1270,23 @@
     </span>next_note_idx: Tiered&lt;NoteIndex&gt;,
 }
 
-<span class="doccomment">/// The state machine used for fast-fowarding backup from point when it was taken to the present time
-/// by following epoch history items from the time the snapshot was taken.
+<span class="doccomment">/// The state machine used for fast-fowarding backup from point when it was
+/// taken to the present time by following epoch history items from the time the
+/// snapshot was taken.
 ///
-/// The caller is responsible for creating it, and then feeding it in order all valid
-/// consensus items from the epoch history between time taken (or even somewhat before it) and
-/// present time.
+/// The caller is responsible for creating it, and then feeding it in order all
+/// valid consensus items from the epoch history between time taken (or even
+/// somewhat before it) and present time.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>EcashRecoveryTracker {
     <span class="doccomment">/// Nonces that we track that are currently spendable.
     </span>spendable_note_by_nonce: HashMap&lt;Nonce, (Amount, SpendableNote)&gt;,
 
-    <span class="doccomment">/// Outputs (by `OutPoint`) we track federation member confirmations for blind nonces.
+    <span class="doccomment">/// Outputs (by `OutPoint`) we track federation member confirmations for
+    /// blind nonces.
     ///
-    /// Once we get enough confirmation (valid shares), these become new spendable notes.
+    /// Once we get enough confirmation (valid shares), these become new
+    /// spendable notes.
     ///
     /// Note that `NoteIssuanceRequest` is optional, as sometimes we might need
     /// to handle a tx where only some of the blind nonces were in the pool.
@@ -1272,18 +1305,19 @@
     /// Once we see them, we move the tracking to `pending_outputs`
     ///
     /// Note: since looking up nonces is going to be the most common operation
-    /// the pool is kept shared (so only one lookup is enough), and replenishment
-    /// is done each time a note is consumed.
+    /// the pool is kept shared (so only one lookup is enough), and
+    /// replenishment is done each time a note is consumed.
     </span>pending_nonces: HashMap&lt;BlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)&gt;,
 
-    <span class="doccomment">/// Tail of `pending`. `pending_notes` is filled by generating note with this index
-    /// and incrementing it.
+    <span class="doccomment">/// Tail of `pending`. `pending_notes` is filled by generating note with
+    /// this index and incrementing it.
     </span>next_pending_note_idx: Tiered&lt;NoteIndex&gt;,
 
-    <span class="doccomment">/// `LastECashNoteIndex` but tracked in flight. Basically max index of any note that got
-    /// a partial sig from the federation (initialled from the backup value).
-    /// TODO: One could imagine a case where the note was issued but not get any partial sigs yet.
-    /// Very unlikely in real life scenario, but worth considering.
+    <span class="doccomment">/// `LastECashNoteIndex` but tracked in flight. Basically max index of any
+    /// note that got a partial sig from the federation (initialled from the
+    /// backup value). TODO: One could imagine a case where the note was
+    /// issued but not get any partial sigs yet. Very unlikely in real life
+    /// scenario, but worth considering.
     </span>last_mined_nonce_idx: Tiered&lt;NoteIndex&gt;,
 
     <span class="doccomment">/// Threshold
@@ -1300,7 +1334,8 @@
     <span class="doccomment">/// Aggregate public key for each amount tier
     </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
 
-    <span class="doccomment">/// The number of nonces we look-ahead when looking for mints (per each amount).
+    <span class="doccomment">/// The number of nonces we look-ahead when looking for mints (per each
+    /// amount).
     </span>gap_limit: usize,
 }
 
@@ -1397,23 +1432,25 @@
         // a nonce mined for as smaller amount, but it doesn&#39;t eliminate completely
         // the possibility that we might use a note mined in a different transaction,
         // that our original one.
-        // While it is harmless to us, as such duplicated blind nonces are effective as good
-        // the as the original ones (same amount), it breaks the assumption that all our
-        // blind nonces in an our output need to be in the pending pool. It forces us to be
-        // greedy no matter what and take what we can, and just report anything suspicious.
+        // While it is harmless to us, as such duplicated blind nonces are effective as
+        // good the as the original ones (same amount), it breaks the assumption
+        // that all our blind nonces in an our output need to be in the pending
+        // pool. It forces us to be greedy no matter what and take what we can,
+        // and just report anything suspicious.
         //
         // found - all nonces that we found in the pool with the correct amount
-        // missing - all the nonces we have not found in the pool, either because they are not ours
-        //           or were consumed by a previous transaction using this nonce, or possibly gap
-        //           buffer was too small
+        // missing - all the nonces we have not found in the pool, either because they
+        // are not ours           or were consumed by a previous transaction
+        // using this nonce, or possibly gap           buffer was too small
         // wrong - nonces that were ours but were mined to a wrong
         </span><span class="kw">let </span>(found, missing, wrong) = output.<span class="number">0</span>.iter_items().fold(
             (<span class="macro">vec!</span>[], <span class="macro">vec!</span>[], <span class="macro">vec!</span>[]),
             |(<span class="kw-2">mut </span>found, <span class="kw-2">mut </span>missing, <span class="kw-2">mut </span>wrong), (amount_from_output, nonce)| {
                 <span class="kw">match </span><span class="self">self</span>.pending_nonces.get(<span class="kw-2">&amp;</span>nonce.<span class="number">0</span>).cloned() {
                     <span class="prelude-val">Some</span>((issuance_request, note_idx, pending_amount)) =&gt; {
-                        <span class="comment">// the moment we see our blind nonce in the epoch history, correctly or incorrectly used,
-                        // we know that we must have used already
+                        <span class="comment">// the moment we see our blind nonce in the epoch history, correctly or
+                        // incorrectly used, we know that we must have used
+                        // already
                         </span><span class="self">self</span>.observe_nonce_idx_being_used(pending_amount, note_idx);
 
                         <span class="kw">if </span>pending_amount == amount_from_output {
@@ -1448,7 +1485,8 @@
                  expected_amount = %wrong.<span class="number">2</span>,
                  found_amount = %wrong.<span class="number">3</span>,
                  <span class="string">&quot;Transaction output contains blind nonce that looks like ours but is of the wrong amount. Ignoring.&quot;</span>);
-            <span class="comment">// Any blind nonce mined with a wrong amount means that this transaction can&#39;t be ours
+            <span class="comment">// Any blind nonce mined with a wrong amount means that this
+            // transaction can&#39;t be ours
         </span>}
 
         <span class="kw">if </span>!wrong.is_empty() {
@@ -1466,8 +1504,8 @@
                  <span class="string">&quot;Missing nonce in pending pool for a transaction with other valid nonces that belong to us. This indicate an issue.&quot;</span>);
         }
 
-        <span class="comment">// ok, now that we know we track this output as ours and use the nonces we&#39;ve found
-        // delete them from the pool and replace them
+        <span class="comment">// ok, now that we know we track this output as ours and use the nonces we&#39;ve
+        // found delete them from the pool and replace them
         </span><span class="kw">for </span><span class="kw-2">&amp;</span>(_amount, (nonce, <span class="kw">_</span>)) <span class="kw">in </span><span class="kw-2">&amp;</span>found {
             <span class="macro">assert!</span>(<span class="self">self</span>.pending_nonces.remove(<span class="kw-2">&amp;</span>nonce).is_some());
         }
@@ -1481,10 +1519,12 @@
         );
     }
 
-    <span class="doccomment">/// React to a valid pending nonce being tracked being used in the epoch history
+    <span class="doccomment">/// React to a valid pending nonce being tracked being used in the epoch
+    /// history
     ///
-    /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the pending pool
-    /// to always maintain at least `gap_limit` of pending onces in each amount tier.
+    /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the
+    /// pending pool to always maintain at least `gap_limit` of pending
+    /// onces in each amount tier.
     </span><span class="kw">fn </span>observe_nonce_idx_being_used(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: Amount, note_idx: NoteIndex) {
         <span class="kw-2">*</span><span class="self">self</span>.last_mined_nonce_idx.entry(amount).or_default() = max(
             <span class="self">self</span>.last_mined_nonce_idx
@@ -1616,14 +1656,16 @@
                 <span class="kw">let </span>txid = tx.tx_hash();
 
                 <span class="kw">if </span>!processed_txs.insert(txid) {
-                    <span class="comment">// Just like server side consensus, do not attempt to process the same transaction twice.
+                    <span class="comment">// Just like server side consensus, do not attempt to process the same
+                    // transaction twice.
                     </span><span class="kw">return</span>;
                 }
 
                 <span class="kw">if </span>rejected_txs.contains(<span class="kw-2">&amp;</span>txid) {
                     <span class="comment">// Do not process invalid transactions.
-                    // Consensus history contains all data proposed by each peer, even invalid (e.g. due to double spent)
-                    // transactions. Precisely to save downstream users from having to run the consensus themselves,
+                    // Consensus history contains all data proposed by each peer, even invalid (e.g.
+                    // due to double spent) transactions. Precisely to save
+                    // downstream users from having to run the consensus themselves,
                     // each epoch contains a list of transactions  that turned out to be invalid.
                     </span><span class="kw">return</span>;
                 }

@@ -129,6 +129,7 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -220,7 +221,8 @@
     key_prefix = OutputOutcomeKeyPrefix
 );
 
-<span class="doccomment">/// Represents the amounts of issued (signed) and redeemed (verified) notes for auditing
+<span class="doccomment">/// Represents the amounts of issued (signed) and redeemed (verified) notes for
+/// auditing
 </span><span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub enum </span>MintAuditItemKey {
     Issuance(OutPoint),

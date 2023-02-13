@@ -367,6 +367,7 @@
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -572,9 +573,10 @@
     <span class="kw">where
         </span>&lt;&lt;Module <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome: Eq,
     {
-        <span class="comment">// Since every member is in the same epoch they should have the same internal state, even
-        // in terms of outcomes. This may change later once end_consensus_epoch is pulled out of the
-        // main consensus loop into another thread to optimize latency. This test will probably fail
+        <span class="comment">// Since every member is in the same epoch they should have the same internal
+        // state, even in terms of outcomes. This may change later once
+        // end_consensus_epoch is pulled out of the main consensus loop into
+        // another thread to optimize latency. This test will probably fail
         // then.
         </span><span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
         <span class="kw">for </span>(<span class="kw">_</span>, member, db, module_instance_id) <span class="kw">in </span><span class="self">self</span>.members.iter() {

@@ -422,6 +422,10 @@
 <a href="#422" id="422">422</a>
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
@@ -549,9 +553,11 @@
                         <span class="kw">break</span>;
                     }
 
-                    <span class="comment">// TODO: Assert short channel id matches the one we subscribed to, or cancel processing of intercepted HTLC
-                    // TODO: Assert the offered fee derived from invoice amount and outgoing amount is acceptable or cancel processing of intercepted HTLC
-                    // TODO: Assert the HTLC expiry or cancel processing of intercepted HTLC
+                    <span class="comment">// TODO: Assert short channel id matches the one we subscribed to, or cancel
+                    // processing of intercepted HTLC TODO: Assert the offered
+                    // fee derived from invoice amount and outgoing amount is acceptable or cancel
+                    // processing of intercepted HTLC TODO: Assert the HTLC
+                    // expiry or cancel processing of intercepted HTLC
 
                     </span><span class="kw">let </span>hash = <span class="kw">match </span>sha256::Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash) {
                         <span class="prelude-val">Ok</span>(hash) =&gt; hash,
@@ -586,8 +592,10 @@
                                 .<span class="kw">await
                             </span>{
                                 <span class="macro">error!</span>(<span class="string">&quot;Failed to complete HTLC: {:?}&quot;</span>, e);
-                                <span class="comment">// Note: To prevent loss of funds for the gateway,
-                                // we should either retry completing the htlc or reclaim funds from the federation
+                                <span class="comment">// Note: To prevent loss of funds for the
+                                // gateway,
+                                // we should either retry completing the htlc or
+                                // reclaim funds from the federation
                             </span>};
                         }
                         <span class="prelude-val">Err</span>(e) =&gt; {

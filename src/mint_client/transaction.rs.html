@@ -353,6 +353,15 @@
 <a href="#353" id="353">353</a>
 <a href="#354" id="354">354</a>
 <a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::config::ClientConfig;
 <span class="kw">use </span>fedimint_api::core::client::ClientModule;
@@ -384,9 +393,13 @@
     <span class="kw">use </span>secp256k1_zkp::{schnorr, XOnlyPublicKey};
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
-    <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
+    <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and
+    /// consensus
     ///
-    /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
+    /// The mint enforces that the total value of the outputs equals the total
+    /// value of the inputs, to prevent creating funds out of thin air. In some
+    /// cases, the value of the inputs and outputs can both be 0 e.g. when
+    /// creating an offer to a Lightning Gateway.
     </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     </span><span class="kw">pub struct </span>Transaction {
         <span class="doccomment">/// [`Input`]s consumed by the transaction
@@ -399,10 +412,13 @@
 
     <span class="doccomment">/// An Input consumed by a Transaction is defined within a Fedimint Module.
     ///
-    /// The user must be able to produce an aggregate Schnorr signature for the transaction over all the inputs.
+    /// The user must be able to produce an aggregate Schnorr signature for the
+    /// transaction over all the inputs.
     ///
     /// Each input has an associated secret/public key pair.
-    /// Inputs can not have keys if the transaction value is 0. This is useful for non-monetary transactions to announce information to the mint like incoming LN contract offers.
+    /// Inputs can not have keys if the transaction value is 0. This is useful
+    /// for non-monetary transactions to announce information to the mint like
+    /// incoming LN contract offers.
     </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>Input {
         <span class="comment">// TODO: maybe treat every note as a seperate input?
@@ -424,7 +440,8 @@
         <span class="doccomment">/// Hash of the transaction (excluding the signature).
         ///
         /// Transaction signature commits to this hash.
-        /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+        /// To generate it without already having a signature use
+        /// [`Self::tx_hash_from_parts`].
         </span><span class="kw">pub fn </span>tx_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TransactionId {
             <span class="self">Self</span>::tx_hash_from_parts(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="kw-2">&amp;</span><span class="self">self</span>.outputs)
         }
@@ -469,9 +486,9 @@
         ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
             <span class="kw">let </span>keys = keys.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-            <span class="comment">// If there are no keys from inputs there are no inputs to protect from re-binding. This
-            // behavior is useful for non-monetary transactions that just announce something, like LN
-            // incoming contract offers.
+            <span class="comment">// If there are no keys from inputs there are no inputs to protect from
+            // re-binding. This behavior is useful for non-monetary transactions
+            // that just announce something, like LN incoming contract offers.
             </span><span class="kw">if </span>keys.is_empty() {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
@@ -629,7 +646,8 @@
     </span>}
 
     <span class="doccomment">/// Builds and signs the final transaction with exact change amounts
-    /// WARNING - could result in an unbalanced tx that will be rejected by the federation
+    /// WARNING - could result in an unbalanced tx that will be rejected by the
+    /// federation
     </span><span class="kw">pub async fn </span>build_with_change&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
         change_module: MintClient,

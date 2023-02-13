@@ -59,6 +59,8 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -83,13 +85,15 @@
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
 
-    <span class="doccomment">/// Returns the amount represented by the input and the fee its processing requires
+    <span class="doccomment">/// Returns the amount represented by the input and the fee its processing
+    /// requires
     </span><span class="kw">fn </span>input_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         input: <span class="kw-2">&amp;</span>&lt;&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input,
     ) -&gt; TransactionItemAmount;
 
-    <span class="doccomment">/// Returns the amount represented by the output and the fee its processing requires
+    <span class="doccomment">/// Returns the amount represented by the output and the fee its processing
+    /// requires
     </span><span class="kw">fn </span>output_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span>&lt;&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Output,

@@ -129,6 +129,8 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::Result;
@@ -150,8 +152,8 @@
     </span>command: DbCommand,
 }
 
-<span class="doccomment">/// Tool to inspect and manipulate rocksdb databases. All binary arguments (keys, values) have to be
-/// hex encoded.
+<span class="doccomment">/// Tool to inspect and manipulate rocksdb databases. All binary arguments
+/// (keys, values) have to be hex encoded.
 </span><span class="attr">#[derive(Debug, Clone, Subcommand)]
 </span><span class="kw">enum </span>DbCommand {
     <span class="doccomment">/// List all key-value pairs where the key begins with `prefix`
@@ -159,7 +161,8 @@
         <span class="attr">#[arg(value_parser = hex_parser)]
         </span>prefix: Bytes,
     },
-    <span class="doccomment">/// Write a key-value pair to the database, overwriting the previous value if present
+    <span class="doccomment">/// Write a key-value pair to the database, overwriting the previous value
+    /// if present
     </span>Write {
         <span class="attr">#[arg(value_parser = hex_parser)]
         </span>key: Bytes,
@@ -171,10 +174,11 @@
         <span class="attr">#[arg(value_parser = hex_parser)]
         </span>key: Bytes,
     },
-    <span class="doccomment">/// Dump a subset of the specified database and serialize the retrieved data to JSON.
-    /// Module and prefix are used to specify which subset of the database to dump.
-    /// Password is used to decrypt the server&#39;s configuration file. If dumping the client database,
-    /// the password can be an arbitrary string.
+    <span class="doccomment">/// Dump a subset of the specified database and serialize the retrieved data
+    /// to JSON. Module and prefix are used to specify which subset of the
+    /// database to dump. Password is used to decrypt the server&#39;s
+    /// configuration file. If dumping the client database, the password can
+    /// be an arbitrary string.
     </span>Dump {
         cfg_dir: PathBuf,
         <span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]

@@ -107,6 +107,9 @@
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::{Deref, DerefMut};
 <span class="kw">use </span>std::sync::Arc;
 
@@ -143,11 +146,13 @@
 /// * Connections to peers are authenticated and encrypted
 /// * Messages are received exactly once and in the order they were sent
 /// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and resent on reconnect, this
-///   avoids the need to rejoin the consensus, which is more tricky.
+/// * Messages are cached in case of short-lived network interruptions and
+///   resent on reconnect, this avoids the need to rejoin the consensus, which
+///   is more tricky.
 ///
-/// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
-/// The thus disconnected peer will need to rejoin the consensus at a later time.  
+/// In case of longer term interruptions the message cache has to be dropped to
+/// avoid DoS attacks. The thus disconnected peer will need to rejoin the
+/// consensus at a later time.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IPeerConnections&lt;Msg&gt;
 <span class="kw">where
@@ -155,8 +160,8 @@
 {
     <span class="doccomment">/// Send a message to a specific peer.
     ///
-    /// The message is sent immediately and cached if the peer is reachable and only cached
-    /// otherwise.
+    /// The message is sent immediately and cached if the peer is reachable and
+    /// only cached otherwise.
     </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: Msg) -&gt; Cancellable&lt;()&gt;;
 
     <span class="doccomment">/// Await receipt of a message from any connected peer.
@@ -189,11 +194,12 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="doccomment">/// Like [`IPeerConnections`] but with an ability to handle multiple destinations (like modules) per each peer-connection.
+</span><span class="doccomment">/// Like [`IPeerConnections`] but with an ability to handle multiple
+/// destinations (like modules) per each peer-connection.
 ///
 /// Notably, unlike [`IPeerConnections`] implementations need to be thread-safe,
-/// as the primary intendet use should support multiple threads using multiplexed
-/// channel at the same time.
+/// as the primary intendet use should support multiple threads using
+/// multiplexed channel at the same time.
 </span><span class="kw">pub trait </span>IMuxPeerConnections&lt;MuxKey, Msg&gt;
 <span class="kw">where
     </span>Msg: Serialize + DeserializeOwned + Unpin + Send,

@@ -120,6 +120,8 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::SocketAddr, path::PathBuf};
 
 <span class="kw">use </span>clap::Parser;
@@ -172,8 +174,10 @@
 
 <span class="comment">// Fedimint Gateway Binary
 </span><span class="doccomment">///
-/// This binary runs a webserver with an API that can be used by Fedimint clients to request routing of payments through the Lightning Network.
-/// It uses a `GatewayLightningClient`, an rpc client to communicate with a remote Lightning node accessible through a `GatewayLightningServer`.
+/// This binary runs a webserver with an API that can be used by Fedimint
+/// clients to request routing of payments through the Lightning Network.
+/// It uses a `GatewayLightningClient`, an rpc client to communicate with a
+/// remote Lightning node accessible through a `GatewayLightningServer`.
 </span><span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args();

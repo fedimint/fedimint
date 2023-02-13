@@ -472,6 +472,12 @@
 <a href="#472" id="472">472</a>
 <a href="#473" id="473">473</a>
 <a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>cln;
@@ -642,7 +648,8 @@
     ///
     /// # Returns
     ///
-    /// A `GatewayActor` that can be used to execute gateway functions for the federation
+    /// A `GatewayActor` that can be used to execute gateway functions for the
+    /// federation
     </span><span class="kw">pub async fn </span>connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client: Arc&lt;GatewayClient&gt;,
@@ -679,8 +686,9 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to get node pubkey from Lightning node&quot;</span>);
 
-        <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation connected.
-        // TODO: explicitly handle the case where the channel id overflows
+        <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
+        // connected. TODO: explicitly handle the case where the channel id
+        // overflows
         </span><span class="kw">let </span>channel_id = <span class="self">self</span>.channel_id_generator.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
 
         <span class="kw">let </span>gw_client_cfg = <span class="self">self
@@ -729,8 +737,8 @@
         })
     }
 
-    <span class="doccomment">/// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
-    /// a federation user.
+    <span class="doccomment">/// Handles an intercepted HTLC that might be an incoming payment we are
+    /// receiving on behalf of a federation user.
     </span><span class="kw">async fn </span>handle_receive_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ReceivePaymentPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">let </span>ReceivePaymentPayload { htlc_accepted } = payload;
 
@@ -739,11 +747,14 @@
         <span class="macro">debug!</span>(<span class="string">&quot;Incoming htlc for payment hash {}&quot;</span>, payment_hash);
 
         <span class="comment">// FIXME: Issue 664: We should avoid having a special reference to a federation
-        // all requests, including `ReceivePaymentPayload`, should contain the federation id
+        // all requests, including `ReceivePaymentPayload`, should contain the
+        // federation id
         //
-        // We use a random federation as the default (works because we only have one federation registered)
+        // We use a random federation as the default (works because we only have one
+        // federation registered)
         //
-        // TODO: Use subscribe intercept htlc streams to avoid actor selection with every intercepted htlc!
+        // TODO: Use subscribe intercept htlc streams to avoid actor selection with
+        // every intercepted htlc!
         </span><span class="kw">let </span>lock = <span class="kw-2">&amp;</span><span class="self">self</span>.actors.lock().<span class="kw">await</span>;
         <span class="kw">let </span>gateway_actor = lock.values().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()[<span class="number">0</span>];
         gateway_actor
@@ -843,7 +854,8 @@
         })
         .<span class="kw">await</span>;
 
-        <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were interrupted
+        <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were
+        // interrupted
         </span><span class="kw">let </span>loop_ctrl = tg.make_handle();
         <span class="kw">loop </span>{
             <span class="comment">// Shut down main loop if requested

@@ -163,6 +163,11 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>fedimint_api::core::{DynInput, DynOutput};
@@ -175,7 +180,10 @@
 
 <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
 ///
-/// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
+/// The mint enforces that the total value of the outputs equals the total value
+/// of the inputs, to prevent creating funds out of thin air. In some cases, the
+/// value of the inputs and outputs can both be 0 e.g. when creating an offer to
+/// a Lightning Gateway.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Transaction {
     <span class="doccomment">/// [`DynInput`]s consumed by the transaction
@@ -192,7 +200,8 @@
     <span class="doccomment">/// Hash of the transaction (excluding the signature).
     ///
     /// Transaction signature commits to this hash.
-    /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+    /// To generate it without already having a signature use
+    /// [`Self::tx_hash_from_parts`].
     </span><span class="kw">pub fn </span>tx_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TransactionId {
         <span class="self">Self</span>::tx_hash_from_parts(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="kw-2">&amp;</span><span class="self">self</span>.outputs)
     }
@@ -216,9 +225,9 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
         <span class="kw">let </span>keys = keys.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="comment">// If there are no keys from inputs there are no inputs to protect from re-binding. This
-        // behavior is useful for non-monetary transactions that just announce something, like LN
-        // incoming contract offers.
+        <span class="comment">// If there are no keys from inputs there are no inputs to protect from
+        // re-binding. This behavior is useful for non-monetary transactions
+        // that just announce something, like LN incoming contract offers.
         </span><span class="kw">if </span>keys.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
@@ -253,7 +262,8 @@
     new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
-<span class="doccomment">/// Precompute a combined public key and the hash of the given public keys for Musig2.
+<span class="doccomment">/// Precompute a combined public key and the hash of the given public keys for
+/// Musig2.
 </span><span class="kw">fn </span>new_pre_session&lt;C&gt;(
     keys: <span class="kw-2">&amp;</span>[XOnlyPublicKey],
     ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,

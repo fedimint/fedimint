@@ -34,7 +34,8 @@
        <span class="where">where 'life0: 'async_trait,
              Ret: <a class="trait" href="https://docs.rs/serde/1.0.152/serde/de/trait.DeserializeOwned.html" title="trait serde::de::DeserializeOwned">DeserializeOwned</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait,
              Self: <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait</span> { ... }
-}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An extension trait allowing to making federation-wide API call on top <a href="trait.IFederationApi.html" title="IFederationApi"><code>IFederationApi</code></a>.</p>
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An extension trait allowing to making federation-wide API call on top
+<a href="trait.IFederationApi.html" title="IFederationApi"><code>IFederationApi</code></a>.</p>
 </div></details><h2 id="provided-methods" class="small-section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.request_with_strategy" class="method"><h4 class="code-header">fn <a href="#method.request_with_strategy" class="fn">request_with_strategy</a>&lt;'life0, 'async_trait, MemberRet, FedRet&gt;(
     &amp;'life0 self,
     strategy: impl <a class="trait" href="../query/trait.QueryStrategy.html" title="trait fedimint_server::query::QueryStrategy">QueryStrategy</a>&lt;MemberRet, FedRet&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait,
@@ -44,7 +45,8 @@
     'life0: 'async_trait,
     MemberRet: 'async_trait + <a class="trait" href="https://docs.rs/serde/1.0.152/serde/de/trait.DeserializeOwned.html" title="trait serde::de::DeserializeOwned">DeserializeOwned</a>,
     FedRet: 'async_trait + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>,
-    Self: <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,</span></h4></section></summary><div class="docblock"><p>Make an aggregate request to federation, using <code>strategy</code> to logically merge the responses.</p>
+    Self: <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> + 'async_trait,</span></h4></section></summary><div class="docblock"><p>Make an aggregate request to federation, using <code>strategy</code> to logically
+merge the responses.</p>
 </div></details><section id="method.request_union" class="method"><h4 class="code-header">fn <a href="#method.request_union" class="fn">request_union</a>&lt;'life0, 'async_trait, Ret&gt;(
     &amp;'life0 self,
     method: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,

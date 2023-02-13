@@ -130,6 +130,8 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -150,7 +152,8 @@
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintConfig {
-    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key material
+    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key
+    /// material
     </span><span class="kw">pub </span>private: MintConfigPrivate,
     <span class="doccomment">/// Contains all configuration that needs to be the same for every server
     </span><span class="kw">pub </span>consensus: MintConfigConsensus,
@@ -158,7 +161,8 @@
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 </span><span class="kw">pub struct </span>MintConfigConsensus {
-    <span class="doccomment">/// The set of public keys for blind-signing all peers and note denominations
+    <span class="doccomment">/// The set of public keys for blind-signing all peers and note
+    /// denominations
     </span><span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
     <span class="doccomment">/// Fees charged for ecash transactions
     </span><span class="kw">pub </span>fee_consensus: FeeConsensus,

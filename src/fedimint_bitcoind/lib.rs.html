@@ -166,6 +166,10 @@
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::Arc;
@@ -188,7 +192,8 @@
 /// Functions may panic if if the bitcoind node is not reachable.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>IBitcoindRpc: Debug + Send + Sync {
-    <span class="doccomment">/// `true` if it&#39;s real-bitcoin (not electrum) backend and thus supports `get_block` call
+    <span class="doccomment">/// `true` if it&#39;s real-bitcoin (not electrum) backend and thus supports
+    /// `get_block` call
     ///
     /// This is a bit of a workaround to support electrum.
     </span><span class="kw">fn </span>backend_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcBackendType {
@@ -204,12 +209,14 @@
     <span class="doccomment">/// Returns the block hash at a given height
     ///
     /// # Panics
-    /// If the node does not know a block for that height. Make sure to only query blocks of a
-    /// height less or equal to the one returned by `Self::get_block_height`.
+    /// If the node does not know a block for that height. Make sure to only
+    /// query blocks of a height less or equal to the one returned by
+    /// `Self::get_block_height`.
     ///
-    /// While there is a corner case that the blockchain shrinks between these two calls (through on
-    /// average heavier blocks on a fork) this is prevented by only querying hashes for blocks
-    /// tailing the chain tip by a certain number of blocks.
+    /// While there is a corner case that the blockchain shrinks between these
+    /// two calls (through on average heavier blocks on a fork) this is
+    /// prevented by only querying hashes for blocks tailing the chain tip
+    /// by a certain number of blocks.
     </span><span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHash&gt;;
 
     <span class="doccomment">/// Returns the block with the given hash
@@ -218,9 +225,10 @@
     /// If the block doesn&#39;t exist.
     </span><span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Block&gt;;
 
-    <span class="doccomment">/// Estimates the fee rate for a given confirmation target. Make sure that all federation
-    /// members use the same algorithm to avoid widely diverging results. If the node is not ready
-    /// yet to return a fee rate estimation this function returns `None`.
+    <span class="doccomment">/// Estimates the fee rate for a given confirmation target. Make sure that
+    /// all federation members use the same algorithm to avoid widely
+    /// diverging results. If the node is not ready yet to return a fee rate
+    /// estimation this function returns `None`.
     </span><span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt;;
 
     <span class="doccomment">/// Submits a transaction to the Bitcoin network

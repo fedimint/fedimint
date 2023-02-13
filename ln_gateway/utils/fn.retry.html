@@ -5,12 +5,12 @@
     max_attempts: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a>
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, <a class="struct" href="https://docs.rs/anyhow/1.0.68/anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>&gt;<span class="where fmt-newline">where
     F: <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>() -&gt; Fut,
-    Fut: <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, <a class="struct" href="https://docs.rs/anyhow/1.0.68/anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>&gt;&gt;,</span></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Run the supplied closure <code>op_fn</code> up to <code>max_attempts</code> times. Wait for the supplied <code>Duration</code>
-<code>interval</code> between attempts</p>
+    Fut: <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, <a class="struct" href="https://docs.rs/anyhow/1.0.68/anyhow/struct.Error.html" title="struct anyhow::Error">Error</a>&gt;&gt;,</span></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Run the supplied closure <code>op_fn</code> up to <code>max_attempts</code> times. Wait for the
+supplied <code>Duration</code> <code>interval</code> between attempts</p>
 <h2 id="returns"><a href="#returns">Returns</a></h2>
 <ul>
 <li>If the closure runs successfully, the result is immediately returned</li>
-<li>If the closure did not run successfully for <code>max_attempts</code> times, the error of the closure
-is returned</li>
+<li>If the closure did not run successfully for <code>max_attempts</code> times, the
+error of the closure is returned</li>
 </ul>
 </div></details></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
