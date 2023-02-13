@@ -1,90 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{% block title %} {% endblock %}</title>
 
-<head>
-  <meta charset="UTF-8" />
-  <title>{% block title %} {% endblock %}</title>
-
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css" rel="stylesheet"
-    integrity="sha384-iYQeCzEYFbKjA/T2uDLTpkwGzCiq6soy8tYaI1GyVh/UjpbCx/TYkiZhlZB6+fzT" crossorigin="anonymous" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-iYQeCzEYFbKjA/T2uDLTpkwGzCiq6soy8tYaI1GyVh/UjpbCx/TYkiZhlZB6+fzT"
+      crossorigin="anonymous"
+    />
 
     {% block head%} {% endblock %}
 
-  <style>
-    * {
-      border-radius: 0 !important;
-    }
+    <style>
+      * {
+        border-radius: 0 !important;
+      }
 
-    html,
-    body {
-      height: 100%;
-      max-width: 600px;
-      margin: auto;
-      font-family: 'Courier New', Courier, monospace;
-    }
+      html,
+      body {
+        height: 100%;
+        margin: auto;
+        font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono",
+          "Ubuntu Mono", "Roboto Mono", Menlo, Monaco, Consolas, monospace;
+      }
 
-    form h1,
-    form h2,
-    form h3,
-    form h4,
-    form h5,
-    form h6 {
-      margin-top: 1em;
-    }
+      main {
+        max-width: 600px;
+      }
 
-    .btn {
-      outline-color: #170022;
-    }
+      form h1,
+      form h2,
+      form h3,
+      form h4,
+      form h5,
+      form h6 {
+        margin-top: 1em;
+      }
 
-    .btn-primary,
-    .btn-outline-primary {
-      --bs-btn-color: #fff;
-      --bs-btn-bg: #170022 !important;
-      --bs-btn-border-color: #170022 !important;
-      --bs-btn-hover-color: #170022 !important;
-      --bs-btn-hover-bg: #fff;
-      --bs-btn-hover-border-color: #170022 !important;
-      --bs-btn-focus-shadow-rgb: 49, 132, 253;
-      --bs-btn-active-color: #fff;
-      --bs-btn-active-bg: #170022 !important;
-      --bs-btn-active-border-color: #170022 !important;
-      --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
-      --bs-btn-disabled-color: #fff;
-      --bs-btn-disabled-bg: #170022 !important;
-      --bs-btn-disabled-border-color: #170022 !important;
-    }
+      form > div {
+        margin-bottom: 1em;
+      }
 
-    .btn-secondary {
-      --bs-btn-color: #170022;
-      --bs-btn-bg: #fff !important;
-      --bs-btn-border-color: #170022 !important;
-      --bs-btn-hover-color: #fff;
-      --bs-btn-hover-border-color: #fff !important;
-      --bs-btn-hover-bg: #170022 !important;
-      --bs-btn-focus-shadow-rgb: 49, 132, 253;
-      --bs-btn-active-color: #170022;
-      --bs-btn-active-bg: #fff !important;
-      --bs-btn-active-border-color: #170022 !important;
-      --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
-      --bs-btn-disabled-color: #170022;
-      --bs-btn-disabled-bg: #fff !important;
-      --bs-btn-disabled-border-color: #170022 !important;
-    }
-  </style>
-</head>
+      .btn {
+        outline-color: #170022;
+      }
 
-<body>
-  <nav class="navbar navbar-expand-md navbar-light bg-light">
-    <div class="container mx-auto justify-content-center">
-      <a class="navbar-brand" href="/">
-        <img src="https://fedimint.org/img/Fedimint-Full.png" alt="Fedimint" width="200" height="50" />
-      </a>
-    </div>
-  </nav>
-  {% block content %} {% endblock %} {% block scripts %} {% endblock %}
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-u1OknCvxWvY5kfmNBILK2hRnQC3Pr17a+RTT6rIHI7NnikvbZlHgTPOOmMi466C8"
-    crossorigin="anonymous"></script>
-</body>
+      .btn-primary,
+      .btn-outline-primary {
+        --bs-btn-color: #fff;
+        --bs-btn-bg: #170022 !important;
+        --bs-btn-border-color: #170022 !important;
+        --bs-btn-hover-color: #170022 !important;
+        --bs-btn-hover-bg: #fff;
+        --bs-btn-hover-border-color: #170022 !important;
+        --bs-btn-focus-shadow-rgb: 49, 132, 253;
+        --bs-btn-active-color: #fff;
+        --bs-btn-active-bg: #170022 !important;
+        --bs-btn-active-border-color: #170022 !important;
+        --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+        --bs-btn-disabled-color: #fff;
+        --bs-btn-disabled-bg: #170022 !important;
+        --bs-btn-disabled-border-color: #170022 !important;
+      }
 
+      .btn-secondary {
+        --bs-btn-color: #170022;
+        --bs-btn-bg: #fff !important;
+        --bs-btn-border-color: #170022 !important;
+        --bs-btn-hover-color: #fff;
+        --bs-btn-hover-border-color: #fff !important;
+        --bs-btn-hover-bg: #170022 !important;
+        --bs-btn-focus-shadow-rgb: 49, 132, 253;
+        --bs-btn-active-color: #170022;
+        --bs-btn-active-bg: #fff !important;
+        --bs-btn-active-border-color: #170022 !important;
+        --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+        --bs-btn-disabled-color: #170022;
+        --bs-btn-disabled-bg: #fff !important;
+        --bs-btn-disabled-border-color: #170022 !important;
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-expand-md navbar-light bg-light">
+      <div class="container mx-auto justify-content-center">
+        <a class="navbar-brand" href="/">
+          <img
+            src="https://fedimint.org/img/Fedimint-Full.png"
+            alt="Fedimint"
+            width="200"
+            height="50"
+          />
+        </a>
+      </div>
+    </nav>
+    <main class="mx-auto">
+      {% block content %} {% endblock %} {% block scripts %} {% endblock %}
+    </main>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-u1OknCvxWvY5kfmNBILK2hRnQC3Pr17a+RTT6rIHI7NnikvbZlHgTPOOmMi466C8"
+      crossorigin="anonymous"
+    ></script>
+  </body>
 </html>
