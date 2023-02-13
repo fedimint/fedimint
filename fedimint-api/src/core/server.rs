@@ -4,14 +4,14 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_api::{
-    db::DatabaseTransaction,
-    module::{audit::Audit, interconnect::ModuleInterconect},
-    OutPoint, PeerId,
-};
+use fedimint_api::db::DatabaseTransaction;
+use fedimint_api::module::audit::Audit;
+use fedimint_api::module::interconnect::ModuleInterconect;
+use fedimint_api::{OutPoint, PeerId};
 
 use super::*;
 use crate::module::{

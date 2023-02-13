@@ -4,15 +4,14 @@ use fedimint_api::module::DynModuleGen;
 use fedimint_api::task::TaskGroup;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
-use fedimint_testing::{
-    btc::{fixtures::FakeBitcoinTest, BitcoinTest},
-    ln::fixtures::FakeLightningTest,
-};
-use ln_gateway::{
-    client::{DynGatewayClientBuilder, MemDbFactory},
-    gatewayd::{gateway::Gateway, lnrpc_client::DynLnRpcClient},
-};
-use mint_client::{module_decode_stubs, modules::wallet::WalletGen};
+use fedimint_testing::btc::fixtures::FakeBitcoinTest;
+use fedimint_testing::btc::BitcoinTest;
+use fedimint_testing::ln::fixtures::FakeLightningTest;
+use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
+use ln_gateway::gatewayd::gateway::Gateway;
+use ln_gateway::gatewayd::lnrpc_client::DynLnRpcClient;
+use mint_client::module_decode_stubs;
+use mint_client::modules::wallet::WalletGen;
 use url::Url;
 
 pub mod client;

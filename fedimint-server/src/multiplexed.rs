@@ -1,16 +1,16 @@
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_api::cancellable::Cancellable;
 use fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio::{sync::Mutex, time::sleep};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
+use tokio::time::sleep;
 use tracing::{debug, warn};
 
 use crate::logging::LOG_NET_PEER;

@@ -1,25 +1,23 @@
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_api::dyn_newtype_define;
 use futures::stream::BoxStream;
 use mint_client::modules::ln::route_hints::RouteHint;
-use tonic::{
-    transport::{Channel, Endpoint},
-    Request,
-};
+use tonic::transport::{Channel, Endpoint};
+use tonic::Request;
 use tracing::error;
 use url::Url;
 
-use crate::{
-    gatewaylnrpc::{
-        gateway_lightning_client::GatewayLightningClient, CompleteHtlcsRequest,
-        CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest,
-        PayInvoiceResponse, SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
-    },
-    LnGatewayError, Result,
+use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
+use crate::gatewaylnrpc::{
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
+    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    SubscribeInterceptHtlcsResponse,
 };
+use crate::{LnGatewayError, Result};
 
 // TODO: Issue 1554: Define gatewaylnpc spec for getting route hints
 pub struct GetRouteHintsResponse {

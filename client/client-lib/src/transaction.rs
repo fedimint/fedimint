@@ -17,11 +17,9 @@ use crate::{module_decode_stubs, Client, DecryptedPreimage, MintClient, MintOutp
 /// Old transaction definition used by old client.
 pub mod legacy {
     use bitcoin_hashes::Hash;
-    use fedimint_api::core::DynInput;
-    use fedimint_api::core::DynOutput;
     use fedimint_api::core::{
-        Decoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+        Decoder, DynInput, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_LN,
+        LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_api::encoding::{Decodable, Encodable};
     use fedimint_api::{ServerModule, TransactionId};

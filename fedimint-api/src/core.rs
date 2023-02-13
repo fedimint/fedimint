@@ -13,10 +13,8 @@ use std::io::Read;
 use std::sync::Arc;
 
 pub use bitcoin::KeyPair;
-use fedimint_api::{
-    dyn_newtype_define,
-    encoding::{Decodable, DecodeError, DynEncodable, Encodable},
-};
+use fedimint_api::dyn_newtype_define;
+use fedimint_api::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use serde::{Deserialize, Serialize};
 
 use crate::{

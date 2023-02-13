@@ -6,22 +6,18 @@ use std::str::FromStr;
 
 use anyhow::{bail, format_err};
 use bitcoin::secp256k1;
-use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::{FromHex, ToHex};
-use bitcoin_hashes::sha256;
-use bitcoin_hashes::sha256::Hash as Sha256;
-use bitcoin_hashes::sha256::HashEngine;
+use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
+use bitcoin_hashes::{hex, sha256};
 use fedimint_api::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_api::encoding::Encodable;
-use fedimint_api::BitcoinHash;
-use fedimint_api::ModuleDecoderRegistry;
+use fedimint_api::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use tbs::serde_impl;
-use tbs::Scalar;
+use tbs::{serde_impl, Scalar};
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;

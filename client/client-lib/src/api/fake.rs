@@ -1,19 +1,16 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_api::PeerId;
-use fedimint_core::api::IFederationApi;
-use fedimint_core::api::JsonRpcResult;
+use fedimint_core::api::{IFederationApi, JsonRpcResult};
 use futures::Future;
 use serde;
 use serde::Serialize;
 use serde_json::Value;
-use tracing::info;
-use tracing::warn;
+use tracing::{info, warn};
 
 #[allow(clippy::type_complexity)]
 type Handler<State> = Pin<

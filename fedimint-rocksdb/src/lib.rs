@@ -177,7 +177,8 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
 
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
-    use fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+    use fedimint_api::db::Database;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
 
     use crate::RocksDb;
 

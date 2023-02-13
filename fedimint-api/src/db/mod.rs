@@ -1,7 +1,8 @@
+use std::error::Error;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::{error::Error, marker::PhantomData};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -10,11 +11,9 @@ use futures::{stream, Stream, StreamExt};
 use thiserror::Error;
 use tracing::{debug, instrument, trace, warn};
 
-use crate::{
-    core::ModuleInstanceId,
-    encoding::{Decodable, Encodable},
-    fmt_utils::AbbreviateHexBytes,
-};
+use crate::core::ModuleInstanceId;
+use crate::encoding::{Decodable, Encodable};
+use crate::fmt_utils::AbbreviateHexBytes;
 
 pub mod mem_impl;
 

@@ -1,43 +1,35 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::anyhow;
 use bitcoin::Address;
-use fedimint_api::{
-    config::{FederationId, ModuleGenRegistry},
-    module::registry::ModuleDecoderRegistry,
-    task::TaskGroup,
-    Amount, TransactionId,
-};
+use fedimint_api::config::{FederationId, ModuleGenRegistry};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
+use fedimint_api::task::TaskGroup;
+use fedimint_api::{Amount, TransactionId};
 use fedimint_server::api::WsClientConnectInfo;
-use mint_client::{
-    ln::PayInvoicePayload,
-    modules::ln::{contracts::Preimage, route_hints::RouteHint},
-    GatewayClient,
-};
+use mint_client::ln::PayInvoicePayload;
+use mint_client::modules::ln::contracts::Preimage;
+use mint_client::modules::ln::route_hints::RouteHint;
+use mint_client::GatewayClient;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info, warn};
 
 use super::actor::GatewayActor;
-use crate::{
-    client::DynGatewayClientBuilder,
-    gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse},
-    gatewaylnrpc::GetPubKeyResponse,
-    rpc::{
-        rpc_server::run_webserver, BackupPayload, BalancePayload, ConnectFedPayload,
-        DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender,
-        InfoPayload, ReceivePaymentPayload, RestorePayload, WithdrawPayload,
-    },
-    LnGatewayError, Result,
+use crate::client::DynGatewayClientBuilder;
+use crate::gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse};
+use crate::gatewaylnrpc::GetPubKeyResponse;
+use crate::rpc::rpc_server::run_webserver;
+use crate::rpc::{
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
+    GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
+    RestorePayload, WithdrawPayload,
 };
+use crate::{LnGatewayError, Result};
 
 const ROUTE_HINT_RETRIES: usize = 10;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);

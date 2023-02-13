@@ -4,13 +4,11 @@ use std::hash::Hash;
 use std::io::Write;
 
 use anyhow::{ensure, format_err};
-use bitcoin_hashes::sha256::Hash as Sha256;
-use bitcoin_hashes::sha256::HashEngine;
+use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use fedimint_api::config::{DkgGroup, DkgMessage, DkgPeerMsg, ISupportedDkgMessage};
 use fedimint_api::core::ModuleInstanceId;
 use fedimint_api::net::peers::MuxPeerConnections;
-use fedimint_api::BitcoinHash;
-use fedimint_api::PeerId;
+use fedimint_api::{BitcoinHash, PeerId};
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 use rand::{CryptoRng, RngCore};

@@ -1,8 +1,7 @@
 use std::time::SystemTime;
 
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::impl_db_prefix_const;
-use fedimint_api::{Amount, OutPoint, PeerId};
+use fedimint_api::{impl_db_prefix_const, Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 

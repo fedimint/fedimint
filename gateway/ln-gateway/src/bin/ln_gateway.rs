@@ -1,28 +1,24 @@
 use cln_plugin::Error;
 use fedimint_api::config::ModuleGenRegistry;
+use fedimint_api::core::{
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
+use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::module::DynModuleGen;
-use fedimint_api::{
-    core::{
-        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-    },
-    module::registry::ModuleDecoderRegistry,
-    task::TaskGroup,
-};
+use fedimint_api::task::TaskGroup;
 use fedimint_server::config::load_from_file;
-use ln_gateway::{
-    client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder},
-    cln::{build_cln_rpc, ClnRpcRef},
-    config::GatewayConfig,
-    rpc::{GatewayRequest, GatewayRpcSender},
-    LnGateway,
-};
+use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
+use ln_gateway::cln::{build_cln_rpc, ClnRpcRef};
+use ln_gateway::config::GatewayConfig;
+use ln_gateway::rpc::{GatewayRequest, GatewayRpcSender};
+use ln_gateway::LnGateway;
+use mint_client::modules::ln::common::LightningDecoder;
 use mint_client::modules::ln::LightningGen;
+use mint_client::modules::mint::common::MintDecoder;
 use mint_client::modules::mint::MintGen;
+use mint_client::modules::wallet::common::WalletDecoder;
 use mint_client::modules::wallet::WalletGen;
-use mint_client::modules::{
-    ln::common::LightningDecoder, mint::common::MintDecoder, wallet::common::WalletDecoder,
-};
 use tokio::sync::mpsc;
 use tracing::error;
 

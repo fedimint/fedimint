@@ -1,7 +1,5 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::Error;
 use async_trait::async_trait;
@@ -13,14 +11,12 @@ use fedimint_ln::route_hints::RouteHint;
 use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
-use ln_gateway::{
-    gatewayd::lnrpc_client::{GetRouteHintsResponse, HtlcStream, ILnRpcClient},
-    gatewaylnrpc::{
-        CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest,
-        PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
-    },
-    ln::{LightningError, LnRpc},
+use ln_gateway::gatewayd::lnrpc_client::{GetRouteHintsResponse, HtlcStream, ILnRpcClient};
+use ln_gateway::gatewaylnrpc::{
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest,
+    PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
+use ln_gateway::ln::{LightningError, LnRpc};
 use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 

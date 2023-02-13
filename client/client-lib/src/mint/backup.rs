@@ -7,26 +7,23 @@
 //! them with federation. A successfully recovered snapshot can be used
 //! to avoid having to scan the whole history.
 
-use std::{
-    cmp::{max, Reverse},
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::Range,
-};
+use std::cmp::{max, Reverse};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ops::Range;
 
 use anyhow::Result;
-use fedimint_api::{
-    cancellable::{Cancellable, Cancelled},
-    core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    task::TaskGroup,
-    NumPeers, PeerId,
-};
+use fedimint_api::cancellable::{Cancellable, Cancelled};
+use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+use fedimint_api::task::TaskGroup;
+use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::api::{FederationError, GlobalFederationApi};
 use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 use tracing::{error, info};
 
-use super::{db::NextECashNoteIndexKeyPrefix, *};
+use super::db::NextECashNoteIndexKeyPrefix;
+use super::*;
 use crate::api::MintFederationApi;
 use crate::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 

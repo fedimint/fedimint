@@ -1,5 +1,4 @@
-use bitcoin_hashes::sha256;
-use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_api::config::ConfigGenParams;
 use fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_api::{Amount, OutPoint};
@@ -11,9 +10,8 @@ use fedimint_ln::contracts::{
     AccountContractOutcome, Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage,
     IdentifyableContract, OutgoingContractOutcome, Preimage,
 };
-use fedimint_ln::LightningGen;
 use fedimint_ln::{
-    ContractOutput, Lightning, LightningError, LightningInput, LightningOutput,
+    ContractOutput, Lightning, LightningError, LightningGen, LightningInput, LightningOutput,
     LightningOutputOutcome,
 };
 use fedimint_testing::FakeFed;

@@ -1,5 +1,4 @@
-use std::fmt;
-use std::{cmp, ops, thread_local};
+use std::{cmp, fmt, ops, thread_local};
 
 use serde_json::Value;
 

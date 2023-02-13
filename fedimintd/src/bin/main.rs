@@ -11,15 +11,13 @@ use fedimint_server::config::io::{
 };
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
-use fedimintd::ui::run_ui;
-use fedimintd::ui::UiMessage;
+use fedimintd::ui::{run_ui, UiMessage};
 use fedimintd::*;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::Layer;
+use tracing_subscriber::{EnvFilter, Layer};
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);

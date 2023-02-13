@@ -15,10 +15,9 @@ use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::{
-    Address, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script, Transaction, TxIn,
-    TxOut, Txid,
+    Address, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, PackedLockTime, Script,
+    Sequence, Transaction, TxIn, TxOut, Txid,
 };
-use bitcoin::{PackedLockTime, Sequence};
 use config::WalletConfigConsensus;
 use db::DbKeyPrefix;
 use fedimint_api::bitcoin_rpc::{
@@ -27,9 +26,9 @@ use fedimint_api::bitcoin_rpc::{
 };
 use fedimint_api::cancellable::{Cancellable, Cancelled};
 use fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 use fedimint_api::core::{ModuleInstanceId, ModuleKind};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
@@ -37,10 +36,9 @@ use fedimint_api::module::__reexports::serde_json;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{
-    api_endpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
-use fedimint_api::module::{ApiEndpoint, ModuleError};
 use fedimint_api::net::peers::MuxPeerConnections;
 use fedimint_api::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]

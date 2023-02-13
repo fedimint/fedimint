@@ -9,9 +9,7 @@ pub mod utils;
 pub mod wallet;
 
 pub mod modules {
-    pub use fedimint_ln as ln;
-    pub use fedimint_mint as mint;
-    pub use fedimint_wallet as wallet;
+    pub use {fedimint_ln as ln, fedimint_mint as mint, fedimint_wallet as wallet};
 }
 
 use std::fmt::{Debug, Formatter};
@@ -34,11 +32,10 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::task::{self, sleep};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::time::SystemTime;
-use fedimint_api::TieredMulti;
-use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_core::api::MemberError;
+use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::api::{
-    DynFederationApi, FederationError, GlobalFederationApi, OutputOutcomeError, WsFederationApi,
+    DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
+    WsFederationApi,
 };
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::outcome::TransactionStatus;
@@ -50,7 +47,8 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use ln::{db::LightningGatewayKey, PayInvoicePayload};
+use ln::db::LightningGatewayKey;
+use ln::PayInvoicePayload;
 use mint::NoteIssuanceRequests;
 use rand::distributions::Standard;
 use rand::prelude::*;
@@ -59,8 +57,7 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
-use tracing::trace;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, trace};
 use url::Url;
 
 use crate::db::ClientSecretKey;
@@ -68,41 +65,31 @@ use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
+use crate::ln::incoming::ConfirmedInvoice;
 use crate::ln::outgoing::OutgoingContractAccount;
-use crate::ln::LnClientError;
+use crate::ln::{LnClient, LnClientError};
 use crate::logging::LOG_WALLET;
 use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
-use crate::mint::MintClientError;
+use crate::mint::{MintClient, MintClientError, SpendableNote};
 use crate::modules::ln::common::LightningDecoder;
 use crate::modules::ln::config::LightningClientConfig;
+use crate::modules::ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
+use crate::modules::ln::contracts::{
+    Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
+};
+use crate::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
 use crate::modules::mint::common::MintDecoder;
 use crate::modules::mint::config::MintClientConfig;
-use crate::modules::mint::{MintOutput, MintOutputOutcome};
+use crate::modules::mint::{BlindNonce, MintOutput, MintOutputOutcome};
 use crate::modules::wallet::common::WalletDecoder;
 use crate::modules::wallet::config::WalletClientConfig;
+use crate::modules::wallet::txoproof::TxOutProof;
 use crate::modules::wallet::{PegOut, WalletInput, WalletOutput};
-use crate::modules::{
-    ln::{
-        contracts::{
-            incoming::{IncomingContract, IncomingContractOffer},
-            Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
-        },
-        ContractOutput, LightningGateway, LightningOutput,
-    },
-    mint::BlindNonce,
-    wallet::txoproof::TxOutProof,
-};
 use crate::outcome::legacy::OutputOutcome;
-use crate::transaction::legacy::Transaction as LegacyTransaction;
-use crate::transaction::legacy::{Input, Output};
+use crate::transaction::legacy::{Input, Output, Transaction as LegacyTransaction};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
-use crate::wallet::WalletClientError;
-use crate::{
-    ln::{incoming::ConfirmedInvoice, LnClient},
-    mint::{MintClient, SpendableNote},
-    wallet::WalletClient,
-};
+use crate::wallet::{WalletClient, WalletClientError};
 
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund

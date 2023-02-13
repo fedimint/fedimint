@@ -1,6 +1,5 @@
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::impl_db_prefix_const;
-use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_api::{impl_db_prefix_const, Amount, OutPoint, TieredMulti, TransactionId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
