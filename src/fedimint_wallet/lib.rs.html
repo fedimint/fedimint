@@ -1758,14 +1758,6 @@
 <a href="#1758" id="1758">1758</a>
 <a href="#1759" id="1759">1759</a>
 <a href="#1760" id="1760">1760</a>
-<a href="#1761" id="1761">1761</a>
-<a href="#1762" id="1762">1762</a>
-<a href="#1763" id="1763">1763</a>
-<a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
-<a href="#1768" id="1768">1768</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1783,8 +1775,8 @@
 <span class="kw">use </span>bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 <span class="kw">use </span>bitcoin::util::sighash::SighashCache;
 <span class="kw">use </span>bitcoin::{
-    Address, AddressType, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script,
-    Transaction, TxIn, TxOut, Txid,
+    Address, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script, Transaction, TxIn,
+    TxOut, Txid,
 };
 <span class="kw">use </span>bitcoin::{PackedLockTime, Sequence};
 <span class="kw">use </span>config::WalletConfigConsensus;
@@ -2463,7 +2455,10 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
         output: <span class="kw-2">&amp;</span>WalletOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">if </span>!is_address_valid_for_network(<span class="kw-2">&amp;</span>output.recipient, <span class="self">self</span>.cfg.consensus.network) {
+        <span class="kw">if </span>!output
+            .recipient
+            .is_valid_for_network(<span class="self">self</span>.cfg.consensus.network)
+        {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
                 <span class="self">self</span>.cfg.consensus.network,
                 output.recipient.network,
@@ -3412,17 +3407,6 @@
         prefix: <span class="string">b&quot;fedimint&quot;</span>.to_vec(),
         subtype: <span class="number">0x00</span>,
         key: <span class="macro">vec!</span>[],
-    }
-}
-
-<span class="kw">pub fn </span>is_address_valid_for_network(address: <span class="kw-2">&amp;</span>Address, network: Network) -&gt; bool {
-    <span class="kw">match </span>(address.network, address.address_type()) {
-        (Network::Testnet, <span class="prelude-val">Some</span>(AddressType::P2pkh))
-        | (Network::Testnet, <span class="prelude-val">Some</span>(AddressType::P2sh)) =&gt; {
-            [Network::Testnet, Network::Regtest, Network::Signet].contains(<span class="kw-2">&amp;</span>network)
-        }
-        (Network::Testnet, <span class="kw">_</span>) =&gt; [Network::Testnet, Network::Signet].contains(<span class="kw-2">&amp;</span>network),
-        (addr_net, <span class="kw">_</span>) =&gt; addr_net == network,
     }
 }
 
