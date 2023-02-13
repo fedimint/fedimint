@@ -457,6 +457,11 @@ impl std::fmt::Display for MintConsensusItem {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
+    type Input = MintInput;
+    type Output = MintOutput;
+    type OutputOutcome = MintOutputOutcome;
+    type ConsensusItem = MintConsensusItem;
+
     type Gen = MintGen;
     type Decoder = MintDecoder;
     type VerificationCache = VerifiedNotes;

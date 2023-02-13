@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
-use fedimint_core::core::{Decoder, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+use fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::interconnect::ModuleInterconect;
@@ -76,17 +76,14 @@ where
         self.block_height.store(bh, Ordering::Relaxed);
     }
 
-    pub async fn verify_input(
-        &self,
-        input: &<Module::Decoder as Decoder>::Input,
-    ) -> Result<TestInputMeta, ModuleError> {
+    pub async fn verify_input(&self, input: &Module::Input) -> Result<TestInputMeta, ModuleError> {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         async fn member_validate<M: ServerModule>(
             member: &M,
             dbtx: &mut DatabaseTransaction<'_>,
             fake_ic: &FakeInterconnect,
-            input: &<M::Decoder as Decoder>::Input,
+            input: &M::Input,
         ) -> Result<TestInputMeta, ModuleError> {
             let cache = member.build_verification_cache(std::iter::once(input));
             let InputMeta {
@@ -117,7 +114,7 @@ where
         assert_all_equal_result(results.into_iter())
     }
 
-    pub async fn verify_output(&self, output: &<Module::Decoder as Decoder>::Output) -> bool {
+    pub async fn verify_output(&self, output: &Module::Output) -> bool {
         let mut results = Vec::new();
         for (_, member, db, module_instance_id) in self.members.iter() {
             results.push(
@@ -139,10 +136,10 @@ where
     // TODO: add expected result to inputs/outputs
     pub async fn consensus_round(
         &mut self,
-        inputs: &[<Module::Decoder as Decoder>::Input],
-        outputs: &[(OutPoint, <Module::Decoder as Decoder>::Output)],
+        inputs: &[Module::Input],
+        outputs: &[(OutPoint, Module::Output)],
     ) where
-        <<Module as ServerModule>::Decoder as Decoder>::Input: Send + Sync + Eq,
+        <Module as ServerModule>::Input: Send + Sync + Eq,
     {
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
         // TODO: only include some of the proposals for realism
@@ -196,12 +193,9 @@ where
         }
     }
 
-    pub async fn output_outcome(
-        &self,
-        out_point: OutPoint,
-    ) -> Option<<Module::Decoder as Decoder>::OutputOutcome>
+    pub async fn output_outcome(&self, out_point: OutPoint) -> Option<Module::OutputOutcome>
     where
-        <<Module as ServerModule>::Decoder as Decoder>::OutputOutcome: Eq,
+        <Module as ServerModule>::OutputOutcome: Eq,
     {
         // Since every member is in the same epoch they should have the same internal
         // state, even in terms of outcomes. This may change later once

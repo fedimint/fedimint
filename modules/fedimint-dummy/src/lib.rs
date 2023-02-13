@@ -204,6 +204,11 @@ impl fmt::Display for DummyConsensusItem {
 
 #[async_trait]
 impl ServerModule for Dummy {
+    type Input = DummyInput;
+    type Output = DummyOutput;
+    type OutputOutcome = DummyOutputOutcome;
+    type ConsensusItem = DummyConsensusItem;
+
     type Gen = DummyConfigGenerator;
     type Decoder = DummyDecoder;
     type VerificationCache = DummyVerificationCache;

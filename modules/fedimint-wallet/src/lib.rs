@@ -483,6 +483,11 @@ pub struct WalletVerificationCache;
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Wallet {
+    type Input = WalletInput;
+    type Output = WalletOutput;
+    type OutputOutcome = WalletOutputOutcome;
+    type ConsensusItem = WalletConsensusItem;
+
     type Gen = WalletGen;
     type Decoder = WalletDecoder;
     type VerificationCache = WalletVerificationCache;

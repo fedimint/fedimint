@@ -457,6 +457,11 @@ impl ModuleGen for LightningGen {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Lightning {
+    type Input = LightningInput;
+    type Output = LightningOutput;
+    type OutputOutcome = LightningOutputOutcome;
+    type ConsensusItem = LightningConsensusItem;
+
     type Gen = LightningGen;
     type Decoder = LightningDecoder;
     type VerificationCache = LightningVerificationCache;
