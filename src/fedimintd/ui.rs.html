@@ -419,8 +419,6 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -430,10 +428,8 @@
 <span class="kw">use </span>askama::Template;
 <span class="kw">use </span>axum::extract::Form;
 <span class="kw">use </span>axum::response::{IntoResponse, Redirect, Response};
-<span class="kw">use </span>axum::{
-    routing::{get, post},
-    Router,
-};
+<span class="kw">use </span>axum::routing::{get, post};
+<span class="kw">use </span>axum::Router;
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::bitcoin_rpc::BitcoindRpcBackend;

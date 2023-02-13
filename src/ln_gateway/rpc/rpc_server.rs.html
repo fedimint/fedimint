@@ -140,13 +140,19 @@
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
-<span class="kw">use </span>axum::{response::IntoResponse, routing::post, Extension, Json, Router};
+<span class="kw">use </span>axum::response::IntoResponse;
+<span class="kw">use </span>axum::routing::post;
+<span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>mint_client::ln::PayInvoicePayload;
 <span class="kw">use </span>serde_json::json;
-<span class="kw">use </span>tower_http::{auth::RequireAuthorizationLayer, cors::CorsLayer};
+<span class="kw">use </span>tower_http::auth::RequireAuthorizationLayer;
+<span class="kw">use </span>tower_http::cors::CorsLayer;
 <span class="kw">use </span>tracing::instrument;
 
 <span class="kw">use super</span>::{

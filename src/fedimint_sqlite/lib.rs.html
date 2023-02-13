@@ -268,6 +268,7 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::Result;
@@ -425,10 +426,11 @@
 </span><span class="kw">mod </span>fedimint_sqlite_tests {
     <span class="kw">use </span>std::fs;
 
-    <span class="kw">use </span>fedimint_api::{
-        core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry,
-    };
-    <span class="kw">use </span>rand::{rngs::OsRng, RngCore};
+    <span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
+    <span class="kw">use </span>fedimint_api::db::Database;
+    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>rand::rngs::OsRng;
+    <span class="kw">use </span>rand::RngCore;
 
     <span class="kw">use </span><span class="kw">crate</span>::SqliteDb;
 

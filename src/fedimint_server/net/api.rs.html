@@ -233,9 +233,6 @@
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -245,20 +242,17 @@
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_api::config::ConfigResponse;
 <span class="kw">use </span>fedimint_api::core::ModuleInstanceId;
+<span class="kw">use </span>fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
-<span class="kw">use </span>fedimint_api::{
-    module::{api_endpoint, ApiEndpoint, ApiError},
-    task::TaskHandle,
-    TransactionId,
-};
+<span class="kw">use </span>fedimint_api::task::TaskHandle;
+<span class="kw">use </span>fedimint_api::TransactionId;
 <span class="kw">use </span>fedimint_core::epoch::SerdeEpochHistory;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>futures::FutureExt;
-<span class="kw">use </span>jsonrpsee::{
-    server::ServerBuilder,
-    types::{error::CallError, ErrorObject},
-    RpcModule,
-};
+<span class="kw">use </span>jsonrpsee::server::ServerBuilder;
+<span class="kw">use </span>jsonrpsee::types::error::CallError;
+<span class="kw">use </span>jsonrpsee::types::ErrorObject;
+<span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>tracing::{debug, error};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;

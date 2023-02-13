@@ -399,54 +399,38 @@
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::{Duration, Instant};
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>bitcoin::Address;
-<span class="kw">use </span>fedimint_api::{
-    config::{FederationId, ModuleGenRegistry},
-    module::registry::ModuleDecoderRegistry,
-    task::TaskGroup,
-    Amount, TransactionId,
-};
+<span class="kw">use </span>fedimint_api::config::{FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
+<span class="kw">use </span>fedimint_api::{Amount, TransactionId};
 <span class="kw">use </span>fedimint_server::api::WsClientConnectInfo;
-<span class="kw">use </span>mint_client::{
-    ln::PayInvoicePayload,
-    modules::ln::{contracts::Preimage, route_hints::RouteHint},
-    GatewayClient,
-};
+<span class="kw">use </span>mint_client::ln::PayInvoicePayload;
+<span class="kw">use </span>mint_client::modules::ln::contracts::Preimage;
+<span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
+<span class="kw">use </span>mint_client::GatewayClient;
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tokio::sync::{mpsc, Mutex};
 <span class="kw">use </span>tracing::{error, info, warn};
 
 <span class="kw">use </span><span class="kw">super</span>::actor::GatewayActor;
-<span class="kw">use crate</span>::{
-    client::DynGatewayClientBuilder,
-    gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse},
-    gatewaylnrpc::GetPubKeyResponse,
-    rpc::{
-        rpc_server::run_webserver, BackupPayload, BalancePayload, ConnectFedPayload,
-        DepositAddressPayload, DepositPayload, GatewayInfo, GatewayRequest, GatewayRpcSender,
-        InfoPayload, ReceivePaymentPayload, RestorePayload, WithdrawPayload,
-    },
-    LnGatewayError, <span class="prelude-ty">Result</span>,
+<span class="kw">use </span><span class="kw">crate</span>::client::DynGatewayClientBuilder;
+<span class="kw">use </span><span class="kw">crate</span>::gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse};
+<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::GetPubKeyResponse;
+<span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
+    GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
+    RestorePayload, WithdrawPayload,
 };
+<span class="kw">use crate</span>::{LnGatewayError, <span class="prelude-ty">Result</span>};
 
 <span class="kw">const </span>ROUTE_HINT_RETRIES: usize = <span class="number">10</span>;
 <span class="kw">const </span>ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(<span class="number">2</span>);

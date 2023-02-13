@@ -445,32 +445,44 @@
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{
-    array::TryFromSliceError, collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr,
-    sync::Arc, time::Duration,
-};
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
+<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::str::FromStr;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin_hashes::{hex::ToHex, sha256, Hash};
+<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::{model, ClnRpc};
-<span class="kw">use </span>fedimint_api::{task::TaskGroup, Amount};
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
+<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
+<span class="kw">use </span>ln_gateway::gatewaylnrpc::gateway_lightning_server::{
+    GatewayLightning, GatewayLightningServer,
+};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    complete_htlcs_request::{Action, Cancel, Settle},
-    gateway_lightning_server::{GatewayLightning, GatewayLightningServer},
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::{
-    io::{stdin, stdout},
-    sync::{mpsc, oneshot, Mutex},
-};
+<span class="kw">use </span>tokio::io::{stdin, stdout};
+<span class="kw">use </span>tokio::sync::{mpsc, oneshot, Mutex};
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
-<span class="kw">use </span>tonic::{transport::Server, Status};
+<span class="kw">use </span>tonic::transport::Server;
+<span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tracing::{debug, error};
 
 <span class="attr">#[derive(Parser)]

@@ -356,21 +356,27 @@
 <a href="#356" id="356">356</a>
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_api::{task::TaskGroup, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>mint_client::modules::ln::contracts::{ContractId, Preimage};
 <span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
-<span class="kw">use </span>mint_client::modules::{
-    ln::contracts::{ContractId, Preimage},
-    wallet::txoproof::TxOutProof,
-};
+<span class="kw">use </span>mint_client::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>mint_client::{GatewayClient, PaymentParameters};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>tracing::{debug, info, instrument, warn};
 
-<span class="kw">use crate</span>::{ln::LnRpc, rpc::FederationInfo, utils::retry, LnGatewayError, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span><span class="kw">crate</span>::ln::LnRpc;
+<span class="kw">use </span><span class="kw">crate</span>::rpc::FederationInfo;
+<span class="kw">use </span><span class="kw">crate</span>::utils::retry;
+<span class="kw">use crate</span>::{LnGatewayError, <span class="prelude-ty">Result</span>};
 
 <span class="doccomment">/// How long a gateway announcement stays valid
 </span><span class="kw">const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);

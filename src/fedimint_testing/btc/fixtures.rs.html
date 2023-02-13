@@ -191,15 +191,15 @@
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
 <a href="#193" id="193">193</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{
-    iter::repeat,
-    sync::{Arc, Mutex},
-};
+</pre><pre class="rust"><code><span class="kw">use </span>std::iter::repeat;
+<span class="kw">use </span>std::sync::{Arc, Mutex};
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin::hash_types::Txid;
+<span class="kw">use </span>bitcoin::hashes::Hash;
+<span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{
-    hash_types::Txid, hashes::Hash, util::merkleblock::PartialMerkleTree, Address, Block,
-    BlockHash, BlockHeader, Network, PackedLockTime, Transaction, TxOut,
+    Address, Block, BlockHash, BlockHeader, Network, PackedLockTime, Transaction, TxOut,
 };
 <span class="kw">use </span>fedimint_api::{Amount, Feerate};
 <span class="kw">use </span>fedimint_bitcoind::{IBitcoindRpc, <span class="prelude-ty">Result </span><span class="kw">as </span>BitcoinRpcResult};

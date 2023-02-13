@@ -142,14 +142,8 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Error;
 <span class="kw">use </span>async_trait::async_trait;
@@ -161,14 +155,12 @@
 <span class="kw">use </span>futures::stream;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
-<span class="kw">use </span>ln_gateway::{
-    gatewayd::lnrpc_client::{GetRouteHintsResponse, HtlcStream, ILnRpcClient},
-    gatewaylnrpc::{
-        CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest,
-        PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
-    },
-    ln::{LightningError, LnRpc},
+<span class="kw">use </span>ln_gateway::gatewayd::lnrpc_client::{GetRouteHintsResponse, HtlcStream, ILnRpcClient};
+<span class="kw">use </span>ln_gateway::gatewaylnrpc::{
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, PayInvoiceRequest,
+    PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
+<span class="kw">use </span>ln_gateway::ln::{LightningError, LnRpc};
 <span class="kw">use </span>mint_client::modules::ln::contracts::Preimage;
 <span class="kw">use </span>rand::rngs::OsRng;
 

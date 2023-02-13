@@ -239,17 +239,17 @@
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
 <a href="#241" id="241">241</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{net::SocketAddr, path::PathBuf};
+</pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::FederationId;
-<span class="kw">use </span>ln_gateway::{
-    config::GatewayConfig,
-    rpc::{
-        rpc_client::RpcClient, BackupPayload, BalancePayload, ConnectFedPayload,
-        DepositAddressPayload, DepositPayload, RestorePayload, WithdrawPayload,
-    },
+<span class="kw">use </span>ln_gateway::config::GatewayConfig;
+<span class="kw">use </span>ln_gateway::rpc::rpc_client::RpcClient;
+<span class="kw">use </span>ln_gateway::rpc::{
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
+    RestorePayload, WithdrawPayload,
 };
 <span class="kw">use </span>mint_client::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>mint_client::utils::from_hex;

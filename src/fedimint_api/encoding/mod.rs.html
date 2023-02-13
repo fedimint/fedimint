@@ -708,7 +708,6 @@
 <a href="#708" id="708">708</a>
 <a href="#709" id="709">709</a>
 <a href="#710" id="710">710</a>
-<a href="#711" id="711">711</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding thant e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -723,9 +722,8 @@
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
-<span class="kw">use </span>bitcoin_hashes::Hash;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;

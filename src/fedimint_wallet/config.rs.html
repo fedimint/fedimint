@@ -179,12 +179,12 @@
 <a href="#179" id="179">179</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
-<span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>anyhow::format_err;
+<span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_api::config::ClientModuleConfig;
-<span class="kw">use </span>fedimint_api::config::TypedServerModuleConfig;
-<span class="kw">use </span>fedimint_api::config::{TypedClientModuleConfig, TypedServerModuleConsensusConfig};
+<span class="kw">use </span>fedimint_api::config::{
+    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
+};
 <span class="kw">use </span>fedimint_api::core::ModuleKind;
 <span class="kw">use </span>fedimint_api::encoding::Encodable;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;

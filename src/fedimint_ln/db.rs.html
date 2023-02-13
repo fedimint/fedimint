@@ -107,13 +107,13 @@
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::impl_db_prefix_const;
-<span class="kw">use </span>fedimint_api::{OutPoint, PeerId};
+<span class="kw">use </span>fedimint_api::{impl_db_prefix_const, OutPoint, PeerId};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
-<span class="kw">use </span><span class="kw">crate</span>::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
+<span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::IncomingContractOffer;
+<span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, PreimageDecryptionShare};
 <span class="kw">use crate</span>::{ContractAccount, LightningGateway, LightningOutputOutcome};
 
 <span class="attr">#[repr(u8)]

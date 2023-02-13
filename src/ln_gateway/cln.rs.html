@@ -351,8 +351,6 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -371,11 +369,9 @@
 <span class="kw">use </span>tokio::io::{stdin, stdout};
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::ln::{LightningError, LnRpc};
+<span class="kw">use </span><span class="kw">crate</span>::rpc::GatewayRpcSender;
 <span class="kw">use </span><span class="kw">crate</span>::ReceivePaymentPayload;
-<span class="kw">use crate</span>::{
-    ln::{LightningError, LnRpc},
-    rpc::GatewayRpcSender,
-};
 
 <span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot;
 /// suffix

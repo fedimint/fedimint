@@ -221,28 +221,20 @@
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{
-    fmt::Debug,
-    fs::File,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::path::{Path, PathBuf};
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::{FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
+<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::dyn_newtype_define;
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_api::{
-    db::{mem_impl::MemDatabase, Database},
-    dyn_newtype_define,
+<span class="kw">use </span>fedimint_server::api::{
+    DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-<span class="kw">use </span>fedimint_server::api::DynFederationApi;
-<span class="kw">use </span>fedimint_server::api::GlobalFederationApi;
-<span class="kw">use </span>fedimint_server::api::WsClientConnectInfo;
-<span class="kw">use </span>fedimint_server::api::WsFederationApi;
 <span class="kw">use </span>fedimint_server::config::load_from_file;
 <span class="kw">use </span>mint_client::{module_decode_stubs, Client, GatewayClientConfig};
 <span class="kw">use </span>secp256k1::{KeyPair, PublicKey};

@@ -134,30 +134,26 @@
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, sync::Arc};
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::dyn_newtype_define;
 <span class="kw">use </span>futures::stream::BoxStream;
 <span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
-<span class="kw">use </span>tonic::{
-    transport::{Channel, Endpoint},
-    Request,
-};
+<span class="kw">use </span>tonic::transport::{Channel, Endpoint};
+<span class="kw">use </span>tonic::Request;
 <span class="kw">use </span>tracing::error;
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use crate</span>::{
-    gatewaylnrpc::{
-        gateway_lightning_client::GatewayLightningClient, CompleteHtlcsRequest,
-        CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse, PayInvoiceRequest,
-        PayInvoiceResponse, SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
-    },
-    LnGatewayError, <span class="prelude-ty">Result</span>,
+<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
+<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
+    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    SubscribeInterceptHtlcsResponse,
 };
+<span class="kw">use crate</span>::{LnGatewayError, <span class="prelude-ty">Result</span>};
 
 <span class="comment">// TODO: Issue 1554: Define gatewaylnpc spec for getting route hints
 </span><span class="kw">pub struct </span>GetRouteHintsResponse {

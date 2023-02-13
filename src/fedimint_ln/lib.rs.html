@@ -1207,6 +1207,7 @@
 <a href="#1207" id="1207">1207</a>
 <a href="#1208" id="1208">1208</a>
 <a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -1233,9 +1234,9 @@
 <span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, ServerModuleConfig, TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -1250,8 +1251,9 @@
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="kw">use </span>fedimint_api::task::TaskGroup;
 <span class="kw">use </span>fedimint_api::time::SystemTime;
-<span class="kw">use </span>fedimint_api::{plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, PeerId};
-<span class="kw">use </span>fedimint_api::{OutPoint, ServerModule};
+<span class="kw">use </span>fedimint_api::{
+    plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule,
+};
 <span class="attr">#[cfg(feature = <span class="string">&quot;server&quot;</span>)]
 </span><span class="kw">use </span>fedimint_server::config::distributedgen::DkgRunner;
 <span class="kw">use </span>futures::StreamExt;
@@ -1267,8 +1269,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
 };
+<span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::{IncomingContractOffer, OfferId};
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{
-    incoming::{IncomingContractOffer, OfferId},
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
     IdentifyableContract, Preimage, PreimageDecryptionShare,
 };

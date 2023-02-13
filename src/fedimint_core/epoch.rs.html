@@ -358,8 +358,8 @@
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
 <a href="#360" id="360">360</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
-<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#361" id="361">361</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>fedimint_api::core::DynModuleConsensusItem <span class="kw">as </span>ModuleConsensusItem;
@@ -571,8 +571,10 @@
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>threshold_crypto::{SecretKey, SecretKeySet};
 
-    <span class="kw">use </span><span class="kw">crate</span>::epoch::{ConsensusItem, SerdeSignatureShare, Sha256};
-    <span class="kw">use </span><span class="kw">crate</span>::epoch::{EpochOutcome, EpochVerifyError, SerdeSignature, SignedEpochOutcome};
+    <span class="kw">use </span><span class="kw">crate</span>::epoch::{
+        ConsensusItem, EpochOutcome, EpochVerifyError, SerdeSignature, SerdeSignatureShare, Sha256,
+        SignedEpochOutcome,
+    };
 
     <span class="kw">fn </span>signed_history(
         epoch: u16,

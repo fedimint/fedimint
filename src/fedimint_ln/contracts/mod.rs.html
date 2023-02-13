@@ -199,16 +199,14 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>account;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
 
 <span class="kw">use </span>std::io::Error;
 
-<span class="kw">use </span>bitcoin_hashes::hash_newtype;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
-<span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
+<span class="kw">use </span>bitcoin_hashes::{hash_newtype, Hash <span class="kw">as </span>BitcoinHash};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_api::OutPoint;

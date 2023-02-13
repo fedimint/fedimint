@@ -311,6 +311,7 @@
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
 <a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
@@ -490,7 +491,8 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_rocksdb_tests {
-    <span class="kw">use </span>fedimint_api::{db::Database, module::registry::ModuleDecoderRegistry};
+    <span class="kw">use </span>fedimint_api::db::Database;
+    <span class="kw">use </span>fedimint_api::module::registry::ModuleDecoderRegistry;
 
     <span class="kw">use </span><span class="kw">crate</span>::RocksDb;
 

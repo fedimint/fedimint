@@ -60,7 +60,6 @@
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
@@ -68,8 +67,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleKind;
-<span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
-<span class="kw">use </span><span class="kw">crate</span>::core::DynDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, DynDecoder};
 <span class="kw">use </span><span class="kw">crate</span>::module::TransactionItemAmount;
 <span class="kw">use crate</span>::{dyn_newtype_define, ServerModule};
 

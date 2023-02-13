@@ -620,10 +620,6 @@
 <a href="#620" id="620">620</a>
 <a href="#621" id="621">621</a>
 <a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -632,22 +628,18 @@
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>bitcoin::secp256k1;
-<span class="kw">use </span>bitcoin_hashes::hex;
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
-<span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
-<span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
+<span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
+<span class="kw">use </span>bitcoin_hashes::{hex, sha256};
 <span class="kw">use </span>fedimint_api::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_api::encoding::Encodable;
-<span class="kw">use </span>fedimint_api::BitcoinHash;
-<span class="kw">use </span>fedimint_api::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_api::{BitcoinHash, ModuleDecoderRegistry};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-<span class="kw">use </span>tbs::serde_impl;
-<span class="kw">use </span>tbs::Scalar;
+<span class="kw">use </span>tbs::{serde_impl, Scalar};
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective, Signature};
 <span class="kw">use </span>url::Url;

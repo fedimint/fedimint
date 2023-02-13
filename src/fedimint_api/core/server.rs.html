@@ -442,14 +442,14 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
-</span><span class="kw">use </span>std::{collections::HashSet, sync::Arc};
+</span><span class="kw">use </span>std::collections::HashSet;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::{
-    db::DatabaseTransaction,
-    module::{audit::Audit, interconnect::ModuleInterconect},
-    OutPoint, PeerId,
-};
+<span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_api::module::audit::Audit;
+<span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>fedimint_api::{OutPoint, PeerId};
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
 <span class="kw">use </span><span class="kw">crate</span>::module::{

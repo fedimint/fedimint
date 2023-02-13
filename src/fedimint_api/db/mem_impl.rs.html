@@ -235,6 +235,8 @@
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
@@ -396,7 +398,9 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::MemDatabase;
-    <span class="kw">use crate</span>::{core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry};
+    <span class="kw">use </span><span class="kw">crate</span>::core::ModuleInstanceId;
+    <span class="kw">use </span><span class="kw">crate</span>::db::Database;
+    <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
     <span class="kw">fn </span>database() -&gt; Database {
         Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())

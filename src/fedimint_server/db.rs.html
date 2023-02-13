@@ -100,13 +100,11 @@
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_api::db::MODULE_GLOBAL_PREFIX;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::impl_db_prefix_const;
-<span class="kw">use </span>fedimint_api::{PeerId, TransactionId};
+<span class="kw">use </span>fedimint_api::{impl_db_prefix_const, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;

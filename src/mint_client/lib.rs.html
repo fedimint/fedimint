@@ -1640,19 +1640,6 @@
 <a href="#1640" id="1640">1640</a>
 <a href="#1641" id="1641">1641</a>
 <a href="#1642" id="1642">1642</a>
-<a href="#1643" id="1643">1643</a>
-<a href="#1644" id="1644">1644</a>
-<a href="#1645" id="1645">1645</a>
-<a href="#1646" id="1646">1646</a>
-<a href="#1647" id="1647">1647</a>
-<a href="#1648" id="1648">1648</a>
-<a href="#1649" id="1649">1649</a>
-<a href="#1650" id="1650">1650</a>
-<a href="#1651" id="1651">1651</a>
-<a href="#1652" id="1652">1652</a>
-<a href="#1653" id="1653">1653</a>
-<a href="#1654" id="1654">1654</a>
-<a href="#1655" id="1655">1655</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1664,9 +1651,7 @@
 <span class="kw">pub mod </span>wallet;
 
 <span class="kw">pub mod </span>modules {
-    <span class="kw">pub use </span>fedimint_ln <span class="kw">as </span>ln;
-    <span class="kw">pub use </span>fedimint_mint <span class="kw">as </span>mint;
-    <span class="kw">pub use </span>fedimint_wallet <span class="kw">as </span>wallet;
+    <span class="kw">pub use </span>{fedimint_ln <span class="kw">as </span>ln, fedimint_mint <span class="kw">as </span>mint, fedimint_wallet <span class="kw">as </span>wallet};
 }
 
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -1689,11 +1674,10 @@
 <span class="kw">use </span>fedimint_api::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::time::SystemTime;
-<span class="kw">use </span>fedimint_api::TieredMulti;
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_core::api::MemberError;
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::api::{
-    DynFederationApi, FederationError, GlobalFederationApi, OutputOutcomeError, WsFederationApi,
+    DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
+    WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
@@ -1705,7 +1689,8 @@
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
 <span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-<span class="kw">use </span>ln::{db::LightningGatewayKey, PayInvoicePayload};
+<span class="kw">use </span>ln::db::LightningGatewayKey;
+<span class="kw">use </span>ln::PayInvoicePayload;
 <span class="kw">use </span>mint::NoteIssuanceRequests;
 <span class="kw">use </span>rand::distributions::Standard;
 <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
@@ -1714,8 +1699,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::PublicKey;
-<span class="kw">use </span>tracing::trace;
-<span class="kw">use </span>tracing::{debug, info, instrument};
+<span class="kw">use </span>tracing::{debug, info, instrument, trace};
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
@@ -1723,41 +1707,31 @@
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
     OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
+<span class="kw">use </span><span class="kw">crate</span>::ln::incoming::ConfirmedInvoice;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount;
-<span class="kw">use </span><span class="kw">crate</span>::ln::LnClientError;
+<span class="kw">use </span><span class="kw">crate</span>::ln::{LnClient, LnClientError};
 <span class="kw">use </span><span class="kw">crate</span>::logging::LOG_WALLET;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NoteKey, PendingNotesKeyPrefix};
-<span class="kw">use </span><span class="kw">crate</span>::mint::MintClientError;
+<span class="kw">use </span><span class="kw">crate</span>::mint::{MintClient, MintClientError, SpendableNote};
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::common::LightningDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::config::LightningClientConfig;
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::{
+    Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
+};
+<span class="kw">use </span><span class="kw">crate</span>::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::common::MintDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::config::MintClientConfig;
-<span class="kw">use </span><span class="kw">crate</span>::modules::mint::{MintOutput, MintOutputOutcome};
+<span class="kw">use </span><span class="kw">crate</span>::modules::mint::{BlindNonce, MintOutput, MintOutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::common::WalletDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{PegOut, WalletInput, WalletOutput};
-<span class="kw">use </span><span class="kw">crate</span>::modules::{
-    ln::{
-        contracts::{
-            incoming::{IncomingContract, IncomingContractOffer},
-            Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
-        },
-        ContractOutput, LightningGateway, LightningOutput,
-    },
-    mint::BlindNonce,
-    wallet::txoproof::TxOutProof,
-};
 <span class="kw">use </span><span class="kw">crate</span>::outcome::legacy::OutputOutcome;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::Transaction <span class="kw">as </span>LegacyTransaction;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::{Input, Output};
+<span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::{Input, Output, Transaction <span class="kw">as </span>LegacyTransaction};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, ClientContext};
-<span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
-<span class="kw">use crate</span>::{
-    ln::{incoming::ConfirmedInvoice, LnClient},
-    mint::{MintClient, SpendableNote},
-    wallet::WalletClient,
-};
+<span class="kw">use </span><span class="kw">crate</span>::wallet::{WalletClient, WalletClientError};
 
 <span class="doccomment">/// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund

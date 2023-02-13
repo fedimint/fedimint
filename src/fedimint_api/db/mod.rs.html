@@ -1540,11 +1540,11 @@
 <a href="#1540" id="1540">1540</a>
 <a href="#1541" id="1541">1541</a>
 <a href="#1542" id="1542">1542</a>
-<a href="#1543" id="1543">1543</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+</pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::{error::Error, marker::PhantomData};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
@@ -1553,11 +1553,9 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
-<span class="kw">use crate</span>::{
-    core::ModuleInstanceId,
-    encoding::{Decodable, Encodable},
-    fmt_utils::AbbreviateHexBytes,
-};
+<span class="kw">use </span><span class="kw">crate</span>::core::ModuleInstanceId;
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+<span class="kw">use </span><span class="kw">crate</span>::fmt_utils::AbbreviateHexBytes;
 
 <span class="kw">pub mod </span>mem_impl;
 

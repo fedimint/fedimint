@@ -251,19 +251,19 @@
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, VecDeque};
+<span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
-<span class="kw">use </span>std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-    time::Duration,
-};
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::cancellable::Cancellable;
 <span class="kw">use </span>fedimint_api::net::peers::{IMuxPeerConnections, PeerConnections};
-<span class="kw">use </span>serde::{de::DeserializeOwned, Deserialize, Serialize};
-<span class="kw">use </span>tokio::{sync::Mutex, time::sleep};
+<span class="kw">use </span>serde::de::DeserializeOwned;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>tokio::sync::Mutex;
+<span class="kw">use </span>tokio::time::sleep;
 <span class="kw">use </span>tracing::{debug, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::logging::LOG_NET_PEER;

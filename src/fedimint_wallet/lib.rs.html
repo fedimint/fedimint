@@ -1756,8 +1756,6 @@
 <a href="#1756" id="1756">1756</a>
 <a href="#1757" id="1757">1757</a>
 <a href="#1758" id="1758">1758</a>
-<a href="#1759" id="1759">1759</a>
-<a href="#1760" id="1760">1760</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -1775,10 +1773,9 @@
 <span class="kw">use </span>bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 <span class="kw">use </span>bitcoin::util::sighash::SighashCache;
 <span class="kw">use </span>bitcoin::{
-    Address, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script, Transaction, TxIn,
-    TxOut, Txid,
+    Address, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, PackedLockTime, Script,
+    Sequence, Transaction, TxIn, TxOut, Txid,
 };
-<span class="kw">use </span>bitcoin::{PackedLockTime, Sequence};
 <span class="kw">use </span>config::WalletConfigConsensus;
 <span class="kw">use </span>db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_api::bitcoin_rpc::{
@@ -1787,9 +1784,9 @@
 };
 <span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_api::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig, TypedServerModuleConfig,
+    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_api::config::{ModuleConfigResponse, TypedServerModuleConsensusConfig};
 <span class="kw">use </span>fedimint_api::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
@@ -1797,10 +1794,9 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::{
-    api_endpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_api::module::{ApiEndpoint, ModuleError};
 <span class="kw">use </span>fedimint_api::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_api::server::DynServerModule;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]

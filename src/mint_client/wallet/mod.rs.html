@@ -408,21 +408,15 @@
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>bitcoin::Address;
-<span class="kw">use </span>bitcoin::KeyPair;
+<span class="kw">use </span>bitcoin::{Address, KeyPair};
 <span class="kw">use </span>db::PegInKey;
 <span class="kw">use </span>fedimint_api::core::client::ClientModule;
 <span class="kw">use </span>fedimint_api::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::{Amount, ServerModule};
-<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
-<span class="kw">use </span>fedimint_core::api::OutputOutcomeError;
+<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
@@ -431,9 +425,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::tweakable::Tweakable;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::WalletInput;
-<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::WalletOutput;
-<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{Wallet, WalletOutputOutcome};
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{Wallet, WalletInput, WalletOutput, WalletOutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::outcome::legacy::OutputOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span><span class="kw">crate</span>::MemberError;

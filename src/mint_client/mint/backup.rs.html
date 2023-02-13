@@ -869,9 +869,6 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -881,26 +878,23 @@
 //! them with federation. A successfully recovered snapshot can be used
 //! to avoid having to scan the whole history.
 
-</span><span class="kw">use </span>std::{
-    cmp::{max, Reverse},
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::Range,
-};
+</span><span class="kw">use </span>std::cmp::{max, Reverse};
+<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+<span class="kw">use </span>std::ops::Range;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>fedimint_api::{
-    cancellable::{Cancellable, Cancelled},
-    core::LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    task::TaskGroup,
-    NumPeers, PeerId,
-};
+<span class="kw">use </span>fedimint_api::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_api::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+<span class="kw">use </span>fedimint_api::task::TaskGroup;
+<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_core::api::{FederationError, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_mint::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 <span class="kw">use </span>tracing::{error, info};
 
-<span class="kw">use super</span>::{db::NextECashNoteIndexKeyPrefix, <span class="kw-2">*</span>};
+<span class="kw">use </span><span class="kw">super</span>::db::NextECashNoteIndexKeyPrefix;
+<span class="kw">use super</span>::<span class="kw-2">*</span>;
 <span class="kw">use </span><span class="kw">crate</span>::api::MintFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 
