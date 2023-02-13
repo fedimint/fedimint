@@ -24,6 +24,6 @@ pub struct ExampleKeyPrefix;
 impl_db_prefix_const!(
     key = ExampleKey,
     value = (),
-    prefix = DbKeyPrefix::Example,
-    key_prefix = ExampleKeyPrefix
+    db_prefix = DbKeyPrefix::Example,
+    query_prefix = ExampleKeyPrefix
 );

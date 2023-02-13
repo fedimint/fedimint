@@ -34,8 +34,8 @@ pub struct NoteKeyPrefix;
 impl_db_prefix_const!(
     key = NoteKey,
     value = SpendableNote,
-    prefix = DbKeyPrefix::Note,
-    key_prefix = NoteKeyPrefix
+    db_prefix = DbKeyPrefix::Note,
+    query_prefix = NoteKeyPrefix
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
@@ -47,8 +47,8 @@ pub struct PendingNotesKeyPrefix;
 impl_db_prefix_const!(
     key = PendingNotesKey,
     value = TieredMulti<SpendableNote>,
-    prefix = DbKeyPrefix::PendingNotes,
-    key_prefix = PendingNotesKeyPrefix
+    db_prefix = DbKeyPrefix::PendingNotes,
+    query_prefix = PendingNotesKeyPrefix
 );
 
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
@@ -60,8 +60,8 @@ pub struct OutputFinalizationKeyPrefix;
 impl_db_prefix_const!(
     key = OutputFinalizationKey,
     value = NoteIssuanceRequests,
-    prefix = DbKeyPrefix::OutputFinalizationData,
-    key_prefix = OutputFinalizationKeyPrefix
+    db_prefix = DbKeyPrefix::OutputFinalizationData,
+    query_prefix = OutputFinalizationKeyPrefix
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
@@ -73,11 +73,11 @@ pub struct NextECashNoteIndexKeyPrefix;
 impl_db_prefix_const!(
     key = NextECashNoteIndexKey,
     value = u64,
-    prefix = DbKeyPrefix::NextECashNoteIndex,
-    key_prefix = NextECashNoteIndexKeyPrefix
+    db_prefix = DbKeyPrefix::NextECashNoteIndex,
+    query_prefix = NextECashNoteIndexKeyPrefix
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct NotesPerDenominationKey;
 
-impl_db_prefix_const!(key = NotesPerDenominationKey, value = u16, prefix = 0);
+impl_db_prefix_const!(key = NotesPerDenominationKey, value = u16, db_prefix = 0);

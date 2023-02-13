@@ -27,6 +27,6 @@ pub struct PegInPrefixKey;
 impl_db_prefix_const!(
     key = PegInKey,
     value = [u8; 32],
-    prefix = DbKeyPrefix::PegIn,
-    key_prefix = PegInPrefixKey
+    db_prefix = DbKeyPrefix::PegIn,
+    query_prefix = PegInPrefixKey
 );

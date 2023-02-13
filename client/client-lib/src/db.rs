@@ -23,5 +23,5 @@ pub struct ClientSecretKey;
 impl_db_prefix_const!(
     key = ClientSecretKey,
     value = ClientSecret,
-    prefix = DbKeyPrefix::ClientSecret
+    db_prefix = DbKeyPrefix::ClientSecret
 );
