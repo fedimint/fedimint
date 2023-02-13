@@ -168,7 +168,8 @@ impl LnGateway {
     ///
     /// # Returns
     ///
-    /// A `GatewayActor` that can be used to execute gateway functions for the federation
+    /// A `GatewayActor` that can be used to execute gateway functions for the
+    /// federation
     pub async fn connect_federation(
         &self,
         client: Arc<GatewayClient>,
@@ -205,8 +206,9 @@ impl LnGateway {
             .await
             .expect("Failed to get node pubkey from Lightning node");
 
-        // The gateway deterministically assigns a channel id (u64) to each federation connected.
-        // TODO: explicitly handle the case where the channel id overflows
+        // The gateway deterministically assigns a channel id (u64) to each federation
+        // connected. TODO: explicitly handle the case where the channel id
+        // overflows
         let channel_id = self.channel_id_generator.fetch_add(1, Ordering::SeqCst);
 
         let gw_client_cfg = self
@@ -255,8 +257,8 @@ impl LnGateway {
         })
     }
 
-    /// Handles an intercepted HTLC that might be an incoming payment we are receiving on behalf of
-    /// a federation user.
+    /// Handles an intercepted HTLC that might be an incoming payment we are
+    /// receiving on behalf of a federation user.
     async fn handle_receive_payment(&self, payload: ReceivePaymentPayload) -> Result<Preimage> {
         let ReceivePaymentPayload { htlc_accepted } = payload;
 
@@ -265,11 +267,14 @@ impl LnGateway {
         debug!("Incoming htlc for payment hash {}", payment_hash);
 
         // FIXME: Issue 664: We should avoid having a special reference to a federation
-        // all requests, including `ReceivePaymentPayload`, should contain the federation id
+        // all requests, including `ReceivePaymentPayload`, should contain the
+        // federation id
         //
-        // We use a random federation as the default (works because we only have one federation registered)
+        // We use a random federation as the default (works because we only have one
+        // federation registered)
         //
-        // TODO: Use subscribe intercept htlc streams to avoid actor selection with every intercepted htlc!
+        // TODO: Use subscribe intercept htlc streams to avoid actor selection with
+        // every intercepted htlc!
         let lock = &self.actors.lock().await;
         let gateway_actor = lock.values().collect::<Vec<_>>()[0];
         gateway_actor
@@ -369,7 +374,8 @@ impl LnGateway {
         })
         .await;
 
-        // TODO: try to drive forward outgoing and incoming payments that were interrupted
+        // TODO: try to drive forward outgoing and incoming payments that were
+        // interrupted
         let loop_ctrl = tg.make_handle();
         loop {
             // Shut down main loop if requested

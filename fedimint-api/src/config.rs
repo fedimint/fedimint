@@ -62,8 +62,8 @@ impl JsonWithKind {
     /// When `kind` gets removed and `value` is parsed, it will
     /// parse as `Value::Object` that is empty.
     ///
-    /// Howerver empty module structs, like `struct FooConfigLocal;` (unit struct),
-    /// will fail to deserialize with this value, as they expect
+    /// Howerver empty module structs, like `struct FooConfigLocal;` (unit
+    /// struct), will fail to deserialize with this value, as they expect
     /// `Value::Null`.
     ///
     /// We can turn manually empty object into null, and that's what
@@ -103,7 +103,8 @@ impl JsonWithKind {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct ApiEndpoint {
-    /// The peer's API websocket network address and port (e.g. `ws://10.42.0.10:5000`)
+    /// The peer's API websocket network address and port (e.g.
+    /// `ws://10.42.0.10:5000`)
     pub url: Url,
     /// human-readable name
     pub name: String,
@@ -138,7 +139,8 @@ pub struct ConfigResponse {
     pub client_hash_signature: Option<Signature>,
 }
 
-/// The federation id is a copy of the authentication threshold public key of the federation
+/// The federation id is a copy of the authentication threshold public key of
+/// the federation
 ///
 /// Stable id so long as guardians membership does not change
 /// Unique id so long as guardians do not all collude
@@ -215,11 +217,13 @@ impl ClientConfig {
         }
     }
 
-    /// (soft-deprecated): Get the first instance of a module of a given kind in defined in config
+    /// (soft-deprecated): Get the first instance of a module of a given kind in
+    /// defined in config
     ///
-    /// Since module ids are numerical and for time being we only support 1:1 mint, wallet, ln
-    /// module code in the client, this is useful, but please write any new code that avoids
-    /// assumptions about available modules.
+    /// Since module ids are numerical and for time being we only support 1:1
+    /// mint, wallet, ln module code in the client, this is useful, but
+    /// please write any new code that avoids assumptions about available
+    /// modules.
     pub fn get_first_module_by_kind<T: DeserializeOwned>(
         &self,
         kind: impl Into<ModuleKind>,
@@ -318,13 +322,13 @@ impl ModuleGenRegistry {
     }
 }
 
-/// Iterate over module generators in a legacy, hardcoded order: ln, mint, wallet, rest...
-/// Returning each `kind` exactly once, so that `LEGACY_HARDCODED_` constants
-/// correspond to correct module kind.
+/// Iterate over module generators in a legacy, hardcoded order: ln, mint,
+/// wallet, rest... Returning each `kind` exactly once, so that
+/// `LEGACY_HARDCODED_` constants correspond to correct module kind.
 ///
-/// We would like to get rid of it eventually, but old client and test code assumes
-/// it in multiple places, and it will take work to fix it, while we want new code
-/// to not assume this 1:1 relationship.
+/// We would like to get rid of it eventually, but old client and test code
+/// assumes it in multiple places, and it will take work to fix it, while we
+/// want new code to not assume this 1:1 relationship.
 pub struct LegacyInitOrderIter {
     /// Counter of what module id will this returned value get assigned
     next_id: ModuleInstanceId,
@@ -452,7 +456,8 @@ pub trait TypedServerModuleConsensusConfig: DeserializeOwned + Serialize + Encod
 pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
     /// Local non-consensus, not security-sensitive settings
     type Local: DeserializeOwned + Serialize;
-    /// Private for this federation member data that are security sensitive and will be encrypted at rest
+    /// Private for this federation member data that are security sensitive and
+    /// will be encrypted at rest
     type Private: DeserializeOwned + Serialize;
     /// Shared consensus-critical config
     type Consensus: TypedServerModuleConsensusConfig;
@@ -566,10 +571,12 @@ struct Dkg<G> {
     pk_shares: BTreeMap<PeerId, Vec<G>>,
 }
 
-/// Implementation of "Secure Distributed Key Generation for Discrete-Log Based Cryptosystems"
-/// by Rosario Gennaro and Stanislaw Jarecki and Hugo Krawczyk and Tal Rabin
+/// Implementation of "Secure Distributed Key Generation for Discrete-Log Based
+/// Cryptosystems" by Rosario Gennaro and Stanislaw Jarecki and Hugo Krawczyk
+/// and Tal Rabin
 ///
-/// Prevents any manipulation of the secret key, but fails with any non-cooperative peers
+/// Prevents any manipulation of the secret key, but fails with any
+/// non-cooperative peers
 impl<G: DkgGroup> Dkg<G> {
     /// Creates the DKG and the first step of the algorithm
     pub fn new(
@@ -855,7 +862,8 @@ where
         }
 
         // process steps for each key
-        // TODO: fix error handling here; what do we do on a malfunctining peer when building the federation?
+        // TODO: fix error handling here; what do we do on a malfunctining peer when
+        // building the federation?
         loop {
             let (peer, msg) = connections.receive(module_id).await?;
 

@@ -77,8 +77,8 @@ impl IDatabase for MemDatabase {
     }
 }
 
-// In-memory database transaction should only be used for test code and never for production
-// as it doesn't properly implement MVCC
+// In-memory database transaction should only be used for test code and never
+// for production as it doesn't properly implement MVCC
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {

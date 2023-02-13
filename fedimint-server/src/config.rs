@@ -44,7 +44,8 @@ pub struct ServerConfig {
     pub consensus: ServerConfigConsensus,
     /// Contains all configuration that is locally configurable and not secret
     pub local: ServerConfigLocal,
-    /// Contains all configuration that will be encrypted such as private key material
+    /// Contains all configuration that will be encrypted such as private key
+    /// material
     pub private: ServerConfigPrivate,
 }
 
@@ -194,7 +195,8 @@ impl ServerConfigConsensus {
 }
 
 impl ServerConfig {
-    /// Creates a new config from the results of a trusted or distributed key setup
+    /// Creates a new config from the results of a trusted or distributed key
+    /// setup
     #[allow(clippy::too_many_arguments)]
     pub fn from(
         code_version: &str,
@@ -440,9 +442,11 @@ impl ServerConfig {
 
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
 
-        // NOTE: Currently we do not implement user-assisted module-kind to module-instance-id assignment
-        // We assume that user wants one instance of each module that was compiled in. This is how
-        // things were initially, where we consider "module as a code" as "module as an instance at runtime"
+        // NOTE: Currently we do not implement user-assisted module-kind to
+        // module-instance-id assignment We assume that user wants one instance
+        // of each module that was compiled in. This is how things were
+        // initially, where we consider "module as a code" as "module as an instance at
+        // runtime"
         for (module_instance_id, (_kind, gen)) in
             module_config_gens.legacy_init_order_iter().enumerate()
         {

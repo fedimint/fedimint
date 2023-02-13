@@ -1,12 +1,12 @@
 //! # Lightning Module
 //!
-//! This module allows to atomically and trustlessly (in the federated trust model) interact with
-//! the Lightning network through a Lightning gateway. See [`Lightning`] for a high level
-//! overview.
+//! This module allows to atomically and trustlessly (in the federated trust
+//! model) interact with the Lightning network through a Lightning gateway. See
+//! [`Lightning`] for a high level overview.
 //!
 //! ## Attention: only one operation per contract and round
-//! If this module is active the consensus' conflict filter must ensure that at most one operation
-//! (spend, funding) happens per contract per round
+//! If this module is active the consensus' conflict filter must ensure that at
+//! most one operation (spend, funding) happens per contract per round
 
 extern crate core;
 
@@ -69,21 +69,25 @@ use crate::db::{
 
 const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 
-/// The lightning module implements an account system. It does not have the privacy guarantees of
-/// the e-cash mint module but instead allows for smart contracting. There exist three contract
-/// types that can be used to "lock" accounts:
+/// The lightning module implements an account system. It does not have the
+/// privacy guarantees of the e-cash mint module but instead allows for smart
+/// contracting. There exist three contract types that can be used to "lock"
+/// accounts:
 ///
 ///   * [Account]: an account locked with a schnorr public key
-///   * [Outgoing]: an account locked with an HTLC-like contract allowing to incentivize an external
-///     Lightning node to make payments for the funder
-///   * [Incoming]: a contract type that represents the acquisition of a preimage belonging to a hash.
-///     Every incoming contract is preceded by an offer that specifies how much the seller is asking
-///     for the preimage to a particular hash. It also contains some threshold-encrypted data. Once
-///     the contract is funded the data is decrypted. If it is a valid preimage the contract's funds
-///     are now accessible to the creator of the offer, if not they are accessible to the funder.
+///   * [Outgoing]: an account locked with an HTLC-like contract allowing to
+///     incentivize an external Lightning node to make payments for the funder
+///   * [Incoming]: a contract type that represents the acquisition of a
+///     preimage belonging to a hash. Every incoming contract is preceded by an
+///     offer that specifies how much the seller is asking for the preimage to a
+///     particular hash. It also contains some threshold-encrypted data. Once
+///     the contract is funded the data is decrypted. If it is a valid preimage
+///     the contract's funds are now accessible to the creator of the offer, if
+///     not they are accessible to the funder.
 ///
-/// These three primitives allow to integrate the federation with the wider Lightning network
-/// through a centralized but untrusted (except for availability) Lightning gateway server.
+/// These three primitives allow to integrate the federation with the wider
+/// Lightning network through a centralized but untrusted (except for
+/// availability) Lightning gateway server.
 ///
 /// [Account]: contracts::account::AccountContract
 /// [Outgoing]: contracts::outgoing::OutgoingContract
@@ -96,11 +100,12 @@ pub struct Lightning {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct LightningInput {
     pub contract_id: contracts::ContractId,
-    /// While for now we only support spending the entire contract we need to avoid
+    /// While for now we only support spending the entire contract we need to
+    /// avoid
     pub amount: Amount,
-    /// Of the three contract types only the outgoing one needs any other witness data than a
-    /// signature. The signature is aggregated on the transaction level, so only the optional
-    /// preimage remains.
+    /// Of the three contract types only the outgoing one needs any other
+    /// witness data than a signature. The signature is aggregated on the
+    /// transaction level, so only the optional preimage remains.
     pub witness: Option<Preimage>,
 }
 
@@ -121,10 +126,11 @@ impl std::fmt::Display for LightningInput {
 ///   * Offers to buy preimages (see `contracts::incoming` docs)
 ///   * Early cancellation of outgoing contracts before their timeout
 ///
-/// The offer type exists to register `IncomingContractOffer`s. Instead of patching in a second way
-/// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
-/// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
-/// to receive their fist notes via LN without already having notes.
+/// The offer type exists to register `IncomingContractOffer`s. Instead of
+/// patching in a second way of letting clients submit consensus items outside
+/// of transactions we let offers be a 0-amount output. We need to take care to
+/// allow 0-input, 1-output transactions for that to allow users to receive
+/// their fist notes via LN without already having notes.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum LightningOutput {
     /// Fund contract
@@ -211,16 +217,17 @@ impl std::fmt::Display for LightningOutputOutcome {
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
     /// Channel identifier assigned to the mint by the gateway.
-    /// All clients in this federation should use this value as `short_channel_id`
-    /// when creating invoices to be settled by this gateway.
+    /// All clients in this federation should use this value as
+    /// `short_channel_id` when creating invoices to be settled by this
+    /// gateway.
     pub mint_channel_id: u64,
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub api: Url,
     /// Route hints to reach the LN node of the gateway.
     ///
-    /// These will be appended with the route hint of the recipient's virtual channel. To keeps
-    /// invoices small these should be used sparingly.
+    /// These will be appended with the route hint of the recipient's virtual
+    /// channel. To keeps invoices small these should be used sparingly.
     pub route_hints: Vec<route_hints::RouteHint>,
     /// Limits the validity of the announcement to allow updates
     pub valid_until: SystemTime,
@@ -1088,8 +1095,9 @@ plugin_types_trait_impl!(
 );
 
 async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
-    // This is a future because we are normally reading from a network socket. But for internal
-    // calls the data is available instantly in one go, so we can just block on it.
+    // This is a future because we are normally reading from a network socket. But
+    // for internal calls the data is available instantly in one go, so we can
+    // just block on it.
     let body = interconnect
         .call(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -1128,7 +1136,8 @@ pub mod route_hints {
         pub htlc_maximum_msat: Option<u64>,
     }
 
-    /// A list of hops along a payment path terminating with a channel to the recipient.
+    /// A list of hops along a payment path terminating with a channel to the
+    /// recipient.
     #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
     pub struct RouteHint(pub Vec<RouteHintHop>);
 

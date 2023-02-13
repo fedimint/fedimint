@@ -6,9 +6,8 @@
 //!
 //! We run them in two modes:
 //!
-//! * With mocks - fake implementations of Lightning and Bitcoin node
-//!   that only simulate the real behavior. These are instantiated
-//!   per test.
+//! * With mocks - fake implementations of Lightning and Bitcoin node that only
+//!   simulate the real behavior. These are instantiated per test.
 //! * Without mocks - against real bitcoind and lightningd.
 //!
 //! When running against real bitcoind, the other tests might create
@@ -69,8 +68,8 @@ async fn test_gateway_authentication() -> Result<()> {
     let client_ref = &RpcClient::new(gw_api_addr);
 
     // Test gateway authentication on `connect_federation` function
-    // *  `connect_federation` with correct password succeeds
-    // *  `connect_federation` with incorrect password fails
+    // * `connect_federation` with correct password succeeds
+    // * `connect_federation` with incorrect password fails
     let payload = ConnectFedPayload {
         connect: serde_json::to_string(&WsClientConnectInfo {
             urls: vec![],
@@ -83,13 +82,13 @@ async fn test_gateway_authentication() -> Result<()> {
     .await?;
 
     // Test gateway authentication on `get_info` function
-    // *  `get_info` with correct password succeeds
-    // *  `get_info` with incorrect password fails
+    // * `get_info` with correct password succeeds
+    // * `get_info` with incorrect password fails
     test_auth(&gw_password, |pw| client_ref.get_info(pw)).await?;
 
     // Test gateway authentication on `get_balance` function
-    // *  `get_balance` with correct password succeeds
-    // *  `get_balance` with incorrect password fails
+    // * `get_balance` with correct password succeeds
+    // * `get_balance` with incorrect password fails
     let payload = BalancePayload {
         federation_id: federation_id.clone(),
     };
@@ -99,8 +98,8 @@ async fn test_gateway_authentication() -> Result<()> {
     .await?;
 
     // Test gateway authentication on `get_deposit_address` function
-    // *  `get_deposit_address` with correct password succeeds
-    // *  `get_deposit_address` with incorrect password fails
+    // * `get_deposit_address` with correct password succeeds
+    // * `get_deposit_address` with incorrect password fails
     let payload = DepositAddressPayload {
         federation_id: federation_id.clone(),
     };
@@ -110,8 +109,8 @@ async fn test_gateway_authentication() -> Result<()> {
     .await?;
 
     // Test gateway authentication on `deposit` function
-    // *  `deposit` with correct password succeeds
-    // *  `deposit` with incorrect password fails
+    // * `deposit` with correct password succeeds
+    // * `deposit` with incorrect password fails
     let (proof, tx) = bitcoin
         .send_and_mine_block(
             &bitcoin.get_new_address().await,
@@ -129,8 +128,8 @@ async fn test_gateway_authentication() -> Result<()> {
     .await?;
 
     // Test gateway authentication on `withdraw` function
-    // *  `withdraw` with correct password succeeds
-    // *  `withdraw` with incorrect password fails
+    // * `withdraw` with correct password succeeds
+    // * `withdraw` with incorrect password fails
     let payload = WithdrawPayload {
         federation_id,
         amount: bitcoin::Amount::from_sat(100),
@@ -141,7 +140,8 @@ async fn test_gateway_authentication() -> Result<()> {
     task_group.shutdown_join_all(None).await
 }
 
-/// Test that a given endpoint/functionality of func fails with the wrong password but works with the correct one
+/// Test that a given endpoint/functionality of func fails with the wrong
+/// password but works with the correct one
 async fn test_auth<Fut>(gw_password: &str, func: impl Fn(String) -> Fut) -> Result<()>
 where
     Fut: Future<Output = Result<Response, Error>>,

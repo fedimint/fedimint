@@ -62,7 +62,8 @@ where
     }
 }
 
-/// Interpolates the constant factor of a polynomial defined by the points supplied in `elements`.
+/// Interpolates the constant factor of a polynomial defined by the points
+/// supplied in `elements`.
 ///
 /// # Panics
 /// If less than 2 points are supplied.

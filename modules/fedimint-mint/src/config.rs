@@ -18,7 +18,8 @@ use crate::KIND;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
-    /// Contains all configuration that will be encrypted such as private key material
+    /// Contains all configuration that will be encrypted such as private key
+    /// material
     pub private: MintConfigPrivate,
     /// Contains all configuration that needs to be the same for every server
     pub consensus: MintConfigConsensus,
@@ -26,7 +27,8 @@ pub struct MintConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
 pub struct MintConfigConsensus {
-    /// The set of public keys for blind-signing all peers and note denominations
+    /// The set of public keys for blind-signing all peers and note
+    /// denominations
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     /// Fees charged for ecash transactions
     pub fee_consensus: FeeConsensus,

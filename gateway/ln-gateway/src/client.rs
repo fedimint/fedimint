@@ -183,7 +183,8 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
             }
 
             panic!("Attempted to overwrite existing gateway client config")
-            // TODO: Issue 1057: Safe persistence and migration of gateway federation config
+            // TODO: Issue 1057: Safe persistence and migration of gateway
+            // federation config
         }
 
         debug!("Saving gateway cfg in {}", path.display());

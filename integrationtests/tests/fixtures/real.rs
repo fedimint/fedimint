@@ -127,9 +127,11 @@ impl RealLightningTest {
     }
 }
 
-/// Fixture implementing bitcoin node under test by talking to a `bitcoind` with no locking considerations.
+/// Fixture implementing bitcoin node under test by talking to a `bitcoind` with
+/// no locking considerations.
 ///
-/// This function assumes the caller already took care of locking considerations).
+/// This function assumes the caller already took care of locking
+/// considerations).
 #[derive(Clone)]
 struct RealBitcoinTestNoLock {
     client: Arc<Client>,
@@ -154,7 +156,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             .expect(Self::ERROR)
             .last()
         {
-            // if this is not true, we will have to add some delay mechanism here, because tests expect it
+            // if this is not true, we will have to add some delay mechanism here, because
+            // tests expect it
             let _ = self
                 .client
                 .get_block(block_hash)
@@ -222,7 +225,8 @@ lazy_static! {
     static ref REAL_BITCOIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
 }
 
-/// Fixture implementing bitcoin node under test by talking to a `bitcoind` - unlocked version (lock each call separately)
+/// Fixture implementing bitcoin node under test by talking to a `bitcoind` -
+/// unlocked version (lock each call separately)
 ///
 /// Default version (and thus the only one with `new`)
 pub struct RealBitcoinTest {
@@ -242,7 +246,8 @@ impl RealBitcoinTest {
         }
     }
 }
-/// Fixture implementing bitcoin node under test by talking to a `bitcoind` - locked version - locks the global lock during construction
+/// Fixture implementing bitcoin node under test by talking to a `bitcoind` -
+/// locked version - locks the global lock during construction
 pub struct RealBitcoinTestLocked {
     inner: RealBitcoinTestNoLock,
     _guard: tokio::sync::MutexGuard<'static, ()>,

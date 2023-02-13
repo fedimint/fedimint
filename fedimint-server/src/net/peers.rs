@@ -1,7 +1,8 @@
-//! Implements a connection manager for communication with other federation members
+//! Implements a connection manager for communication with other federation
+//! members
 //!
-//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its main implementation is
-//! [`ReconnectPeerConnections`], see these for details.
+//! The main interface is [`fedimint_api::net::peers::IPeerConnections`] and its
+//! main implementation is [`ReconnectPeerConnections`], see these for details.
 
 use std::cmp::min;
 use std::collections::{BTreeSet, HashMap};
@@ -40,10 +41,11 @@ pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 
 /// Connection manager that automatically reconnects to peers
 ///
-/// `ReconnectPeerConnections` is based on a [`Connector`](crate::net::connect::Connector) object
-/// which is used to open [`FramedTransport`](crate::net::framed::FramedTransport) connections. For
-/// production deployments the `Connector` has to ensure that connections are authenticated and
-/// encrypted.
+/// `ReconnectPeerConnections` is based on a
+/// [`Connector`](crate::net::connect::Connector) object which is used to open
+/// [`FramedTransport`](crate::net::framed::FramedTransport) connections. For
+/// production deployments the `Connector` has to ensure that connections are
+/// authenticated and encrypted.
 pub struct ReconnectPeerConnections<T> {
     connections: HashMap<PeerId, PeerConnection<T>>,
 }
@@ -58,14 +60,15 @@ struct PeerConnection<T> {
 pub struct NetworkConfig {
     /// Our federation member's identity
     pub identity: PeerId,
-    /// Our listen address for incoming connections from other federation members
+    /// Our listen address for incoming connections from other federation
+    /// members
     pub bind_addr: SocketAddr,
     /// Map of all peers' connection information we want to be connected to
     pub peers: HashMap<PeerId, Url>,
 }
 
-/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
-/// public interface.
+/// Internal message type for [`ReconnectPeerConnections`], just public because
+/// it appears in the public interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerMessage<M> {
     msg: UniqueMessage<M>,
@@ -106,9 +109,10 @@ impl<T: 'static> ReconnectPeerConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
-    /// Creates a new `ReconnectPeerConnections` connection manager from a network config and a
-    /// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for
-    /// requirements on the `Connector`.
+    /// Creates a new `ReconnectPeerConnections` connection manager from a
+    /// network config and a [`Connector`](crate::net::connect::Connector).
+    /// See [`ReconnectPeerConnections`] for requirements on the
+    /// `Connector`.
     #[instrument(skip_all)]
     pub async fn new(
         cfg: NetworkConfig,
@@ -256,9 +260,9 @@ where
     async fn run(mut self, task_handle: &TaskHandle) {
         let peer = self.common.peer;
 
-        // Note: `state_transition` internally uses channel operations (`send` and `recv`)
-        // which will disconnect when other tasks are shutting down returning here,
-        // so we probably don't need any `timeout` here.
+        // Note: `state_transition` internally uses channel operations (`send` and
+        // `recv`) which will disconnect when other tasks are shutting down
+        // returning here, so we probably don't need any `timeout` here.
         while !task_handle.is_shutting_down() {
             if let Some(new_self) = self.state_transition(task_handle).await {
                 self = new_self;

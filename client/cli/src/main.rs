@@ -217,7 +217,8 @@ enum Command {
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
 
-    /// Send direct method call to the API, waiting for all peers to agree on a response
+    /// Send direct method call to the API, waiting for all peers to agree on a
+    /// response
     Api {
         method: String,
         /// JSON args that will be serialized and send with the request
@@ -239,7 +240,8 @@ enum Command {
         notes: TieredMulti<SpendableNote>,
     },
 
-    /// Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
+    /// Validate notes without claiming them (only checks if signatures valid,
+    /// does not check if nonce unspent)
     Validate {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
@@ -300,12 +302,15 @@ enum Command {
     /// Upload the (encrypted) snapshot of mint notes to federation
     Backup,
 
-    /// Restore the previously created backup of mint notes (with `backup` command)
+    /// Restore the previously created backup of mint notes (with `backup`
+    /// command)
     Restore {
-        /// The amount of nonces to look ahead when scanning epoch history (per amount tier)
+        /// The amount of nonces to look ahead when scanning epoch history (per
+        /// amount tier)
         ///
-        /// Larger values might make the restore initialization slower and memory usage
-        /// slightly higher, but help restore all mint notes in some rare situations.
+        /// Larger values might make the restore initialization slower and
+        /// memory usage slightly higher, but help restore all mint
+        /// notes in some rare situations.
         #[clap(long = "gap-limit", default_value = "100")]
         gap_limit: usize,
     },

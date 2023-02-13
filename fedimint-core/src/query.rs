@@ -30,10 +30,12 @@ pub struct VerifiableResponse<R> {
 }
 
 impl<R> VerifiableResponse<R> {
-    /// Strategy for returning first response that is verifiable (typically with a signature)
+    /// Strategy for returning first response that is verifiable (typically with
+    /// a signature)
     ///
     /// * `required`: How many responses until a failure or success is returned
-    /// * `allow_consensus_fallback`: Returns a success if cannot verify but `required` agree
+    /// * `allow_consensus_fallback`: Returns a success if cannot verify but
+    ///   `required` agree
     /// * `verifier`: Function that verifies the data with the public key
     pub fn new(
         required: usize,
@@ -183,9 +185,10 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R> for Retry404<R> {
     }
 }
 
-/// Returns when `required` responses are equal, retrying after every `required` responses
-// FIXME: should be replaced by queries for specific epochs in case we cannot get enough responses
-// FIXME: for any single epoch
+/// Returns when `required` responses are equal, retrying after every `required`
+/// responses
+// FIXME: should be replaced by queries for specific epochs in case we cannot
+// get enough responses FIXME: for any single epoch
 pub struct EventuallyConsistent<R> {
     responses: BTreeSet<PeerId>,
     current: CurrentConsensus<R>,

@@ -25,8 +25,9 @@ pub struct GatewayRpcSender {
 
 /// A two-way rpc channel for [`GatewayRequest`]s.
 ///
-/// The channel consists of a long lived sender and receiver used to pass along the original message
-/// And a short lived (oneshot tx, rx) is used to receive a response in the opposite direction as the original message.
+/// The channel consists of a long lived sender and receiver used to pass along
+/// the original message And a short lived (oneshot tx, rx) is used to receive a
+/// response in the opposite direction as the original message.
 impl GatewayRpcSender {
     pub fn new(sender: mpsc::Sender<GatewayRequest>) -> Self {
         Self { sender }

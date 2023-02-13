@@ -77,13 +77,14 @@ pub enum AutocommitError<E> {
         /// Last error on commit
         last_error: anyhow::Error,
     },
-    /// Error returned by the closure provided to `autocommit`. If returned no commit was attempted
-    /// in that round
+    /// Error returned by the closure provided to `autocommit`. If returned no
+    /// commit was attempted in that round
     ClosureError {
         /// Retry on which the closure returned an error
         ///
-        /// Values other than 0 typically indicate a logic error since the closure given to
-        /// `autocommit` should not have side effects and thus keep succeeding if it succeeded once.
+        /// Values other than 0 typically indicate a logic error since the
+        /// closure given to `autocommit` should not have side effects
+        /// and thus keep succeeding if it succeeded once.
         retries: usize,
         /// Error returned by the closure
         error: E,
@@ -127,24 +128,28 @@ impl Database {
         }
     }
 
-    /// Runs a closure with a reference to a database transaction and tries to commit the
-    /// transaction if the closure returns `Ok` and rolls it back otherwise. If committing fails the
-    /// closure is run again for up to `max_retries` times. If `max_retries` is `None` it will run
+    /// Runs a closure with a reference to a database transaction and tries to
+    /// commit the transaction if the closure returns `Ok` and rolls it back
+    /// otherwise. If committing fails the closure is run again for up to
+    /// `max_retries` times. If `max_retries` is `None` it will run
     /// `usize::MAX` times which is close enough to infinite times.
     ///
-    /// The closure `tx_fn` provided should not have side effects outside of the database
-    /// transaction provided, or if it does these should be idempotent, since the closure might be
-    /// run multiple times.
+    /// The closure `tx_fn` provided should not have side effects outside of the
+    /// database transaction provided, or if it does these should be
+    /// idempotent, since the closure might be run multiple times.
     ///
     /// # Lifetime Parameters
     ///
-    /// The higher rank trait bound (HRTB) `'a` that is applied to the the mutable reference to the
-    /// database transaction ensures that the reference lives as least as long as the returned
-    /// future of the closure.
+    /// The higher rank trait bound (HRTB) `'a` that is applied to the the
+    /// mutable reference to the database transaction ensures that the
+    /// reference lives as least as long as the returned future of the
+    /// closure.
     ///
-    /// Further, the reference to self (`'s`) must outlive the `DatabaseTransaction<'dt>`. In other
-    /// words, the `DatabaseTransaction` must live as least as long as `self` and that is true as
-    /// the `DatabaseTransaction` is only dropped at the end of the `loop{}`.
+    /// Further, the reference to self (`'s`) must outlive the
+    /// `DatabaseTransaction<'dt>`. In other words, the
+    /// `DatabaseTransaction` must live as least as long as `self` and that is
+    /// true as the `DatabaseTransaction` is only dropped at the end of the
+    /// `loop{}`.
     pub async fn autocommit<'s: 'dt, 'dt, F, T, E>(
         &'s self,
         tx_fn: F,
@@ -190,33 +195,37 @@ impl Database {
     }
 }
 
-/// Fedimint requires that the database implementation implement Snapshot Isolation.
-/// Snapshot Isolation is a database isolation level that guarantees consistent reads
-/// from the time that the snapshot was created (at transaction creation time). Transactions
-/// with Snapshot Isolation level will only commit if there has been no write to the modified
-/// keys since the snapshot (i.e. write-write conflicts are prevented).
+/// Fedimint requires that the database implementation implement Snapshot
+/// Isolation. Snapshot Isolation is a database isolation level that guarantees
+/// consistent reads from the time that the snapshot was created (at transaction
+/// creation time). Transactions with Snapshot Isolation level will only commit
+/// if there has been no write to the modified keys since the snapshot (i.e.
+/// write-write conflicts are prevented).
 ///
-/// Specifically, Fedimint expects the database implementation to prevent the following
-/// anamolies:
+/// Specifically, Fedimint expects the database implementation to prevent the
+/// following anamolies:
 ///
-/// Non-Readable Write: TX1 writes (K1, V1) at time t but cannot read (K1, V1) at time (t + i)
+/// Non-Readable Write: TX1 writes (K1, V1) at time t but cannot read (K1, V1)
+/// at time (t + i)
 ///
 /// Dirty Read: TX1 is able to read TX2's uncommitted writes.
 ///
-/// Non-Repeatable Read: TX1 reads (K1, V1) at time t and retrieves (K1, V2) at time (t + i) where
-/// V1 != V2.
+/// Non-Repeatable Read: TX1 reads (K1, V1) at time t and retrieves (K1, V2) at
+/// time (t + i) where V1 != V2.
 ///
-/// Phantom Record: TX1 retrieves X number of records for a prefix at time t and retrieves Y number
-/// of records for the same prefix at time (t + i).
+/// Phantom Record: TX1 retrieves X number of records for a prefix at time t and
+/// retrieves Y number of records for the same prefix at time (t + i).
 ///
-/// Lost Writes: TX1 writes (K1, V1) at the same time as TX2 writes (K1, V2). V2 overwrites V1 as the
-/// value for K1 (write-write conflict).
+/// Lost Writes: TX1 writes (K1, V1) at the same time as TX2 writes (K1, V2). V2
+/// overwrites V1 as the value for K1 (write-write conflict).
 ///
-/// | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom Record | Lost Writes |
-/// | -------- | ------------------ | ---------- | ------------------- | -------------- | ----------- |
-/// | MemoryDB | Prevented          | Prevented  | Prevented           | Prevented      | Possible    |
-/// | RocksDB  | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
-/// | Sqlite   | Prevented          | Prevented  | Prevented           | Prevented      | Prevented   |
+/// | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom
+/// Record | Lost Writes | | -------- | ------------------ | ---------- |
+/// ------------------- | -------------- | ----------- | | MemoryDB | Prevented
+/// | Prevented  | Prevented           | Prevented      | Possible    |
+/// | RocksDB  | Prevented          | Prevented  | Prevented           |
+/// Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
+/// | Prevented           | Prevented      | Prevented   |
 #[async_trait]
 pub trait IDatabaseTransaction<'a>: 'a + Send {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
@@ -227,7 +236,8 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_>;
 
-    /// Default implementation is a combination of [`Self::raw_find_by_prefix`] + loop over [`Self::raw_remove_entry`]
+    /// Default implementation is a combination of [`Self::raw_find_by_prefix`]
+    /// + loop over [`Self::raw_remove_entry`]
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let keys = self
             .raw_find_by_prefix(key_prefix)
@@ -245,12 +255,14 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
 
     async fn rollback_tx_to_savepoint(&mut self);
 
-    /// Create a savepoint during the transaction that can be rolled back to using
-    /// rollback_tx_to_savepoint. Rolling back to the savepoint will atomically remove the writes
-    /// that were applied since the savepoint was created.
+    /// Create a savepoint during the transaction that can be rolled back to
+    /// using rollback_tx_to_savepoint. Rolling back to the savepoint will
+    /// atomically remove the writes that were applied since the savepoint
+    /// was created.
     ///
-    /// Warning: Avoid using this in fedimint client code as not all database transaction
-    /// implementations will support setting a savepoint during a transaction.
+    /// Warning: Avoid using this in fedimint client code as not all database
+    /// transaction implementations will support setting a savepoint during
+    /// a transaction.
     async fn set_tx_savepoint(&mut self);
 }
 
@@ -271,12 +283,13 @@ impl Drop for CommitTracker {
 }
 
 /// `ModuleDatabaseTransaction` is an isolated database transaction that
-/// consumes an existing `DatabaseTransaction`. Unlike `IsolatedDatabaseTransaction`,
-/// `ModuleDatabaseTransaction` can be owned by the module as long as it has a handle
-/// to the isolated `Database`. This allows the module to make changes only affecting
-/// it's own portion of the database and also being able to commit those changes.
-/// From the module's perspective, the `Database` is isolated and calling `begin_transaction`
-/// will always produce a `ModuleDatabaseTransaction`, which is isolated from other
+/// consumes an existing `DatabaseTransaction`. Unlike
+/// `IsolatedDatabaseTransaction`, `ModuleDatabaseTransaction` can be owned by
+/// the module as long as it has a handle to the isolated `Database`. This
+/// allows the module to make changes only affecting it's own portion of the
+/// database and also being able to commit those changes. From the module's
+/// perspective, the `Database` is isolated and calling `begin_transaction` will
+/// always produce a `ModuleDatabaseTransaction`, which is isolated from other
 /// modules by prepending a prefix to each key.
 struct ModuleDatabaseTransaction<'a> {
     dbtx: DatabaseTransaction<'a>,
@@ -344,12 +357,13 @@ impl<'a> IDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     }
 }
 
-/// IsolatedDatabaseTransaction is a wrapper around DatabaseTransaction that is responsible for
-/// inserting and striping prefixes before reading or writing to the database. It does this by
-/// implementing IDatabaseTransaction and manipulating the prefix bytes in the raw insert/get
-/// functions. This is done to isolate modules/module instances from each other inside the database,
-/// which allows the same module to be instantiated twice or two different modules to use the same
-/// key.
+/// IsolatedDatabaseTransaction is a wrapper around DatabaseTransaction that is
+/// responsible for inserting and striping prefixes before reading or writing to
+/// the database. It does this by implementing IDatabaseTransaction and
+/// manipulating the prefix bytes in the raw insert/get functions. This is done
+/// to isolate modules/module instances from each other inside the database,
+/// which allows the same module to be instantiated twice or two different
+/// modules to use the same key.
 struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated, T: Send + Encodable> {
     inner_tx: &'isolated mut DatabaseTransaction<'parent>,
     prefix: Vec<u8>,
@@ -491,7 +505,8 @@ impl<'parent> DatabaseTransaction<'parent> {
         DatabaseTransaction {
             tx: isolated,
             decoders,
-            // DatabaseTransaction passed to modules cannot be committed, so the commit tracker is set to committed to surpress the warning
+            // DatabaseTransaction passed to modules cannot be committed, so the commit tracker is
+            // set to committed to surpress the warning
             commit_tracker: CommitTracker {
                 is_committed: true,
                 has_writes: true,
@@ -635,7 +650,8 @@ where
 
 impl<T> DatabaseKey for T
 where
-    // Note: key can only be `T` that can be decoded without modules (even if module type is `()`)
+    // Note: key can only be `T` that can be decoded without modules (even if
+    // module type is `()`)
     T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + crate::encoding::Decodable + Sized,
 {
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
@@ -682,17 +698,23 @@ where
 /// DatabaseKeyPrefixConst necessary for reading/writing to the
 /// database and fetching by prefix.
 ///
-/// - `key`: This is the type of struct that will be used as the key into the database.
-/// - `value`: This is the type of struct that will be used as the value into the database.
-/// - `prefix`: Enum expression that is represented as a `u8` that is the prefix prepended to this key.
-/// - `key_prefix`: Optional type of struct that can be passed multiple times if necessary. These will be used
+/// - `key`: This is the type of struct that will be used as the key into the
+///   database.
+/// - `value`: This is the type of struct that will be used as the value into
+///   the database.
+/// - `prefix`: Enum expression that is represented as a `u8` that is the prefix
+///   prepended to this key.
+/// - `key_prefix`: Optional type of struct that can be passed multiple times if
+///   necessary. These will be used
 /// as the key prefix when querying the database via `find_by_prefix`.
 ///
 /// Examples:
 ///
-/// `impl_db_prefix_const!(key = TestKey, value = TestVal, prefix = TestDbKeyPrefix::Test);`
+/// `impl_db_prefix_const!(key = TestKey, value = TestVal, prefix =
+/// TestDbKeyPrefix::Test);`
 ///
-/// `impl_db_prefix_const!(key = AltTestKey, value = TestVal, prefix = TestDbKeyPrefix::AltTest, key_prefix = AltDbPrefixTestPrefix);`
+/// `impl_db_prefix_const!(key = AltTestKey, value = TestVal, prefix =
+/// TestDbKeyPrefix::AltTest, key_prefix = AltDbPrefixTestPrefix);`
 #[macro_export]
 macro_rules! impl_db_prefix_const {
     (key = $key:ty, value = $val:ty, prefix = $prefix:expr $(, key_prefix = $prefix_ty:ty)* $(,)?) => {
@@ -1166,8 +1188,9 @@ mod tests {
             .await
             .is_ok());
 
-        // Depending on if the database implementation supports optimistic or pessimistic transactions, this test should generate
-        // an error here (pessimistic) or at commit time (optimistic)
+        // Depending on if the database implementation supports optimistic or
+        // pessimistic transactions, this test should generate an error here
+        // (pessimistic) or at commit time (optimistic)
         let res = dbtx3
             .insert_entry(&TestKey(100), &TestVal(103))
             .await
@@ -1208,7 +1231,8 @@ mod tests {
             .await
             .is_ok());
 
-        // If the wildcard character ('%') is not handled properly, this will make find_by_prefix return 5 results instead of 4
+        // If the wildcard character ('%') is not handled properly, this will make
+        // find_by_prefix return 5 results instead of 4
         assert!(dbtx
             .insert_entry(&TestKey(101), &TestVal(100))
             .await
@@ -1433,7 +1457,8 @@ mod tests {
             None
         );
 
-        // test_dbtx on its own wont find the key because it does not use a module prefix
+        // test_dbtx on its own wont find the key because it does not use a module
+        // prefix
         let mut test_dbtx = db.begin_transaction().await;
         assert_eq!(test_dbtx.get_value(&TestKey(101)).await.unwrap(), None);
 

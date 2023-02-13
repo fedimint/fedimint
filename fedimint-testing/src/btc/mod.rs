@@ -17,7 +17,8 @@ pub trait BitcoinTest {
 
     /// Prepare funding wallet
     ///
-    /// If needed will mine initial 100 blocks for `send_and_mine_block` to work.
+    /// If needed will mine initial 100 blocks for `send_and_mine_block` to
+    /// work.
     async fn prepare_funding_wallet(&self);
 
     /// Send some bitcoin to an address then mine a block to confirm it.
@@ -34,6 +35,7 @@ pub trait BitcoinTest {
     /// Returns a new address.
     async fn get_new_address(&self) -> Address;
 
-    /// Mine a block to include any pending transactions then get the amount received to an address
+    /// Mine a block to include any pending transactions then get the amount
+    /// received to an address
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount;
 }

@@ -22,7 +22,8 @@ use crate::{
     rpc::GatewayRpcSender,
 };
 
-/// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
+/// The core-lightning `htlc_accepted` event's `amount` field has a "msat"
+/// suffix
 fn as_fedimint_amount<'de, D>(amount: D) -> Result<Amount, D::Error>
 where
     D: Deserializer<'de>,
@@ -77,8 +78,9 @@ impl ClnRpc {
 
     /// Creates a new RPC client for a request.
     ///
-    /// This operation is cheap enough to do it for each request since it merely connects to a UNIX
-    /// domain socket without doing any further initialization.
+    /// This operation is cheap enough to do it for each request since it merely
+    /// connects to a UNIX domain socket without doing any further
+    /// initialization.
     async fn rpc_client(&self) -> Result<cln_rpc::ClnRpc, LightningError> {
         cln_rpc::ClnRpc::new(&self.socket).await.map_err(|err| {
             error!("Could not connect to CLN RPC socket: {err}");
@@ -254,7 +256,8 @@ fn scid_to_u64(scid: ShortChannelId) -> u64 {
 /// BOLT 4: <https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages>
 /// 16399 error code reports unknown payment details.
 ///
-/// TODO: We should probably use a more specific error code based on htlc processing fail reason
+/// TODO: We should probably use a more specific error code based on htlc
+/// processing fail reason
 fn htlc_processing_failure() -> serde_json::Value {
     serde_json::json!({
         "result": "fail",
@@ -262,8 +265,8 @@ fn htlc_processing_failure() -> serde_json::Value {
     })
 }
 
-/// Handle core-lightning "htlc_accepted" events by attempting to buy this preimage from the federation
-/// and completing the payment
+/// Handle core-lightning "htlc_accepted" events by attempting to buy this
+/// preimage from the federation and completing the payment
 async fn htlc_accepted_hook(
     plugin: Plugin<GatewayRpcSender>,
     value: serde_json::Value,
@@ -273,8 +276,8 @@ async fn htlc_accepted_hook(
     // Filter and process intercepted HTLCs based on `short_channel_id` value.
     //
     // After https://github.com/fedimint/fedimint/pull/1180,
-    // all HTLCs to Fedimint clients should have route hint with `short_channel_id = 0u64`,
-    // unless the gateway is serving multiple federations.
+    // all HTLCs to Fedimint clients should have route hint with `short_channel_id =
+    // 0u64`, unless the gateway is serving multiple federations.
     if htlc_accepted.onion.short_channel_id.as_deref() == Some("0x0x0") {
         let preimage = match plugin
             .state()

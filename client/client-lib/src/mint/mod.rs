@@ -38,8 +38,8 @@ const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 const MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID: ChildId = ChildId(1);
 const MINT_E_CASH_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Federation module client for the Mint module. It can both create transaction inputs and outputs
-/// of the mint type.
+/// Federation module client for the Mint module. It can both create transaction
+/// inputs and outputs of the mint type.
 #[derive(Debug, Clone)]
 pub struct MintClient {
     pub epoch_pk: threshold_crypto::PublicKey,
@@ -99,10 +99,12 @@ impl fmt::Display for NoteIndex {
 /// Single [`Note`] issuance request to the mint.f
 ///
 /// Keeps the data to generate [`SpendableNote`] once the
-/// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
+/// mint successfully processed the transaction signing the corresponding
+/// [`BlindNonce`].
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequest {
-    /// Spend key from which the note nonce (corresponding public key) is derived
+    /// Spend key from which the note nonce (corresponding public key) is
+    /// derived
     spend_key: KeyPair,
     /// Key to unblind the blind signature supplied by the mint for this note
     blinding_key: BlindingKey,
@@ -143,7 +145,8 @@ pub struct NoteIssuanceRequests {
     notes: TieredMulti<NoteIssuanceRequest>,
 }
 
-/// A [`Note`] with associated secret key that allows to proof ownership (spend it)
+/// A [`Note`] with associated secret key that allows to proof ownership (spend
+/// it)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
     pub note: Note,
@@ -302,8 +305,9 @@ impl MintClient {
         let note_key_pairs = ecash
             .into_iter()
             .map(|(amt, note)| {
-                // We check for note validity in case we got it from an untrusted third party. We
-                // don't want to needlessly create invalid tx and bother the federation with them.
+                // We check for note validity in case we got it from an untrusted third party.
+                // We don't want to needlessly create invalid tx and bother the
+                // federation with them.
                 let spend_pub_key = note.spend_key.x_only_public_key().0;
                 if &spend_pub_key == note.note.spend_key() {
                     Ok((note.spend_key, (amt, note.note)))
@@ -369,9 +373,11 @@ impl MintClient {
         Self::new_note_secret_static(&self.secret, amount, new_idx)
     }
 
-    /// Derive the note `DerivableSecret` from the Mint's `secret` the `amount` tier and `note_idx`
+    /// Derive the note `DerivableSecret` from the Mint's `secret` the `amount`
+    /// tier and `note_idx`
     ///
-    /// Static to help re-use in other places, that don't have a whole [`Self`] available
+    /// Static to help re-use in other places, that don't have a whole [`Self`]
+    /// available
     pub fn new_note_secret_static(
         secret: &DerivableSecret,
         amount: Amount,
@@ -437,7 +443,8 @@ impl MintClient {
                 Ok(_) => {
                     break Ok(*outpoint);
                 }
-                // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                // TODO: make mint error more expressive (currently any HTTP error) and maybe use
+                // custom return type instead of error for retrying
                 Err(e) if e.is_retryable() && total_time < MINT_E_CASH_FETCH_TIMEOUT => {
                     trace!("Mint returned retryable error: {:?}", e);
                     fedimint_api::task::sleep(retry_duration).await
@@ -542,9 +549,10 @@ impl Extend<(Amount, NoteIssuanceRequest)> for NoteIssuanceRequests {
 }
 
 impl NoteIssuanceRequests {
-    /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from the mint containing the blind
-    /// signatures for all notes in this `IssuanceRequest`. It also takes the mint's
-    /// [`AggregatePublicKey`] to validate the supplied blind signatures.
+    /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from
+    /// the mint containing the blind signatures for all notes in this
+    /// `IssuanceRequest`. It also takes the mint's [`AggregatePublicKey`]
+    /// to validate the supplied blind signatures.
     pub fn finalize(
         &self,
         bsigs: MintOutputBlindSignatures,
@@ -582,8 +590,8 @@ impl NoteIssuanceRequests {
 }
 
 impl NoteIssuanceRequest {
-    /// Generate a request session for a single note and returns it plus the corresponding blinded
-    /// message
+    /// Generate a request session for a single note and returns it plus the
+    /// corresponding blinded message
     fn new<C>(ctx: &Secp256k1<C>, secret: DerivableSecret) -> (NoteIssuanceRequest, BlindNonce)
     where
         C: Signing,
@@ -645,7 +653,8 @@ pub enum MintClientError {
 }
 
 impl MintClientError {
-    /// Returns `true` if queried outpoint isn't ready yet but may become ready later
+    /// Returns `true` if queried outpoint isn't ready yet but may become ready
+    /// later
     pub fn is_retryable(&self) -> bool {
         match self {
             MintClientError::OutputOutcomeError(OutputOutcomeError::Federation(e)) => {

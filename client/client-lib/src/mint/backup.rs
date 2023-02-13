@@ -54,9 +54,10 @@ impl MintClient {
 
         let mut task_group = task_group.make_subgroup().await;
 
-        // TODO: If the client attempts any operations between while the recovery is working,
-        // the recovery code will most probably miss them, which might lead to incorrect state.
-        // We should probably lock everything in some way during recovery for corectness.
+        // TODO: If the client attempts any operations between while the recovery is
+        // working, the recovery code will most probably miss them, which might
+        // lead to incorrect state. We should probably lock everything in some
+        // way during recovery for corectness.
         let snapshot = match self
             .restore_current_state_from_backup(&mut task_group, backup, gap_limit)
             .await?
@@ -106,7 +107,8 @@ impl MintClient {
 
     /// Delete all the note-related data from the database
     ///
-    /// Useful for cleaning previous data before restoring data recovered from backup.
+    /// Useful for cleaning previous data before restoring data recovered from
+    /// backup.
     async fn wipe_notes_static(dbtx: &mut DatabaseTransaction<'_>) -> Result<()> {
         dbtx.remove_by_prefix(&NoteKeyPrefix).await?;
         dbtx.remove_by_prefix(&OutputFinalizationKeyPrefix).await?;
@@ -142,7 +144,8 @@ impl MintClient {
         Ok(responses.into_iter().next())
     }
 
-    /// Static version of [`Self::get_derived_backup_encryption_key`] for testing without creating whole `MintClient`
+    /// Static version of [`Self::get_derived_backup_encryption_key`] for
+    /// testing without creating whole `MintClient`
     fn get_derived_backup_encryption_key_static(secret: &DerivableSecret) -> aead::LessSafeKey {
         aead::LessSafeKey::new(
             secret
@@ -151,9 +154,11 @@ impl MintClient {
         )
     }
 
-    /// Static version of [`Self::get_derived_backup_signing_key`] for testing without creating whole `MintClient`
+    /// Static version of [`Self::get_derived_backup_signing_key`] for testing
+    /// without creating whole `MintClient`
     fn get_derived_backup_signing_key_static(secret: &DerivableSecret) -> secp256k1_zkp::KeyPair {
-        // TODO: Do we need that one derivation level? This key is already derived for the mint itself, and internally another kdf will be done with key type tag.
+        // TODO: Do we need that one derivation level? This key is already derived for
+        // the mint itself, and internally another kdf will be done with key type tag.
         secret
             .child_key(MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID)
             .to_secp_key(&Secp256k1::<secp256k1::SignOnly>::gen_new())
@@ -252,7 +257,10 @@ impl MintClient {
                 return Err(e.into());
             }
         };
-        // TODO: This -1 is probably not necessary, as it should be enough to start from the exact epoch the snapshot was taken, but it is harmless to start from any epoch in the past, and starting a bit earlier makes it more robust in face of some inconsistency that we've missed.
+        // TODO: This -1 is probably not necessary, as it should be enough to start from
+        // the exact epoch the snapshot was taken, but it is harmless to start from any
+        // epoch in the past, and starting a bit earlier makes it more robust in face of
+        // some inconsistency that we've missed.
         let start_epoch = backup.epoch_count.saturating_sub(1);
         let epoch_range = start_epoch..current_epoch_count;
 
@@ -273,7 +281,8 @@ impl MintClient {
                 return Ok(Err(Cancelled));
             }
             // if `recv` returned `None` that means fetch_epoch finished prematurelly,
-            // withouth sending an `Err` which is supposed to mean `is_shutting_down() == true`
+            // withouth sending an `Err` which is supposed to mean `is_shutting_down() ==
+            // true`
             info!(epoch, "Awaiting epoch");
             let epoch_history = epoch_res?;
             assert_eq!(epoch_history.outcome.epoch, epoch);
@@ -387,20 +396,23 @@ pub struct EcashRecoveryFinalState {
     next_note_idx: Tiered<NoteIndex>,
 }
 
-/// The state machine used for fast-fowarding backup from point when it was taken to the present time
-/// by following epoch history items from the time the snapshot was taken.
+/// The state machine used for fast-fowarding backup from point when it was
+/// taken to the present time by following epoch history items from the time the
+/// snapshot was taken.
 ///
-/// The caller is responsible for creating it, and then feeding it in order all valid
-/// consensus items from the epoch history between time taken (or even somewhat before it) and
-/// present time.
+/// The caller is responsible for creating it, and then feeding it in order all
+/// valid consensus items from the epoch history between time taken (or even
+/// somewhat before it) and present time.
 #[derive(Debug)]
 struct EcashRecoveryTracker {
     /// Nonces that we track that are currently spendable.
     spendable_note_by_nonce: HashMap<Nonce, (Amount, SpendableNote)>,
 
-    /// Outputs (by `OutPoint`) we track federation member confirmations for blind nonces.
+    /// Outputs (by `OutPoint`) we track federation member confirmations for
+    /// blind nonces.
     ///
-    /// Once we get enough confirmation (valid shares), these become new spendable notes.
+    /// Once we get enough confirmation (valid shares), these become new
+    /// spendable notes.
     ///
     /// Note that `NoteIssuanceRequest` is optional, as sometimes we might need
     /// to handle a tx where only some of the blind nonces were in the pool.
@@ -419,18 +431,19 @@ struct EcashRecoveryTracker {
     /// Once we see them, we move the tracking to `pending_outputs`
     ///
     /// Note: since looking up nonces is going to be the most common operation
-    /// the pool is kept shared (so only one lookup is enough), and replenishment
-    /// is done each time a note is consumed.
+    /// the pool is kept shared (so only one lookup is enough), and
+    /// replenishment is done each time a note is consumed.
     pending_nonces: HashMap<BlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)>,
 
-    /// Tail of `pending`. `pending_notes` is filled by generating note with this index
-    /// and incrementing it.
+    /// Tail of `pending`. `pending_notes` is filled by generating note with
+    /// this index and incrementing it.
     next_pending_note_idx: Tiered<NoteIndex>,
 
-    /// `LastECashNoteIndex` but tracked in flight. Basically max index of any note that got
-    /// a partial sig from the federation (initialled from the backup value).
-    /// TODO: One could imagine a case where the note was issued but not get any partial sigs yet.
-    /// Very unlikely in real life scenario, but worth considering.
+    /// `LastECashNoteIndex` but tracked in flight. Basically max index of any
+    /// note that got a partial sig from the federation (initialled from the
+    /// backup value). TODO: One could imagine a case where the note was
+    /// issued but not get any partial sigs yet. Very unlikely in real life
+    /// scenario, but worth considering.
     last_mined_nonce_idx: Tiered<NoteIndex>,
 
     /// Threshold
@@ -447,7 +460,8 @@ struct EcashRecoveryTracker {
     /// Aggregate public key for each amount tier
     tbs_pks: Tiered<AggregatePublicKey>,
 
-    /// The number of nonces we look-ahead when looking for mints (per each amount).
+    /// The number of nonces we look-ahead when looking for mints (per each
+    /// amount).
     gap_limit: usize,
 }
 
@@ -544,23 +558,25 @@ impl EcashRecoveryTracker {
         // a nonce mined for as smaller amount, but it doesn't eliminate completely
         // the possibility that we might use a note mined in a different transaction,
         // that our original one.
-        // While it is harmless to us, as such duplicated blind nonces are effective as good
-        // the as the original ones (same amount), it breaks the assumption that all our
-        // blind nonces in an our output need to be in the pending pool. It forces us to be
-        // greedy no matter what and take what we can, and just report anything suspicious.
+        // While it is harmless to us, as such duplicated blind nonces are effective as
+        // good the as the original ones (same amount), it breaks the assumption
+        // that all our blind nonces in an our output need to be in the pending
+        // pool. It forces us to be greedy no matter what and take what we can,
+        // and just report anything suspicious.
         //
         // found - all nonces that we found in the pool with the correct amount
-        // missing - all the nonces we have not found in the pool, either because they are not ours
-        //           or were consumed by a previous transaction using this nonce, or possibly gap
-        //           buffer was too small
+        // missing - all the nonces we have not found in the pool, either because they
+        // are not ours           or were consumed by a previous transaction
+        // using this nonce, or possibly gap           buffer was too small
         // wrong - nonces that were ours but were mined to a wrong
         let (found, missing, wrong) = output.0.iter_items().fold(
             (vec![], vec![], vec![]),
             |(mut found, mut missing, mut wrong), (amount_from_output, nonce)| {
                 match self.pending_nonces.get(&nonce.0).cloned() {
                     Some((issuance_request, note_idx, pending_amount)) => {
-                        // the moment we see our blind nonce in the epoch history, correctly or incorrectly used,
-                        // we know that we must have used already
+                        // the moment we see our blind nonce in the epoch history, correctly or
+                        // incorrectly used, we know that we must have used
+                        // already
                         self.observe_nonce_idx_being_used(pending_amount, note_idx);
 
                         if pending_amount == amount_from_output {
@@ -595,7 +611,8 @@ impl EcashRecoveryTracker {
                  expected_amount = %wrong.2,
                  found_amount = %wrong.3,
                  "Transaction output contains blind nonce that looks like ours but is of the wrong amount. Ignoring.");
-            // Any blind nonce mined with a wrong amount means that this transaction can't be ours
+            // Any blind nonce mined with a wrong amount means that this
+            // transaction can't be ours
         }
 
         if !wrong.is_empty() {
@@ -613,8 +630,8 @@ impl EcashRecoveryTracker {
                  "Missing nonce in pending pool for a transaction with other valid nonces that belong to us. This indicate an issue.");
         }
 
-        // ok, now that we know we track this output as ours and use the nonces we've found
-        // delete them from the pool and replace them
+        // ok, now that we know we track this output as ours and use the nonces we've
+        // found delete them from the pool and replace them
         for &(_amount, (nonce, _)) in &found {
             assert!(self.pending_nonces.remove(&nonce).is_some());
         }
@@ -628,10 +645,12 @@ impl EcashRecoveryTracker {
         );
     }
 
-    /// React to a valid pending nonce being tracked being used in the epoch history
+    /// React to a valid pending nonce being tracked being used in the epoch
+    /// history
     ///
-    /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the pending pool
-    /// to always maintain at least `gap_limit` of pending onces in each amount tier.
+    /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the
+    /// pending pool to always maintain at least `gap_limit` of pending
+    /// onces in each amount tier.
     fn observe_nonce_idx_being_used(&mut self, amount: Amount, note_idx: NoteIndex) {
         *self.last_mined_nonce_idx.entry(amount).or_default() = max(
             self.last_mined_nonce_idx
@@ -763,14 +782,16 @@ impl EcashRecoveryTracker {
                 let txid = tx.tx_hash();
 
                 if !processed_txs.insert(txid) {
-                    // Just like server side consensus, do not attempt to process the same transaction twice.
+                    // Just like server side consensus, do not attempt to process the same
+                    // transaction twice.
                     return;
                 }
 
                 if rejected_txs.contains(&txid) {
                     // Do not process invalid transactions.
-                    // Consensus history contains all data proposed by each peer, even invalid (e.g. due to double spent)
-                    // transactions. Precisely to save downstream users from having to run the consensus themselves,
+                    // Consensus history contains all data proposed by each peer, even invalid (e.g.
+                    // due to double spent) transactions. Precisely to save
+                    // downstream users from having to run the consensus themselves,
                     // each epoch contains a list of transactions  that turned out to be invalid.
                     return;
                 }

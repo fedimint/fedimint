@@ -360,8 +360,8 @@ fn sanity_check_recovery_fresh_backup() {
         &Default::default(),
     );
 
-    // At this point tracker should recognize c1's blind nonces are mined and move them
-    // into `pending_outputs` to start matching against consensus items.
+    // At this point tracker should recognize c1's blind nonces are mined and move
+    // them into `pending_outputs` to start matching against consensus items.
     assert_eq!(tracker.pending_outputs.len(), 1);
     assert!(tracker.pending_outputs.contains_key(&output_c1_a_out_point));
 
@@ -391,7 +391,8 @@ fn sanity_check_recovery_fresh_backup() {
         );
     }
 
-    // The tracker will reject incorrect confirmations (here: mismatch between peer and confirmation data)
+    // The tracker will reject incorrect confirmations (here: mismatch between peer
+    // and confirmation data)
     for wrong_peer_i in 1..2 {
         tracker.handle_consensus_item(
             confirmations_c1_a[wrong_peer_i].0,
@@ -414,7 +415,8 @@ fn sanity_check_recovery_fresh_backup() {
         );
     }
 
-    // After enough correct confirmations, the tracker convert tracked output into spendable notes
+    // After enough correct confirmations, the tracker convert tracked output into
+    // spendable notes
     for (peer_id, mint_output_confirmation) in &confirmations_c1_a {
         tracker.handle_consensus_item(
             *peer_id,
@@ -459,9 +461,11 @@ fn sanity_check_recovery_fresh_backup() {
     assert!(tracker.spendable_note_by_nonce.is_empty());
 }
 
-/// Exercise restoring from backup that contains existing notes (spendable & unsigned)
+/// Exercise restoring from backup that contains existing notes (spendable &
+/// unsigned)
 ///
-/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more comments
+/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more
+/// comments
 #[test]
 fn sanity_check_recovery_non_empty_backup() {
     let peers_num = 3;
@@ -559,9 +563,11 @@ fn sanity_check_recovery_non_empty_backup() {
     }
 }
 
-/// Exercise restoring from backup where another client tries to race to re-use blind nonce (with different amount)
+/// Exercise restoring from backup where another client tries to race to re-use
+/// blind nonce (with different amount)
 ///
-/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more comments
+/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more
+/// comments
 #[test]
 fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
     let peers_num = 3;
@@ -589,7 +595,8 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
     let (output_c1_b, _iss_reqs_c1_b) = c1.generate_output([1, 2, 4]);
     let (mut output_c2_a, _iss_reqs_c2_a) = c2.generate_output([1, 2, 4]);
 
-    // Client2 uses blind nonce of client1, with a smaller value, trying to confuse them!!!
+    // Client2 uses blind nonce of client1, with a smaller value, trying to confuse
+    // them!!!
     output_c2_a.0.get_mut(msats(1)).unwrap()[0] = output_c1_b.0.get(msats(4)).unwrap()[0];
 
     let tx_a = Transaction {
@@ -618,8 +625,8 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
         out_idx: 0,
     };
 
-    // The transaction with fake outputs gets included in consensus earlier, so tracker
-    // processes it first.
+    // The transaction with fake outputs gets included in consensus earlier, so
+    // tracker processes it first.
     tracker.handle_consensus_item(
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_a),
@@ -633,17 +640,19 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
         &Default::default(),
     );
 
-    // Tracker ignored the tx with incorrect values, because the amount associated with
-    // this blind nonce was incorrect.
+    // Tracker ignored the tx with incorrect values, because the amount associated
+    // with this blind nonce was incorrect.
     // It did start tracking the correct output.
     assert_eq!(tracker.pending_outputs.len(), 1);
     assert!(!tracker.pending_outputs.contains_key(&output_c1_a_out_point));
     assert!(tracker.pending_outputs.contains_key(&output_c1_b_out_point));
 }
 
-/// Exercise restoring from backup where another client tries to race to re-use blind nonce (with valid amount)
+/// Exercise restoring from backup where another client tries to race to re-use
+/// blind nonce (with valid amount)
 ///
-/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more comments
+/// Refer to [`sanity_check_recovery_fresh_backup`] for introduction and more
+/// comments
 #[test]
 fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     let peers_num = 3;
@@ -671,7 +680,8 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     let (output_c1_b, iss_reqs_c1_b) = c1.generate_output([1, 2, 4]);
     let (mut output_c2_a, _iss_reqs_c2_a) = c2.generate_output([1, 2, 4]);
 
-    // Client2 uses blind nonce of client1, with a same value, trying to confuse them!!!
+    // Client2 uses blind nonce of client1, with a same value, trying to confuse
+    // them!!!
     output_c2_a.0.get_mut(msats(1)).unwrap()[0] = output_c1_b.0.get(msats(1)).unwrap()[0];
 
     let tx_a = Transaction {
@@ -700,8 +710,8 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
         out_idx: 0,
     };
 
-    // The transaction with fake outputs gets included in consensus earlier, so tracker
-    // processes it first.
+    // The transaction with fake outputs gets included in consensus earlier, so
+    // tracker processes it first.
     tracker.handle_consensus_item(
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_a),
@@ -734,7 +744,8 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
         );
     }
 
-    // Tracker was happy to accept the note of the correct value produced by client2, however...
+    // Tracker was happy to accept the note of the correct value produced by
+    // client2, however...
     assert_eq!(tracker.spendable_note_by_nonce.len(), 1);
 
     let confirmations_c1_b = fed.confirm_mint_output(output_c1_b_out_point, &output_c1_b);

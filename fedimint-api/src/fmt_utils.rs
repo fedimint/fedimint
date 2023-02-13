@@ -39,9 +39,9 @@ impl<'a> fmt::Debug for AbbreviateHexBytes<'a> {
 
 /// Use for displaying potentially large `[serde_json::Value]`s in the logs
 ///
-/// Notably, unlike normal `fmt::Debug` for `serde_json::Value` it does not respect
-/// pretty-printing and other formatting settings on the `formatter`. Which for
-/// debugging & logs should be OK.
+/// Notably, unlike normal `fmt::Debug` for `serde_json::Value` it does not
+/// respect pretty-printing and other formatting settings on the `formatter`.
+/// Which for debugging & logs should be OK.
 pub struct AbbreviateJson<'a>(pub &'a serde_json::Value);
 
 // TODO: use `str::floor_char_boundary` instead (when it becomes stable)
@@ -80,7 +80,8 @@ fn fmt_abbreviated_str(value: &str, formatter: &mut fmt::Formatter<'_>) -> fmt::
     Ok(())
 }
 
-/// Format json array value truncating elements if there's too many, and values if they are too long
+/// Format json array value truncating elements if there's too many, and values
+/// if they are too long
 fn fmt_abbreviated_vec(vec: &[Value], formatter: &mut fmt::Formatter) -> fmt::Result {
     const ARRAY_ABBR_LEN: usize = 64;
     formatter.write_str("[")?;
@@ -97,7 +98,8 @@ fn fmt_abbreviated_vec(vec: &[Value], formatter: &mut fmt::Formatter) -> fmt::Re
     Ok(())
 }
 
-/// Format json object value truncating keys if there's too many, and keys and values if they are too long
+/// Format json object value truncating keys if there's too many, and keys and
+/// values if they are too long
 fn fmt_abbreviated_object(
     map: &serde_json::Map<String, Value>,
     formatter: &mut fmt::Formatter,
@@ -152,7 +154,8 @@ pub trait AbbreviatedDebug {
     fn abbreviated_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
 }
 
-/// A wrapper that causes the inner `T` to be debug-formatted using [`AbbreviatedDebug`]
+/// A wrapper that causes the inner `T` to be debug-formatted using
+/// [`AbbreviatedDebug`]
 ///
 /// Useful in situations where using more specific wrapper is not feasible,
 /// e.g. the value to be abbreviated is nested inside larger struct

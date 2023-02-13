@@ -181,7 +181,8 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
             })
             .await;
 
-        // If federation configs (e.g. local.json) missing, wait for admin UI to report DKG completion
+        // If federation configs (e.g. local.json) missing, wait for admin UI to report
+        // DKG completion
         let local_cfg_path = opts.data_dir.join(LOCAL_CONFIG).with_extension(JSON_EXT);
         if !std::path::Path::new(&local_cfg_path).exists() {
             loop {

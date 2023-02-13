@@ -40,13 +40,15 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
-    /// Subscribe to intercept htlcs that belong to a specific mint identified by `short_channel_id`
+    /// Subscribe to intercept htlcs that belong to a specific mint identified
+    /// by `short_channel_id`
     async fn subscribe_htlcs<'a>(
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> Result<HtlcStream<'a>>;
 
-    /// Request completion of an intercepted htlc after processing and determining an outcome
+    /// Request completion of an intercepted htlc after processing and
+    /// determining an outcome
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse>;
 }
 
@@ -62,9 +64,10 @@ impl DynLnRpcClient {
     }
 }
 
-/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for convenience,
-/// and makes real RPC requests over the wire to a remote lightning node.
-/// The lightning node is exposed via a corresponding `GatewayLightningServer`.
+/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
+/// convenience, and makes real RPC requests over the wire to a remote lightning
+/// node. The lightning node is exposed via a corresponding
+/// `GatewayLightningServer`.
 #[derive(Debug)]
 pub struct NetworkLnRpcClient {
     client: GatewayLightningClient<Channel>,
