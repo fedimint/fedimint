@@ -27,11 +27,9 @@ use url::Url;
 
 use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
 use crate::fedimint_api::encoding::Encodable;
-use crate::fedimint_api::BitcoinHash;
-use crate::fedimint_api::NumPeers;
+use crate::fedimint_api::{BitcoinHash, NumPeers};
 use crate::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
-use crate::net::connect::TlsConfig;
-use crate::net::connect::{parse_host_port, Connector};
+use crate::net::connect::{parse_host_port, Connector, TlsConfig};
 use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 

@@ -14,16 +14,14 @@ use fedimint_api::module::registry::ModuleDecoderRegistry;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_api::{NumPeers, PeerId};
-use fedimint_core::api::WsFederationApi;
-use fedimint_core::api::{DynFederationApi, GlobalFederationApi};
+use fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
 use fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
 use fedimint_core::transaction::Transaction;
 pub use fedimint_core::*;
 use futures::stream::Peekable;
-use futures::FutureExt;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
 use itertools::Itertools;
@@ -42,8 +40,7 @@ use crate::fedimint_api::encoding::Encodable;
 use crate::fedimint_api::net::peers::IPeerConnections;
 use crate::logging::LOG_CONSENSUS;
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::PeerSlice;
-use crate::net::peers::{PeerConnector, ReconnectPeerConnections};
+use crate::net::peers::{PeerConnector, PeerSlice, ReconnectPeerConnections};
 
 /// The actual implementation of the federated mint
 pub mod consensus;

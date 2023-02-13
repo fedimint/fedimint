@@ -2,8 +2,7 @@ use std::fmt::Debug;
 
 use fedimint_api::db::MODULE_GLOBAL_PREFIX;
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::impl_db_prefix_const;
-use fedimint_api::{PeerId, TransactionId};
+use fedimint_api::{impl_db_prefix_const, PeerId, TransactionId};
 use fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
 use serde::Serialize;
 use strum_macros::EnumIter;
