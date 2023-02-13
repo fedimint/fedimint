@@ -155,10 +155,11 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
 mod fedimint_sqlite_tests {
     use std::fs;
 
-    use fedimint_api::{
-        core::ModuleInstanceId, db::Database, module::registry::ModuleDecoderRegistry,
-    };
-    use rand::{rngs::OsRng, RngCore};
+    use fedimint_api::core::ModuleInstanceId;
+    use fedimint_api::db::Database;
+    use fedimint_api::module::registry::ModuleDecoderRegistry;
+    use rand::rngs::OsRng;
+    use rand::RngCore;
 
     use crate::SqliteDb;
 
