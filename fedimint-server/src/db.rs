@@ -37,8 +37,8 @@ pub struct AcceptedTransactionKeyPrefix;
 impl_db_prefix_const!(
     key = AcceptedTransactionKey,
     value = AcceptedTransaction,
-    prefix = DbKeyPrefix::AcceptedTransaction,
-    key_prefix = AcceptedTransactionKeyPrefix
+    db_prefix = DbKeyPrefix::AcceptedTransaction,
+    query_prefix = AcceptedTransactionKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -50,8 +50,8 @@ pub struct RejectedTransactionKeyPrefix;
 impl_db_prefix_const!(
     key = RejectedTransactionKey,
     value = String,
-    prefix = DbKeyPrefix::RejectedTransaction,
-    key_prefix = RejectedTransactionKeyPrefix
+    db_prefix = DbKeyPrefix::RejectedTransaction,
+    query_prefix = RejectedTransactionKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -63,8 +63,8 @@ pub struct DropPeerKeyPrefix;
 impl_db_prefix_const!(
     key = DropPeerKey,
     value = (),
-    prefix = DbKeyPrefix::DropPeer,
-    key_prefix = DropPeerKeyPrefix
+    db_prefix = DbKeyPrefix::DropPeer,
+    query_prefix = DropPeerKeyPrefix
 );
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
@@ -76,8 +76,8 @@ pub struct EpochHistoryKeyPrefix;
 impl_db_prefix_const!(
     key = EpochHistoryKey,
     value = SignedEpochOutcome,
-    prefix = DbKeyPrefix::EpochHistory,
-    key_prefix = EpochHistoryKeyPrefix
+    db_prefix = DbKeyPrefix::EpochHistory,
+    query_prefix = EpochHistoryKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -86,7 +86,7 @@ pub struct LastEpochKey;
 impl_db_prefix_const!(
     key = LastEpochKey,
     value = EpochHistoryKey,
-    prefix = DbKeyPrefix::LastEpoch
+    db_prefix = DbKeyPrefix::LastEpoch
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -98,6 +98,6 @@ pub struct ClientConfigSignatureKeyPrefix;
 impl_db_prefix_const!(
     key = ClientConfigSignatureKey,
     value = SerdeSignature,
-    prefix = DbKeyPrefix::ClientConfigSignature,
-    key_prefix = ClientConfigSignatureKeyPrefix
+    db_prefix = DbKeyPrefix::ClientConfigSignature,
+    query_prefix = ClientConfigSignatureKeyPrefix
 );

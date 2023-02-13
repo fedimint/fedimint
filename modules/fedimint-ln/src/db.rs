@@ -34,8 +34,8 @@ pub struct ContractKeyPrefix;
 impl_db_prefix_const!(
     key = ContractKey,
     value = ContractAccount,
-    prefix = DbKeyPrefix::Contract,
-    key_prefix = ContractKeyPrefix
+    db_prefix = DbKeyPrefix::Contract,
+    query_prefix = ContractKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -47,8 +47,8 @@ pub struct ContractUpdateKeyPrefix;
 impl_db_prefix_const!(
     key = ContractUpdateKey,
     value = LightningOutputOutcome,
-    prefix = DbKeyPrefix::ContractUpdate,
-    key_prefix = ContractUpdateKeyPrefix
+    db_prefix = DbKeyPrefix::ContractUpdate,
+    query_prefix = ContractUpdateKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -60,8 +60,8 @@ pub struct OfferKeyPrefix;
 impl_db_prefix_const!(
     key = OfferKey,
     value = IncomingContractOffer,
-    prefix = DbKeyPrefix::Offer,
-    key_prefix = OfferKeyPrefix
+    db_prefix = DbKeyPrefix::Offer,
+    query_prefix = OfferKeyPrefix
 );
 
 // TODO: remove redundancy
@@ -75,8 +75,8 @@ pub struct ProposeDecryptionShareKeyPrefix;
 impl_db_prefix_const!(
     key = ProposeDecryptionShareKey,
     value = PreimageDecryptionShare,
-    prefix = DbKeyPrefix::ProposeDecryptionShare,
-    key_prefix = ProposeDecryptionShareKeyPrefix
+    db_prefix = DbKeyPrefix::ProposeDecryptionShare,
+    query_prefix = ProposeDecryptionShareKeyPrefix
 );
 
 /// Preimage decryption shares we received
@@ -90,8 +90,8 @@ pub struct AgreedDecryptionShareKeyPrefix;
 impl_db_prefix_const!(
     key = AgreedDecryptionShareKey,
     value = PreimageDecryptionShare,
-    prefix = DbKeyPrefix::AgreedDecryptionShare,
-    key_prefix = AgreedDecryptionShareKeyPrefix
+    db_prefix = DbKeyPrefix::AgreedDecryptionShare,
+    query_prefix = AgreedDecryptionShareKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -103,6 +103,6 @@ pub struct LightningGatewayKeyPrefix;
 impl_db_prefix_const!(
     key = LightningGatewayKey,
     value = LightningGateway,
-    prefix = DbKeyPrefix::LightningGateway,
-    key_prefix = LightningGatewayKeyPrefix
+    db_prefix = DbKeyPrefix::LightningGateway,
+    query_prefix = LightningGatewayKeyPrefix
 );

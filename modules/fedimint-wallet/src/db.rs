@@ -36,8 +36,8 @@ pub struct BlockHashKeyPrefix;
 impl_db_prefix_const!(
     key = BlockHashKey,
     value = (),
-    prefix = DbKeyPrefix::BlockHash,
-    key_prefix = BlockHashKeyPrefix
+    db_prefix = DbKeyPrefix::BlockHash,
+    query_prefix = BlockHashKeyPrefix
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
@@ -49,8 +49,8 @@ pub struct UTXOPrefixKey;
 impl_db_prefix_const!(
     key = UTXOKey,
     value = SpendableUTXO,
-    prefix = DbKeyPrefix::Utxo,
-    key_prefix = UTXOPrefixKey
+    db_prefix = DbKeyPrefix::Utxo,
+    query_prefix = UTXOPrefixKey
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
@@ -59,7 +59,7 @@ pub struct RoundConsensusKey;
 impl_db_prefix_const!(
     key = RoundConsensusKey,
     value = RoundConsensus,
-    prefix = DbKeyPrefix::RoundConsensus,
+    db_prefix = DbKeyPrefix::RoundConsensus,
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
@@ -71,8 +71,8 @@ pub struct UnsignedTransactionPrefixKey;
 impl_db_prefix_const!(
     key = UnsignedTransactionKey,
     value = UnsignedTransaction,
-    prefix = DbKeyPrefix::UnsignedTransaction,
-    key_prefix = UnsignedTransactionPrefixKey
+    db_prefix = DbKeyPrefix::UnsignedTransaction,
+    query_prefix = UnsignedTransactionPrefixKey
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
@@ -84,8 +84,8 @@ pub struct PendingTransactionPrefixKey;
 impl_db_prefix_const!(
     key = PendingTransactionKey,
     value = PendingTransaction,
-    prefix = DbKeyPrefix::PendingTransaction,
-    key_prefix = PendingTransactionPrefixKey
+    db_prefix = DbKeyPrefix::PendingTransaction,
+    query_prefix = PendingTransactionPrefixKey
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
@@ -97,8 +97,8 @@ pub struct PegOutTxSignatureCIPrefix;
 impl_db_prefix_const!(
     key = PegOutTxSignatureCI,
     value = Vec<Signature>,
-    prefix = DbKeyPrefix::PegOutTxSigCi,
-    key_prefix = PegOutTxSignatureCIPrefix
+    db_prefix = DbKeyPrefix::PegOutTxSigCi,
+    query_prefix = PegOutTxSignatureCIPrefix
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
@@ -110,6 +110,6 @@ pub struct PegOutBitcoinTransactionPrefix;
 impl_db_prefix_const!(
     key = PegOutBitcoinTransaction,
     value = WalletOutputOutcome,
-    prefix = DbKeyPrefix::PegOutBitcoinOutPoint,
-    key_prefix = PegOutBitcoinTransactionPrefix
+    db_prefix = DbKeyPrefix::PegOutBitcoinOutPoint,
+    query_prefix = PegOutBitcoinTransactionPrefix
 );

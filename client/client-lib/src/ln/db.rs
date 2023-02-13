@@ -34,8 +34,8 @@ pub struct OutgoingPaymentKeyPrefix;
 impl_db_prefix_const!(
     key = OutgoingPaymentKey,
     value = OutgoingContractData,
-    prefix = DbKeyPrefix::OutgoingPayment,
-    key_prefix = OutgoingPaymentKeyPrefix
+    db_prefix = DbKeyPrefix::OutgoingPayment,
+    query_prefix = OutgoingPaymentKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -47,8 +47,8 @@ pub struct OutgoingPaymentClaimKeyPrefix;
 impl_db_prefix_const!(
     key = OutgoingPaymentClaimKey,
     value = (),
-    prefix = DbKeyPrefix::OutgoingPaymentClaim,
-    key_prefix = OutgoingPaymentClaimKeyPrefix
+    db_prefix = DbKeyPrefix::OutgoingPaymentClaim,
+    query_prefix = OutgoingPaymentClaimKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -60,8 +60,8 @@ pub struct OutgoingContractAccountKeyPrefix;
 impl_db_prefix_const!(
     key = OutgoingContractAccountKey,
     value = OutgoingContractAccount,
-    prefix = DbKeyPrefix::OutgoingContractAccount,
-    key_prefix = OutgoingContractAccountKeyPrefix
+    db_prefix = DbKeyPrefix::OutgoingContractAccount,
+    query_prefix = OutgoingContractAccountKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -73,8 +73,8 @@ pub struct ConfirmedInvoiceKeyPrefix;
 impl_db_prefix_const!(
     key = ConfirmedInvoiceKey,
     value = ConfirmedInvoice,
-    prefix = DbKeyPrefix::ConfirmedInvoice,
-    key_prefix = ConfirmedInvoiceKeyPrefix
+    db_prefix = DbKeyPrefix::ConfirmedInvoice,
+    query_prefix = ConfirmedInvoiceKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -86,6 +86,6 @@ pub struct LightningGatewayKeyPrefix;
 impl_db_prefix_const!(
     key = LightningGatewayKey,
     value = LightningGateway,
-    prefix = DbKeyPrefix::LightningGateway,
-    key_prefix = LightningGatewayKeyPrefix
+    db_prefix = DbKeyPrefix::LightningGateway,
+    query_prefix = LightningGatewayKeyPrefix
 );

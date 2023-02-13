@@ -695,38 +695,61 @@ where
 }
 
 /// This is a helper macro that generates the implementations of
-/// DatabaseKeyPrefixConst necessary for reading/writing to the
+/// [`DatabaseKeyPrefixConst`] necessary for reading/writing to the
 /// database and fetching by prefix.
 ///
 /// - `key`: This is the type of struct that will be used as the key into the
-///   database.
+///   database
 /// - `value`: This is the type of struct that will be used as the value into
-///   the database.
-/// - `prefix`: Enum expression that is represented as a `u8` that is the prefix
-///   prepended to this key.
-/// - `key_prefix`: Optional type of struct that can be passed multiple times if
-///   necessary. These will be used
-/// as the key prefix when querying the database via `find_by_prefix`.
+///   the database
+/// - `db_prefix`: Required enum expression that is represented as a `u8` and is
+///   prepended to this key
+/// - `query_prefix`: Optional type of struct that can be passed zero or more
+///   times. Every query prefix can be used to query the database via
+///   `find_by_prefix`
 ///
 /// Examples:
 ///
-/// `impl_db_prefix_const!(key = TestKey, value = TestVal, prefix =
-/// TestDbKeyPrefix::Test);`
+/// Only use the required parameters
 ///
-/// `impl_db_prefix_const!(key = AltTestKey, value = TestVal, prefix =
-/// TestDbKeyPrefix::AltTest, key_prefix = AltDbPrefixTestPrefix);`
+/// ```
+/// use fedimint_api::db::TestDbKeyPrefix;
+///
+/// use crate::fedimint_api::impl_db_prefix_const;
+///
+/// impl_db_prefix_const!(
+///     key = TestKey,
+///     value = TestVal,
+///     db_prefix = TestDbKeyPrefix::Test
+/// );
+/// ```
+///
+/// Use the required parameters and specify one `query_prefix`.
+///
+/// ```
+/// use fedimint_api::db::TestDbKeyPrefix;
+///
+/// use crate::fedimint_api::impl_db_prefix_const;
+///
+/// impl_db_prefix_const!(
+///     key = AltTestKey,
+///     value = TestVal,
+///     db_prefix = TestDbKeyPrefix::AltTest,
+///     query_prefix = AltDbPrefixTestPrefix
+/// );
+/// ```
 #[macro_export]
 macro_rules! impl_db_prefix_const {
-    (key = $key:ty, value = $val:ty, prefix = $prefix:expr $(, key_prefix = $prefix_ty:ty)* $(,)?) => {
+    (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(, query_prefix = $query_prefix:ty)* $(,)?) => {
         impl fedimint_api::db::DatabaseKeyPrefixConst for $key {
-            const DB_PREFIX: u8 = $prefix as u8;
+            const DB_PREFIX: u8 = $db_prefix as u8;
             type Key = Self;
             type Value = $val;
         }
 
         $(
-            impl $crate::db::DatabaseKeyPrefixConst for $prefix_ty {
-                const DB_PREFIX: u8 = $prefix as u8;
+            impl $crate::db::DatabaseKeyPrefixConst for $query_prefix {
+                const DB_PREFIX: u8 = $db_prefix as u8;
                 type Key = $key;
                 type Value = $val;
             }
@@ -832,8 +855,8 @@ mod tests {
     impl_db_prefix_const!(
         key = TestKey,
         value = TestVal,
-        prefix = TestDbKeyPrefix::Test,
-        key_prefix = DbPrefixTestPrefix
+        db_prefix = TestDbKeyPrefix::Test,
+        query_prefix = DbPrefixTestPrefix
     );
 
     #[derive(Debug, Encodable, Decodable)]
@@ -845,8 +868,8 @@ mod tests {
     impl_db_prefix_const!(
         key = AltTestKey,
         value = TestVal,
-        prefix = TestDbKeyPrefix::AltTest,
-        key_prefix = AltDbPrefixTestPrefix
+        db_prefix = TestDbKeyPrefix::AltTest,
+        query_prefix = AltDbPrefixTestPrefix
     );
 
     #[derive(Debug, Encodable, Decodable)]
@@ -858,8 +881,8 @@ mod tests {
     impl_db_prefix_const!(
         key = PercentTestKey,
         value = TestVal,
-        prefix = TestDbKeyPrefix::PercentTestKey,
-        key_prefix = PercentPrefixTestPrefix
+        db_prefix = TestDbKeyPrefix::PercentTestKey,
+        query_prefix = PercentPrefixTestPrefix
     );
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]

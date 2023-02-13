@@ -34,8 +34,8 @@ pub struct NonceKeyPrefix;
 impl_db_prefix_const!(
     key = NonceKey,
     value = (),
-    prefix = DbKeyPrefix::NoteNonce,
-    key_prefix = NonceKeyPrefix
+    db_prefix = DbKeyPrefix::NoteNonce,
+    query_prefix = NonceKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -49,8 +49,8 @@ pub struct ProposedPartialSignaturesKeyPrefix;
 impl_db_prefix_const!(
     key = ProposedPartialSignatureKey,
     value = MintOutputSignatureShare,
-    prefix = DbKeyPrefix::ProposedPartialSig,
-    key_prefix = ProposedPartialSignaturesKeyPrefix
+    db_prefix = DbKeyPrefix::ProposedPartialSig,
+    query_prefix = ProposedPartialSignaturesKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -70,9 +70,9 @@ pub struct ReceivedPartialSignatureKeyOutputPrefix {
 impl_db_prefix_const!(
     key = ReceivedPartialSignatureKey,
     value = MintOutputSignatureShare,
-    prefix = DbKeyPrefix::ReceivedPartialSig,
-    key_prefix = ReceivedPartialSignaturesKeyPrefix,
-    key_prefix = ReceivedPartialSignatureKeyOutputPrefix
+    db_prefix = DbKeyPrefix::ReceivedPartialSig,
+    query_prefix = ReceivedPartialSignaturesKeyPrefix,
+    query_prefix = ReceivedPartialSignatureKeyOutputPrefix
 );
 
 /// Transaction id and output index identifying an output outcome
@@ -85,8 +85,8 @@ pub struct OutputOutcomeKeyPrefix;
 impl_db_prefix_const!(
     key = OutputOutcomeKey,
     value = MintOutputBlindSignatures,
-    prefix = DbKeyPrefix::OutputOutcome,
-    key_prefix = OutputOutcomeKeyPrefix
+    db_prefix = DbKeyPrefix::OutputOutcome,
+    query_prefix = OutputOutcomeKeyPrefix
 );
 
 /// Represents the amounts of issued (signed) and redeemed (verified) notes for
@@ -105,8 +105,8 @@ pub struct MintAuditItemKeyPrefix;
 impl_db_prefix_const!(
     key = MintAuditItemKey,
     value = Amount,
-    prefix = DbKeyPrefix::MintAuditItem,
-    key_prefix = MintAuditItemKeyPrefix
+    db_prefix = DbKeyPrefix::MintAuditItem,
+    query_prefix = MintAuditItemKeyPrefix
 );
 
 /// Key used to store user's ecash backups
@@ -119,8 +119,8 @@ pub struct EcashBackupKeyPrefix;
 impl_db_prefix_const!(
     key = EcashBackupKey,
     value = ECashUserBackupSnapshot,
-    prefix = DbKeyPrefix::EcashBackup,
-    key_prefix = EcashBackupKeyPrefix
+    db_prefix = DbKeyPrefix::EcashBackup,
+    query_prefix = EcashBackupKeyPrefix
 );
 
 /// User's backup, received at certain time, containing encrypted payload
