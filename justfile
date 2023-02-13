@@ -10,6 +10,9 @@ build:
 test: build
   cargo test
 
+test-real:
+  ./scripts/rust-tests.sh
+
 lint:
   env NO_STASH=true misc/git-hooks/pre-commit
   just clippy
