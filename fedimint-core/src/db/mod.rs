@@ -712,9 +712,9 @@ where
 /// Only use the required parameters
 ///
 /// ```
-/// use fedimint_api::db::TestDbKeyPrefix;
+/// use fedimint_core::db::TestDbKeyPrefix;
 ///
-/// use crate::fedimint_api::impl_db_prefix_const;
+/// use crate::fedimint_core::impl_db_prefix_const;
 ///
 /// impl_db_prefix_const!(
 ///     key = TestKey,
@@ -726,9 +726,9 @@ where
 /// Use the required parameters and specify one `query_prefix`.
 ///
 /// ```
-/// use fedimint_api::db::TestDbKeyPrefix;
+/// use fedimint_core::db::TestDbKeyPrefix;
 ///
-/// use crate::fedimint_api::impl_db_prefix_const;
+/// use crate::fedimint_core::impl_db_prefix_const;
 ///
 /// impl_db_prefix_const!(
 ///     key = AltTestKey,

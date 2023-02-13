@@ -116,7 +116,7 @@ impl Amount {
 /// Shorthand for [`Amount::from_msats`]
 ///
 /// Useful only for tests, but it's so common that it makes sense to have
-/// it in the main `fedimint-api` crate.
+/// it in the main `fedimint-core` crate.
 pub fn msats(msats: u64) -> Amount {
     Amount::from_msats(msats)
 }
