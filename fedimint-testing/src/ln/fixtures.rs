@@ -13,7 +13,7 @@ use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 use ln_gateway::gatewayd::lnrpc_client::{HtlcStream, ILnRpcClient};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::ln::{LightningError, LnRpc};
@@ -112,7 +112,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
         Ok(GetRouteHintsResponse {
-            route_hints: vec![RouteHint(vec![])],
+            route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
         })
     }
 
