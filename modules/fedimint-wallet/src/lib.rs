@@ -1236,7 +1236,7 @@ impl Wallet {
                 .await;
 
             match self.btc_rpc.backend_type() {
-                BitcoinRpcBackendType::Bitcoind => {
+                BitcoinRpcBackendType::Bitcoind | BitcoinRpcBackendType::Esplora => {
                     if !pending_transactions.is_empty() {
                         let block = self
                             .btc_rpc
@@ -1257,14 +1257,11 @@ impl Wallet {
                             .btc_rpc
                             .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
                             .await
-                            .expect("bitcoin rpc backend failed")
+                            .expect("bitcoin electrum rpc backend failed")
                         {
                             self.recognize_change_utxo(dbtx, transaction.1).await;
                         }
                     }
-                }
-                BitcoinRpcBackendType::Esplora => {
-                    todo!("Esplora backend currently does not have an implementation for IBitcoindRpc trait")
                 }
             }
 

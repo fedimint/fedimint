@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -56,9 +57,7 @@ pub fn make_bitcoin_rpc_backend(
             .context("bitcoind rpc backend initialization failed"),
         BitcoindRpcBackend::Electrum(url) => make_electrum_rpc(url, task_handle)
             .context("electrum rpc backend initialization failed"),
-        BitcoindRpcBackend::Esplora(_) => {
-            todo!("esplora rpc backend is currently not implemented yet")
-        }
+        BitcoindRpcBackend::Esplora(url) => make_esplora_rpc(url, task_handle),
     }
 }
 
@@ -76,6 +75,13 @@ pub fn make_bitcoind_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoi
 
 pub fn make_electrum_rpc(url: &Url, _task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
     Ok(ElectrumClient::new(url)?.into())
+}
+
+pub fn make_esplora_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
+    let esplora_client = EsploraClient::new(url)?;
+    let retry_client = RetryClient::new(esplora_client, task_handle);
+
+    Ok(retry_client.into())
 }
 
 /// Wrapper around [`bitcoincore_rpc::Client`] logging failures
@@ -294,5 +300,98 @@ impl IBitcoindRpc for ElectrumClient {
                     (history_item.height as u64) == height && history_item.tx_hash == txid
                 }))
         })
+    }
+}
+
+pub struct EsploraClient(esplora_client::AsyncClient);
+
+impl EsploraClient {
+    fn new(url: &Url) -> anyhow::Result<Self> {
+        let builder = esplora_client::Builder::new(url.as_str());
+        let client = builder.build_async()?;
+        Ok(Self(client))
+    }
+}
+
+impl fmt::Debug for EsploraClient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("EsploraClient")
+    }
+}
+
+#[async_trait]
+impl IBitcoindRpc for EsploraClient {
+    fn backend_type(&self) -> BitcoinRpcBackendType {
+        BitcoinRpcBackendType::Esplora
+    }
+
+    async fn get_network(&self) -> Result<Network> {
+        let genesis_height: u32 = 0;
+        let genesis_hash = self.0.get_block_hash(genesis_height).await?;
+
+        // TODO: How could we extract the BlockHash to a constant, and use something
+        // like the `bitcoin::blockdata::constants::genesis_block` from rust-bitcoin ?
+        let network = match genesis_hash.to_hex().as_str() {
+            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" => Network::Bitcoin,
+            "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943" => Network::Testnet,
+            "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6" => Network::Signet,
+            hash => {
+                warn!("Unknown genesis hash {hash} - assuming regtest");
+                Network::Regtest
+            }
+        };
+
+        Ok(network)
+    }
+
+    async fn get_block_height(&self) -> Result<u64> {
+        match self.0.get_height().await {
+            Ok(height) => Ok(height as u64),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
+        self.0
+            .get_block_hash(height as u32)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(Into::into)
+    }
+
+    async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
+        self.0
+            .get_block_by_hash(hash)
+            .await
+            .map(|block| {
+                block.ok_or_else(|| {
+                    anyhow::Error::msg(format!(
+                        "The fetched block for given height {hash} has not been not found"
+                    ))
+                })
+            })?
+            .map_err(anyhow::Error::from)
+            .map_err(Into::into)
+    }
+
+    async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
+        let fee_estimates: HashMap<String, f64> = self.0.get_fee_estimates().await?;
+
+        let fee_rate_vb =
+            esplora_client::convert_fee_rate(confirmation_target.into(), fee_estimates)?;
+
+        let fee_rate_kvb = fee_rate_vb * 1_000f32;
+
+        Ok(Some(Feerate {
+            sats_per_kvb: (fee_rate_kvb).ceil() as u64,
+        }))
+    }
+
+    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
+        self.0
+            .broadcast(&transaction)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(Into::into)
     }
 }

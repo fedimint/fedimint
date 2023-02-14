@@ -55,40 +55,20 @@ pub fn select_bitcoin_backend_from_envs(
     esplora_rpc: Option<&OsStr>,
 ) -> anyhow::Result<BitcoindRpcBackend> {
     Ok(if let Some(val) = bitcoind_rpc {
-        BitcoindRpcBackend::Bitcoind(fm_bitcoind_rpc_env_value_to_url(Some(val))?)
+        BitcoindRpcBackend::Bitcoind(fm_backend_rpc_env_value_to_url(val)?)
     } else if let Some(val) = electrum_rpc {
-        BitcoindRpcBackend::Electrum(fm_electrum_rpc_env_value_to_url(val)?)
+        BitcoindRpcBackend::Electrum(fm_backend_rpc_env_value_to_url(val)?)
     } else if let Some(val) = esplora_rpc {
-        BitcoindRpcBackend::Esplora(fm_esplora_rpc_env_value_to_url(val)?)
+        BitcoindRpcBackend::Esplora(fm_backend_rpc_env_value_to_url(val)?)
     } else {
-        BitcoindRpcBackend::Bitcoind(fm_bitcoind_rpc_env_value_to_url(None)?)
+        BitcoindRpcBackend::Bitcoind(Url::parse(FM_BITCOIND_RPC_DEFAULT_FALLBACK)?)
     })
 }
 
 /// Get the value of bitcoin rpc url to use, from the value of env variable
 ///
 /// Useful in places where variable value is already available.
-fn fm_bitcoind_rpc_env_value_to_url(value: Option<&OsStr>) -> anyhow::Result<Url> {
-    Ok(if let Some(url_str) = value {
-        Url::parse(
-            url_str
-                .to_str()
-                .ok_or_else(|| anyhow::format_err!("Url not ascii text"))?,
-        )?
-    } else {
-        Url::parse(FM_BITCOIND_RPC_DEFAULT_FALLBACK)?
-    })
-}
-
-pub fn fm_electrum_rpc_env_value_to_url(value: &OsStr) -> anyhow::Result<Url> {
-    Ok(Url::parse(value.to_str().ok_or_else(|| {
-        anyhow::format_err!("Url not ascii text")
-    })?)?)
-}
-
-// TODO: Should we use a single fn instead of 3, such as:
-// `fm_backend_rpc_env_value_to_url` ? As they are pratically the same
-pub fn fm_esplora_rpc_env_value_to_url(value: &OsStr) -> anyhow::Result<Url> {
+fn fm_backend_rpc_env_value_to_url(value: &OsStr) -> anyhow::Result<Url> {
     Ok(Url::parse(value.to_str().ok_or_else(|| {
         anyhow::format_err!("Url not ascii text")
     })?)?)

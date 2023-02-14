@@ -203,7 +203,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                     fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Electrum(_) => {
                         panic!("Electrum backend not supported for tests")
                     }
-                    fedimint_api::bitcoin_rpc::BitcoindRpcBackend::Esplora(_) => {
+                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Esplora(_) => {
                         panic!("Esplora backend not supported for tests")
                     }
                 };
