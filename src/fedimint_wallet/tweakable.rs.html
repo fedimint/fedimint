@@ -50,10 +50,37 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
-<span class="kw">use </span>secp256k1::{Scalar, Secp256k1, Verification};
+<span class="kw">use </span>secp256k1::{Scalar, Secp256k1, Signing, Verification};
 
 <span class="doccomment">/// An object that can be used as a ricardian contract to tweak a key
 </span><span class="kw">pub trait </span>Contract {
@@ -65,11 +92,19 @@
 /// constructions
 </span><span class="kw">pub trait </span>Tweakable {
     <span class="doccomment">/// Tweak the key with a `tweak` contract
-    </span><span class="kw">fn </span>tweak&lt;Ctx: Verification, Ctr: Contract&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>Ctr, secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;) -&gt; <span class="self">Self</span>;
+    </span><span class="kw">fn </span>tweak&lt;Ctx: Verification + Signing, Ctr: Contract&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tweak: <span class="kw-2">&amp;</span>Ctr,
+        secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;,
+    ) -&gt; <span class="self">Self</span>;
 }
 
 <span class="kw">impl </span>Tweakable <span class="kw">for </span>secp256k1::PublicKey {
-    <span class="kw">fn </span>tweak&lt;Ctx: Verification, Ctr: Contract&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>Ctr, secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">fn </span>tweak&lt;Ctx: Verification + Signing, Ctr: Contract&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tweak: <span class="kw-2">&amp;</span>Ctr,
+        secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;,
+    ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span><span class="self">self</span>.serialize()[..]);
         tweak.encode(<span class="kw-2">&amp;mut </span>hasher).expect(<span class="string">&quot;hashing is infallible&quot;</span>);
         <span class="kw">let </span>tweak = Hmac::from_engine(hasher).into_inner();
@@ -77,6 +112,25 @@
         <span class="self">self</span>.add_exp_tweak(secp, <span class="kw-2">&amp;</span>Scalar::from_be_bytes(tweak).expect(<span class="string">&quot;can&#39;t fail&quot;</span>))
             .expect(<span class="string">&quot;tweak is always 32 bytes, other failure modes are negligible&quot;</span>)
     }
+}
+
+<span class="kw">impl </span>Tweakable <span class="kw">for </span>secp256k1::SecretKey {
+    <span class="kw">fn </span>tweak&lt;Ctx: Verification + Signing, Ctr: Contract&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tweak_in: <span class="kw-2">&amp;</span>Ctr,
+        secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>pub_key = secp256k1::PublicKey::from_secret_key(secp, <span class="self">self</span>);
+
+        <span class="kw">let </span>tweak = {
+            <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span>pub_key.serialize()[..]);
+            tweak_in.encode(<span class="kw-2">&amp;mut </span>hasher).expect(<span class="string">&quot;hashing is infallible&quot;</span>);
+            Hmac::from_engine(hasher).into_inner()
+        };
+
+        <span class="self">self</span>.add_tweak(<span class="kw-2">&amp;</span>Scalar::from_be_bytes(tweak).expect(<span class="string">&quot;can&#39;t fail&quot;</span>))
+            .expect(<span class="string">&quot;Tweaking priv key failed&quot;</span>) <span class="comment">// TODO: why could this happen?
+    </span>}
 }
 
 <span class="kw">impl </span>Contract <span class="kw">for </span>secp256k1::PublicKey {

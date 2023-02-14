@@ -1133,9 +1133,9 @@
 <span class="doccomment">/// Transaction that was already signed
 </span><span class="attr">#[derive(Encodable)]
 </span><span class="kw">pub struct </span>Transaction {
-    inputs: Vec&lt;DynInput&gt;,
-    outputs: Vec&lt;DynOutput&gt;,
-    signature: Signature,
+    <span class="kw">pub </span>inputs: Vec&lt;DynInput&gt;,
+    <span class="kw">pub </span>outputs: Vec&lt;DynOutput&gt;,
+    <span class="kw">pub </span>signature: Signature,
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>Transaction

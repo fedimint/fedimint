@@ -1747,16 +1747,6 @@
 <a href="#1747" id="1747">1747</a>
 <a href="#1748" id="1748">1748</a>
 <a href="#1749" id="1749">1749</a>
-<a href="#1750" id="1750">1750</a>
-<a href="#1751" id="1751">1751</a>
-<a href="#1752" id="1752">1752</a>
-<a href="#1753" id="1753">1753</a>
-<a href="#1754" id="1754">1754</a>
-<a href="#1755" id="1755">1755</a>
-<a href="#1756" id="1756">1756</a>
-<a href="#1757" id="1757">1757</a>
-<a href="#1758" id="1758">1758</a>
-<a href="#1759" id="1759">1759</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -3304,23 +3294,13 @@
             .enumerate()
         {
             <span class="kw">let </span>tweaked_secret = {
-                <span class="kw">let </span>tweak_pk_bytes = psbt_input
+                <span class="kw">let </span>tweak = psbt_input
                     .proprietary
                     .get(<span class="kw-2">&amp;</span>proprietary_tweak_key())
                     .expect(<span class="string">&quot;Malformed PSBT: expected tweak&quot;</span>);
-                <span class="kw">let </span>pub_key = secp256k1::PublicKey::from_secret_key(<span class="self">self</span>.secp, <span class="self">self</span>.secret_key);
 
-                <span class="kw">let </span>tweak = {
-                    <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span>pub_key.serialize()[..]);
-                    hasher.input(<span class="kw-2">&amp;</span>tweak_pk_bytes[..]);
-                    Hmac::from_engine(hasher).into_inner()
-                };
-
-                <span class="self">self</span>.secret_key
-                    .add_tweak(<span class="kw-2">&amp;</span>Scalar::from_be_bytes(tweak).expect(<span class="string">&quot;can&#39;t fail&quot;</span>))
-                    .expect(<span class="string">&quot;Tweaking priv key failed&quot;</span>) <span class="comment">// TODO: why could this
-                                                        // happen?
-            </span>};
+                <span class="self">self</span>.secret_key.tweak(tweak, <span class="self">self</span>.secp)
+            };
 
             <span class="kw">let </span>tx_hash = tx_hasher
                 .segwit_signature_hash(
