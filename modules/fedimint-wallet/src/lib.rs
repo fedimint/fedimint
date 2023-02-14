@@ -31,7 +31,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
@@ -237,6 +237,7 @@ pub struct WalletGen;
 #[async_trait]
 impl ModuleGen for WalletGen {
     const KIND: ModuleKind = KIND;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
     type Decoder = WalletDecoder;
 
     fn decoder(&self) -> WalletDecoder {

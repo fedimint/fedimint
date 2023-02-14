@@ -20,7 +20,7 @@ use tracing::instrument;
 use crate::cancellable::Cancellable;
 use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
-use crate::db::{Database, DatabaseTransaction};
+use crate::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
@@ -274,6 +274,8 @@ pub trait IModuleGen: Debug {
 
     fn module_kind(&self) -> ModuleKind;
 
+    fn database_version(&self) -> DatabaseVersion;
+
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
         &self,
@@ -282,6 +284,11 @@ pub trait IModuleGen: Debug {
         env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
+
+    /// Retreives the `MigrationMap` from the module to be applied to the
+    /// database before the module is initialized. The `MigrationMap` is
+    /// indexed on the from version.
+    fn get_database_migrations(&self) -> MigrationMap;
 
     fn trusted_dealer_gen(
         &self,
@@ -399,6 +406,14 @@ pub struct ApiVersion {
 pub trait ModuleGen: Debug + Sized {
     const KIND: ModuleKind;
 
+    /// This represents the module's database version that the current code is
+    /// compatible with. It is important to increment this value whenever a
+    /// key or a value that is persisted to the database within the module
+    /// changes. It is also important to add the corresponding
+    /// migration function in `get_database_migrations` which should define how
+    /// to move from the previous database version to the current version.
+    const DATABASE_VERSION: DatabaseVersion;
+
     type Decoder: Decoder;
 
     fn decoder(&self) -> Self::Decoder;
@@ -424,6 +439,13 @@ pub trait ModuleGen: Debug + Sized {
         env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
+
+    /// Retreives the `MigrationMap` from the module to be applied to the
+    /// database before the module is initialized. The `MigrationMap` is
+    /// indexed on the from version.
+    fn get_database_migrations(&self) -> MigrationMap {
+        MigrationMap::new()
+    }
 
     fn trusted_dealer_gen(
         &self,
@@ -468,6 +490,10 @@ where
         <Self as ModuleGen>::KIND
     }
 
+    fn database_version(&self) -> DatabaseVersion {
+        <Self as ModuleGen>::DATABASE_VERSION
+    }
+
     fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion> {
         <Self as ModuleGen>::versions(self, core).to_vec()
     }
@@ -480,6 +506,10 @@ where
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         <Self as ModuleGen>::init(self, cfg, db, env, task_group).await
+    }
+
+    fn get_database_migrations(&self) -> MigrationMap {
+        <Self as ModuleGen>::get_database_migrations(self)
     }
 
     fn trusted_dealer_gen(

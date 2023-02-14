@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -8,10 +9,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use futures::{stream, Stream, StreamExt};
+use serde::Serialize;
+use strum_macros::EnumIter;
 use thiserror::Error;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
-use crate::core::ModuleInstanceId;
+use crate::core::{ModuleInstanceId, ModuleKind};
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 
@@ -740,7 +743,7 @@ where
 #[macro_export]
 macro_rules! impl_db_prefix_const {
     (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(, query_prefix = $query_prefix:ty)* $(,)?) => {
-        impl fedimint_core::db::DatabaseKeyPrefixConst for $key {
+        impl $crate::db::DatabaseKeyPrefixConst for $key {
             const DB_PREFIX: u8 = $db_prefix as u8;
             type Key = Self;
             type Value = $val;
@@ -754,6 +757,46 @@ macro_rules! impl_db_prefix_const {
             }
         )*
     };
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct DatabaseVersionKey;
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+pub struct DatabaseVersionKeyPrefix;
+
+#[derive(Debug, Encodable, Decodable, Serialize, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct DatabaseVersion(pub u64);
+
+impl_db_prefix_const!(
+    key = DatabaseVersionKey,
+    value = DatabaseVersion,
+    db_prefix = DbKeyPrefix::DatabaseVersion,
+    query_prefix = DatabaseVersionKeyPrefix
+);
+
+impl std::fmt::Display for DatabaseVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl DatabaseVersion {
+    pub fn increment(&mut self) {
+        self.0 += 1;
+    }
+}
+
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+#[repr(u8)]
+#[derive(Clone, EnumIter, Debug)]
+pub enum DbKeyPrefix {
+    DatabaseVersion = 0x50,
 }
 
 #[derive(Debug, Error)]
@@ -831,11 +874,77 @@ macro_rules! push_db_key_items {
     };
 }
 
-mod tests {
-    use futures::StreamExt;
+/// MigrationMap is a BTreeMap that maps DatabaseVersions to async functions.
+/// These functions are expected to "migrate" the database from the keyed
+/// DatabaseVersion to DatabaseVersion + 1.
+pub type MigrationMap<'a> = BTreeMap<
+    DatabaseVersion,
+    for<'b> fn(
+        &'b mut DatabaseTransaction<'a>,
+    ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'b>>,
+>;
 
-    use super::Database;
+/// `apply_migrations` iterates from the on disk database version for the module
+/// up to `target_db_version` and executes all of the migrations that exist in
+/// the `MigrationMap`. Each migration in `MigrationMap` updates the database to
+/// have the correct on-disk structures that the code is expecting. The entire
+/// migration process is atomic (i.e migration from 0->1 and 1->2 happen
+/// atomically). This function is called before the module is initialized and as
+/// long as the correct migrations are supplied in `MigrationMap`, the module
+/// will be able to read and write from the database successfully.
+pub async fn apply_migrations<'a>(
+    db: &'a Database,
+    kind: ModuleKind,
+    target_db_version: DatabaseVersion,
+    migrations: MigrationMap<'a>,
+) -> Result<(), anyhow::Error> {
+    let mut dbtx = db.begin_transaction().await;
+    let disk_version = dbtx.get_value(&DatabaseVersionKey).await?;
+    let db_version = if let Some(disk_version) = disk_version {
+        let mut current_db_version = disk_version;
+
+        if current_db_version > target_db_version {
+            return Err(anyhow::anyhow!(format!(
+                "On disk database version for module {kind} was higher than the code database version."
+            )));
+        }
+
+        while current_db_version < target_db_version {
+            if let Some(migration) = migrations.get(&current_db_version) {
+                migration(&mut dbtx).await?;
+            } else {
+                panic!("Missing migration for version {current_db_version}");
+            }
+
+            current_db_version.increment();
+            dbtx.insert_entry(&DatabaseVersionKey, &current_db_version)
+                .await?;
+        }
+
+        current_db_version
+    } else {
+        dbtx.insert_entry(&DatabaseVersionKey, &target_db_version)
+            .await?;
+        target_db_version
+    };
+
+    dbtx.commit_tx().await?;
+    info!("{} module db version: {}", kind, db_version);
+    Ok(())
+}
+
+#[allow(unused_imports)]
+mod tests {
+    use futures::{FutureExt, StreamExt};
+
+    use super::{
+        apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+        MigrationMap,
+    };
+    use crate::core::ModuleKind;
+    use crate::db::mem_impl::MemDatabase;
     use crate::encoding::{Decodable, Encodable};
+    use crate::module::registry::ModuleDecoderRegistry;
 
     #[repr(u8)]
     #[derive(Clone)]
@@ -856,6 +965,19 @@ mod tests {
         value = TestVal,
         db_prefix = TestDbKeyPrefix::Test,
         query_prefix = DbPrefixTestPrefix
+    );
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct TestKeyV0(u64, u64);
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct DbPrefixTestPrefixV0;
+
+    impl_db_prefix_const!(
+        key = TestKeyV0,
+        value = TestVal,
+        db_prefix = TestDbKeyPrefix::Test,
+        query_prefix = DbPrefixTestPrefixV0
     );
 
     #[derive(Debug, Encodable, Decodable)]
@@ -1485,6 +1607,74 @@ mod tests {
         assert_eq!(test_dbtx.get_value(&TestKey(101)).await.unwrap(), None);
 
         test_dbtx.commit_tx().await.expect("DB Error");
+    }
+
+    #[cfg(test)]
+    #[tokio::test]
+    pub async fn verify_test_migration() {
+        // Insert a bunch of old dummy data that needs to be migrated to a new version
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let expected_test_keys_size: usize = 100;
+        let mut dbtx = db.begin_transaction().await;
+        for i in 0..expected_test_keys_size {
+            dbtx.insert_new_entry(&TestKeyV0(i as u64, (i + 1) as u64), &TestVal(i as u64))
+                .await
+                .expect("DB Error");
+        }
+
+        dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
+            .await
+            .expect("DB Error");
+        dbtx.commit_tx().await.expect("DB Error");
+
+        let mut migrations = MigrationMap::new();
+
+        migrations.insert(DatabaseVersion(0), move |dbtx| {
+            migrate_test_db_version_0(dbtx).boxed()
+        });
+
+        apply_migrations(
+            &db,
+            ModuleKind::from_static_str("TestModule"),
+            DatabaseVersion(1),
+            migrations,
+        )
+        .await
+        .expect("Error applying migrations for TestModule");
+
+        // Verify that the migrations completed successfully
+        let mut dbtx = db.begin_transaction().await;
+
+        // Verify Dummy module migration
+        let test_keys = dbtx
+            .find_by_prefix(&DbPrefixTestPrefix)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        let test_keys_size = test_keys.len();
+        assert_eq!(test_keys_size, expected_test_keys_size);
+        for test_key in test_keys {
+            let (key, val) = test_key.unwrap();
+            assert_eq!(key.0, val.0 + 1);
+        }
+    }
+
+    #[allow(dead_code)]
+    async fn migrate_test_db_version_0<'a, 'b>(
+        dbtx: &'b mut DatabaseTransaction<'a>,
+    ) -> Result<(), anyhow::Error> {
+        let example_keys_v0 = dbtx
+            .find_by_prefix(&DbPrefixTestPrefixV0)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        dbtx.remove_by_prefix(&DbPrefixTestPrefixV0).await?;
+        for pair in example_keys_v0 {
+            let (key, val) = pair?;
+            let key_v2 = TestKey(key.1);
+            dbtx.insert_new_entry(&key_v2, &val).await?;
+        }
+        Ok(())
     }
 
     #[cfg(test)]

@@ -11,7 +11,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
@@ -24,10 +24,12 @@ use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
+use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::config::{DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+use crate::db::migrate_dummy_db_version_0;
 use crate::serde_json::Value;
 
 pub mod common;
@@ -54,6 +56,7 @@ pub struct DummyConfigGenerator;
 #[async_trait]
 impl ModuleGen for DummyConfigGenerator {
     const KIND: ModuleKind = KIND;
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
     type Decoder = DummyDecoder;
 
     fn decoder(&self) -> DummyDecoder {
@@ -74,15 +77,21 @@ impl ModuleGen for DummyConfigGenerator {
         Ok(Dummy::new(cfg.to_typed()?).into())
     }
 
+    fn get_database_migrations(&self) -> MigrationMap {
+        let mut migrations = MigrationMap::new();
+
+        migrations.insert(DatabaseVersion(0), move |dbtx| {
+            migrate_dummy_db_version_0(dbtx).boxed()
+        });
+
+        migrations
+    }
+
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenParams,
+        _params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let _params = params
-            .get::<DummyConfigGenParams>()
-            .expect("Invalid mint params");
-
         let mint_cfg: BTreeMap<_, DummyConfig> = peers
             .iter()
             .map(|&peer| {
@@ -108,13 +117,9 @@ impl ModuleGen for DummyConfigGenerator {
         _our_id: &PeerId,
         _instance_id: ModuleInstanceId,
         _peers: &[PeerId],
-        params: &ConfigGenParams,
+        _params: &ConfigGenParams,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
-        let _params = params
-            .get::<DummyConfigGenParams>()
-            .expect("Invalid mint params");
-
         let server = DummyConfig {
             private: DummyConfigPrivate {
                 something_private: 3,

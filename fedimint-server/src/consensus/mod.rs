@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 use fedimint_core::config::{ConfigResponse, ModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
@@ -148,10 +148,19 @@ impl FedimintConsensus {
             };
             info!(module_instance_id = *module_id, kind = %kind, "Init module");
 
+            let isolated_db = db.new_isolated(*module_id);
+            apply_migrations(
+                &isolated_db,
+                init.module_kind(),
+                init.database_version(),
+                init.get_database_migrations(),
+            )
+            .await?;
+
             let module = init
                 .init(
                     cfg.get_module_config(*module_id)?,
-                    db.new_isolated(*module_id),
+                    isolated_db,
                     &env,
                     task_group,
                 )

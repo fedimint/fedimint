@@ -1229,10 +1229,21 @@ impl FederationTest {
                     modules.insert(id, module);
                 } else {
                     info!(module_instance_id = id, kind = %kind, "Init module");
+
+                    let isolated_db = db.new_isolated(id);
+                    fedimint_core::db::apply_migrations(
+                        &isolated_db,
+                        gen.module_kind(),
+                        gen.database_version(),
+                        gen.get_database_migrations(),
+                    )
+                    .await
+                    .unwrap();
+
                     let module = gen
                         .init(
                             cfg.get_module_config(id).unwrap(),
-                            db.new_isolated(id),
+                            isolated_db,
                             &env_vars,
                             &mut task_group,
                         )
