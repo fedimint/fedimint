@@ -451,6 +451,18 @@
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -464,7 +476,7 @@
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
-<span class="kw">use </span>cln_rpc::{model, ClnRpc};
+<span class="kw">use </span>cln_rpc::model;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
@@ -557,7 +569,7 @@
 
 <span class="attr">#[allow(dead_code)]
 </span><span class="kw">pub struct </span>ClnRpcService {
-    client: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
+    socket: PathBuf,
     interceptor: Arc&lt;ClnHtlcInterceptor&gt;,
     task_group: TaskGroup,
 }
@@ -594,7 +606,6 @@
         </span>{
             <span class="kw">let </span>config = plugin.configuration();
             <span class="kw">let </span>socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
-            <span class="kw">let </span>client = ClnRpc::new(socket).<span class="kw">await</span>.expect(<span class="string">&quot;connect to ln_socket&quot;</span>);
 
             <span class="comment">// Parse configurations or read from
             </span><span class="kw">let </span>listen: SocketAddr = <span class="kw">match </span>ClnExtensionOpts::try_parse() {
@@ -616,7 +627,7 @@
 
             <span class="prelude-val">Ok</span>((
                 <span class="self">Self </span>{
-                    client: Arc::new(Mutex::new(client)),
+                    socket,
                     task_group: TaskGroup::new(),
                     interceptor,
                 },
@@ -628,6 +639,19 @@
             </span>)))
         }
     }
+
+    <span class="doccomment">/// Creates a new RPC client for a request.
+    ///
+    /// This operation is cheap enough to do it for each request since it merely
+    /// connects to a UNIX domain socket without doing any further
+    /// initialization.
+    </span><span class="kw">async fn </span>rpc_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;cln_rpc::ClnRpc, ClnExtensionError&gt; {
+        cln_rpc::ClnRpc::new(<span class="kw-2">&amp;</span><span class="self">self</span>.socket).<span class="kw">await</span>.map_err(|err| {
+            <span class="kw">let </span>e = <span class="macro">format!</span>(<span class="string">&quot;Could not connect to CLN RPC socket: {err}&quot;</span>);
+            <span class="macro">error!</span>(e);
+            ClnExtensionError::Error(<span class="macro">anyhow!</span>(e))
+        })
+    }
 }
 
 <span class="attr">#[tonic::async_trait]
@@ -636,9 +660,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _request: tonic::Request&lt;GetPubKeyRequest&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetPubKeyResponse&gt;, Status&gt; {
-        <span class="self">self</span>.client
-            .lock()
+        <span class="self">self</span>.rpc_client()
             .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
             </span>.call(cln_rpc::Request::Getinfo(
                 model::requests::GetinfoRequest {},
             ))
@@ -671,9 +695,9 @@
         } = request.into_inner();
 
         <span class="kw">let </span>outcome = <span class="self">self
-            </span>.client
-            .lock()
+            </span>.rpc_client()
             .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
             </span>.call(cln_rpc::Request::Pay(model::PayRequest {
                 bolt11: invoice,
                 amount_msat: <span class="prelude-val">None</span>,
