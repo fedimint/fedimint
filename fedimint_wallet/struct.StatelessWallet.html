@@ -7,7 +7,7 @@
     peg_out_amount: Amount,
     destination: Script,
     utxos: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(<a class="struct" href="db/struct.UTXOKey.html" title="struct fedimint_wallet::db::UTXOKey">UTXOKey</a>, <a class="struct" href="struct.SpendableUTXO.html" title="struct fedimint_wallet::SpendableUTXO">SpendableUTXO</a>)&gt;,
-    fee_rate: <a class="struct" href="../fedimint_core/struct.Feerate.html" title="struct fedimint_core::Feerate">Feerate</a>,
+    fee_rate: Feerate,
     change_tweak: &amp;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>]
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.UnsignedTransaction.html" title="struct fedimint_wallet::UnsignedTransaction">UnsignedTransaction</a>&gt;</h4></section></summary><div class="docblock"><p>Attempts to create a tx ready to be signed from available UTXOs.
 Returns <code>None</code> if there are not enough <code>SpendableUTXO</code></p>
