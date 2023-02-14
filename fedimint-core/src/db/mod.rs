@@ -26,26 +26,44 @@ use crate::module::registry::ModuleDecoderRegistry;
 
 pub const MODULE_GLOBAL_PREFIX: u8 = 0xff;
 
-pub trait DatabaseKeyPrefixConst {
+pub trait DatabaseKeyPrefix: Debug {
+    fn to_bytes(&self) -> Vec<u8>;
+}
+
+/// A key + value pair in the database with a unique prefix
+/// Extends `DatabaseKeyPrefix` to prepend the key's prefix.
+pub trait DatabaseRecord: DatabaseKeyPrefix {
     const DB_PREFIX: u8;
     type Key: DatabaseKey + Debug;
     type Value: DatabaseValue + Debug;
 }
 
-pub trait DatabaseKeyPrefix: Debug {
-    fn to_bytes(&self) -> Vec<u8>;
+/// A key that can be used to query one or more `DatabaseRecord`
+/// Extends `DatabaseKeyPrefix` to prepend the key's prefix.
+pub trait DatabaseLookup: DatabaseKeyPrefix {
+    type Record: DatabaseRecord;
+    type Key: DatabaseKey + Debug;
 }
 
-pub trait DatabaseKey: Sized + DatabaseKeyPrefix {
+// Every `DatabaseRecord` is automatically a `DatabaseLookup`
+impl<Record> DatabaseLookup for Record
+where
+    Record: DatabaseRecord + Debug + Decodable + Encodable,
+{
+    type Record = Record;
+    type Key = Record;
+}
+
+/// `DatabaseKey` that represents the lookup structure for retrieving key/value
+/// pairs from the database.
+pub trait DatabaseKey: Sized {
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError>;
 }
 
-pub trait SerializableDatabaseValue: Debug {
-    fn to_bytes(&self) -> Vec<u8>;
-}
-
-pub trait DatabaseValue: Sized + SerializableDatabaseValue {
+/// `DatabaseValue` that represents the value structure of database records.
+pub trait DatabaseValue: Sized + Debug {
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError>;
+    fn to_bytes(&self) -> Vec<u8>;
 }
 
 pub type PrefixStream<'a> = Pin<Box<dyn Stream<Item = (Vec<u8>, Vec<u8>)> + Send + 'a>>;
@@ -538,7 +556,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     #[instrument(level = "debug", skip_all, fields(?key), ret)]
     pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
     where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
+        K: DatabaseKey + DatabaseRecord,
     {
         let key_bytes = key.to_bytes();
         let value_bytes = match self.tx.raw_get_bytes(&key_bytes).await? {
@@ -556,9 +574,14 @@ impl<'parent> DatabaseTransaction<'parent> {
     pub async fn find_by_prefix<KP>(
         &mut self,
         key_prefix: &KP,
-    ) -> impl Stream<Item = Result<(KP::Key, KP::Value)>> + '_
+    ) -> impl Stream<
+        Item = Result<(
+            KP::Key,
+            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+        )>,
+    > + '_
     where
-        KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
+        KP: DatabaseLookup,
     {
         debug!("find by prefix");
         let decoders = self.decoders.clone();
@@ -576,7 +599,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
     pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
     where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
+        K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
         match self
@@ -595,7 +618,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         value: &K::Value,
     ) -> Result<Option<K::Value>>
     where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
+        K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
         match self
@@ -616,7 +639,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
     pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
     where
-        K: DatabaseKey + DatabaseKeyPrefixConst,
+        K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
         let key_bytes = key.to_bytes();
@@ -631,7 +654,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     #[instrument(level = "debug", skip_all, fields(key = ?key_prefix), ret)]
     pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
     where
-        KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
+        KP: DatabaseLookup,
     {
         self.commit_tracker.has_writes = true;
         self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
@@ -640,10 +663,10 @@ impl<'parent> DatabaseTransaction<'parent> {
 
 impl<T> DatabaseKeyPrefix for T
 where
-    T: DatabaseKeyPrefixConst + crate::encoding::Encodable + Debug,
+    T: DatabaseLookup + crate::encoding::Encodable + Debug,
 {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut data = vec![Self::DB_PREFIX];
+        let mut data = vec![<Self as DatabaseLookup>::Record::DB_PREFIX];
         self.consensus_encode(&mut data)
             .expect("Writing to vec is infallible");
         data
@@ -654,7 +677,7 @@ impl<T> DatabaseKey for T
 where
     // Note: key can only be `T` that can be decoded without modules (even if
     // module type is `()`)
-    T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + crate::encoding::Decodable + Sized,
+    T: DatabaseRecord + crate::encoding::Decodable + Sized,
 {
     fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
         if data.is_empty() {
@@ -674,10 +697,15 @@ where
     }
 }
 
-impl<T> SerializableDatabaseValue for T
+impl<T> DatabaseValue for T
 where
-    T: Encodable + Debug,
+    T: Debug + Encodable + Decodable,
 {
+    fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
+        T::consensus_decode(&mut std::io::Cursor::new(data), modules)
+            .map_err(|e| DecodingError::Other(e.0))
+    }
+
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         self.consensus_encode(&mut bytes)
@@ -686,18 +714,8 @@ where
     }
 }
 
-impl<T> DatabaseValue for T
-where
-    T: SerializableDatabaseValue + Decodable,
-{
-    fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
-        T::consensus_decode(&mut std::io::Cursor::new(data), modules)
-            .map_err(|e| DecodingError::Other(e.0))
-    }
-}
-
 /// This is a helper macro that generates the implementations of
-/// [`DatabaseKeyPrefixConst`] necessary for reading/writing to the
+/// `DatabaseRecord` necessary for reading/writing to the
 /// database and fetching by prefix.
 ///
 /// - `key`: This is the type of struct that will be used as the key into the
@@ -710,50 +728,68 @@ where
 ///   times. Every query prefix can be used to query the database via
 ///   `find_by_prefix`
 ///
-/// Examples:
-///
-/// Only use the required parameters
+/// # Examples
 ///
 /// ```
-/// use fedimint_api::db::TestDbKeyPrefix;
+/// use fedimint_core::encoding::{Decodable, Encodable};
+/// use fedimint_core::impl_db_prefix_const;
 ///
-/// use crate::fedimint_api::impl_db_prefix_const;
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyKey;
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyValue;
+///
+/// #[repr(u8)]
+/// #[derive(Clone, Debug)]
+/// pub enum DbKeyPrefix {
+///     MyKey = 0x50,
+/// }
+///
+/// impl_db_prefix_const!(key = MyKey, value = MyValue, db_prefix = DbKeyPrefix::MyKey);
+/// ```
+///
+/// Use the required parameters and specify one `query_prefix`
+///
+/// ```
+/// use fedimint_core::encoding::{Decodable, Encodable};
+/// use fedimint_core::impl_db_prefix_const;
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyKey;
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyValue;
+///
+/// #[repr(u8)]
+/// #[derive(Clone, Debug)]
+/// pub enum DbKeyPrefix {
+///     MyKey = 0x50,
+/// }
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyKeyPrefix;
 ///
 /// impl_db_prefix_const!(
-///     key = TestKey,
-///     value = TestVal,
-///     db_prefix = TestDbKeyPrefix::Test
-/// );
-/// ```
-///
-/// Use the required parameters and specify one `query_prefix`.
-///
-/// ```
-/// use fedimint_api::db::TestDbKeyPrefix;
-///
-/// use crate::fedimint_api::impl_db_prefix_const;
-///
-/// impl_db_prefix_const!(
-///     key = AltTestKey,
-///     value = TestVal,
-///     db_prefix = TestDbKeyPrefix::AltTest,
-///     query_prefix = AltDbPrefixTestPrefix
+///     key = MyKey,
+///     value = MyValue,
+///     db_prefix = DbKeyPrefix::MyKey,
+///     query_prefix = MyKeyPrefix
 /// );
 /// ```
 #[macro_export]
 macro_rules! impl_db_prefix_const {
     (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(, query_prefix = $query_prefix:ty)* $(,)?) => {
-        impl $crate::db::DatabaseKeyPrefixConst for $key {
+        impl $crate::db::DatabaseRecord for $key {
             const DB_PREFIX: u8 = $db_prefix as u8;
             type Key = Self;
             type Value = $val;
         }
 
         $(
-            impl $crate::db::DatabaseKeyPrefixConst for $query_prefix {
-                const DB_PREFIX: u8 = $db_prefix as u8;
+            impl $crate::db::DatabaseLookup for $query_prefix {
+                type Record = $key;
                 type Key = $key;
-                type Value = $val;
             }
         )*
     };
@@ -762,17 +798,13 @@ macro_rules! impl_db_prefix_const {
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct DatabaseVersionKey;
 
-#[derive(Debug, Clone, Copy, Encodable, Decodable)]
-pub struct DatabaseVersionKeyPrefix;
-
 #[derive(Debug, Encodable, Decodable, Serialize, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct DatabaseVersion(pub u64);
 
 impl_db_prefix_const!(
     key = DatabaseVersionKey,
     value = DatabaseVersion,
-    db_prefix = DbKeyPrefix::DatabaseVersion,
-    query_prefix = DatabaseVersionKeyPrefix
+    db_prefix = DbKeyPrefix::DatabaseVersion
 );
 
 impl std::fmt::Display for DatabaseVersion {

@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use futures::StreamExt;
 
-use crate::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
+use crate::db::{DatabaseLookup, DatabaseRecord, DatabaseTransaction};
 
 #[derive(Default)]
 pub struct Audit {
@@ -28,8 +28,8 @@ impl Audit {
         key_prefix: &KP,
         to_milli_sat: F,
     ) where
-        KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + 'static,
-        F: Fn(KP::Key, KP::Value) -> i64,
+        KP: DatabaseLookup + 'static,
+        F: Fn(KP::Key, <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value) -> i64,
     {
         let mut new_items = dbtx
             .find_by_prefix(key_prefix)
