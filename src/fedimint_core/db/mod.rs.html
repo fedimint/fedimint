@@ -1753,6 +1753,38 @@
 <a href="#1753" id="1753">1753</a>
 <a href="#1754" id="1754">1754</a>
 <a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
+<a href="#1772" id="1772">1772</a>
+<a href="#1773" id="1773">1773</a>
+<a href="#1774" id="1774">1774</a>
+<a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
+<a href="#1783" id="1783">1783</a>
+<a href="#1784" id="1784">1784</a>
+<a href="#1785" id="1785">1785</a>
+<a href="#1786" id="1786">1786</a>
+<a href="#1787" id="1787">1787</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1781,26 +1813,44 @@
 
 <span class="kw">pub const </span>MODULE_GLOBAL_PREFIX: u8 = <span class="number">0xff</span>;
 
-<span class="kw">pub trait </span>DatabaseKeyPrefixConst {
+<span class="kw">pub trait </span>DatabaseKeyPrefix: Debug {
+    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
+}
+
+<span class="doccomment">/// A key + value pair in the database with a unique prefix
+/// Extends `DatabaseKeyPrefix` to prepend the key&#39;s prefix.
+</span><span class="kw">pub trait </span>DatabaseRecord: DatabaseKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8;
     <span class="kw">type </span>Key: DatabaseKey + Debug;
     <span class="kw">type </span>Value: DatabaseValue + Debug;
 }
 
-<span class="kw">pub trait </span>DatabaseKeyPrefix: Debug {
-    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
+<span class="doccomment">/// A key that can be used to query one or more `DatabaseRecord`
+/// Extends `DatabaseKeyPrefix` to prepend the key&#39;s prefix.
+</span><span class="kw">pub trait </span>DatabaseLookup: DatabaseKeyPrefix {
+    <span class="kw">type </span>Record: DatabaseRecord;
+    <span class="kw">type </span>Key: DatabaseKey + Debug;
 }
 
-<span class="kw">pub trait </span>DatabaseKey: Sized + DatabaseKeyPrefix {
+<span class="comment">// Every `DatabaseRecord` is automatically a `DatabaseLookup`
+</span><span class="kw">impl</span>&lt;Record&gt; DatabaseLookup <span class="kw">for </span>Record
+<span class="kw">where
+    </span>Record: DatabaseRecord + Debug + Decodable + Encodable,
+{
+    <span class="kw">type </span>Record = Record;
+    <span class="kw">type </span>Key = Record;
+}
+
+<span class="doccomment">/// `DatabaseKey` that represents the lookup structure for retrieving key/value
+/// pairs from the database.
+</span><span class="kw">pub trait </span>DatabaseKey: Sized {
     <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
 }
 
-<span class="kw">pub trait </span>SerializableDatabaseValue: Debug {
-    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
-}
-
-<span class="kw">pub trait </span>DatabaseValue: Sized + SerializableDatabaseValue {
+<span class="doccomment">/// `DatabaseValue` that represents the value structure of database records.
+</span><span class="kw">pub trait </span>DatabaseValue: Sized + Debug {
     <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
+    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
 }
 
 <span class="kw">pub type </span>PrefixStream&lt;<span class="lifetime">&#39;a</span>&gt; = Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = (Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt;;
@@ -2293,7 +2343,7 @@
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key), ret)]
     </span><span class="kw">pub async fn </span>get_value&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
     <span class="kw">where
-        </span>K: DatabaseKey + DatabaseKeyPrefixConst,
+        </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="kw">let </span>key_bytes = key.to_bytes();
         <span class="kw">let </span>value_bytes = <span class="kw">match </span><span class="self">self</span>.tx.raw_get_bytes(<span class="kw-2">&amp;</span>key_bytes).<span class="kw">await</span><span class="question-mark">? </span>{
@@ -2311,9 +2361,14 @@
     </span><span class="kw">pub async fn </span>find_by_prefix&lt;KP&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         key_prefix: <span class="kw-2">&amp;</span>KP,
-    ) -&gt; <span class="kw">impl </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;(KP::Key, KP::Value)&gt;&gt; + <span class="lifetime">&#39;_
+    ) -&gt; <span class="kw">impl </span>Stream&lt;
+        Item = <span class="prelude-ty">Result</span>&lt;(
+            KP::Key,
+            &lt;&lt;KP <span class="kw">as </span>DatabaseLookup&gt;::Record <span class="kw">as </span>DatabaseRecord&gt;::Value,
+        )&gt;,
+    &gt; + <span class="lifetime">&#39;_
     </span><span class="kw">where
-        </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
+        </span>KP: DatabaseLookup,
     {
         <span class="macro">debug!</span>(<span class="string">&quot;find by prefix&quot;</span>);
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
@@ -2331,7 +2386,7 @@
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key, <span class="question-mark">?</span>value), ret)]
     </span><span class="kw">pub async fn </span>insert_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
     <span class="kw">where
-        </span>K: DatabaseKey + DatabaseKeyPrefixConst,
+        </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
         <span class="kw">match </span><span class="self">self
@@ -2350,7 +2405,7 @@
         value: <span class="kw-2">&amp;</span>K::Value,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
     <span class="kw">where
-        </span>K: DatabaseKey + DatabaseKeyPrefixConst,
+        </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
         <span class="kw">match </span><span class="self">self
@@ -2371,7 +2426,7 @@
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key, ret), ret)]
     </span><span class="kw">pub async fn </span>remove_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
     <span class="kw">where
-        </span>K: DatabaseKey + DatabaseKeyPrefixConst,
+        </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
         <span class="kw">let </span>key_bytes = key.to_bytes();
@@ -2386,7 +2441,7 @@
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(key = <span class="question-mark">?</span>key_prefix), ret)]
     </span><span class="kw">pub async fn </span>remove_by_prefix&lt;KP&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>KP) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
     <span class="kw">where
-        </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
+        </span>KP: DatabaseLookup,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
         <span class="self">self</span>.raw_remove_by_prefix(<span class="kw-2">&amp;</span>key_prefix.to_bytes()).<span class="kw">await
@@ -2395,10 +2450,10 @@
 
 <span class="kw">impl</span>&lt;T&gt; DatabaseKeyPrefix <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: DatabaseKeyPrefixConst + <span class="kw">crate</span>::encoding::Encodable + Debug,
+    </span>T: DatabaseLookup + <span class="kw">crate</span>::encoding::Encodable + Debug,
 {
     <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[<span class="self">Self</span>::DB_PREFIX];
+        <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[&lt;<span class="self">Self </span><span class="kw">as </span>DatabaseLookup&gt;::Record::DB_PREFIX];
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>data)
             .expect(<span class="string">&quot;Writing to vec is infallible&quot;</span>);
         data
@@ -2409,7 +2464,7 @@
 <span class="kw">where
     </span><span class="comment">// Note: key can only be `T` that can be decoded without modules (even if
     // module type is `()`)
-    </span>T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="kw">crate</span>::encoding::Decodable + Sized,
+    </span>T: DatabaseRecord + <span class="kw">crate</span>::encoding::Decodable + Sized,
 {
     <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
         <span class="kw">if </span>data.is_empty() {
@@ -2429,10 +2484,15 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T&gt; SerializableDatabaseValue <span class="kw">for </span>T
+<span class="kw">impl</span>&lt;T&gt; DatabaseValue <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: Encodable + Debug,
+    </span>T: Debug + Encodable + Decodable,
 {
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(data), modules)
+            .map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
+    }
+
     <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
@@ -2441,18 +2501,8 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T&gt; DatabaseValue <span class="kw">for </span>T
-<span class="kw">where
-    </span>T: SerializableDatabaseValue + Decodable,
-{
-    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
-        T::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(data), modules)
-            .map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
-    }
-}
-
 <span class="doccomment">/// This is a helper macro that generates the implementations of
-/// [`DatabaseKeyPrefixConst`] necessary for reading/writing to the
+/// `DatabaseRecord` necessary for reading/writing to the
 /// database and fetching by prefix.
 ///
 /// - `key`: This is the type of struct that will be used as the key into the
@@ -2465,50 +2515,68 @@
 ///   times. Every query prefix can be used to query the database via
 ///   `find_by_prefix`
 ///
-/// Examples:
-///
-/// Only use the required parameters
+/// # Examples
 ///
 /// ```
-/// use fedimint_api::db::TestDbKeyPrefix;
+/// use fedimint_core::encoding::{Decodable, Encodable};
+/// use fedimint_core::impl_db_prefix_const;
 ///
-/// use crate::fedimint_api::impl_db_prefix_const;
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyKey;
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyValue;
+///
+/// #[repr(u8)]
+/// #[derive(Clone, Debug)]
+/// pub enum DbKeyPrefix {
+///     MyKey = 0x50,
+/// }
+///
+/// impl_db_prefix_const!(key = MyKey, value = MyValue, db_prefix = DbKeyPrefix::MyKey);
+/// ```
+///
+/// Use the required parameters and specify one `query_prefix`
+///
+/// ```
+/// use fedimint_core::encoding::{Decodable, Encodable};
+/// use fedimint_core::impl_db_prefix_const;
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyKey;
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyValue;
+///
+/// #[repr(u8)]
+/// #[derive(Clone, Debug)]
+/// pub enum DbKeyPrefix {
+///     MyKey = 0x50,
+/// }
+///
+/// #[derive(Debug, Encodable, Decodable)]
+/// struct MyKeyPrefix;
 ///
 /// impl_db_prefix_const!(
-///     key = TestKey,
-///     value = TestVal,
-///     db_prefix = TestDbKeyPrefix::Test
-/// );
-/// ```
-///
-/// Use the required parameters and specify one `query_prefix`.
-///
-/// ```
-/// use fedimint_api::db::TestDbKeyPrefix;
-///
-/// use crate::fedimint_api::impl_db_prefix_const;
-///
-/// impl_db_prefix_const!(
-///     key = AltTestKey,
-///     value = TestVal,
-///     db_prefix = TestDbKeyPrefix::AltTest,
-///     query_prefix = AltDbPrefixTestPrefix
+///     key = MyKey,
+///     value = MyValue,
+///     db_prefix = DbKeyPrefix::MyKey,
+///     query_prefix = MyKeyPrefix
 /// );
 /// ```
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>impl_db_prefix_const {
     (key = <span class="macro-nonterminal">$key</span>:ty, value = <span class="macro-nonterminal">$val</span>:ty, db_prefix = <span class="macro-nonterminal">$db_prefix</span>:expr $(, query_prefix = <span class="macro-nonterminal">$query_prefix</span>:ty)* $(,)<span class="question-mark">?</span>) =&gt; {
-        <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseKeyPrefixConst </span><span class="kw">for </span><span class="macro-nonterminal">$key </span>{
+        <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseRecord </span><span class="kw">for </span><span class="macro-nonterminal">$key </span>{
             <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$db_prefix </span><span class="kw">as </span>u8;
             <span class="kw">type </span>Key = <span class="self">Self</span>;
             <span class="kw">type </span>Value = <span class="macro-nonterminal">$val</span>;
         }
 
         $(
-            <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseKeyPrefixConst </span><span class="kw">for </span><span class="macro-nonterminal">$query_prefix </span>{
-                <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$db_prefix </span><span class="kw">as </span>u8;
+            <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseLookup </span><span class="kw">for </span><span class="macro-nonterminal">$query_prefix </span>{
+                <span class="kw">type </span>Record = <span class="macro-nonterminal">$key</span>;
                 <span class="kw">type </span>Key = <span class="macro-nonterminal">$key</span>;
-                <span class="kw">type </span>Value = <span class="macro-nonterminal">$val</span>;
             }
         )*
     };
@@ -2517,17 +2585,13 @@
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>DatabaseVersionKey;
 
-<span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>DatabaseVersionKeyPrefix;
-
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize, Clone, PartialOrd, Ord, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>DatabaseVersion(<span class="kw">pub </span>u64);
 
 <span class="macro">impl_db_prefix_const!</span>(
     key = DatabaseVersionKey,
     value = DatabaseVersion,
-    db_prefix = DbKeyPrefix::DatabaseVersion,
-    query_prefix = DatabaseVersionKeyPrefix
+    db_prefix = DbKeyPrefix::DatabaseVersion
 );
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DatabaseVersion {

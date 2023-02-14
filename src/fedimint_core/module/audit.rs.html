@@ -71,7 +71,7 @@
 
 <span class="kw">use </span>futures::StreamExt;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::{DatabaseKeyPrefix, DatabaseKeyPrefixConst, DatabaseTransaction};
+<span class="kw">use </span><span class="kw">crate</span>::db::{DatabaseLookup, DatabaseRecord, DatabaseTransaction};
 
 <span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>Audit {
@@ -97,8 +97,8 @@
         key_prefix: <span class="kw-2">&amp;</span>KP,
         to_milli_sat: F,
     ) <span class="kw">where
-        </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="lifetime">&#39;static</span>,
-        F: Fn(KP::Key, KP::Value) -&gt; i64,
+        </span>KP: DatabaseLookup + <span class="lifetime">&#39;static</span>,
+        F: Fn(KP::Key, &lt;&lt;KP <span class="kw">as </span>DatabaseLookup&gt;::Record <span class="kw">as </span>DatabaseRecord&gt;::Value) -&gt; i64,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>new_items = dbtx
             .find_by_prefix(key_prefix)
