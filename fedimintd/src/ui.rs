@@ -1,3 +1,4 @@
+use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -220,6 +221,10 @@ async fn post_guardians(
 struct UrlConnection {
     ro_bitcoin_rpc_type: &'static str,
     ro_bitcoin_rpc_url: String,
+    bind_p2p: String,
+    p2p_url: String,
+    bind_api: String,
+    api_url: String,
 }
 
 async fn params_page(
@@ -244,6 +249,10 @@ async fn params_page(
     UrlConnection {
         ro_bitcoin_rpc_type,
         ro_bitcoin_rpc_url,
+        bind_p2p: env::var("FM_BIND_P2P").unwrap_or("".to_string()),
+        p2p_url: env::var("FM_P2P_URL").unwrap_or("".to_string()),
+        bind_api: env::var("FM_BIND_API").unwrap_or("".to_string()),
+        api_url: env::var("FM_API_URL").unwrap_or("".to_string()),
     }
 }
 
