@@ -62,9 +62,9 @@ impl Gateway {
         let mut num_retries = 0;
         let route_hints = loop {
             let GetRouteHintsResponse { route_hints } = lnrpc
-                .route_hints()
+                .routehints()
                 .await
-                .expect("Could not feth route hints");
+                .expect("Could not fetch route hints");
 
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
                 break route_hints;
@@ -336,8 +336,7 @@ impl Gateway {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
-                        let GetRouteHintsResponse { route_hints } =
-                            self.lnrpc.route_hints().await?;
+                        let GetRouteHintsResponse { route_hints } = self.lnrpc.routehints().await?;
                         inner
                             .handle(|payload| {
                                 self.handle_connect_federation(payload, route_hints.clone())

@@ -27,7 +27,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn pubkey(&self) -> Result<GetPubKeyResponse>;
 
     /// Get route hints to the lightning node
-    async fn route_hints(&self) -> Result<GetRouteHintsResponse>;
+    async fn routehints(&self) -> Result<GetRouteHintsResponse>;
 
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
@@ -94,7 +94,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(res.into_inner())
     }
 
-    async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
+    async fn routehints(&self) -> Result<GetRouteHintsResponse> {
         let req = Request::new(EmptyRequest {});
 
         let mut client = self.client.clone();
