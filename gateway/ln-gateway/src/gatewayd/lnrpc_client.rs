@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyRequest, GetPubKeyResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -95,7 +95,12 @@ impl ILnRpcClient for NetworkLnRpcClient {
     }
 
     async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
-        unimplemented!()
+        let req = Request::new(EmptyRequest {});
+
+        let mut client = self.client.clone();
+        let res = client.get_route_hints(req).await?;
+
+        Ok(res.into_inner())
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
