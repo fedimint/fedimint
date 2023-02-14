@@ -12,17 +12,20 @@ use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
+use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
+use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gatewaylnrpc::{
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
+use secp256k1::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use tokio::io::{stdin, stdout};
@@ -30,7 +33,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 use tonic::Status;
-use tracing::{debug, error};
+use tracing::{debug, error, trace, warn};
 
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
@@ -187,6 +190,20 @@ impl ClnRpcService {
             ClnExtensionError::Error(anyhow!(e))
         })
     }
+
+    pub async fn pubkey(&self) -> Result<PublicKey, ClnExtensionError> {
+        self.rpc_client()
+            .await?
+            .call(cln_rpc::Request::Getinfo(
+                model::requests::GetinfoRequest {},
+            ))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, .. }) => id,
+                _ => panic!("Unexpected response from cln_rpc"),
+            })
+            .map_err(ClnExtensionError::RpcError)
+    }
 }
 
 #[tonic::async_trait]
@@ -195,20 +212,9 @@ impl GatewayLightning for ClnRpcService {
         &self,
         _request: tonic::Request<GetPubKeyRequest>,
     ) -> Result<tonic::Response<GetPubKeyResponse>, Status> {
-        self.rpc_client()
+        self.pubkey()
             .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::Getinfo(
-                model::requests::GetinfoRequest {},
-            ))
-            .await
-            .map(|response| {
-                let pub_key = match response {
-                    cln_rpc::Response::Getinfo(model::responses::GetinfoResponse {
-                        id, ..
-                    }) => id,
-                    _ => panic!("Unexpected response from cln_rpc"),
-                };
+            .map(|pub_key| {
                 tonic::Response::new(GetPubKeyResponse {
                     pub_key: pub_key.serialize().to_vec(),
                 })
@@ -217,6 +223,102 @@ impl GatewayLightning for ClnRpcService {
                 error!("cln getinfo returned error: {:?}", e);
                 Status::internal(e.to_string())
             })
+    }
+
+    async fn get_route_hints(
+        &self,
+        _request: tonic::Request<EmptyRequest>,
+    ) -> Result<tonic::Response<GetRouteHintsResponse>, Status> {
+        let our_pub_key = self
+            .pubkey()
+            .await
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+        let mut client = self
+            .rpc_client()
+            .await
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+        let peers_response = client
+            .call(cln_rpc::Request::ListPeers(model::ListpeersRequest {
+                id: None,
+                level: None,
+            }))
+            .await
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+        let peers = match peers_response {
+            cln_rpc::Response::ListPeers(peers) => peers.peers,
+            _ => {
+                panic!("Unexpected response")
+            }
+        };
+
+        let active_peer_channels = peers
+            .into_iter()
+            .flat_map(|peer| peer.channels.into_iter().map(move |chan| (peer.id, chan)))
+            .filter_map(|(peer_id, chan)| {
+                // TODO: upstream eq derive
+                if !matches!(
+                    chan.state,
+                    model::ListpeersPeersChannelsState::CHANNELD_NORMAL
+                ) {
+                    return None;
+                }
+
+                let Some(scid) = chan.short_channel_id else {
+                    warn!("Encountered channel without short channel id");
+                    return None;
+                };
+
+                Some((peer_id, scid))
+            })
+            .collect::<Vec<_>>();
+
+        debug!(
+            "Found {} active channels to use as route hints",
+            active_peer_channels.len()
+        );
+
+        let mut route_hints = vec![];
+        for (peer_id, scid) in active_peer_channels {
+            let channels_response = client
+                .call(cln_rpc::Request::ListChannels(model::ListchannelsRequest {
+                    short_channel_id: Some(scid),
+                    source: None,
+                    destination: None,
+                }))
+                .await
+                .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+            let channel = match channels_response {
+                cln_rpc::Response::ListChannels(channels) => {
+                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == our_pub_key) else {
+                        warn!("Channel {:?} not found in graph", scid);
+                        continue;
+                    };
+                    channel
+                }
+                _ => panic!("Unexpected response"),
+            };
+
+            let route_hint_hop = RouteHintHop {
+                src_node_id: peer_id.serialize().to_vec(),
+                short_channel_id: scid_to_u64(scid),
+                base_msat: channel.base_fee_millisatoshi,
+                proportional_millionths: channel.fee_per_millionth,
+                cltv_expiry_delta: channel.delay,
+                htlc_minimum_msat: Some(channel.htlc_minimum_msat.msat()),
+                htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
+            };
+
+            trace!("Constructed route hint {:?}", route_hint_hop);
+            route_hints.push(RouteHint {
+                hops: vec![route_hint_hop],
+            });
+        }
+
+        Ok(tonic::Response::new(GetRouteHintsResponse { route_hints }))
     }
 
     async fn pay_invoice(
@@ -352,6 +454,16 @@ impl GatewayLightning for ClnRpcService {
 pub enum ClnExtensionError {
     #[error("Gateway CLN Extension Error : {0:?}")]
     Error(#[from] anyhow::Error),
+    #[error("Gateway CLN Extension Error : {0:?}")]
+    RpcError(#[from] cln_rpc::RpcError),
+}
+
+// TODO: upstream
+fn scid_to_u64(scid: ShortChannelId) -> u64 {
+    let mut scid_num = scid.outnum() as u64;
+    scid_num |= (scid.txindex() as u64) << 16;
+    scid_num |= (scid.block() as u64) << 40;
+    scid_num
 }
 
 // BOLT 4: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages

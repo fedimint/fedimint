@@ -21,8 +21,8 @@ use tracing::{error, info, warn};
 
 use super::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
-use crate::gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse};
-use crate::gatewaylnrpc::GetPubKeyResponse;
+use crate::gatewayd::lnrpc_client::DynLnRpcClient;
+use crate::gatewaylnrpc::{GetPubKeyResponse, GetRouteHintsResponse};
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
