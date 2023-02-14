@@ -6,7 +6,7 @@ package gatewaylnrpc;
  * from a lightning node to Fedimint gateways */
 service GatewayLightning {
   /* GetPubKey returns the public key of the associated lightning node */
-  rpc GetPubKey(GetPubKeyRequest) returns (GetPubKeyResponse) {}
+  rpc GetPubKey(EmptyRequest) returns (GetPubKeyResponse) {}
 
   /* GetRouteHints returns the route hints to the associated lightning node */
   rpc GetRouteHints(EmptyRequest) returns (GetRouteHintsResponse) {}
@@ -34,8 +34,6 @@ service GatewayLightning {
 }
 
 message EmptyRequest {}
-
-message GetPubKeyRequest {}
 
 message GetPubKeyResponse {
   // The public key of the associated lightning node

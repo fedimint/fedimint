@@ -21,7 +21,7 @@ use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
 };
 use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -210,7 +210,7 @@ impl ClnRpcService {
 impl GatewayLightning for ClnRpcService {
     async fn get_pub_key(
         &self,
-        _request: tonic::Request<GetPubKeyRequest>,
+        _request: tonic::Request<EmptyRequest>,
     ) -> Result<tonic::Response<GetPubKeyResponse>, Status> {
         self.pubkey()
             .await
