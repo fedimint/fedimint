@@ -199,10 +199,10 @@ impl ClnRpcService {
             ))
             .await
             .map(|response| match response {
-                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, .. }) => id,
-                _ => panic!("Unexpected response from cln_rpc"),
+                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, .. }) => Ok(id),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
             })
-            .map_err(ClnExtensionError::RpcError)
+            .map_err(ClnExtensionError::RpcError)?
     }
 }
 
@@ -248,11 +248,10 @@ impl GatewayLightning for ClnRpcService {
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
         let peers = match peers_response {
-            cln_rpc::Response::ListPeers(peers) => peers.peers,
-            _ => {
-                panic!("Unexpected response")
-            }
-        };
+            cln_rpc::Response::ListPeers(peers) => Ok(peers.peers),
+            _ => Err(ClnExtensionError::RpcWrongResponse),
+        }
+        .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
         let active_peer_channels = peers
             .into_iter()
@@ -297,10 +296,10 @@ impl GatewayLightning for ClnRpcService {
                         warn!("Channel {:?} not found in graph", scid);
                         continue;
                     };
-                    channel
+                    Ok(channel)
                 }
-                _ => panic!("Unexpected response"),
-            };
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            }.map_err(|err| tonic::Status::internal(err.to_string()))?;
 
             let route_hint_hop = RouteHintHop {
                 src_node_id: peer_id.serialize().to_vec(),
@@ -353,15 +352,16 @@ impl GatewayLightning for ClnRpcService {
             .map(|response| match response {
                 cln_rpc::Response::Pay(model::PayResponse {
                     payment_preimage, ..
-                }) => PayInvoiceResponse {
+                }) => Ok(PayInvoiceResponse {
                     preimage: payment_preimage.to_vec(),
-                },
-                _ => panic!("Unexpected response from cln pay rpc"),
+                }),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
             })
             .map_err(|e| {
                 error!("cln pay rpc returned error {:?}", e);
                 tonic::Status::internal(e.to_string())
-            })?;
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         Ok(tonic::Response::new(outcome))
     }
@@ -456,6 +456,8 @@ pub enum ClnExtensionError {
     Error(#[from] anyhow::Error),
     #[error("Gateway CLN Extension Error : {0:?}")]
     RpcError(#[from] cln_rpc::RpcError),
+    #[error("Gateway CLN Extension, CLN RPC Wrong Response")]
+    RpcWrongResponse,
 }
 
 // TODO: upstream
