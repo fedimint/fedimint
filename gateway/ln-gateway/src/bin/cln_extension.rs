@@ -11,7 +11,7 @@ use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
-use cln_rpc::{model, ClnRpc};
+use cln_rpc::model;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
@@ -104,7 +104,7 @@ pub struct ClnRpcClient {}
 
 #[allow(dead_code)]
 pub struct ClnRpcService {
-    client: Arc<Mutex<ClnRpc>>,
+    socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
     task_group: TaskGroup,
 }
@@ -141,7 +141,6 @@ impl ClnRpcService {
         {
             let config = plugin.configuration();
             let socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
-            let client = ClnRpc::new(socket).await.expect("connect to ln_socket");
 
             // Parse configurations or read from
             let listen: SocketAddr = match ClnExtensionOpts::try_parse() {
@@ -163,7 +162,7 @@ impl ClnRpcService {
 
             Ok((
                 Self {
-                    client: Arc::new(Mutex::new(client)),
+                    socket,
                     task_group: TaskGroup::new(),
                     interceptor,
                 },
@@ -175,6 +174,19 @@ impl ClnRpcService {
             )))
         }
     }
+
+    /// Creates a new RPC client for a request.
+    ///
+    /// This operation is cheap enough to do it for each request since it merely
+    /// connects to a UNIX domain socket without doing any further
+    /// initialization.
+    async fn rpc_client(&self) -> Result<cln_rpc::ClnRpc, ClnExtensionError> {
+        cln_rpc::ClnRpc::new(&self.socket).await.map_err(|err| {
+            let e = format!("Could not connect to CLN RPC socket: {err}");
+            error!(e);
+            ClnExtensionError::Error(anyhow!(e))
+        })
+    }
 }
 
 #[tonic::async_trait]
@@ -183,9 +195,9 @@ impl GatewayLightning for ClnRpcService {
         &self,
         _request: tonic::Request<GetPubKeyRequest>,
     ) -> Result<tonic::Response<GetPubKeyResponse>, Status> {
-        self.client
-            .lock()
+        self.rpc_client()
             .await
+            .map_err(|e| Status::internal(e.to_string()))?
             .call(cln_rpc::Request::Getinfo(
                 model::requests::GetinfoRequest {},
             ))
@@ -218,9 +230,9 @@ impl GatewayLightning for ClnRpcService {
         } = request.into_inner();
 
         let outcome = self
-            .client
-            .lock()
+            .rpc_client()
             .await
+            .map_err(|e| Status::internal(e.to_string()))?
             .call(cln_rpc::Request::Pay(model::PayRequest {
                 bolt11: invoice,
                 amount_msat: None,
