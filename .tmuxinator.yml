@@ -34,7 +34,7 @@ windows:
           - fg
         - ln2:
           - sleep 5 # wait for bitcoind and federation
-          - export GW_CLN_EXTENSION_LISTEN_ADDRESS=127.0.0.1:10001
+          - export GW_CLN_EXTENSION_LISTEN_ADDRESS=0.0.0.0:54321
           - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 --plugin=$FM_BIN_DIR/gateway-cln-extension &
           - echo $! >> $FM_PID_FILE
           - fg

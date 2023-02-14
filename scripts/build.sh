@@ -73,7 +73,7 @@ export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:10000"
 export FM_GATEWAY_API_ADDR="http://127.0.0.1:10000"
 export FM_GATEWAY_PASSWORD="theresnosecondbest"
 
-export FM_GATEWAY_LIGHTNING_ADDR="http://127.0.0.1:10001"
+export FM_GATEWAY_LIGHTNING_ADDR="http://localhost:54321"
 
 mkdir -p $FM_GATEWAY_DATA_DIR
 
