@@ -1469,6 +1469,7 @@
 <a href="#1469" id="1469">1469</a>
 <a href="#1470" id="1470">1470</a>
 <a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::hash::Hash;
@@ -1485,7 +1486,7 @@
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -1626,6 +1627,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>MintGen {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
     <span class="kw">type </span>Decoder = MintDecoder;
 

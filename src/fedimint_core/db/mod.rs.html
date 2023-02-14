@@ -1563,7 +1563,198 @@
 <a href="#1563" id="1563">1563</a>
 <a href="#1564" id="1564">1564</a>
 <a href="#1565" id="1565">1565</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
+<a href="#1566" id="1566">1566</a>
+<a href="#1567" id="1567">1567</a>
+<a href="#1568" id="1568">1568</a>
+<a href="#1569" id="1569">1569</a>
+<a href="#1570" id="1570">1570</a>
+<a href="#1571" id="1571">1571</a>
+<a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
+<a href="#1605" id="1605">1605</a>
+<a href="#1606" id="1606">1606</a>
+<a href="#1607" id="1607">1607</a>
+<a href="#1608" id="1608">1608</a>
+<a href="#1609" id="1609">1609</a>
+<a href="#1610" id="1610">1610</a>
+<a href="#1611" id="1611">1611</a>
+<a href="#1612" id="1612">1612</a>
+<a href="#1613" id="1613">1613</a>
+<a href="#1614" id="1614">1614</a>
+<a href="#1615" id="1615">1615</a>
+<a href="#1616" id="1616">1616</a>
+<a href="#1617" id="1617">1617</a>
+<a href="#1618" id="1618">1618</a>
+<a href="#1619" id="1619">1619</a>
+<a href="#1620" id="1620">1620</a>
+<a href="#1621" id="1621">1621</a>
+<a href="#1622" id="1622">1622</a>
+<a href="#1623" id="1623">1623</a>
+<a href="#1624" id="1624">1624</a>
+<a href="#1625" id="1625">1625</a>
+<a href="#1626" id="1626">1626</a>
+<a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a>
+<a href="#1631" id="1631">1631</a>
+<a href="#1632" id="1632">1632</a>
+<a href="#1633" id="1633">1633</a>
+<a href="#1634" id="1634">1634</a>
+<a href="#1635" id="1635">1635</a>
+<a href="#1636" id="1636">1636</a>
+<a href="#1637" id="1637">1637</a>
+<a href="#1638" id="1638">1638</a>
+<a href="#1639" id="1639">1639</a>
+<a href="#1640" id="1640">1640</a>
+<a href="#1641" id="1641">1641</a>
+<a href="#1642" id="1642">1642</a>
+<a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
+<a href="#1659" id="1659">1659</a>
+<a href="#1660" id="1660">1660</a>
+<a href="#1661" id="1661">1661</a>
+<a href="#1662" id="1662">1662</a>
+<a href="#1663" id="1663">1663</a>
+<a href="#1664" id="1664">1664</a>
+<a href="#1665" id="1665">1665</a>
+<a href="#1666" id="1666">1666</a>
+<a href="#1667" id="1667">1667</a>
+<a href="#1668" id="1668">1668</a>
+<a href="#1669" id="1669">1669</a>
+<a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
+<a href="#1693" id="1693">1693</a>
+<a href="#1694" id="1694">1694</a>
+<a href="#1695" id="1695">1695</a>
+<a href="#1696" id="1696">1696</a>
+<a href="#1697" id="1697">1697</a>
+<a href="#1698" id="1698">1698</a>
+<a href="#1699" id="1699">1699</a>
+<a href="#1700" id="1700">1700</a>
+<a href="#1701" id="1701">1701</a>
+<a href="#1702" id="1702">1702</a>
+<a href="#1703" id="1703">1703</a>
+<a href="#1704" id="1704">1704</a>
+<a href="#1705" id="1705">1705</a>
+<a href="#1706" id="1706">1706</a>
+<a href="#1707" id="1707">1707</a>
+<a href="#1708" id="1708">1708</a>
+<a href="#1709" id="1709">1709</a>
+<a href="#1710" id="1710">1710</a>
+<a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
+<a href="#1737" id="1737">1737</a>
+<a href="#1738" id="1738">1738</a>
+<a href="#1739" id="1739">1739</a>
+<a href="#1740" id="1740">1740</a>
+<a href="#1741" id="1741">1741</a>
+<a href="#1742" id="1742">1742</a>
+<a href="#1743" id="1743">1743</a>
+<a href="#1744" id="1744">1744</a>
+<a href="#1745" id="1745">1745</a>
+<a href="#1746" id="1746">1746</a>
+<a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::pin::Pin;
@@ -1573,10 +1764,12 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>futures::{stream, Stream, StreamExt};
+<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>strum_macros::EnumIter;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::{debug, instrument, trace, warn};
+<span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::core::ModuleInstanceId;
+<span class="kw">use </span><span class="kw">crate</span>::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::fmt_utils::AbbreviateHexBytes;
 
@@ -2305,7 +2498,7 @@
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>impl_db_prefix_const {
     (key = <span class="macro-nonterminal">$key</span>:ty, value = <span class="macro-nonterminal">$val</span>:ty, db_prefix = <span class="macro-nonterminal">$db_prefix</span>:expr $(, query_prefix = <span class="macro-nonterminal">$query_prefix</span>:ty)* $(,)<span class="question-mark">?</span>) =&gt; {
-        <span class="kw">impl </span>fedimint_core::db::DatabaseKeyPrefixConst <span class="kw">for </span><span class="macro-nonterminal">$key </span>{
+        <span class="kw">impl </span><span class="macro-nonterminal">$crate::db::DatabaseKeyPrefixConst </span><span class="kw">for </span><span class="macro-nonterminal">$key </span>{
             <span class="kw">const </span>DB_PREFIX: u8 = <span class="macro-nonterminal">$db_prefix </span><span class="kw">as </span>u8;
             <span class="kw">type </span>Key = <span class="self">Self</span>;
             <span class="kw">type </span>Value = <span class="macro-nonterminal">$val</span>;
@@ -2319,6 +2512,46 @@
             }
         )*
     };
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>DatabaseVersionKey;
+
+<span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>DatabaseVersionKeyPrefix;
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize, Clone, PartialOrd, Ord, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>DatabaseVersion(<span class="kw">pub </span>u64);
+
+<span class="macro">impl_db_prefix_const!</span>(
+    key = DatabaseVersionKey,
+    value = DatabaseVersion,
+    db_prefix = DbKeyPrefix::DatabaseVersion,
+    query_prefix = DatabaseVersionKeyPrefix
+);
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DatabaseVersion {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>)
+    }
+}
+
+<span class="kw">impl </span>DatabaseVersion {
+    <span class="kw">pub fn </span>increment(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.<span class="number">0 </span>+= <span class="number">1</span>;
+    }
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{self:?}&quot;</span>)
+    }
+}
+
+<span class="attr">#[repr(u8)]
+#[derive(Clone, EnumIter, Debug)]
+</span><span class="kw">pub enum </span>DbKeyPrefix {
+    DatabaseVersion = <span class="number">0x50</span>,
 }
 
 <span class="attr">#[derive(Debug, Error)]
@@ -2396,11 +2629,77 @@
     };
 }
 
-<span class="kw">mod </span>tests {
-    <span class="kw">use </span>futures::StreamExt;
+<span class="doccomment">/// MigrationMap is a BTreeMap that maps DatabaseVersions to async functions.
+/// These functions are expected to &quot;migrate&quot; the database from the keyed
+/// DatabaseVersion to DatabaseVersion + 1.
+</span><span class="kw">pub type </span>MigrationMap&lt;<span class="lifetime">&#39;a</span>&gt; = BTreeMap&lt;
+    DatabaseVersion,
+    <span class="kw">for</span>&lt;<span class="lifetime">&#39;b</span>&gt; <span class="kw">fn</span>(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;b</span>&gt;&gt;,
+&gt;;
 
-    <span class="kw">use </span><span class="kw">super</span>::Database;
+<span class="doccomment">/// `apply_migrations` iterates from the on disk database version for the module
+/// up to `target_db_version` and executes all of the migrations that exist in
+/// the `MigrationMap`. Each migration in `MigrationMap` updates the database to
+/// have the correct on-disk structures that the code is expecting. The entire
+/// migration process is atomic (i.e migration from 0-&gt;1 and 1-&gt;2 happen
+/// atomically). This function is called before the module is initialized and as
+/// long as the correct migrations are supplied in `MigrationMap`, the module
+/// will be able to read and write from the database successfully.
+</span><span class="kw">pub async fn </span>apply_migrations&lt;<span class="lifetime">&#39;a</span>&gt;(
+    db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
+    kind: ModuleKind,
+    target_db_version: DatabaseVersion,
+    migrations: MigrationMap&lt;<span class="lifetime">&#39;a</span>&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+    <span class="kw">let </span>disk_version = dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>db_version = <span class="kw">if let </span><span class="prelude-val">Some</span>(disk_version) = disk_version {
+        <span class="kw">let </span><span class="kw-2">mut </span>current_db_version = disk_version;
+
+        <span class="kw">if </span>current_db_version &gt; target_db_version {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="macro">format!</span>(
+                <span class="string">&quot;On disk database version for module {kind} was higher than the code database version.&quot;
+            </span>)));
+        }
+
+        <span class="kw">while </span>current_db_version &lt; target_db_version {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(migration) = migrations.get(<span class="kw-2">&amp;</span>current_db_version) {
+                migration(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+            } <span class="kw">else </span>{
+                <span class="macro">panic!</span>(<span class="string">&quot;Missing migration for version {current_db_version}&quot;</span>);
+            }
+
+            current_db_version.increment();
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>current_db_version)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
+        current_db_version
+    } <span class="kw">else </span>{
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>target_db_version)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        target_db_version
+    };
+
+    dbtx.commit_tx().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">info!</span>(<span class="string">&quot;{} module db version: {}&quot;</span>, kind, db_version);
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="attr">#[allow(unused_imports)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>futures::{FutureExt, StreamExt};
+
+    <span class="kw">use super</span>::{
+        apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+        MigrationMap,
+    };
+    <span class="kw">use </span><span class="kw">crate</span>::core::ModuleKind;
+    <span class="kw">use </span><span class="kw">crate</span>::db::mem_impl::MemDatabase;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+    <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
     <span class="attr">#[repr(u8)]
     #[derive(Clone)]
@@ -2421,6 +2720,19 @@
         value = TestVal,
         db_prefix = TestDbKeyPrefix::Test,
         query_prefix = DbPrefixTestPrefix
+    );
+
+    <span class="attr">#[derive(Debug, Encodable, Decodable)]
+    </span><span class="kw">struct </span>TestKeyV0(u64, u64);
+
+    <span class="attr">#[derive(Debug, Encodable, Decodable)]
+    </span><span class="kw">struct </span>DbPrefixTestPrefixV0;
+
+    <span class="macro">impl_db_prefix_const!</span>(
+        key = TestKeyV0,
+        value = TestVal,
+        db_prefix = TestDbKeyPrefix::Test,
+        query_prefix = DbPrefixTestPrefixV0
     );
 
     <span class="attr">#[derive(Debug, Encodable, Decodable)]
@@ -3050,6 +3362,74 @@
         <span class="macro">assert_eq!</span>(test_dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">101</span>)).<span class="kw">await</span>.unwrap(), <span class="prelude-val">None</span>);
 
         test_dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+    }
+
+    <span class="attr">#[cfg(test)]
+    #[tokio::test]
+    </span><span class="kw">pub async fn </span>verify_test_migration() {
+        <span class="comment">// Insert a bunch of old dummy data that needs to be migrated to a new version
+        </span><span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        <span class="kw">let </span>expected_test_keys_size: usize = <span class="number">100</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..expected_test_keys_size {
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>TestKeyV0(i <span class="kw">as </span>u64, (i + <span class="number">1</span>) <span class="kw">as </span>u64), <span class="kw-2">&amp;</span>TestVal(i <span class="kw">as </span>u64))
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        }
+
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DatabaseVersionKey, <span class="kw-2">&amp;</span>DatabaseVersion(<span class="number">0</span>))
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
+
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| {
+            migrate_test_db_version_0(dbtx).boxed()
+        });
+
+        apply_migrations(
+            <span class="kw-2">&amp;</span>db,
+            ModuleKind::from_static_str(<span class="string">&quot;TestModule&quot;</span>),
+            DatabaseVersion(<span class="number">1</span>),
+            migrations,
+        )
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;Error applying migrations for TestModule&quot;</span>);
+
+        <span class="comment">// Verify that the migrations completed successfully
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+
+        <span class="comment">// Verify Dummy module migration
+        </span><span class="kw">let </span>test_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+            .<span class="kw">await
+            </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+        <span class="kw">let </span>test_keys_size = test_keys.len();
+        <span class="macro">assert_eq!</span>(test_keys_size, expected_test_keys_size);
+        <span class="kw">for </span>test_key <span class="kw">in </span>test_keys {
+            <span class="kw">let </span>(key, val) = test_key.unwrap();
+            <span class="macro">assert_eq!</span>(key.<span class="number">0</span>, val.<span class="number">0 </span>+ <span class="number">1</span>);
+        }
+    }
+
+    <span class="attr">#[allow(dead_code)]
+    </span><span class="kw">async fn </span>migrate_test_db_version_0&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+        <span class="kw">let </span>example_keys_v0 = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefixV0)
+            .<span class="kw">await
+            </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefixV0).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>pair <span class="kw">in </span>example_keys_v0 {
+            <span class="kw">let </span>(key, val) = pair<span class="question-mark">?</span>;
+            <span class="kw">let </span>key_v2 = TestKey(key.<span class="number">1</span>);
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key_v2, <span class="kw-2">&amp;</span>val).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="attr">#[cfg(test)]

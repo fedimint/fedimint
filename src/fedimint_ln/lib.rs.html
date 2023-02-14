@@ -1208,6 +1208,7 @@
 <a href="#1208" id="1208">1208</a>
 <a href="#1209" id="1209">1209</a>
 <a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -1238,7 +1239,7 @@
     TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
@@ -1467,6 +1468,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>LightningGen {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
     <span class="kw">type </span>Decoder = LightningDecoder;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningDecoder {

@@ -761,6 +761,36 @@
 <a href="#761" id="761">761</a>
 <a href="#762" id="762">762</a>
 <a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -783,7 +813,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
-<span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseTransaction};
+<span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
 <span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
@@ -1037,6 +1067,8 @@
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
 
+    <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion;
+
     <span class="doccomment">/// Initialize the [`DynServerModule`] instance from its config
     </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1045,6 +1077,11 @@
         env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt;;
+
+    <span class="doccomment">/// Retreives the `MigrationMap` from the module to be applied to the
+    /// database before the module is initialized. The `MigrationMap` is
+    /// indexed on the from version.
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap;
 
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1162,6 +1199,14 @@
 </span><span class="kw">pub trait </span>ModuleGen: Debug + Sized {
     <span class="kw">const </span>KIND: ModuleKind;
 
+    <span class="doccomment">/// This represents the module&#39;s database version that the current code is
+    /// compatible with. It is important to increment this value whenever a
+    /// key or a value that is persisted to the database within the module
+    /// changes. It is also important to add the corresponding
+    /// migration function in `get_database_migrations` which should define how
+    /// to move from the previous database version to the current version.
+    </span><span class="kw">const </span>DATABASE_VERSION: DatabaseVersion;
+
     <span class="kw">type </span>Decoder: Decoder;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
@@ -1187,6 +1232,13 @@
         env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt;;
+
+    <span class="doccomment">/// Retreives the `MigrationMap` from the module to be applied to the
+    /// database before the module is initialized. The `MigrationMap` is
+    /// indexed on the from version.
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
+        MigrationMap::new()
+    }
 
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1231,6 +1283,10 @@
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::KIND
     }
 
+    <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::DATABASE_VERSION
+    }
+
     <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; Vec&lt;ModuleConsensusVersion&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::versions(<span class="self">self</span>, core).to_vec()
     }
@@ -1244,6 +1300,10 @@
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::init(<span class="self">self</span>, cfg, db, env, task_group).<span class="kw">await
     </span>}
+
+    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::get_database_migrations(<span class="self">self</span>)
+    }
 
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

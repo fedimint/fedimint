@@ -1,4 +1,5 @@
 (function() {var implementors = {
+"fedimint_core":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_core/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_core::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_dummy":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_dummy/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_dummy::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_ln":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_ln/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_ln::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_mint":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_mint/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_mint::db::DbKeyPrefix\">DbKeyPrefix</a>"]],

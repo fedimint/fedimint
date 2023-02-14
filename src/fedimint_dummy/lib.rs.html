@@ -330,6 +330,11 @@
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt;
@@ -343,7 +348,7 @@
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -356,10 +361,12 @@
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
+<span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::{DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+<span class="kw">use </span><span class="kw">crate</span>::db::migrate_dummy_db_version_0;
 <span class="kw">use </span><span class="kw">crate</span>::serde_json::Value;
 
 <span class="kw">pub mod </span>common;
@@ -386,6 +393,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ModuleGen <span class="kw">for </span>DummyConfigGenerator {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
     <span class="kw">type </span>Decoder = DummyDecoder;
 
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DummyDecoder {
@@ -406,15 +414,21 @@
         <span class="prelude-val">Ok</span>(Dummy::new(cfg.to_typed()<span class="question-mark">?</span>).into())
     }
 
+    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
+
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| {
+            migrate_dummy_db_version_0(dbtx).boxed()
+        });
+
+        migrations
+    }
+
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
-        <span class="kw">let </span>_params = params
-            .get::&lt;DummyConfigGenParams&gt;()
-            .expect(<span class="string">&quot;Invalid mint params&quot;</span>);
-
         <span class="kw">let </span>mint_cfg: BTreeMap&lt;<span class="kw">_</span>, DummyConfig&gt; = peers
             .iter()
             .map(|<span class="kw-2">&amp;</span>peer| {
@@ -440,13 +454,9 @@
         _our_id: <span class="kw-2">&amp;</span>PeerId,
         _instance_id: ModuleInstanceId,
         _peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
-        <span class="kw">let </span>_params = params
-            .get::&lt;DummyConfigGenParams&gt;()
-            .expect(<span class="string">&quot;Invalid mint params&quot;</span>);
-
         <span class="kw">let </span>server = DummyConfig {
             private: DummyConfigPrivate {
                 something_private: <span class="number">3</span>,
