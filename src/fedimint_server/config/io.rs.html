@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/io.rs`."><title>io.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-0ef3deca4ed45ad8.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-a0090c8b1ced384f.css"><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-bfa4087bf2db080e.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/io.rs`."><title>io.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -224,6 +224,13 @@
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -284,7 +291,7 @@
     p2p_url: Url,
     api_url: Url,
     guardian_name: String,
-    password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    password: <span class="kw-2">&amp;</span>str,
 ) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>salt: [u8; <span class="number">16</span>] = rand::random();
     fs::write(dir_out_path.join(SALT_FILE), salt.to_hex())<span class="question-mark">?</span>;
@@ -299,7 +306,7 @@
     dir_out_path: <span class="kw-2">&amp;</span>Path,
     federation_name: String,
     certs: Vec&lt;String&gt;,
-    pk: rustls::PrivateKey,
+    password: <span class="kw-2">&amp;</span>str,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     code_version: <span class="kw-2">&amp;</span>str,
     module_params: ConfigGenParams,
@@ -310,6 +317,8 @@
         peers.insert(PeerId::from(idx <span class="kw">as </span>u16), parse_peer_params(cert)<span class="question-mark">?</span>);
     }
 
+    <span class="kw">let </span>key = get_key(password, dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
+    <span class="kw">let </span>tls_pk = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK))<span class="question-mark">?</span>;
     <span class="kw">let </span>cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))<span class="question-mark">?</span>;
 
     <span class="kw">let </span>our_params = parse_peer_params(cert_string)<span class="question-mark">?</span>;
@@ -322,7 +331,7 @@
     <span class="kw">let </span>params = ServerConfigParams::gen_params(
         bind_p2p,
         bind_api,
-        pk,
+        rustls::PrivateKey(tls_pk),
         our_id,
         <span class="kw-2">&amp;</span>peers,
         federation_name,
@@ -384,23 +393,25 @@
 }
 
 <span class="doccomment">/// Reads the server from the local, private, and consensus cfg files
-/// (private file encrypted)
-</span><span class="kw">pub fn </span>read_server_configs(key: <span class="kw-2">&amp;</span>LessSafeKey, path: PathBuf) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+</span><span class="kw">pub fn </span>read_server_config(password: <span class="kw-2">&amp;</span>str, path: PathBuf) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+    <span class="kw">let </span>salt_path = path.join(SALT_FILE);
+    <span class="kw">let </span>key = get_key(password, salt_path)<span class="question-mark">?</span>;
+
     <span class="prelude-val">Ok</span>(ServerConfig {
         consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>,
         local: plaintext_json_read(path.join(LOCAL_CONFIG))<span class="question-mark">?</span>,
-        private: encrypted_json_read(key, path.join(PRIVATE_CONFIG))<span class="question-mark">?</span>,
+        private: encrypted_json_read(<span class="kw-2">&amp;</span>key, path.join(PRIVATE_CONFIG))<span class="question-mark">?</span>,
     })
 }
 
 <span class="doccomment">/// Reads a plaintext json file into a struct
-</span><span class="kw">pub fn </span>plaintext_json_read&lt;T: Serialize + DeserializeOwned&gt;(path: PathBuf) -&gt; anyhow::Result&lt;T&gt; {
+</span><span class="kw">fn </span>plaintext_json_read&lt;T: Serialize + DeserializeOwned&gt;(path: PathBuf) -&gt; anyhow::Result&lt;T&gt; {
     <span class="kw">let </span>string = fs::read_to_string(path.with_extension(JSON_EXT))<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>string)<span class="question-mark">?</span>)
 }
 
 <span class="doccomment">/// Reads an encrypted json file into a struct
-</span><span class="kw">pub fn </span>encrypted_json_read&lt;T: Serialize + DeserializeOwned&gt;(
+</span><span class="kw">fn </span>encrypted_json_read&lt;T: Serialize + DeserializeOwned&gt;(
     key: <span class="kw-2">&amp;</span>LessSafeKey,
     path: PathBuf,
 ) -&gt; anyhow::Result&lt;T&gt; {
@@ -409,13 +420,15 @@
     <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>string)<span class="question-mark">?</span>)
 }
 
-<span class="doccomment">/// Writes the server into plaintext json configuration files
-/// (private keys not serialized)
-</span><span class="kw">pub fn </span>write_nonprivate_configs(
+<span class="doccomment">/// Writes the server into configuration files (private keys encrypted)
+</span><span class="kw">pub fn </span>write_server_config(
     server: <span class="kw-2">&amp;</span>ServerConfig,
     path: PathBuf,
+    password: <span class="kw-2">&amp;</span>str,
     module_config_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry,
 ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>key = get_key(password, path.join(SALT_FILE))<span class="question-mark">?</span>;
+
     <span class="kw">let </span>client_config = server
         .consensus
         .to_config_response(module_config_gens)
@@ -426,11 +439,12 @@
         <span class="kw-2">&amp;</span>WsClientConnectInfo::from_honest_peers(<span class="kw-2">&amp;</span>client_config),
         path.join(CLIENT_CONNECT_FILE),
     )<span class="question-mark">?</span>;
-    plaintext_json_write(<span class="kw-2">&amp;</span>client_config, path.join(CLIENT_CONFIG))
+    plaintext_json_write(<span class="kw-2">&amp;</span>client_config, path.join(CLIENT_CONFIG))<span class="question-mark">?</span>;
+    encrypted_json_write(<span class="kw-2">&amp;</span>server.private, <span class="kw-2">&amp;</span>key, path.join(PRIVATE_CONFIG))
 }
 
 <span class="doccomment">/// Writes struct into a plaintext json file
-</span><span class="kw">pub fn </span>plaintext_json_write&lt;T: Serialize + DeserializeOwned&gt;(
+</span><span class="kw">fn </span>plaintext_json_write&lt;T: Serialize + DeserializeOwned&gt;(
     obj: <span class="kw-2">&amp;</span>T,
     path: PathBuf,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -442,7 +456,7 @@
 }
 
 <span class="doccomment">/// Writes struct into an encrypted json file
-</span><span class="kw">pub fn </span>encrypted_json_write&lt;T: Serialize + DeserializeOwned&gt;(
+</span><span class="kw">fn </span>encrypted_json_write&lt;T: Serialize + DeserializeOwned&gt;(
     obj: <span class="kw-2">&amp;</span>T,
     key: <span class="kw-2">&amp;</span>LessSafeKey,
     path: PathBuf,
@@ -451,4 +465,4 @@
     encrypted_write(bytes, key, path.with_extension(ENCRYPTED_EXT))
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (5b8f28453 2023-02-12)" data-search-js="search-28136cea55c34037.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (065852def 2023-02-13)" data-search-js="search-abe1d547ad11c273.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
