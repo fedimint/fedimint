@@ -20,6 +20,16 @@ use super::*;
 // <https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48>
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
 
+// <https://blockstream.info/api/block-height/0>
+const MAINNET_GENESIS_BLOCK_HASH: &str =
+    "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+// <https://blockstream.info/testnet/api/block-height/0>
+const TESTNET_GENESIS_BLOCK_HASH: &str =
+    "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943";
+// <https://mempool.space/signet/api/block-height/0>
+const SIGNET_GENESIS_BLOCK_HASH: &str =
+    "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6";
+
 pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
     Ok((
         (if let Some(port) = url.port() {
@@ -219,11 +229,9 @@ impl IBitcoindRpc for ElectrumClient {
             self.0.server_features().map_err(anyhow::Error::from)
         })?;
         Ok(match resp.genesis_hash.to_hex().as_str() {
-            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" => Network::Bitcoin,
-            // https://blockstream.info/testnet/block/000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943
-            "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943" => Network::Testnet,
-            // https://explorer.bc-2.jp/block/00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6
-            "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6" => Network::Signet,
+            MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
+            TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
+            SIGNET_GENESIS_BLOCK_HASH => Network::Signet,
             hash => {
                 warn!("Unknown genesis hash {hash} - assuming regtest");
                 Network::Regtest
@@ -315,7 +323,7 @@ impl EsploraClient {
 
 impl fmt::Debug for EsploraClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("EsploraClient")
+        f.write_fmt(format_args!("EsploraClient [url: {}]", self.0.url()))
     }
 }
 
@@ -329,12 +337,10 @@ impl IBitcoindRpc for EsploraClient {
         let genesis_height: u32 = 0;
         let genesis_hash = self.0.get_block_hash(genesis_height).await?;
 
-        // TODO: How could we extract the BlockHash to a constant, and use something
-        // like the `bitcoin::blockdata::constants::genesis_block` from rust-bitcoin ?
         let network = match genesis_hash.to_hex().as_str() {
-            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f" => Network::Bitcoin,
-            "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943" => Network::Testnet,
-            "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6" => Network::Signet,
+            MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
+            TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
+            SIGNET_GENESIS_BLOCK_HASH => Network::Signet,
             hash => {
                 warn!("Unknown genesis hash {hash} - assuming regtest");
                 Network::Regtest
