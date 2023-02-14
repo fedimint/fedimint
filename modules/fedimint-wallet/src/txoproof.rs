@@ -9,7 +9,7 @@ use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use miniscript::{Descriptor, TranslatePk};
-use secp256k1::{Secp256k1, Verification};
+use secp256k1::{Secp256k1, Signing, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
@@ -127,7 +127,7 @@ impl PegInProof {
         })
     }
 
-    pub fn verify<C: Verification>(
+    pub fn verify<C: Verification + Signing>(
         &self,
         secp: &Secp256k1<C>,
         untweaked_pegin_descriptor: &Descriptor<CompressedPublicKey>,
@@ -177,13 +177,17 @@ impl PegInProof {
 }
 
 impl Tweakable for Descriptor<CompressedPublicKey> {
-    fn tweak<Ctx: Verification, Ctr: Contract>(&self, tweak: &Ctr, secp: &Secp256k1<Ctx>) -> Self {
+    fn tweak<Ctx: Verification + Signing, Ctr: Contract>(
+        &self,
+        tweak: &Ctr,
+        secp: &Secp256k1<Ctx>,
+    ) -> Self {
         struct CompressedPublicKeyTranslator<'t, 's, Ctx: Verification, Ctr: Contract> {
             tweak: &'t Ctr,
             secp: &'s Secp256k1<Ctx>,
         }
 
-        impl<'t, 's, Ctx: Verification, Ctr: Contract>
+        impl<'t, 's, Ctx: Verification + Signing, Ctr: Contract>
             miniscript::PkTranslator<CompressedPublicKey, CompressedPublicKey, Infallible>
             for CompressedPublicKeyTranslator<'t, 's, Ctx, Ctr>
         {

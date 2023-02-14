@@ -6,6 +6,7 @@ use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::PublicKey;
 use fedimint_core::encoding::Encodable;
 use miniscript::{MiniscriptKey, ToPublicKey};
+use secp256k1::Signing;
 use serde::{Deserialize, Serialize};
 
 use crate::tweakable::{Contract, Tweakable};
@@ -89,7 +90,11 @@ impl FromStr for CompressedPublicKey {
 }
 
 impl Tweakable for CompressedPublicKey {
-    fn tweak<Ctx: Verification, Ctr: Contract>(&self, tweak: &Ctr, secp: &Secp256k1<Ctx>) -> Self {
+    fn tweak<Ctx: Verification + Signing, Ctr: Contract>(
+        &self,
+        tweak: &Ctr,
+        secp: &Secp256k1<Ctx>,
+    ) -> Self {
         CompressedPublicKey {
             key: self.key.tweak(tweak, secp),
         }
