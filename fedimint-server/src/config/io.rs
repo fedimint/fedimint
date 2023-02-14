@@ -58,7 +58,7 @@ pub fn create_cert(
     p2p_url: Url,
     api_url: Url,
     guardian_name: String,
-    password: Option<String>,
+    password: &str,
 ) -> anyhow::Result<String> {
     let salt: [u8; 16] = rand::random();
     fs::write(dir_out_path.join(SALT_FILE), salt.to_hex())?;
@@ -73,7 +73,7 @@ pub async fn run_dkg(
     dir_out_path: &Path,
     federation_name: String,
     certs: Vec<String>,
-    pk: rustls::PrivateKey,
+    password: &str,
     task_group: &mut TaskGroup,
     code_version: &str,
     module_params: ConfigGenParams,
@@ -84,6 +84,8 @@ pub async fn run_dkg(
         peers.insert(PeerId::from(idx as u16), parse_peer_params(cert)?);
     }
 
+    let key = get_key(password, dir_out_path.join(SALT_FILE))?;
+    let tls_pk = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
     let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))?;
 
     let our_params = parse_peer_params(cert_string)?;
@@ -96,7 +98,7 @@ pub async fn run_dkg(
     let params = ServerConfigParams::gen_params(
         bind_p2p,
         bind_api,
-        pk,
+        rustls::PrivateKey(tls_pk),
         our_id,
         &peers,
         federation_name,
@@ -158,23 +160,25 @@ fn gen_tls(
 }
 
 /// Reads the server from the local, private, and consensus cfg files
-/// (private file encrypted)
-pub fn read_server_configs(key: &LessSafeKey, path: PathBuf) -> anyhow::Result<ServerConfig> {
+pub fn read_server_config(password: &str, path: PathBuf) -> anyhow::Result<ServerConfig> {
+    let salt_path = path.join(SALT_FILE);
+    let key = get_key(password, salt_path)?;
+
     Ok(ServerConfig {
         consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))?,
         local: plaintext_json_read(path.join(LOCAL_CONFIG))?,
-        private: encrypted_json_read(key, path.join(PRIVATE_CONFIG))?,
+        private: encrypted_json_read(&key, path.join(PRIVATE_CONFIG))?,
     })
 }
 
 /// Reads a plaintext json file into a struct
-pub fn plaintext_json_read<T: Serialize + DeserializeOwned>(path: PathBuf) -> anyhow::Result<T> {
+fn plaintext_json_read<T: Serialize + DeserializeOwned>(path: PathBuf) -> anyhow::Result<T> {
     let string = fs::read_to_string(path.with_extension(JSON_EXT))?;
     Ok(serde_json::from_str(&string)?)
 }
 
 /// Reads an encrypted json file into a struct
-pub fn encrypted_json_read<T: Serialize + DeserializeOwned>(
+fn encrypted_json_read<T: Serialize + DeserializeOwned>(
     key: &LessSafeKey,
     path: PathBuf,
 ) -> anyhow::Result<T> {
@@ -183,13 +187,15 @@ pub fn encrypted_json_read<T: Serialize + DeserializeOwned>(
     Ok(serde_json::from_str(&string)?)
 }
 
-/// Writes the server into plaintext json configuration files
-/// (private keys not serialized)
-pub fn write_nonprivate_configs(
+/// Writes the server into configuration files (private keys encrypted)
+pub fn write_server_config(
     server: &ServerConfig,
     path: PathBuf,
+    password: &str,
     module_config_gens: &ModuleGenRegistry,
 ) -> anyhow::Result<()> {
+    let key = get_key(password, path.join(SALT_FILE))?;
+
     let client_config = server
         .consensus
         .to_config_response(module_config_gens)
@@ -200,11 +206,12 @@ pub fn write_nonprivate_configs(
         &WsClientConnectInfo::from_honest_peers(&client_config),
         path.join(CLIENT_CONNECT_FILE),
     )?;
-    plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))
+    plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))?;
+    encrypted_json_write(&server.private, &key, path.join(PRIVATE_CONFIG))
 }
 
 /// Writes struct into a plaintext json file
-pub fn plaintext_json_write<T: Serialize + DeserializeOwned>(
+fn plaintext_json_write<T: Serialize + DeserializeOwned>(
     obj: &T,
     path: PathBuf,
 ) -> anyhow::Result<()> {
@@ -216,7 +223,7 @@ pub fn plaintext_json_write<T: Serialize + DeserializeOwned>(
 }
 
 /// Writes struct into an encrypted json file
-pub fn encrypted_json_write<T: Serialize + DeserializeOwned>(
+fn encrypted_json_write<T: Serialize + DeserializeOwned>(
     obj: &T,
     key: &LessSafeKey,
     path: PathBuf,

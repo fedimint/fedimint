@@ -2,13 +2,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use aead::get_key;
 use clap::Parser;
 use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_server::config::io::{
-    read_server_configs, DB_FILE, JSON_EXT, LOCAL_CONFIG, SALT_FILE,
-};
+use fedimint_server::config::io::{read_server_config, DB_FILE, JSON_EXT, LOCAL_CONFIG};
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimintd::ui::{run_ui, UiMessage};
@@ -28,7 +25,7 @@ pub struct ServerOpts {
     pub data_dir: PathBuf,
     /// Password to encrypt sensitive config files
     #[arg(env = "FM_PASSWORD")]
-    pub password: Option<String>,
+    pub password: String,
     /// Port to run admin UI on
     #[arg(long = "listen-ui", env = "FM_LISTEN_UI")]
     pub listen_ui: Option<SocketAddr>,
@@ -142,18 +139,10 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
 
     // Run admin UI if a socket address was given for it
     if let Some(listen_ui) = opts.listen_ui {
-        // Make sure password is set
-        let password = match opts.password.clone() {
-            Some(password) => password,
-            None => {
-                eprintln!("fedimintd admin UI requires FM_PASSWORD environment variable to be set");
-                std::process::exit(1);
-            }
-        };
-
         // Spawn admin UI
         let data_dir = opts.data_dir.clone();
         let ui_task_group = task_group.make_subgroup().await;
+        let password = opts.password.clone();
         task_group
             .spawn("admin-ui", move |_| async move {
                 run_ui(
@@ -186,9 +175,7 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
 
     info!("Starting consensus");
 
-    let salt_path = opts.data_dir.join(SALT_FILE);
-    let key = get_key(opts.password, salt_path)?;
-    let cfg = read_server_configs(&key, opts.data_dir.clone())?;
+    let cfg = read_server_config(&opts.password, opts.data_dir.clone())?;
 
     let decoders = module_registry().decoders(cfg.iter_module_instances())?;
 

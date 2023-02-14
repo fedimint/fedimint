@@ -49,7 +49,7 @@ enum DbCommand {
     Dump {
         cfg_dir: PathBuf,
         #[arg(env = "FM_PASSWORD")]
-        password: Option<String>,
+        password: String,
         #[arg(required = false)]
         modules: Option<String>,
         #[arg(required = false)]

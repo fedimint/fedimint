@@ -12,7 +12,7 @@ use fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
 use fedimint_rocksdb::RocksDbReadOnly;
-use fedimint_server::config::io::{read_server_configs, SALT_FILE};
+use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::db as ConsensusRange;
 use fedimint_wallet::WalletGen;
@@ -50,7 +50,7 @@ impl<'a> DatabaseDump<'a> {
     pub fn new(
         cfg_dir: PathBuf,
         data_dir: String,
-        password: Option<String>,
+        password: String,
         modules: Vec<String>,
         prefixes: Vec<String>,
     ) -> DatabaseDump<'a> {
@@ -80,9 +80,7 @@ impl<'a> DatabaseDump<'a> {
             DynModuleGen::from(LightningGen),
         ]);
 
-        let salt_path = cfg_dir.join(SALT_FILE);
-        let key = aead::get_key(password, salt_path).unwrap();
-        let cfg = read_server_configs(&key, cfg_dir).unwrap();
+        let cfg = read_server_config(&password, cfg_dir).unwrap();
         let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
         let dbtx = DatabaseTransaction::new(Box::new(read_only), decoders);
 
