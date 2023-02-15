@@ -43,3 +43,41 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    use std::time::Duration;
+
+    use anyhow::anyhow;
+
+    use super::retry;
+
+    #[tokio::test]
+    async fn retry_succeed_with_one_attempt() {
+        let counter = AtomicU8::new(0);
+        let closure = || async {
+            counter.fetch_add(1, Ordering::SeqCst);
+            // always return a success
+            Ok(42)
+        };
+
+        let _ = retry("Run once".to_string(), closure, Duration::ZERO, 3).await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_fail_with_three_attempts() {
+        let counter = AtomicU8::new(0);
+        let closure = || async {
+            counter.fetch_add(1, Ordering::SeqCst);
+            // always fail
+            Err::<(), anyhow::Error>(anyhow!("42"))
+        };
+
+        let _ = retry("Run 3 times".to_string(), closure, Duration::ZERO, 3).await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
+    }
+}
