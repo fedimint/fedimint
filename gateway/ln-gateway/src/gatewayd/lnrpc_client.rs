@@ -5,7 +5,6 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_core::dyn_newtype_define;
 use futures::stream::BoxStream;
-use mint_client::modules::ln::route_hints::RouteHint;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::error;
@@ -13,16 +12,11 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyRequest, GetPubKeyResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
+    GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
 use crate::{LnGatewayError, Result};
-
-// TODO: Issue 1554: Define gatewaylnpc spec for getting route hints
-pub struct GetRouteHintsResponse {
-    pub route_hints: Vec<RouteHint>,
-}
 
 pub type HtlcStream<'a> =
     BoxStream<'a, std::result::Result<SubscribeInterceptHtlcsResponse, tonic::Status>>;
@@ -33,7 +27,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn pubkey(&self) -> Result<GetPubKeyResponse>;
 
     /// Get route hints to the lightning node
-    async fn route_hints(&self) -> Result<GetRouteHintsResponse>;
+    async fn routehints(&self) -> Result<GetRouteHintsResponse>;
 
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
@@ -92,7 +86,7 @@ impl NetworkLnRpcClient {
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
     async fn pubkey(&self) -> Result<GetPubKeyResponse> {
-        let req = Request::new(GetPubKeyRequest {});
+        let req = Request::new(EmptyRequest {});
 
         let mut client = self.client.clone();
         let res = client.get_pub_key(req).await?;
@@ -100,8 +94,13 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(res.into_inner())
     }
 
-    async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
-        unimplemented!()
+    async fn routehints(&self) -> Result<GetRouteHintsResponse> {
+        let req = Request::new(EmptyRequest {});
+
+        let mut client = self.client.clone();
+        let res = client.get_route_hints(req).await?;
+
+        Ok(res.into_inner())
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {

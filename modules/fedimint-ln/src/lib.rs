@@ -1142,7 +1142,7 @@ pub mod route_hints {
         pub src_node_id: PublicKey,
         /// The `short_channel_id` of this channel
         pub short_channel_id: u64,
-        /// Flat routing fee in satoshis
+        /// Flat routing fee in millisatoshis
         pub base_msat: u32,
         /// Liquidity-based routing fee in millionths of a routed amount.
         /// In other words, 10000 is 1%.

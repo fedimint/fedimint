@@ -6,7 +6,10 @@ package gatewaylnrpc;
  * from a lightning node to Fedimint gateways */
 service GatewayLightning {
   /* GetPubKey returns the public key of the associated lightning node */
-  rpc GetPubKey(GetPubKeyRequest) returns (GetPubKeyResponse) {}
+  rpc GetPubKey(EmptyRequest) returns (GetPubKeyResponse) {}
+
+  /* GetRouteHints returns the route hints to the associated lightning node */
+  rpc GetRouteHints(EmptyRequest) returns (GetRouteHintsResponse) {}
 
   /* PayInvoice attempts to pay an invoice using the associated lightning node
    */
@@ -30,7 +33,7 @@ service GatewayLightning {
   rpc CompleteHtlc(CompleteHtlcsRequest) returns (CompleteHtlcsResponse) {}
 }
 
-message GetPubKeyRequest {}
+message EmptyRequest {}
 
 message GetPubKeyResponse {
   // The public key of the associated lightning node
@@ -127,3 +130,37 @@ message CompleteHtlcsRequest {
 }
 
 message CompleteHtlcsResponse {}
+
+message GetRouteHintsResponse {
+  message RouteHintHop {
+    // The node_id of the non-target end of the route.
+    bytes src_node_id = 1;
+
+    // The short_channel_id of this channel.
+    uint64 short_channel_id = 2;
+
+    // Flat routing fee in millisatoshis.
+    uint32 base_msat = 3;
+
+    // Liquidity-based routing fee in millionths of a routed amount.
+    // In other words, 10000 is 1%.
+    uint32 proportional_millionths = 4;
+
+    // The difference in CLTV values between this node and the next node.
+    uint32 cltv_expiry_delta = 5;
+
+    // The minimum value, in msat, which must be relayed to the next hop.
+    optional uint64 htlc_minimum_msat = 6;
+
+    // The maximum value in msat available for routing with a single HTLC.
+    optional uint64 htlc_maximum_msat = 7;
+  }
+
+  message RouteHint {
+    // Hops that make up a route hint to the associated lightning node
+    repeated RouteHintHop hops = 1;
+  }
+
+  // The route hints to the associated lightning node
+  repeated RouteHint route_hints = 1;
+}

@@ -21,7 +21,7 @@ use tracing::{error, info, warn};
 
 use super::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
-use crate::gatewayd::lnrpc_client::{DynLnRpcClient, GetRouteHintsResponse};
+use crate::gatewayd::lnrpc_client::DynLnRpcClient;
 use crate::gatewaylnrpc::GetPubKeyResponse;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
@@ -61,10 +61,12 @@ impl Gateway {
         // Source route hints form the LN node
         let mut num_retries = 0;
         let route_hints = loop {
-            let GetRouteHintsResponse { route_hints } = lnrpc
-                .route_hints()
+            let route_hints: Vec<RouteHint> = lnrpc
+                .routehints()
                 .await
-                .expect("Could not feth route hints");
+                .expect("Could not fetch route hints")
+                .try_into()
+                .expect("Could not parse route hints");
 
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
                 break route_hints;
@@ -336,8 +338,8 @@ impl Gateway {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
-                        let GetRouteHintsResponse { route_hints } =
-                            self.lnrpc.route_hints().await?;
+                        let route_hints: Vec<RouteHint> =
+                            self.lnrpc.routehints().await?.try_into()?;
                         inner
                             .handle(|payload| {
                                 self.handle_connect_federation(payload, route_hints.clone())
