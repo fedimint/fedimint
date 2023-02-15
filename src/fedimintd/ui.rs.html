@@ -412,8 +412,6 @@
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
 <a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -488,9 +486,7 @@
                         <span class="prelude-val">Ok</span>(cfg) =&gt; {
                             <span class="kw">let </span>connect_info = WsClientConnectInfo::from_honest_peers(<span class="kw-2">&amp;</span>cfg);
 
-                            RunTemplateState::DkgDone(
-                                serde_json::to_string(<span class="kw-2">&amp;</span>connect_info).expect(<span class="string">&quot;should deserialize&quot;</span>),
-                            )
+                            RunTemplateState::DkgDone(connect_info.to_string())
                         }
                         <span class="prelude-val">Err</span>(e) =&gt; RunTemplateState::LocalIoError(e.to_string()),
                     },
@@ -741,7 +737,7 @@
             <span class="kw">let </span>cfg: ClientConfig =
                 serde_json::from_reader(file).expect(<span class="string">&quot;Could not parse cfg file.&quot;</span>);
             <span class="kw">let </span>connect_info = WsClientConnectInfo::from_honest_peers(<span class="kw-2">&amp;</span>cfg);
-            serde_json::to_string(<span class="kw-2">&amp;</span>connect_info).expect(<span class="string">&quot;should deserialize&quot;</span>)
+            connect_info.to_string()
         }
         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="string">&quot;&quot;</span>.into(),
     };
@@ -831,4 +827,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (065852def 2023-02-13)" data-search-js="search-abe1d547ad11c273.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
