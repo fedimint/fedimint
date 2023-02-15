@@ -17,6 +17,10 @@ check-ulimit:
 test: build check-ulimit
   cargo test
 
+# show number of tests per package
+test-count:
+  ./scripts/test-cov.sh
+
 test-real: check-ulimit
   ./scripts/rust-tests.sh
 
