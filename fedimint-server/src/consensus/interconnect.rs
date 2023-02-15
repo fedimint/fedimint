@@ -28,7 +28,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
 
                 return (endpoint.handler)(
                     module,
-                    self.fedimint.database_transaction().await,
+                    self.fedimint.db.begin_transaction().await,
                     data,
                     Some(module_id),
                 )

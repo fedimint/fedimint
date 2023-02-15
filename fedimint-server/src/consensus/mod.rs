@@ -223,10 +223,6 @@ impl FedimintConsensus {
         self.modules.decoder_registry()
     }
 
-    pub async fn database_transaction(&self) -> DatabaseTransaction<'_> {
-        self.db.begin_transaction().await
-    }
-
     pub async fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -631,7 +627,7 @@ impl FedimintConsensus {
             .iter_modules()
             .map(|(module_instance_id, module)| {
                 Box::pin(async move {
-                    let mut dbtx = self.database_transaction().await;
+                    let mut dbtx = self.db.begin_transaction().await;
                     let mut module_dbtx = dbtx.with_module_prefix(module_instance_id);
                     module.await_consensus_proposal(&mut module_dbtx).await
                 })
@@ -642,7 +638,7 @@ impl FedimintConsensus {
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
-        let mut dbtx = self.database_transaction().await;
+        let mut dbtx = self.db.begin_transaction().await;
 
         let drop_peers = dbtx
             .find_by_prefix(&DropPeerKeyPrefix)
@@ -769,7 +765,7 @@ impl FedimintConsensus {
         &self,
         txid: TransactionId,
     ) -> Option<crate::outcome::TransactionStatus> {
-        let mut dbtx = self.database_transaction().await;
+        let mut dbtx = self.db.begin_transaction().await;
 
         let accepted: Option<AcceptedTransaction> = dbtx
             .get_value(&AcceptedTransactionKey(txid))
@@ -840,7 +836,7 @@ impl FedimintConsensus {
     }
 
     pub async fn audit(&self) -> Audit {
-        let mut dbtx = self.database_transaction().await;
+        let mut dbtx = self.db.begin_transaction().await;
         let mut audit = Audit::default();
         for (module_instance_id, module) in self.modules.iter_modules() {
             module
