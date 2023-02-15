@@ -68,7 +68,7 @@
 
                 <span class="kw">return </span>(endpoint.handler)(
                     module,
-                    <span class="self">self</span>.fedimint.database_transaction().<span class="kw">await</span>,
+                    <span class="self">self</span>.fedimint.db.begin_transaction().<span class="kw">await</span>,
                     data,
                     <span class="prelude-val">Some</span>(module_id),
                 )

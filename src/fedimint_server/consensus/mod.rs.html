@@ -896,10 +896,6 @@
 <a href="#896" id="896">896</a>
 <a href="#897" id="897">897</a>
 <a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
-<a href="#900" id="900">900</a>
-<a href="#901" id="901">901</a>
-<a href="#902" id="902">902</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -1124,10 +1120,6 @@
     <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="self">self</span>.modules.decoder_registry()
     }
-
-    <span class="kw">pub async fn </span>database_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="self">self</span>.db.begin_transaction().<span class="kw">await
-    </span>}
 
     <span class="kw">pub async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1533,7 +1525,7 @@
             .iter_modules()
             .map(|(module_instance_id, module)| {
                 Box::pin(<span class="kw">async move </span>{
-                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
                     <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(module_instance_id);
                     module.await_consensus_proposal(<span class="kw-2">&amp;mut </span>module_dbtx).<span class="kw">await
                 </span>})
@@ -1544,7 +1536,7 @@
     }
 
     <span class="kw">pub async fn </span>get_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusProposal {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>drop_peers = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>DropPeerKeyPrefix)
@@ -1671,7 +1663,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::outcome::TransactionStatus&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; = dbtx
             .get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid))
@@ -1742,7 +1734,7 @@
     }
 
     <span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.database_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
         <span class="kw">for </span>(module_instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             module
