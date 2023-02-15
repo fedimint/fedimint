@@ -7,10 +7,17 @@ check:
 build:
   cargo build --all --all-targets
 
-test: build
+# check if ulimit is set correctly
+check-ulimit:
+  #!/usr/bin/env bash
+  if [ "$(ulimit -Sn)" -lt "1024" ]; then
+      >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
+  fi
+
+test: build check-ulimit
   cargo test
 
-test-real:
+test-real: check-ulimit
   ./scripts/rust-tests.sh
 
 lint:
