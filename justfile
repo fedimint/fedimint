@@ -21,6 +21,24 @@ lint:
 clippy:
   cargo clippy --all --all-targets
 
+# check files you've touched for spelling errors
+spell:
+  #!/usr/bin/env bash
+  >&2 echo '💡 Valid new words can be added to dictionary in `.config/spellcheck.dic`'
+  ref_branch=master
+  if git rev-parse --verify upstream/master >/dev/null 2>/dev/null ; then
+    ref_branch=upstream/master
+  elif  git rev-parse --verify upstream/master >/dev/null 2>/dev/null ; then
+    ref_branch=u/master
+  fi
+  cargo spellcheck fix $(git diff $ref_branch..HEAD --name-only)
+
+# try to fix spelling in all files
+spell-fix-all:
+   @>&2 echo '❗ `cargo spellcheck fix` seems buggy. Quit and verify your changes often.'
+   @>&2 echo '💡 Valid new words can be added to dictionary in `.config/spellcheck.dic`'
+   cargo spellcheck fix
+
 format:
   cargo fmt --all
   nixpkgs-fmt $(echo **.nix)

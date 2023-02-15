@@ -5,10 +5,10 @@ use url::Url;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GatewayConfig {
-    /// API webserver bind address
+    /// API web-server bind address
     pub bind_address: SocketAddr,
     /// URL under which the API will be reachable
     pub announce_address: Url,
-    /// webserver authentication password
+    /// web-server authentication password
     pub password: String,
 }
