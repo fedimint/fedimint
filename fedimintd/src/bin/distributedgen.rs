@@ -8,9 +8,9 @@ use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use fedimint_server::config::io::{create_cert, run_dkg, write_server_config, SALT_FILE};
+use fedimint_server::logging::TracingSetup;
 use fedimintd::*;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 use url::Url;
 
 #[derive(Parser)]
@@ -124,11 +124,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    TracingSetup::default().init()?;
 
     let mut task_group = TaskGroup::new();
 

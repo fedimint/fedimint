@@ -18,6 +18,7 @@ fedimint-core ={ path = "../../fedimint-core" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
 fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-mint = { path = "../../modules/fedimint-mint" }
+fedimint-server = { path = "../../fedimint-server" }
 lightning-invoice = "0.21.0"
 ln-gateway = { path = "../ln-gateway" }
 mint-client = { path = "../../client/client-lib" }
@@ -27,5 +28,4 @@ serde_json = "1.0.91"
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 tokio = { version = "1.25.0", features = ["full"] }
 tracing ="0.1.37"
-tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 url = { version = "2.3.1", features = ["serde"] }

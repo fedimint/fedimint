@@ -24,23 +24,18 @@ use std::time::Duration;
 use anyhow::Result;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::FederationId;
+use fedimint_server::logging::TracingSetup;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response, RpcClient};
 use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
 use ln_gateway::utils::retry;
-use tracing_subscriber::EnvFilter;
 use url::Url;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_authentication() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
-        )
-        .init();
+    TracingSetup::default().init()?;
     let gw_password = "password".to_string();
     let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
     let gw_listen = SocketAddr::from(([127, 0, 0, 1], gw_port));

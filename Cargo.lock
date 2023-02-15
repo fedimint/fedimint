@@ -1141,6 +1141,7 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "bytes",
+ "console-subscriber",
  "fedimint-build",
  "fedimint-core",
  "futures",
@@ -1148,6 +1149,8 @@ dependencies = [
  "impl-tools",
  "itertools",
  "jsonrpsee",
+ "opentelemetry",
+ "opentelemetry-jaeger",
  "rand",
  "rayon",
  "rcgen",
@@ -1166,6 +1169,8 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
+ "tracing-chrome",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
 ]
@@ -1244,8 +1249,6 @@ dependencies = [
  "threshold_crypto",
  "tokio",
  "tracing",
- "tracing-chrome",
- "tracing-subscriber",
  "url",
 ]
 
@@ -1308,8 +1311,6 @@ dependencies = [
  "itertools",
  "jsonrpsee",
  "mint-client",
- "opentelemetry",
- "opentelemetry-jaeger",
  "qrcode-generator",
  "rand",
  "rayon",
@@ -1327,8 +1328,6 @@ dependencies = [
  "tokio-util",
  "tower",
  "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
  "url",
 ]
 
@@ -1551,6 +1550,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln",
  "fedimint-mint",
+ "fedimint-server",
  "fedimint-testing",
  "lightning-invoice",
  "ln-gateway",
@@ -1561,7 +1561,6 @@ dependencies = [
  "threshold_crypto",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "url",
 ]
 

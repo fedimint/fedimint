@@ -7,14 +7,13 @@ use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_server::config::io::{read_server_config, DB_FILE, JSON_EXT, LOCAL_CONFIG};
 use fedimint_server::consensus::FedimintConsensus;
+use fedimint_server::logging::TracingSetup;
 use fedimint_server::FedimintServer;
 use fedimintd::ui::{run_ui, UiMessage};
 use fedimintd::*;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::{EnvFilter, Layer};
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -31,8 +30,7 @@ pub struct ServerOpts {
     pub listen_ui: Option<SocketAddr>,
     #[arg(long = "tokio-console-bind", env = "FM_TOKIO_CONSOLE_BIND")]
     pub tokio_console_bind: Option<SocketAddr>,
-    #[cfg(feature = "telemetry")]
-    #[clap(long)]
+    #[arg(long, default_value = "false")]
     pub with_telemetry: bool,
 }
 
@@ -49,36 +47,9 @@ async fn main() {
     info!("Starting fedimintd (version: {CODE_VERSION})");
 
     let opts: ServerOpts = ServerOpts::parse();
-    let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(filter_layer);
-
-    let console_opt = opts.tokio_console_bind.map(|l| {
-        console_subscriber::ConsoleLayer::builder()
-            .retention(Duration::from_secs(60))
-            .server_addr(l)
-            .spawn()
-            // tokio-console cares only about these layers, so we filter separately for it
-            .with_filter(EnvFilter::new("tokio=trace,runtime=trace"))
-    });
-
-    let telemetry_layer_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
-        #[cfg(feature = "telemetry")]
-        if opts.with_telemetry {
-            let tracer = opentelemetry_jaeger::new_pipeline()
-                .with_service_name("fedimint")
-                .install_simple()
-                .unwrap();
-
-            return Some(tracing_opentelemetry::layer().with_tracer(tracer).boxed());
-        }
-        None
-    };
-
-    tracing_subscriber::registry()
-        .with(console_opt)
-        .with(fmt_layer)
-        .with(telemetry_layer_opt())
-        .init();
+    TracingSetup::default()
+        .tokio_console_bind(opts.tokio_console_bind)
+        .with_jaeger(opts.with_telemetry);
 
     let mut root_task_group = TaskGroup::new();
     root_task_group.install_kill_handler();

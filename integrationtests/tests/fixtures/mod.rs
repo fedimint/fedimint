@@ -35,6 +35,7 @@ use fedimint_server::config::{connect, ServerConfig, ServerConfigParams};
 use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
+use fedimint_server::logging::TracingSetup;
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
@@ -69,8 +70,6 @@ use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
 use tokio::sync::Mutex;
 use tracing::info;
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
 use url::Url;
 
 use crate::fixtures::utils::LnRpcAdapter;
@@ -141,23 +140,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == BASE_PORT_INIT {
-        if env::var_os("FEDIMINT_TRACE_CHROME").map_or(false, |x| !x.is_empty()) {
-            let (cr_layer, gaurd) = tracing_chrome::ChromeLayerBuilder::new()
-                .include_args(true)
-                .build();
-            // drop gaurd cause file to written and closed
-            // in this case file will closed after exit of program
-            std::mem::forget(gaurd);
-
-            tracing_subscriber::registry().with(cr_layer).init();
-        } else {
-            tracing_subscriber::fmt()
-                .with_env_filter(
-                    EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
-                )
-                .init();
-        }
+        let chrome = env::var_os("FEDIMINT_TRACE_CHROME").map_or(false, |x| !x.is_empty());
+        TracingSetup::default().with_chrome(chrome).init()?;
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
