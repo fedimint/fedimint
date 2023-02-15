@@ -9,7 +9,7 @@ use strum_macros::EnumIter;
 
 use crate::consensus::AcceptedTransaction;
 
-pub const CONSENSUS_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -103,6 +103,6 @@ impl_db_prefix_const!(
     query_prefix = ClientConfigSignatureKeyPrefix
 );
 
-pub fn get_consensus_database_migrations<'a>() -> MigrationMap<'a> {
+pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
     MigrationMap::new()
 }

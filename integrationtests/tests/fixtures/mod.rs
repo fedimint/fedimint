@@ -35,7 +35,7 @@ use fedimint_server::config::{connect, ServerConfig, ServerConfigParams};
 use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
-use fedimint_server::db::CONSENSUS_DATABASE_VERSION;
+use fedimint_server::db::GLOBAL_DATABASE_VERSION;
 use fedimint_server::logging::TracingSetup;
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
@@ -1209,12 +1209,12 @@ impl FederationTest {
 
             fedimint_core::db::apply_migrations(
                 &db,
-                "Consensus".to_string(),
-                CONSENSUS_DATABASE_VERSION,
-                fedimint_server::db::get_consensus_database_migrations(),
+                "Global".to_string(),
+                GLOBAL_DATABASE_VERSION,
+                fedimint_server::db::get_global_database_migrations(),
             )
             .await
-            .expect("Error while applying consensus database migrations");
+            .unwrap_or_else(|_| panic!("Error while applying global database migrations"));
 
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
@@ -1232,7 +1232,9 @@ impl FederationTest {
                         gen.get_database_migrations(),
                     )
                     .await
-                    .expect("Error while apply database migrations for module");
+                    .unwrap_or_else(|_| {
+                        panic!("Error while applying database migrations for module {kind}")
+                    });
 
                     let module = gen
                         .init(

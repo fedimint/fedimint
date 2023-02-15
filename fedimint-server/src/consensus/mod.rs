@@ -36,9 +36,9 @@ use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
-    get_consensus_database_migrations, AcceptedTransactionKey, ClientConfigSignatureKey,
-    DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
-    CONSENSUS_DATABASE_VERSION,
+    get_global_database_migrations, AcceptedTransactionKey, ClientConfigSignatureKey, DropPeerKey,
+    DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
+    GLOBAL_DATABASE_VERSION,
 };
 use crate::logging::LOG_CONSENSUS;
 use crate::transaction::{Transaction, TransactionError};
@@ -143,9 +143,9 @@ impl FedimintConsensus {
 
         apply_migrations(
             &db,
-            "Consensus".to_string(),
-            CONSENSUS_DATABASE_VERSION,
-            get_consensus_database_migrations(),
+            "Global".to_string(),
+            GLOBAL_DATABASE_VERSION,
+            get_global_database_migrations(),
         )
         .await?;
 
