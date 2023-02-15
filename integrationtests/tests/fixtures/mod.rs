@@ -35,6 +35,7 @@ use fedimint_server::config::{connect, ServerConfig, ServerConfigParams};
 use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
+use fedimint_server::db::CONSENSUS_DATABASE_VERSION;
 use fedimint_server::logging::TracingSetup;
 use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
@@ -1206,6 +1207,15 @@ impl FederationTest {
             let mut modules = BTreeMap::new();
             let env_vars = FedimintConsensus::get_env_vars_map();
 
+            fedimint_core::db::apply_migrations(
+                &db,
+                "Consensus".to_string(),
+                CONSENSUS_DATABASE_VERSION,
+                fedimint_server::db::get_consensus_database_migrations(),
+            )
+            .await
+            .expect("Error while applying consensus database migrations");
+
             for (kind, gen) in module_inits.legacy_init_order_iter() {
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
                 if let Some(module) = override_modules.remove(kind.as_str()) {
@@ -1217,12 +1227,12 @@ impl FederationTest {
                     let isolated_db = db.new_isolated(id);
                     fedimint_core::db::apply_migrations(
                         &isolated_db,
-                        gen.module_kind(),
+                        kind.to_string(),
                         gen.database_version(),
                         gen.get_database_migrations(),
                     )
                     .await
-                    .unwrap();
+                    .expect("Error while apply database migrations for module");
 
                     let module = gen
                         .init(
