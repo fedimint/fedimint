@@ -6,6 +6,7 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_server::logging::TracingSetup;
 use futures::StreamExt;
 
 use crate::dump::DatabaseDump;
@@ -72,7 +73,8 @@ fn print_kv(key: &[u8], value: &[u8]) {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
+    TracingSetup::default().init()?;
     let options: Options = Options::parse();
 
     match options.command {
@@ -130,4 +132,6 @@ async fn main() {
             dbdump.dump_database().await;
         }
     }
+
+    Ok(())
 }

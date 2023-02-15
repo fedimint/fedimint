@@ -13,8 +13,7 @@ name = "fedimint_server"
 path = "src/lib.rs"
 
 [features]
-default = ["telemetry"]
-telemetry = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome"]
+telemetry = ["tracing-opentelemetry", "opentelemetry-jaeger", "tracing-chrome"]
 
 [dependencies]
 aead = { path = "../crypto/aead" }
