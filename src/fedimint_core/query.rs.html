@@ -325,7 +325,7 @@
     }
 }
 
-<span class="doccomment">/// Returns first response with a valid sig
+<span class="doccomment">/// Returns first response with a valid signature
 </span><span class="kw">pub struct </span>VerifiableResponse&lt;R&gt; {
     verifier: Box&lt;<span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>R) -&gt; bool + Send + Sync&gt;,
     allow_consensus_fallback: bool,
@@ -419,7 +419,7 @@
 <span class="doccomment">/// Returns the deduplicated union of `required` number of responses
 ///
 /// Unlike [`UnionResponses`], it works with single values, not `Vec`s.
-/// TODO: Should we make UnionResponses a wrapper around this one?
+/// TODO: Should we make `UnionResponses` a wrapper around this one?
 </span><span class="kw">pub struct </span>UnionResponsesSingle&lt;R&gt; {
     responses: HashSet&lt;PeerId&gt;,
     existing_results: Vec&lt;R&gt;,
@@ -599,7 +599,7 @@
     </span>FailMembers(BTreeMap&lt;PeerId, MemberError&gt;),
     <span class="doccomment">/// Do nothing yet, keep waiting for requests
     </span>Continue,
-    <span class="doccomment">/// Return the succsessful result
+    <span class="doccomment">/// Return the successful result
     </span>Success(R),
     <span class="doccomment">/// Fail the whole request and remember errors from given members
     </span>Failure(BTreeMap&lt;PeerId, MemberError&gt;),

@@ -218,7 +218,7 @@
         TransactionId::from_engine(engine)
     }
 
-    <span class="doccomment">/// Validate the aggregated Schnorr Signature signed over the tx_hash
+    <span class="doccomment">/// Validate the aggregated Schnorr Signature signed over the `tx_hash`
     </span><span class="kw">pub fn </span>validate_signature(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         keys: <span class="kw">impl </span>Iterator&lt;Item = XOnlyPublicKey&gt;,

@@ -1349,7 +1349,7 @@
 </span><span class="kw">pub enum </span>LightningOutput {
     <span class="doccomment">/// Fund contract
     </span>Contract(ContractOutput),
-    <span class="doccomment">/// Creat incoming contract offer
+    <span class="doccomment">/// Create incoming contract offer
     </span>Offer(contracts::incoming::IncomingContractOffer),
     <span class="doccomment">/// Allow early refund of outgoing contract
     </span>CancelOutgoing {
@@ -2341,7 +2341,7 @@
 }
 
 <span class="comment">// TODO: upstream serde support to LDK
-</span><span class="doccomment">/// Hack to get a route hint that implements serde traits.
+</span><span class="doccomment">/// Hack to get a route hint that implements `serde` traits.
 </span><span class="kw">pub mod </span>route_hints {
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>secp256k1::PublicKey;
@@ -2349,9 +2349,9 @@
 
     <span class="attr">#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
     </span><span class="kw">pub struct </span>RouteHintHop {
-        <span class="doccomment">/// The node_id of the non-target end of the route
+        <span class="doccomment">/// The `node_id` of the non-target end of the route
         </span><span class="kw">pub </span>src_node_id: PublicKey,
-        <span class="doccomment">/// The short_channel_id of this channel
+        <span class="doccomment">/// The `short_channel_id` of this channel
         </span><span class="kw">pub </span>short_channel_id: u64,
         <span class="doccomment">/// Flat routing fee in satoshis
         </span><span class="kw">pub </span>base_msat: u32,

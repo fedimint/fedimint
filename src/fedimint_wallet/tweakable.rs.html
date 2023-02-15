@@ -82,7 +82,7 @@
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
 <span class="kw">use </span>secp256k1::{Scalar, Secp256k1, Signing, Verification};
 
-<span class="doccomment">/// An object that can be used as a ricardian contract to tweak a key
+<span class="doccomment">/// An object that can be used as a Ricardian contract to tweak a key
 </span><span class="kw">pub trait </span>Contract {
     <span class="doccomment">/// Serialize the contract in a deterministic way to be used as a tweak
     </span><span class="kw">fn </span>encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::io::Result&lt;()&gt;;
