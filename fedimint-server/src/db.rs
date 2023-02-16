@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use fedimint_core::db::MODULE_GLOBAL_PREFIX;
+use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
 use fedimint_core::{impl_db_prefix_const, PeerId, TransactionId};
@@ -8,6 +8,8 @@ use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::consensus::AcceptedTransaction;
+
+pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -100,3 +102,7 @@ impl_db_prefix_const!(
     db_prefix = DbKeyPrefix::ClientConfigSignature,
     query_prefix = ClientConfigSignatureKeyPrefix
 );
+
+pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
+    MigrationMap::new()
+}

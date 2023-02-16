@@ -14,7 +14,7 @@ use strum_macros::EnumIter;
 use thiserror::Error;
 use tracing::{debug, info, instrument, trace, warn};
 
-use crate::core::{ModuleInstanceId, ModuleKind};
+use crate::core::ModuleInstanceId;
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 
@@ -926,7 +926,7 @@ pub type MigrationMap<'a> = BTreeMap<
 /// will be able to read and write from the database successfully.
 pub async fn apply_migrations<'a>(
     db: &'a Database,
-    kind: ModuleKind,
+    kind: String,
     target_db_version: DatabaseVersion,
     migrations: MigrationMap<'a>,
 ) -> Result<(), anyhow::Error> {
@@ -1667,7 +1667,7 @@ mod tests {
 
         apply_migrations(
             &db,
-            ModuleKind::from_static_str("TestModule"),
+            "TestModule".to_string(),
             DatabaseVersion(1),
             migrations,
         )
