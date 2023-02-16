@@ -883,6 +883,10 @@
                 fi
 
                 >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
+
+                if [ "$(ulimit -Sn)" -lt "1024" ]; then
+                    >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
+                fi
               '';
             };
 
