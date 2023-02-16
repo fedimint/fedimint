@@ -35,12 +35,12 @@ pub struct ServerOpts {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let mut args = std::env::args();
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
             println!("{CODE_VERSION}");
-            return;
+            return Ok(());
         }
     }
 
@@ -49,7 +49,8 @@ async fn main() {
     let opts: ServerOpts = ServerOpts::parse();
     TracingSetup::default()
         .tokio_console_bind(opts.tokio_console_bind)
-        .with_jaeger(opts.with_telemetry);
+        .with_jaeger(opts.with_telemetry)
+        .init()?;
 
     let mut root_task_group = TaskGroup::new();
     root_task_group.install_kill_handler();

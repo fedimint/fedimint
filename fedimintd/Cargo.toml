@@ -34,7 +34,7 @@ jsonrpsee = { version = "0.16.2", features = ["server"] }
 mint-client = { path = "../client/client-lib" }
 fedimint-core ={ path = "../fedimint-core" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
-fedimint-server = { path = "../fedimint-server" }
+fedimint-server = { path = "../fedimint-server", features = ["telemetry"] }
 fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native", "server"] }
 fedimint-mint= { path = "../modules/fedimint-mint", features = ["server"] }
 fedimint-ln = { path = "../modules/fedimint-ln", features = ["server"] }
