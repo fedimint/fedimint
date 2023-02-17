@@ -344,7 +344,6 @@
         };
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
-          src = filterWorkspaceDepsBuildFiles ./.;
           buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE ; cargo check --profile $CARGO_PROFILE --all-targets ; cargo build --profile $CARGO_PROFILE --all-targets";
           doCheck = false;
         });
@@ -386,7 +385,6 @@
         # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
         workspaceDepsCov = craneLib.buildDepsOnly (commonArgs // {
           pnameSuffix = "-lcov-deps";
-          src = filterWorkspaceDepsBuildFiles ./.;
           buildPhaseCargoCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE --no-report";
           cargoBuildCommand = "dontuse";
           cargoCheckCommand = "dontuse";
@@ -448,7 +446,6 @@
             # "--package x --package y" args passed to cargo
             pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
             deps = craneLib.buildDepsOnly (commonArgs // {
-              src = filterWorkspaceDepsBuildFiles ./.;
               pname = name;
               buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
               doCheck = false;
@@ -479,7 +476,6 @@
             pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
             craneLib = craneLibCross.${target.attr};
             deps = craneLib.buildDepsOnly (commonArgs // {
-              src = filterWorkspaceDepsBuildFiles ./.;
               pname = "${name}-${target.attr}";
               # workaround: on wasm, we can't compile all deps, so narrow dependency build
               # to ones used by the client package only
