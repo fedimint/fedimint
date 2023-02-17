@@ -25,6 +25,7 @@ use tracing::{error, info};
 use super::db::NextECashNoteIndexKeyPrefix;
 use super::*;
 use crate::api::MintFederationApi;
+use crate::logging::LOG_ECASH_RECOVERY;
 use crate::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 
 impl MintClient {
@@ -45,7 +46,11 @@ impl MintClient {
         let backup = if let Some(backup) = self.download_ecash_backup_from_federation().await? {
             backup
         } else {
-            warn!("Could not find any valid existing backup. Will attempt to restore from scratch. This might take a long time.");
+            warn!(
+                target: LOG_ECASH_RECOVERY,
+                id=%self.get_backup_id(),
+                "Could not find any valid existing backup. Will attempt to restore from scratch. This might take a long time."
+            );
             PlaintextEcashBackup::new_empty()
         };
 
@@ -119,7 +124,7 @@ impl MintClient {
         let mut responses: Vec<_> = self
             .context
             .api
-            .download_ecash_backup(&self.get_derived_backup_signing_key().x_only_public_key().0)
+            .download_ecash_backup(&self.get_backup_id())
             .await?
             .into_iter()
             .filter_map(|backup| {
@@ -128,17 +133,29 @@ impl MintClient {
                 {
                     Ok(valid) => Some(valid),
                     Err(e) => {
-                        warn!("Invalid backup returned by one of the peers: {e}");
+                        warn!(
+                            target: LOG_ECASH_RECOVERY,
+                            "Invalid backup returned by one of the peers: {e}"
+                        );
                         None
                     }
                 }
             })
             .collect();
 
+        debug!(
+            target: LOG_ECASH_RECOVERY,
+            "Received {} valid responses",
+            responses.len()
+        );
         // Use the newest (highest epoch)
         responses.sort_by_key(|backup| Reverse(backup.epoch_count));
 
         Ok(responses.into_iter().next())
+    }
+
+    fn get_backup_id(&self) -> bitcoin::XOnlyPublicKey {
+        self.get_derived_backup_signing_key().x_only_public_key().0
     }
 
     /// Static version of [`Self::get_derived_backup_encryption_key`] for
@@ -261,7 +278,10 @@ impl MintClient {
         let start_epoch = backup.epoch_count.saturating_sub(1);
         let epoch_range = start_epoch..current_epoch_count;
 
-        info!(start_epoch, current_epoch_count, "Recovering from snapshot");
+        info!(
+            target: LOG_ECASH_RECOVERY,
+            start_epoch, current_epoch_count, "Recovering from snapshot"
+        );
 
         let mut tracker = EcashRecoveryTracker::from_backup(
             backup,
@@ -280,11 +300,11 @@ impl MintClient {
             // if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() ==
             // true`
-            info!(epoch, "Awaiting epoch");
+            info!(target: LOG_ECASH_RECOVERY, epoch, "Awaiting epoch");
             let epoch_history = epoch_res?;
             assert_eq!(epoch_history.outcome.epoch, epoch);
 
-            info!(epoch, "Processing epoch");
+            info!(target: LOG_ECASH_RECOVERY, epoch, "Processing epoch");
             let mut procesed_txs = Default::default();
             for (peer_id, items) in &epoch_history.outcome.items {
                 // TODO: epoch history to contain rejected items, we should skip them here
@@ -772,6 +792,7 @@ impl EcashRecoveryTracker {
         processed_txs: &mut HashSet<TransactionId>,
         rejected_txs: &BTreeSet<TransactionId>,
     ) {
+        debug!(target: LOG_ECASH_RECOVERY, ?item, "handling consensus item");
         match item {
             ConsensusItem::ClientConfigSignatureShare(_) => {}
             ConsensusItem::EpochOutcomeSignatureShare(_) => {}
@@ -781,10 +802,12 @@ impl EcashRecoveryTracker {
                 if !processed_txs.insert(txid) {
                     // Just like server side consensus, do not attempt to process the same
                     // transaction twice.
+                    debug!(target: LOG_ECASH_RECOVERY, ?item, "was already processed");
                     return;
                 }
 
                 if rejected_txs.contains(&txid) {
+                    debug!(target: LOG_ECASH_RECOVERY, ?item, "was rejected");
                     // Do not process invalid transactions.
                     // Consensus history contains all data proposed by each peer, even invalid (e.g.
                     // due to double spent) transactions. Precisely to save

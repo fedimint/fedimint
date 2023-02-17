@@ -11,7 +11,9 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::query::{EventuallyConsistent, Retry404, UnionResponsesSingle};
+use fedimint_core::query::{
+    CurrentConsensus, EventuallyConsistent, Retry404, UnionResponses, UnionResponsesSingle,
+};
 use fedimint_core::NumPeers;
 use fedimint_mint::db::ECashUserBackupSnapshot;
 
@@ -60,7 +62,8 @@ where
     }
 
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
-        self.request_union(
+        self.request_with_strategy(
+            UnionResponses::new(self.all_members().threshold()),
             format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/list_gateways"),
             erased_no_param(),
         )
@@ -68,7 +71,8 @@ where
     }
 
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
-        self.request_current_consensus(
+        self.request_with_strategy(
+            CurrentConsensus::new(self.all_members().threshold()),
             format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/register_gateway"),
             erased_single_param(gateway),
         )
@@ -107,7 +111,8 @@ where
         &self,
         request: &fedimint_mint::SignedBackupRequest,
     ) -> FederationResult<()> {
-        self.request_current_consensus(
+        self.request_with_strategy(
+            CurrentConsensus::new(self.all_members().threshold()),
             format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/backup"),
             erased_single_param(request),
         )
@@ -120,7 +125,7 @@ where
         Ok(self
             .request_with_strategy(
                 UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
-                    self.all_members().one_honest(),
+                    self.all_members().threshold(),
                 ),
                 format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/recover"),
                 erased_single_param(id),
