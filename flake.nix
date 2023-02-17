@@ -126,26 +126,21 @@
         # Later mapped over to conveniently loop over all posibilities.
         crossTargets =
           builtins.mapAttrs
-            (attr: target: { attr = attr; extraEnvs = ""; } // target)
+            (attr: target: { name = attr; extraEnvs = ""; } // target)
             {
-              "wasm32" = {
-                name = "wasm32-unknown-unknown";
+              "wasm32-unknown-unknown" = {
                 extraEnvs = wasm32CrossEnvVars;
               };
-              "armv7-android" = {
-                name = "armv7-linux-androideabi";
+              "armv7-linux-androideabi" = {
                 extraEnvs = androidCrossEnvVars;
               };
-              "aarch64-android" = {
-                name = "aarch64-linux-android";
+              "aarch64-linux-android" = {
                 extraEnvs = androidCrossEnvVars;
               };
-              "i686-android" = {
-                name = "i686-linux-android";
+              "i686-linux-android" = {
                 extraEnvs = androidCrossEnvVars;
               };
-              "x86_64-android" = {
-                name = "x86_64-linux-android";
+              "x86_64-linux-android" = {
                 extraEnvs = androidCrossEnvVars;
               };
             };
@@ -471,40 +466,43 @@
         # This unifies their cargo features and avoids building common dependencies mulitple
         # times, but will produce a derivation with all listed packages.
         pkgsCrossBuild = { name, pkgs, dirs, target }:
-          let
-            # "--package x --package y" args passed to cargo
-            pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
-            craneLib = craneLibCross.${target.attr};
-            deps = craneLib.buildDepsOnly (commonArgs // {
-              pname = "${name}-${target.attr}";
-              # workaround: on wasm, we can't compile all deps, so narrow dependency build
-              # to ones used by the client package only
-              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} ${pkgsArgs}";
-              doCheck = false;
+          if target == null then
+            pkgsBuild { inherit name pkgs dirs; }
+          else
+            let
+              # "--package x --package y" args passed to cargo
+              pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
+              craneLib = craneLibCross.${target.name};
+              deps = craneLib.buildDepsOnly (commonArgs // {
+                pname = "${name}-${target.name}";
+                # workaround: on wasm, we can't compile all deps, so narrow dependency build
+                # to ones used by the client package only
+                buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} ${pkgsArgs}";
+                doCheck = false;
 
+                preBuild = ''
+                  chmod +x .cargo/ar.*
+                  chmod +x .cargo/ld.*
+                  patchShebangs .cargo/
+                '' + target.extraEnvs;
+              });
+
+            in
+            craneLib.buildPackage (commonArgs // {
+              pname = "${name}-${target.name}";
+              cargoArtifacts = deps;
+
+              src = filterModules dirs ./.;
+              cargoExtraArgs = "--target ${target.name} ${pkgsArgs}";
+
+              # if needed we will check the whole workspace at once with `workspaceBuild`
+              doCheck = false;
               preBuild = ''
                 chmod +x .cargo/ar.*
                 chmod +x .cargo/ld.*
                 patchShebangs .cargo/
               '' + target.extraEnvs;
             });
-
-          in
-          craneLib.buildPackage (commonArgs // {
-            pname = "${name}-${target.attr}";
-            cargoArtifacts = deps;
-
-            src = filterModules dirs ./.;
-            cargoExtraArgs = "--target ${target.name} ${pkgsArgs}";
-
-            # if needed we will check the whole workspace at once with `workspaceBuild`
-            doCheck = false;
-            preBuild = ''
-              chmod +x .cargo/ar.*
-              chmod +x .cargo/ld.*
-              patchShebangs .cargo/
-            '' + target.extraEnvs;
-          });
 
         fedimint-pkgs = pkgsBuild {
           name = "fedimint-pkgs";
@@ -565,13 +563,13 @@
           ];
         };
 
-        client-pkgs = { target }: pkgsCrossBuild {
+        client-pkgs = { target ? null }: pkgsCrossBuild {
           name = "client-pkgs";
           inherit target;
 
           pkgs = {
             mint-client = { };
-          } // lib.optionalAttrs (target.name != "wasm32-unknown-unknown") {
+          } // lib.optionalAttrs (target == null || target.name != "wasm32-unknown-unknown") {
             # broken on wasm32
             fedimint-sqlite = { };
           };
@@ -637,13 +635,15 @@
             workspaceAudit;
 
         };
+
         # outputs that build a particular package
         outputsPackages = {
           default = fedimint-pkgs;
 
-          inherit fedimint-pkgs client-pkgs ln-gateway-pkgs;
-
+          inherit fedimint-pkgs ln-gateway-pkgs;
+          client-pkgs = client-pkgs { };
         };
+
         packages = outputsWorkspace //
           # replace git hash in the final binaries
           (builtins.mapAttrs (name: package: replace-git-hash { inherit name package; }) outputsPackages)
