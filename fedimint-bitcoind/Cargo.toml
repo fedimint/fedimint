@@ -12,18 +12,19 @@ name = "fedimint_bitcoind"
 path = "src/lib.rs"
 
 [features]
-bitcoincore-rpc = [ "dep:bitcoincore-rpc", "dep:electrum-client" ]
+bitcoincore-rpc = ["dep:bitcoincore-rpc", "dep:electrum-client"]
 default = []
 
 [dependencies]
 anyhow = "1.0.66"
+async-trait = "*"
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
-bitcoincore-rpc = { version = "0.16.0" , optional = true }
+bitcoincore-rpc = { version = "0.16.0", optional = true }
 electrum-client = { version = "0.12.0", optional = true }
-async-trait = "*"
+esplora-client = { version = "0.3.0", default-features = false, features = ["async", "async-https"] }
 fedimint-core  = { path = "../fedimint-core" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 tracing = "0.1.37"
-url = "2.3.1"                   
+url = "2.3.1"

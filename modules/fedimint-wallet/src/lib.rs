@@ -23,7 +23,7 @@ use db::DbKeyPrefix;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::bitcoin_rpc::{
     select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
-    FM_ELECTRUM_RPC_ENV,
+    FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
 };
 use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
@@ -922,6 +922,8 @@ impl Wallet {
                 .map(OsString::as_os_str),
             env.get(OsStr::new(FM_ELECTRUM_RPC_ENV))
                 .map(OsString::as_os_str),
+            env.get(OsStr::new(FM_ESPLORA_RPC_ENV))
+                .map(OsString::as_os_str),
         )?;
 
         let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoin_rpc_backend(
@@ -1229,7 +1231,7 @@ impl Wallet {
                 .await;
 
             match self.btc_rpc.backend_type() {
-                BitcoinRpcBackendType::Bitcoind => {
+                BitcoinRpcBackendType::Bitcoind | BitcoinRpcBackendType::Esplora => {
                     if !pending_transactions.is_empty() {
                         let block = self
                             .btc_rpc
@@ -1250,7 +1252,7 @@ impl Wallet {
                             .btc_rpc
                             .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
                             .await
-                            .expect("bitcoin rpc backend failed")
+                            .expect("bitcoin electrum rpc backend failed")
                         {
                             self.recognize_change_utxo(dbtx, transaction.1).await;
                         }

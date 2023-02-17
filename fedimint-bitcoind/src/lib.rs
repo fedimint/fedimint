@@ -17,7 +17,7 @@ pub mod bitcoincore_rpc;
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
-/// Functions may panic if if the bitcoind node is not reachable.
+/// Functions may panic if the bitcoind node is not reachable.
 #[async_trait]
 pub trait IBitcoindRpc: Debug + Send + Sync {
     /// `true` if it's real-bitcoin (not electrum) backend and thus supports
@@ -68,7 +68,7 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
         _transaction: &Transaction,
         _height: u64,
     ) -> Result<bool> {
-        bail!("is_transaction_confirmed_in call not supported in standard (non-electrum) backends")
+        bail!("was_transaction_confirmed_in call not supported in standard (non-electrum/esplora) backends")
     }
 }
 
