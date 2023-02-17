@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.69"
 bitcoin = "0.29.2"
-clap = "4.1.4"
+clap = "4.1.6"
 fedimintd = { path = "../fedimintd" }
 aead = { path = "../crypto/aead" }
 fedimint-core = { path = "../fedimint-core" }
