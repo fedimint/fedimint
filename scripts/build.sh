@@ -26,7 +26,8 @@ echo "Setting up env variables in $FM_TMP_DIR"
 # Builds the rust executables and sets environment variables
 SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 cd $SRC_DIR || exit 1
-cargo build
+# Note: Respect 'CARGO_PROFILE' that crane uses
+cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 
 # Define temporary directories to not overwrite manually created config if run locally
 export FM_TEST_DIR=$FM_TMP_DIR
