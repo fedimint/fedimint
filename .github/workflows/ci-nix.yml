@@ -198,3 +198,30 @@ jobs:
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.ln_gateway_clightning_container_tag }} && hub_tag="fedimint/ln-gateway-clightning:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+
+  pkgs:
+    if: github.ref == 'refs/heads/master'
+    name: "Release packages: ${{ matrix.build }}"
+
+    strategy:
+      matrix:
+        build:
+          - client-pkgs
+          - fedimint-pkgs
+          - ln-gateway-pkgs
+
+    runs-on: buildjet-4vcpu-ubuntu-2004
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cachix/install-nix-action@v19
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v12
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+
+      - name: Build ${{ matrix.build }}
+        run: nix build -L .#${{ matrix.build }}
