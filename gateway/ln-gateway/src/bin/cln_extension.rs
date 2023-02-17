@@ -38,7 +38,7 @@ use tracing::{debug, error, trace, warn};
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
-    #[arg(long = "listen", env = "GW_CLN_EXTENSION_LISTEN_ADDRESS")]
+    #[arg(long = "listen", env = "FM_CLN_EXTENSION_LISTEN_ADDRESS")]
     pub listen: SocketAddr,
 }
 
@@ -153,7 +153,7 @@ impl ClnRpcService {
                     Some(options::Value::String(listen)) => {
                         if listen == "default-dont-use" {
                             panic!(
-                                "Gateway cln extension is missing a listen address configuration. You can set it via GW_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --listen config option to the cln plugin"
+                                "Gateway cln extension is missing a listen address configuration. You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --listen config option to the cln plugin"
                             )
                         } else {
                             SocketAddr::from_str(&listen).expect("invalid listen address")

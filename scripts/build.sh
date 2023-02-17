@@ -70,11 +70,12 @@ mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 
 # Generate gateway config
 export FM_GATEWAY_DATA_DIR=$FM_CFG_DIR/gateway
-export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:10000"
-export FM_GATEWAY_API_ADDR="http://127.0.0.1:10000"
+export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
+export FM_GATEWAY_API_ADDR="http://127.0.0.1:8175"
 export FM_GATEWAY_PASSWORD="theresnosecondbest"
 
-export FM_GATEWAY_LIGHTNING_ADDR="http://localhost:54321"
+export FM_CLN_EXTENSION_LISTEN_ADDRESS="0.0.0.0:8177"
+export FM_GATEWAY_LIGHTNING_ADDR="http://localhost:8177"
 
 mkdir -p $FM_GATEWAY_DATA_DIR
 
