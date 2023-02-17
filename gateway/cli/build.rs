@@ -1,3 +1,3 @@
 fn main() {
-    fedimint_build::print_git_hash();
+    fedimint_build::set_code_version();
 }

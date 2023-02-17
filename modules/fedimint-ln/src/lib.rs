@@ -22,10 +22,9 @@ use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
-use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
@@ -319,8 +318,7 @@ impl ModuleGen for LightningGen {
         module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         _params: &ConfigGenParams,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+    ) -> DkgResult<ServerModuleConfig> {
         unimplemented!()
     }
 
@@ -332,17 +330,11 @@ impl ModuleGen for LightningGen {
         module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         _params: &ConfigGenParams,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+    ) -> DkgResult<ServerModuleConfig> {
         let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let g1 = if let Ok(g1) = dkg
+        let g1 = dkg
             .run_g1(module_instance_id, connections, &mut OsRng)
-            .await
-        {
-            g1
-        } else {
-            return Ok(Err(Cancelled));
-        };
+            .await?;
 
         let keys = g1[&()].threshold_crypto();
 
@@ -356,7 +348,7 @@ impl ModuleGen for LightningGen {
             },
         };
 
-        Ok(Ok(server.to_erased()))
+        Ok(server.to_erased())
     }
 
     fn to_config_response(

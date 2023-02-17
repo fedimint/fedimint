@@ -5,10 +5,9 @@ use std::fmt;
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use common::DummyDecoder;
-use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
+    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
@@ -118,8 +117,7 @@ impl ModuleGen for DummyConfigGenerator {
         _instance_id: ModuleInstanceId,
         _peers: &[PeerId],
         _params: &ConfigGenParams,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+    ) -> DkgResult<ServerModuleConfig> {
         let server = DummyConfig {
             private: DummyConfigPrivate {
                 something_private: 3,
@@ -127,7 +125,7 @@ impl ModuleGen for DummyConfigGenerator {
             consensus: DummyConfigConsensus { something: 2 },
         };
 
-        Ok(Ok(server.to_erased()))
+        Ok(server.to_erased())
     }
 
     fn to_config_response(

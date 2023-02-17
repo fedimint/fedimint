@@ -374,7 +374,7 @@ async fn main() {
             println!(
                 "{}",
                 CliOutput::VersionHash {
-                    hash: env!("GIT_HASH").to_string()
+                    hash: env!("CODE_VERSION").to_string()
                 }
             );
         };
@@ -465,7 +465,7 @@ async fn handle_command(
             Ok(CliOutput::UntypedApiOutput { value: response })
         }
         Command::VersionHash => Ok(CliOutput::VersionHash {
-            hash: env!("GIT_HASH").to_string(),
+            hash: env!("CODE_VERSION").to_string(),
         }),
         Command::PegInAddress => {
             let peg_in_address = client.get_new_pegin_address(rng).await;

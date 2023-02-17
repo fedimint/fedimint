@@ -76,7 +76,7 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
         task_group: TaskGroup,
     ) -> Self {
-        info!(version = env!("GIT_HASH"), "Starting lightning gateway");
+        info!(version = env!("CODE_VERSION"), "Starting lightning gateway");
 
         let mut num_retries = 0;
         let route_hints = loop {
@@ -250,7 +250,7 @@ impl LnGateway {
 
         Ok(GatewayInfo {
             federations,
-            version_hash: env!("GIT_HASH").to_string(),
+            version_hash: env!("CODE_VERSION").to_string(),
         })
     }
 

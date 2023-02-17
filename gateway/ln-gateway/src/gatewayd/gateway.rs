@@ -224,7 +224,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations,
-            version_hash: env!("GIT_HASH").to_string(),
+            version_hash: env!("CODE_VERSION").to_string(),
         })
     }
 

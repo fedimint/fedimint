@@ -8,10 +8,9 @@ use async_trait::async_trait;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
-use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
+    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
@@ -241,8 +240,7 @@ impl ModuleGen for MintGen {
         module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         _params: &ConfigGenParams,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+    ) -> DkgResult<ServerModuleConfig> {
         unimplemented!()
     }
 
@@ -254,8 +252,7 @@ impl ModuleGen for MintGen {
         module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+    ) -> DkgResult<ServerModuleConfig> {
         let params = params.get::<MintGenParams>().expect("Invalid mint params");
 
         let mut dkg = DkgRunner::multi(
@@ -264,14 +261,10 @@ impl ModuleGen for MintGen {
             our_id,
             peers,
         );
-        let g2 = if let Ok(g2) = dkg
+
+        let g2 = dkg
             .run_g2(module_instance_id, connections, &mut OsRng)
-            .await
-        {
-            g2
-        } else {
-            return Ok(Err(Cancelled));
-        };
+            .await?;
 
         let amounts_keys = g2
             .into_iter()
@@ -305,7 +298,7 @@ impl ModuleGen for MintGen {
             },
         };
 
-        Ok(Ok(server.to_erased()))
+        Ok(server.to_erased())
     }
 
     fn to_config_response(

@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
             .expect("Failed to write gateway configs to file");
         }
         Commands::VersionHash => {
-            println!("version: {}", env!("GIT_HASH"));
+            println!("version: {}", env!("CODE_VERSION"));
         }
         Commands::Info => {
             let response = client

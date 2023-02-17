@@ -24,20 +24,18 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::DynModuleGen;
-use fedimint_core::net::peers::IMuxPeerConnections;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
-use fedimint_server::config::{connect, ServerConfig, ServerConfigParams};
+use fedimint_server::config::{ServerConfig, ServerConfigParams};
 use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
 use fedimint_server::db::GLOBAL_DATABASE_VERSION;
 use fedimint_server::logging::TracingSetup;
-use fedimint_server::multiplexed::PeerConnectionMultiplexer;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
@@ -167,7 +165,6 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
             let (server_config, client_config) = distributed_config(
-                "",
                 &peers,
                 params,
                 module_inits.clone(),
@@ -257,8 +254,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config =
-                ServerConfig::trusted_dealer_gen("", &peers, &params, module_inits.clone(), OsRng);
+            let server_config = ServerConfig::trusted_dealer_gen(&params, module_inits.clone());
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
                 .to_config_response(&module_inits)
@@ -388,59 +384,34 @@ pub async fn create_user_client(
 }
 
 async fn distributed_config(
-    code_version: &str,
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
-    module_config_gens: ModuleGenRegistry,
+    registry: ModuleGenRegistry,
     _max_evil: usize,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
-    let configs: Cancellable<Vec<(PeerId, ServerConfig)>> = join_all(peers.iter().map(|peer| {
+    let configs: Vec<(PeerId, ServerConfig)> = join_all(peers.iter().map(|peer| {
         let params = params.clone();
-        let peers = peers.to_vec();
 
         let mut task_group = task_group.clone();
-        let module_config_gens = module_config_gens.clone();
+        let registry = registry.clone();
 
         async move {
             let our_params = params[peer].clone();
-            let server_conn = connect(
-                our_params.fed_network.clone(),
-                our_params.tls.clone(),
-                &mut task_group,
-            )
-            .await;
-            let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
 
-            let rng = OsRng;
-            let cfg = ServerConfig::distributed_gen(
-                code_version,
-                &connections,
-                peer,
-                &peers,
-                &our_params,
-                module_config_gens,
-                rng,
-                &mut task_group,
-            );
+            let cfg = ServerConfig::distributed_gen(&our_params, registry, &mut task_group);
             (*peer, cfg.await.expect("generation failed"))
         }
     }))
     .await
     .into_iter()
-    .map(|(peer_id, maybe_cancelled)| maybe_cancelled.map(|v| (peer_id, v)))
     .collect();
-
-    let configs = configs?;
 
     let (_, config) = configs.first().unwrap().clone();
 
     Ok((
         configs.into_iter().collect(),
-        config
-            .consensus
-            .to_config_response(&module_config_gens)
-            .client,
+        config.consensus.to_config_response(&registry).client,
     ))
 }
 
