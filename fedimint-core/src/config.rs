@@ -11,10 +11,7 @@ use bitcoin_hashes::hex::{FromHex, ToHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use fedimint_core::cancellable::Cancelled;
-use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
@@ -231,29 +228,42 @@ impl ClientConfig {
 ///
 /// The same `ModuleKind` may have multiple instances with different settings
 #[derive(Debug, Clone, Default)]
-pub struct ConfigGenParams(BTreeMap<String, serde_json::Value>);
+pub struct ConfigGenParams {
+    modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+    pub registry: ModuleGenRegistry,
+}
 
 impl ConfigGenParams {
     pub fn new() -> ConfigGenParams {
         ConfigGenParams::default()
     }
 
-    /// Add params for a module
+    pub fn generators(&self) -> Vec<(ModuleInstanceId, DynModuleGen)> {
+        self.modules
+            .iter()
+            .map(|(id, kind)| (*id, self.registry.get(kind.kind()).expect("Exists").clone()))
+            .collect()
+    }
+
+    /// Add a module with configuration parameters
     pub fn attach<P: ModuleGenParams>(mut self, module_params: P) -> Self {
-        self.0.insert(
-            P::MODULE_NAME.to_string(),
+        let next_id = self.modules.len() as u16;
+        let value = JsonWithKind::new(
+            ModuleKind::from_static_str(P::MODULE_NAME),
             serde_json::to_value(&module_params).expect("Encoding to value doesn't fail"),
         );
+        self.registry.insert(value.kind.clone(), P::module_gen());
+        self.modules.insert(next_id, value);
         self
     }
 
-    /// Retrieve a typed config generation parameters for a module
-    pub fn get<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
+    /// Retrieve typed config generation parameters for a module
+    pub fn get<P: ModuleGenParams>(&self, id: &ModuleInstanceId) -> anyhow::Result<P> {
         let value = self
-            .0
-            .get(P::MODULE_NAME)
-            .ok_or_else(|| anyhow::anyhow!("No params found for module {}", P::MODULE_NAME))?;
-        serde_json::from_value(value.clone())
+            .modules
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("No params found for module {}", id))?;
+        serde_json::from_value(value.value().clone())
             .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
     }
 }
@@ -270,25 +280,12 @@ impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
 }
 
 impl ModuleGenRegistry {
-    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
-        self.0.get(k)
+    pub fn insert(&mut self, k: ModuleKind, v: DynModuleGen) {
+        self.0.insert(k, v);
     }
 
-    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
-    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
-        for hardcoded_module in ["mint", "ln", "wallet"] {
-            if !self
-                .0
-                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
-            {
-                panic!("Missing {hardcoded_module} module");
-            }
-        }
-
-        LegacyInitOrderIter {
-            next_id: 0,
-            rest: self.0.clone(),
-        }
+    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
+        self.0.get(k)
     }
 
     pub fn decoders<'a>(
@@ -307,57 +304,11 @@ impl ModuleGenRegistry {
     }
 }
 
-/// Iterate over module generators in a legacy, hardcoded order: ln, mint,
-/// wallet, rest... Returning each `kind` exactly once, so that
-/// `LEGACY_HARDCODED_` constants correspond to correct module kind.
-///
-/// We would like to get rid of it eventually, but old client and test code
-/// assumes it in multiple places, and it will take work to fix it, while we
-/// want new code to not assume this 1:1 relationship.
-pub struct LegacyInitOrderIter {
-    /// Counter of what module id will this returned value get assigned
-    next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, DynModuleGen>,
-}
-
-impl Iterator for LegacyInitOrderIter {
-    type Item = (ModuleKind, DynModuleGen);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let ret = match self.next_id {
-            LEGACY_HARDCODED_INSTANCE_ID_LN => {
-                let kind = ModuleKind::from_static_str("ln");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
-                let kind = ModuleKind::from_static_str("mint");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
-                let kind = ModuleKind::from_static_str("wallet");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            _ => self.rest.pop_first(),
-        };
-
-        if ret.is_some() {
-            self.next_id += 1;
-        }
-        ret
-    }
-}
-
 pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE_NAME: &'static str;
+
+    // TODO: make a const?
+    fn module_gen() -> DynModuleGen;
 }
 
 /// Response from the API for this particular module

@@ -16,8 +16,8 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, DynModuleGen,
+    InputMeta, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
@@ -89,6 +89,7 @@ impl ModuleGen for DummyConfigGenerator {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
+        _module_id: ModuleInstanceId,
         _params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let mint_cfg: BTreeMap<_, DummyConfig> = peers
@@ -164,6 +165,10 @@ pub struct DummyConfigGenParams {
 
 impl ModuleGenParams for DummyConfigGenParams {
     const MODULE_NAME: &'static str = "dummy";
+
+    fn module_gen() -> DynModuleGen {
+        DynModuleGen::from(DummyConfigGenerator)
+    }
 }
 
 #[derive(

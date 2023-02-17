@@ -20,7 +20,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    DynModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
@@ -179,9 +179,12 @@ impl ModuleGen for MintGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
+        module_id: ModuleInstanceId,
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = params.get::<MintGenParams>().expect("Invalid mint params");
+        let params = params
+            .get::<MintGenParams>(&module_id)
+            .expect("Invalid mint params");
 
         let tbs_keys = params
             .mint_amounts
@@ -253,7 +256,9 @@ impl ModuleGen for MintGen {
         peers: &[PeerId],
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
-        let params = params.get::<MintGenParams>().expect("Invalid mint params");
+        let params = params
+            .get::<MintGenParams>(&module_instance_id)
+            .expect("Invalid mint params");
 
         let mut dkg = DkgRunner::multi(
             params.mint_amounts.to_vec(),
@@ -402,6 +407,10 @@ pub struct MintGenParams {
 
 impl ModuleGenParams for MintGenParams {
     const MODULE_NAME: &'static str = "mint";
+
+    fn module_gen() -> DynModuleGen {
+        DynModuleGen::from(MintGen)
+    }
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]
@@ -1264,6 +1273,7 @@ mod test {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
         let mint_cfg = MintGen.trusted_dealer_gen(
             &peers,
+            0_u16,
             &ConfigGenParams::new().attach(MintGenParams {
                 mint_amounts: vec![Amount::from_sats(1)],
             }),

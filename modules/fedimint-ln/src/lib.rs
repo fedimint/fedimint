@@ -23,8 +23,8 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
+    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
@@ -33,7 +33,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    DynModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
@@ -253,6 +253,17 @@ pub struct LightningVerificationCache;
 #[derive(Debug)]
 pub struct LightningGen;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningGenParams;
+
+impl ModuleGenParams for LightningGenParams {
+    const MODULE_NAME: &'static str = "ln";
+
+    fn module_gen() -> DynModuleGen {
+        DynModuleGen::from(LightningGen)
+    }
+}
+
 #[async_trait]
 impl ModuleGen for LightningGen {
     const KIND: ModuleKind = KIND;
@@ -280,6 +291,7 @@ impl ModuleGen for LightningGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
+        _module_id: ModuleInstanceId,
         _params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);

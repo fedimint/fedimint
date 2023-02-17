@@ -292,6 +292,7 @@ pub trait IModuleGen: Debug {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
+        module_id: ModuleInstanceId,
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
@@ -448,6 +449,7 @@ pub trait ModuleGen: Debug + Sized {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
+        module_id: ModuleInstanceId,
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
@@ -512,9 +514,10 @@ where
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
+        module_id: ModuleInstanceId,
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ModuleGen>::trusted_dealer_gen(self, peers, params)
+        <Self as ModuleGen>::trusted_dealer_gen(self, peers, module_id, params)
     }
 
     async fn distributed_gen(

@@ -23,13 +23,12 @@ use fedimint_core::core::{
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_core::module::DynModuleGen;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
-use fedimint_ln::{LightningGateway, LightningGen};
+use fedimint_ln::LightningGateway;
 use fedimint_mint::db::NonceKeyPrefix;
-use fedimint_mint::{MintGen, MintOutput};
+use fedimint_mint::MintOutput;
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
 use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
@@ -46,7 +45,7 @@ use fedimint_testing::ln::fixtures::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
-use fedimint_wallet::{SpendableUTXO, Wallet, WalletGen};
+use fedimint_wallet::{SpendableUTXO, Wallet};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
@@ -151,12 +150,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     );
     let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
     let max_evil = hbbft::util::max_faulty(peers.len());
-
-    let module_inits = ModuleGenRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ]);
+    let params0 = params[&PeerId::from(0)].clone();
+    let module_inits = params0.modules.registry.clone();
 
     let decoders = module_decode_stubs();
 
@@ -207,7 +202,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
-                module_inits.clone(),
+                params0.clone(),
                 |_cfg: ServerConfig, _db| Box::pin(async { BTreeMap::default() }),
                 &mut task_group,
             )
@@ -254,7 +249,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config = ServerConfig::trusted_dealer_gen(&params, module_inits.clone());
+            let server_config = ServerConfig::trusted_dealer_gen(&params);
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
                 .to_config_response(&module_inits)
@@ -276,7 +271,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &bitcoin_rpc,
                 &connect_gen,
-                module_inits.clone(),
+                params0.clone(),
                 // the things dealing with async makes us do...
                 // if you know how to make it better, please do --dpc
                 |cfg: ServerConfig, db: Database| {
@@ -394,12 +389,11 @@ async fn distributed_config(
         let params = params.clone();
 
         let mut task_group = task_group.clone();
-        let registry = registry.clone();
 
         async move {
             let our_params = params[peer].clone();
 
-            let cfg = ServerConfig::distributed_gen(&our_params, registry, &mut task_group);
+            let cfg = ServerConfig::distributed_gen(&our_params, &mut task_group);
             (*peer, cfg.await.expect("generation failed"))
         }
     }))
@@ -1158,7 +1152,7 @@ impl FederationTest {
         database_gen: &impl Fn(ModuleDecoderRegistry) -> Database,
         bitcoin_gen: &impl Fn() -> DynBitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
-        module_inits: ModuleGenRegistry,
+        params: ServerConfigParams,
         override_modules: impl Fn(
             ServerConfig,
             Database,
@@ -1169,7 +1163,11 @@ impl FederationTest {
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
             let btc_rpc = bitcoin_gen();
-            let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
+            let decoders = params
+                .modules
+                .registry
+                .decoders(cfg.iter_module_instances())
+                .unwrap();
             let db = database_gen(decoders.clone());
             let mut task_group = task_group.clone();
 
@@ -1187,7 +1185,8 @@ impl FederationTest {
             .await
             .unwrap_or_else(|_| panic!("Error while applying global database migrations"));
 
-            for (kind, gen) in module_inits.legacy_init_order_iter() {
+            for (_, gen) in params.modules.generators() {
+                let kind = gen.module_kind().clone();
                 let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
                 if let Some(module) = override_modules.remove(kind.as_str()) {
                     info!(module_instance_id = id, kind = %kind, "Use overriden module");
@@ -1223,7 +1222,7 @@ impl FederationTest {
             let (consensus, tx_receiver) = FedimintConsensus::new_with_modules(
                 cfg.clone(),
                 db.clone(),
-                module_inits.clone(),
+                params.modules.registry.clone(),
                 ModuleRegistry::from(modules),
             );
             let decoders = consensus.decoders();
@@ -1272,7 +1271,11 @@ impl FederationTest {
             servers,
             max_balance_sheet,
             last_consensus,
-            decoders: module_inits.decoders(cfg.iter_module_instances()).unwrap(),
+            decoders: params
+                .modules
+                .registry
+                .decoders(cfg.iter_module_instances())
+                .unwrap(),
             cfg,
             wallet,
             mint_id: LEGACY_HARDCODED_INSTANCE_ID_MINT,

@@ -36,8 +36,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, DynModuleGen,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
@@ -262,10 +263,11 @@ impl ModuleGen for WalletGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
+        module_id: ModuleInstanceId,
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
-            .get::<WalletGenParams>()
+            .get::<WalletGenParams>(&module_id)
             .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
@@ -307,7 +309,7 @@ impl ModuleGen for WalletGen {
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = params
-            .get::<WalletGenParams>()
+            .get::<WalletGenParams>(&module_instance_id)
             .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
@@ -453,6 +455,10 @@ pub struct WalletGenParams {
 
 impl ModuleGenParams for WalletGenParams {
     const MODULE_NAME: &'static str = "wallet";
+
+    fn module_gen() -> DynModuleGen {
+        DynModuleGen::from(WalletGen)
+    }
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]

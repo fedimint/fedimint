@@ -51,7 +51,7 @@ where
         let peers = (0..members)
             .map(|idx| PeerId::from(idx as u16))
             .collect::<Vec<_>>();
-        let server_cfg = conf_gen.trusted_dealer_gen(&peers, params);
+        let server_cfg = conf_gen.trusted_dealer_gen(&peers, module_instance_id, params);
         let consensus_cfg = server_cfg[&PeerId::from(0)].consensus.value().clone();
         let cfg_response = conf_gen.to_config_response(consensus_cfg)?;
 

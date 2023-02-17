@@ -162,16 +162,13 @@ async fn main() -> anyhow::Result<()> {
                 &password,
                 configure_modules(max_denomination, network, finality_delay),
             )?;
-            let server =
-                match ServerConfig::distributed_gen(&params, module_registry(), &mut task_group)
-                    .await
-                {
-                    Ok(server) => server,
-                    Err(DkgError::Cancelled(_)) => return Ok(info!("DKG cancelled")),
-                    Err(DkgError::Failed(err)) => return Err(err),
-                };
+            let server = match ServerConfig::distributed_gen(&params, &mut task_group).await {
+                Ok(server) => server,
+                Err(DkgError::Cancelled(_)) => return Ok(info!("DKG cancelled")),
+                Err(DkgError::Failed(err)) => return Err(err),
+            };
 
-            write_server_config(&server, dir_out_path, &password, &module_registry())
+            write_server_config(&server, dir_out_path, &password, &params.modules.registry)
         }
         Command::VersionHash => Ok(println!("{CODE_VERSION}")),
         Command::ConfigDecrypt {

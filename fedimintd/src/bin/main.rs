@@ -119,15 +119,7 @@ async fn run(opts: ServerOpts, mut task_group: TaskGroup) -> anyhow::Result<()> 
         let password = opts.password.clone();
         task_group
             .spawn("admin-ui", move |_| async move {
-                run_ui(
-                    data_dir,
-                    ui_sender,
-                    listen_ui,
-                    password,
-                    ui_task_group,
-                    module_registry(),
-                )
-                .await;
+                run_ui(data_dir, ui_sender, listen_ui, password, ui_task_group).await;
             })
             .await;
 

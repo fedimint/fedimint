@@ -360,7 +360,6 @@ impl ServerConfig {
 
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ServerConfigParams>,
-        registry: ModuleGenRegistry,
     ) -> BTreeMap<PeerId, Self> {
         let mut rng = OsRng;
         let peer0 = &params[&PeerId::from(0)];
@@ -373,16 +372,11 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
-        // We assume user wants one module instance for every module kind
-        let module_configs: BTreeMap<_, _> = registry
-            .legacy_init_order_iter()
-            .enumerate()
-            .map(|(module_id, (_kind, gen))| {
-                (
-                    u16::try_from(module_id).expect("Can't fail"),
-                    gen.trusted_dealer_gen(peers, &peer0.modules),
-                )
-            })
+        let module_configs: BTreeMap<_, _> = peer0
+            .modules
+            .generators()
+            .into_iter()
+            .map(|(id, gen)| (id, gen.trusted_dealer_gen(peers, id, &peer0.modules)))
             .collect();
 
         let server_config: BTreeMap<_, _> = netinfo
@@ -416,7 +410,6 @@ impl ServerConfig {
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
         params: &ServerConfigParams,
-        registry: ModuleGenRegistry,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
         let server_conn = connect(params.fed_network.clone(), params.tls.clone(), task_group).await;
@@ -427,8 +420,7 @@ impl ServerConfig {
         let our_id = &params.our_id;
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
-            let server =
-                Self::trusted_dealer_gen(&HashMap::from([(*our_id, params.clone())]), registry);
+            let server = Self::trusted_dealer_gen(&HashMap::from([(*our_id, params.clone())]));
             return Ok(server[our_id].clone());
         }
         info!("Peer {} running distributed key generation...", our_id);
@@ -448,14 +440,7 @@ impl ServerConfig {
 
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
 
-        // NOTE: Currently we do not implement user-assisted module-kind to
-        // module-instance-id assignment We assume that user wants one instance
-        // of each module that was compiled in. This is how things were
-        // initially, where we consider "module as a code" as "module as an instance at
-        // runtime"
-        for (module_instance_id, (_kind, gen)) in registry.legacy_init_order_iter().enumerate() {
-            let module_instance_id = u16::try_from(module_instance_id)
-                .expect("64k module instances should be enough for everyone");
+        for (module_instance_id, gen) in params.modules.generators() {
             module_cfgs.insert(
                 module_instance_id,
                 gen.distributed_gen(

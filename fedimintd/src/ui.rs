@@ -12,7 +12,7 @@ use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::config::ClientConfig;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
@@ -29,7 +29,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::{configure_modules, module_registry};
+use crate::configure_modules;
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -159,7 +159,6 @@ async fn post_guardians(
 
     let mut dkg_task_group = state.task_group.make_subgroup().await;
     state.dkg_task_group = Some(dkg_task_group.clone());
-    let module_gens = state.module_gens.clone();
     let password = state.password.clone();
     state
         .task_group
@@ -167,7 +166,7 @@ async fn post_guardians(
             tracing::info!("Running DKG");
 
             state_copy.lock().await.dkg_state = Some(DkgState::Running);
-            let maybe_config = match ServerConfigParams::parse_from_connect_strings(
+            let write_result = match ServerConfigParams::parse_from_connect_strings(
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
@@ -176,17 +175,19 @@ async fn post_guardians(
                 &password,
                 configure_modules(max_denomination, params.network, params.finality_delay),
             ) {
-                Ok(params) => {
-                    ServerConfig::distributed_gen(&params, module_registry(), &mut dkg_task_group)
-                        .await
-                        .map_err(|e| format_err!("Failed {}", e))
-                }
+                Ok(params) => ServerConfig::distributed_gen(&params, &mut dkg_task_group)
+                    .await
+                    .map_err(|e| format_err!("Failed {}", e))
+                    .and_then(|server| {
+                        write_server_config(
+                            &server,
+                            dir_out_path,
+                            &password,
+                            &params.modules.registry,
+                        )
+                    }),
                 Err(err) => Err(err),
             };
-
-            let write_result = maybe_config.and_then(|server| {
-                write_server_config(&server, dir_out_path, &password, &module_gens)
-            });
 
             match write_result {
                 Ok(_) => {
@@ -355,7 +356,6 @@ struct State {
     password: String,
     task_group: TaskGroup,
     dkg_task_group: Option<TaskGroup>,
-    module_gens: ModuleGenRegistry,
     dkg_state: Option<DkgState>,
 }
 type MutableState = Arc<Mutex<State>>;
@@ -379,7 +379,6 @@ pub async fn run_ui(
     bind_addr: SocketAddr,
     password: String,
     task_group: TaskGroup,
-    module_gens: ModuleGenRegistry,
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,
@@ -388,7 +387,6 @@ pub async fn run_ui(
         password,
         task_group: task_group.clone(),
         dkg_task_group: None,
-        module_gens,
         dkg_state: None,
     }));
 
