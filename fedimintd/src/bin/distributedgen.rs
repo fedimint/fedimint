@@ -5,9 +5,11 @@ use std::path::{Path, PathBuf};
 
 use aead::{encrypted_read, encrypted_write, get_key};
 use clap::{Parser, Subcommand};
+use fedimint_core::config::DkgError;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
-use fedimint_server::config::io::{create_cert, run_dkg, write_server_config, SALT_FILE};
+use fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
+use fedimint_server::config::{ServerConfig, ServerConfigParams};
 use fedimint_server::logging::TracingSetup;
 use fedimintd::*;
 use tracing::info;
@@ -151,25 +153,23 @@ async fn main() -> anyhow::Result<()> {
             finality_delay,
             password,
         } => {
-            let server = if let Ok(v) = run_dkg(
+            let params = ServerConfigParams::parse_from_connect_strings(
                 bind_p2p,
                 bind_api,
                 &dir_out_path,
                 federation_name,
                 certs,
                 &password,
-                &mut task_group,
-                CODE_VERSION,
                 configure_modules(max_denomination, network, finality_delay),
-                module_registry(),
-            )
-            .await
-            {
-                v
-            } else {
-                info!("Canceled");
-                return Ok(());
-            };
+            )?;
+            let server =
+                match ServerConfig::distributed_gen(&params, module_registry(), &mut task_group)
+                    .await
+                {
+                    Ok(server) => server,
+                    Err(DkgError::Cancelled(_)) => return Ok(info!("DKG cancelled")),
+                    Err(DkgError::Failed(err)) => return Err(err),
+                };
 
             write_server_config(&server, dir_out_path, &password, &module_registry())
         }

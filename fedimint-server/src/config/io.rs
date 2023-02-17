@@ -1,27 +1,20 @@
-use std::collections::BTreeMap;
 use std::fs;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use aead::{encrypted_read, encrypted_write, get_key, LessSafeKey};
 use anyhow::{ensure, format_err};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_core::api::WsClientConnectInfo;
-use fedimint_core::config::{ConfigGenParams, ModuleGenRegistry};
-use fedimint_core::task::TaskGroup;
-use fedimint_core::PeerId;
-use itertools::Itertools;
-use rand::rngs::OsRng;
+use fedimint_core::config::ModuleGenRegistry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_rustls::rustls;
 use url::Url;
 
-use crate::config::{
-    connect, gen_cert_and_key, PeerServerParams, ServerConfig, ServerConfigParams,
-};
-use crate::fedimint_core::net::peers::IMuxPeerConnections;
-use crate::multiplexed::PeerConnectionMultiplexer;
+use crate::config::{gen_cert_and_key, PeerServerParams, ServerConfig};
+
+/// Version of the server code (should be the same among peers)
+pub const CODE_VERSION: &str = env!("CODE_VERSION");
 
 /// Client configuration file
 pub const CLIENT_CONFIG: &str = "client";
@@ -64,67 +57,6 @@ pub fn create_cert(
     fs::write(dir_out_path.join(SALT_FILE), salt.to_hex())?;
     let key = get_key(password, dir_out_path.join(SALT_FILE))?;
     gen_tls(&dir_out_path, p2p_url, api_url, guardian_name, &key)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn run_dkg(
-    bind_p2p: SocketAddr,
-    bind_api: SocketAddr,
-    dir_out_path: &Path,
-    federation_name: String,
-    certs: Vec<String>,
-    password: &str,
-    task_group: &mut TaskGroup,
-    code_version: &str,
-    module_params: ConfigGenParams,
-    module_registry: ModuleGenRegistry,
-) -> anyhow::Result<ServerConfig> {
-    let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
-    for (idx, cert) in certs.into_iter().sorted().enumerate() {
-        peers.insert(PeerId::from(idx as u16), parse_peer_params(cert)?);
-    }
-
-    let key = get_key(password, dir_out_path.join(SALT_FILE))?;
-    let tls_pk = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
-    let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))?;
-
-    let our_params = parse_peer_params(cert_string)?;
-    let our_id = peers
-        .iter()
-        .find(|(_peer, params)| params.cert == our_params.cert)
-        .map(|(peer, _)| *peer)
-        .ok_or_else(|| anyhow::Error::msg("Our id not found"))?;
-
-    let params = ServerConfigParams::gen_params(
-        bind_p2p,
-        bind_api,
-        rustls::PrivateKey(tls_pk),
-        our_id,
-        &peers,
-        federation_name,
-        module_params,
-    );
-
-    let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
-    let server_conn = connect(params.fed_network.clone(), params.tls.clone(), task_group).await;
-
-    let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
-
-    let result = ServerConfig::distributed_gen(
-        code_version,
-        &connections,
-        &our_id,
-        &peer_ids,
-        &params,
-        module_registry,
-        OsRng,
-        task_group,
-    )
-    .await?;
-
-    drop(connections);
-
-    Ok(result?)
 }
 
 pub fn parse_peer_params(url: String) -> anyhow::Result<PeerServerParams> {

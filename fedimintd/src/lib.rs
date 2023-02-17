@@ -8,9 +8,6 @@ use fedimint_wallet::{WalletGen, WalletGenParams};
 
 pub mod ui;
 
-/// Version of the server code (should be the same among peers)
-pub const CODE_VERSION: &str = env!("GIT_HASH");
-
 /// Generates the configuration for the modules configured in the server binary
 pub fn configure_modules(
     max_denomination: Amount,

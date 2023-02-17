@@ -59,7 +59,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
-            println!("{}", env!("GIT_HASH"));
+            println!("{}", env!("CODE_VERSION"));
             return Ok(());
         }
     }

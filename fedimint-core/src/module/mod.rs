@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::cancellable::Cancellable;
 use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
 use crate::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
@@ -136,7 +135,7 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
-use fedimint_core::config::ModuleConfigResponse;
+use fedimint_core::config::{DkgResult, ModuleConfigResponse};
 
 use self::registry::ModuleDecoderRegistry;
 
@@ -303,8 +302,7 @@ pub trait IModuleGen: Debug {
         module_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>>;
+    ) -> DkgResult<ServerModuleConfig>;
 
     fn to_config_response(&self, config: serde_json::Value)
         -> anyhow::Result<ModuleConfigResponse>;
@@ -460,8 +458,7 @@ pub trait ModuleGen: Debug + Sized {
         module_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>>;
+    ) -> DkgResult<ServerModuleConfig>;
 
     fn to_config_response(&self, config: serde_json::Value)
         -> anyhow::Result<ModuleConfigResponse>;
@@ -527,18 +524,9 @@ where
         module_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
-        <Self as ModuleGen>::distributed_gen(
-            self,
-            connections,
-            our_id,
-            module_id,
-            peers,
-            params,
-            task_group,
-        )
-        .await
+    ) -> DkgResult<ServerModuleConfig> {
+        <Self as ModuleGen>::distributed_gen(self, connections, our_id, module_id, peers, params)
+            .await
     }
 
     fn to_config_response(

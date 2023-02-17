@@ -17,8 +17,9 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
 use fedimint_server::config::io::{
-    create_cert, parse_peer_params, run_dkg, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
+    create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
+use fedimint_server::config::{ServerConfig, ServerConfigParams};
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
@@ -28,7 +29,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::{configure_modules, module_registry, CODE_VERSION};
+use crate::{configure_modules, module_registry};
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -166,19 +167,22 @@ async fn post_guardians(
             tracing::info!("Running DKG");
 
             state_copy.lock().await.dkg_state = Some(DkgState::Running);
-            let maybe_config = run_dkg(
+            let maybe_config = match ServerConfigParams::parse_from_connect_strings(
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
                 params.federation_name,
                 connection_strings,
                 &password,
-                &mut dkg_task_group,
-                CODE_VERSION,
                 configure_modules(max_denomination, params.network, params.finality_delay),
-                module_registry(),
-            )
-            .await;
+            ) {
+                Ok(params) => {
+                    ServerConfig::distributed_gen(&params, module_registry(), &mut dkg_task_group)
+                        .await
+                        .map_err(|e| format_err!("Failed {}", e))
+                }
+                Err(err) => Err(err),
+            };
 
             let write_result = maybe_config.and_then(|server| {
                 write_server_config(&server, dir_out_path, &password, &module_gens)

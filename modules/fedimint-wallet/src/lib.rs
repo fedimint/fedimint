@@ -6,7 +6,7 @@ use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
-use anyhow::bail;
+use anyhow::format_err;
 use async_trait::async_trait;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
@@ -25,10 +25,9 @@ use fedimint_core::bitcoin_rpc::{
     select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
     FM_ELECTRUM_RPC_ENV,
 };
-use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
+    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
@@ -306,8 +305,7 @@ impl ModuleGen for WalletGen {
         module_instance_id: ModuleInstanceId,
         peers: &[PeerId],
         params: &ConfigGenParams,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+    ) -> DkgResult<ServerModuleConfig> {
         let params = params
             .get::<WalletGenParams>()
             .expect("Invalid wallet params");
@@ -317,28 +315,24 @@ impl ModuleGen for WalletGen {
         let our_key = CompressedPublicKey { key: pk };
         let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
 
-        if let Err(Cancelled) = connections
+        connections
             .send(
                 peers,
                 module_instance_id,
                 DkgPeerMsg::PublicKey(our_key.key),
             )
-            .await
-        {
-            return Ok(Err(Cancelled));
-        }
+            .await?;
 
         peer_peg_in_keys.insert(*our_id, our_key);
         while peer_peg_in_keys.len() < peers.len() {
-            match connections.receive(module_instance_id).await {
-                Ok((peer, DkgPeerMsg::PublicKey(key))) => {
+            match connections.receive(module_instance_id).await? {
+                (peer, DkgPeerMsg::PublicKey(key)) => {
                     peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
                 }
-                Ok((peer, msg)) => {
-                    bail!("Invalid message received from: {peer}: {msg:?}");
-                }
-                _ => {
-                    return Ok(Err(Cancelled));
+                (peer, msg) => {
+                    return Err(
+                        format_err!("Invalid message received from: {peer}: {msg:?}").into(),
+                    );
                 }
             }
         }
@@ -351,7 +345,7 @@ impl ModuleGen for WalletGen {
             params.finality_delay,
         );
 
-        Ok(Ok(wallet_cfg.to_erased()))
+        Ok(wallet_cfg.to_erased())
     }
 
     fn to_config_response(

@@ -10,6 +10,7 @@ use bitcoin::secp256k1;
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
+use fedimint_core::cancellable::Cancelled;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -19,6 +20,7 @@ use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tbs::{serde_impl, Scalar};
+use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
@@ -225,14 +227,9 @@ impl ClientConfig {
     }
 }
 
-/// Global Fedimint configuration generation settings passed to modules
+/// Parameters for generating all module configs
 ///
-/// This includes typed module settings for know modules for simplicity,
-/// and better UX, while the non-standard modules have to use a type-erased
-/// config.
-///
-/// Candidate for re-designing when the modularization effort is
-/// complete.
+/// The same `ModuleKind` may have multiple instances with different settings
 #[derive(Debug, Clone, Default)]
 pub struct ConfigGenParams(BTreeMap<String, serde_json::Value>);
 
@@ -500,6 +497,20 @@ pub enum DkgPeerMsg {
     DistributedGen((String, SupportedDkgMessage)),
     // Dkg completed on our side
     Done,
+}
+
+/// Result of running DKG
+pub type DkgResult<T> = Result<T, DkgError>;
+
+#[derive(Error, Debug)]
+/// Captures an error occurring in DKG
+pub enum DkgError {
+    /// User has cancelled the DKG task
+    #[error("Operation cancelled")]
+    Cancelled(#[from] Cancelled),
+    /// Error running DKG
+    #[error("Running DKG failed due to {0}")]
+    Failed(#[from] anyhow::Error),
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types

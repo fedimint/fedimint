@@ -5,7 +5,7 @@ use std::io::Write;
 
 use anyhow::{ensure, format_err};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
-use fedimint_core::config::{DkgGroup, DkgMessage, DkgPeerMsg, ISupportedDkgMessage};
+use fedimint_core::config::{DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::{BitcoinHash, PeerId};
@@ -272,7 +272,7 @@ where
         module_id: ModuleInstanceId,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> anyhow::Result<HashMap<T, DkgKeys<G2Projective>>> {
+    ) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>> {
         self.run(module_id, G2Projective::generator(), connections, rng)
             .await
     }
@@ -283,7 +283,7 @@ where
         module_id: ModuleInstanceId,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> anyhow::Result<HashMap<T, DkgKeys<G1Projective>>> {
+    ) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>> {
         self.run(module_id, G1Projective::generator(), connections, rng)
             .await
     }
@@ -295,7 +295,7 @@ where
         group: G,
         connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> anyhow::Result<HashMap<T, DkgKeys<G>>>
+    ) -> DkgResult<HashMap<T, DkgKeys<G>>>
     where
         DkgMessage<G>: ISupportedDkgMessage,
     {
@@ -337,25 +337,19 @@ where
                 )),
             };
 
-            let (key, message) = parsed_msg?;
-            let key = serde_json::from_str(&key).expect("invalid key");
-            let message = ISupportedDkgMessage::from_msg(message).expect("invalid message");
+            let (key_string, message) = parsed_msg?;
+            let key = serde_json::from_str(&key_string)
+                .map_err(|e| format_err!("Failed to parse {}", e))?;
+            let message = ISupportedDkgMessage::from_msg(message)?;
             let step = dkgs.get_mut(&key).expect("exists").step(peer, message)?;
 
             match step {
                 DkgStep::Messages(messages) => {
                     for (peer, msg) in messages {
-                        connections
-                            .send(
-                                &[peer],
-                                module_id,
-                                DkgPeerMsg::DistributedGen((
-                                    serde_json::to_string(&key)
-                                        .expect("FIXME - handle errors here"),
-                                    msg.to_msg(),
-                                )),
-                            )
-                            .await?;
+                        let send_msg =
+                            DkgPeerMsg::DistributedGen((key_string.clone(), msg.to_msg()));
+
+                        connections.send(&[peer], module_id, send_msg).await?;
                     }
                 }
                 DkgStep::Result(result) => {
