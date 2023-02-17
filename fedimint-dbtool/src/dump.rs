@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use erased_serde::Serialize;
 use fedimint_core::config::ModuleGenRegistry;
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{DatabaseTransaction, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::DynModuleGen;
 use fedimint_core::module::__reexports::serde_json;
@@ -60,10 +60,11 @@ impl<'a> DatabaseDump<'a> {
                 panic!("Error reading RocksDB database. Quitting...");
             }
         };
+        let single_use = SingleUseDatabaseTransaction::new(read_only);
 
         if modules.contains(&"client".to_string()) {
             let dbtx =
-                DatabaseTransaction::new(Box::new(read_only), ModuleDecoderRegistry::default());
+                DatabaseTransaction::new(Box::new(single_use), ModuleDecoderRegistry::default());
             return DatabaseDump {
                 serialized: BTreeMap::new(),
                 read_only: dbtx,
@@ -82,7 +83,7 @@ impl<'a> DatabaseDump<'a> {
 
         let cfg = read_server_config(&password, cfg_dir).unwrap();
         let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
-        let dbtx = DatabaseTransaction::new(Box::new(read_only), decoders);
+        let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders);
 
         DatabaseDump {
             serialized: BTreeMap::new(),
