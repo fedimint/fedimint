@@ -2,7 +2,6 @@ name: fedimint-dev
 root: .
 socket_name: fedimint-dev
 pre_window:
-  - source .tmpenv
   - alias ln1="\$FM_LN1"
   - alias ln2="\$FM_LN2"
   - alias bitcoin-cli="\$FM_BTC_CLIENT"
