@@ -15,6 +15,7 @@ use anyhow::format_err;
 use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::{sha256, Hash};
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
 
@@ -532,7 +533,7 @@ where
 }
 /// Wrappers for `T` that are `De-Serializable`, while we need them in
 /// `Encodable` contex
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct SerdeEncodable<T>(pub T);
 
 impl<T> Encodable for SerdeEncodable<T>
