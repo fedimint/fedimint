@@ -507,7 +507,14 @@ impl ClnHtlcInterceptor {
         let htlc_expiry = payload.htlc.cltv_expiry;
 
         let short_channel_id = match payload.onion.short_channel_id {
-            Some(scid) => scid,
+            Some(scid) => match ShortChannelId::from_str(&scid) {
+                Ok(scid) => scid_to_u64(scid),
+                Err(_) => {
+                    // Ignore invalid SCID
+                    error!("Received invalid short channel id {:?}", scid);
+                    return serde_json::json!({ "result": "continue" });
+                }
+            },
             None => {
                 // This is a HTLC terminating at the gateway node. DO NOT intercept
                 return serde_json::json!({ "result": "continue" });
