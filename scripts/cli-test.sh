@@ -19,7 +19,7 @@ cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/con
 ./scripts/pegin.sh # peg in user
 
 export PEG_IN_AMOUNT=99999
-start_gateway
+start_gatewayd
 ./scripts/pegin.sh $PEG_IN_AMOUNT 1 # peg in gateway
 
 #### BEGIN TESTS ####
