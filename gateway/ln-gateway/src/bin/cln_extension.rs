@@ -77,13 +77,13 @@ where
     ))
 }
 
-// TODO: Keep in sync with cln-plugin:
+// TODO: upstream these structs to cln-plugin
 // See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Htlc {
-    pub short_channel_id: u64,
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub amount_msat: Amount,
+    // TODO: use these to validate we can actually redeem the HTLC in time
     pub cltv_expiry: u32,
     pub cltv_expiry_relative: u32,
     pub payment_hash: bitcoin_hashes::sha256::Hash,
@@ -92,7 +92,7 @@ pub struct Htlc {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Onion {
     #[serde(default)]
-    pub short_channel_id: Option<u64>,
+    pub short_channel_id: Option<String>,
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub forward_msat: Amount,
 }
