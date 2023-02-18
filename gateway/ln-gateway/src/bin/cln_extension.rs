@@ -33,7 +33,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 use tonic::Status;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
@@ -60,7 +60,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .add_service(GatewayLightningServer::new(service))
         .serve(listen)
         .await
-        .map_err(|_| ClnExtensionError::Error(anyhow!("Failed to start server")))?;
+        .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
 
     Ok(())
 }
@@ -396,6 +396,8 @@ impl GatewayLightning for ClnRpcService {
             }
         };
 
+        info!("Completing htlc with reference, {:?}", hash);
+
         if let Some(outcome) = self.interceptor.outcomes.lock().await.remove(&hash) {
             // Translate action request into a cln rpc response for `htlc_accepted` event
             let htlca_res = match action {
@@ -500,6 +502,8 @@ impl ClnHtlcInterceptor {
     }
 
     async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
+        info!("Intercepted htlc with payload, {:?}", payload);
+
         let htlc_expiry = payload.htlc.cltv_expiry;
 
         let short_channel_id = match payload.onion.short_channel_id {
@@ -510,12 +514,19 @@ impl ClnHtlcInterceptor {
             }
         };
 
+        info!("Intercepted htlc with SCID: {:?}", short_channel_id);
+
         if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
             let payment_hash = payload.htlc.payment_hash.to_vec();
 
-            // This has a chance of collission since payment_hashes are not guaranteed to be
+            // This has a chance of collision since payment_hashes are not guaranteed to be
             // unique TODO: generate unique id for each intercepted HTLC
             let intercepted_htlc_id = sha256::Hash::hash(&payment_hash);
+
+            info!(
+                "Sending htlc to gatewayd for processing. Reference {:?}",
+                intercepted_htlc_id
+            );
 
             match subscription
                 .send(Ok(SubscribeInterceptHtlcsResponse {

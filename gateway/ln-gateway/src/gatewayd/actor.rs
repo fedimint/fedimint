@@ -92,6 +92,7 @@ impl GatewayActor {
             .to_owned()
             .subscribe_htlcs(SubscribeInterceptHtlcsRequest { short_channel_id })
             .await?;
+        info!("Subscribed to HTLCs with {:?}", short_channel_id);
 
         let actor = self.to_owned();
         let lnrpc_copy = self.lnrpc.to_owned();
