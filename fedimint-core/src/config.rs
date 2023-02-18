@@ -147,9 +147,10 @@ impl Display for FederationId {
 
 /// Display as a hex encoding
 impl FederationId {
-    /// Non-unique dummy id for testing
+    /// Random dummy id for testing
     pub fn dummy() -> Self {
-        Self(threshold_crypto::PublicKey::from(G1Projective::identity()))
+        let rand_pk = threshold_crypto::SecretKey::random().public_key();
+        Self(rand_pk)
     }
 
     fn try_from_bytes(bytes: [u8; 48]) -> Option<Self> {
