@@ -33,6 +33,12 @@ pub struct GatewayActor {
     task_group: TaskGroup,
 }
 
+#[derive(Debug, Clone)]
+pub enum BuyPreimage {
+    Internal((OutPoint, ContractId)),
+    External(Preimage),
+}
+
 impl GatewayActor {
     pub async fn new(
         client: Arc<GatewayClient>,
@@ -148,7 +154,36 @@ impl GatewayActor {
 
                     let amount_msat = Amount::from_msats(outgoing_amount_msat);
 
-                    match actor.buy_preimage_internal(&hash, &amount_msat).await {
+                    let (outpoint, contract_id) =
+                        match actor.buy_preimage_internal(&hash, &amount_msat).await {
+                            Ok((outpoint, contract_id)) => (outpoint, contract_id),
+                            Err(e) => {
+                                error!("Failed to buy preimage: {:?}", e);
+                                // Note: this specific complete htlc requires no futher action.
+                                // If we fail to send the complete htlc message, or get an error
+                                // result, lightning node will still
+                                // cancel HTCL after expiry period lapses.
+                                // Result can be safely ignored.
+                                // TODO: make sure this succeeded?
+                                let _ = lnrpc_copy
+                                    .complete_htlc(CompleteHtlcsRequest {
+                                        intercepted_htlc_id,
+                                        action: Some(Action::Cancel(Cancel {
+                                            reason: e.to_string(),
+                                        })),
+                                    })
+                                    .await;
+                                return;
+                            }
+                        };
+
+                    match actor
+                        .pay_invoice_buy_preimage_finalize(BuyPreimage::Internal((
+                            outpoint,
+                            contract_id,
+                        )))
+                        .await
+                    {
                         Ok(preimage) => {
                             info!("Successfully processed intercepted HTLC");
                             if let Err(e) = lnrpc_copy
@@ -218,8 +253,16 @@ impl GatewayActor {
 
     #[instrument(skip_all, fields(%contract_id))]
     pub async fn pay_invoice(&self, contract_id: ContractId) -> Result<OutPoint> {
+        self.pay_invoice_buy_preimage_finalize_and_claim(
+            contract_id,
+            self.pay_invoice_buy_preimage(contract_id).await?,
+        )
+        .await
+    }
+
+    #[instrument(skip_all, fields(%contract_id), err)]
+    pub async fn pay_invoice_buy_preimage(&self, contract_id: ContractId) -> Result<BuyPreimage> {
         debug!("Fetching contract");
-        let rng = rand::rngs::OsRng;
         let contract_account = self.client.fetch_outgoing_contract(contract_id).await?;
 
         let payment_params = match self
@@ -253,25 +296,53 @@ impl GatewayActor {
                 .await
                 .unwrap_or(false);
 
-        let preimage_res = if is_internal_payment {
-            self.buy_preimage_internal(&payment_params.payment_hash, &payment_params.invoice_amount)
-                .await
+        Ok(if is_internal_payment {
+            BuyPreimage::Internal(
+                self.buy_preimage_internal(
+                    &payment_params.payment_hash,
+                    &payment_params.invoice_amount,
+                )
+                .await?,
+            )
         } else {
-            self.buy_preimage_external(contract_account.contract.invoice, &payment_params)
-                .await
-        };
+            BuyPreimage::External(
+                self.buy_preimage_external(contract_account.contract.invoice, &payment_params)
+                    .await?,
+            )
+        })
+    }
 
-        match preimage_res {
+    pub async fn pay_invoice_buy_preimage_finalize(
+        &self,
+        buy_preimage: BuyPreimage,
+    ) -> Result<Preimage> {
+        match buy_preimage {
+            BuyPreimage::Internal((out_point, contract_id)) => {
+                self.buy_preimage_internal_await_decryption(out_point, contract_id)
+                    .await
+            }
+            BuyPreimage::External(preimage) => Ok(preimage),
+        }
+    }
+
+    #[instrument(skip_all, fields(?buy_preimage), err)]
+    pub async fn pay_invoice_buy_preimage_finalize_and_claim(
+        &self,
+        contract_id: ContractId,
+        buy_preimage: BuyPreimage,
+    ) -> Result<OutPoint> {
+        let rng = rand::rngs::OsRng;
+
+        match self.pay_invoice_buy_preimage_finalize(buy_preimage).await {
             Ok(preimage) => {
                 let outpoint = self
                     .client
                     .claim_outgoing_contract(contract_id, preimage, rng)
                     .await?;
-
                 Ok(outpoint)
             }
             Err(e) => {
-                warn!("Invoice payment failed: {}. Aborting", e);
+                warn!("Invoice payment failed. Aborting");
                 // FIXME: combine both errors?
                 self.client.abort_outgoing_payment(contract_id).await?;
                 Err(e)
@@ -279,31 +350,38 @@ impl GatewayActor {
         }
     }
 
+    #[instrument(skip(self), ret, err)]
     pub async fn buy_preimage_internal(
         &self,
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
-    ) -> Result<Preimage> {
+    ) -> Result<(OutPoint, ContractId)> {
+        let mut rng = rand::rngs::OsRng;
+
         self.fetch_all_notes().await;
 
-        let mut rng = rand::rngs::OsRng;
-        let (out_point, contract_id) = self
+        Ok(self
             .client
             .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
-            .await?;
+            .await?)
+    }
 
-        debug!("Awaiting decryption of preimage of hash {}", payment_hash);
+    #[instrument(skip(self), ret, err)]
+    pub async fn buy_preimage_internal_await_decryption(
+        &self,
+        out_point: OutPoint,
+        contract_id: ContractId,
+    ) -> Result<Preimage> {
+        let rng = rand::rngs::OsRng;
+
         match self.client.await_preimage_decryption(out_point).await {
-            Ok(preimage) => {
-                debug!("Decrypted preimage {:?}", preimage);
-                Ok(preimage)
-            }
-            Err(e) => {
-                warn!("Failed to decrypt preimage. Now requesting a refund: {}", e);
+            Ok(preimage) => Ok(preimage),
+            Err(error) => {
+                warn!(%error, "Failed to decrypt preimage. Now requesting a refund");
                 self.client
                     .refund_incoming_contract(contract_id, rng)
                     .await?;
-                Err(LnGatewayError::ClientError(e))
+                Err(LnGatewayError::ClientError(error))
             }
         }
     }

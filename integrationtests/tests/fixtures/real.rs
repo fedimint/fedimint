@@ -24,6 +24,7 @@ use url::Url;
 
 use crate::fixtures::LightningTest;
 
+#[derive(Clone)]
 pub struct RealLightningTest {
     rpc_gateway: Arc<Mutex<ClnRpc>>,
     rpc_other: Arc<Mutex<ClnRpc>>,

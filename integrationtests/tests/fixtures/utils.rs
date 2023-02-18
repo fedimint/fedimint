@@ -1,26 +1,29 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Error;
+use anyhow::anyhow;
 use async_trait::async_trait;
-use bitcoin::secp256k1::PublicKey;
-use fedimint_ln::contracts::Preimage;
-use fedimint_ln::route_hints::RouteHint;
-use ln_gateway::ln::{LightningError, LnRpc};
+use ln_gateway::gatewayd::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
+use ln_gateway::gatewaylnrpc::{
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+};
+use ln_gateway::LnGatewayError;
 use tokio::sync::Mutex;
 
 /// A proxy for the underlying LnRpc which can be used to add behavoir to it
 /// using the "Decorator pattern"
+#[derive(Debug, Clone)]
 pub struct LnRpcAdapter {
-    /// The actual LnRpc that we add behavior to.
-    client: Box<dyn LnRpc>,
-    /// A pair of <Invoice> and <Count> where client.pay() will fail <Count>
-    /// times for each <Invoice>
-    fail_invoices: Arc<Mutex<HashMap<lightning_invoice::Invoice, u8>>>,
+    /// The actual `ILnRpcClient` that we add behavior to.
+    client: DynLnRpcClient,
+    /// A pair of <PayInvoiceRequest> and <Count> where client.pay() will fail
+    /// <Count> times for each <String> (bolt11 invoice)
+    fail_invoices: Arc<Mutex<HashMap<String, u8>>>,
 }
 
 impl LnRpcAdapter {
-    pub fn new(client: Box<dyn LnRpc>) -> Self {
+    pub fn new(client: DynLnRpcClient) -> Self {
         let fail_invoices = Arc::new(Mutex::new(HashMap::new()));
 
         LnRpcAdapter {
@@ -32,40 +35,52 @@ impl LnRpcAdapter {
     /// Register <invoice> to fail <times> before (attempt) succeeding. The
     /// invoice will be dropped from the HashMap after succeeding
     #[allow(dead_code)]
-    pub async fn fail_invoice(&self, invoice: lightning_invoice::Invoice, times: u8) {
-        self.fail_invoices.lock().await.insert(invoice, times + 1);
+    pub async fn fail_invoice(&self, invoice: PayInvoiceRequest, times: u8) {
+        self.fail_invoices
+            .lock()
+            .await
+            .insert(invoice.invoice, times + 1);
     }
 }
 
 #[async_trait]
-impl LnRpc for LnRpcAdapter {
-    async fn pubkey(&self) -> Result<PublicKey, LightningError> {
+impl ILnRpcClient for LnRpcAdapter {
+    async fn pubkey(&self) -> ln_gateway::Result<GetPubKeyResponse> {
         self.client.pubkey().await
     }
 
-    async fn pay(
-        &self,
-        invoice: lightning_invoice::Invoice,
-        max_delay: u64,
-        max_fee_percent: f64,
-    ) -> Result<Preimage, LightningError> {
+    async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
+        self.client.routehints().await
+    }
+
+    async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
         self.fail_invoices
             .lock()
             .await
-            .entry(invoice.clone())
+            .entry(invoice.invoice.clone())
             .and_modify(|counter| {
                 *counter -= 1;
             });
-        if let Some(counter) = self.fail_invoices.lock().await.get(&invoice) {
+        if let Some(counter) = self.fail_invoices.lock().await.get(&invoice.invoice) {
             if *counter > 0 {
-                return Err(LightningError(None));
+                return Err(LnGatewayError::Other(anyhow!("expected test error")));
             }
         }
-        self.fail_invoices.lock().await.remove(&invoice);
-        self.client.pay(invoice, max_delay, max_fee_percent).await
+        self.fail_invoices.lock().await.remove(&invoice.invoice);
+        self.client.pay(invoice).await
     }
 
-    async fn route_hints(&self) -> Result<Vec<RouteHint>, Error> {
-        Ok(vec![RouteHint(vec![])])
+    async fn subscribe_htlcs<'a>(
+        &self,
+        subscription: SubscribeInterceptHtlcsRequest,
+    ) -> ln_gateway::Result<HtlcStream<'a>> {
+        self.client.subscribe_htlcs(subscription).await
+    }
+
+    async fn complete_htlc(
+        &self,
+        complete: CompleteHtlcsRequest,
+    ) -> ln_gateway::Result<CompleteHtlcsResponse> {
+        self.client.complete_htlc(complete).await
     }
 }

@@ -515,7 +515,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         let claim_outpoint = {
             let buy_preimage = gateway
                 .actor
-                .pay_invoice_buy_preimage(gateway.adapter.clone(), contract_id)
+                .pay_invoice_buy_preimage(contract_id)
                 .await
                 .unwrap();
 
@@ -599,11 +599,7 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
             .await
             .unwrap();
 
-        let claim_outpoint = gateway
-            .actor
-            .pay_invoice(gateway.adapter.clone(), contract_id)
-            .await
-            .unwrap();
+        let claim_outpoint = gateway.actor.pay_invoice(contract_id).await.unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway
@@ -678,7 +674,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         let response = {
             let buy_preimage = gateway
                 .actor
-                .pay_invoice_buy_preimage(gateway.adapter.clone(), contract_id)
+                .pay_invoice_buy_preimage(contract_id)
                 .await
                 .unwrap();
 
