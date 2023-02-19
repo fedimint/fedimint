@@ -17,10 +17,6 @@ name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
 [[bin]]
-name = "ln_gateway"
-path = "src/bin/ln_gateway.rs"
-
-[[bin]]
 name = "gateway-cln-extension"
 path = "src/bin/cln_extension.rs"
 
