@@ -13,12 +13,12 @@ use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::gatewayd::lnrpc_client::DynLnRpcClient;
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::{
     CompleteHtlcsRequest, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
+use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::FederationInfo;
 use crate::utils::retry;
 use crate::{LnGatewayError, Result};

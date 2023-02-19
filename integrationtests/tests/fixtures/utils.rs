@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use ln_gateway::gatewayd::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
 use ln_gateway::gatewaylnrpc::{
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
+use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
 use ln_gateway::LnGatewayError;
 use tokio::sync::Mutex;
 

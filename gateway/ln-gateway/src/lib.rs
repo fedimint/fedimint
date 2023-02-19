@@ -1,9 +1,12 @@
+pub mod actor;
 pub mod client;
 pub mod cln;
 pub mod config;
-pub mod gatewayd;
+pub mod gateway;
 pub mod ln;
+pub mod lnrpc_client;
 pub mod rpc;
+pub mod types;
 pub mod utils;
 
 pub mod gatewaylnrpc {
