@@ -89,6 +89,7 @@ function kill_fedimint_processes {
   # shellcheck disable=SC2046
   kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') 2>/dev/null #sed reverses the order here
   pkill "gatewayd" 2>/dev/null || true;
+  pkill "gateway-cln-extension" 2>/dev/null || true;
   rm -f $FM_PID_FILE
 }
 
