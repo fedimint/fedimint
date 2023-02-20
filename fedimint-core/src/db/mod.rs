@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use futures::{stream, Stream, StreamExt};
@@ -299,15 +299,15 @@ pub trait ISingleUseDatabaseTransaction<'a>: 'a + Send {
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_>;
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
 
     async fn commit_tx(&mut self) -> Result<()>;
 
-    async fn rollback_tx_to_savepoint(&mut self);
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
 
-    async fn set_tx_savepoint(&mut self);
+    async fn set_tx_savepoint(&mut self) -> Result<()>;
 }
 
 /// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
@@ -328,70 +328,70 @@ impl<'a, Tx: IDatabaseTransaction<'a> + Send> ISingleUseDatabaseTransaction<'a>
     for SingleUseDatabaseTransaction<'a, Tx>
 {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        match &mut self.0 {
-            Some(tx) => tx.raw_insert_bytes(key, value).await,
-            None => Err(anyhow::anyhow!(
-                "Cannot insert into already consumed transaction"
-            )),
-        }
+        self.0
+            .as_mut()
+            .context("Cannot insert into already consumed transaction")?
+            .raw_insert_bytes(key, value)
+            .await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        match &mut self.0 {
-            Some(tx) => tx.raw_get_bytes(key).await,
-            None => Err(anyhow::anyhow!(
-                "Cannot retrieve from already consumed transaction"
-            )),
-        }
+        self.0
+            .as_mut()
+            .context("Cannot retrieve from already consumed transaction")?
+            .raw_get_bytes(key)
+            .await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        match &mut self.0 {
-            Some(tx) => tx.raw_remove_entry(key).await,
-            None => Err(anyhow::anyhow!(
-                "Cannot remove from already consumed transaction"
-            )),
-        }
+        self.0
+            .as_mut()
+            .context("Cannot remove from already consumed transaction")?
+            .raw_remove_entry(key)
+            .await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        match &mut self.0 {
-            Some(tx) => tx.raw_find_by_prefix(key_prefix).await,
-            None => panic!("Cannot retrieve from already consumed transaction"),
-        }
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        Ok(self
+            .0
+            .as_mut()
+            .context("Cannot retreive from already consumed transaction")?
+            .raw_find_by_prefix(key_prefix)
+            .await)
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        match &mut self.0 {
-            Some(tx) => tx.raw_remove_by_prefix(key_prefix).await,
-            None => Err(anyhow::anyhow!(
-                "Cannot remove from already consumed transaction"
-            )),
-        }
+        self.0
+            .as_mut()
+            .context("Cannot remove from already consumed transaction")?
+            .raw_remove_by_prefix(key_prefix)
+            .await
     }
 
     async fn commit_tx(&mut self) -> Result<()> {
-        if let Some(tx) = self.0.take() {
-            return tx.commit_tx().await;
-        }
-
-        Err(anyhow::anyhow!(
-            "Cannot commit an already committed transaction"
-        ))
+        self.0
+            .take()
+            .context("Cannot commit an already committed transaction")?
+            .commit_tx()
+            .await
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) {
-        match &mut self.0 {
-            Some(tx) => tx.rollback_tx_to_savepoint().await,
-            None => panic!("Cannot rollback to a savepoint on an already consumed transaction"),
-        }
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.0
+            .as_mut()
+            .context("Cannot rollback to a savepoint on an already consumed transaction")?
+            .rollback_tx_to_savepoint()
+            .await;
+        Ok(())
     }
 
-    async fn set_tx_savepoint(&mut self) {
-        match &mut self.0 {
-            Some(tx) => tx.set_tx_savepoint().await,
-            None => panic!("Cannot set a tx savepoint on an already consumed transaction"),
-        }
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.0
+            .as_mut()
+            .context("Cannot set a tx savepoint on an already consumed transaction")?
+            .set_tx_savepoint()
+            .await;
+        Ok(())
     }
 }
 
@@ -421,13 +421,13 @@ impl Drop for CommitTracker {
 /// always produce a `ModuleDatabaseTransaction`, which is isolated from other
 /// modules by prepending a prefix to each key.
 struct ModuleDatabaseTransaction<'a> {
-    dbtx: DatabaseTransaction<'a>,
+    dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     prefix: ModuleInstanceId,
 }
 
 impl<'a> ModuleDatabaseTransaction<'a> {
     pub fn new(
-        dbtx: DatabaseTransaction<'a>,
+        dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
         prefix: ModuleInstanceId,
     ) -> ModuleDatabaseTransaction<'a> {
         ModuleDatabaseTransaction { dbtx, prefix }
@@ -435,61 +435,49 @@ impl<'a> ModuleDatabaseTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
+impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .raw_insert_bytes(key, value)
-            .await
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_insert_bytes(key, value).await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .raw_get_bytes(key)
-            .await
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_get_bytes(key).await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .raw_remove_entry(key)
-            .await
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_remove_entry(key).await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        let mut sub_dbtx = self.dbtx.with_module_prefix(self.prefix);
-        let stream = sub_dbtx
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let stream = isolated
             .raw_find_by_prefix(key_prefix)
-            .await
+            .await?
             .collect::<Vec<_>>()
             .await;
-        Box::pin(stream::iter(stream))
+        Ok(Box::pin(stream::iter(stream)))
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .raw_remove_by_prefix(key_prefix)
-            .await
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_remove_by_prefix(key_prefix).await
     }
 
-    async fn commit_tx(self) -> Result<()> {
+    async fn commit_tx(&mut self) -> Result<()> {
         self.dbtx.commit_tx().await
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .rollback_tx_to_savepoint()
-            .await
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.rollback_tx_to_savepoint().await
     }
 
-    async fn set_tx_savepoint(&mut self) {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .set_tx_savepoint()
-            .await
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.set_tx_savepoint().await
     }
 }
 
@@ -553,19 +541,19 @@ impl<'isolated, 'parent, T: Send + Encodable + 'isolated> ISingleUseDatabaseTran
             .await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         let mut prefix_with_module = self.prefix.clone();
         prefix_with_module.extend_from_slice(key_prefix);
         let raw_prefix = self
             .inner_tx
             .raw_find_by_prefix(prefix_with_module.as_slice())
-            .await;
+            .await?;
 
-        Box::pin(raw_prefix.map(|kv| {
+        Ok(Box::pin(raw_prefix.map(|kv| {
             let key = kv.0;
             let stripped_key = &key[(self.prefix.len())..];
             (stripped_key.to_vec(), kv.1)
-        }))
+        })))
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
@@ -576,11 +564,11 @@ impl<'isolated, 'parent, T: Send + Encodable + 'isolated> ISingleUseDatabaseTran
         panic!("DatabaseTransaction inside modules cannot be committed");
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) {
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         self.inner_tx.rollback_tx_to_savepoint().await
     }
 
-    async fn set_tx_savepoint(&mut self) {
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
         self.inner_tx.set_tx_savepoint().await
     }
 }
@@ -590,20 +578,6 @@ pub struct DatabaseTransaction<'a> {
     tx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
-}
-
-impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
-    type Target = dyn ISingleUseDatabaseTransaction<'a>;
-
-    fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-        &*self.tx
-    }
-}
-
-impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
-    fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
-        &mut *self.tx
-    }
 }
 
 #[instrument(level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
@@ -660,10 +634,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     ) -> DatabaseTransaction<'parent> {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
-        let single_use = SingleUseDatabaseTransaction::new(ModuleDatabaseTransaction::new(
-            self,
-            module_instance_id,
-        ));
+        let single_use = ModuleDatabaseTransaction::new(self.tx, module_instance_id);
         DatabaseTransaction {
             tx: Box::new(single_use),
             decoders,
@@ -712,6 +683,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         self.tx
             .raw_find_by_prefix(&prefix_bytes)
             .await
+            .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
                 let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
                 let value = decode_value(&value_bytes, &decoders)?;
@@ -726,6 +698,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     {
         self.commit_tracker.has_writes = true;
         match self
+            .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
         {
@@ -745,6 +718,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     {
         self.commit_tracker.has_writes = true;
         match self
+            .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
         {
@@ -766,7 +740,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     {
         self.commit_tracker.has_writes = true;
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
+        let value_bytes = match self.tx.raw_remove_entry(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -780,7 +754,17 @@ impl<'parent> DatabaseTransaction<'parent> {
         KP: DatabaseLookup,
     {
         self.commit_tracker.has_writes = true;
-        self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
+        self.tx.raw_remove_by_prefix(&key_prefix.to_bytes()).await
+    }
+
+    #[instrument(level = "debug", skip_all, ret)]
+    pub async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.tx.rollback_tx_to_savepoint().await
+    }
+
+    #[instrument(level = "debug", skip_all, ret)]
+    pub async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.tx.set_tx_savepoint().await
     }
 }
 
@@ -1340,7 +1324,10 @@ mod tests {
             .await
             .is_ok());
 
-        dbtx_rollback.set_tx_savepoint().await;
+        dbtx_rollback
+            .set_tx_savepoint()
+            .await
+            .expect("Error setting transaction savepoint");
 
         assert!(dbtx_rollback
             .insert_entry(&TestKey(21), &TestVal(2001))
@@ -1356,7 +1343,10 @@ mod tests {
             Some(TestVal(2001))
         );
 
-        dbtx_rollback.rollback_tx_to_savepoint().await;
+        dbtx_rollback
+            .rollback_tx_to_savepoint()
+            .await
+            .expect("Error setting transaction savepoint");
 
         assert_eq!(
             dbtx_rollback.get_value(&TestKey(20)).await.unwrap(),
