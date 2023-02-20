@@ -26,5 +26,6 @@ SHELL=$(which bash) tmuxinator local
 tmux -L fedimint-dev kill-session -t fedimint-dev || true
 pkill bitcoind
 pkill lightningd
+pkill lnd
 
 rm .tmpenv

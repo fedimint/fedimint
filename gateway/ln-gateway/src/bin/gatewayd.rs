@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::process::exit;
 
 use clap::Parser;
 use fedimint_core::config::ClientModuleGenRegistry;
@@ -12,6 +13,7 @@ use fedimint_core::module::{DynClientModuleGen, ModuleCommon};
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
+use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::NetworkLnRpcClient;
 use ln_gateway::Gateway;
 use mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
@@ -41,6 +43,19 @@ pub struct GatewayOpts {
     /// Public URL to a Gateway Lightning rpc service
     #[arg(long = "lnrpc-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
     pub lnrpc_addr: Option<Url>,
+
+    // TODO: we can overload FM_GATEWAY_LIGHTNING_ADDR option for this
+    /// LND RPC address
+    #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
+    pub lnd_rpc_addr: Option<String>,
+
+    /// LND TLS cert file path
+    #[arg(long = "lnd-tls-cert", env = "FM_LND_TLS_CERT")]
+    pub lnd_tls_cert: Option<String>,
+
+    /// LND macaroon file path
+    #[arg(long = "lnd-macaroon", env = "FM_LND_MACAROON")]
+    pub lnd_macaroon: Option<String>,
 }
 
 // Fedimint Gateway Binary
@@ -68,6 +83,9 @@ async fn main() -> Result<(), anyhow::Error> {
         api_addr,
         lnrpc_addr,
         password,
+        lnd_rpc_addr,
+        lnd_tls_cert,
+        lnd_macaroon,
     } = GatewayOpts::parse();
 
     info!(
@@ -84,8 +102,15 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let lnrpc = if let Some(lnrpc_addr) = lnrpc_addr {
         NetworkLnRpcClient::new(lnrpc_addr).await?.into()
+    } else if let (Some(lnd_rpc_addr), Some(lnd_tls_cert), Some(lnd_macaroon)) =
+        (lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
+    {
+        GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, task_group.clone())
+            .await?
+            .into()
     } else {
-        panic!("No lightning node provided")
+        error!("No lightning node provided. For CLN set FM_GATEWAY_LIGHTNING_ADDR for CLN. For LND set FM_LND_RPC_ADDR, FM_LND_TLS_CERT, and FM_LND_MACAROON");
+        exit(1);
     };
 
     // Create module decoder registry

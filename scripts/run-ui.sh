@@ -6,8 +6,7 @@ rm -r $PWD/fed-ui
 mkdir $PWD/fed-ui
 
 # start bitcoind on regtest in the background
-export FM_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
-bitcoind -regtest -daemon -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin
+bitcoind -datadir=$FM_BTC_DIR
 
 # start guardians
 for ((ID = 0; ID < $FM_FED_SIZE; ID++)); do

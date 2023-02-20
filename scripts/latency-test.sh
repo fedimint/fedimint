@@ -35,9 +35,9 @@ for i in $( seq 1 $ITERATIONS )
 do
   echo "LN SEND $i"
   LABEL=test$RANDOM$RANDOM
-  INVOICE="$($FM_LN2 invoice 50000000 $LABEL $LABEL 1m | jq -e -r '.bolt11')"
+  INVOICE="$($FM_LND invoice 50000000 $LABEL $LABEL 1m | jq -e -r '.bolt11')"
   $FM_MINT_CLIENT ln-pay $INVOICE
-  INVOICE_RESULT="$($FM_LN2 waitinvoice $LABEL)"
+  INVOICE_RESULT="$($FM_LND waitinvoice $LABEL)"
   INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
   echo "RESULT $INVOICE_STATUS"
   [[ "$INVOICE_STATUS" = "paid" ]]
@@ -49,7 +49,7 @@ for i in $( seq 1 $ITERATIONS )
 do
   echo "LN RECEIVE $i"
   INVOICE="$($FM_MINT_CLIENT ln-invoice '50000000msat' '$RANDOM' | jq -e -r '.invoice')"
-  INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
+  INVOICE_RESULT=$($FM_LND pay $INVOICE)
   INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
   echo "RESULT $INVOICE_STATUS"
   [[ "$INVOICE_STATUS" = "complete" ]]

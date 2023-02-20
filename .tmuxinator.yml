@@ -3,45 +3,64 @@ root: .
 socket_name: fedimint-dev
 pre_window:
   - source .tmpenv
-  - alias ln1="\$FM_LN1"
-  - alias ln2="\$FM_LN2"
+  - alias lightning-cli="\$FM_CLN"
+  - alias lncli="\$FM_LND"
   - alias bitcoin-cli="\$FM_BTC_CLIENT"
   - alias fedimint-cli="\$FM_MINT_CLIENT"
-  - alias gateway-cli="\$FM_GATEWAY_CLI"
+  - alias gateway-cli="\$FM_GWCLI_CLN"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
   - alias dbtool="\$FM_DB_TOOL"
   - alias restart="./scripts/restart-tmux.sh"
 tmux_detached: false
 windows:
-  - main:
+  - cli:
       panes:
         - user:
+            - sleep 1 # wait for bitcoind
             - source scripts/tmux-user-shell.sh
-  - federation:
-      layout: 3ed7,272x74,0,0{119x74,0,0,54,152x74,120,0[152x17,120,0,55,152x17,120,18,56,152x17,120,36,57,152x20,120,54,58]}
+  - fedimint:
       panes:
-        - user:
-          - # empty user shell
-        - bitcoind:
-          - bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$FM_BTC_DIR &
-          - echo $! >> $FM_PID_FILE
-          - fg
-        - ln1:
-          - sleep 5 # wait for bitcoind and federation
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/gateway-cln-extension &
-          - echo $! >> $FM_PID_FILE
-          - fg
-        - ln2:
-          - sleep 5 # wait for bitcoind and federation
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001
-          - echo $! >> $FM_PID_FILE
-          - fg
-        - gateway:
-          - sleep 7 # wait for gateway-cln-extension to start
-          - $FM_BIN_DIR/gatewayd
-          - echo $! >> $FM_PID_FILE
-          - fg
+        # TODO: 4 panes ... one for each guardian
         - federation:
           - sleep 1 # wait for bitcoind
           - ./scripts/start-fed.sh
+  - lightning:
+      layout: tiled
+      panes:
+        - cln:
+          - sleep 5 # wait for bitcoind and federation
+          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_CLN_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/gateway-cln-extension &
+          - echo $! >> $FM_PID_FILE
+          - fg
+        - lnd:
+          - sleep 5 # wait for bitcoind and federation
+          - lnd --lnddir=$FM_LND_DIR &
+          - echo $! >> $FM_PID_FILE
+          - fg
+        - gw-cln:
+          - sleep 7 # wait for gateway-cln-extension to start
+          - export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw1
+          - export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
+          - export FM_GATEWAY_API_ADDR="http://127.0.0.1:8175"
+          - $FM_BIN_DIR/gatewayd &
+          - echo $! >> $FM_PID_FILE
+          - fg
+        - gw-lnd:
+          - sleep 7 # wait for gateway-cln-extension to start
+          - unset FM_GATEWAY_LIGHTNING_ADDR
+          - export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw2
+          - export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:18175"
+          - export FM_GATEWAY_API_ADDR="http://127.0.0.1:18175"
+          - export FM_LND_RPC_ADDR=http://localhost:11009
+          - export FM_LND_TLS_CERT=$FM_LND_DIR/tls.cert
+          - export FM_LND_MACAROON=$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon
+          - $FM_BIN_DIR/gatewayd &
+          - echo $! >> $FM_PID_FILE
+          - fg
+  - bitcoin:
+      panes:
+        - bitcoind:
+          - bitcoind -datadir=$FM_BTC_DIR
+          - echo $! >> $FM_PID_FILE
+          - fg
 

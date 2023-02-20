@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod client;
+pub mod lnd;
 pub mod lnrpc_client;
 pub mod rpc;
 pub mod types;
@@ -88,6 +89,7 @@ impl Gateway {
         task_group: TaskGroup,
     ) -> Self {
         // Create message channels for the webserver
+        // FIXME: why instantiate sender / receiver here?
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
 
         // Source route hints form the LN node
@@ -113,6 +115,7 @@ impl Gateway {
             tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
 
+        info!("fetched route hints {:?}", route_hints);
         let gw = Self {
             lnrpc,
             actors: Mutex::new(HashMap::new()),
@@ -127,6 +130,7 @@ impl Gateway {
 
         gw.load_federation_actors(decoders, module_gens, route_hints)
             .await;
+        info!("loaded actors");
 
         gw
     }
@@ -345,6 +349,7 @@ impl Gateway {
             }
         })
         .await;
+        info!("Spawned gateway webserver");
 
         // TODO: try to drive forward outgoing and incoming payments that were
         // interrupted
@@ -359,7 +364,7 @@ impl Gateway {
 
             // Handle messages from webserver and plugin
             while let Ok(msg) = self.receiver.try_recv() {
-                tracing::trace!("Gateway received message {:?}", msg);
+                tracing::info!("Gateway received message {:?}", msg);
                 match msg {
                     GatewayRequest::Info(inner) => {
                         inner.handle(|payload| self.handle_get_info(payload)).await;

@@ -305,6 +305,8 @@ enum Command {
     /// Switch active gateway
     SwitchGateway {
         /// node public key for a gateway
+        /// FIXME: make it clearer in the help instructions that this is a node
+        /// pubkey, not a mint pubkey
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
@@ -648,6 +650,9 @@ async fn handle_command(
         Command::JoinFederation { .. } => {
             unreachable!()
         }
+        // FIXME: it would probably be better to just return a array of gateways ..
+        // putting in `num_gateways` isn't very helpful if you can just count the length of the
+        // array ...
         Command::ListGateways {} => match client.fetch_registered_gateways().await {
             Ok(gateways) => {
                 if !gateways.is_empty() {

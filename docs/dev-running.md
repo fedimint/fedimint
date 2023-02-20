@@ -118,7 +118,7 @@ $ fedimint-cli fetch
 First let's have the gateway execute a peg-in so it has an ecash note balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
 
 ```shell
-$ ./scripts/pegin.sh 10000 1
+$ ./scripts/pegin.sh 10000 1 # fixme
 ```
 
 Make a note of the federation id from the previous step, or run `gateway-cli info` and copy the federation id.

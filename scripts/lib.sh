@@ -8,17 +8,14 @@ function mine_blocks() {
 }
 
 function open_channel() {
-    LN_ADDR="$($FM_LN1 newaddr | jq -e -r '.bech32')"
+    LN_ADDR="$($FM_CLN newaddr | jq -e -r '.bech32')"
     $FM_BTC_CLIENT sendtoaddress $LN_ADDR 1
     mine_blocks 10
-    FM_LN2_PUB_KEY="$($FM_LN2 getinfo | jq -e -r '.id')"
-    export FM_LN2_PUB_KEY
-    FM_LN1_PUB_KEY="$($FM_LN1 getinfo | jq -e -r '.id')"
-    export FM_LN1_PUB_KEY
-    $FM_LN1 connect $FM_LN2_PUB_KEY@127.0.0.1:9001
-    until $FM_LN1 -k fundchannel id=$FM_LN2_PUB_KEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
+    FM_LND_PUB_KEY=$($FM_LND getinfo | jq -r ".identity_pubkey")
+    $FM_CLN connect $FM_LND_PUB_KEY@127.0.0.1:9734
+    until $FM_CLN -k fundchannel id=$FM_LND_PUB_KEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
     mine_blocks 10
-    until [[ $($FM_LN1 listpeers | jq -e -r ".peers[] | select(.id == \"$FM_LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
+    until [[ $($FM_CLN listpeers | jq -e -r ".peers[] | select(.id == \"$FM_LND_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
 }
 
 function await_bitcoin_rpc() {
@@ -28,13 +25,16 @@ function await_bitcoin_rpc() {
     done
 }
 
-function await_cln_rpc() {
-    until [ -e "$FM_LN1_DIR/regtest/lightning-rpc" ]; do
-        >&2 echo "LN gateway 1 not ready yet. Waiting ..."
+function await_cln_start() {
+    until [ -e "$FM_CLN_DIR/regtest/lightning-rpc" ]; do
+        >&2 echo "CLN gateway not ready yet. Waiting ..."
         sleep "$POLL_INTERVAL"
     done
-    until [ -e "$FM_LN2_DIR/regtest/lightning-rpc" ]; do
-        >&2 echo "LN gateway 2 not ready yet. Waiting ..."
+}
+
+function await_lnd_start() {
+    until [ -e "$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon" ]; do
+        >&2 echo "LND gateway not ready yet. Waiting ..."
         sleep "$POLL_INTERVAL"
     done
 }
@@ -71,16 +71,16 @@ function await_server_on_port() {
 function await_cln_block_processing() {
   EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
 
-  # ln1
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN1 getinfo | jq -e -r '.blockheight')" ]
+  # cln
+  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_CLN getinfo | jq -e -r '.blockheight')" ]
   do
       sleep $POLL_INTERVAL
   done
 
-  # ln2
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN2 getinfo | jq -e -r '.blockheight')" ]
+  # lnd
+  until [ "true" == "$($FM_LND getinfo | jq -r '.synced_to_chain')" ]
   do
-      sleep $POLL_INTERVAL
+    sleep $POLL_INTERVAL
   done
 }
 
@@ -92,16 +92,33 @@ function kill_fedimint_processes {
 }
 
 function start_gatewayd() {
+  # start cln gw
+  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw1
+  export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
+  export FM_GATEWAY_API_ADDR="http://127.0.0.1:8175"
   $FM_BIN_DIR/gatewayd &
   echo $! >> $FM_PID_FILE
+
+  # start lnd gw
+  unset FM_GATEWAY_LIGHTNING_ADDR
+  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw2
+  export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:18175"
+  export FM_GATEWAY_API_ADDR="http://127.0.0.1:18175"
+  export FM_LND_RPC_ADDR="http://localhost:11009"
+  export FM_LND_TLS_CERT=$FM_LND_DIR/tls.cert
+  export FM_LND_MACAROON=$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon
+  $FM_BIN_DIR/gatewayd &
+  echo $! >> $FM_PID_FILE
+
   echo "started gatewayd"
-  gw_connect_fed
+  connect_gateways
 }
 
-function gw_connect_fed() {
+function connect_gateways() {
   # connect federation with the gateway
   FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info')"
-  $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
+  $FM_GWCLI_CLN connect-fed "$FM_CONNECT_STR"
+  $FM_GWCLI_LND connect-fed "$FM_CONNECT_STR"
 }
 
 function get_finality_delay() {
@@ -160,4 +177,18 @@ function await_gateway_registered() {
     until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" -gt "0" ]; do
         sleep $POLL_INTERVAL
     done
+}
+
+function switch_to_cln_gateway() {
+    # FIXME: we should have a better way to filter than by API url
+    local PUBKEY
+    PUBKEY=$($FM_MINT_CLIENT list-gateways | jq -e '.gateways[] | select(.api == "http://127.0.0.1:8175/")' | jq -r -e '.node_pub_key')
+    $FM_MINT_CLIENT switch-gateway $PUBKEY
+}
+
+function switch_to_lnd_gateway() {
+    # FIXME: we should have a better way to filter than by API url
+    local PUBKEY
+    PUBKEY=$($FM_MINT_CLIENT list-gateways | jq -e '.gateways[] | select(.api == "http://127.0.0.1:18175/")' | jq -r -e '.node_pub_key')
+    $FM_MINT_CLIENT switch-gateway $PUBKEY
 }

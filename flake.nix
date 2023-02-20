@@ -290,6 +290,7 @@
             pkgs-kitman.esplora
             clightning-dev
             jq
+            lnd
             netcat
             perl
             procps

@@ -20,7 +20,8 @@ cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/con
 
 export PEG_IN_AMOUNT=99999
 start_gatewayd
-./scripts/pegin.sh $PEG_IN_AMOUNT 1 # peg in gateway
+# ./scripts/pegin.sh $PEG_IN_AMOUNT CLN # peg in CLN gateway
+./scripts/pegin.sh $PEG_IN_AMOUNT LND # peg in LND gateway
 
 #### BEGIN TESTS ####
 
@@ -54,26 +55,47 @@ mine_blocks 10
 RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 [[ "$RECEIVED" = "0.00000500" ]]
 
-# outgoing lightning
-INVOICE="$($FM_LN2 invoice 100000 test test 1m | jq -e -r '.bolt11')"
+# fedimint-cli pays CLN via LND gateaway
+switch_to_lnd_gateway
+INVOICE="$($FM_CLN invoice 100000 lnd-gw-to-cln test 1m | jq -e -r '.bolt11')"
 await_cln_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
-LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -e -r '.balance_msat')"
+# FIXME ^^ comment isn't right
+FED_ID="$(get_federation_id)"
+LN_GATEWAY_BALANCE="$($FM_GWCLI_LND balance $FED_ID | jq -e -r '.balance_msat')"
 [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
-INVOICE_RESULT="$($FM_LN2 waitinvoice test)"
+INVOICE_RESULT="$($FM_CLN waitinvoice lnd-gw-to-cln)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
-# test that LN1 can still receive directly even though running the plugin
-INVOICE="$($FM_LN1 invoice 42000 test test 1m | jq -e -r '.bolt11')"
-$FM_LN2 pay "$INVOICE"
-INVOICE_STATUS="$($FM_LN1 waitinvoice test | jq -e -r '.status')"
+# fedimint-cli pays LND via CLN gateaway
+switch_to_cln_gateway
+ADD_INVOICE="$($FM_LND addinvoice --amt_msat 100000)"
+INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
+PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
+await_cln_block_processing
+$FM_MINT_CLIENT ln-pay $INVOICE
+# Check that gateway has received the ecash notes from the user payment
+# 100,000 sats + 100 sats without processing fee
+# FIXME ^^ comment isnt' right
+FED_ID="$(get_federation_id)"
+LN_GATEWAY_BALANCE="$($FM_GWCLI_CLN balance $FED_ID | jq -e -r '.balance_msat')"
+[[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
+INVOICE_STATUS="$($FM_LND lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
+[[ "$INVOICE_STATUS" = "SETTLED" ]]
+
+# LND pays CLN directly
+INVOICE="$($FM_CLN invoice 42000 lnd-to-cln test 1m | jq -e -r '.bolt11')"
+$FM_LND payinvoice --force "$INVOICE"
+INVOICE_STATUS="$($FM_CLN waitinvoice lnd-to-cln | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
-# incoming lightning
-INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
-INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
-INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
-[[ "$INVOICE_STATUS" = "complete" ]]
+# CLN pays LND directly
+ADD_INVOICE="$($FM_LND addinvoice --amt_msat 42000)"
+INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
+PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
+$FM_CLN pay "$INVOICE"
+INVOICE_STATUS="$($FM_LND lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
+[[ "$INVOICE_STATUS" = "SETTLED" ]]

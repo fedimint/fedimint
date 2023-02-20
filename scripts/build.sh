@@ -33,15 +33,19 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 export FM_TEST_DIR=$FM_TMP_DIR
 export FM_BIN_DIR="$SRC_DIR/target/debug"
 export FM_PID_FILE="$FM_TMP_DIR/.pid"
-export FM_LN1_DIR="$FM_TEST_DIR/ln1"
-export FM_LN2_DIR="$FM_TEST_DIR/ln2"
+export FM_CLN_DIR="$FM_TEST_DIR/cln"
+export FM_LND_DIR="$FM_TEST_DIR/lnd"
 export FM_BTC_DIR="$FM_TEST_DIR/bitcoin"
 export FM_CFG_DIR="$FM_TEST_DIR/cfg"
 export FM_ELECTRS_DIR="$FM_TEST_DIR/electrs"
-mkdir -p $FM_LN1_DIR
-mkdir -p $FM_LN2_DIR
+mkdir -p $FM_CLN_DIR
+mkdir -p $FM_LND_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
+
+# Copy bitcoind and lnd configs to directories
+cp misc/bitcoin.conf $FM_BTC_DIR
+cp misc/lnd.conf $FM_LND_DIR
 
 # Generate federation configs
 CERTS=""
@@ -81,22 +85,26 @@ export FM_GATEWAY_LIGHTNING_ADDR="http://localhost:8177"
 mkdir -p $FM_GATEWAY_DATA_DIR
 
 # Define clients
-export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"
-export FM_LN2="lightning-cli --network regtest --lightning-dir=$FM_LN2_DIR"
+export FM_CLN="lightning-cli --network regtest --lightning-dir=$FM_CLN_DIR"
+export FM_LND="lncli -n regtest --lnddir=$FM_LND_DIR --rpcserver=localhost:11009"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
-export FM_GATEWAY_CLI="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
+export FM_GWCLI_CLN="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
+export FM_GWCLI_LND="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:18175/"
 export FM_DB_TOOL="$FM_BIN_DIR/dbtool"
 export FM_DISTRIBUTEDGEN="$FM_BIN_DIR/distributedgen"
 
+# Gatewayd parameters
+
 # Alias clients
-alias ln1="\$FM_LN1"
-alias ln2="\$FM_LN2"
+alias lightning-cli="\$FM_CLN"
+alias lncli="\$FM_LND"
 alias bitcoin-cli="\$FM_BTC_CLIENT"
 alias mint_client="\$FM_MINT_CLIENT"
 alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
-alias gateway-cli="\$FM_GATEWAY_CLI"
+alias gateway-cln="\$FM_GWCLI_CLN"
+alias gateway-lnd="\$FM_GWCLI_LND"
 alias dbtool="\$FM_DB_TOOL"
 alias distributedgen="\$FM_DISTRIBUTEDGEN"
 
