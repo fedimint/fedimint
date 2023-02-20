@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{Cursor, Read};
@@ -590,7 +591,7 @@ struct FederationMember<C> {
 /// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct WsClientConnectInfo {
     /// Urls that support the federation API (expected to be in PeerId order)
     pub urls: Vec<Url>,
@@ -674,6 +675,25 @@ impl Display for WsClientConnectInfo {
             bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
 
         formatter.write_str(&encode)
+    }
+}
+
+impl Serialize for WsClientConnectInfo {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        String::serialize(&self.to_string(), serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for WsClientConnectInfo {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let string = Cow::<str>::deserialize(deserializer)?;
+        Self::from_str(&string).map_err(serde::de::Error::custom)
     }
 }
 
@@ -1101,5 +1121,11 @@ mod tests {
         let bech32 = connect.to_string();
         let connect_parsed = WsClientConnectInfo::from_str(&bech32).expect("parses");
         assert_eq!(connect, connect_parsed);
+
+        let json = serde_json::to_string(&connect).unwrap();
+        let connect_as_string: String = serde_json::from_str(&json).unwrap();
+        assert_eq!(connect_as_string, bech32);
+        let connect_parsed_json: WsClientConnectInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(connect_parsed_json, connect_parsed);
     }
 }

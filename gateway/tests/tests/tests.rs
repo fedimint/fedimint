@@ -63,10 +63,11 @@ async fn test_gateway_authentication() -> Result<()> {
     // * `connect_federation` with correct password succeeds
     // * `connect_federation` with incorrect password fails
     let payload = ConnectFedPayload {
-        connect: serde_json::to_string(&WsClientConnectInfo {
+        connect: WsClientConnectInfo {
             urls: vec![],
             id: FederationId::dummy(),
-        })?,
+        }
+        .to_string(),
     };
     test_auth(&gw_password, move |pw| {
         client_ref.connect_federation(pw, payload.clone())

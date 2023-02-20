@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::process::exit;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
@@ -326,12 +327,12 @@ trait ErrorHandler<T, E> {
         F: Fn(T) -> CliOutput;
 }
 
-impl<T, E: Error + 'static> ErrorHandler<T, E> for Result<T, E> {
+impl<T, E: Into<Box<dyn Error>>> ErrorHandler<T, E> for Result<T, E> {
     fn or_terminate(self, err: CliErrorKind, msg: &str) -> T {
         match self {
             Ok(v) => v,
             Err(e) => {
-                let cli_error = CliError::from(err, msg, Some(Box::new(e)));
+                let cli_error = CliError::from(err, msg, Some(e.into()));
                 eprintln!("{cli_error}");
                 exit(1);
             }
@@ -343,7 +344,7 @@ impl<T, E: Error + 'static> ErrorHandler<T, E> for Result<T, E> {
     {
         match self {
             Ok(v) => Ok(success(v)),
-            Err(e) => Err(CliError::from(err, msg, Some(Box::new(e)))),
+            Err(e) => Err(CliError::from(err, msg, Some(e.into()))),
         }
     }
 }
@@ -387,7 +388,8 @@ async fn main() {
 
         let cli = Cli::parse();
         if let Command::JoinFederation { connect } = cli.command {
-            let connect_obj: WsClientConnectInfo = serde_json::from_str(&connect)
+            let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
+                .map_err(Box::<dyn Error>::from)
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
             let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;

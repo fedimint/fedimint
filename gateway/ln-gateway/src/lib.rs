@@ -13,6 +13,7 @@ pub mod gatewaylnrpc {
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -193,9 +194,10 @@ impl LnGateway {
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
-        let connect: WsClientConnectInfo = serde_json::from_str(&payload.connect).map_err(|e| {
-            LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
-        })?;
+        let connect: WsClientConnectInfo = WsClientConnectInfo::from_str(&payload.connect)
+            .map_err(|e| {
+                LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
+            })?;
 
         let node_pub_key = self
             .ln_rpc

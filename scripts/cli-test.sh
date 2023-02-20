@@ -25,7 +25,7 @@ start_gateway
 #### BEGIN TESTS ####
 
 # test the fetching of client configs
-CONNECT_STRING=$(cat $FM_CFG_DIR/client-connect.json)
+CONNECT_STRING=$(cat $FM_CFG_DIR/client-connect)
 rm $FM_CFG_DIR/client.json
 $FM_MINT_CLIENT join-federation "$CONNECT_STRING"
 
