@@ -421,7 +421,9 @@ impl FedimintConsensus {
                 trace!(?transaction);
                 self.tx_cache.lock().unwrap().remove(&transaction);
 
-                dbtx.set_tx_savepoint().await;
+                dbtx.set_tx_savepoint()
+                    .await
+                    .expect("Error setting transaction savepoint");
                 // TODO: use borrowed transaction
                 match self
                     .process_transaction(dbtx, transaction.clone(), &caches)
@@ -437,7 +439,9 @@ impl FedimintConsensus {
                     }
                     Err(error) => {
                         rejected_txs.insert(txid);
-                        dbtx.rollback_tx_to_savepoint().await;
+                        dbtx.rollback_tx_to_savepoint()
+                            .await
+                            .expect("Error rolling back to transaction savepoint");
                         warn!(target: LOG_CONSENSUS, %error, "Transaction failed");
                         dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{error:?}"))
                             .await

@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use bitcoin_hashes::hex::ToHex;
 use futures::stream;
 
-use super::{IDatabase, IDatabaseTransaction};
+use super::{
+    IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, SingleUseDatabaseTransaction,
+};
 use crate::db::PrefixStream;
 
 #[derive(Debug, Default)]
@@ -61,7 +63,7 @@ impl MemDatabase {
 
 #[async_trait]
 impl IDatabase for MemDatabase {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
         let db_copy = self.data.lock().unwrap().clone();
         let mut memtx = MemTransaction {
             operations: Vec::new(),
@@ -73,7 +75,8 @@ impl IDatabase for MemDatabase {
         };
 
         memtx.set_tx_savepoint().await;
-        Box::new(memtx)
+        let single_use = SingleUseDatabaseTransaction::new(memtx);
+        Box::new(single_use)
     }
 }
 
@@ -121,7 +124,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Box::pin(stream::iter(data))
     }
 
-    async fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn commit_tx(self) -> Result<()> {
         for op in self.operations {
             match op {
                 DatabaseOperation::Insert(insert_op) => {

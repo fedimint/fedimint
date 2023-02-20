@@ -4,8 +4,7 @@ use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
-use fedimint_core::db::Database;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::db::IDatabase;
 use fedimint_server::logging::TracingSetup;
 use futures::StreamExt;
 
@@ -63,11 +62,6 @@ fn hex_parser(hex: &str) -> Result<Bytes> {
     Ok(bytes.into())
 }
 
-async fn open_db(path: &str) -> Result<Database> {
-    let rocksdb = fedimint_rocksdb::RocksDb::open(path)?;
-    Ok(Database::new(rocksdb, ModuleDecoderRegistry::default()))
-}
-
 fn print_kv(key: &[u8], value: &[u8]) {
     println!("{} {}", key.to_hex(), value.to_hex());
 }
@@ -79,11 +73,12 @@ async fn main() -> Result<()> {
 
     match options.command {
         DbCommand::List { prefix } => {
-            let db = open_db(&options.database).await.expect("Failed to open DB");
-            let mut dbtx = db.begin_transaction().await;
+            let rocksdb: Box<dyn IDatabase> =
+                Box::new(fedimint_rocksdb::RocksDb::open(&options.database).unwrap());
+            let mut dbtx = rocksdb.begin_transaction().await;
             let prefix_iter = dbtx
                 .raw_find_by_prefix(&prefix)
-                .await
+                .await?
                 .collect::<Vec<_>>()
                 .await;
             for (key, value) in prefix_iter {
@@ -92,16 +87,18 @@ async fn main() -> Result<()> {
             dbtx.commit_tx().await.expect("DB Error");
         }
         DbCommand::Write { key, value } => {
-            let db = open_db(&options.database).await.expect("Failed to open DB");
-            let mut dbtx = db.begin_transaction().await;
+            let rocksdb: Box<dyn IDatabase> =
+                Box::new(fedimint_rocksdb::RocksDb::open(&options.database).unwrap());
+            let mut dbtx = rocksdb.begin_transaction().await;
             dbtx.raw_insert_bytes(&key, value.into())
                 .await
                 .expect("DB error");
             dbtx.commit_tx().await.expect("DB Error");
         }
         DbCommand::Delete { key } => {
-            let db = open_db(&options.database).await.expect("Failed to open DB");
-            let mut dbtx = db.begin_transaction().await;
+            let rocksdb: Box<dyn IDatabase> =
+                Box::new(fedimint_rocksdb::RocksDb::open(&options.database).unwrap());
+            let mut dbtx = rocksdb.begin_transaction().await;
             dbtx.raw_remove_entry(&key).await.expect("DB error");
             dbtx.commit_tx().await.expect("DB Error");
         }

@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use futures::{stream, Stream, StreamExt};
@@ -70,7 +70,7 @@ pub type PrefixStream<'a> = Pin<Box<dyn Stream<Item = (Vec<u8>, Vec<u8>)> + Send
 
 #[async_trait]
 pub trait IDatabase: Debug + Send + Sync {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>>;
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>>;
 }
 
 #[derive(Clone, Debug)]
@@ -271,7 +271,7 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
         Ok(())
     }
 
-    async fn commit_tx(self: Box<Self>) -> Result<()>;
+    async fn commit_tx(self) -> Result<()>;
 
     async fn rollback_tx_to_savepoint(&mut self);
 
@@ -284,6 +284,115 @@ pub trait IDatabaseTransaction<'a>: 'a + Send {
     /// transaction implementations will support setting a savepoint during
     /// a transaction.
     async fn set_tx_savepoint(&mut self);
+}
+
+/// `ISingleUseDatabaseTransaction` re-defines the functions from
+/// `IDatabaseTransaction` but does not consumed `self` when committing to the
+/// database. This allows for wrapper structs to more easily borrow
+/// `ISingleUseDatabaseTransaction` without needing to make additional
+/// allocations.
+#[async_trait]
+pub trait ISingleUseDatabaseTransaction<'a>: 'a + Send {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
+
+    async fn commit_tx(&mut self) -> Result<()>;
+
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
+
+    async fn set_tx_savepoint(&mut self) -> Result<()>;
+}
+
+/// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
+/// easier in other structs since it does not consumed `self` by move.
+pub struct SingleUseDatabaseTransaction<'a, Tx: IDatabaseTransaction<'a> + Send>(
+    Option<Tx>,
+    &'a PhantomData<()>,
+);
+
+impl<'a, Tx: IDatabaseTransaction<'a> + Send> SingleUseDatabaseTransaction<'a, Tx> {
+    pub fn new(dbtx: Tx) -> SingleUseDatabaseTransaction<'a, Tx> {
+        SingleUseDatabaseTransaction(Some(dbtx), &PhantomData)
+    }
+}
+
+#[async_trait]
+impl<'a, Tx: IDatabaseTransaction<'a> + Send> ISingleUseDatabaseTransaction<'a>
+    for SingleUseDatabaseTransaction<'a, Tx>
+{
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        self.0
+            .as_mut()
+            .context("Cannot insert into already consumed transaction")?
+            .raw_insert_bytes(key, value)
+            .await
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.0
+            .as_mut()
+            .context("Cannot retrieve from already consumed transaction")?
+            .raw_get_bytes(key)
+            .await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.0
+            .as_mut()
+            .context("Cannot remove from already consumed transaction")?
+            .raw_remove_entry(key)
+            .await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        Ok(self
+            .0
+            .as_mut()
+            .context("Cannot retreive from already consumed transaction")?
+            .raw_find_by_prefix(key_prefix)
+            .await)
+    }
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        self.0
+            .as_mut()
+            .context("Cannot remove from already consumed transaction")?
+            .raw_remove_by_prefix(key_prefix)
+            .await
+    }
+
+    async fn commit_tx(&mut self) -> Result<()> {
+        self.0
+            .take()
+            .context("Cannot commit an already committed transaction")?
+            .commit_tx()
+            .await
+    }
+
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.0
+            .as_mut()
+            .context("Cannot rollback to a savepoint on an already consumed transaction")?
+            .rollback_tx_to_savepoint()
+            .await;
+        Ok(())
+    }
+
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.0
+            .as_mut()
+            .context("Cannot set a tx savepoint on an already consumed transaction")?
+            .set_tx_savepoint()
+            .await;
+        Ok(())
+    }
 }
 
 // TODO: use macro again
@@ -312,13 +421,13 @@ impl Drop for CommitTracker {
 /// always produce a `ModuleDatabaseTransaction`, which is isolated from other
 /// modules by prepending a prefix to each key.
 struct ModuleDatabaseTransaction<'a> {
-    dbtx: DatabaseTransaction<'a>,
+    dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     prefix: ModuleInstanceId,
 }
 
 impl<'a> ModuleDatabaseTransaction<'a> {
     pub fn new(
-        dbtx: DatabaseTransaction<'a>,
+        dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
         prefix: ModuleInstanceId,
     ) -> ModuleDatabaseTransaction<'a> {
         ModuleDatabaseTransaction { dbtx, prefix }
@@ -326,54 +435,49 @@ impl<'a> ModuleDatabaseTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
+impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .raw_insert_bytes(key, value)
-            .await
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_insert_bytes(key, value).await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .raw_get_bytes(key)
-            .await
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_get_bytes(key).await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .raw_remove_entry(key)
-            .await
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_remove_entry(key).await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        let mut sub_dbtx = self.dbtx.with_module_prefix(self.prefix);
-        let stream = sub_dbtx
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let stream = isolated
             .raw_find_by_prefix(key_prefix)
-            .await
+            .await?
             .collect::<Vec<_>>()
             .await;
-        Box::pin(stream::iter(stream))
+        Ok(Box::pin(stream::iter(stream)))
     }
 
-    async fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.raw_remove_by_prefix(key_prefix).await
+    }
+
+    async fn commit_tx(&mut self) -> Result<()> {
         self.dbtx.commit_tx().await
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .rollback_tx_to_savepoint()
-            .await
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.rollback_tx_to_savepoint().await
     }
 
-    async fn set_tx_savepoint(&mut self) {
-        self.dbtx
-            .with_module_prefix(self.prefix)
-            .set_tx_savepoint()
-            .await
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        isolated.set_tx_savepoint().await
     }
 }
 
@@ -385,7 +489,7 @@ impl<'a> IDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
 /// which allows the same module to be instantiated twice or two different
 /// modules to use the same key.
 struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated, T: Send + Encodable> {
-    inner_tx: &'isolated mut DatabaseTransaction<'parent>,
+    inner_tx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
     prefix: Vec<u8>,
     _marker: PhantomData<T>,
 }
@@ -394,7 +498,7 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
     IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {
     pub fn new(
-        dbtx: &'isolated mut DatabaseTransaction<'parent>,
+        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
         module_prefix: T,
     ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
         let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
@@ -410,7 +514,7 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
 }
 
 #[async_trait]
-impl<'isolated, 'parent, T: Send + Encodable + 'isolated> IDatabaseTransaction<'isolated>
+impl<'isolated, 'parent, T: Send + Encodable + 'isolated> ISingleUseDatabaseTransaction<'isolated>
     for IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
@@ -437,53 +541,43 @@ impl<'isolated, 'parent, T: Send + Encodable + 'isolated> IDatabaseTransaction<'
             .await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         let mut prefix_with_module = self.prefix.clone();
         prefix_with_module.extend_from_slice(key_prefix);
         let raw_prefix = self
             .inner_tx
             .raw_find_by_prefix(prefix_with_module.as_slice())
-            .await;
+            .await?;
 
-        Box::pin(raw_prefix.map(|kv| {
+        Ok(Box::pin(raw_prefix.map(|kv| {
             let key = kv.0;
             let stripped_key = &key[(self.prefix.len())..];
             (stripped_key.to_vec(), kv.1)
-        }))
+        })))
     }
 
-    async fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        self.inner_tx.raw_remove_by_prefix(key_prefix).await
+    }
+
+    async fn commit_tx(&mut self) -> Result<()> {
         panic!("DatabaseTransaction inside modules cannot be committed");
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) {
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         self.inner_tx.rollback_tx_to_savepoint().await
     }
 
-    async fn set_tx_savepoint(&mut self) {
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
         self.inner_tx.set_tx_savepoint().await
     }
 }
 
 #[doc = " A handle to a type-erased database implementation"]
 pub struct DatabaseTransaction<'a> {
-    tx: Box<dyn IDatabaseTransaction<'a>>,
+    tx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
-}
-
-impl<'a> std::ops::Deref for DatabaseTransaction<'a> {
-    type Target = dyn IDatabaseTransaction<'a>;
-
-    fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-        &*self.tx
-    }
-}
-
-impl<'a> std::ops::DerefMut for DatabaseTransaction<'a> {
-    fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
-        &mut *self.tx
-    }
 }
 
 #[instrument(level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
@@ -500,7 +594,7 @@ fn decode_value<V: DatabaseValue>(
 
 impl<'parent> DatabaseTransaction<'parent> {
     pub fn new(
-        dbtx: Box<dyn IDatabaseTransaction<'parent>>,
+        dbtx: Box<dyn ISingleUseDatabaseTransaction<'parent>>,
         decoders: ModuleDecoderRegistry,
     ) -> DatabaseTransaction<'parent> {
         DatabaseTransaction {
@@ -521,9 +615,9 @@ impl<'parent> DatabaseTransaction<'parent> {
         'parent: 'isolated,
     {
         let decoders = self.decoders.clone();
-        let isolated = Box::new(IsolatedDatabaseTransaction::new(self, module_instance_id));
+        let isolated = IsolatedDatabaseTransaction::new(self.tx.as_mut(), module_instance_id);
         DatabaseTransaction {
-            tx: isolated,
+            tx: Box::new(isolated),
             decoders,
             // DatabaseTransaction passed to modules cannot be committed, so the commit tracker is
             // set to committed to surpress the warning
@@ -540,9 +634,9 @@ impl<'parent> DatabaseTransaction<'parent> {
     ) -> DatabaseTransaction<'parent> {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
-        let wrapped = ModuleDatabaseTransaction::new(self, module_instance_id);
+        let single_use = ModuleDatabaseTransaction::new(self.tx, module_instance_id);
         DatabaseTransaction {
-            tx: Box::new(wrapped),
+            tx: Box::new(single_use),
             decoders,
             commit_tracker,
         }
@@ -589,6 +683,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         self.tx
             .raw_find_by_prefix(&prefix_bytes)
             .await
+            .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
                 let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
                 let value = decode_value(&value_bytes, &decoders)?;
@@ -603,6 +698,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     {
         self.commit_tracker.has_writes = true;
         match self
+            .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
         {
@@ -622,6 +718,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     {
         self.commit_tracker.has_writes = true;
         match self
+            .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
         {
@@ -643,7 +740,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     {
         self.commit_tracker.has_writes = true;
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
+        let value_bytes = match self.tx.raw_remove_entry(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -657,7 +754,17 @@ impl<'parent> DatabaseTransaction<'parent> {
         KP: DatabaseLookup,
     {
         self.commit_tracker.has_writes = true;
-        self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
+        self.tx.raw_remove_by_prefix(&key_prefix.to_bytes()).await
+    }
+
+    #[instrument(level = "debug", skip_all, ret)]
+    pub async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.tx.rollback_tx_to_savepoint().await
+    }
+
+    #[instrument(level = "debug", skip_all, ret)]
+    pub async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.tx.set_tx_savepoint().await
     }
 }
 
@@ -1217,7 +1324,10 @@ mod tests {
             .await
             .is_ok());
 
-        dbtx_rollback.set_tx_savepoint().await;
+        dbtx_rollback
+            .set_tx_savepoint()
+            .await
+            .expect("Error setting transaction savepoint");
 
         assert!(dbtx_rollback
             .insert_entry(&TestKey(21), &TestVal(2001))
@@ -1233,7 +1343,10 @@ mod tests {
             Some(TestVal(2001))
         );
 
-        dbtx_rollback.rollback_tx_to_savepoint().await;
+        dbtx_rollback
+            .rollback_tx_to_savepoint()
+            .await
+            .expect("Error setting transaction savepoint");
 
         assert_eq!(
             dbtx_rollback.get_value(&TestKey(20)).await.unwrap(),
@@ -1717,7 +1830,10 @@ mod tests {
         use anyhow::anyhow;
         use async_trait::async_trait;
 
-        use crate::db::{AutocommitError, IDatabase, IDatabaseTransaction};
+        use crate::db::{
+            AutocommitError, IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction,
+            SingleUseDatabaseTransaction,
+        };
         use crate::ModuleDecoderRegistry;
 
         #[derive(Debug)]
@@ -1725,8 +1841,9 @@ mod tests {
 
         #[async_trait]
         impl IDatabase for FakeDatabase {
-            async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
-                Box::new(FakeTransaction(PhantomData))
+            async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
+                let single_use = SingleUseDatabaseTransaction::new(FakeTransaction(PhantomData));
+                Box::new(single_use)
             }
         }
 
@@ -1758,7 +1875,7 @@ mod tests {
                 unimplemented!()
             }
 
-            async fn commit_tx(self: Box<Self>) -> anyhow::Result<()> {
+            async fn commit_tx(self) -> anyhow::Result<()> {
                 Err(anyhow!("Can't commit!"))
             }
 

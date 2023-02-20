@@ -2,7 +2,10 @@ use std::path::Path;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_core::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+use fedimint_core::db::{
+    IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, PrefixStream,
+    SingleUseDatabaseTransaction,
+};
 use futures::stream;
 pub use rocksdb;
 use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
@@ -49,7 +52,7 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
 
 #[async_trait]
 impl IDatabase for RocksDb {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
         let mut rocksdb_tx = RocksDbTransaction(
@@ -57,7 +60,8 @@ impl IDatabase for RocksDb {
                 .transaction_opt(&WriteOptions::default(), &optimistic_options),
         );
         rocksdb_tx.set_tx_savepoint().await;
-        Box::new(rocksdb_tx)
+        let single_use = SingleUseDatabaseTransaction::new(rocksdb_tx);
+        Box::new(single_use)
     }
 }
 
@@ -106,7 +110,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         })
     }
 
-    async fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn commit_tx(self) -> Result<()> {
         fedimint_core::task::block_in_place(|| {
             self.0.commit()?;
             Ok(())
@@ -162,7 +166,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         })
     }
 
-    async fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn commit_tx(self) -> Result<()> {
         panic!("Cannot commit a read only transaction");
     }
 

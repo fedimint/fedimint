@@ -2,7 +2,10 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fedimint_core::db::{IDatabase, IDatabaseTransaction, PrefixStream};
+use fedimint_core::db::{
+    IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, PrefixStream,
+    SingleUseDatabaseTransaction,
+};
 use futures::stream;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::SqliteConnectOptions;
@@ -53,10 +56,11 @@ impl SqliteDb {
 
 #[async_trait]
 impl IDatabase for SqliteDb {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a>> {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
         let mut tx = SqliteDbTransaction(self.0.begin().await.unwrap());
         tx.set_tx_savepoint().await;
-        Box::new(tx)
+        let single_use = SingleUseDatabaseTransaction::new(tx);
+        Box::new(single_use)
     }
 }
 
@@ -136,7 +140,7 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         Ok(())
     }
 
-    async fn commit_tx(self: Box<Self>) -> Result<()> {
+    async fn commit_tx(self) -> Result<()> {
         self.0.commit().await.map_err(anyhow::Error::from)
     }
 
