@@ -307,7 +307,6 @@ impl MintClient {
             info!(target: LOG_ECASH_RECOVERY, epoch, "Processing epoch");
             let mut procesed_txs = Default::default();
             for (peer_id, items) in &epoch_history.outcome.items {
-                // TODO: epoch history to contain rejected items, we should skip them here
                 for item in items {
                     tracker.handle_consensus_item(
                         *peer_id,
