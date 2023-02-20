@@ -1,4 +1,6 @@
+use std::fmt::Display;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use aead::{encrypted_read, encrypted_write, get_key, LessSafeKey};
@@ -134,9 +136,9 @@ pub fn write_server_config(
         .client;
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
-    plaintext_json_write(
+    plaintext_display_write(
         &WsClientConnectInfo::from_honest_peers(&client_config),
-        path.join(CLIENT_CONNECT_FILE),
+        &path.join(CLIENT_CONNECT_FILE),
     )?;
     plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))?;
     encrypted_json_write(&server.private, &key, path.join(PRIVATE_CONFIG))
@@ -151,6 +153,13 @@ fn plaintext_json_write<T: Serialize + DeserializeOwned>(
     let file = fs::File::create(filename.clone())
         .map_err(|_| format_err!("Unable to create file {:?}", filename))?;
     serde_json::to_writer_pretty(file, obj)?;
+    Ok(())
+}
+
+fn plaintext_display_write<T: Display>(obj: &T, path: &Path) -> anyhow::Result<()> {
+    let mut file =
+        fs::File::create(path).map_err(|_| format_err!("Unable to create file {:?}", path))?;
+    file.write_all(obj.to_string().as_bytes())?;
     Ok(())
 }
 

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -169,9 +170,10 @@ impl Gateway {
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
-        let connect: WsClientConnectInfo = serde_json::from_str(&payload.connect).map_err(|e| {
-            LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
-        })?;
+        let connect: WsClientConnectInfo = WsClientConnectInfo::from_str(&payload.connect)
+            .map_err(|e| {
+                LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
+            })?;
 
         let GetPubKeyResponse { pub_key } = self.lnrpc.pubkey().await?;
         let node_pub_key = PublicKey::from_slice(&pub_key)
