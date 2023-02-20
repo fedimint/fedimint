@@ -112,7 +112,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: result/lcov.info
 
-  wasm32:
+  cross:
     name: "Cross-compile: ${{ matrix.build }}"
 
     strategy:
