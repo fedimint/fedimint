@@ -1,6 +1,5 @@
 pub mod fake;
 
-use async_trait::async_trait;
 use bitcoin::Address;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::api::{
@@ -14,7 +13,8 @@ use fedimint_core::core::{
 use fedimint_core::query::{
     CurrentConsensus, EventuallyConsistent, Retry404, UnionResponses, UnionResponsesSingle,
 };
-use fedimint_core::NumPeers;
+use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 use fedimint_mint::db::ECashUserBackupSnapshot;
 
 use crate::modules::ln::contracts::incoming::IncomingContractOffer;
@@ -22,8 +22,7 @@ use crate::modules::ln::contracts::ContractId;
 use crate::modules::ln::{ContractAccount, LightningGateway};
 use crate::modules::wallet::PegOutFees;
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
     async fn fetch_offer(
@@ -35,11 +34,10 @@ pub trait LnFederationApi {
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> LnFederationApi for T
 where
-    T: IFederationApi + Send + Sync + 'static,
+    T: IFederationApi + MaybeSend + MaybeSync + 'static,
 {
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
         self.request_with_strategy(
@@ -88,8 +86,7 @@ where
     }
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 pub trait MintFederationApi {
     async fn upload_ecash_backup(
         &self,
@@ -101,11 +98,10 @@ pub trait MintFederationApi {
     ) -> FederationResult<Vec<ECashUserBackupSnapshot>>;
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> MintFederationApi for T
 where
-    T: IFederationApi + Send + Sync + 'static,
+    T: IFederationApi + MaybeSend + MaybeSync + 'static,
 {
     async fn upload_ecash_backup(
         &self,
@@ -137,8 +133,7 @@ where
     }
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
     async fn fetch_consensus_block_height(&self) -> FederationResult<u64>;
     async fn fetch_peg_out_fees(
@@ -148,11 +143,10 @@ pub trait WalletFederationApi {
     ) -> FederationResult<Option<PegOutFees>>;
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(? Send))]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
+#[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> WalletFederationApi for T
 where
-    T: IFederationApi + Send + Sync + 'static,
+    T: IFederationApi + MaybeSend + MaybeSync + 'static,
 {
     async fn fetch_consensus_block_height(&self) -> FederationResult<u64> {
         self.request_with_strategy(

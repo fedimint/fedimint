@@ -1,3 +1,4 @@
+#![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 extern crate self as fedimint_core;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,6 +11,7 @@ use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::ApiEndpoint;
+pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

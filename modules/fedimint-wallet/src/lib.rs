@@ -7,7 +7,6 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use anyhow::format_err;
-use async_trait::async_trait;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -45,8 +44,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{
-    plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Feerate, NumPeers, OutPoint,
-    PeerId, ServerModule,
+    apply, async_trait_maybe_send, plugin_types_trait_impl, push_db_key_items, push_db_pair_items,
+    Feerate, NumPeers, OutPoint, PeerId, ServerModule,
 };
 use futures::{stream, StreamExt};
 use impl_tools::autoimpl;
@@ -233,7 +232,7 @@ impl std::fmt::Display for WalletOutputOutcome {
 #[derive(Debug)]
 pub struct WalletGen;
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl ModuleGen for WalletGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
@@ -482,7 +481,7 @@ impl std::fmt::Display for WalletOutput {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletVerificationCache;
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl ServerModule for Wallet {
     type Gen = WalletGen;
     type Decoder = WalletDecoder;

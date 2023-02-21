@@ -3,13 +3,14 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use bitcoin_hashes::hex::ToHex;
 use futures::stream;
+use macro_rules_attribute::apply;
 
 use super::{
     IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, SingleUseDatabaseTransaction,
 };
+use crate::async_trait_maybe_send;
 use crate::db::PrefixStream;
 
 #[derive(Debug, Default)]
@@ -61,7 +62,7 @@ impl MemDatabase {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IDatabase for MemDatabase {
     async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
         let db_copy = self.data.lock().unwrap().clone();
@@ -82,7 +83,7 @@ impl IDatabase for MemDatabase {
 
 // In-memory database transaction should only be used for test code and never
 // for production as it doesn't properly implement MVCC
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key).await;

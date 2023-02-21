@@ -18,7 +18,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::ops::Sub;
 
-use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
@@ -41,7 +40,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::SystemTime;
 use fedimint_core::{
-    plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers,
+    OutPoint, PeerId, ServerModule,
 };
 #[cfg(feature = "server")]
 use fedimint_server::config::distributedgen::DkgRunner;
@@ -253,7 +253,7 @@ pub struct LightningVerificationCache;
 #[derive(Debug)]
 pub struct LightningGen;
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl ModuleGen for LightningGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
@@ -455,7 +455,7 @@ impl ModuleGen for LightningGen {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl ServerModule for Lightning {
     type Gen = LightningGen;
     type Decoder = LightningDecoder;

@@ -7,20 +7,21 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
-use fedimint_core::{OutPoint, PeerId};
+use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
 use super::*;
+use crate::maybe_add_send_sync;
 use crate::module::{
     ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, ModuleConsensusVersion, ModuleError,
     ServerModule, TransactionItemAmount,
 };
+use crate::task::{MaybeSend, MaybeSync};
 
 pub trait IVerificationCache: Debug {
-    fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
     fn clone(&self) -> DynVerificationCache;
 }
 
@@ -29,13 +30,13 @@ dyn_newtype_define! {
 }
 
 // TODO: make macro impl that doesn't force en/decodable
-pub trait VerificationCache: Clone + Debug + Send + Sync + 'static {}
+pub trait VerificationCache: Clone + Debug + MaybeSend + MaybeSync + 'static {}
 
 impl<T> IVerificationCache for T
 where
     T: VerificationCache + 'static,
 {
-    fn as_any(&self) -> &(dyn Any + Send + Sync) {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
     }
 
@@ -47,7 +48,7 @@ where
 /// Backend side module interface
 ///
 /// Server side Fedimint module needs to implement this trait.
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait IServerModule: Debug {
     fn as_any(&self) -> &dyn Any;
 
@@ -185,7 +186,7 @@ dyn_newtype_define!(
     pub DynServerModule(Arc<IServerModule>)
 );
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<T> IServerModule for T
 where
     T: ServerModule + 'static + Sync,

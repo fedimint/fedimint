@@ -4,7 +4,6 @@ use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Sub;
 
-use async_trait::async_trait;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
@@ -25,11 +24,11 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{MaybeSend, TaskGroup};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{
-    plugin_types_trait_impl, push_db_key_items, push_db_pair_items, Amount, NumPeers, OutPoint,
-    PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
+    apply, async_trait_maybe_send, plugin_types_trait_impl, push_db_key_items, push_db_pair_items,
+    Amount, NumPeers, OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
 #[cfg(feature = "server")]
 use fedimint_server::config::distributedgen::scalar;
@@ -151,7 +150,7 @@ pub struct VerifiedNotes {
 #[derive(Debug)]
 pub struct MintGen;
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl ModuleGen for MintGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
@@ -456,7 +455,7 @@ impl std::fmt::Display for MintConsensusItem {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
     type Gen = MintGen;
     type Decoder = MintDecoder;
@@ -516,14 +515,17 @@ impl ServerModule for Mint {
 
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a MintInput> + Send,
+        inputs: impl Iterator<Item = &'a MintInput> + MaybeSend,
     ) -> Self::VerificationCache {
         // We build a lookup table for checking the validity of all notes for certain
         // amounts. This calculation can happen massively in parallel since
         // verification is a pure function and thus has no side effects.
-        let valid_notes = inputs
-            .flat_map(|inputs| inputs.0.iter_items())
-            .par_bridge()
+        let iter = inputs.flat_map(|inputs| inputs.0.iter_items());
+
+        #[cfg(not(target_family = "wasm"))]
+        let iter = iter.par_bridge();
+
+        let valid_notes = iter
             .filter_map(|(amount, note)| {
                 let amount_key = self.pub_key.get(&amount)?;
                 if note.verify(*amount_key) {
