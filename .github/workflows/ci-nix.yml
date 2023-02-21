@@ -112,15 +112,15 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: result/lcov.info
 
-  wasm32:
+  cross:
     name: "Cross-compile: ${{ matrix.build }}"
 
     strategy:
       matrix:
         build:
-          - aarch64-android
-          - x86_64-android
-          - wasm32
+          - aarch64-linux-android
+          - x86_64-linux-android
+          - wasm32-unknown-unknown
 
     runs-on: ubuntu-22.04
     timeout-minutes: 30
