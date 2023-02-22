@@ -9,7 +9,6 @@ use std::any::{Any, TypeId};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
-use std::io;
 use std::io::Read;
 use std::sync::Arc;
 
@@ -22,8 +21,6 @@ use crate::{
     dyn_newtype_define_with_instance_id, dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id,
     ModuleDecoderRegistry,
 };
-
-pub mod encode;
 
 pub mod client;
 pub mod server;
@@ -108,14 +105,11 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
 
         impl Decodable for $name {
             fn consensus_decode<R: std::io::Read>(
-                r: &mut R,
+                reader: &mut R,
                 modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, DecodeError> {
-                $crate::core::encode::module_decode_key_prefixed_decodable(
-                    r,
-                    modules,
-                    |r, m, id| m.$decode_fn(r, id),
-                )
+                let key = ModuleInstanceId::consensus_decode(reader, modules)?;
+                modules.get_expect(key).decode(reader, key)
             }
         }
     };
@@ -366,74 +360,6 @@ impl Decoder {
 impl Debug for Decoder {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Decoder(registered_types = {})", self.decode_fns.len())
-    }
-}
-
-pub trait IDecoder: Debug {
-    /// Decode `Input` compatible with this module, after the module key prefix
-    /// was already decoded
-    fn decode_input(
-        &self,
-        r: &mut dyn io::Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynInput, DecodeError>;
-
-    /// Decode `Output` compatible with this module, after the module key prefix
-    /// was already decoded
-    fn decode_output(
-        &self,
-        r: &mut dyn io::Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynOutput, DecodeError>;
-
-    /// Decode `OutputOutcome` compatible with this module, after the module key
-    /// prefix was already decoded
-    fn decode_output_outcome(
-        &self,
-        r: &mut dyn io::Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynOutputOutcome, DecodeError>;
-
-    /// Decode `ConsensusItem` compatible with this module, after the module key
-    /// prefix was already decoded
-    fn decode_consensus_item(
-        &self,
-        r: &mut dyn io::Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynModuleConsensusItem, DecodeError>;
-}
-
-impl IDecoder for Decoder {
-    fn decode_input(
-        &self,
-        r: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynInput, DecodeError> {
-        self.decode(r, instance_id)
-    }
-
-    fn decode_output(
-        &self,
-        r: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynOutput, DecodeError> {
-        self.decode(r, instance_id)
-    }
-
-    fn decode_output_outcome(
-        &self,
-        r: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynOutputOutcome, DecodeError> {
-        self.decode(r, instance_id)
-    }
-
-    fn decode_consensus_item(
-        &self,
-        r: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynModuleConsensusItem, DecodeError> {
-        self.decode(r, instance_id)
     }
 }
 
