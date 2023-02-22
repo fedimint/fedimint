@@ -192,12 +192,15 @@ mod tests {
     #[test]
     fn test_queue() {
         let mut queue = MessageQueue::default();
+        assert_eq!(queue.next_id, MessageId(1));
 
         queue.queue_message(TestMsg {
             epoch: None,
             msg: 0,
         });
+        // no epochs buffered at all
         assert_eq!(queue.buffered_epochs(), 0);
+        assert_eq!(queue.next_id, MessageId(2));
 
         // Test queuing unsent
         for i in 0u64..10 {
@@ -207,6 +210,9 @@ mod tests {
             });
             assert_eq!(queue.next_id, MessageId(i + 3));
             assert_eq!(queue.unsent_messages, i + 2);
+
+            // as we never mark the first message with content "0" as sent,
+            // it should always be returned as the next message to be send
             assert_eq!(
                 queue.next_send_message().unwrap(),
                 &UniqueMessage {
@@ -224,6 +230,7 @@ mod tests {
 
         // Test sending
         queue.mark_sent(MessageId(1));
+        assert_eq!(queue.unsent_len(), 10);
         assert_eq!(
             queue.next_send_message().unwrap(),
             &UniqueMessage {
@@ -261,8 +268,13 @@ mod tests {
             }
         );
         assert_eq!(queue.buffered_epochs(), 10);
+        // marked 2 more messages as sent
+        assert_eq!(queue.unsent_len(), 8);
 
         // Test ACK
+        // no messages were ack'ed yet, so the queue still contains all messages
+        assert_eq!(queue.queue.len(), 11);
+
         queue.ack(MessageId(1));
         assert_eq!(queue.queue.len(), 10);
         assert_eq!(queue.buffered_epochs(), 10);
@@ -278,15 +290,34 @@ mod tests {
         assert_eq!(queue.queue.len(), 10);
         assert_eq!(queue.buffered_epochs(), 9);
 
-        // Test resend
+        // received MessageID from the future.
+        // Queue would expect 3, but gets msg id 5, and hence removes msg with id 3,4,5
+        queue.ack(MessageId(5));
+        assert_eq!(queue.queue.len(), 7);
+        // unset_len() was 9 but should be reset to queue.len()
+        assert_eq!(
+            queue.unsent_len(),
+            7,
+            "unsent message counter was not reset"
+        );
+
+        queue.mark_sent(MessageId(6));
+        assert_eq!(queue.unsent_len(), 6);
+
+        // Test resend all
         queue.resend_all();
+        assert_eq!(
+            queue.unsent_len(),
+            7,
+            "resend_all did not reset unsent message counter"
+        );
         assert_eq!(
             queue.next_send_message().unwrap(),
             &UniqueMessage {
-                id: MessageId(3),
+                id: MessageId(6),
                 msg: TestMsg {
-                    epoch: Some(1),
-                    msg: 42
+                    epoch: Some(4),
+                    msg: 168
                 }
             }
         );
