@@ -126,6 +126,9 @@ enum Command {
     },
 }
 
+/// `distributedgen` builder
+///
+/// See [`super::fedimintd::Fedimintd`] for more info.
 pub struct DistributedGen {
     module_gens: ModuleGenRegistry,
     opts: Cli,

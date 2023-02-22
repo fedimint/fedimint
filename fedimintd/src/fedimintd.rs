@@ -43,9 +43,28 @@ pub struct ServerOpts {
 /// Fedimint supports third party modules. Right now (and for forseable feature)
 /// modules needs to be combined with rest of the code at the compilation time.
 ///
-/// To make this easier, [`Fedimintd`] builder is exposed, allowing people
-/// who want to run `fedimintd` with custom set of modules compile their own
-/// binary.
+/// To make this easier, [`Fedimintd`] builder is exposed, allowing
+/// building `fedimintd` with custom set of modules.
+///
+///
+/// Example:
+///
+/// ```
+/// use fedimint_ln::LightningGen;
+/// use fedimint_mint::MintGen;
+/// use fedimint_wallet::WalletGen;
+/// use fedimintd::fedimintd::Fedimintd;
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     Fedimintd::new()?
+///         .attach(WalletGen)
+///         .attach(MintGen)
+///         .attach(LightningGen)
+///         .run()
+///         .await
+/// }
+/// ```
 pub struct Fedimintd {
     module_gens: ModuleGenRegistry,
     opts: ServerOpts,

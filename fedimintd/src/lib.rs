@@ -4,9 +4,11 @@ use fedimint_core::{Amount, Tiered};
 use fedimint_mint::MintGenParams;
 use fedimint_wallet::WalletGenParams;
 
-pub mod ui;
+mod ui;
 
+/// Module for creating `distributetgen` binary with custom modules
 pub mod distributed_gen;
+/// Module for creating `fedimintd` binary with custom modules
 pub mod fedimintd;
 
 /// Generates the configuration for the modules configured in the server binary

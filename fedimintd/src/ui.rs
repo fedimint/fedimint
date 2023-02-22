@@ -374,6 +374,7 @@ pub enum DkgState {
 #[derive(Debug)]
 pub enum UiMessage {
     DkgSuccess,
+    #[allow(unused)]
     DkgFailure(String),
 }
 
