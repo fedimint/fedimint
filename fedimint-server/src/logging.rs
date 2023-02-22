@@ -21,20 +21,20 @@ pub struct TracingSetup {
 }
 
 impl TracingSetup {
-    /// Setup a console server for tokio logging https://docs.rs/console-subscriber
+    /// Setup a console server for tokio logging <https://docs.rs/console-subscriber>
     pub fn tokio_console_bind(&mut self, address: Option<SocketAddr>) -> &mut Self {
         self.tokio_console_bind = address;
         self
     }
 
-    /// Setup telemetry through Jaeger https://docs.rs/tracing-jaeger
+    /// Setup telemetry through Jaeger <https://docs.rs/tracing-jaeger>
     #[cfg(feature = "telemetry")]
     pub fn with_jaeger(&mut self, enabled: bool) -> &mut Self {
         self.with_jaeger = enabled;
         self
     }
 
-    /// Setup telemetry through Chrome https://docs.rs/tracing-chrome
+    /// Setup telemetry through Chrome <https://docs.rs/tracing-chrome>
     #[cfg(feature = "telemetry")]
     pub fn with_chrome(&mut self, enabled: bool) -> &mut Self {
         self.with_chrome = enabled;
