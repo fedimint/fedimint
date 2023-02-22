@@ -25,7 +25,7 @@ use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
-use crate::module::DynModuleGen;
+use crate::module::{DynModuleGen, ModuleGen};
 use crate::PeerId;
 
 /// [`serde_json::Value`] that must contain `kind: String` field
@@ -270,6 +270,21 @@ impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
 }
 
 impl ModuleGenRegistry {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn attach<T>(&mut self, gen: T)
+    where
+        T: ModuleGen + 'static + Send + Sync,
+    {
+        let gen: DynModuleGen = gen.into();
+        let kind = gen.module_kind();
+        if self.0.insert(kind.clone(), gen).is_some() {
+            panic!("Can't insert module of same kind twice: {kind}");
+        }
+    }
+
     pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
         self.0.get(k)
     }

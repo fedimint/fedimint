@@ -14,6 +14,10 @@ license = "MIT"
 name = "fedimintd"
 path = "src/bin/main.rs"
 
+[lib]
+name = "fedimintd"
+path = "src/lib.rs"
+
 [[bin]]
 name = "distributedgen"
 path  = "src/bin/distributedgen.rs"

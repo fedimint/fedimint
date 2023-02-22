@@ -1,12 +1,15 @@
 use bitcoin::Network;
-use fedimint_core::config::{ConfigGenParams, ModuleGenRegistry};
-use fedimint_core::module::DynModuleGen;
+use fedimint_core::config::ConfigGenParams;
 use fedimint_core::{Amount, Tiered};
-use fedimint_ln::LightningGen;
-use fedimint_mint::{MintGen, MintGenParams};
-use fedimint_wallet::{WalletGen, WalletGenParams};
+use fedimint_mint::MintGenParams;
+use fedimint_wallet::WalletGenParams;
 
-pub mod ui;
+mod ui;
+
+/// Module for creating `distributetgen` binary with custom modules
+pub mod distributed_gen;
+/// Module for creating `fedimintd` binary with custom modules
+pub mod fedimintd;
 
 /// Generates the configuration for the modules configured in the server binary
 pub fn configure_modules(
@@ -27,12 +30,4 @@ pub fn configure_modules(
                 .cloned()
                 .collect(),
         })
-}
-
-pub fn module_registry() -> ModuleGenRegistry {
-    ModuleGenRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
-    ])
 }
