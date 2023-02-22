@@ -20,6 +20,8 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
+use crate::logging::LOG_TASK;
+
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
 
@@ -151,7 +153,10 @@ impl TaskGroup {
             let task_group = self.clone();
             async move {
                 wait_for_shutdown_signal().await;
-                info!("signal received, starting graceful shutdown");
+                info!(
+                    target: LOG_TASK,
+                    "signal received, starting graceful shutdown"
+                );
                 task_group.shutdown().await;
             }
         });
@@ -263,14 +268,17 @@ impl TaskGroup {
 
             match join_future.await {
                 Ok(Ok(())) => {
-                    info!("{name} task finished");
+                    info!(target: LOG_TASK, "{name} task finished");
                 }
                 Ok(Err(e)) => {
-                    error!("Thread {name} panicked with: {e}");
+                    error!(target: LOG_TASK, "Thread {name} panicked with: {e}");
                     errors.push(e);
                 }
                 Err(Elapsed) => {
-                    warn!("{name} task hit timeout while shutting down")
+                    warn!(
+                        target: LOG_TASK,
+                        "{name} task hit timeout while shutting down"
+                    )
                 }
             }
         }
@@ -303,8 +311,8 @@ impl Drop for TaskPanicGuard {
     fn drop(&mut self) {
         if !self.completed {
             info!(
-                "Task {} shut down uncleanly. Shutting down task group.",
-                self.name
+                target: LOG_TASK,
+                "Task {} shut down uncleanly. Shutting down task group.", self.name
             );
             self.inner.is_shutting_down.store(true, SeqCst);
         }

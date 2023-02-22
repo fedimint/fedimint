@@ -124,7 +124,10 @@ impl FedimintServer {
             .await;
 
         loop {
-            info!("Waiting for peers to agree on a consensus config hash");
+            info!(
+                target: LOG_CONSENSUS,
+                "Waiting for peers to agree on a consensus config hash"
+            );
             match server.api.consensus_config_hash().await {
                 Ok(consensus_hash) if consensus_hash == consensus.consensus_hash => break,
                 Ok(_) => bail!("Our consensus config doesn't match peers!"),
@@ -232,14 +235,18 @@ impl FedimintServer {
             };
 
             for outcome in outcomes {
-                info!("{}", consensus::debug::epoch_message(&outcome));
+                info!(
+                    target: LOG_CONSENSUS,
+                    "{}",
+                    consensus::debug::epoch_message(&outcome)
+                );
                 self.process_outcome(outcome)
                     .await
                     .expect("failed to process epoch");
             }
         }
 
-        info!("Consensus task shut down");
+        info!(target: LOG_CONSENSUS, "Consensus task shut down");
     }
 
     /// Starts consensus by skipping to the last saved epoch history  and
@@ -253,7 +260,10 @@ impl FedimintServer {
         }
 
         let epoch = self.next_epoch_to_process();
-        info!("Starting consensus at epoch {}", epoch);
+        info!(
+            target: LOG_CONSENSUS,
+            "Starting consensus at epoch {}", epoch
+        );
         self.hbbft.skip_to_epoch(epoch);
         self.rejoin_at_epoch = Some(HashMap::new());
         self.request_rejoin(1).await;
@@ -301,7 +311,10 @@ impl FedimintServer {
                         true,
                     )
                 } else {
-                    info!("Downloading missing epoch {}", epoch_num);
+                    info!(
+                        target: LOG_CONSENSUS,
+                        "Downloading missing epoch {}", epoch_num
+                    );
                     let epoch_pk = self.cfg.consensus.epoch_pk_set.public_key();
                     let epoch = self
                         .api
@@ -486,8 +499,8 @@ impl FedimintServer {
             (_, EpochMessage::RejoinRequest(epoch)) => {
                 self.run_empty_epochs += min(NUM_EPOCHS_REJOIN_AHEAD, epoch);
                 info!(
-                    "Requested to run {} epochs, running {} epochs",
-                    epoch, self.run_empty_epochs
+                    target: LOG_CONSENSUS,
+                    "Requested to run {} epochs, running {} epochs", epoch, self.run_empty_epochs
                 );
                 Ok(vec![])
             }
@@ -504,7 +517,11 @@ impl FedimintServer {
             peers.insert(peer);
 
             if peers.len() >= self.peers.threshold() && self.hbbft.epoch() < epoch {
-                info!("Skipping to epoch {}", epoch + NUM_EPOCHS_REJOIN_AHEAD);
+                info!(
+                    target: LOG_CONSENSUS,
+                    "Skipping to epoch {}",
+                    epoch + NUM_EPOCHS_REJOIN_AHEAD
+                );
                 self.hbbft.skip_to_epoch(epoch + NUM_EPOCHS_REJOIN_AHEAD);
                 self.request_rejoin(NUM_EPOCHS_REJOIN_AHEAD).await;
             }

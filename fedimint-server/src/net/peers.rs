@@ -222,11 +222,11 @@ where
     #[must_use]
     async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()> {
         for peer_id in peers {
-            trace!(?peer_id, "Sending message to");
+            trace!(target: LOG_NET_PEER, ?peer_id, "Sending message to");
             if let Some(peer) = self.connections.get_mut(peer_id) {
                 peer.send(msg.clone()).await?;
             } else {
-                trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
+                trace!(target: LOG_NET_PEER,peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
             }
         }
         Ok(())
@@ -271,7 +271,11 @@ where
                 break;
             }
         }
-        info!(?peer, "Shutting down peer connection state machine");
+        info!(
+            target: LOG_NET_PEER,
+            ?peer,
+            "Shutting down peer connection state machine"
+        );
     }
 
     async fn state_transition(self, task_handle: &TaskHandle) -> Option<Self> {
@@ -312,7 +316,7 @@ where
                         self.send_message_connected(connected, msg).await
                     },
                     None => {
-                        debug!("Exiting peer connection IO task - parent disconnected");
+                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
                         return None;
                     },
                 }
@@ -324,7 +328,9 @@ where
                         self.connect(new_connection, 0).await
                     },
                     None => {
-                        debug!("Exiting peer connection IO task - parent disconnected");
+                        debug!(
+                        target: LOG_NET_PEER,
+                            "Exiting peer connection IO task - parent disconnected");
                         return None;
                     },
                 }
@@ -343,7 +349,8 @@ where
         mut new_connection: AnyFramedTransport<PeerMessage<M>>,
         disconnect_count: u64,
     ) -> PeerConnectionState<M> {
-        debug!(peer = ?self.peer, "Received incoming connection");
+        debug!(target: LOG_NET_PEER,
+            peer = ?self.peer, "Received incoming connection");
         match self.resend_buffer_contents(&mut new_connection).await {
             Ok(()) => PeerConnectionState::Connected(ConnectedPeerConnectionState {
                 connection: new_connection,
@@ -374,7 +381,10 @@ where
         let reconnect_at = {
             let scaling_factor = disconnect_count as f64;
             let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor..4.0 * scaling_factor);
-            debug!(delay, "Scheduling reopening of connection");
+            debug!(
+                target: LOG_NET_PEER,
+                delay, "Scheduling reopening of connection"
+            );
             Instant::now() + Duration::from_secs_f64(delay)
         };
 
@@ -385,7 +395,8 @@ where
     }
 
     fn disconnect_err(&self, err: anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
-        debug!(peer = ?self.peer, %err, %disconnect_count, "Peer disconnected");
+        debug!(target: LOG_NET_PEER,
+            peer = ?self.peer, %err, %disconnect_count, "Peer disconnected");
         self.disconnect(disconnect_count)
     }
 
@@ -395,7 +406,7 @@ where
         msg: M,
     ) -> PeerConnectionState<M> {
         let umsg = self.resend_queue.push(msg);
-        trace!(?self.peer, id = ?umsg.id, "Sending outgoing message");
+        trace!(target: LOG_NET_PEER, peer = ?self.peer, id = ?umsg.id, "Sending outgoing message");
 
         match connected
             .connection
@@ -429,7 +440,7 @@ where
         msg_res: Result<PeerMessage<M>, anyhow::Error>,
     ) -> Result<(), anyhow::Error> {
         let PeerMessage { msg, ack } = msg_res?;
-        trace!(peer = ?self.peer, id = ?msg.id, "Received incoming message");
+        trace!(target: LOG_NET_PEER,peer = ?self.peer, id = ?msg.id, "Received incoming message");
 
         let expected = self
             .last_received
@@ -437,7 +448,9 @@ where
             .unwrap_or(msg.id);
 
         if msg.id < expected {
-            info!(?expected, received = ?msg.id, "Received old message");
+            info!(
+                        target: LOG_NET_PEER,
+                ?expected, received = ?msg.id, "Received old message");
             return Ok(());
         }
 
@@ -455,7 +468,10 @@ where
         if self.incoming.send(msg.msg).await.is_err() {
             // ignore error - if the other side is not there,
             // it means we're are probably shutting down
-            debug!("Could not deliver message to recipient - probably shutting down");
+            debug!(
+                target: LOG_NET_PEER,
+                "Could not deliver message to recipient - probably shutting down"
+            );
         }
 
         Ok(())
@@ -472,7 +488,7 @@ where
                     Some(msg) => {
                         self.send_message(disconnected, msg).await}
                     None => {
-                        debug!("Exiting peer connection IO task - parent disconnected");
+                        debug!(target: LOG_NET_PEER,"Exiting peer connection IO task - parent disconnected");
                         return None;
                     }
                 }
@@ -483,7 +499,7 @@ where
                         self.receive_connection(disconnected, new_connection).await
                     },
                     None => {
-                        debug!("Exiting peer connection IO task - parent disconnected");
+                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
                         return None;
                     },
                 }
@@ -503,7 +519,7 @@ where
         msg: M,
     ) -> PeerConnectionState<M> {
         let umsg = self.resend_queue.push(msg);
-        trace!(id = ?umsg.id, "Queueing outgoing message");
+        trace!(target: LOG_NET_PEER, id = ?umsg.id, "Queueing outgoing message");
         PeerConnectionState::Disconnected(disconnected)
     }
 
@@ -530,7 +546,7 @@ where
     }
 
     async fn try_reconnect(&self) -> Result<AnyFramedTransport<PeerMessage<M>>, anyhow::Error> {
-        debug!("Trying to reconnect");
+        debug!(target: LOG_NET_PEER, "Trying to reconnect");
         let addr = self.peer_address.clone();
         let (connected_peer, conn) = self.connect.connect_framed(addr, self.peer).await?;
 
