@@ -31,6 +31,7 @@
         };
 
         lib = pkgs.lib;
+
         stdenv = pkgs.stdenv;
 
         clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
@@ -612,7 +613,7 @@
         #
         # To avoid impurity, we use a git hash placeholder when building binaries
         # and then replace them with the real git hash in the binaries themselves.
-        replace-git-hash = { package, name }:
+        replaceGitHash = { package, name }:
           let
             # the git hash placeholder we use in `build.rs` scripts when
             # building in Nix (to preserve purity)
@@ -665,11 +666,143 @@
 
         packages = outputsWorkspace //
           # replace git hash in the final binaries
-          (builtins.mapAttrs (name: package: replace-git-hash { inherit name package; }) outputsPackages)
+          (builtins.mapAttrs (name: package: replaceGitHash { inherit name package; }) outputsPackages)
         ;
+
+        devShells =
+
+          let
+            shellCommon = {
+              buildInputs = commonArgs.buildInputs;
+              nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
+                fenix.packages.${system}.rust-analyzer
+                fenixToolchainRustfmt
+                cargo-llvm-cov
+                cargo-udeps
+                pkgs.parallel
+                pkgs.just
+                cargo-spellcheck
+
+                (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
+
+                # This is required to prevent a mangled bash shell in nix develop
+                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
+                (hiPrio pkgs.bashInteractive)
+                tmux
+                tmuxinator
+                docker-compose
+                pkgs.tokio-console
+
+                # Nix
+                pkgs.nixpkgs-fmt
+                pkgs.shellcheck
+                pkgs.rnix-lsp
+                pkgs-unstable.convco
+                pkgs.nodePackages.bash-language-server
+              ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
+                pkgs.semgrep
+              ] ++ cliTestsDeps;
+              RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
+              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+              ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+
+              shellHook = ''
+                # auto-install git hooks
+                dot_git="$(git rev-parse --git-common-dir)"
+                if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
+                for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
+                ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
+
+                # workaround https://github.com/rust-lang/cargo/issues/11020
+                cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
+                if (( ''${#cargo_cmd_bins[@]} != 0 )); then
+                  >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
+                  >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
+                fi
+
+                # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
+                if [ -n "$TMUX" ]; then
+                  # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
+                  if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
+                    echo
+                    >&2 echo "⚠️  tmux's 'default-command' not set"
+                    >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
+                  fi
+                fi
+
+                # if runing in direnv
+                if [ -n "''${DIRENV_IN_ENVRC:-}" ]; then
+                  # and not set DIRENV_LOG_FORMAT
+                  if [ -n "''${DIRENV_LOG_FORMAT:-}" ]; then
+                    >&2 echo "💡 Set 'DIRENV_LOG_FORMAT=\"\"' in your shell environment variables for a cleaner output of direnv"
+                  fi
+                fi
+
+                >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
+
+                if [ "$(ulimit -Sn)" -lt "1024" ]; then
+                    >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
+                fi
+              '';
+            };
+
+          in
+          {
+            # The default shell - meant to developers working on the project,
+            # so notably not building any project binaries, but including all
+            # the settings and tools neccessary to build and work with the codebase.
+            default = pkgs.mkShell (shellCommon
+              // {
+              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchain ];
+            });
+
+
+            # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
+            #
+            # This will pull extra stuff so to save time and download time to most common developers,
+            # was moved into another shell.
+            cross = pkgs.mkShell (shellCommon // {
+              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchainCrossAll ];
+
+              shellHook = shellCommon.shellHook +
+
+                # Android NDK not available for Arm MacOS
+                (if isArch64Darwin then "" else androidCrossEnvVars)
+                + wasm32CrossEnvVars;
+            });
+
+            # this shell is used only in CI, so it should contain minimum amount
+            # of stuff to avoid building and caching things we don't need
+            lint = pkgs.mkShell {
+              nativeBuildInputs = [
+                fenixToolchainCargoFmt
+                pkgs.nixpkgs-fmt
+                pkgs.shellcheck
+                pkgs.git
+                pkgs.parallel
+                pkgs.semgrep
+              ];
+            };
+
+            replit = pkgs.mkShell {
+              nativeBuildInputs = with pkgs; [
+                pkg-config
+                openssl
+              ];
+              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+            };
+
+            bootstrap = pkgs.mkShell {
+              nativeBuildInputs = with pkgs; [
+                cachix
+              ];
+            };
+          };
       in
       {
-        inherit packages;
+        inherit packages devShells;
+
+        lib = { inherit replaceGitHash devShells commonArgsBase; };
 
         # Technically nested sets are not allowed in `packages`, so we can
         # dump the nested things here. They'll work the same way for most
@@ -689,7 +822,7 @@
             in
             (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") outputsWorkspace) //
             (builtins.mapAttrs
-              (name: deriv: replace-git-hash {
+              (name: deriv: replaceGitHash {
                 inherit name; package = overrideCargoProfileRecursively deriv "dev";
               })
               outputsPackages) // { cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") cli-test); }
@@ -828,135 +961,6 @@
             workspaceClippy;
         };
 
-        devShells =
-
-          let
-            shellCommon = {
-              buildInputs = commonArgs.buildInputs;
-              nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
-                fenix.packages.${system}.rust-analyzer
-                fenixToolchainRustfmt
-                cargo-llvm-cov
-                cargo-udeps
-                pkgs.parallel
-                pkgs.just
-                cargo-spellcheck
-
-                (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
-
-                # This is required to prevent a mangled bash shell in nix develop
-                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
-                (hiPrio pkgs.bashInteractive)
-                tmux
-                tmuxinator
-                docker-compose
-                pkgs.tokio-console
-
-                # Nix
-                pkgs.nixpkgs-fmt
-                pkgs.shellcheck
-                pkgs.rnix-lsp
-                pkgs-unstable.convco
-                pkgs.nodePackages.bash-language-server
-              ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
-                pkgs.semgrep
-              ] ++ cliTestsDeps;
-              RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
-              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-              ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
-
-              shellHook = ''
-                # auto-install git hooks
-                dot_git="$(git rev-parse --git-common-dir)"
-                if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
-                for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
-                ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
-
-                # workaround https://github.com/rust-lang/cargo/issues/11020
-                cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
-                if (( ''${#cargo_cmd_bins[@]} != 0 )); then
-                  >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
-                  >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
-                fi
-
-                # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
-                if [ -n "$TMUX" ]; then
-                  # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
-                  if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
-                    echo
-                    >&2 echo "⚠️  tmux's 'default-command' not set"
-                    >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
-                  fi
-                fi
-
-                # if runing in direnv
-                if [ -n "''${DIRENV_IN_ENVRC:-}" ]; then
-                  # and not set DIRENV_LOG_FORMAT
-                  if [ -n "''${DIRENV_LOG_FORMAT:-}" ]; then
-                    >&2 echo "💡 Set 'DIRENV_LOG_FORMAT=\"\"' in your shell environment variables for a cleaner output of direnv"
-                  fi
-                fi
-
-                >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
-
-                if [ "$(ulimit -Sn)" -lt "1024" ]; then
-                    >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
-                fi
-              '';
-            };
-
-          in
-          {
-            # The default shell - meant to developers working on the project,
-            # so notably not building any project binaries, but including all
-            # the settings and tools neccessary to build and work with the codebase.
-            default = pkgs.mkShell (shellCommon
-              // {
-              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchain ];
-            });
-
-
-            # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
-            #
-            # This will pull extra stuff so to save time and download time to most common developers,
-            # was moved into another shell.
-            cross = pkgs.mkShell (shellCommon // {
-              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchainCrossAll ];
-
-              shellHook = shellCommon.shellHook +
-
-                # Android NDK not available for Arm MacOS
-                (if isArch64Darwin then "" else androidCrossEnvVars)
-                + wasm32CrossEnvVars;
-            });
-
-            # this shell is used only in CI, so it should contain minimum amount
-            # of stuff to avoid building and caching things we don't need
-            lint = pkgs.mkShell {
-              nativeBuildInputs = [
-                fenixToolchainCargoFmt
-                pkgs.nixpkgs-fmt
-                pkgs.shellcheck
-                pkgs.git
-                pkgs.parallel
-                pkgs.semgrep
-              ];
-            };
-
-            replit = pkgs.mkShell {
-              nativeBuildInputs = with pkgs; [
-                pkg-config
-                openssl
-              ];
-              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-            };
-
-            bootstrap = pkgs.mkShell {
-              nativeBuildInputs = with pkgs; [
-                cachix
-              ];
-            };
-          };
       });
 
   nixConfig = {
