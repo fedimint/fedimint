@@ -10,10 +10,11 @@ use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::api::FederationError;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::client::ClientModule;
+use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::task::timeout;
-use fedimint_core::Amount;
+use fedimint_core::{Amount, ServerModule};
 use futures::StreamExt;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -26,7 +27,6 @@ use crate::api::{LnFederationApi, WalletFederationApi};
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-use crate::modules::ln::common::LightningDecoder;
 use crate::modules::ln::config::LightningClientConfig;
 use crate::modules::ln::contracts::incoming::IncomingContractOffer;
 use crate::modules::ln::contracts::outgoing::OutgoingContract;
@@ -46,11 +46,10 @@ pub struct LnClient {
 
 impl ClientModule for LnClient {
     const KIND: &'static str = "ln";
-    type Decoder = LightningDecoder;
     type Module = Lightning;
 
-    fn decoder(&self) -> Self::Decoder {
-        LightningDecoder
+    fn decoder(&self) -> Decoder {
+        <Self::Module as ServerModule>::decoder()
     }
 
     fn input_amount(&self, input: &LightningInput) -> TransactionItemAmount {
@@ -343,7 +342,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
-    use fedimint_core::{Amount, OutPoint, TransactionId};
+    use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
     use tokio::sync::Mutex;
@@ -351,7 +350,6 @@ mod tests {
 
     use crate::api::fake::FederationApiFaker;
     use crate::ln::LnClient;
-    use crate::modules::ln::common::LightningDecoder;
     use crate::modules::ln::config::LightningClientConfig;
     use crate::modules::ln::contracts::{ContractId, IdentifyableContract};
     use crate::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
@@ -435,7 +433,7 @@ mod tests {
         let client_context = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
-                LightningDecoder.into(),
+                <Lightning as ServerModule>::decoder(),
             )]),
             module_gens: Default::default(),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),

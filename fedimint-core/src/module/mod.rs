@@ -19,8 +19,7 @@ use tracing::instrument;
 
 use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
-    Decoder, DynDecoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
-    OutputOutcome,
+    Decoder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output, OutputOutcome,
 };
 use crate::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -274,7 +273,7 @@ where
 /// `[Self::init]`.
 #[apply(async_trait_maybe_send!)]
 pub trait IModuleGen: Debug {
-    fn decoder(&self) -> DynDecoder;
+    fn decoder(&self) -> Decoder;
 
     fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion>;
 
@@ -419,9 +418,7 @@ pub trait ModuleGen: Debug + Sized {
     /// to move from the previous database version to the current version.
     const DATABASE_VERSION: DatabaseVersion;
 
-    type Decoder: Decoder;
-
-    fn decoder(&self) -> Self::Decoder;
+    fn decoder(&self) -> Decoder;
 
     /// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].
@@ -486,8 +483,8 @@ impl<T> IModuleGen for T
 where
     T: ModuleGen + 'static + Sync,
 {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(ModuleGen::decoder(self))
+    fn decoder(&self) -> Decoder {
+        ModuleGen::decoder(self)
     }
 
     fn module_kind(&self) -> ModuleKind {
@@ -629,7 +626,6 @@ pub trait ServerModule: Debug + Sized {
     type ConsensusItem: ModuleConsensusItem;
 
     type Gen: ModuleGen;
-    type Decoder: Decoder;
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
@@ -638,7 +634,19 @@ pub trait ServerModule: Debug + Sized {
         Self::Gen::KIND
     }
 
-    fn decoder(&self) -> Self::Decoder;
+    /// Returns a decoder for the following associated types of this module:
+    /// * `Input`
+    /// * `Output`
+    /// * `OutputOutcome`
+    /// * `ConsensusItem`
+    fn decoder() -> Decoder {
+        let mut decoder = Decoder::new();
+        decoder.with_decodable_type::<Self::Input>();
+        decoder.with_decodable_type::<Self::Output>();
+        decoder.with_decodable_type::<Self::OutputOutcome>();
+        decoder.with_decodable_type::<Self::ConsensusItem>();
+        decoder
+    }
 
     /// Module consensus version this module is running with and the API
     /// versions it supports in it

@@ -5,21 +5,20 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use super::ModuleKind;
-use crate::core::{Decoder, DynDecoder};
+use crate::core::Decoder;
 use crate::module::TransactionItemAmount;
 use crate::{dyn_newtype_define, ServerModule};
 
 #[async_trait]
 pub trait ClientModule: Debug {
     const KIND: &'static str;
-    type Decoder: Decoder;
     type Module: ServerModule;
 
     fn module_kind() -> ModuleKind {
         ModuleKind::from_static_str(Self::KIND)
     }
 
-    fn decoder(&self) -> Self::Decoder;
+    fn decoder(&self) -> Decoder;
 
     /// Returns the amount represented by the input and the fee its processing
     /// requires
@@ -37,7 +36,7 @@ pub trait IClientModule: Debug {
     fn as_any(&self) -> &dyn Any;
 
     /// Return the type-erased decoder of the module
-    fn decoder(&self) -> DynDecoder;
+    fn decoder(&self) -> Decoder;
 }
 
 dyn_newtype_define!(
@@ -53,7 +52,7 @@ where
         self
     }
 
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(<T as ClientModule>::decoder(self))
+    fn decoder(&self) -> Decoder {
+        <T as ClientModule>::decoder(self)
     }
 }

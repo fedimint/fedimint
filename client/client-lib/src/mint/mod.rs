@@ -8,6 +8,7 @@ use std::time::Duration;
 use db::{NoteKey, NoteKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_core::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
 use fedimint_core::core::client::ClientModule;
+use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -30,7 +31,7 @@ use crate::modules::mint::{
 use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::{Input, Output, Transaction};
 use crate::utils::ClientContext;
-use crate::{ChildId, DerivableSecret, FuturesUnordered, MintDecoder};
+use crate::{ChildId, DerivableSecret, FuturesUnordered};
 
 pub mod backup;
 
@@ -155,11 +156,10 @@ pub struct SpendableNote {
 
 impl ClientModule for MintClient {
     const KIND: &'static str = "mint";
-    type Decoder = <Mint as ServerModule>::Decoder;
     type Module = Mint;
 
-    fn decoder(&self) -> Self::Decoder {
-        MintDecoder
+    fn decoder(&self) -> Decoder {
+        <Self::Module as ServerModule>::decoder()
     }
 
     fn input_amount(&self, input: &MintInput) -> TransactionItemAmount {
@@ -688,8 +688,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
-    use fedimint_core::{Amount, OutPoint, Tiered, TransactionId};
-    use fedimint_mint::common::MintDecoder;
+    use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TransactionId};
     use fedimint_testing::FakeFed;
     use futures::executor::block_on;
     use tokio::sync::Mutex;
@@ -767,7 +766,10 @@ mod tests {
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client_context = ClientContext {
-            decoders: ModuleDecoderRegistry::from_iter([(module_id, MintDecoder.into())]),
+            decoders: ModuleDecoderRegistry::from_iter([(
+                module_id,
+                <Mint as ServerModule>::decoder(),
+            )]),
             module_gens: Default::default(),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),
@@ -935,7 +937,10 @@ mod tests {
                 max_notes_per_denomination: 0,
             },
             context: Arc::new(ClientContext {
-                decoders: ModuleDecoderRegistry::from_iter([(module_id, MintDecoder.into())]),
+                decoders: ModuleDecoderRegistry::from_iter([(
+                    module_id,
+                    <Mint as ServerModule>::decoder(),
+                )]),
                 module_gens: Default::default(),
                 db: Database::new(db, module_decode_stubs()),
                 api: WsFederationApi::new(vec![]).into(),

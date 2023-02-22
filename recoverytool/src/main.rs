@@ -16,20 +16,20 @@ use fedimint_core::core::{
 };
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_ln::common::LightningDecoder;
+use fedimint_core::ServerModule;
+use fedimint_ln::Lightning;
 use fedimint_logging::TracingSetup;
-use fedimint_mint::common::MintDecoder;
+use fedimint_mint::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::db::EpochHistoryKeyPrefix;
 use fedimint_server::epoch::{IterUnzipConsensusItem, SignedEpochOutcome, UnzipConsensusItem};
 use fedimint_server::transaction::Transaction;
-use fedimint_wallet::common::WalletDecoder;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet::keys::CompressedPublicKey;
 use fedimint_wallet::tweakable::Tweakable;
-use fedimint_wallet::{PegInDescriptor, SpendableUTXO, WalletConsensusItem, WalletInput};
+use fedimint_wallet::{PegInDescriptor, SpendableUTXO, Wallet, WalletConsensusItem, WalletInput};
 use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
@@ -162,9 +162,18 @@ async fn main() -> anyhow::Result<()> {
         }
         TweakSource::Epochs { db } => {
             let decoders = ModuleDecoderRegistry::from_iter([
-                (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
-                (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
-                (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
+                (
+                    LEGACY_HARDCODED_INSTANCE_ID_LN,
+                    <Lightning as ServerModule>::decoder(),
+                ),
+                (
+                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                    <Mint as ServerModule>::decoder(),
+                ),
+                (
+                    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                    <Wallet as ServerModule>::decoder(),
+                ),
             ]);
 
             let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);

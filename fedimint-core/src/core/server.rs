@@ -53,7 +53,7 @@ pub trait IServerModule: Debug {
     fn as_any(&self) -> &dyn Any;
 
     /// Returns the decoder belonging to the server module
-    fn decoder(&self) -> DynDecoder;
+    fn decoder(&self) -> Decoder;
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
@@ -191,8 +191,13 @@ impl<T> IServerModule for T
 where
     T: ServerModule + 'static + Sync,
 {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(ServerModule::decoder(self))
+    fn decoder(&self) -> Decoder {
+        let mut decoder = Decoder::new();
+        decoder.with_decodable_type::<T::Input>();
+        decoder.with_decodable_type::<T::Output>();
+        decoder.with_decodable_type::<T::OutputOutcome>();
+        decoder.with_decodable_type::<T::ConsensusItem>();
+        decoder
     }
 
     fn as_any(&self) -> &dyn Any {

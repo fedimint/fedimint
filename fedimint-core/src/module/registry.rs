@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::core::DynDecoder;
+use crate::core::Decoder;
 pub use crate::core::ModuleInstanceId;
 use crate::server::DynServerModule;
 
@@ -73,4 +73,4 @@ impl ServerModuleRegistry {
 
 /// Collection of decoders belonging to modules, typically obtained from a
 /// `ModuleRegistry`
-pub type ModuleDecoderRegistry = ModuleRegistry<DynDecoder>;
+pub type ModuleDecoderRegistry = ModuleRegistry<Decoder>;

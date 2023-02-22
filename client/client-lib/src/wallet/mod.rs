@@ -4,6 +4,7 @@ use bitcoin::{Address, KeyPair};
 use db::PegInKey;
 use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::core::client::ClientModule;
+use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::{Amount, ServerModule};
@@ -11,7 +12,6 @@ use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::modules::wallet::common::WalletDecoder;
 use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::tweakable::Tweakable;
 use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
@@ -32,11 +32,10 @@ pub struct WalletClient {
 
 impl ClientModule for WalletClient {
     const KIND: &'static str = "wallet";
-    type Decoder = <Wallet as ServerModule>::Decoder;
     type Module = Wallet;
 
-    fn decoder(&self) -> Self::Decoder {
-        WalletDecoder
+    fn decoder(&self) -> Decoder {
+        <Self::Module as ServerModule>::decoder()
     }
 
     fn input_amount(&self, input: &WalletInput) -> TransactionItemAmount {
@@ -207,13 +206,12 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::task::TaskGroup;
-    use fedimint_core::{Feerate, OutPoint, TransactionId};
+    use fedimint_core::{Feerate, OutPoint, ServerModule, TransactionId};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
     use tokio::sync::Mutex;
 
     use crate::api::fake::FederationApiFaker;
-    use crate::modules::wallet::common::WalletDecoder;
     use crate::modules::wallet::config::WalletClientConfig;
     use crate::modules::wallet::{
         PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
@@ -298,7 +296,10 @@ mod tests {
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client = ClientContext {
-            decoders: ModuleDecoderRegistry::from_iter([(module_id, WalletDecoder.into())]),
+            decoders: ModuleDecoderRegistry::from_iter([(
+                module_id,
+                <Wallet as ServerModule>::decoder(),
+            )]),
             module_gens: Default::default(),
             db: Database::new(MemDatabase::new(), module_decode_stubs()),
             api: api.into(),

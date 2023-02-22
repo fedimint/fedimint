@@ -10,7 +10,6 @@
 
 extern crate core;
 
-pub mod common;
 pub mod config;
 pub mod contracts;
 pub mod db;
@@ -25,7 +24,9 @@ use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+use fedimint_core::core::{
+    Decoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
@@ -54,7 +55,6 @@ use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 use url::Url;
 
-use crate::common::LightningDecoder;
 use crate::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
 };
@@ -257,10 +257,9 @@ pub struct LightningGen;
 impl ModuleGen for LightningGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
-    type Decoder = LightningDecoder;
 
-    fn decoder(&self) -> LightningDecoder {
-        LightningDecoder
+    fn decoder(&self) -> Decoder {
+        <Lightning as ServerModule>::decoder()
     }
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -463,12 +462,7 @@ impl ServerModule for Lightning {
     type ConsensusItem = LightningConsensusItem;
 
     type Gen = LightningGen;
-    type Decoder = LightningDecoder;
     type VerificationCache = LightningVerificationCache;
-
-    fn decoder(&self) -> Self::Decoder {
-        LightningDecoder
-    }
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
         (

@@ -28,7 +28,7 @@ use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
     ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::__reexports::serde_json;
@@ -59,7 +59,6 @@ use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::common::WalletDecoder;
 use crate::config::{WalletClientConfig, WalletConfig};
 use crate::db::{
     BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
@@ -71,7 +70,6 @@ use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 
-pub mod common;
 pub mod config;
 pub mod db;
 pub mod keys;
@@ -236,10 +234,9 @@ pub struct WalletGen;
 impl ModuleGen for WalletGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
-    type Decoder = WalletDecoder;
 
-    fn decoder(&self) -> WalletDecoder {
-        WalletDecoder {}
+    fn decoder(&self) -> Decoder {
+        <Wallet as ServerModule>::decoder()
     }
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -489,12 +486,7 @@ impl ServerModule for Wallet {
     type ConsensusItem = WalletConsensusItem;
 
     type Gen = WalletGen;
-    type Decoder = WalletDecoder;
     type VerificationCache = WalletVerificationCache;
-
-    fn decoder(&self) -> Self::Decoder {
-        WalletDecoder
-    }
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
         (

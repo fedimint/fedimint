@@ -1,8 +1,8 @@
 pub mod legacy {
     use fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
     use fedimint_core::core::{
-        Decoder, DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN,
-        LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+        DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::{CoreError, ServerModule};
@@ -17,9 +17,9 @@ pub mod legacy {
 
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     pub enum OutputOutcome {
-        Mint(<<Mint as ServerModule>::Decoder as Decoder>::OutputOutcome),
-        Wallet(<<Wallet as ServerModule>::Decoder as Decoder>::OutputOutcome),
-        LN(<<Lightning as ServerModule>::Decoder as Decoder>::OutputOutcome),
+        Mint(<Mint as ServerModule>::OutputOutcome),
+        Wallet(<Wallet as ServerModule>::OutputOutcome),
+        LN(<Lightning as ServerModule>::OutputOutcome),
     }
 
     impl From<fedimint_core::core::DynOutputOutcome> for OutputOutcome {

@@ -7,17 +7,15 @@ use fedimint_core::core::{
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::DynModuleGen;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::ServerModule;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::cln::{build_cln_rpc, ClnRpcRef};
 use ln_gateway::config::GatewayConfig;
 use ln_gateway::rpc::{GatewayRequest, GatewayRpcSender};
 use ln_gateway::LnGateway;
-use mint_client::modules::ln::common::LightningDecoder;
-use mint_client::modules::ln::LightningGen;
-use mint_client::modules::mint::common::MintDecoder;
-use mint_client::modules::mint::MintGen;
-use mint_client::modules::wallet::common::WalletDecoder;
-use mint_client::modules::wallet::WalletGen;
+use mint_client::modules::ln::{Lightning, LightningGen};
+use mint_client::modules::mint::{Mint, MintGen};
+use mint_client::modules::wallet::{Wallet, WalletGen};
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -50,9 +48,18 @@ async fn main() -> Result<(), Error> {
     )
     .into();
     let decoders = ModuleDecoderRegistry::from_iter([
-        (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
-        (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
-        (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_LN,
+            <Lightning as ServerModule>::decoder(),
+        ),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            <Mint as ServerModule>::decoder(),
+        ),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            <Wallet as ServerModule>::decoder(),
+        ),
     ]);
     let module_gens = ModuleGenRegistry::from(vec![
         DynModuleGen::from(WalletGen),

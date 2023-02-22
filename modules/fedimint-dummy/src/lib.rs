@@ -4,12 +4,11 @@ use std::fmt;
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use common::DummyDecoder;
 use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
     ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
@@ -31,7 +30,6 @@ use crate::config::{DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyC
 use crate::db::migrate_dummy_db_version_0;
 use crate::serde_json::Value;
 
-pub mod common;
 pub mod config;
 pub mod db;
 
@@ -56,10 +54,9 @@ pub struct DummyConfigGenerator;
 impl ModuleGen for DummyConfigGenerator {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
-    type Decoder = DummyDecoder;
 
-    fn decoder(&self) -> DummyDecoder {
-        DummyDecoder
+    fn decoder(&self) -> Decoder {
+        <Dummy as ServerModule>::decoder()
     }
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -210,12 +207,7 @@ impl ServerModule for Dummy {
     type ConsensusItem = DummyConsensusItem;
 
     type Gen = DummyConfigGenerator;
-    type Decoder = DummyDecoder;
     type VerificationCache = DummyVerificationCache;
-
-    fn decoder(&self) -> Self::Decoder {
-        DummyDecoder
-    }
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
         (

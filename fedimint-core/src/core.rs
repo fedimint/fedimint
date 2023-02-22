@@ -5,12 +5,12 @@
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
 use core::fmt;
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::borrow::Cow;
-use std::fmt::{Debug, Display};
+use std::collections::BTreeMap;
+use std::fmt::{Debug, Display, Formatter};
 use std::io;
 use std::io::Read;
-use std::sync::Arc;
 
 pub use bitcoin::KeyPair;
 use fedimint_core::dyn_newtype_define;
@@ -135,7 +135,7 @@ macro_rules! module_plugin_trait_define{
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
         pub trait $plugin_ty:
-            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
+            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance<DynType = $newtype_ty> + Send + Sync + 'static
         {
             $($extra_methods)*
         }
@@ -180,11 +180,43 @@ macro_rules! plugin_types_trait_impl {
     ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
         impl fedimint_core::core::Input for $input {}
 
+        impl fedimint_core::core::IntoDynInstance for $input {
+            type DynType = fedimint_core::core::DynInput;
+
+            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+                fedimint_core::core::DynInput::from_typed(instance_id, self)
+            }
+        }
+
         impl fedimint_core::core::Output for $output {}
+
+        impl fedimint_core::core::IntoDynInstance for $output {
+            type DynType = fedimint_core::core::DynOutput;
+
+            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+                fedimint_core::core::DynOutput::from_typed(instance_id, self)
+            }
+        }
 
         impl fedimint_core::core::OutputOutcome for $outcome {}
 
+        impl fedimint_core::core::IntoDynInstance for $outcome {
+            type DynType = fedimint_core::core::DynOutputOutcome;
+
+            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+                fedimint_core::core::DynOutputOutcome::from_typed(instance_id, self)
+            }
+        }
+
         impl fedimint_core::core::ModuleConsensusItem for $ci {}
+
+        impl fedimint_core::core::IntoDynInstance for $ci {
+            type DynType = fedimint_core::core::DynModuleConsensusItem;
+
+            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+                fedimint_core::core::DynModuleConsensusItem::from_typed(instance_id, self)
+            }
+        }
 
         impl fedimint_core::server::VerificationCache for $cache {}
     };
@@ -240,40 +272,87 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
     };
 }
 
-/// Module Decoder trait
-///
-/// Static-polymorphism version of [`IDecoder`]
-///
-/// All methods are static, as the decoding code is supposed to be
-/// instance-independent, at least until we start to support modules with
-/// overriden [`ModuleInstanceId`]s
-pub trait Decoder: Debug + Send + Sync + 'static {
-    type Input: Input;
-    type Output: Output;
-    type OutputOutcome: OutputOutcome;
-    type ConsensusItem: ModuleConsensusItem;
+/// A type that has a `Dyn*`, type erased version of itself
+pub trait IntoDynInstance {
+    /// The type erased version of the type implementing this trait
+    type DynType;
 
-    /// Decode `Input` compatible with this module, after the module key prefix
-    /// was already decoded
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Self::Input, DecodeError>;
+    /// Convert `self` into its type-erased equivalent
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType;
+}
 
-    /// Decode `Output` compatible with this module, after the module key prefix
-    /// was already decoded
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Self::Output, DecodeError>;
+type DecodeFn =
+    for<'a> fn(Box<dyn Read + 'a>, ModuleInstanceId) -> Result<Box<dyn Any>, DecodeError>;
 
-    /// Decode `OutputOutcome` compatible with this module, after the module key
-    /// prefix was already decoded
-    fn decode_output_outcome(
+/// Decoder for module associated types
+#[derive(Clone, Default)]
+pub struct Decoder {
+    decode_fns: BTreeMap<TypeId, DecodeFn>,
+}
+
+impl Decoder {
+    /// Creates a new `Decoder` instance, use `with_decodable_type` to attach
+    /// decode functions.
+    pub fn new() -> Decoder {
+        Decoder::default()
+    }
+
+    /// Decodes a specific `DynType` from the `reader` byte stream.
+    ///
+    /// # Panics
+    /// * If no decoder is registered for the `DynType`
+    pub fn decode<DynType: Any>(
         &self,
-        r: &mut dyn io::Read,
-    ) -> Result<Self::OutputOutcome, DecodeError>;
+        reader: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<DynType, DecodeError> {
+        let decode_fn = self
+            .decode_fns
+            .get(&TypeId::of::<DynType>())
+            .expect("Type unknown to decoder");
+        Ok(*decode_fn(Box::new(reader), instance_id)?
+            .downcast::<DynType>()
+            .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))
+    }
 
-    /// Decode `ConsensusItem` compatible with this module, after the module key
-    /// prefix was already decoded
-    fn decode_consensus_item(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<Self::ConsensusItem, DecodeError>;
+    /// Attach decoder for a specific `Type`/`DynType` pair where `DynType =
+    /// <Type as IntoDynInstance>::DynType`.
+    ///
+    /// This allows calling `decode::<DynType>` on this decoder, returning a
+    /// `DynType` object which contains a `Type` object internally.
+    ///
+    /// **Caution**: One `Decoder` object should only contain decoders that
+    /// belong to the same [*module kind*](fedimint_core::core::ModuleKind).
+    ///
+    /// # Panics
+    /// * If multiple `Types` with the same `DynType` are added
+    pub fn with_decodable_type<Type>(&mut self)
+    where
+        Type: IntoDynInstance + Decodable,
+        Type::DynType: 'static,
+    {
+        // TODO: enforce that all decoders are for the same module kind (+fix docs
+        // after)
+        let decode_fn: DecodeFn = |mut reader, instance| {
+            let typed_val = Type::consensus_decode(&mut reader, &Default::default())?;
+            let dyn_val = typed_val.into_dyn(instance);
+            let any_val: Box<dyn Any> = Box::new(dyn_val);
+            Ok(any_val)
+        };
+        if self
+            .decode_fns
+            .insert(TypeId::of::<Type::DynType>(), decode_fn)
+            .is_some()
+        {
+            panic!("Tried to add multiple decoders for the same DynType");
+        }
+    }
+}
+
+impl Debug for Decoder {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Decoder(registered_types = {})", self.decode_fns.len())
+    }
 }
 
 pub trait IDecoder: Debug {
@@ -310,47 +389,13 @@ pub trait IDecoder: Debug {
     ) -> Result<DynModuleConsensusItem, DecodeError>;
 }
 
-// TODO: use macro again
-/// Decoder for module associated types
-#[derive(Clone)]
-pub struct DynDecoder(Arc<dyn IDecoder + Send + Sync>);
-
-impl std::ops::Deref for DynDecoder {
-    type Target = dyn IDecoder + Send + Sync + 'static;
-
-    fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-        &*self.0
-    }
-}
-
-impl<T> From<T> for DynDecoder
-where
-    T: Decoder + Send + Sync + 'static,
-{
-    fn from(value: T) -> Self {
-        DynDecoder(Arc::new(value))
-    }
-}
-
-impl std::fmt::Debug for DynDecoder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-impl<T> IDecoder for T
-where
-    T: Decoder + 'static,
-{
+impl IDecoder for Decoder {
     fn decode_input(
         &self,
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
     ) -> Result<DynInput, DecodeError> {
-        Ok(DynInput::from_typed(
-            instance_id,
-            <Self as Decoder>::decode_input(self, r)?,
-        ))
+        self.decode(r, instance_id)
     }
 
     fn decode_output(
@@ -358,51 +403,7 @@ where
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
     ) -> Result<DynOutput, DecodeError> {
-        Ok(DynOutput::from_typed(
-            instance_id,
-            <Self as Decoder>::decode_output(self, r)?,
-        ))
-    }
-
-    fn decode_output_outcome(
-        &self,
-        r: &mut dyn Read,
-
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynOutputOutcome, DecodeError> {
-        Ok(DynOutputOutcome::from_typed(
-            instance_id,
-            <Self as Decoder>::decode_output_outcome(self, r)?,
-        ))
-    }
-
-    fn decode_consensus_item(
-        &self,
-        r: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynModuleConsensusItem, DecodeError> {
-        Ok(DynModuleConsensusItem::from_typed(
-            instance_id,
-            <Self as Decoder>::decode_consensus_item(self, r)?,
-        ))
-    }
-}
-
-impl IDecoder for DynDecoder {
-    fn decode_input(
-        &self,
-        r: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynInput, DecodeError> {
-        self.0.decode_input(r, instance_id)
-    }
-
-    fn decode_output(
-        &self,
-        r: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynOutput, DecodeError> {
-        self.0.decode_output(r, instance_id)
+        self.decode(r, instance_id)
     }
 
     fn decode_output_outcome(
@@ -410,7 +411,7 @@ impl IDecoder for DynDecoder {
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
     ) -> Result<DynOutputOutcome, DecodeError> {
-        self.0.decode_output_outcome(r, instance_id)
+        self.decode(r, instance_id)
     }
 
     fn decode_consensus_item(
@@ -418,14 +419,7 @@ impl IDecoder for DynDecoder {
         r: &mut dyn Read,
         instance_id: ModuleInstanceId,
     ) -> Result<DynModuleConsensusItem, DecodeError> {
-        self.0.decode_consensus_item(r, instance_id)
-    }
-}
-
-impl DynDecoder {
-    /// Create [`Self`] form a typed version defined by the plugin
-    pub fn from_typed(decoder: impl Decoder + Send + Sync + 'static) -> DynDecoder {
-        DynDecoder(Arc::new(decoder))
+        self.decode(r, instance_id)
     }
 }
 

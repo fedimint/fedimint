@@ -13,24 +13,16 @@ use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, ModuleGenRegistry};
-use fedimint_core::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
 use fedimint_core::db::Database;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::DynModuleGen;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_logging::TracingSetup;
-use fedimint_mint::common::MintDecoder;
 use fedimint_mint::MintGen;
 use mint_client::mint::SpendableNote;
-use mint_client::modules::ln::common::LightningDecoder;
 use mint_client::modules::ln::contracts::ContractId;
 use mint_client::modules::ln::LightningGen;
-use mint_client::modules::wallet::common::WalletDecoder;
 use mint_client::modules::wallet::txoproof::TxOutProof;
 use mint_client::modules::wallet::WalletGen;
 use mint_client::utils::{
@@ -417,11 +409,7 @@ async fn main() {
 
         let rng = rand::rngs::OsRng;
 
-        let decoders = ModuleDecoderRegistry::from_iter([
-            (LEGACY_HARDCODED_INSTANCE_ID_LN, LightningDecoder.into()),
-            (LEGACY_HARDCODED_INSTANCE_ID_MINT, MintDecoder.into()),
-            (LEGACY_HARDCODED_INSTANCE_ID_WALLET, WalletDecoder.into()),
-        ]);
+        let decoders = module_decode_stubs();
 
         let client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await;
 
