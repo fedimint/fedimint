@@ -8,23 +8,26 @@ use crate::MaybeEpochMessage;
 /// Message queue to manage unsent and unacknowledged messages
 ///
 /// # Lifetime of a message
-/// 1. A message is inserted into the queue using `queue_message`. It receives an auto-incrementing
-///    message id.
-/// 2. Unsent messages are retrieved using `next_send_message`.
-/// 3. If sending a message succeeds `mark_sent` is called after which the next call to
-///    `next_send_message` will return the next message to be sent. The message remains in the
-///    buffer though till an ACK is received.
 ///
-///    The separation of step 2+3 is necessary to make the future that attempts to send the message
-///    cancellation safe. Marking the message as sent has to happen right after the future writing
-///    it to the destination returns, without an await point in between.
-/// 4. Once an acknowledgement is received for a message, `ack` is called with its message id. All
-///    messages with a lower or equal id will be removed from the buffer.
-/// 5. If a reconnect happens all messages that have not been acknowledged have to be resent. In
-///    that case `resend_all` has to be called.
+/// 1. A message is inserted into the queue using `queue_message`. It receives
+/// an auto-incrementing message id.
+/// 2. Unsent messages are retrieved using `next_send_message`.
+/// 3. If sending a message succeeds `mark_sent` is called after which the next
+/// call to `next_send_message` will return the next message to be sent. The
+/// message remains in the buffer though till an ACK is received.
+/// The separation of step 2+3 is necessary to make the future that attempts
+/// to send the message cancellation safe. Marking the message as sent has to
+/// happen right after the future writing it to the destination returns,
+/// without an await point in between.
+/// 4. Once an acknowledgement is received for a message, `ack` is called with
+/// its message id. All messages with a lower or equal id will be removed from
+/// the buffer.
+/// 5. If a reconnect happens all messages that have not been
+/// acknowledged have to be resent. In that case `resend_all` has to be called.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MessageQueue<M> {
-    /// Messages that were scheduled to be sent (sent and unsent) and not acknowledged yet
+    /// Messages that were scheduled to be sent (sent and unsent) and not
+    /// acknowledged yet
     pub(super) queue: VecDeque<UniqueMessage<M>>,
     /// Id for the next message to be inserted into the queue
     next_id: MessageId,
@@ -72,7 +75,8 @@ where
         self.unsent_messages += 1;
     }
 
-    /// Remove all messages older than `msg_id` from the buffer since they were received by our peer
+    /// Remove all messages older than `msg_id` from the buffer since they were
+    /// received by our peer
     pub fn ack(&mut self, msg_id: MessageId) {
         debug!("Received ACK for {:?}", msg_id);
         while self
@@ -85,9 +89,10 @@ where
             trace!("Removing message {:?} from resend buffer", msg.id);
         }
 
-        // If we got an ACK from the future we remove all of them from the queue even if we haven't
-        // sent them yet (can happen on reconnect). In that case we need to adjust the unsent
-        // messages field so we never try to send messages not in the buffer anymore
+        // If we got an ACK from the future we remove all of them from the queue even if
+        // we haven't sent them yet (can happen on reconnect). In that case we
+        // need to adjust the unsent messages field so we never try to send
+        // messages not in the buffer anymore
         let queued_messages = self.queue.len() as u64;
         if self.unsent_messages > queued_messages {
             self.unsent_messages = queued_messages;
@@ -110,8 +115,9 @@ where
         }
     }
 
-    /// Marks the message `msg_id` as sent over the wire. This does not aknowledge the receipt by
-    /// our peer and thus keeps the message in the buffer in case it needs to be re-sent.
+    /// Marks the message `msg_id` as sent over the wire. This does not
+    /// aknowledge the receipt by our peer and thus keeps the message in the
+    /// buffer in case it needs to be re-sent.
     pub fn mark_sent(&mut self, msg_id: MessageId) {
         assert_ne!(self.unsent_messages, 0, "There are no messages to be sent!");
         assert_eq!(
@@ -122,8 +128,8 @@ where
         self.unsent_messages -= 1;
     }
 
-    /// Mark all messages as unsent to attempt re-sending and return the oldest and newest messages
-    /// to be sent.
+    /// Mark all messages as unsent to attempt re-sending and return the oldest
+    /// and newest messages to be sent.
     pub fn resend_all(&mut self) -> Option<(MessageId, MessageId)> {
         self.unsent_messages = self.queue.len() as u64;
 
@@ -143,12 +149,13 @@ where
 }
 
 impl<M: MaybeEpochMessage> MessageQueue<M> {
-    /// Returns the number of epochs the buffer has messages of. This assumes that the we send
-    /// messages in each epoch and the epoch only increases.
+    /// Returns the number of epochs the buffer has messages of. This assumes
+    /// that the we send messages in each epoch and the epoch only
+    /// increases.
     pub fn buffered_epochs(&self) -> u64 {
-        // We only have non-epoch messages during DKG and on re-joins. Both happen infrequently
-        // enough that this O(n) search for the lowest and highest epoch number in the buffer is
-        // sufficient
+        // We only have non-epoch messages during DKG and on re-joins. Both happen
+        // infrequently enough that this O(n) search for the lowest and highest
+        // epoch number in the buffer is sufficient
         let maybe_oldest = self.queue.iter().find_map(|msg| msg.msg.message_epoch());
         let maybe_newest = self
             .queue

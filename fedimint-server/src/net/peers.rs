@@ -36,10 +36,12 @@ use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 use crate::MaybeEpochMessage;
 
-/// How many unsent messages will be buffered before a connection is re-established
+/// How many unsent messages will be buffered before a connection is
+/// re-established
 const MAX_UNSENT_MESSAGES: usize = 4096;
 
-/// Messages for how many epochs the resend buffer will hold before the session is reset
+/// Messages for how many epochs the resend buffer will hold before the session
+/// is reset
 const MAX_BUFFERED_EPOCHS: u64 = 100;
 
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
@@ -176,11 +178,11 @@ impl DelayCalculator {
 
 /// IO task state that is required no matter if there is a connection
 struct CommonPeerConnectionState<M> {
-    /// Buffer containing both to-be-sent messages and messages that were already sent but not
-    /// acknowledged yet.
+    /// Buffer containing both to-be-sent messages and messages that were
+    /// already sent but not acknowledged yet.
     message_buffer: MessageQueue<M>,
-    /// Some if the connection was just re-established and we are still sending old messages from
-    /// the buffer None otherwise.
+    /// Some if the connection was just re-established and we are still sending
+    /// old messages from the buffer None otherwise.
     resend_catch_up_goal: Option<MessageId>,
     /// Send side of the incoming message channel from io task to main task
     incoming: Sender<M>,
@@ -191,13 +193,14 @@ struct CommonPeerConnectionState<M> {
     /// The peer's address we try to connect to
     peer_address: Url,
     delay_calculator: DelayCalculator,
-    /// Network connector to establish new connections with. The connector determines what kind of
-    /// underlying transport is used (plain TCP, TLS, Tor)
+    /// Network connector to establish new connections with. The connector
+    /// determines what kind of underlying transport is used (plain TCP,
+    /// TLS, Tor)
     connect: SharedAnyConnector<PeerMessage<M>>,
     /// Receiver that incoming connections from this io tasks' peer are sent to
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-    /// Message id of the last received message that will be acknowledged in the next message we
-    /// send
+    /// Message id of the last received message that will be acknowledged in the
+    /// next message we send
     last_received: Option<MessageId>,
     status_query_receiver: PeerStatusChannelReceiver,
 }
@@ -207,8 +210,8 @@ struct DisconnectedPeerConnectionState {
     reconnect_at: Instant,
     /// Number used to calculate time till next reconnect attempt
     failed_reconnect_counter: u64,
-    /// If a connection was dropped because of a full `message_buffer` we do not need to buffer any
-    /// messages till there is a new TCP connection.
+    /// If a connection was dropped because of a full `message_buffer` we do not
+    /// need to buffer any messages till there is a new TCP connection.
     session_active: bool,
 }
 

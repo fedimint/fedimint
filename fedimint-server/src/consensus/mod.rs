@@ -52,8 +52,8 @@ impl MaybeEpochMessage for HbbftMessage {
 }
 
 // FIXME: implement alternative anti-DoS measure during DKG
-/// We don't care about epochs during DKG, we don't enforce an upper limit on caching messages since
-/// DKG is assumed to only happen under supervision.
+/// We don't care about epochs during DKG, we don't enforce an upper limit on
+/// caching messages since DKG is assumed to only happen under supervision.
 impl MaybeEpochMessage for fedimint_core::config::DkgPeerMsg {
     fn message_epoch(&self) -> Option<u64> {
         None
