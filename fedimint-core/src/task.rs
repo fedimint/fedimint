@@ -20,6 +20,8 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
+use crate::logging::LOG_TASK;
+
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
 
@@ -266,11 +268,14 @@ impl TaskGroup {
                     info!("{name} task finished");
                 }
                 Ok(Err(e)) => {
-                    error!("Thread {name} panicked with: {e}");
+                    error!(target: LOG_TASK, "Thread {name} panicked with: {e}");
                     errors.push(e);
                 }
                 Err(Elapsed) => {
-                    warn!("{name} task hit timeout while shutting down")
+                    warn!(
+                        target: LOG_TASK,
+                        "{name} task hit timeout while shutting down"
+                    )
                 }
             }
         }

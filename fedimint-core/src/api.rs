@@ -41,6 +41,7 @@ use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+use crate::logging::LOG_NET_API;
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
@@ -525,7 +526,10 @@ where
                         fedimint_core::task::sleep(interval).await
                     }
                     Err(e) => {
-                        warn!("Federation api returned error: {:?}", e);
+                        warn!(
+                            target: LOG_NET_API,
+                            "Federation api returned error: {:?}", e
+                        );
                         return Err(e);
                     }
                 }
@@ -851,7 +855,9 @@ impl<C: JsonRpcClient> FederationMember<C> {
                             .await?
                     }
                     Err(err) => {
-                        error!(%err, "unable to connect to server");
+                        error!(
+                            target: LOG_NET_API,
+                            %err, "unable to connect to server");
                         return Err(err)?;
                     }
                 }
@@ -895,6 +901,7 @@ mod tests {
     use jsonrpsee_core::traits::ToRpcParams;
     use once_cell::sync::Lazy;
     use serde::de::DeserializeOwned;
+    use tracing::error;
 
     use super::*;
 
@@ -1024,7 +1031,7 @@ mod tests {
         #[apply(async_trait_maybe_send!)]
         impl SimpleClient for Client {
             async fn connect() -> Result<Self> {
-                tracing::error!("connect");
+                error!(target: LOG_NET_API, "connect");
                 let id = CONNECTION_COUNT.fetch_add(1, Ordering::SeqCst);
                 // slow down
                 tokio::time::sleep(Duration::from_millis(100)).await;

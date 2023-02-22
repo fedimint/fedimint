@@ -17,6 +17,7 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::core::ModuleInstanceId;
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
+use crate::logging::LOG_DB;
 use crate::task::{MaybeSend, MaybeSync};
 use crate::{async_trait_maybe_send, maybe_add_send};
 
@@ -408,7 +409,10 @@ pub struct CommitTracker {
 impl Drop for CommitTracker {
     fn drop(&mut self) {
         if self.has_writes && !self.is_committed {
-            warn!("DatabaseTransaction has writes and has not called commit.");
+            warn!(
+                target: LOG_DB,
+                "DatabaseTransaction has writes and has not called commit."
+            );
         }
     }
 }
@@ -726,6 +730,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         {
             Some(_) => {
                 warn!(
+                    target: LOG_DB,
                     "Database overwriting element when expecting insertion of new entry. Key: {:?}",
                     key
                 );

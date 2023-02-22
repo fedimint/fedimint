@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+pub use fedimint_core::logging::*;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
@@ -9,7 +10,6 @@ pub const LOG_CONSENSUS: &str = "consensus";
 pub const LOG_NET: &str = "net";
 pub const LOG_NET_PEER: &str = "net::peer";
 pub const LOG_NET_PEER_DKG: &str = "net::peer::dkg";
-pub const LOG_NET_API: &str = "net::api";
 pub const LOG_DB: &str = "db";
 
 /// Consolidates the setup of server tracing into a helper
