@@ -640,12 +640,12 @@ pub trait ServerModule: Debug + Sized {
     /// * `OutputOutcome`
     /// * `ConsensusItem`
     fn decoder() -> Decoder {
-        let mut decoder = Decoder::new();
-        decoder.with_decodable_type::<Self::Input>();
-        decoder.with_decodable_type::<Self::Output>();
-        decoder.with_decodable_type::<Self::OutputOutcome>();
-        decoder.with_decodable_type::<Self::ConsensusItem>();
-        decoder
+        let mut decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::<Self::Input>();
+        decoder_builder.with_decodable_type::<Self::Output>();
+        decoder_builder.with_decodable_type::<Self::OutputOutcome>();
+        decoder_builder.with_decodable_type::<Self::ConsensusItem>();
+        decoder_builder.build()
     }
 
     /// Module consensus version this module is running with and the API

@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::io;
 use std::io::Read;
+use std::sync::Arc;
 
 pub use bitcoin::KeyPair;
 use fedimint_core::dyn_newtype_define;
@@ -284,35 +285,16 @@ pub trait IntoDynInstance {
 type DecodeFn =
     for<'a> fn(Box<dyn Read + 'a>, ModuleInstanceId) -> Result<Box<dyn Any>, DecodeError>;
 
-/// Decoder for module associated types
-#[derive(Clone, Default)]
-pub struct Decoder {
+#[derive(Default)]
+pub struct DecoderBuilder {
     decode_fns: BTreeMap<TypeId, DecodeFn>,
 }
 
-impl Decoder {
-    /// Creates a new `Decoder` instance, use `with_decodable_type` to attach
-    /// decode functions.
-    pub fn new() -> Decoder {
-        Decoder::default()
-    }
-
-    /// Decodes a specific `DynType` from the `reader` byte stream.
-    ///
-    /// # Panics
-    /// * If no decoder is registered for the `DynType`
-    pub fn decode<DynType: Any>(
-        &self,
-        reader: &mut dyn Read,
-        instance_id: ModuleInstanceId,
-    ) -> Result<DynType, DecodeError> {
-        let decode_fn = self
-            .decode_fns
-            .get(&TypeId::of::<DynType>())
-            .expect("Type unknown to decoder");
-        Ok(*decode_fn(Box::new(reader), instance_id)?
-            .downcast::<DynType>()
-            .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))
+impl DecoderBuilder {
+    pub fn build(self) -> Decoder {
+        Decoder {
+            decode_fns: Arc::new(self.decode_fns),
+        }
     }
 
     /// Attach decoder for a specific `Type`/`DynType` pair where `DynType =
@@ -346,6 +328,38 @@ impl Decoder {
         {
             panic!("Tried to add multiple decoders for the same DynType");
         }
+    }
+}
+
+/// Decoder for module associated types
+#[derive(Clone, Default)]
+pub struct Decoder {
+    decode_fns: Arc<BTreeMap<TypeId, DecodeFn>>,
+}
+
+impl Decoder {
+    /// Creates a `DecoderBuilder` to which decoders for single types can be
+    /// attached to build a `Decoder`.
+    pub fn builder() -> DecoderBuilder {
+        DecoderBuilder::default()
+    }
+
+    /// Decodes a specific `DynType` from the `reader` byte stream.
+    ///
+    /// # Panics
+    /// * If no decoder is registered for the `DynType`
+    pub fn decode<DynType: Any>(
+        &self,
+        reader: &mut dyn Read,
+        instance_id: ModuleInstanceId,
+    ) -> Result<DynType, DecodeError> {
+        let decode_fn = self
+            .decode_fns
+            .get(&TypeId::of::<DynType>())
+            .expect("Type unknown to decoder");
+        Ok(*decode_fn(Box::new(reader), instance_id)?
+            .downcast::<DynType>()
+            .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))
     }
 }
 

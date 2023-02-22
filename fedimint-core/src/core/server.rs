@@ -192,12 +192,12 @@ where
     T: ServerModule + 'static + Sync,
 {
     fn decoder(&self) -> Decoder {
-        let mut decoder = Decoder::new();
-        decoder.with_decodable_type::<T::Input>();
-        decoder.with_decodable_type::<T::Output>();
-        decoder.with_decodable_type::<T::OutputOutcome>();
-        decoder.with_decodable_type::<T::ConsensusItem>();
-        decoder
+        let mut decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::<T::Input>();
+        decoder_builder.with_decodable_type::<T::Output>();
+        decoder_builder.with_decodable_type::<T::OutputOutcome>();
+        decoder_builder.with_decodable_type::<T::ConsensusItem>();
+        decoder_builder.build()
     }
 
     fn as_any(&self) -> &dyn Any {
