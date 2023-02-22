@@ -7,12 +7,15 @@ use fedimint_core::config::ModuleGenRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::module::ModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_ln::LightningGen;
 use fedimint_logging::TracingSetup;
+use fedimint_mint::MintGen;
 use fedimint_server::config::io::{
     read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG,
 };
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
+use fedimint_wallet::WalletGen;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
@@ -58,9 +61,11 @@ pub struct ServerOpts {
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     Fedimintd::new()?
-///         .attach(WalletGen)
-///         .attach(MintGen)
-///         .attach(LightningGen)
+///         /// use `.with_default_modules()` to avoid having
+///         /// to import these manually
+///         .with_module(WalletGen)
+///         .with_module(MintGen)
+///         .with_module(LightningGen)
 ///         .run()
 ///         .await
 /// }
@@ -94,12 +99,18 @@ impl Fedimintd {
         })
     }
 
-    pub fn attach<T>(mut self, gen: T) -> Self
+    pub fn with_module<T>(mut self, gen: T) -> Self
     where
         T: ModuleGen + 'static + Send + Sync,
     {
         self.module_gens.attach(gen);
         self
+    }
+
+    pub fn with_default_modules(self) -> Self {
+        self.with_module(LightningGen)
+            .with_module(MintGen)
+            .with_module(WalletGen)
     }
 
     pub async fn run(self) -> ! {
