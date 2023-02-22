@@ -75,8 +75,8 @@ where
         self.unsent_messages += 1;
     }
 
-    /// Remove all messages older than `msg_id` from the buffer since they were
-    /// received by our peer
+    /// Remove all messages older than (meaning less or equal than) `msg_id`
+    /// from the buffer since they were received by our peer
     pub fn ack(&mut self, msg_id: MessageId) {
         debug!("Received ACK for {:?}", msg_id);
         while self
@@ -165,6 +165,9 @@ impl<M: MaybeEpochMessage> MessageQueue<M> {
         match (maybe_oldest, maybe_newest) {
             (Some(oldest_epoch), Some(newest_epoch)) => {
                 assert!(oldest_epoch <= newest_epoch);
+                // number of epochs includes both, the oldest and the newest,
+                // hence we must add one after the subtraction.
+                // e.g.: 10 - 8 + 1 = 3  (includes epochs 8, 9, 10)
                 newest_epoch - oldest_epoch + 1
             }
             _ => 0,
