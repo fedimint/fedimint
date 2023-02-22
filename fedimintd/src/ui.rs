@@ -29,7 +29,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::{configure_modules, module_registry};
+use crate::configure_modules;
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -177,7 +177,7 @@ async fn post_guardians(
                 configure_modules(max_denomination, params.network, params.finality_delay),
             ) {
                 Ok(params) => {
-                    ServerConfig::distributed_gen(&params, module_registry(), &mut dkg_task_group)
+                    ServerConfig::distributed_gen(&params, module_gens.clone(), &mut dkg_task_group)
                         .await
                         .map_err(|e| format_err!("Failed {}", e))
                 }
