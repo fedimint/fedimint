@@ -36,7 +36,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
+    IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
+    TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
@@ -478,13 +479,18 @@ impl std::fmt::Display for WalletOutput {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletVerificationCache;
 
-#[apply(async_trait_maybe_send!)]
-impl ServerModule for Wallet {
+pub struct WalletModuleTypes;
+
+impl ModuleCommon for WalletModuleTypes {
     type Input = WalletInput;
     type Output = WalletOutput;
     type OutputOutcome = WalletOutputOutcome;
     type ConsensusItem = WalletConsensusItem;
+}
 
+#[apply(async_trait_maybe_send!)]
+impl ServerModule for Wallet {
+    type Common = WalletModuleTypes;
     type Gen = WalletGen;
     type VerificationCache = WalletVerificationCache;
 

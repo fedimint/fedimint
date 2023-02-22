@@ -22,6 +22,7 @@ pub mod legacy {
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::module::ModuleCommon;
     use fedimint_core::transaction::{agg_keys, TransactionError};
     use fedimint_core::{ServerModule, TransactionId};
     use secp256k1_zkp::{schnorr, XOnlyPublicKey};
@@ -56,18 +57,18 @@ pub mod legacy {
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
         // TODO: maybe treat every note as a seperate input?
-        Mint(<fedimint_mint::Mint as ServerModule>::Input),
-        Wallet(<fedimint_wallet::Wallet as ServerModule>::Input),
-        LN(<fedimint_ln::Lightning as ServerModule>::Input),
+        Mint(<<fedimint_mint::Mint as ServerModule>::Common as ModuleCommon>::Input),
+        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Input),
+        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Input),
     }
 
     // TODO: check if clippy is right
     #[allow(clippy::large_enum_variant)]
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Output {
-        Mint(<fedimint_mint::Mint as ServerModule>::Output),
-        Wallet(<fedimint_wallet::Wallet as ServerModule>::Output),
-        LN(<fedimint_ln::Lightning as ServerModule>::Output),
+        Mint(<<fedimint_mint::Mint as ServerModule>::Common as ModuleCommon>::Output),
+        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Output),
+        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Output),
     }
 
     impl Transaction {

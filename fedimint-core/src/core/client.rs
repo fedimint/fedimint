@@ -6,7 +6,7 @@ use async_trait::async_trait;
 
 use super::ModuleKind;
 use crate::core::Decoder;
-use crate::module::TransactionItemAmount;
+use crate::module::{ModuleCommon, TransactionItemAmount};
 use crate::{dyn_newtype_define, ServerModule};
 
 #[async_trait]
@@ -22,13 +22,16 @@ pub trait ClientModule: Debug {
 
     /// Returns the amount represented by the input and the fee its processing
     /// requires
-    fn input_amount(&self, input: &<Self::Module as ServerModule>::Input) -> TransactionItemAmount;
+    fn input_amount(
+        &self,
+        input: &<<Self::Module as ServerModule>::Common as ModuleCommon>::Input,
+    ) -> TransactionItemAmount;
 
     /// Returns the amount represented by the output and the fee its processing
     /// requires
     fn output_amount(
         &self,
-        output: &<Self::Module as ServerModule>::Output,
+        output: &<<Self::Module as ServerModule>::Common as ModuleCommon>::Output,
     ) -> TransactionItemAmount;
 }
 

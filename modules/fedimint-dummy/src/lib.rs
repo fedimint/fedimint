@@ -16,7 +16,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
+    ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
@@ -199,13 +199,18 @@ impl fmt::Display for DummyConsensusItem {
     }
 }
 
-#[async_trait]
-impl ServerModule for Dummy {
+pub struct DummyModuleTypes;
+
+impl ModuleCommon for DummyModuleTypes {
     type Input = DummyInput;
     type Output = DummyOutput;
     type OutputOutcome = DummyOutputOutcome;
     type ConsensusItem = DummyConsensusItem;
+}
 
+#[async_trait]
+impl ServerModule for Dummy {
+    type Common = DummyModuleTypes;
     type Gen = DummyConfigGenerator;
     type VerificationCache = DummyVerificationCache;
 

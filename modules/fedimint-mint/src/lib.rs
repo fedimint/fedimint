@@ -19,7 +19,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
@@ -452,13 +452,18 @@ impl std::fmt::Display for MintConsensusItem {
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl ServerModule for Mint {
+pub struct MintModuleTypes;
+
+impl ModuleCommon for MintModuleTypes {
     type Input = MintInput;
     type Output = MintOutput;
     type OutputOutcome = MintOutputOutcome;
     type ConsensusItem = MintConsensusItem;
+}
 
+#[apply(async_trait_maybe_send!)]
+impl ServerModule for Mint {
+    type Common = MintModuleTypes;
     type Gen = MintGen;
     type VerificationCache = VerifiedNotes;
 

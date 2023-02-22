@@ -33,7 +33,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
@@ -454,13 +454,18 @@ impl ModuleGen for LightningGen {
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl ServerModule for Lightning {
+pub struct LightningModuleTypes;
+
+impl ModuleCommon for LightningModuleTypes {
     type Input = LightningInput;
     type Output = LightningOutput;
     type OutputOutcome = LightningOutputOutcome;
     type ConsensusItem = LightningConsensusItem;
+}
 
+#[apply(async_trait_maybe_send!)]
+impl ServerModule for Lightning {
+    type Common = LightningModuleTypes;
     type Gen = LightningGen;
     type VerificationCache = LightningVerificationCache;
 

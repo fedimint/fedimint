@@ -5,6 +5,7 @@ pub mod legacy {
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::module::ModuleCommon;
     use fedimint_core::{CoreError, ServerModule};
     use fedimint_ln::contracts::incoming::OfferId;
     use fedimint_ln::contracts::{
@@ -17,9 +18,9 @@ pub mod legacy {
 
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     pub enum OutputOutcome {
-        Mint(<Mint as ServerModule>::OutputOutcome),
-        Wallet(<Wallet as ServerModule>::OutputOutcome),
-        LN(<Lightning as ServerModule>::OutputOutcome),
+        Mint(<<Mint as ServerModule>::Common as ModuleCommon>::OutputOutcome),
+        Wallet(<<Wallet as ServerModule>::Common as ModuleCommon>::OutputOutcome),
+        LN(<<Lightning as ServerModule>::Common as ModuleCommon>::OutputOutcome),
     }
 
     impl From<fedimint_core::core::DynOutputOutcome> for OutputOutcome {
