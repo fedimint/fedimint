@@ -431,7 +431,10 @@ impl ServerConfig {
                 Self::trusted_dealer_gen(&HashMap::from([(*our_id, params.clone())]), registry);
             return Ok(server[our_id].clone());
         }
-        info!("Peer {} running distributed key generation...", our_id);
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Peer {} running distributed key generation...", our_id
+        );
 
         // hbbft uses a lower threshold of signing keys (f+1)
         let mut dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
@@ -469,7 +472,10 @@ impl ServerConfig {
             );
         }
 
-        info!("Sending confirmations to other peers.");
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Sending confirmations to other peers."
+        );
         // Note: Since our outgoing buffers are asynchronous, we don't actually know
         // if other peers received our message, just because we received theirs.
         // That's why we need to do a one last best effort sync.
@@ -477,14 +483,19 @@ impl ServerConfig {
             .send(peers, MODULE_INSTANCE_ID_GLOBAL, DkgPeerMsg::Done)
             .await?;
 
-        info!("Waiting for confirmations from other peers.");
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Waiting for confirmations from other peers."
+        );
         if let Err(Elapsed) = timeout(Duration::from_secs(30), async {
             let mut done_peers = BTreeSet::from([*our_id]);
 
             while done_peers.len() < peers.len() {
                 match connections.receive(MODULE_INSTANCE_ID_GLOBAL).await {
                     Ok((peer_id, DkgPeerMsg::Done)) => {
-                        info!(%peer_id, "Got completion confirmation");
+                        info!(
+                            target: LOG_NET_PEER_DKG,
+                            pper_id = %peer_id, "Got completion confirmation");
                         done_peers.insert(peer_id);
                     },
                     Ok((peer_id, msg)) => {

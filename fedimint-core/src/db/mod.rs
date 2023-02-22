@@ -1075,7 +1075,7 @@ pub async fn apply_migrations<'a>(
     };
 
     dbtx.commit_tx().await?;
-    info!("{} module db version: {}", kind, db_version);
+    info!(target: LOG_DB, "{} module db version: {}", kind, db_version);
     Ok(())
 }
 

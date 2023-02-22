@@ -14,6 +14,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
+use fedimint_core::logging::LOG_CORE;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
@@ -155,7 +156,8 @@ impl FedimintConsensus {
             let Some(init) = module_inits.get(kind) else {
                 anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
             };
-            info!(module_instance_id = *module_id, kind = %kind, "Init module");
+            info!(target: LOG_CORE,
+                module_instance_id = *module_id, kind = %kind, "Init module");
 
             let isolated_db = db.new_isolated(*module_id);
             apply_migrations(
