@@ -833,12 +833,6 @@ impl Client<UserClientConfig> {
 
         let consensus_height = self.context.api.fetch_consensus_block_height().await?;
         let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
-        let consensus_clock_time = self.context.api.fetch_consensus_clock_time().await?;
-
-        // consensus_clock_time (u64): number of secs from UNIX_EPOCH
-        if invoice.would_expire(Duration::from_secs(consensus_clock_time)) {
-            return Err(ClientError::LnClientError(LnClientError::ExpiredInvoice));
-        }
 
         let contract = self
             .ln_client()

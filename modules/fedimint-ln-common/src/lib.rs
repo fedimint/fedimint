@@ -319,4 +319,6 @@ pub enum LightningError {
     NotOutgoingContract,
     #[error("Cancellation request wasn't properly signed")]
     InvalidCancellationSignature,
+    #[error("Expired invoice")]
+    ExpiredInvoice,
 }
