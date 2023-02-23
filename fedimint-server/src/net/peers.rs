@@ -485,7 +485,7 @@ where
                         PeerConnectionState::Connected(connected)
                     },
                     Some(_) => {
-                        self.disconnect_err(anyhow::anyhow!("Buffer too full, disconnecting"), 0)
+                        self.disconnect_with_err(anyhow::anyhow!("Buffer too full, disconnecting"), 0)
                     },
                     None => {
                         debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
@@ -507,7 +507,7 @@ where
                         PeerConnectionState::Connected(connected)
                     },
                     Err(e) => {
-                        self.disconnect_err(e, 0)
+                        self.disconnect_with_err(e, 0)
                     }
                 }
             }
@@ -583,7 +583,11 @@ where
         })
     }
 
-    fn disconnect_err(&self, err: anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
+    fn disconnect_with_err(
+        &self,
+        err: anyhow::Error,
+        disconnect_count: u64,
+    ) -> PeerConnectionState<M> {
         debug!(target: LOG_NET_PEER,
             peer = ?self.peer, %err, %disconnect_count, "Peer disconnected");
         self.disconnect(disconnect_count)
@@ -598,7 +602,7 @@ where
             Ok(()) => PeerConnectionState::Connected(connected),
             Err(e) => {
                 self.last_received = None;
-                self.disconnect_err(e, 0)
+                self.disconnect_with_err(e, 0)
             }
         }
     }
@@ -703,8 +707,11 @@ where
         disconnected: DisconnectedPeerConnectionState,
     ) -> PeerConnectionState<M> {
         match self.try_reconnect().await {
-            Ok(conn) => self.connect(conn, disconnected.failed_reconnect_counter).await,
-            Err(e) => self.disconnect_err(e, disconnected.failed_reconnect_counter),
+            Ok(conn) => {
+                self.connect(conn, disconnected.failed_reconnect_counter)
+                    .await
+            }
+            Err(e) => self.disconnect_with_err(e, disconnected.failed_reconnect_counter),
         }
     }
 
