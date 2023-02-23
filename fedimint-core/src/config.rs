@@ -105,8 +105,6 @@ pub struct ApiEndpoint {
 /// This includes global settings and client-side module configs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable)]
 pub struct ClientConfig {
-    /// name of the federation
-    pub federation_name: String,
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
@@ -116,6 +114,9 @@ pub struct ClientConfig {
     /// Configs from other client modules
     #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+    // TODO: make it a String -> serde_json::Value map?
+    /// Additional config the federation wants to transmit to the clients
+    pub meta: BTreeMap<String, String>,
 }
 
 /// The API response for configuration requests
@@ -647,6 +648,10 @@ impl SGroup for G1Projective {
         serde_impl::g1::deserialize(d).map(G1Projective::from)
     }
 }
+
+/// Key under which the federation name can be sent to client in the `meta` part
+/// of the config
+pub const META_FEDERATION_NAME_KEY: &str = "federation_name";
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
     let file = std::fs::File::open(path)?;

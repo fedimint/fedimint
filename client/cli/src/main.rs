@@ -80,8 +80,8 @@ enum CliOutput {
 
     Info {
         federation_id: String,
-        federation_name: String,
         network: Network,
+        meta: BTreeMap<String, String>,
         total_amount: Amount,
         total_num_notes: usize,
         details: BTreeMap<Amount, usize>,
@@ -516,10 +516,11 @@ async fn handle_command(
                 .iter()
                 .map(|(amount, notes)| (amount.to_owned(), notes.len()))
                 .collect();
+
             Ok(CliOutput::Info {
                 federation_id: client.config().as_ref().federation_id.to_string(),
-                federation_name: client.config().as_ref().federation_name.clone(),
                 network: client.wallet_client().config.network,
+                meta: client.config().0.meta,
                 total_amount: (notes.total_amount()),
                 total_num_notes: (notes.count_items()),
                 details: (details_vec),

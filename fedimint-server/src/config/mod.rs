@@ -87,8 +87,6 @@ pub struct ServerConfigPrivate {
 pub struct ServerConfigConsensus {
     /// The version of the binary code running
     pub code_version: String,
-    /// Configurable federation name
-    pub federation_name: String,
     /// Public keys authenticating members of the federation and the configs
     #[serde(with = "serde_binary_human_readable")]
     pub auth_pk_set: hbbft::crypto::PublicKeySet,
@@ -103,6 +101,8 @@ pub struct ServerConfigConsensus {
     /// All configuration that needs to be the same for modules
     #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+    /// Additional config the federation wants to transmit to the clients
+    pub meta: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,8 +149,10 @@ pub struct ServerConfigParams {
     pub fed_network: NetworkConfig,
     /// Endpoints for client API communication
     pub api_network: NetworkConfig,
-    /// Name of our federation
-    pub federation_name: String,
+    /// Guardian-defined key-value pairs that will be passed to the client.
+    /// These should be the same for all guardians since they become part of
+    /// the consensus config.
+    pub meta: BTreeMap<String, String>,
     /// Params for the modules we wish to configure, can contain custom
     /// parameters
     pub modules: ConfigGenParams,
@@ -193,11 +195,11 @@ impl ServerConfigConsensus {
         let consensus_hash = sha256::Hash::from_engine(engine);
 
         let client = ClientConfig {
-            federation_name: self.federation_name.clone(),
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
             nodes: self.api.values().cloned().collect(),
             modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
+            meta: self.meta.clone(),
         };
 
         Ok(ConfigResponse {
@@ -243,12 +245,12 @@ impl ServerConfig {
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
-            federation_name: params.federation_name.clone(),
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
             api: params.api_nodes(),
             modules: Default::default(),
+            meta: params.meta,
         };
         let mut cfg = Self {
             consensus,
@@ -685,7 +687,7 @@ impl ServerConfigParams {
             tls,
             fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
-            federation_name,
+            meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
             modules,
         }
     }
