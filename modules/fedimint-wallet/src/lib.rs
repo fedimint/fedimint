@@ -970,6 +970,21 @@ impl Wallet {
             ));
         }
 
+        match bitcoind_rpc.get_block_height().await {
+            Ok(height) => info!(height, "Connected to bitcoind"),
+            Err(err) => warn!("Bitcoin node is not ready or configured properly. Modules relying on it may not function correctly: {:?}", err),
+        }
+
+        match bitcoind_rpc.get_fee_rate(1).await {
+            Ok(feerate) => {
+                match feerate {
+                    Some(fr) => info!(feerate = fr.sats_per_kvb, "Bitcoind feerate available"),
+                    None => info!(feerate = 0, "Bitcoind feerate available"),
+                }
+            },
+            Err(err) => warn!("Bitcoin fee estimation failed. Please configure your nodes to enable fee estimation: {:?}", err),
+        }
+
         let wallet = Wallet {
             cfg,
             secp: Default::default(),
