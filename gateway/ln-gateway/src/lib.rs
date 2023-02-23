@@ -54,8 +54,6 @@ pub enum GatewayError {
     ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
     LnRpcError(#[from] tonic::Status),
-    #[error("Actor not found")]
-    UnknownFederation,
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }
@@ -172,7 +170,10 @@ impl Gateway {
             .await
             .get(&federation_id.to_string())
             .cloned()
-            .ok_or(GatewayError::UnknownFederation)
+            .ok_or(GatewayError::Other(anyhow::anyhow!(
+                "No federation with id {}",
+                federation_id.to_string()
+            )))
     }
 
     pub async fn connect_federation(
