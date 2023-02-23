@@ -88,14 +88,14 @@ function await_cln_block_processing() {
 function kill_fedimint_processes {
   # shellcheck disable=SC2046
   kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') 2>/dev/null #sed reverses the order here
-  pkill "ln_gateway" 2>/dev/null || true;
+  pkill "gatewayd" 2>/dev/null || true;
+  pkill "gateway-cln-extension" 2>/dev/null || true;
   rm -f $FM_PID_FILE
 }
 
-function start_gateway() {
-  $FM_GATEWAY_CLI generate-config '127.0.0.1:8175' 'http://127.0.0.1:8175' $FM_CFG_DIR/gateway # generate gateway config
-  $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR/gateway &
-  sleep 5 # wait for plugin to start
+function start_gatewayd() {
+  $FM_BIN_DIR/gatewayd &
+  echo "started gatewayd"
   gw_connect_fed
 }
 

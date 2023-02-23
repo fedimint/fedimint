@@ -33,12 +33,12 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 use tonic::Status;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
-    #[arg(long = "listen", env = "GW_CLN_EXTENSION_LISTEN_ADDRESS")]
+    #[arg(long = "listen", env = "FM_CLN_EXTENSION_LISTEN_ADDRESS")]
     pub listen: SocketAddr,
 }
 
@@ -60,7 +60,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .add_service(GatewayLightningServer::new(service))
         .serve(listen)
         .await
-        .map_err(|_| ClnExtensionError::Error(anyhow!("Failed to start server")))?;
+        .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
 
     Ok(())
 }
@@ -77,13 +77,13 @@ where
     ))
 }
 
-// TODO: Keep in sync with cln-plugin:
+// TODO: upstream these structs to cln-plugin
 // See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Htlc {
-    pub short_channel_id: u64,
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub amount_msat: Amount,
+    // TODO: use these to validate we can actually redeem the HTLC in time
     pub cltv_expiry: u32,
     pub cltv_expiry_relative: u32,
     pub payment_hash: bitcoin_hashes::sha256::Hash,
@@ -92,7 +92,7 @@ pub struct Htlc {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Onion {
     #[serde(default)]
-    pub short_channel_id: Option<u64>,
+    pub short_channel_id: Option<String>,
     #[serde(deserialize_with = "as_fedimint_amount")]
     pub forward_msat: Amount,
 }
@@ -153,7 +153,7 @@ impl ClnRpcService {
                     Some(options::Value::String(listen)) => {
                         if listen == "default-dont-use" {
                             panic!(
-                                "Gateway cln extension is missing a listen address configuration. You can set it via GW_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --listen config option to the cln plugin"
+                                "Gateway cln extension is missing a listen address configuration. You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --listen config option to the cln plugin"
                             )
                         } else {
                             SocketAddr::from_str(&listen).expect("invalid listen address")
@@ -396,6 +396,8 @@ impl GatewayLightning for ClnRpcService {
             }
         };
 
+        info!("Completing htlc with reference, {:?}", hash);
+
         if let Some(outcome) = self.interceptor.outcomes.lock().await.remove(&hash) {
             // Translate action request into a cln rpc response for `htlc_accepted` event
             let htlca_res = match action {
@@ -500,22 +502,38 @@ impl ClnHtlcInterceptor {
     }
 
     async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
+        info!("Intercepted htlc with payload, {:?}", payload);
+
         let htlc_expiry = payload.htlc.cltv_expiry;
 
         let short_channel_id = match payload.onion.short_channel_id {
-            Some(scid) => scid,
+            Some(scid) => match ShortChannelId::from_str(&scid) {
+                Ok(scid) => scid_to_u64(scid),
+                Err(_) => {
+                    // Ignore invalid SCID
+                    error!("Received invalid short channel id {:?}", scid);
+                    return serde_json::json!({ "result": "continue" });
+                }
+            },
             None => {
                 // This is a HTLC terminating at the gateway node. DO NOT intercept
                 return serde_json::json!({ "result": "continue" });
             }
         };
 
+        info!("Intercepted htlc with SCID: {:?}", short_channel_id);
+
         if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
             let payment_hash = payload.htlc.payment_hash.to_vec();
 
-            // This has a chance of collission since payment_hashes are not guaranteed to be
+            // This has a chance of collision since payment_hashes are not guaranteed to be
             // unique TODO: generate unique id for each intercepted HTLC
             let intercepted_htlc_id = sha256::Hash::hash(&payment_hash);
+
+            info!(
+                "Sending htlc to gatewayd for processing. Reference {:?}",
+                intercepted_htlc_id
+            );
 
             match subscription
                 .send(Ok(SubscribeInterceptHtlcsResponse {

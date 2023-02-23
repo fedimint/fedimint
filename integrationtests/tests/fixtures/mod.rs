@@ -52,12 +52,10 @@ use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::cln::ClnRpc;
-use ln_gateway::config::GatewayConfig;
-use ln_gateway::rpc::GatewayRequest;
-use ln_gateway::LnGateway;
+use ln_gateway::gatewayd::actor::GatewayActor;
+use ln_gateway::gatewayd::gateway::Gateway;
+use ln_gateway::gatewayd::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
 use mint_client::mint::SpendableNote;
 use mint_client::transaction::legacy::Transaction;
 use mint_client::transaction::TransactionBuilder;
@@ -195,12 +193,18 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             )
             .expect("Could not create bitcoinrpc");
             let bitcoin = RealBitcoinTest::new(&bitcoin_rpc_url);
+
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =
                 RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
-            let gateway_lightning_rpc = ClnRpc::new(socket_gateway.clone());
-            let lightning_rpc_adapter = LnRpcAdapter::new(Box::new(gateway_lightning_rpc));
+
+            let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
+                .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
+                .parse::<Url>()
+                .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
+            let lnrpc: DynLnRpcClient = NetworkLnRpcClient::new(lnrpc_addr).await.unwrap().into();
+            let lnrpc_adapter = LnRpcAdapter::new(lnrpc);
 
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
@@ -237,7 +241,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
-                lightning_rpc_adapter,
+                lnrpc_adapter,
                 client_config.clone(),
                 decoders,
                 module_inits,
@@ -266,8 +270,10 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
             let bitcoin_rpc_2: DynBitcoindRpc = bitcoin.clone().into();
+
             let lightning = FakeLightningTest::new();
-            let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
+            let lnrpc_adapter = LnRpcAdapter::new(lightning.clone().into());
+
             let net = MockNetwork::new();
             let net_ref = &net;
             let connect_gen =
@@ -324,7 +330,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             user.client.await_consensus_block_height(0).await?;
 
             let gateway = GatewayTest::new(
-                ln_rpc_adapter,
+                lnrpc_adapter,
                 client_config.clone(),
                 decoders,
                 module_inits,
@@ -440,7 +446,7 @@ pub struct GatewayTest {
 
 impl GatewayTest {
     async fn new(
-        ln_client_adapter: LnRpcAdapter,
+        adapter: LnRpcAdapter,
         client_config: ClientConfig,
         decoders: ModuleDecoderRegistry,
         module_gens: ModuleGenRegistry,
@@ -466,6 +472,7 @@ impl GatewayTest {
         let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();
         let announce_addr = Url::parse(format!("http://{bind_addr}").as_str())
             .expect("Could not parse URL to generate GatewayClientConfig API endpoint");
+
         let gw_client_cfg = GatewayClientConfig {
             mint_channel_id,
             client_config: client_config.clone(),
@@ -483,24 +490,11 @@ impl GatewayTest {
         )
         .into();
 
-        let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let adapter = Arc::new(ln_client_adapter);
-        let ln_rpc = Arc::clone(&adapter);
-
-        let gw_cfg = GatewayConfig {
-            bind_address: bind_addr,
-            announce_address: announce_addr,
-            password: "abc".into(),
-        };
-
-        let gateway = LnGateway::new(
-            gw_cfg,
+        let gateway = Gateway::new(
+            adapter.clone().into(),
+            client_builder.clone(),
             decoders.clone(),
             module_gens.clone(),
-            ln_rpc,
-            client_builder.clone(),
-            sender,
-            receiver,
             TaskGroup::new(),
         )
         .await;
@@ -523,7 +517,7 @@ impl GatewayTest {
 
         GatewayTest {
             actor,
-            adapter,
+            adapter: Arc::new(adapter),
             keys,
             user,
             client,

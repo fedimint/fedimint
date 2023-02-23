@@ -13,6 +13,5 @@ else
   source ./scripts/setup-tests.sh ""
 fi
 
-
 export FM_TEST_DISABLE_MOCKS=1
 env RUST_BACKTRACE=1 cargo test -p fedimint-tests -- --test-threads=$(($(nproc) * 2)) "$@"
