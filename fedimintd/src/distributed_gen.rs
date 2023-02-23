@@ -9,9 +9,12 @@ use fedimint_core::config::{DkgError, ModuleGenRegistry};
 use fedimint_core::module::ModuleGen;
 use fedimint_core::task::{self, TaskGroup};
 use fedimint_core::Amount;
+use fedimint_ln::LightningGen;
 use fedimint_logging::TracingSetup;
+use fedimint_mint::MintGen;
 use fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
+use fedimint_wallet::WalletGen;
 use tracing::info;
 use url::Url;
 
@@ -147,12 +150,18 @@ impl DistributedGen {
         })
     }
 
-    pub fn attach<T>(mut self, gen: T) -> Self
+    pub fn with_module<T>(mut self, gen: T) -> Self
     where
         T: ModuleGen + 'static + task::MaybeSend + task::MaybeSync,
     {
         self.module_gens.attach(gen);
         self
+    }
+
+    pub fn with_default_modules(self) -> Self {
+        self.with_module(LightningGen)
+            .with_module(MintGen)
+            .with_module(WalletGen)
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
