@@ -26,7 +26,6 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, TransactionId};
 use mint_client::ln::PayInvoicePayload;
-use mint_client::mint::MintClientError;
 use mint_client::modules::ln::route_hints::RouteHint;
 use mint_client::{ClientError, GatewayClient};
 use secp256k1::PublicKey;
@@ -55,8 +54,6 @@ pub enum GatewayError {
     ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
     LnRpcError(#[from] tonic::Status),
-    #[error("Mint client error: {0:?}")]
-    MintClientE(#[from] MintClientError),
     #[error("Actor not found")]
     UnknownFederation,
     #[error("Other: {0:?}")]
