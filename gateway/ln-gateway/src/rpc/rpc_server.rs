@@ -14,7 +14,7 @@ use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
     GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
 };
-use crate::LnGatewayError;
+use crate::GatewayError;
 
 pub async fn run_webserver(
     authkey: String,
@@ -56,7 +56,7 @@ pub async fn run_webserver(
 async fn info(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<InfoPayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     let info = rpc.send(payload).await?;
     Ok(Json(json!(info)))
 }
@@ -67,7 +67,7 @@ async fn info(
 async fn balance(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<BalancePayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     let amount = rpc.send(payload).await?;
     Ok(Json(json!({ "balance_msat": amount.msats })))
 }
@@ -78,7 +78,7 @@ async fn balance(
 async fn address(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<DepositAddressPayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     let address = rpc.send(payload).await?;
     Ok(Json(json!({ "address": address })))
 }
@@ -89,7 +89,7 @@ async fn address(
 async fn deposit(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<DepositPayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     let txid = rpc.send(payload).await?;
     Ok(Json(json!({ "fedimint_txid": txid.to_string() })))
 }
@@ -100,7 +100,7 @@ async fn deposit(
 async fn withdraw(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<WithdrawPayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     let txid = rpc.send(payload).await?;
     Ok(Json(json!({ "fedimint_txid": txid.to_string() })))
 }
@@ -109,7 +109,7 @@ async fn withdraw(
 async fn pay_invoice(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<PayInvoicePayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())
 }
@@ -119,7 +119,7 @@ async fn pay_invoice(
 async fn connect(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<ConnectFedPayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())
 }
@@ -129,7 +129,7 @@ async fn connect(
 async fn backup(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<BackupPayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())
 }
@@ -139,7 +139,7 @@ async fn backup(
 async fn restore(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<RestorePayload>,
-) -> Result<impl IntoResponse, LnGatewayError> {
+) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())
 }

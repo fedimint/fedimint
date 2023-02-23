@@ -47,10 +47,10 @@ use crate::rpc::{
 const ROUTE_HINT_RETRIES: usize = 10;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 
-pub type Result<T> = std::result::Result<T, LnGatewayError>;
+pub type Result<T> = std::result::Result<T, GatewayError>;
 
 #[derive(Debug, Error)]
-pub enum LnGatewayError {
+pub enum GatewayError {
     #[error("Federation client operation error: {0:?}")]
     ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
@@ -63,7 +63,7 @@ pub enum LnGatewayError {
     Other(#[from] anyhow::Error),
 }
 
-impl IntoResponse for LnGatewayError {
+impl IntoResponse for GatewayError {
     fn into_response(self) -> Response {
         let mut err = Cow::<'static, str>::Owned(format!("{self:?}")).into_response();
         *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
@@ -175,7 +175,7 @@ impl Gateway {
             .await
             .get(&federation_id.to_string())
             .cloned()
-            .ok_or(LnGatewayError::UnknownFederation)
+            .ok_or(GatewayError::UnknownFederation)
     }
 
     pub async fn connect_federation(
@@ -206,12 +206,12 @@ impl Gateway {
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
         let connect: WsClientConnectInfo = serde_json::from_str(&payload.connect).map_err(|e| {
-            LnGatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
+            GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
         let GetPubKeyResponse { pub_key } = self.lnrpc.pubkey().await?;
         let node_pub_key = PublicKey::from_slice(&pub_key)
-            .map_err(|e| LnGatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
+            .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
         // The gateway deterministically assigns a channel id (u64) to each federation
         // connected. TODO: explicitly handle the case where the channel id

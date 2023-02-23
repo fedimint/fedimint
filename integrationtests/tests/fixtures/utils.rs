@@ -8,7 +8,7 @@ use ln_gateway::gatewaylnrpc::{
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
-use ln_gateway::LnGatewayError;
+use ln_gateway::GatewayError;
 use tokio::sync::Mutex;
 
 /// A proxy for the underlying LnRpc which can be used to add behavoir to it
@@ -63,7 +63,7 @@ impl ILnRpcClient for LnRpcAdapter {
             });
         if let Some(counter) = self.fail_invoices.lock().await.get(&invoice.invoice) {
             if *counter > 0 {
-                return Err(LnGatewayError::Other(anyhow!("expected test error")));
+                return Err(GatewayError::Other(anyhow!("expected test error")));
             }
         }
         self.fail_invoices.lock().await.remove(&invoice.invoice);

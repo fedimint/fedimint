@@ -21,7 +21,7 @@ use crate::gatewaylnrpc::{
 use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::FederationInfo;
 use crate::utils::retry;
-use crate::{LnGatewayError, Result};
+use crate::{GatewayError, Result};
 
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -381,7 +381,7 @@ impl GatewayActor {
                 self.client
                     .refund_incoming_contract(contract_id, rng)
                     .await?;
-                Err(LnGatewayError::ClientError(error))
+                Err(GatewayError::ClientError(error))
             }
         }
     }
@@ -434,7 +434,7 @@ impl GatewayActor {
         self.client
             .peg_in(txout_proof, transaction, rng)
             .await
-            .map_err(LnGatewayError::ClientError)
+            .map_err(GatewayError::ClientError)
     }
 
     pub async fn withdraw(
@@ -454,7 +454,7 @@ impl GatewayActor {
         self.client
             .peg_out(peg_out, rng)
             .await
-            .map_err(LnGatewayError::ClientError)
+            .map_err(GatewayError::ClientError)
             .map(|out_point| out_point.txid)
     }
 
@@ -463,7 +463,7 @@ impl GatewayActor {
             .mint_client()
             .back_up_ecash_to_federation()
             .await
-            .map_err(LnGatewayError::Other)?;
+            .map_err(GatewayError::Other)?;
 
         Ok(())
     }
@@ -476,13 +476,13 @@ impl GatewayActor {
             .mint_client()
             .restore_ecash_from_federation(10, &mut task_group)
             .await
-            .map_err(LnGatewayError::Other)?
-            .map_err(|e| LnGatewayError::Other(e.into()))?;
+            .map_err(GatewayError::Other)?
+            .map_err(|e| GatewayError::Other(e.into()))?;
 
         task_group
             .join_all(None)
             .await
-            .map_err(LnGatewayError::Other)?;
+            .map_err(GatewayError::Other)?;
 
         Ok(())
     }

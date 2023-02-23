@@ -16,7 +16,7 @@ use crate::gatewaylnrpc::{
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
-use crate::{LnGatewayError, Result};
+use crate::{GatewayError, Result};
 
 pub type HtlcStream<'a> =
     BoxStream<'a, std::result::Result<SubscribeInterceptHtlcsResponse, tonic::Status>>;
@@ -69,14 +69,14 @@ impl NetworkLnRpcClient {
     pub async fn new(url: Url) -> Result<Self> {
         let endpoint = Endpoint::from_shared(url.to_string()).map_err(|e| {
             error!("Failed to create lnrpc endpoint from url : {:?}", e);
-            LnGatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
+            GatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
         })?;
 
         let client = GatewayLightningClient::connect(endpoint)
             .await
             .map_err(|e| {
                 error!("Failed to connect to lnrpc server: {:?}", e);
-                LnGatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
+                GatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
             })?;
 
         Ok(Self { client })
