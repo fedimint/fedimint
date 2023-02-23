@@ -12,9 +12,7 @@ use clap::{Parser, Subcommand};
 use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_core::config::{
-    load_from_file, ClientConfig, ModuleGenRegistry, META_FEDERATION_NAME_KEY,
-};
+use fedimint_core::config::{load_from_file, ClientConfig, ModuleGenRegistry};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -90,8 +88,8 @@ enum CliOutput {
 
     Info {
         federation_id: String,
-        federation_name: String,
         network: Network,
+        meta: BTreeMap<String, String>,
         total_amount: Amount,
         total_num_notes: usize,
         details: BTreeMap<Amount, usize>,
@@ -531,24 +529,10 @@ async fn handle_command(
                 .map(|(amount, notes)| (amount.to_owned(), notes.len()))
                 .collect();
 
-            let federation_name = client
-                .config()
-                .as_ref()
-                .meta
-                .get(META_FEDERATION_NAME_KEY)
-                .ok_or_else(|| {
-                    CliError::from(
-                        CliErrorKind::GeneralFederationError,
-                        "Federation config did not contain federation name",
-                        None,
-                    )
-                })?
-                .clone();
-
             Ok(CliOutput::Info {
                 federation_id: client.config().as_ref().federation_id.to_string(),
-                federation_name,
                 network: client.wallet_client().config.network,
+                meta: client.config().0.meta,
                 total_amount: (notes.total_amount()),
                 total_num_notes: (notes.count_items()),
                 details: (details_vec),
