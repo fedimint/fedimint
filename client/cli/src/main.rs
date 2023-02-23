@@ -23,6 +23,7 @@ use fedimint_core::module::DynModuleGen;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_logging::TracingSetup;
 use fedimint_mint::common::MintDecoder;
 use fedimint_mint::MintGen;
 use mint_client::mint::SpendableNote;
@@ -39,7 +40,6 @@ use mint_client::utils::{
 use mint_client::{module_decode_stubs, Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tracing_subscriber::EnvFilter;
 
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
@@ -359,13 +359,7 @@ struct PayRequest {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("error,mint_client=info,fedimint_cli=info")),
-        )
-        .with_writer(std::io::stderr)
-        .init();
+    TracingSetup::default().init().expect("tracing initializes");
 
     if let Ok(cli) = CliNoWorkdir::try_parse() {
         // Only commands that don't need the workdir can be used here

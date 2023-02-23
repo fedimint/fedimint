@@ -32,7 +32,6 @@ pub mod encoding;
 pub mod epoch;
 pub mod fmt_utils;
 pub mod hex;
-pub mod logging;
 pub mod macros;
 pub mod module;
 pub mod net;

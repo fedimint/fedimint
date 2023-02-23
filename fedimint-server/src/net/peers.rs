@@ -17,6 +17,7 @@ use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::net::peers::IPeerConnections;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::PeerId;
+use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;
@@ -28,7 +29,6 @@ use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 use url::Url;
 
-use crate::logging::LOG_NET_PEER;
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};

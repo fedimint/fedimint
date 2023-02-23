@@ -12,9 +12,6 @@ license = "MIT"
 name = "fedimint_server"
 path = "src/lib.rs"
 
-[features]
-telemetry = ["tracing-opentelemetry", "opentelemetry-jaeger", "tracing-chrome"]
-
 [dependencies]
 aead = { path = "../crypto/aead" }
 anyhow = "1.0.66"
@@ -28,6 +25,7 @@ futures = "0.3.24"
 impl-tools = "0.6.1"
 itertools = "0.10.5"
 fedimint-core = { path = "../fedimint-core" }
+fedimint-logging = { path = "../fedimint-logging" }
 rand = "0.8"
 rayon = "1.6.1"
 rcgen = "=0.10.0"
@@ -48,11 +46,6 @@ tokio-stream = "0.1.11"
 tokio-rustls = "0.23.4"
 tokio-util = { version = "0.7.4", features = [ "codec" ] }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
-tracing-opentelemetry = { version = "0.18.0", optional = true}
-opentelemetry = { version = "0.18.0", optional = true }
-opentelemetry-jaeger = { version = "0.17.0", optional = true }
-console-subscriber = "0.1.8"
-tracing-chrome = { version = "0.7.0", optional = true}
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

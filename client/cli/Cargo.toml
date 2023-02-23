@@ -12,6 +12,7 @@ name = "fedimint-cli"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.66"
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
@@ -20,6 +21,7 @@ mint-client = { path = "../client-lib" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 fedimint-mint = { path = "../../modules/fedimint-mint" }
+fedimint-logging = { path = "../../fedimint-logging" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 tokio = { version = "1.25.0", features = ["full"] }

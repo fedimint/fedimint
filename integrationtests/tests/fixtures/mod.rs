@@ -28,6 +28,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
 use fedimint_ln::{LightningGateway, LightningGen};
+use fedimint_logging::TracingSetup;
 use fedimint_mint::db::NonceKeyPrefix;
 use fedimint_mint::{MintGen, MintOutput};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
@@ -35,7 +36,6 @@ use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
 use fedimint_server::db::GLOBAL_DATABASE_VERSION;
-use fedimint_server::logging::TracingSetup;
 use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;

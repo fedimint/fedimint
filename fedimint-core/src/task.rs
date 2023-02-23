@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use fedimint_logging::LOG_TASK;
 #[cfg(target_family = "wasm")]
 use futures::channel::oneshot;
 use futures::future::BoxFuture;
@@ -19,8 +20,6 @@ use tokio::sync::oneshot;
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
-
-use crate::logging::LOG_TASK;
 
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;

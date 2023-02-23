@@ -924,11 +924,13 @@ version = "0.1.0"
 name = "fedimint-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bitcoin",
  "bitcoin_hashes",
  "clap",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-logging",
  "fedimint-mint",
  "fedimint-rocksdb",
  "lightning-invoice",
@@ -964,6 +966,7 @@ dependencies = [
  "bitcoin_hashes",
  "erased-serde",
  "fedimint-derive",
+ "fedimint-logging",
  "futures",
  "getrandom",
  "gloo-timers",
@@ -1008,6 +1011,7 @@ dependencies = [
  "erased-serde",
  "fedimint-core",
  "fedimint-ln",
+ "fedimint-logging",
  "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-server",
@@ -1099,6 +1103,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-logging"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "console-subscriber",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "tracing-chrome",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fedimint-mint"
 version = "0.1.0"
 dependencies = [
@@ -1155,16 +1172,14 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "bytes",
- "console-subscriber",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-logging",
  "futures",
  "hbbft",
  "impl-tools",
  "itertools",
  "jsonrpsee",
- "opentelemetry",
- "opentelemetry-jaeger",
  "rand",
  "rayon",
  "rcgen",
@@ -1183,8 +1198,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
- "tracing-chrome",
- "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
 ]
@@ -1243,6 +1256,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-ln",
+ "fedimint-logging",
  "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-server",
@@ -1313,6 +1327,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-ln",
+ "fedimint-logging",
  "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-server",
@@ -1557,7 +1572,7 @@ dependencies = [
  "clap",
  "fedimint-build",
  "fedimint-core",
- "fedimint-server",
+ "fedimint-logging",
  "ln-gateway",
  "mint-client",
  "reqwest",
@@ -1578,8 +1593,8 @@ dependencies = [
  "bitcoin",
  "fedimint-core",
  "fedimint-ln",
+ "fedimint-logging",
  "fedimint-mint",
- "fedimint-server",
  "fedimint-testing",
  "lightning-invoice",
  "ln-gateway",
@@ -2092,12 +2107,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
-
-[[package]]
 name = "jsonrpc"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2358,8 +2367,8 @@ dependencies = [
  "cln-rpc",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-logging",
  "fedimint-rocksdb",
- "fedimint-server",
  "futures",
  "lightning-invoice",
  "mint-client",
@@ -2514,6 +2523,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-ln",
+ "fedimint-logging",
  "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-testing",
@@ -3179,6 +3189,7 @@ dependencies = [
  "clap",
  "fedimint-core",
  "fedimint-ln",
+ "fedimint-logging",
  "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-server",
@@ -4243,12 +4254,11 @@ dependencies = [
 
 [[package]]
 name = "tracing-chrome"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865016457701971958e047b9f61add5bba70d7a7b084a13c9e54f9bb4f19d3a6"
+checksum = "496b3cd5447f7ff527bbbf19b071ad542a000adf297d4127078b4dfdb931f41a"
 dependencies = [
- "crossbeam-channel",
- "json",
+ "serde_json",
  "tracing-core",
  "tracing-subscriber",
 ]

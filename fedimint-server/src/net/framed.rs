@@ -8,13 +8,12 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use bytes::{Buf, BufMut, BytesMut};
+use fedimint_logging::LOG_NET_PEER;
 use futures::{Sink, Stream};
 use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{error, trace};
-
-use crate::logging::LOG_NET_PEER;
 
 /// Owned [`FramedTransport`] trait object
 pub type AnyFramedTransport<M> = Box<dyn FramedTransport<M> + Send + Unpin + 'static>;

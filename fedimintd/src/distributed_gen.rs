@@ -9,9 +9,9 @@ use fedimint_core::config::{DkgError, ModuleGenRegistry};
 use fedimint_core::module::ModuleGen;
 use fedimint_core::task::{self, TaskGroup};
 use fedimint_core::Amount;
+use fedimint_logging::TracingSetup;
 use fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
-use fedimint_server::logging::TracingSetup;
 use tracing::info;
 use url::Url;
 

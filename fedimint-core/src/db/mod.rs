@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use fedimint_logging::LOG_DB;
 use futures::future::BoxFuture;
 use futures::{stream, Stream, StreamExt};
 use macro_rules_attribute::apply;
@@ -17,7 +18,6 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::core::ModuleInstanceId;
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
-use crate::logging::LOG_DB;
 use crate::task::{MaybeSend, MaybeSync};
 use crate::{async_trait_maybe_send, maybe_add_send};
 

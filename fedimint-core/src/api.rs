@@ -23,6 +23,7 @@ use fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard}
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
+use fedimint_logging::LOG_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 #[cfg(not(target_family = "wasm"))]
@@ -41,7 +42,6 @@ use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use crate::logging::LOG_NET_API;
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
