@@ -28,7 +28,6 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, TransactionId};
 use mint_client::ln::PayInvoicePayload;
 use mint_client::mint::MintClientError;
-use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::ln::route_hints::RouteHint;
 use mint_client::{ClientError, GatewayClient};
 use secp256k1::PublicKey;
@@ -43,8 +42,7 @@ use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, ReceivePaymentPayload,
-    RestorePayload, WithdrawPayload,
+    GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
 };
 
 const ROUTE_HINT_RETRIES: usize = 10;
@@ -267,14 +265,6 @@ impl Gateway {
         })
     }
 
-    /// Handles an intercepted HTLC that might be an incoming payment we are
-    /// receiving on behalf of a federation user.
-    async fn handle_receive_payment(&self, _payload: ReceivePaymentPayload) -> Result<Preimage> {
-        Err(LnGatewayError::Other(anyhow::anyhow!(
-            "Not implemented: handle_receive_payment"
-        )))
-    }
-
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
         let PayInvoicePayload {
             federation_id,
@@ -383,12 +373,6 @@ impl Gateway {
                             .handle(|payload| {
                                 self.handle_connect_federation(payload, route_hints.clone())
                             })
-                            .await;
-                    }
-                    // TODO: Remove this handler because Gateway uses lnrpc to intercept HTLCs
-                    GatewayRequest::ReceivePayment(inner) => {
-                        inner
-                            .handle(|payload| self.handle_receive_payment(payload))
                             .await;
                     }
                     GatewayRequest::PayInvoice(inner) => {
