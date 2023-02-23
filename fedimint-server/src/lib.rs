@@ -1,5 +1,6 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
-extern crate fedimint_core;
+/// Re-export for dependencies so they don't have to import  separately
+pub extern crate fedimint_core;
 
 use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
