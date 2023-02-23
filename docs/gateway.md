@@ -56,7 +56,6 @@ $ gateway-cli help
 Usage: gateway-cli [OPTIONS] <COMMAND>
 
 Commands:
-  generate-config  Ganerate gateway configuration NOTE: This command can only be used on a local gateway
   version-hash     Display CLI version hash
   info             Display high-level information about the Gateway
   balance          Check gateway balance

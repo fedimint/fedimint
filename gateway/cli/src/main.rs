@@ -1,11 +1,7 @@
-use std::net::SocketAddr;
-use std::path::PathBuf;
-
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_logging::TracingSetup;
-use ln_gateway::config::GatewayConfig;
 use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
@@ -30,16 +26,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Ganerate gateway configuration
-    /// NOTE: This command can only be used on a local gateway
-    GenerateConfig {
-        /// Address to which the API webserver will bind
-        bind_address: SocketAddr,
-        /// URL under which the API will be reachable
-        announce_address: Url,
-        /// The gateway configuration directory
-        out_dir: PathBuf,
-    },
     /// Display CLI version hash
     VersionHash,
     /// Display high-level information about the Gateway
@@ -85,29 +71,6 @@ async fn main() -> anyhow::Result<()> {
     let client = RpcClient::new(cli.address);
 
     match cli.command {
-        Commands::GenerateConfig {
-            bind_address: address,
-            announce_address,
-            mut out_dir,
-        } => {
-            // Recursively create config directory if it doesn't exist
-            std::fs::create_dir_all(&out_dir).expect("Failed to create config directory");
-            // Create config file
-            out_dir.push("gateway.config");
-
-            let cfg_file =
-                std::fs::File::create(out_dir).expect("Failed to create gateway config file");
-            serde_json::to_writer_pretty(
-                cfg_file,
-                &GatewayConfig {
-                    bind_address: address,
-                    announce_address,
-                    // TODO: Generate a strong random password
-                    password: source_password(cli.rpcpassword),
-                },
-            )
-            .expect("Failed to write gateway configs to file");
-        }
         Commands::VersionHash => {
             println!("version: {}", env!("CODE_VERSION"));
         }
