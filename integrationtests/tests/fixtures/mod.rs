@@ -11,6 +11,7 @@ use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, KeyPair};
+use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
@@ -177,22 +178,27 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 .expect("Distributed config did not exit cleanly");
 
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            let bitcoin_rpc_url =
+            let url = env::var("FM_TEST_BITCOIND_RPC")
+                .expect("Must have bitcoind RPC defined for real tests")
+                .parse()
+                .expect("Invalid bitcoind RPC URL");
+            let bitcoin_rpc =
                 match read_bitcoin_backend_from_global_env().expect("invalid bitcoin rpc url") {
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Bitcoind(url) => url,
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Electrum(_) => {
-                        panic!("Electrum backend not supported for tests")
+                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Bitcoind(url) => {
+                        info!("Running tests with Bitcoin rpc");
+                        make_bitcoind_rpc(&url, task_group.make_handle())
+                            .expect("Could not create Bitcoin rpc")
+                    }
+                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Electrum(url) => {
+                        info!("Running tests with Electrum rpc");
+                        make_electrum_rpc(&url, task_group.make_handle())
+                            .expect("Could not create Electrum rpc")
                     }
                     fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Esplora(_) => {
                         panic!("Esplora backend not supported for tests")
                     }
                 };
-            let bitcoin_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoind_rpc(
-                &bitcoin_rpc_url,
-                task_group.make_handle(),
-            )
-            .expect("Could not create bitcoinrpc");
-            let bitcoin = RealBitcoinTest::new(&bitcoin_rpc_url);
+            let bitcoin = RealBitcoinTest::new(&url);
 
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
