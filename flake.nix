@@ -2,7 +2,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
-    crane.url = "github:ipetkov/crane?rev=98894bb39b03bfb379c5e10523cd61160e1ac782"; # https://github.com/ipetkov/crane/releases/tag/v0.11.0
+    crane.url = "github:ipetkov/crane?ref=master&ref=953b70da2813fb882c39890f2514e7db76fc8843";
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -282,9 +282,9 @@
           };
 
 
-        commonArgs = {
+
+        commonArgsBase = {
           pname = "fedimint-workspace";
-          src = filterWorkspaceFiles ./.;
 
           buildInputs = with pkgs; [
             clang
@@ -308,14 +308,6 @@
             pkg-config
           ];
 
-          # copy over the linker/ar wrapper scripts which by default would get
-          # stripped by crane
-          dummySrc = craneLib.mkDummySrc {
-            src = ./.;
-            extraDummyScript = ''
-              cp -r ${./.cargo} -T $out/.cargo
-            '';
-          };
 
           # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
           installCargoArtifactsMode = "use-zstd";
@@ -328,8 +320,29 @@
           HOME = "/tmp";
         };
 
+        commonArgs = commonArgsBase // {
+          src = filterWorkspaceFiles ./.;
+        };
+
+        commonArgsDepsOnly = commonArgsBase // {
+          # TODO: use this one instead of `src` after https://github.com/ipetkov/crane/issues/249 is figured out
+          # cargoVendorDir = craneLib.vendorCargoDeps {
+          #   src = filterWorkspaceFiles ./.;
+          # };
+          src = filterWorkspaceFiles ./.;
+          # copy over the linker/ar wrapper scripts which by default would get
+          # stripped by crane
+          dummySrc = craneLib.mkDummySrc {
+            src = filterWorkspaceDepsBuildFiles ./.;
+            extraDummyScript = ''
+              cp -ar ${./.cargo} --no-target-directory $out/.cargo
+            '';
+          };
+        };
+
         commonCliTestArgs = commonArgs // {
           pname = "fedimint-cli-test";
+          version = "0.0.1";
           src = filterWorkspaceCliTestFiles ./.;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
           # there's no point saving the `./target/` dir
@@ -338,12 +351,14 @@
           doCheck = false;
         };
 
-        workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
+        workspaceDeps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
+          version = "0.0.1";
           buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE ; cargo check --profile $CARGO_PROFILE --all-targets ; cargo build --profile $CARGO_PROFILE --all-targets";
           doCheck = false;
         });
 
         workspaceBuild = craneLib.cargoBuild (commonArgs // {
+          version = "0.0.1";
           cargoArtifacts = workspaceDeps;
           doCheck = false;
         });
@@ -378,8 +393,9 @@
         });
 
         # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
-        workspaceDepsCov = craneLib.buildDepsOnly (commonArgs // {
+        workspaceDepsCov = craneLib.buildDepsOnly (commonArgsDepsOnly // {
           pnameSuffix = "-lcov-deps";
+          version = "0.0.1";
           buildPhaseCargoCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE --no-report";
           cargoBuildCommand = "dontuse";
           cargoCheckCommand = "dontuse";
@@ -389,6 +405,7 @@
 
         workspaceCov = craneLib.buildPackage (commonArgs // {
           pnameSuffix = "-lcov";
+          version = "0.0.1";
           cargoArtifacts = workspaceDepsCov;
           buildPhaseCargoCommand = "mkdir -p $out ; cargo llvm-cov --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
           installPhaseCommand = "true";
@@ -440,7 +457,8 @@
           let
             # "--package x --package y" args passed to cargo
             pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
-            deps = craneLib.buildDepsOnly (commonArgs // {
+            deps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
+              version = "0.0.1";
               pname = name;
               buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
               doCheck = false;
@@ -450,6 +468,7 @@
 
           craneLib.buildPackage (commonArgs // {
             meta = { mainProgram = defaultBin; };
+            version = "0.0.1";
             pname = "${name}";
             cargoArtifacts = deps;
 
@@ -473,16 +492,15 @@
               # "--package x --package y" args passed to cargo
               pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
               craneLib = craneLibCross.${target.name};
-              deps = craneLib.buildDepsOnly (commonArgs // {
+              deps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
                 pname = "${name}-${target.name}";
+                version = "0.0.1";
                 # workaround: on wasm, we can't compile all deps, so narrow dependency build
                 # to ones used by the client package only
                 buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} ${pkgsArgs}";
                 doCheck = false;
 
                 preBuild = ''
-                  chmod +x .cargo/ar.*
-                  chmod +x .cargo/ld.*
                   patchShebangs .cargo/
                 '' + target.extraEnvs;
               });
@@ -490,6 +508,7 @@
             in
             craneLib.buildPackage (commonArgs // {
               pname = "${name}-${target.name}";
+              version = "0.0.1";
               cargoArtifacts = deps;
 
               src = filterModules dirs ./.;
@@ -498,8 +517,6 @@
               # if needed we will check the whole workspace at once with `workspaceBuild`
               doCheck = false;
               preBuild = ''
-                chmod +x .cargo/ar.*
-                chmod +x .cargo/ld.*
                 patchShebangs .cargo/
               '' + target.extraEnvs;
             });
