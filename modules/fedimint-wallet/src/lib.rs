@@ -28,7 +28,7 @@ use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
     ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::__reexports::serde_json;
@@ -36,7 +36,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
+    IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
+    TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
@@ -59,7 +60,6 @@ use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::common::WalletDecoder;
 use crate::config::{WalletClientConfig, WalletConfig};
 use crate::db::{
     BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
@@ -71,7 +71,6 @@ use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 
-pub mod common;
 pub mod config;
 pub mod db;
 pub mod keys;
@@ -236,10 +235,9 @@ pub struct WalletGen;
 impl ModuleGen for WalletGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
-    type Decoder = WalletDecoder;
 
-    fn decoder(&self) -> WalletDecoder {
-        WalletDecoder {}
+    fn decoder(&self) -> Decoder {
+        <Wallet as ServerModule>::decoder()
     }
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -481,15 +479,20 @@ impl std::fmt::Display for WalletOutput {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct WalletVerificationCache;
 
+pub struct WalletModuleTypes;
+
+impl ModuleCommon for WalletModuleTypes {
+    type Input = WalletInput;
+    type Output = WalletOutput;
+    type OutputOutcome = WalletOutputOutcome;
+    type ConsensusItem = WalletConsensusItem;
+}
+
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Wallet {
+    type Common = WalletModuleTypes;
     type Gen = WalletGen;
-    type Decoder = WalletDecoder;
     type VerificationCache = WalletVerificationCache;
-
-    fn decoder(&self) -> Self::Decoder {
-        WalletDecoder
-    }
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
         (

@@ -15,8 +15,8 @@ use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 use super::*;
 use crate::maybe_add_send_sync;
 use crate::module::{
-    ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, ModuleConsensusVersion, ModuleError,
-    ServerModule, TransactionItemAmount,
+    ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, ModuleCommon, ModuleConsensusVersion,
+    ModuleError, ServerModule, TransactionItemAmount,
 };
 use crate::task::{MaybeSend, MaybeSync};
 
@@ -53,7 +53,7 @@ pub trait IServerModule: Debug {
     fn as_any(&self) -> &dyn Any;
 
     /// Returns the decoder belonging to the server module
-    fn decoder(&self) -> DynDecoder;
+    fn decoder(&self) -> Decoder;
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
@@ -191,8 +191,8 @@ impl<T> IServerModule for T
 where
     T: ServerModule + 'static + Sync,
 {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(ServerModule::decoder(self))
+    fn decoder(&self) -> Decoder {
+        <T::Common as ModuleCommon>::decoder_builder().build()
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -239,7 +239,8 @@ where
                         peer,
                         Clone::clone(
                             item.as_any()
-                                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::ConsensusItem>()
+                                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::ConsensusItem>(
+                                )
                                 .expect("incorrect consensus item type passed to module plugin"),
                         ),
                     )
@@ -259,7 +260,7 @@ where
             self,
             inputs.iter().map(|i| {
                 i.as_any()
-                    .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
+                    .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                     .expect("incorrect input type passed to module plugin")
             }),
         )
@@ -288,7 +289,7 @@ where
                 .expect("incorrect verification cache type passed to module plugin"),
             input
                 .as_any()
-                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
         )
         .await
@@ -316,7 +317,7 @@ where
             dbtx,
             input
                 .as_any()
-                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Input>()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
             verification_cache
                 .as_any()
@@ -342,7 +343,7 @@ where
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Output>()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
                 .expect("incorrect output type passed to module plugin"),
         )
         .await
@@ -371,7 +372,7 @@ where
             dbtx,
             output
                 .as_any()
-                .downcast_ref::<<<Self as ServerModule>::Decoder as Decoder>::Output>()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
                 .expect("incorrect output type passed to module plugin"),
             out_point,
         )

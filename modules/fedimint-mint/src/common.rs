@@ -1,14 +1,9 @@
 use std::fmt::Debug;
-use std::io;
 
 use bitcoin_hashes::sha256;
-use fedimint_core::core::Decoder;
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
-
-use crate::{MintConsensusItem, MintInput, MintOutput, MintOutputOutcome};
 
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
@@ -53,37 +48,5 @@ impl SignedBackupRequest {
         )?;
 
         Ok(&self.request)
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct MintDecoder;
-
-impl Decoder for MintDecoder {
-    type Input = MintInput;
-    type Output = MintOutput;
-    type OutputOutcome = MintOutputOutcome;
-    type ConsensusItem = MintConsensusItem;
-
-    fn decode_input(&self, mut d: &mut dyn io::Read) -> Result<MintInput, DecodeError> {
-        MintInput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
-    }
-
-    fn decode_output(&self, mut d: &mut dyn io::Read) -> Result<MintOutput, DecodeError> {
-        MintOutput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
-    }
-
-    fn decode_output_outcome(
-        &self,
-        mut d: &mut dyn io::Read,
-    ) -> Result<MintOutputOutcome, DecodeError> {
-        MintOutputOutcome::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
-    }
-
-    fn decode_consensus_item(
-        &self,
-        mut r: &mut dyn io::Read,
-    ) -> Result<MintConsensusItem, DecodeError> {
-        MintConsensusItem::consensus_decode(&mut r, &ModuleDecoderRegistry::default())
     }
 }

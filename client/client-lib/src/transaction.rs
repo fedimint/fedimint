@@ -18,10 +18,11 @@ use crate::{module_decode_stubs, Client, DecryptedPreimage, MintClient, MintOutp
 pub mod legacy {
     use bitcoin_hashes::Hash;
     use fedimint_core::core::{
-        Decoder, DynInput, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_LN,
-        LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+        DynInput, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::module::ModuleCommon;
     use fedimint_core::transaction::{agg_keys, TransactionError};
     use fedimint_core::{ServerModule, TransactionId};
     use secp256k1_zkp::{schnorr, XOnlyPublicKey};
@@ -56,18 +57,18 @@ pub mod legacy {
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
         // TODO: maybe treat every note as a seperate input?
-        Mint(<<fedimint_mint::Mint as ServerModule>::Decoder as Decoder>::Input),
-        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Decoder as Decoder>::Input),
-        LN(<<fedimint_ln::Lightning as ServerModule>::Decoder as Decoder>::Input),
+        Mint(<<fedimint_mint::Mint as ServerModule>::Common as ModuleCommon>::Input),
+        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Input),
+        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Input),
     }
 
     // TODO: check if clippy is right
     #[allow(clippy::large_enum_variant)]
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Output {
-        Mint(<<fedimint_mint::Mint as ServerModule>::Decoder as Decoder>::Output),
-        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Decoder as Decoder>::Output),
-        LN(<<fedimint_ln::Lightning as ServerModule>::Decoder as Decoder>::Output),
+        Mint(<<fedimint_mint::Mint as ServerModule>::Common as ModuleCommon>::Output),
+        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Output),
+        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Output),
     }
 
     impl Transaction {

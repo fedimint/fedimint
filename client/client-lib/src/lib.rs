@@ -26,7 +26,7 @@ use fedimint_core::api::{
 };
 use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_core::core::{
-    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::Database;
@@ -37,9 +37,12 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::time::SystemTime;
-use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_ln::Lightning;
 use fedimint_logging::LOG_WALLET;
+use fedimint_mint::Mint;
+use fedimint_wallet::Wallet;
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
 use itertools::{Either, Itertools};
@@ -70,17 +73,14 @@ use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::{LnClient, LnClientError};
 use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
 use crate::mint::{MintClient, MintClientError, SpendableNote};
-use crate::modules::ln::common::LightningDecoder;
 use crate::modules::ln::config::LightningClientConfig;
 use crate::modules::ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use crate::modules::ln::contracts::{
     Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
 };
 use crate::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
-use crate::modules::mint::common::MintDecoder;
 use crate::modules::mint::config::MintClientConfig;
 use crate::modules::mint::{BlindNonce, MintOutput, MintOutputOutcome};
-use crate::modules::wallet::common::WalletDecoder;
 use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::txoproof::TxOutProof;
 use crate::modules::wallet::{PegOut, WalletInput, WalletOutput};
@@ -1503,15 +1503,15 @@ pub fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            DynDecoder::from_typed(LightningDecoder),
+            <Lightning as ServerModule>::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            DynDecoder::from_typed(WalletDecoder),
+            <Wallet as ServerModule>::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            DynDecoder::from_typed(MintDecoder),
+            <Mint as ServerModule>::decoder(),
         ),
     ])
 }

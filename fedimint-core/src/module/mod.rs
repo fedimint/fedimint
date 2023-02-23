@@ -18,7 +18,10 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
-use crate::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
+use crate::core::{
+    Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
+    OutputOutcome,
+};
 use crate::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -271,7 +274,7 @@ where
 /// `[Self::init]`.
 #[apply(async_trait_maybe_send!)]
 pub trait IModuleGen: Debug {
-    fn decoder(&self) -> DynDecoder;
+    fn decoder(&self) -> Decoder;
 
     fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion>;
 
@@ -416,9 +419,7 @@ pub trait ModuleGen: Debug + Sized {
     /// to move from the previous database version to the current version.
     const DATABASE_VERSION: DatabaseVersion;
 
-    type Decoder: Decoder;
-
-    fn decoder(&self) -> Self::Decoder;
+    fn decoder(&self) -> Decoder;
 
     /// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].
@@ -483,8 +484,8 @@ impl<T> IModuleGen for T
 where
     T: ModuleGen + 'static + Sync,
 {
-    fn decoder(&self) -> DynDecoder {
-        DynDecoder::from_typed(ModuleGen::decoder(self))
+    fn decoder(&self) -> Decoder {
+        ModuleGen::decoder(self)
     }
 
     fn module_kind(&self) -> ModuleKind {
@@ -618,10 +619,28 @@ impl<CI> ConsensusProposal<CI> {
     }
 }
 
+/// Module associated types required by both client and server
+pub trait ModuleCommon {
+    type Input: Input;
+    type Output: Output;
+    type OutputOutcome: OutputOutcome;
+    type ConsensusItem: ModuleConsensusItem;
+
+    fn decoder_builder() -> DecoderBuilder {
+        let mut decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::<Self::Input>();
+        decoder_builder.with_decodable_type::<Self::Output>();
+        decoder_builder.with_decodable_type::<Self::OutputOutcome>();
+        decoder_builder.with_decodable_type::<Self::ConsensusItem>();
+        decoder_builder
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModule: Debug + Sized {
+    type Common: ModuleCommon;
+
     type Gen: ModuleGen;
-    type Decoder: Decoder;
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
@@ -630,7 +649,14 @@ pub trait ServerModule: Debug + Sized {
         Self::Gen::KIND
     }
 
-    fn decoder(&self) -> Self::Decoder;
+    /// Returns a decoder for the following associated types of this module:
+    /// * `Input`
+    /// * `Output`
+    /// * `OutputOutcome`
+    /// * `ConsensusItem`
+    fn decoder() -> Decoder {
+        Self::Common::decoder_builder().build()
+    }
 
     /// Module consensus version this module is running with and the API
     /// versions it supports in it
@@ -643,7 +669,7 @@ pub trait ServerModule: Debug + Sized {
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> ConsensusProposal<<Self::Decoder as Decoder>::ConsensusItem>;
+    ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All
     /// module consensus items of this round are supplied as
@@ -653,7 +679,7 @@ pub trait ServerModule: Debug + Sized {
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, <Self::Decoder as Decoder>::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, <Self::Common as ModuleCommon>::ConsensusItem)>,
     );
 
     /// Some modules may have slow to verify inputs that would block transaction
@@ -663,7 +689,7 @@ pub trait ServerModule: Debug + Sized {
     /// constructing such lookup tables.
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a <Self::Decoder as Decoder>::Input> + MaybeSend,
+        inputs: impl Iterator<Item = &'a <Self::Common as ModuleCommon>::Input> + MaybeSend,
     ) -> Self::VerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed
@@ -676,7 +702,7 @@ pub trait ServerModule: Debug + Sized {
         interconnect: &dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
-        input: &'a <Self::Decoder as Decoder>::Input,
+        input: &'a <Self::Common as ModuleCommon>::Input,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to spend a transaction input. On success all necessary updates will
@@ -691,7 +717,7 @@ pub trait ServerModule: Debug + Sized {
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b <Self::Decoder as Decoder>::Input,
+        input: &'b <Self::Common as ModuleCommon>::Input,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
@@ -703,7 +729,7 @@ pub trait ServerModule: Debug + Sized {
     async fn validate_output(
         &self,
         dbtx: &mut DatabaseTransaction,
-        output: &<Self::Decoder as Decoder>::Output,
+        output: &<Self::Common as ModuleCommon>::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -721,7 +747,7 @@ pub trait ServerModule: Debug + Sized {
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a <Self::Decoder as Decoder>::Output,
+        output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -745,7 +771,7 @@ pub trait ServerModule: Debug + Sized {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<<Self::Decoder as Decoder>::OutputOutcome>;
+    ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
 
     /// Queries the database and returns all assets and liabilities of the
     /// module.

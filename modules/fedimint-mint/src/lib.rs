@@ -11,7 +11,7 @@ use fedimint_core::config::{
     ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
     ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
@@ -19,7 +19,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleGen,
+    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
     TransactionItemAmount,
 };
 use fedimint_core::net::peers::MuxPeerConnections;
@@ -50,7 +50,6 @@ use thiserror::Error;
 use threshold_crypto::group::Curve;
 use tracing::{debug, error, info, warn};
 
-use crate::common::MintDecoder;
 use crate::config::{MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate};
 use crate::db::{
     DbKeyPrefix, EcashBackupKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey,
@@ -155,10 +154,8 @@ impl ModuleGen for MintGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
-    type Decoder = MintDecoder;
-
-    fn decoder(&self) -> MintDecoder {
-        MintDecoder
+    fn decoder(&self) -> Decoder {
+        <Mint as ServerModule>::decoder()
     }
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -455,15 +452,20 @@ impl std::fmt::Display for MintConsensusItem {
     }
 }
 
+pub struct MintModuleTypes;
+
+impl ModuleCommon for MintModuleTypes {
+    type Input = MintInput;
+    type Output = MintOutput;
+    type OutputOutcome = MintOutputOutcome;
+    type ConsensusItem = MintConsensusItem;
+}
+
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
+    type Common = MintModuleTypes;
     type Gen = MintGen;
-    type Decoder = MintDecoder;
     type VerificationCache = VerifiedNotes;
-
-    fn decoder(&self) -> Self::Decoder {
-        MintDecoder
-    }
 
     async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
         if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
