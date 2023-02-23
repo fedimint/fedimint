@@ -1,7 +1,6 @@
 pub mod actor;
 pub mod client;
 pub mod config;
-pub mod ln;
 pub mod lnrpc_client;
 pub mod rpc;
 pub mod types;
@@ -40,7 +39,6 @@ use tracing::{error, info, warn};
 use crate::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
 use crate::gatewaylnrpc::GetPubKeyResponse;
-use crate::ln::LightningError;
 use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
@@ -60,8 +58,6 @@ pub enum LnGatewayError {
     ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
     LnRpcError(#[from] tonic::Status),
-    #[error("Our LN node could not route the payment: {0:?}")]
-    CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
     #[error("Actor not found")]
