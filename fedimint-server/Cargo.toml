@@ -22,7 +22,7 @@ bitcoin_hashes = "0.11.0"
 bytes = "1.4.0"
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
 futures = "0.3.24"
-impl-tools = "0.6.1"
+impl-tools = "0.8.0"
 itertools = "0.10.5"
 fedimint-core = { path = "../fedimint-core" }
 fedimint-logging = { path = "../fedimint-logging" }
