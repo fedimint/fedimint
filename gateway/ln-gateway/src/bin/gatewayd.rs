@@ -10,7 +10,7 @@ use fedimint_core::core::{
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::DynModuleGen;
 use fedimint_core::task::TaskGroup;
-use fedimint_server::logging::TracingSetup;
+use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::gatewayd::gateway::Gateway;
 use ln_gateway::gatewayd::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};

@@ -14,7 +14,6 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
-use fedimint_core::logging::LOG_CORE;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
@@ -24,6 +23,7 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::{DynServerModule, DynVerificationCache};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
+use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use futures::future::select_all;
 use futures::StreamExt;
 use hbbft::honey_badger::Batch;
@@ -41,7 +41,6 @@ use crate::db::{
     DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
     GLOBAL_DATABASE_VERSION,
 };
-use crate::logging::LOG_CONSENSUS;
 use crate::transaction::{Transaction, TransactionError};
 
 pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;

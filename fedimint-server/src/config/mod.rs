@@ -19,6 +19,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBA
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::PeerId;
+use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
 use itertools::Itertools;
@@ -33,7 +34,6 @@ use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
 use crate::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TLS_PK};
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::{BitcoinHash, NumPeers};
-use crate::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{parse_host_port, Connector, TlsConfig};
 use crate::net::peers::NetworkConfig;

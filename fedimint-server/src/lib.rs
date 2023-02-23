@@ -21,6 +21,7 @@ use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::transaction::Transaction;
 pub use fedimint_core::*;
 use fedimint_core::{NumPeers, PeerId};
+use fedimint_logging::LOG_CONSENSUS;
 use futures::stream::Peekable;
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
@@ -39,7 +40,6 @@ use crate::consensus::{
 use crate::db::LastEpochKey;
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
-use crate::logging::LOG_CONSENSUS;
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{PeerConnector, PeerSlice, ReconnectPeerConnections};
 
@@ -57,9 +57,6 @@ pub mod config;
 
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
-
-/// Logging targets and helpers
-pub mod logging;
 
 type PeerMessage = (PeerId, EpochMessage);
 

@@ -6,7 +6,7 @@ use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use fedimint_core::db::IDatabase;
-use fedimint_server::logging::TracingSetup;
+use fedimint_logging::TracingSetup;
 use futures::StreamExt;
 
 use crate::dump::DatabaseDump;

@@ -1,5 +1,5 @@
 use cln_plugin::Error;
-use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::config::{load_from_file, ModuleGenRegistry};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -7,7 +7,6 @@ use fedimint_core::core::{
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::DynModuleGen;
 use fedimint_core::task::TaskGroup;
-use fedimint_server::config::load_from_file;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::cln::{build_cln_rpc, ClnRpcRef};
 use ln_gateway::config::GatewayConfig;

@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use anyhow::anyhow;
 use bitcoin::Address;
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::{FederationId, ModuleGenRegistry};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, TransactionId};
-use fedimint_server::api::WsClientConnectInfo;
 use mint_client::ln::PayInvoicePayload;
 use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::ln::route_hints::RouteHint;

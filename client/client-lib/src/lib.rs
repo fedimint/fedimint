@@ -1,7 +1,6 @@
 pub mod api;
 pub mod db;
 pub mod ln;
-pub mod logging;
 pub mod mint;
 pub mod outcome;
 pub mod transaction;
@@ -40,6 +39,7 @@ use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::time::SystemTime;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_logging::LOG_WALLET;
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
 use itertools::{Either, Itertools};
@@ -68,7 +68,6 @@ use crate::ln::db::{
 use crate::ln::incoming::ConfirmedInvoice;
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::{LnClient, LnClientError};
-use crate::logging::LOG_WALLET;
 use crate::mint::db::{NoteKey, PendingNotesKeyPrefix};
 use crate::mint::{MintClient, MintClientError, SpendableNote};
 use crate::modules::ln::common::LightningDecoder;

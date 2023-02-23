@@ -7,13 +7,13 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
+use fedimint_logging::LOG_NET_PEER;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 
-use crate::logging::LOG_NET_PEER;
 use crate::PeerId;
 
 /// TODO: Use proper ModuleId after modularization is complete

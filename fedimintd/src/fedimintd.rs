@@ -7,11 +7,11 @@ use fedimint_core::config::ModuleGenRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::module::ModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_logging::TracingSetup;
 use fedimint_server::config::io::{
     read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG,
 };
 use fedimint_server::consensus::FedimintConsensus;
-use fedimint_server::logging::TracingSetup;
 use fedimint_server::FedimintServer;
 use futures::FutureExt;
 use tokio::select;

@@ -546,6 +546,7 @@
             "fedimint-dbtool"
             "fedimint-rocksdb"
             "fedimint-server"
+            "fedimint-logging"
             "gateway/ln-gateway"
             "modules"
           ];
@@ -572,8 +573,8 @@
             "fedimint-derive"
             "fedimint-dbtool"
             "fedimint-rocksdb"
-            "fedimint-server"
             "fedimint-build"
+            "fedimint-logging"
             "gateway/ln-gateway"
             "gateway/cli"
             "modules"
@@ -602,6 +603,7 @@
             "fedimint-dbtool"
             "fedimint-rocksdb"
             "fedimint-sqlite"
+            "fedimint-logging"
             "modules"
           ];
         };

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_core::config::FederationId;
-use fedimint_server::logging::TracingSetup;
+use fedimint_logging::TracingSetup;
 use ln_gateway::config::GatewayConfig;
 use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::rpc::{

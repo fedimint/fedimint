@@ -13,6 +13,7 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::TransactionId;
+use fedimint_logging::LOG_NET_API;
 use futures::FutureExt;
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::types::error::CallError;
@@ -22,7 +23,6 @@ use tracing::{debug, error};
 
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
-use crate::logging::LOG_NET_API;
 use crate::transaction::SerdeTransaction;
 
 /// A state of fedimint server passed to each rpc handler callback

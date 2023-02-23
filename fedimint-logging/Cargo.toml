@@ -1,0 +1,25 @@
+[package]
+name = "fedimint-logging"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "contains some utilities for logging and tracing"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "fedimint_logging"
+path = "src/lib.rs"
+
+[features]
+telemetry = ["tracing-opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "console-subscriber"]
+
+[dependencies]
+anyhow = "1.0.66"
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+tracing-opentelemetry = { version = "0.18.0", optional = true}
+opentelemetry = { version = "0.18.0", optional = true }
+opentelemetry-jaeger = { version = "0.17.0", optional = true }
+console-subscriber = { version = "0.1.8", optional = true }
+tracing-chrome = { version = "0.7.0", optional = true}

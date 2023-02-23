@@ -18,6 +18,7 @@ use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId};
+use fedimint_logging::LOG_ECASH_RECOVERY;
 use fedimint_mint::{BackupRequest, SignedBackupRequest};
 use tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 use tracing::{error, info};
@@ -25,7 +26,6 @@ use tracing::{error, info};
 use super::db::NextECashNoteIndexKeyPrefix;
 use super::*;
 use crate::api::MintFederationApi;
-use crate::logging::LOG_ECASH_RECOVERY;
 use crate::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 
 impl MintClient {

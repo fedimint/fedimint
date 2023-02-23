@@ -24,7 +24,7 @@ use std::time::Duration;
 use anyhow::Result;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::FederationId;
-use fedimint_server::logging::TracingSetup;
+use fedimint_logging::TracingSetup;
 use fixtures::{fixtures, Fixtures};
 use ln_gateway::rpc::rpc_client::{Error, Response, RpcClient};
 use ln_gateway::rpc::{

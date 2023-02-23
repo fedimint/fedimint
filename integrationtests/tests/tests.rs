@@ -9,6 +9,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::LightningConsensusItem;
+use fedimint_logging::LOG_TEST;
 use fedimint_mint::{MintConsensusItem, MintOutputSignatureShare};
 use fedimint_server::consensus::TransactionSubmissionError::{
     TransactionError, TransactionReplayError,
@@ -19,7 +20,6 @@ use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
-use mint_client::logging::LOG_TEST;
 use mint_client::mint::MintClient;
 use mint_client::transaction::legacy::Output;
 use mint_client::transaction::TransactionBuilder;

@@ -4,15 +4,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_core::config::{FederationId, ModuleGenRegistry};
+use fedimint_core::api::{
+    DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
+};
+use fedimint_core::config::{load_from_file, FederationId, ModuleGenRegistry};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::dyn_newtype_define;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_server::api::{
-    DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
-};
-use fedimint_server::config::load_from_file;
 use mint_client::{module_decode_stubs, Client, GatewayClientConfig};
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};

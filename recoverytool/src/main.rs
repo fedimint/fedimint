@@ -17,6 +17,7 @@ use fedimint_core::core::{
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_ln::common::LightningDecoder;
+use fedimint_logging::TracingSetup;
 use fedimint_mint::common::MintDecoder;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
@@ -33,7 +34,6 @@ use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
 use serde::Serialize;
-use tracing_subscriber::EnvFilter;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
@@ -97,14 +97,8 @@ fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 32]> {
 }
 
 #[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("error,mint_client=info,fedimint_cli=info")),
-        )
-        .with_writer(std::io::stderr)
-        .init();
+async fn main() -> anyhow::Result<()> {
+    TracingSetup::default().init()?;
 
     let opts: RecoveryTool = RecoveryTool::parse();
 
@@ -217,6 +211,8 @@ async fn main() {
                 .expect("Could not encode to stdout")
         }
     }
+
+    Ok(())
 }
 
 fn input_tweaks_output_present(
