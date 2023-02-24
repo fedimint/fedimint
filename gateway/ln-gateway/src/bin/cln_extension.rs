@@ -47,7 +47,9 @@ pub struct ClnExtensionOpts {
 // within cln-plugin
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let (service, listen) = ClnRpcService::new()
+    let tg = TaskGroup::new();
+
+    let (service, listen) = ClnRpcService::new(tg.clone())
         .await
         .expect("Failed to create cln rpc service");
 
@@ -58,7 +60,12 @@ async fn main() -> Result<(), anyhow::Error> {
 
     Server::builder()
         .add_service(GatewayLightningServer::new(service))
-        .serve(listen)
+        .serve_with_shutdown(listen, async {
+            // Wait for a shutdown signal received from the controlling task group
+            // The plugin will be shutdown when this callback returns
+            let shutdown_rx = tg.make_handle().make_shutdown_rx().await;
+            let _ = shutdown_rx.await;
+        })
         .await
         .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
 
@@ -113,8 +120,8 @@ pub struct ClnRpcService {
 }
 
 impl ClnRpcService {
-    pub async fn new() -> Result<(Self, SocketAddr), ClnExtensionError> {
-        let interceptor = Arc::new(ClnHtlcInterceptor::new());
+    pub async fn new(task_group: TaskGroup) -> Result<(Self, SocketAddr), ClnExtensionError> {
+        let interceptor = Arc::new(ClnHtlcInterceptor::new(task_group.clone()));
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
@@ -134,6 +141,22 @@ impl ClnRpcService {
                         // by passing the HTLC to the interceptor in the plugin state
                         let payload: HtlcAccepted = serde_json::from_value(value)?;
                         Ok(plugin.state().intercept_htlc(payload).await)
+                    });
+                    handle.await?
+                },
+            )
+            // Shutdown the plugin when lightningd is shutting down or when the plugin is stopped
+            // via `plugin stop` command. There's a chance that the subscription is never called in
+            // case lightningd crashes or aborts.
+            // For details, see documentation for `shutdown` event notification:
+            // https://lightning.readthedocs.io/PLUGINS.html?highlight=shutdown#shutdown
+            .subscribe(
+                "shutdown",
+                |plugin: Plugin<Arc<ClnHtlcInterceptor>>, _: serde_json::Value| async move {
+                    info!("Received shutdown event ... gracefully shutting down the plugin");
+                    let handle = tokio::spawn(async move {
+                        plugin.state().shutdown().await;
+                        Ok(())
                     });
                     handle.await?
                 },
@@ -166,7 +189,7 @@ impl ClnRpcService {
             Ok((
                 Self {
                     socket,
-                    task_group: TaskGroup::new(),
+                    task_group,
                     interceptor,
                 },
                 listen,
@@ -491,14 +514,20 @@ type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 struct ClnHtlcInterceptor {
     subscriptions: Arc<Mutex<HashMap<u64, HtlcSubscriptionSender>>>,
     pub outcomes: Arc<Mutex<HashMap<sha256::Hash, HtlcOutcomeSender>>>,
+    task_group: TaskGroup,
 }
 
 impl ClnHtlcInterceptor {
-    fn new() -> Self {
+    fn new(task_group: TaskGroup) -> Self {
         Self {
             subscriptions: Arc::new(Mutex::new(HashMap::new())),
             outcomes: Arc::new(Mutex::new(HashMap::new())),
+            task_group,
         }
+    }
+
+    async fn shutdown(&self) {
+        self.task_group.shutdown().await;
     }
 
     async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
