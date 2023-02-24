@@ -167,7 +167,7 @@ impl Serialize for PendingTransaction {
 
 /// A PSBT that is awaiting enough signatures from the federation to becoming a
 /// `PendingTransaction`
-#[derive(Clone, Debug, Encodable, Decodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
 pub struct UnsignedTransaction {
     pub psbt: PartiallySignedTransaction,
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
@@ -708,8 +708,8 @@ impl ServerModule for Wallet {
             ))
             .into_module_error_other();
         }
-        if self.create_peg_out_tx(dbtx, output).await.is_none() {
-            return Err(WalletError::NotEnoughSpendableUTXO).into_module_error_other();
+        if let Err(err) = self.create_peg_out_tx(dbtx, output).await {
+            return Err(err).into_module_error_other();
         }
         Ok(TransactionItemAmount {
             amount: (output.amount + output.fees.amount()).into(),
@@ -904,7 +904,7 @@ impl ServerModule for Wallet {
                         &consensus.randomness_beacon
                     );
 
-                    Ok(tx.map(|tx| tx.fees))
+                    Ok(tx.map(|tx| tx.fees).ok())
                 }
             },
         ]
@@ -1336,7 +1336,7 @@ impl Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         peg_out: &PegOut,
-    ) -> Option<UnsignedTransaction> {
+    ) -> Result<UnsignedTransaction, WalletError> {
         let change_tweak = self
             .current_round_consensus(dbtx)
             .await
@@ -1394,7 +1394,12 @@ impl<'a> StatelessWallet<'a> {
         mut utxos: Vec<(UTXOKey, SpendableUTXO)>,
         fee_rate: Feerate,
         change_tweak: &[u8],
-    ) -> Option<UnsignedTransaction> {
+    ) -> Result<UnsignedTransaction, WalletError> {
+        // If the peg out amount is under the dust limit fail immediately
+        if peg_out_amount < destination.dust_value() {
+            return Err(WalletError::PegOutUnderDustLimit);
+        }
+
         // When building a transaction we need to take care of two things:
         //  * We need enough input amount to fund all outputs
         //  * We need to keep an eye on the tx weight so we can factor the fees into out
@@ -1436,7 +1441,7 @@ impl<'a> StatelessWallet<'a> {
                     fees = fee_rate.calculate_fee(total_weight);
                     selected_utxos.push((utxo_key, utxo));
                 }
-                _ => return None, // Not enough UTXOs
+                _ => return Err(WalletError::NotEnoughSpendableUTXO), // Not enough UTXOs
             }
         }
 
@@ -1537,7 +1542,7 @@ impl<'a> StatelessWallet<'a> {
             outputs: vec![Default::default(), change_out],
         };
 
-        Some(UnsignedTransaction {
+        Ok(UnsignedTransaction {
             psbt,
             signatures: vec![],
             change,
@@ -1728,6 +1733,8 @@ pub enum WalletError {
     PegOutFeeRate(Feerate, Feerate),
     #[error("Not enough SpendableUTXO")]
     NotEnoughSpendableUTXO,
+    #[error("Peg out amount was under the dust limit")]
+    PegOutUnderDustLimit,
 }
 
 #[derive(Debug, Error)]
@@ -1760,3 +1767,80 @@ impl PartialEq for WalletError {
 
 /// **WARNING**: this is only intended to be used for testing
 impl Eq for WalletError {}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use bitcoin::{Address, Amount, OutPoint};
+    use fedimint_core::Feerate;
+    use miniscript::descriptor::Wsh;
+
+    use crate::{
+        CompressedPublicKey, OsRng, PegInDescriptor, SpendableUTXO, StatelessWallet, UTXOKey,
+        WalletError,
+    };
+
+    #[test]
+    fn create_tx_should_validate_amounts() {
+        let secp = secp256k1::Secp256k1::new();
+
+        let descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                3,
+                (0..4)
+                    .map(|_| secp.generate_keypair(&mut OsRng))
+                    .map(|(_, key)| CompressedPublicKey { key })
+                    .collect(),
+            )
+            .unwrap(),
+        );
+
+        let (secret_key, _) = secp.generate_keypair(&mut OsRng);
+
+        let wallet = StatelessWallet {
+            descriptor: &descriptor,
+            secret_key: &secret_key,
+            secp: &secp,
+        };
+
+        let spendable = SpendableUTXO {
+            tweak: [0; 32],
+            amount: Amount::from_sat(2000),
+        };
+
+        let destination = Address::from_str("msFGPqHVk8rbARMd69FfGYxwcboZLemdBi")
+            .unwrap()
+            .script_pubkey();
+
+        // not enough SpendableUTXO
+        let tx = wallet.create_tx(
+            Amount::from_sat(2000),
+            destination.clone(),
+            vec![(UTXOKey(OutPoint::null()), spendable.clone())],
+            Feerate { sats_per_kvb: 0 },
+            &[],
+        );
+        assert_eq!(tx, Err(WalletError::NotEnoughSpendableUTXO));
+
+        // peg out amount is under dust limit
+        let tx = wallet.create_tx(
+            Amount::from_sat(1),
+            destination.clone(),
+            vec![(UTXOKey(OutPoint::null()), spendable.clone())],
+            Feerate { sats_per_kvb: 0 },
+            &[],
+        );
+        assert_eq!(tx, Err(WalletError::PegOutUnderDustLimit));
+
+        // successful tx creation
+        let tx = wallet.create_tx(
+            Amount::from_sat(1000),
+            destination,
+            vec![(UTXOKey(OutPoint::null()), spendable)],
+            Feerate { sats_per_kvb: 0 },
+            &[],
+        );
+        assert!(tx.is_ok());
+    }
+}
