@@ -268,7 +268,7 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
 /// A type that has a `Dyn*`, type erased version of itself
 pub trait IntoDynInstance {
     /// The type erased version of the type implementing this trait
-    type DynType;
+    type DynType: 'static;
 
     /// Convert `self` into its type-erased equivalent
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType;
@@ -303,7 +303,6 @@ impl DecoderBuilder {
     pub fn with_decodable_type<Type>(&mut self)
     where
         Type: IntoDynInstance + Decodable,
-        Type::DynType: 'static,
     {
         // TODO: enforce that all decoders are for the same module kind (+fix docs
         // after)
