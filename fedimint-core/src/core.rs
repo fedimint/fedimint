@@ -170,7 +170,7 @@ macro_rules! module_plugin_trait_define{
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl {
-    ($key:expr, $input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
+    ($input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
         impl fedimint_core::core::Input for $input {}
 
         impl fedimint_core::core::IntoDynInstance for $input {

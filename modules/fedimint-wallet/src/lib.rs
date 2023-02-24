@@ -1707,7 +1707,6 @@ impl PartialEq for PegOutSignatureItem {
 impl Eq for PegOutSignatureItem {}
 
 plugin_types_trait_impl!(
-    fedimint_core::core::MODULE_KEY_WALLET,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,

@@ -1190,7 +1190,6 @@ impl Extend<(Amount, BlindNonce)> for MintOutput {
 }
 
 plugin_types_trait_impl!(
-    fedimint_core::core::MODULE_KEY_MINT,
     MintInput,
     MintOutput,
     MintOutputOutcome,
