@@ -38,7 +38,7 @@ jobs:
         # is not supported and workarounds are very gnarly
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         with:
           target: ${{ matrix.target }}
