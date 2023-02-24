@@ -174,6 +174,12 @@
           (attr: target: targets.${target.name}.stable.rust-std)
           crossTargets));
 
+        fenixToolchainCrossWasm = with fenix.packages.${system}; combine ([
+          stable.cargo
+          stable.rustc
+          targets.wasm32-unknown-unknown.stable.rust-std
+        ]);
+
         fenixToolchainCross = builtins.mapAttrs
           (attr: target: with fenix.packages.${system}; combine [
             stable.cargo
@@ -775,6 +781,13 @@
                 # Android NDK not available for Arm MacOS
                 (if isArch64Darwin then "" else androidCrossEnvVars)
                 + wasm32CrossEnvVars;
+            });
+
+            # Like `cross` but only with wasm
+            crossWasm = pkgs.mkShell (shellCommon // {
+              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchainCrossWasm ];
+
+              shellHook = shellCommon.shellHook + wasm32CrossEnvVars;
             });
 
             # this shell is used only in CI, so it should contain minimum amount

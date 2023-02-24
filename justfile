@@ -30,7 +30,8 @@ lint:
   cargo doc --profile dev --no-deps --document-private-items
 
 final-check: lint
-  nix build -L .#cross.wasm32-unknown-unknown.client-pkgs
+  cargo test --doc
+  nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package mint-client
   just test
 
 clippy:
