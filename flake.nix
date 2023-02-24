@@ -368,6 +368,11 @@
           cargoArtifacts = workspaceDeps;
         });
 
+        workspaceTestDoc = craneLib.cargoTest (commonArgs // {
+          cargoTestExtraArgs = "--doc";
+          cargoArtifacts = workspaceDeps;
+        });
+
         workspaceClippy = craneLib.cargoClippy (commonArgs // {
           cargoArtifacts = workspaceDeps;
 
@@ -650,6 +655,7 @@
             workspaceBuild
             workspaceClippy
             workspaceTest
+            workspaceTestDoc
             workspaceDoc
             workspaceCov
             workspaceAudit;

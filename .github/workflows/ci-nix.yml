@@ -65,6 +65,9 @@ jobs:
       # - name: Test workspace
       #   run: nix build -L .#workspaceTest
 
+      - name: Test docs
+        run: nix build -L .#debug.workspaceTestDoc
+
       - name: Reconnect Tests
         run: nix build -L .#debug.cli-test.reconnect
 
