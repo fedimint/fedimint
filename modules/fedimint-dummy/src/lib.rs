@@ -318,11 +318,7 @@ impl Dummy {
     }
 }
 
-// Must be unique.
-// TODO: we need to provide guidence for allocating these
-pub const MODULE_KEY_DUMMY: u16 = 128;
 plugin_types_trait_impl!(
-    MODULE_KEY_DUMMY,
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
