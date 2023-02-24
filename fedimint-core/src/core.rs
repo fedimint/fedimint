@@ -90,9 +90,7 @@ impl From<&'static str> for ModuleKind {
 /// Fedimint code to abstract away details of mint modules.
 #[macro_export]
 macro_rules! module_dyn_newtype_impl_encode_decode {
-    (
-        $name:ident, $decode_fn:ident
-    ) => {
+    ($name:ident) => {
         impl Encodable for $name {
             fn consensus_encode<W: std::io::Write>(
                 &self,
@@ -107,8 +105,8 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             fn consensus_decode<R: std::io::Read>(
                 reader: &mut R,
                 modules: &$crate::module::registry::ModuleDecoderRegistry,
-            ) -> Result<Self, DecodeError> {
-                let key = ModuleInstanceId::consensus_decode(reader, modules)?;
+            ) -> Result<Self, fedimint_core::encoding::DecodeError> {
+                let key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
                 modules.get_expect(key).decode(reader, key)
             }
         }
@@ -270,7 +268,7 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
 /// A type that has a `Dyn*`, type erased version of itself
 pub trait IntoDynInstance {
     /// The type erased version of the type implementing this trait
-    type DynType;
+    type DynType: 'static;
 
     /// Convert `self` into its type-erased equivalent
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType;
@@ -305,7 +303,6 @@ impl DecoderBuilder {
     pub fn with_decodable_type<Type>(&mut self)
     where
         Type: IntoDynInstance + Decodable,
-        Type::DynType: 'static,
     {
         // TODO: enforce that all decoders are for the same module kind (+fix docs
         // after)
@@ -385,9 +382,8 @@ dyn_newtype_define_with_instance_id! {
     /// An owned, immutable input to a [`Transaction`]
     pub DynInput(Box<IInput>)
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynInput, decode_input
-}
+module_dyn_newtype_impl_encode_decode!(DynInput);
+
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynInput);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynInput);
@@ -415,9 +411,8 @@ module_plugin_trait_define! {
         erased_eq_no_instance_id!(DynOutput);
     }
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynOutput, decode_output
-}
+module_dyn_newtype_impl_encode_decode!(DynOutput);
+
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutput);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynOutput);
@@ -446,9 +441,7 @@ module_plugin_trait_define! {
         erased_eq_no_instance_id!(DynOutputOutcome);
     }
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynOutputOutcome, decode_output_outcome
-}
+module_dyn_newtype_impl_encode_decode!(DynOutputOutcome);
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutputOutcome);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynOutputOutcome);
@@ -474,9 +467,8 @@ module_plugin_trait_define! {
         erased_eq_no_instance_id!(DynModuleConsensusItem);
     }
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynModuleConsensusItem, decode_consensus_item
-}
+module_dyn_newtype_impl_encode_decode!(DynModuleConsensusItem);
+
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynModuleConsensusItem);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynModuleConsensusItem);
