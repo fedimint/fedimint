@@ -8,8 +8,8 @@ pub use common::{BackupRequest, SignedBackupRequest};
 use config::FeeConsensus;
 use db::{ECashUserBackupSnapshot, EcashBackupKey, NonceKeyPrefix};
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
-    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
@@ -20,9 +20,8 @@ use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
     InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
-    TransactionItemAmount,
+    PeerHandle, TransactionItemAmount,
 };
-use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
 use fedimint_core::tiered::InvalidAmountTierError;
@@ -33,11 +32,10 @@ use fedimint_core::{
 #[cfg(feature = "server")]
 use fedimint_server::config::distributedgen::scalar;
 #[cfg(feature = "server")]
-use fedimint_server::config::distributedgen::DkgRunner;
+use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use impl_tools::autoimpl;
 use itertools::Itertools;
-use rand::rngs::OsRng;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use secp256k1_zkp::SECP256K1;
 use serde::{Deserialize, Serialize};
@@ -231,10 +229,7 @@ impl ModuleGen for MintGen {
     #[cfg(not(feature = "server"))]
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_instance_id: ModuleInstanceId,
-        peers: &[PeerId],
+        peers: &PeerHandle,
         _params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         unimplemented!()
@@ -243,24 +238,12 @@ impl ModuleGen for MintGen {
     #[cfg(feature = "server")]
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_instance_id: ModuleInstanceId,
-        peers: &[PeerId],
+        peers: &PeerHandle,
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = params.get::<MintGenParams>().expect("Invalid mint params");
 
-        let mut dkg = DkgRunner::multi(
-            params.mint_amounts.to_vec(),
-            peers.threshold(),
-            our_id,
-            peers,
-        );
-
-        let g2 = dkg
-            .run_g2(module_instance_id, connections, &mut OsRng)
-            .await?;
+        let g2 = peers.run_dkg_multi_g2(params.mint_amounts.to_vec()).await?;
 
         let amounts_keys = g2
             .into_iter()
@@ -276,6 +259,7 @@ impl ModuleGen for MintGen {
             },
             consensus: MintConfigConsensus {
                 peer_tbs_pks: peers
+                    .peer_ids()
                     .iter()
                     .map(|peer| {
                         let pks = amounts_keys

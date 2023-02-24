@@ -304,10 +304,7 @@ pub trait IModuleGen: Debug {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_id: ModuleInstanceId,
-        peers: &[PeerId],
+        peers: &PeerHandle,
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig>;
 
@@ -458,10 +455,7 @@ pub trait ModuleGen: Debug + Sized {
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_id: ModuleInstanceId,
-        peers: &[PeerId],
+        peer: &PeerHandle,
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig>;
 
@@ -524,14 +518,10 @@ where
 
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_id: ModuleInstanceId,
-        peers: &[PeerId],
+        peers: &PeerHandle,
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
-        <Self as ModuleGen>::distributed_gen(self, connections, our_id, module_id, peers, params)
-            .await
+        <Self as ModuleGen>::distributed_gen(self, peers, params).await
     }
 
     fn to_config_response(
@@ -807,5 +797,44 @@ impl<T: Encodable + Decodable> SerdeModuleEncoding<T> {
     pub fn try_into_inner(&self, modules: &ModuleDecoderRegistry) -> Result<T, DecodeError> {
         let mut reader = std::io::Cursor::new(&self.0);
         Decodable::consensus_decode(&mut reader, modules)
+    }
+}
+
+/// A handle passed to [`ModuleGen::distributed_gen`]
+///
+/// This struct encapsulates dkg data that the module should not have a direct
+/// access to, and implements higher level dkg operations available to the
+/// module to complete its distributed initialization inside the federation.
+#[non_exhaustive]
+pub struct PeerHandle<'a> {
+    // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccesible
+    // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
+    #[doc(hidden)]
+    pub connections: &'a MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+    #[doc(hidden)]
+    pub module_instance_id: ModuleInstanceId,
+    #[doc(hidden)]
+    pub our_id: PeerId,
+    #[doc(hidden)]
+    pub peers: Vec<PeerId>,
+}
+
+impl<'a> PeerHandle<'a> {
+    pub fn new(
+        connections: &'a MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        module_instance_id: ModuleInstanceId,
+        our_id: PeerId,
+        peers: Vec<PeerId>,
+    ) -> Self {
+        Self {
+            connections,
+            module_instance_id,
+            our_id,
+            peers,
+        }
+    }
+
+    pub fn peer_ids(&self) -> &[PeerId] {
+        self.peers.as_slice()
     }
 }

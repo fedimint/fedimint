@@ -4,9 +4,12 @@ use std::hash::Hash;
 use std::io::Write;
 
 use anyhow::{ensure, format_err};
+use async_trait::async_trait;
+use bitcoin::secp256k1;
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use fedimint_core::config::{DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage};
 use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::module::PeerHandle;
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::{BitcoinHash, PeerId};
 use hbbft::crypto::poly::Commitment;
@@ -471,5 +474,76 @@ mod tests {
         }
 
         keys
+    }
+}
+
+// TODO: this trait is only needed to break the `DkgHandle` impl
+// from it's defintion that is still in `fedimint-core`
+#[async_trait]
+pub trait PeerHandleOps {
+    async fn run_dkg_g1<T>(&self, v: T) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>>
+    where
+        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync;
+
+    async fn run_dkg_multi_g2<T>(&self, v: Vec<T>) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>>
+    where
+        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync;
+
+    async fn exchange_pubkeys(
+        &self,
+        key: secp256k1::PublicKey,
+    ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>>;
+}
+
+#[async_trait]
+impl<'a> PeerHandleOps for PeerHandle<'a> {
+    async fn run_dkg_g1<T>(&self, v: T) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>>
+    where
+        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
+    {
+        let mut dkg = DkgRunner::new(v, self.peers.threshold(), &self.our_id, &self.peers);
+        dkg.run_g1(self.module_instance_id, self.connections, &mut OsRng)
+            .await
+    }
+
+    async fn run_dkg_multi_g2<T>(&self, v: Vec<T>) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>>
+    where
+        T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
+    {
+        let mut dkg = DkgRunner::multi(v, self.peers.threshold(), &self.our_id, &self.peers);
+
+        dkg.run_g2(self.module_instance_id, self.connections, &mut OsRng)
+            .await
+    }
+
+    async fn exchange_pubkeys(
+        &self,
+        key: secp256k1::PublicKey,
+    ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>> {
+        let mut peer_peg_in_keys: BTreeMap<PeerId, secp256k1::PublicKey> = BTreeMap::new();
+
+        self.connections
+            .send(
+                &self.peers,
+                self.module_instance_id,
+                DkgPeerMsg::PublicKey(key),
+            )
+            .await?;
+
+        peer_peg_in_keys.insert(self.our_id, key);
+        while peer_peg_in_keys.len() < self.peers.len() {
+            match self.connections.receive(self.module_instance_id).await? {
+                (peer, DkgPeerMsg::PublicKey(key)) => {
+                    peer_peg_in_keys.insert(peer, key);
+                }
+                (peer, msg) => {
+                    return Err(
+                        format_err!("Invalid message received from: {peer}: {msg:?}").into(),
+                    );
+                }
+            }
+        }
+
+        Ok(peer_peg_in_keys)
     }
 }

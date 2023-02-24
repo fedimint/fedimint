@@ -21,8 +21,8 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
 use db::{DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{
     Decoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -34,9 +34,8 @@ use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
     InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
-    TransactionItemAmount,
+    PeerHandle, TransactionItemAmount,
 };
-use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::SystemTime;
@@ -45,7 +44,7 @@ use fedimint_core::{
     OutPoint, PeerId, ServerModule,
 };
 #[cfg(feature = "server")]
-use fedimint_server::config::distributedgen::DkgRunner;
+use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use itertools::Itertools;
 use rand::rngs::OsRng;
@@ -312,10 +311,7 @@ impl ModuleGen for LightningGen {
     #[cfg(not(feature = "server"))]
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_instance_id: ModuleInstanceId,
-        peers: &[PeerId],
+        _peers: &PeerHandle,
         _params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         unimplemented!()
@@ -324,16 +320,10 @@ impl ModuleGen for LightningGen {
     #[cfg(feature = "server")]
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_instance_id: ModuleInstanceId,
-        peers: &[PeerId],
+        peers: &PeerHandle,
         _params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
-        let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
-        let g1 = dkg
-            .run_g1(module_instance_id, connections, &mut OsRng)
-            .await?;
+        let g1 = peers.run_dkg_g1(()).await?;
 
         let keys = g1[&()].threshold_crypto();
 
