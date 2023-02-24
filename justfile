@@ -1,11 +1,17 @@
 default:
   @just --list
 
+# run `cargo build` on everything
+build:
+  cargo build --all --all-targets
+
+# run `cargo check` on everything
 check:
   cargo check --all --all-targets
 
-build:
-  cargo build --all --all-targets
+# run `cargo clippy` on everything
+clippy:
+  cargo clippy --all --all-targets
 
 # check if ulimit is set correctly
 check-ulimit:
@@ -14,28 +20,29 @@ check-ulimit:
       >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
   fi
 
+# run tests
 test: build check-ulimit
   cargo test
+
+# run tests against real services (like bitcoind)
+test-real: check-ulimit
+  ./scripts/rust-tests.sh
 
 # show number of tests per package
 test-count:
   ./scripts/test-cov.sh
 
-test-real: check-ulimit
-  ./scripts/rust-tests.sh
-
+# run lints (quick)
 lint:
   env NO_STASH=true misc/git-hooks/pre-commit
   just clippy
   cargo doc --profile dev --no-deps --document-private-items
 
+# run all checks recommended before opening a PR
 final-check: lint
   cargo test --doc
   nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package mint-client
   just test
-
-clippy:
-  cargo clippy --all --all-targets
 
 # check files you've touched for spelling errors
 spell:
@@ -55,9 +62,11 @@ spell-fix-all:
    @>&2 echo '💡 Valid new words can be added to dictionary in `.config/spellcheck.dic`'
    cargo spellcheck fix
 
+# run code formatters
 format:
   cargo fmt --all
   nixpkgs-fmt $(echo **.nix)
 
+# start tmuxinator with a dev federation setup
 tmuxinator:
   ./scripts/tmuxinator.sh
