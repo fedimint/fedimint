@@ -32,6 +32,7 @@ use mint_client::utils::{
 use mint_client::{module_decode_stubs, Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use url::Url;
 
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
@@ -101,6 +102,11 @@ enum CliOutput {
 
     ConnectInfo {
         connect_info: WsClientConnectInfo,
+    },
+
+    DecodeConnectInfo {
+        urls: Vec<Url>,
+        id: FederationId,
     },
 
     JoinFederation {
@@ -274,6 +280,9 @@ enum Command {
 
     /// Wait for the fed to reach a consensus block height
     WaitBlockHeight { height: u64 },
+
+    /// Decode connection info into its JSON representation
+    DecodeConnectInfo { connect_info: WsClientConnectInfo },
 
     /// Config enabling client to establish websocket connection to federation
     ConnectInfo,
@@ -619,6 +628,10 @@ async fn handle_command(
                 connect_info: (info),
             })
         }
+        Command::DecodeConnectInfo { connect_info } => Ok(CliOutput::DecodeConnectInfo {
+            urls: connect_info.urls,
+            id: connect_info.id,
+        }),
         Command::JoinFederation { .. } => {
             unreachable!()
         }
