@@ -591,7 +591,7 @@ struct FederationMember<C> {
 /// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WsClientConnectInfo {
     /// Urls that support the federation API (expected to be in PeerId order)
     pub urls: Vec<Url>,

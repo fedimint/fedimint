@@ -29,6 +29,14 @@ CONNECT_STRING=$(cat $FM_CFG_DIR/client-connect)
 rm $FM_CFG_DIR/client.json
 $FM_MINT_CLIENT join-federation "$CONNECT_STRING"
 
+FED_ID="$(get_federation_id)"
+[[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.id')" = "${FED_ID}" ]]
+# Number required for one honest is ceil(($FM_FED_SIZE-1)/3+1)
+ONE_HONEST=2
+for ((ID = 0; ID < $ONE_HONEST; ID++)); do
+[[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq --argjson id $ID -e -r '.urls[$id]')" = "$(cat $FM_CFG_DIR/client.json | jq --argjson id $ID -e -r '.nodes[$id] | .url')" ]]
+done
+
 # reissue
 NOTES=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.note')
 [[ $($FM_MINT_CLIENT info | jq -e -r '.total_amount') = "9958000" ]]
@@ -54,7 +62,6 @@ await_cln_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
-FED_ID="$(get_federation_id)"
 LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -e -r '.balance_msat')"
 [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
 INVOICE_RESULT="$($FM_LN2 waitinvoice test)"
