@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_core::config::{load_from_file, ClientConfig, ModuleGenRegistry};
+use fedimint_core::config::{load_from_file, ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::module::DynModuleGen;
 use fedimint_core::query::EventuallyConsistent;
@@ -79,7 +79,7 @@ enum CliOutput {
     },
 
     Info {
-        federation_id: String,
+        federation_id: FederationId,
         network: Network,
         meta: BTreeMap<String, String>,
         total_amount: Amount,
@@ -518,7 +518,7 @@ async fn handle_command(
                 .collect();
 
             Ok(CliOutput::Info {
-                federation_id: client.config().as_ref().federation_id.to_string(),
+                federation_id: client.config().as_ref().federation_id.clone(),
                 network: client.wallet_client().config.network,
                 meta: client.config().0.meta,
                 total_amount: (notes.total_amount()),

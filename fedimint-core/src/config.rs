@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::ops::Mul;
 use std::path::Path;
@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use anyhow::{bail, format_err};
 use bitcoin::secp256k1;
-use bitcoin_hashes::hex::{FromHex, ToHex};
+use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use fedimint_core::cancellable::Cancelled;
@@ -138,6 +138,12 @@ pub struct ConfigResponse {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable)]
 pub struct FederationId(pub threshold_crypto::PublicKey);
 
+impl Display for FederationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        format_hex(&self.0.to_bytes(), f)
+    }
+}
+
 /// Display as a hex encoding
 impl FederationId {
     /// Non-unique dummy id for testing
@@ -147,12 +153,6 @@ impl FederationId {
 
     fn try_from_bytes(bytes: [u8; 48]) -> Option<Self> {
         Some(Self(threshold_crypto::PublicKey::from_bytes(bytes).ok()?))
-    }
-}
-
-impl ToString for FederationId {
-    fn to_string(&self) -> String {
-        self.0.to_bytes().to_hex()
     }
 }
 
