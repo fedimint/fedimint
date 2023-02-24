@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
-use fedimint_core::{impl_db_prefix_const, PeerId, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -35,10 +35,13 @@ pub struct AcceptedTransactionKey(pub TransactionId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct AcceptedTransactionKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = AcceptedTransactionKey,
     value = AcceptedTransaction,
     db_prefix = DbKeyPrefix::AcceptedTransaction,
+);
+impl_db_lookup!(
+    key = AcceptedTransactionKey,
     query_prefix = AcceptedTransactionKeyPrefix
 );
 
@@ -48,10 +51,13 @@ pub struct RejectedTransactionKey(pub TransactionId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct RejectedTransactionKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = RejectedTransactionKey,
     value = String,
     db_prefix = DbKeyPrefix::RejectedTransaction,
+);
+impl_db_lookup!(
+    key = RejectedTransactionKey,
     query_prefix = RejectedTransactionKeyPrefix
 );
 
@@ -61,12 +67,12 @@ pub struct DropPeerKey(pub PeerId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct DropPeerKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = DropPeerKey,
     value = (),
     db_prefix = DbKeyPrefix::DropPeer,
-    query_prefix = DropPeerKeyPrefix
 );
+impl_db_lookup!(key = DropPeerKey, query_prefix = DropPeerKeyPrefix);
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
 pub struct EpochHistoryKey(pub u64);
@@ -74,17 +80,17 @@ pub struct EpochHistoryKey(pub u64);
 #[derive(Debug, Encodable, Decodable)]
 pub struct EpochHistoryKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = EpochHistoryKey,
     value = SignedEpochOutcome,
     db_prefix = DbKeyPrefix::EpochHistory,
-    query_prefix = EpochHistoryKeyPrefix
 );
+impl_db_lookup!(key = EpochHistoryKey, query_prefix = EpochHistoryKeyPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LastEpochKey;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = LastEpochKey,
     value = EpochHistoryKey,
     db_prefix = DbKeyPrefix::LastEpoch
@@ -96,10 +102,13 @@ pub struct ClientConfigSignatureKey;
 #[derive(Debug, Encodable, Decodable)]
 pub struct ClientConfigSignatureKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ClientConfigSignatureKey,
     value = SerdeSignature,
     db_prefix = DbKeyPrefix::ClientConfigSignature,
+);
+impl_db_lookup!(
+    key = ClientConfigSignatureKey,
     query_prefix = ClientConfigSignatureKeyPrefix
 );
 

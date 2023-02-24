@@ -1,6 +1,6 @@
 use bitcoin::{BlockHash, Txid};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_prefix_const;
+use fedimint_core::{impl_db_lookup, impl_db_record};
 use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -33,12 +33,12 @@ pub struct BlockHashKey(pub BlockHash);
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct BlockHashKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = BlockHashKey,
     value = (),
     db_prefix = DbKeyPrefix::BlockHash,
-    query_prefix = BlockHashKeyPrefix
 );
+impl_db_lookup!(key = BlockHashKey, query_prefix = BlockHashKeyPrefix);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct UTXOKey(pub bitcoin::OutPoint);
@@ -46,17 +46,17 @@ pub struct UTXOKey(pub bitcoin::OutPoint);
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UTXOPrefixKey;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = UTXOKey,
     value = SpendableUTXO,
     db_prefix = DbKeyPrefix::Utxo,
-    query_prefix = UTXOPrefixKey
 );
+impl_db_lookup!(key = UTXOKey, query_prefix = UTXOPrefixKey);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct RoundConsensusKey;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = RoundConsensusKey,
     value = RoundConsensus,
     db_prefix = DbKeyPrefix::RoundConsensus,
@@ -68,10 +68,13 @@ pub struct UnsignedTransactionKey(pub Txid);
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct UnsignedTransactionPrefixKey;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = UnsignedTransactionKey,
     value = UnsignedTransaction,
     db_prefix = DbKeyPrefix::UnsignedTransaction,
+);
+impl_db_lookup!(
+    key = UnsignedTransactionKey,
     query_prefix = UnsignedTransactionPrefixKey
 );
 
@@ -81,10 +84,13 @@ pub struct PendingTransactionKey(pub Txid);
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PendingTransactionPrefixKey;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = PendingTransactionKey,
     value = PendingTransaction,
     db_prefix = DbKeyPrefix::PendingTransaction,
+);
+impl_db_lookup!(
+    key = PendingTransactionKey,
     query_prefix = PendingTransactionPrefixKey
 );
 
@@ -94,10 +100,13 @@ pub struct PegOutTxSignatureCI(pub Txid);
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PegOutTxSignatureCIPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = PegOutTxSignatureCI,
     value = Vec<Signature>,
     db_prefix = DbKeyPrefix::PegOutTxSigCi,
+);
+impl_db_lookup!(
+    key = PegOutTxSignatureCI,
     query_prefix = PegOutTxSignatureCIPrefix
 );
 
@@ -107,9 +116,12 @@ pub struct PegOutBitcoinTransaction(pub fedimint_core::OutPoint);
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PegOutBitcoinTransactionPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = PegOutBitcoinTransaction,
     value = WalletOutputOutcome,
     db_prefix = DbKeyPrefix::PegOutBitcoinOutPoint,
+);
+impl_db_lookup!(
+    key = PegOutBitcoinTransaction,
     query_prefix = PegOutBitcoinTransactionPrefix
 );

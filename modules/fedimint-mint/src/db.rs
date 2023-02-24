@@ -1,7 +1,7 @@
 use std::time::SystemTime;
 
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_prefix_const, Amount, OutPoint, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -30,12 +30,12 @@ pub struct NonceKey(pub Nonce);
 #[derive(Debug, Encodable, Decodable)]
 pub struct NonceKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = NonceKey,
     value = (),
     db_prefix = DbKeyPrefix::NoteNonce,
-    query_prefix = NonceKeyPrefix
 );
+impl_db_lookup!(key = NonceKey, query_prefix = NonceKeyPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ProposedPartialSignatureKey {
@@ -45,10 +45,13 @@ pub struct ProposedPartialSignatureKey {
 #[derive(Debug, Encodable, Decodable)]
 pub struct ProposedPartialSignaturesKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ProposedPartialSignatureKey,
     value = MintOutputSignatureShare,
     db_prefix = DbKeyPrefix::ProposedPartialSig,
+);
+impl_db_lookup!(
+    key = ProposedPartialSignatureKey,
     query_prefix = ProposedPartialSignaturesKeyPrefix
 );
 
@@ -66,10 +69,13 @@ pub struct ReceivedPartialSignatureKeyOutputPrefix {
     pub request_id: OutPoint, // tx + output idx
 }
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ReceivedPartialSignatureKey,
     value = MintOutputSignatureShare,
     db_prefix = DbKeyPrefix::ReceivedPartialSig,
+);
+impl_db_lookup!(
+    key = ReceivedPartialSignatureKey,
     query_prefix = ReceivedPartialSignaturesKeyPrefix,
     query_prefix = ReceivedPartialSignatureKeyOutputPrefix
 );
@@ -81,10 +87,13 @@ pub struct OutputOutcomeKey(pub OutPoint);
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutputOutcomeKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = OutputOutcomeKey,
     value = MintOutputBlindSignatures,
     db_prefix = DbKeyPrefix::OutputOutcome,
+);
+impl_db_lookup!(
+    key = OutputOutcomeKey,
     query_prefix = OutputOutcomeKeyPrefix
 );
 
@@ -101,10 +110,13 @@ pub enum MintAuditItemKey {
 #[derive(Debug, Encodable, Decodable)]
 pub struct MintAuditItemKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = MintAuditItemKey,
     value = Amount,
     db_prefix = DbKeyPrefix::MintAuditItem,
+);
+impl_db_lookup!(
+    key = MintAuditItemKey,
     query_prefix = MintAuditItemKeyPrefix
 );
 
@@ -115,12 +127,12 @@ pub struct EcashBackupKey(pub secp256k1_zkp::XOnlyPublicKey);
 #[derive(Debug, Encodable, Decodable)]
 pub struct EcashBackupKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = EcashBackupKey,
     value = ECashUserBackupSnapshot,
     db_prefix = DbKeyPrefix::EcashBackup,
-    query_prefix = EcashBackupKeyPrefix
 );
+impl_db_lookup!(key = EcashBackupKey, query_prefix = EcashBackupKeyPrefix);
 
 /// User's backup, received at certain time, containing encrypted payload
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]

@@ -1,6 +1,6 @@
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_prefix_const;
+use fedimint_core::{impl_db_lookup, impl_db_record};
 use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -44,22 +44,22 @@ pub struct ExampleKeyV0(pub u64);
 #[derive(Debug, Encodable, Decodable)]
 pub struct ExampleKeyPrefixV0;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ExampleKeyV0,
     value = (),
     db_prefix = DbKeyPrefix::Example,
-    query_prefix = ExampleKeyPrefixV0
 );
 
+impl_db_lookup!(key = ExampleKeyV0, query_prefix = ExampleKeyPrefixV0);
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
 pub struct ExampleKey(pub u64, pub String);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct ExampleKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ExampleKey,
     value = (),
     db_prefix = DbKeyPrefix::Example,
-    query_prefix = ExampleKeyPrefix
 );
+impl_db_lookup!(key = ExampleKey, query_prefix = ExampleKeyPrefix);

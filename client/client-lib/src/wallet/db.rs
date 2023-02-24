@@ -1,6 +1,6 @@
 use bitcoin::Script;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_prefix_const;
+use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -24,9 +24,9 @@ pub struct PegInKey {
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct PegInPrefixKey;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = PegInKey,
     value = [u8; 32],
     db_prefix = DbKeyPrefix::PegIn,
-    query_prefix = PegInPrefixKey
 );
+impl_db_lookup!(key = PegInKey, query_prefix = PegInPrefixKey);
