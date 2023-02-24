@@ -484,6 +484,9 @@ macro_rules! async_trait_maybe_send {
 /// # Example
 ///
 /// ```rust
+/// use std::any::Any;
+///
+/// use fedimint_core::{apply, maybe_add_send};
 /// type Foo = maybe_add_send!(dyn Any);
 /// ```
 #[cfg(not(target_family = "wasm"))]

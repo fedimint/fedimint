@@ -58,11 +58,12 @@ pub struct ServerOpts {
 /// use fedimint_wallet::WalletGen;
 /// use fedimintd::fedimintd::Fedimintd;
 ///
-/// #[tokio::main]
-/// async fn main() -> anyhow::Result<()> {
+/// // Note: not called `main` to avoid rustdoc executing it
+/// // #[tokio::main]
+/// async fn main_() -> anyhow::Result<()> {
 ///     Fedimintd::new()?
-///         /// use `.with_default_modules()` to avoid having
-///         /// to import these manually
+///         // use `.with_default_modules()` to avoid having
+///         // to import these manually
 ///         .with_module(WalletGen)
 ///         .with_module(MintGen)
 ///         .with_module(LightningGen)
