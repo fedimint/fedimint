@@ -105,8 +105,8 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             fn consensus_decode<R: std::io::Read>(
                 reader: &mut R,
                 modules: &$crate::module::registry::ModuleDecoderRegistry,
-            ) -> Result<Self, DecodeError> {
-                let key = ModuleInstanceId::consensus_decode(reader, modules)?;
+            ) -> Result<Self, fedimint_core::encoding::DecodeError> {
+                let key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
                 modules.get_expect(key).decode(reader, key)
             }
         }
