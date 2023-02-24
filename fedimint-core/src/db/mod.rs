@@ -846,7 +846,7 @@ where
 ///
 /// ```
 /// use fedimint_core::encoding::{Decodable, Encodable};
-/// use fedimint_core::impl_db_prefix_const;
+/// use fedimint_core::impl_db_record;
 ///
 /// #[derive(Debug, Encodable, Decodable)]
 /// struct MyKey;
@@ -867,7 +867,7 @@ where
 ///
 /// ```
 /// use fedimint_core::encoding::{Decodable, Encodable};
-/// use fedimint_core::impl_db_prefix_const;
+/// use fedimint_core::{impl_db_lookup, impl_db_record};
 ///
 /// #[derive(Debug, Encodable, Decodable)]
 /// struct MyKey;
