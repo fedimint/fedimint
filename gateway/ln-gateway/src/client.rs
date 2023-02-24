@@ -60,7 +60,7 @@ impl IDbFactory for RocksDbFactory {
         path: PathBuf,
         decoders: ModuleDecoderRegistry,
     ) -> Result<Database> {
-        let db_path = path.join(format!("{}.db", federation_id.to_string()));
+        let db_path = path.join(format!("{federation_id}.db"));
         let db = fedimint_rocksdb::RocksDb::open(db_path).expect("Error opening new rocks DB");
         Ok(Database::new(db, decoders))
     }
