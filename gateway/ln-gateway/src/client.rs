@@ -17,7 +17,7 @@ use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
 use url::Url;
 
-use crate::{LnGatewayError, Result};
+use crate::{GatewayError, Result};
 
 pub trait IDbFactory: Debug {
     fn create_database(
@@ -191,7 +191,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
     fn load_configs(&self) -> Result<Vec<GatewayClientConfig>> {
         Ok(std::fs::read_dir(&self.work_dir)
-            .map_err(|e| LnGatewayError::Other(anyhow::Error::new(e)))?
+            .map_err(|e| GatewayError::Other(anyhow::Error::new(e)))?
             .filter_map(|file_res| {
                 let file = file_res.ok()?;
                 if !file.file_type().ok()?.is_file() {

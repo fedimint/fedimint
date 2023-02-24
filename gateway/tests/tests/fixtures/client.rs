@@ -10,7 +10,7 @@ use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::PeerId;
 use ln_gateway::client::{DynDbFactory, IGatewayClientBuilder};
-use ln_gateway::LnGatewayError;
+use ln_gateway::GatewayError;
 use mint_client::{module_decode_stubs, Client, GatewayClient, GatewayClientConfig};
 use secp256k1::{PublicKey, Secp256k1};
 use url::Url;
@@ -39,7 +39,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
         _module_gens: ModuleGenRegistry,
-    ) -> Result<Client<GatewayClientConfig>, LnGatewayError> {
+    ) -> Result<Client<GatewayClientConfig>, GatewayError> {
         let federation_id = config.client_config.federation_id.clone();
         // Ignore `config`s, hardcode one peer.
         let members = BTreeSet::from([PeerId::from(0)]);
@@ -71,7 +71,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         _module_gens: ModuleGenRegistry,
-    ) -> Result<GatewayClientConfig, LnGatewayError> {
+    ) -> Result<GatewayClientConfig, GatewayError> {
         // TODO: use the connect info urls to get the federation name?
         // Simulate clients in the same federation by seeding the generated
         // `client_config` Using some of the info in provided web socket connect
@@ -99,12 +99,12 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         })
     }
 
-    fn save_config(&self, _config: GatewayClientConfig) -> Result<(), LnGatewayError> {
+    fn save_config(&self, _config: GatewayClientConfig) -> Result<(), GatewayError> {
         // noop: don't save configs
         Ok(())
     }
 
-    fn load_configs(&self) -> Result<Vec<GatewayClientConfig>, LnGatewayError> {
+    fn load_configs(&self) -> Result<Vec<GatewayClientConfig>, GatewayError> {
         // noop: return empty config list
         Ok([].into())
     }

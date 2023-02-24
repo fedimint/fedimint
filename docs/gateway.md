@@ -1,6 +1,6 @@
 # Fedimint Lightning Gateways
 
-Lightning Gateways provide routing services in and out of Fedimint Federations. In essence, a Gateway is a specialized Fedimint client, paired up with a running instance of lightning node like [Core Lightning (CLN)](https://github.com/ElementsProject/lightning) or [Lightning Network Daemon (LND)](https://github.com/lightningnetwork/lnd), so it can route payments on behalf of the Federation.
+Lightning gateways provide routing services in and out of Fedimint Federations. In essence, a gateway is a specialized Fedimint client, paired up with a running instance of lightning node like [Core Lightning (CLN)](https://github.com/ElementsProject/lightning) or [Lightning Network Daemon (LND)](https://github.com/lightningnetwork/lnd), so it can route payments on behalf of the Federation.
 
 A single Gateway can serve multiple Federations.
 
@@ -40,11 +40,6 @@ A Lightning extension / plugin service that provides all the necessary Lightning
   - **TODO:** help us implement a similar extension for [Sensei](https://github.com/L2-Technology/sensei) nodes
   - **TODO:** help us implement a similar extension for _your-favorite-variant_ lightning node
 
-> **Note**
->
-> We are currenly transitioning from a monolith `ln_gateway` extension that runs all the gateway business logic inside of a cln extension.
-> `ln_gateway` is equivalent to `Gatewayd` and `gateway-cln-extension` packaged into the same binary to run inside a CLN node as a plugin.
-
 ---
 
 ## Interacting with the Gateway
@@ -61,7 +56,6 @@ $ gateway-cli help
 Usage: gateway-cli [OPTIONS] <COMMAND>
 
 Commands:
-  generate-config  Ganerate gateway configuration NOTE: This command can only be used on a local gateway
   version-hash     Display CLI version hash
   info             Display high-level information about the Gateway
   balance          Check gateway balance
@@ -93,12 +87,6 @@ As described in [Running Fedimint for dev testing](./dev-running.md#using-the-ga
 - See and contribute to [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs)
 - Help add support to other node implementations by building [gateway-lnrpc-extensions](#gateway-lnrpc-extension) for them. You can parent your brand-new extension in this directory, or in your own repository and we will link to it in this open documentation
 - Contributions are highly welcome!
-
-### Developing [gatewayd](../gateway/ln-gateway/src/bin/ln_gateway.rs), [gateway-cli](../gateway/cli/) and more towards [fedimint-ln](../modules/fedimint-ln/) module
-
-- Contributions are highly welcome!
-
----
 
 ## Deploying a Gateway in Production
 

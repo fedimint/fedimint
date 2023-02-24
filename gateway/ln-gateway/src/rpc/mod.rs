@@ -11,14 +11,12 @@ use fedimint_core::config::FederationId;
 use fedimint_core::{Amount, TransactionId};
 use futures::Future;
 use mint_client::ln::PayInvoicePayload;
-use mint_client::modules::ln::contracts::Preimage;
 use mint_client::modules::wallet::txoproof::TxOutProof;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
-use crate::cln::HtlcAccepted;
-use crate::{LnGatewayError, Result};
+use crate::{GatewayError, Result};
 
 #[derive(Debug, Clone)]
 pub struct GatewayRpcSender {
@@ -50,7 +48,7 @@ impl GatewayRpcSender {
         receiver
             .await
             .unwrap_or_else(|_| {
-                Err(LnGatewayError::Other(anyhow!(
+                Err(GatewayError::Other(anyhow!(
                     "Failed to receive response over channel"
                 )))
             })
@@ -61,13 +59,6 @@ impl GatewayRpcSender {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
     pub connect: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ReceivePaymentPayload {
-    // NOTE: On ReceivePayment signal from ln_rpc,
-    // we extract the relevant federation id from the accepted htlc
-    pub htlc_accepted: HtlcAccepted,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -128,7 +119,6 @@ pub struct GatewayInfo {
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
     ConnectFederation(GatewayRequestInner<ConnectFedPayload>),
-    ReceivePayment(GatewayRequestInner<ReceivePaymentPayload>),
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
@@ -166,11 +156,6 @@ macro_rules! impl_gateway_request_trait {
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
 impl_gateway_request_trait!(ConnectFedPayload, (), GatewayRequest::ConnectFederation);
-impl_gateway_request_trait!(
-    ReceivePaymentPayload,
-    Preimage,
-    GatewayRequest::ReceivePayment
-);
 impl_gateway_request_trait!(PayInvoicePayload, (), GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
 impl_gateway_request_trait!(

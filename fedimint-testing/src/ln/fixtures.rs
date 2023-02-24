@@ -1,22 +1,19 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::Error;
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_core::Amount;
-use fedimint_ln::route_hints::RouteHint;
 use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
-use ln_gateway::gatewayd::lnrpc_client::{HtlcStream, ILnRpcClient};
 use ln_gateway::gatewaylnrpc::{
     self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
-use ln_gateway::ln::{LightningError, LnRpc};
+use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
 use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 
@@ -76,29 +73,6 @@ impl LightningTest for FakeLightningTest {
 
     fn is_shared(&self) -> bool {
         false
-    }
-}
-
-/// Back compat for the old ln-gateway
-#[async_trait]
-impl LnRpc for FakeLightningTest {
-    async fn pubkey(&self) -> std::result::Result<PublicKey, LightningError> {
-        Ok(self.gateway_node_pub_key)
-    }
-
-    async fn pay(
-        &self,
-        invoice: lightning_invoice::Invoice,
-        _max_delay: u64,
-        _max_fee_percent: f64,
-    ) -> std::result::Result<Preimage, LightningError> {
-        *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
-
-        Ok(self.preimage.clone())
-    }
-
-    async fn route_hints(&self) -> std::result::Result<Vec<RouteHint>, Error> {
-        Ok(vec![RouteHint(vec![])])
     }
 }
 
