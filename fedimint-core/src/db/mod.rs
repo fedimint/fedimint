@@ -860,7 +860,7 @@ where
 ///     MyKey = 0x50,
 /// }
 ///
-/// impl_db_prefix_const!(key = MyKey, value = MyValue, db_prefix = DbKeyPrefix::MyKey);
+/// impl_db_record!(key = MyKey, value = MyValue, db_prefix = DbKeyPrefix::MyKey);
 /// ```
 ///
 /// Use the required parameters and specify one `query_prefix`
@@ -884,22 +884,24 @@ where
 /// #[derive(Debug, Encodable, Decodable)]
 /// struct MyKeyPrefix;
 ///
-/// impl_db_prefix_const!(
-///     key = MyKey,
-///     value = MyValue,
-///     db_prefix = DbKeyPrefix::MyKey,
-///     query_prefix = MyKeyPrefix
-/// );
+/// impl_db_record!(key = MyKey, value = MyValue, db_prefix = DbKeyPrefix::MyKey,);
+///
+/// impl_db_lookup!(key = MyKey, query_prefix = MyKeyPrefix);
 /// ```
 #[macro_export]
-macro_rules! impl_db_prefix_const {
-    (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(, query_prefix = $query_prefix:ty)* $(,)?) => {
+macro_rules! impl_db_record {
+    (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(,)?) => {
         impl $crate::db::DatabaseRecord for $key {
             const DB_PREFIX: u8 = $db_prefix as u8;
             type Key = Self;
             type Value = $val;
         }
+    };
+}
 
+#[macro_export]
+macro_rules! impl_db_lookup{
+    (key = $key:ty $(, query_prefix = $query_prefix:ty)* $(,)?) => {
         $(
             impl $crate::db::DatabaseLookup for $query_prefix {
                 type Record = $key;
@@ -915,7 +917,7 @@ pub struct DatabaseVersionKey;
 #[derive(Debug, Encodable, Decodable, Serialize, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct DatabaseVersion(pub u64);
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = DatabaseVersionKey,
     value = DatabaseVersion,
     db_prefix = DbKeyPrefix::DatabaseVersion
@@ -1106,12 +1108,12 @@ mod tests {
     #[derive(Debug, Encodable, Decodable)]
     struct DbPrefixTestPrefix;
 
-    impl_db_prefix_const!(
+    impl_db_record!(
         key = TestKey,
         value = TestVal,
-        db_prefix = TestDbKeyPrefix::Test,
-        query_prefix = DbPrefixTestPrefix
+        db_prefix = TestDbKeyPrefix::Test
     );
+    impl_db_lookup!(key = TestKey, query_prefix = DbPrefixTestPrefix);
 
     #[derive(Debug, Encodable, Decodable)]
     struct TestKeyV0(u64, u64);
@@ -1119,12 +1121,12 @@ mod tests {
     #[derive(Debug, Encodable, Decodable)]
     struct DbPrefixTestPrefixV0;
 
-    impl_db_prefix_const!(
+    impl_db_record!(
         key = TestKeyV0,
         value = TestVal,
         db_prefix = TestDbKeyPrefix::Test,
-        query_prefix = DbPrefixTestPrefixV0
     );
+    impl_db_lookup!(key = TestKeyV0, query_prefix = DbPrefixTestPrefixV0);
 
     #[derive(Debug, Encodable, Decodable)]
     struct AltTestKey(u64);
@@ -1132,12 +1134,12 @@ mod tests {
     #[derive(Debug, Encodable, Decodable)]
     struct AltDbPrefixTestPrefix;
 
-    impl_db_prefix_const!(
+    impl_db_record!(
         key = AltTestKey,
         value = TestVal,
         db_prefix = TestDbKeyPrefix::AltTest,
-        query_prefix = AltDbPrefixTestPrefix
     );
+    impl_db_lookup!(key = AltTestKey, query_prefix = AltDbPrefixTestPrefix);
 
     #[derive(Debug, Encodable, Decodable)]
     struct PercentTestKey(u64);
@@ -1145,13 +1147,13 @@ mod tests {
     #[derive(Debug, Encodable, Decodable)]
     struct PercentPrefixTestPrefix;
 
-    impl_db_prefix_const!(
+    impl_db_record!(
         key = PercentTestKey,
         value = TestVal,
         db_prefix = TestDbKeyPrefix::PercentTestKey,
-        query_prefix = PercentPrefixTestPrefix
     );
 
+    impl_db_lookup!(key = PercentTestKey, query_prefix = PercentPrefixTestPrefix);
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
 

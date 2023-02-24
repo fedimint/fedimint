@@ -1,5 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_prefix_const;
+use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -31,10 +31,13 @@ pub struct OutgoingPaymentKey(pub ContractId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = OutgoingPaymentKey,
     value = OutgoingContractData,
     db_prefix = DbKeyPrefix::OutgoingPayment,
+);
+impl_db_lookup!(
+    key = OutgoingPaymentKey,
     query_prefix = OutgoingPaymentKeyPrefix
 );
 
@@ -44,10 +47,13 @@ pub struct OutgoingPaymentClaimKey(pub ContractId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentClaimKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = OutgoingPaymentClaimKey,
     value = (),
     db_prefix = DbKeyPrefix::OutgoingPaymentClaim,
+);
+impl_db_lookup!(
+    key = OutgoingPaymentClaimKey,
     query_prefix = OutgoingPaymentClaimKeyPrefix
 );
 
@@ -57,10 +63,13 @@ pub struct OutgoingContractAccountKey(pub ContractId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingContractAccountKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = OutgoingContractAccountKey,
     value = OutgoingContractAccount,
     db_prefix = DbKeyPrefix::OutgoingContractAccount,
+);
+impl_db_lookup!(
+    key = OutgoingContractAccountKey,
     query_prefix = OutgoingContractAccountKeyPrefix
 );
 
@@ -70,10 +79,13 @@ pub struct ConfirmedInvoiceKey(pub ContractId);
 #[derive(Debug, Encodable, Decodable)]
 pub struct ConfirmedInvoiceKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ConfirmedInvoiceKey,
     value = ConfirmedInvoice,
     db_prefix = DbKeyPrefix::ConfirmedInvoice,
+);
+impl_db_lookup!(
+    key = ConfirmedInvoiceKey,
     query_prefix = ConfirmedInvoiceKeyPrefix
 );
 
@@ -83,9 +95,12 @@ pub struct LightningGatewayKey;
 #[derive(Debug, Encodable, Decodable)]
 pub struct LightningGatewayKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = LightningGatewayKey,
     value = LightningGateway,
     db_prefix = DbKeyPrefix::LightningGateway,
+);
+impl_db_lookup!(
+    key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
 );

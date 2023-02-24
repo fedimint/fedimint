@@ -1,5 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_prefix_const, OutPoint, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 use secp256k1::PublicKey;
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -31,12 +31,12 @@ pub struct ContractKey(pub ContractId);
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]
 pub struct ContractKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ContractKey,
     value = ContractAccount,
     db_prefix = DbKeyPrefix::Contract,
-    query_prefix = ContractKeyPrefix
 );
+impl_db_lookup!(key = ContractKey, query_prefix = ContractKeyPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ContractUpdateKey(pub OutPoint);
@@ -44,10 +44,13 @@ pub struct ContractUpdateKey(pub OutPoint);
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]
 pub struct ContractUpdateKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ContractUpdateKey,
     value = LightningOutputOutcome,
     db_prefix = DbKeyPrefix::ContractUpdate,
+);
+impl_db_lookup!(
+    key = ContractUpdateKey,
     query_prefix = ContractUpdateKeyPrefix
 );
 
@@ -57,12 +60,12 @@ pub struct OfferKey(pub bitcoin_hashes::sha256::Hash);
 #[derive(Debug, Encodable, Decodable)]
 pub struct OfferKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = OfferKey,
     value = IncomingContractOffer,
     db_prefix = DbKeyPrefix::Offer,
-    query_prefix = OfferKeyPrefix
 );
+impl_db_lookup!(key = OfferKey, query_prefix = OfferKeyPrefix);
 
 // TODO: remove redundancy
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -72,10 +75,13 @@ pub struct ProposeDecryptionShareKey(pub ContractId);
 #[derive(Debug, Encodable)]
 pub struct ProposeDecryptionShareKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ProposeDecryptionShareKey,
     value = PreimageDecryptionShare,
     db_prefix = DbKeyPrefix::ProposeDecryptionShare,
+);
+impl_db_lookup!(
+    key = ProposeDecryptionShareKey,
     query_prefix = ProposeDecryptionShareKeyPrefix
 );
 
@@ -87,10 +93,13 @@ pub struct AgreedDecryptionShareKey(pub ContractId, pub PeerId);
 #[derive(Debug, Encodable)]
 pub struct AgreedDecryptionShareKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = AgreedDecryptionShareKey,
     value = PreimageDecryptionShare,
     db_prefix = DbKeyPrefix::AgreedDecryptionShare,
+);
+impl_db_lookup!(
+    key = AgreedDecryptionShareKey,
     query_prefix = AgreedDecryptionShareKeyPrefix
 );
 
@@ -100,9 +109,12 @@ pub struct LightningGatewayKey(pub PublicKey);
 #[derive(Debug, Encodable, Decodable)]
 pub struct LightningGatewayKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = LightningGatewayKey,
     value = LightningGateway,
     db_prefix = DbKeyPrefix::LightningGateway,
+);
+impl_db_lookup!(
+    key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
 );

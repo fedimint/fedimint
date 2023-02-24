@@ -1,5 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_prefix_const, Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, TieredMulti, TransactionId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -31,12 +31,12 @@ pub struct NoteKey {
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct NoteKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = NoteKey,
     value = SpendableNote,
     db_prefix = DbKeyPrefix::Note,
-    query_prefix = NoteKeyPrefix
 );
+impl_db_lookup!(key = NoteKey, query_prefix = NoteKeyPrefix);
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct PendingNotesKey(pub TransactionId);
@@ -44,12 +44,12 @@ pub struct PendingNotesKey(pub TransactionId);
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct PendingNotesKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = PendingNotesKey,
     value = TieredMulti<SpendableNote>,
     db_prefix = DbKeyPrefix::PendingNotes,
-    query_prefix = PendingNotesKeyPrefix
 );
+impl_db_lookup!(key = PendingNotesKey, query_prefix = PendingNotesKeyPrefix);
 
 #[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct OutputFinalizationKey(pub OutPoint);
@@ -57,10 +57,13 @@ pub struct OutputFinalizationKey(pub OutPoint);
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct OutputFinalizationKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = OutputFinalizationKey,
     value = NoteIssuanceRequests,
     db_prefix = DbKeyPrefix::OutputFinalizationData,
+);
+impl_db_lookup!(
+    key = OutputFinalizationKey,
     query_prefix = OutputFinalizationKeyPrefix
 );
 
@@ -70,14 +73,17 @@ pub struct NextECashNoteIndexKey(pub Amount);
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct NextECashNoteIndexKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = NextECashNoteIndexKey,
     value = u64,
     db_prefix = DbKeyPrefix::NextECashNoteIndex,
+);
+impl_db_lookup!(
+    key = NextECashNoteIndexKey,
     query_prefix = NextECashNoteIndexKeyPrefix
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct NotesPerDenominationKey;
 
-impl_db_prefix_const!(key = NotesPerDenominationKey, value = u16, db_prefix = 0);
+impl_db_record!(key = NotesPerDenominationKey, value = u16, db_prefix = 0);
