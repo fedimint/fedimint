@@ -12,6 +12,7 @@ pub mod gatewaylnrpc {
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -203,7 +204,7 @@ impl Gateway {
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
-        let connect: WsClientConnectInfo = serde_json::from_str(&payload.connect).map_err(|e| {
+        let connect = WsClientConnectInfo::from_str(&payload.connect).map_err(|e| {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
