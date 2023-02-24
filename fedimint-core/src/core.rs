@@ -90,9 +90,7 @@ impl From<&'static str> for ModuleKind {
 /// Fedimint code to abstract away details of mint modules.
 #[macro_export]
 macro_rules! module_dyn_newtype_impl_encode_decode {
-    (
-        $name:ident, $decode_fn:ident
-    ) => {
+    ($name:ident) => {
         impl Encodable for $name {
             fn consensus_encode<W: std::io::Write>(
                 &self,
@@ -385,9 +383,8 @@ dyn_newtype_define_with_instance_id! {
     /// An owned, immutable input to a [`Transaction`]
     pub DynInput(Box<IInput>)
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynInput, decode_input
-}
+module_dyn_newtype_impl_encode_decode!(DynInput);
+
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynInput);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynInput);
@@ -415,9 +412,8 @@ module_plugin_trait_define! {
         erased_eq_no_instance_id!(DynOutput);
     }
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynOutput, decode_output
-}
+module_dyn_newtype_impl_encode_decode!(DynOutput);
+
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutput);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynOutput);
@@ -446,9 +442,7 @@ module_plugin_trait_define! {
         erased_eq_no_instance_id!(DynOutputOutcome);
     }
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynOutputOutcome, decode_output_outcome
-}
+module_dyn_newtype_impl_encode_decode!(DynOutputOutcome);
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutputOutcome);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynOutputOutcome);
@@ -474,9 +468,8 @@ module_plugin_trait_define! {
         erased_eq_no_instance_id!(DynModuleConsensusItem);
     }
 }
-module_dyn_newtype_impl_encode_decode! {
-    DynModuleConsensusItem, decode_consensus_item
-}
+module_dyn_newtype_impl_encode_decode!(DynModuleConsensusItem);
+
 dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynModuleConsensusItem);
 
 newtype_impl_eq_passthrough_with_instance_id!(DynModuleConsensusItem);
