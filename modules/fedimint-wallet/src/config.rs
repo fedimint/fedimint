@@ -8,7 +8,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
@@ -89,16 +88,16 @@ impl Default for FeeConsensus {
 
 impl TypedServerModuleConsensusConfig for WalletConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        ClientModuleConfig::new(
+        ClientModuleConfig::from_typed(
             crate::KIND,
-            serde_json::to_value(&WalletClientConfig {
+            &WalletClientConfig {
                 peg_in_descriptor: self.peg_in_descriptor.clone(),
                 network: self.network,
                 fee_consensus: self.fee_consensus.clone(),
                 finality_delay: self.finality_delay,
-            })
-            .expect("Serialization can't fail"),
+            },
         )
+        .expect("Serialization can't fail")
     }
 }
 

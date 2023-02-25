@@ -202,7 +202,7 @@ impl ClientConfig {
 
     pub fn get_module<T: DeserializeOwned>(&self, id: ModuleInstanceId) -> anyhow::Result<T> {
         if let Some(client_cfg) = self.modules.get(&id) {
-            Ok(serde_json::from_value(client_cfg.0.value().clone())?)
+            Ok(serde_json::from_value(client_cfg.value().clone())?)
         } else {
             Err(format_err!("Client config for module id: {id} not found"))
         }
@@ -224,7 +224,7 @@ impl ClientConfig {
             anyhow::bail!("Module kind {kind} not found")
         };
 
-        Ok((*id, serde_json::from_value(module_cfg.0.value().clone())?))
+        Ok((*id, serde_json::from_value(module_cfg.value().clone())?))
     }
 }
 
@@ -391,29 +391,48 @@ pub struct ModuleConfigResponse {
 /// it needs to be some form of an abstract type-erased-like
 /// value.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ClientModuleConfig(JsonWithKind);
+pub struct ClientModuleConfig {
+    kind: ModuleKind,
+    consensus_hash: sha256::Hash,
+    config: serde_json::Value,
+}
 
 impl ClientModuleConfig {
-    pub fn new(kind: ModuleKind, value: serde_json::Value) -> Self {
-        Self(JsonWithKind::new(kind, value))
+    pub fn new(kind: ModuleKind, consensus_hash: sha256::Hash, value: serde_json::Value) -> Self {
+        Self {
+            kind,
+            consensus_hash,
+            config: value,
+        }
+    }
+
+    pub fn from_typed<T: Encodable + Serialize>(
+        kind: ModuleKind,
+        value: &T,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            kind,
+            consensus_hash: value.consensus_hash()?,
+            config: serde_json::to_value(value)?,
+        })
     }
 
     pub fn is_kind(&self, kind: &ModuleKind) -> bool {
-        self.0.is_kind(kind)
+        &self.kind == kind
     }
 
     pub fn kind(&self) -> &ModuleKind {
-        self.0.kind()
+        &self.kind
     }
 
     pub fn value(&self) -> &serde_json::Value {
-        self.0.value()
+        &self.config
     }
 }
 
 impl ClientModuleConfig {
     pub fn cast<T: TypedClientModuleConfig>(&self) -> anyhow::Result<T> {
-        Ok(serde_json::from_value(self.0.value().clone())?)
+        Ok(serde_json::from_value(self.config.clone())?)
     }
 }
 
@@ -498,10 +517,7 @@ pub trait TypedClientModuleConfig: DeserializeOwned + Serialize + Encodable {
     fn kind(&self) -> ModuleKind;
 
     fn to_erased(&self) -> ClientModuleConfig {
-        ClientModuleConfig::new(
-            self.kind(),
-            serde_json::to_value(self).expect("serialization can't fail"),
-        )
+        ClientModuleConfig::from_typed(self.kind(), self).expect("serialization can't fail")
     }
 }
 

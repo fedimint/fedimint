@@ -8,7 +8,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -67,16 +66,16 @@ impl TypedServerModuleConsensusConfig for MintConfigConsensus {
                 })
                 .collect();
 
-        ClientModuleConfig::new(
+        ClientModuleConfig::from_typed(
             KIND,
-            serde_json::to_value(&MintClientConfig {
+            &MintClientConfig {
                 tbs_pks: Tiered::from_iter(pub_key.into_iter()),
                 fee_consensus: self.fee_consensus.clone(),
                 peer_tbs_pks: self.peer_tbs_pks.clone(),
                 max_notes_per_denomination: self.max_notes_per_denomination,
-            })
-            .expect("Serialization can't fail"),
+            },
         )
+        .expect("Serialization can't fail")
     }
 }
 
