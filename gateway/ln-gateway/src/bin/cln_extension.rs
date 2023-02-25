@@ -49,7 +49,7 @@ pub struct ClnExtensionOpts {
 async fn main() -> Result<(), anyhow::Error> {
     let tg = TaskGroup::new();
 
-    let (service, listen) = ClnRpcService::new(tg.clone())
+    let (service, listen, plugin) = ClnRpcService::new(tg.clone())
         .await
         .expect("Failed to create cln rpc service");
 
@@ -58,8 +58,6 @@ async fn main() -> Result<(), anyhow::Error> {
         listen
     );
 
-    // TODO: have ClnRpcService::new() return this
-    let plugin = service.plugin.clone();
     // FIXME: better variable names
     let handle = tg.make_handle();
     let shutdown_rx = handle.make_shutdown_rx();
@@ -135,11 +133,12 @@ pub struct ClnRpcService {
     socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
     task_group: TaskGroup,
-    plugin: Plugin<Arc<ClnHtlcInterceptor>>,
 }
 
 impl ClnRpcService {
-    pub async fn new(task_group: TaskGroup) -> Result<(Self, SocketAddr), ClnExtensionError> {
+    pub async fn new(
+        task_group: TaskGroup,
+    ) -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError> {
         let interceptor = Arc::new(ClnHtlcInterceptor::new(task_group.clone()));
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
@@ -210,9 +209,9 @@ impl ClnRpcService {
                     socket,
                     task_group,
                     interceptor,
-                    plugin,
                 },
                 listen,
+                plugin,
             ))
         } else {
             Err(ClnExtensionError::Error(anyhow!(
@@ -531,7 +530,8 @@ type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 /// Functional structure to filter intercepted HTLCs into subscription streams.
 /// Used as a CLN plugin
 #[derive(Clone)]
-struct ClnHtlcInterceptor {
+// FIXME: probably shouldn't be pub?
+pub struct ClnHtlcInterceptor {
     subscriptions: Arc<Mutex<HashMap<u64, HtlcSubscriptionSender>>>,
     pub outcomes: Arc<Mutex<HashMap<sha256::Hash, HtlcOutcomeSender>>>,
     task_group: TaskGroup,
