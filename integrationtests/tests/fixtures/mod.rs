@@ -148,7 +148,6 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         10,
     );
     let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
-    let max_evil = hbbft::util::max_faulty(peers.len());
 
     let module_inits = ModuleGenRegistry::from(vec![
         DynModuleGen::from(WalletGen),
@@ -162,15 +161,10 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
-            let (server_config, client_config) = distributed_config(
-                &peers,
-                params,
-                module_inits.clone(),
-                max_evil,
-                &mut config_task_group,
-            )
-            .await
-            .expect("distributed config should not be canceled");
+            let (server_config, client_config) =
+                distributed_config(&peers, params, module_inits.clone(), &mut config_task_group)
+                    .await
+                    .expect("distributed config should not be canceled");
             config_task_group
                 .shutdown_join_all(None)
                 .await
@@ -396,7 +390,6 @@ async fn distributed_config(
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
     registry: ModuleGenRegistry,
-    _max_evil: usize,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
     let configs: Vec<(PeerId, ServerConfig)> = join_all(peers.iter().map(|peer| {
