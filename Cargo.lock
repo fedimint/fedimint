@@ -2646,6 +2646,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.8.3",
  "tonic-build 0.8.4",
+ "tonic_lnd",
  "tower-http",
  "tracing",
  "url",
