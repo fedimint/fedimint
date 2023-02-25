@@ -15,8 +15,10 @@ use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse};
 use tonic_lnd::{connect, LndClient};
 use tracing::{debug, error, info};
 
+use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
+use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
 use crate::gatewaylnrpc::{
-    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -80,7 +82,7 @@ impl ILnRpcClient for GatewayLndClient {
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
         // TODO: actually implement this
         Ok(GetRouteHintsResponse {
-            route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
+            route_hints: vec![RouteHint { hops: vec![] }],
         })
     }
 
@@ -222,9 +224,64 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn complete_htlc(
         &self,
-        _outcome: CompleteHtlcsRequest,
+        outcome: CompleteHtlcsRequest,
     ) -> crate::Result<CompleteHtlcsResponse> {
-        todo!()
+        let CompleteHtlcsRequest {
+            action,
+            intercepted_htlc_id,
+        } = outcome;
+
+        let hash = match sha256::Hash::from_slice(&intercepted_htlc_id) {
+            Ok(hash) => hash,
+            Err(e) => {
+                error!("Invalid intercepted_htlc_id: {:?}", e);
+                return Err(GatewayError::LnRpcError(tonic::Status::invalid_argument(
+                    e.to_string(),
+                )));
+            }
+        };
+
+        info!("Completing htlc with reference, {:?}", hash);
+
+        if let Some(outcome) = self.outcomes.lock().await.remove(&hash) {
+            let htlca_res = match action {
+                Some(Action::Settle(Settle { preimage })) => {
+                    // FIXME: Specify a failure code and message, use proper incoming circuit key
+                    ForwardHtlcInterceptResponse {
+                        incoming_circuit_key: None,
+                        action: 0,
+                        preimage,
+                        failure_message: vec![],
+                        failure_code: 0,
+                    }
+                }
+                Some(Action::Cancel(Cancel { reason: _ })) => cancel_intercepted_htlc(None),
+                None => {
+                    error!("No action specified for intercepted htlc id: {:?}", hash);
+                    return Err(GatewayError::LnRpcError(tonic::Status::internal(
+                        "No action specified on this intercepted htlc",
+                    )));
+                }
+            };
+
+            // TODO: Consider retrying this if the send fails
+            let _ = outcome.send(htlca_res).await.map_err(|_| {
+                GatewayError::LnRpcError(tonic::Status::internal(
+                    "Failed to send htlc processing outcome to LND node",
+                ))
+            });
+
+            Ok(CompleteHtlcsResponse {})
+        } else {
+            error!(
+                "No interceptor reference found for this processed htlc with id: {:?}",
+                intercepted_htlc_id
+            );
+            // FIXME: Use error codes to signal the gateway to take reactionary actions
+            return Err(GatewayError::LnRpcError(tonic::Status::internal(
+                "No interceptor reference found for this processed htlc. Potential loss of funds",
+            )));
+        }
     }
 }
 
