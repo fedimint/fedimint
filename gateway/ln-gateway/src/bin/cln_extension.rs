@@ -71,14 +71,12 @@ async fn main() -> Result<(), anyhow::Error> {
                 // task group requested shutdown
                 _ = shutdown_rx.await => {
                     info!("(1) Shutting down ...");
-                    std::process::exit(0);
                 }
                 // plugin encountered error and is exiting, so we kill the task group
                 _ = plugin.join() => {
                     // shuts down task group
                     info!("(2) Shutting down ...");
                     tg.shutdown().await;
-                    std::process::exit(0);
                 }
             };
         })
