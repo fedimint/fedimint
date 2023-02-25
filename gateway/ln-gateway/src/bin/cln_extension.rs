@@ -68,14 +68,15 @@ async fn main() -> Result<(), anyhow::Error> {
             // Wait for a shutdown signal received from the controlling task group
             // The plugin will be shutdown when this callback returns
             tokio::select! {
-                // task group requested shutdown
+                // task group requested shutdown (e.g. via "shutdown" core-lightning notification)
                 _ = shutdown_rx.await => {
                     info!("(1) Shutting down ...");
                 }
                 // plugin encountered error and is exiting, so we kill the task group
                 _ = plugin.join() => {
-                    // shuts down task group
                     info!("(2) Shutting down ...");
+                    // shuts down task group
+                    // FIXME: should we shutdown_join)_all?
                     tg.shutdown().await;
                 }
             };
