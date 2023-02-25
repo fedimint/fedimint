@@ -88,6 +88,7 @@ enum CliOutput {
     },
 
     Fetch {
+        claimed_incoming_contracts: Vec<(ContractId, OutPoint)>,
         issuance: Vec<OutPoint>,
     },
 
@@ -687,16 +688,24 @@ impl FedimintCli {
                     CliErrorKind::GeneralFederationError,
                     "failed to execute spend (no further information)",
                 ),
-            Command::Fetch => cli
-                .build_client(&self.module_gens)
-                .await?
-                .fetch_all_notes()
-                .await
-                .map(|issuance| CliOutput::Fetch { issuance })
-                .map_err_cli_msg(
+            Command::Fetch => {
+                let client = cli.build_client(&self.module_gens).await?;
+                let contracts = client
+                    .claim_incoming_contracts(&mut rng)
+                    .await
+                    .map_err_cli_msg(
+                        CliErrorKind::GeneralFederationError,
+                        "failed to claim incoming contracts",
+                    )?;
+                let fetched = client.fetch_all_notes().await.map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
                     "failed to fetch notes",
-                ),
+                )?;
+                Ok(CliOutput::Fetch {
+                    claimed_incoming_contracts: contracts,
+                    issuance: (fetched),
+                })
+            }
             Command::Info => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let notes = client.notes().await;

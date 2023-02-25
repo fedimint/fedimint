@@ -56,7 +56,7 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use ln::db::LightningGatewayKey;
+use ln::db::{ConfirmedInvoiceKey, ConfirmedInvoiceKeyPrefix, LightningGatewayKey};
 use ln::PayInvoicePayload;
 use mint::NoteIssuanceRequests;
 use modules::mint::MintOutputOutcome;
@@ -1102,6 +1102,59 @@ impl Client<UserClientConfig> {
         Ok(confirmed)
     }
 
+    /// Lists all confirmed invoices that have not expired
+    pub async fn list_unexpired_confirmed_invoices(&self) -> Vec<(ContractId, ConfirmedInvoice)> {
+        self.context
+            .db
+            .begin_transaction()
+            .await
+            .find_by_prefix(&ConfirmedInvoiceKeyPrefix)
+            .await
+            .filter_map(
+                |(ConfirmedInvoiceKey(contract_id), confirmed_invoice)| async move {
+                    if !confirmed_invoice.invoice.is_expired() {
+                        Some((contract_id, confirmed_invoice))
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect()
+            .await
+    }
+
+    /// Claims all incoming contracts for unexpired confirmed invoices
+    pub async fn claim_incoming_contracts(
+        &self,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<Vec<(ContractId, OutPoint)>> {
+        let mut claimed_contracts: Vec<(ContractId, Result<OutPoint>)> = vec![];
+        for (contract_id, _) in self.list_unexpired_confirmed_invoices().await {
+            claimed_contracts.push((
+                contract_id,
+                self.claim_incoming_contract(contract_id, &mut rng).await,
+            ))
+        }
+
+        // Contracts that have previously been claimed will return an error
+        let (errors, contract_outpoints): (Vec<_>, Vec<_>) = claimed_contracts
+            .into_iter()
+            .partition_map(|(contract_id, result)| match result {
+                Ok(outpoint) => Either::Right((contract_id, outpoint)),
+                Err(error) => Either::Left((contract_id, error)),
+            });
+
+        // Only return error if no contracts were successfully claimed
+        if !errors.is_empty() && contract_outpoints.is_empty() {
+            Err(ClientError::FailedToClaimIncomingContracts(
+                errors,
+                contract_outpoints,
+            ))
+        } else {
+            Ok(contract_outpoints)
+        }
+    }
+
     pub async fn claim_incoming_contract(
         &self,
         contract_id: ContractId,
@@ -1674,6 +1727,8 @@ pub enum ClientError {
     ConfigVerify(ConfigVerifyError),
     #[error("Failed to fetch notes we expected to be issued {0:?}")]
     UnableToFetchAllNotes(Vec<ClientError>, Vec<OutPoint>),
+    #[error("Failed to claim incoming contracts {0:?}")]
+    FailedToClaimIncomingContracts(Vec<(ContractId, ClientError)>, Vec<(ContractId, OutPoint)>),
 }
 
 #[derive(Debug, Error)]
