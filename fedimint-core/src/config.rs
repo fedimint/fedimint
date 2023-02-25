@@ -184,8 +184,8 @@ impl ClientConfig {
                     *module_instance_id,
                     module_config_gens
                         .get(kind)
-                        .ok_or_else(|| format_err!("module config gen not found: {kind}"))?
-                        .hash_client_module(v.value().clone())?,
+                        .map(|gen| gen.hash_client_module(v.value().clone()))
+                        .unwrap_or(Ok(v.consensus_hash))?,
                 ))
             })
             .collect::<anyhow::Result<_>>()?;
@@ -398,14 +398,6 @@ pub struct ClientModuleConfig {
 }
 
 impl ClientModuleConfig {
-    pub fn new(kind: ModuleKind, consensus_hash: sha256::Hash, value: serde_json::Value) -> Self {
-        Self {
-            kind,
-            consensus_hash,
-            config: value,
-        }
-    }
-
     pub fn from_typed<T: Encodable + Serialize>(
         kind: ModuleKind,
         value: &T,
