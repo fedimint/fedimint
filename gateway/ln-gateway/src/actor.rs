@@ -308,8 +308,11 @@ impl GatewayActor {
             )
         } else {
             BuyPreimage::External(
-                self.buy_preimage_external(contract_account.contract.invoice, &payment_params)
-                    .await?,
+                self.buy_preimage_over_lightning(
+                    contract_account.contract.invoice,
+                    &payment_params,
+                )
+                .await?,
             )
         })
     }
@@ -388,7 +391,7 @@ impl GatewayActor {
         }
     }
 
-    pub async fn buy_preimage_external(
+    pub async fn buy_preimage_over_lightning(
         &self,
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
