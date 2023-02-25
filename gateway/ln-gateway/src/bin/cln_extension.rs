@@ -49,7 +49,7 @@ pub struct ClnExtensionOpts {
 async fn main() -> Result<(), anyhow::Error> {
     let tg = TaskGroup::new();
 
-    let (service, listen) = ClnRpcService::new(tg.clone())
+    let (service, listen, plugin) = ClnRpcService::new()
         .await
         .expect("Failed to create cln rpc service");
 
@@ -61,10 +61,10 @@ async fn main() -> Result<(), anyhow::Error> {
     Server::builder()
         .add_service(GatewayLightningServer::new(service))
         .serve_with_shutdown(listen, async {
-            // Wait for a shutdown signal received from the controlling task group
-            // The plugin will be shutdown when this callback returns
-            let shutdown_rx = tg.make_handle().make_shutdown_rx().await;
-            let _ = shutdown_rx.await;
+            // Wait for plugin to signal it's shutting down
+            // Shut down everything else via TaskGroup regardless of error
+            let _ = plugin.join().await;
+            tg.shutdown().await;
         })
         .await
         .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
@@ -116,12 +116,12 @@ pub struct ClnRpcClient {}
 pub struct ClnRpcService {
     socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
-    task_group: TaskGroup,
 }
 
 impl ClnRpcService {
-    pub async fn new(task_group: TaskGroup) -> Result<(Self, SocketAddr), ClnExtensionError> {
-        let interceptor = Arc::new(ClnHtlcInterceptor::new(task_group.clone()));
+    pub async fn new(
+    ) -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError> {
+        let interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
@@ -141,22 +141,6 @@ impl ClnRpcService {
                         // by passing the HTLC to the interceptor in the plugin state
                         let payload: HtlcAccepted = serde_json::from_value(value)?;
                         Ok(plugin.state().intercept_htlc(payload).await)
-                    });
-                    handle.await?
-                },
-            )
-            // Shutdown the plugin when lightningd is shutting down or when the plugin is stopped
-            // via `plugin stop` command. There's a chance that the subscription is never called in
-            // case lightningd crashes or aborts.
-            // For details, see documentation for `shutdown` event notification:
-            // https://lightning.readthedocs.io/PLUGINS.html?highlight=shutdown#shutdown
-            .subscribe(
-                "shutdown",
-                |plugin: Plugin<Arc<ClnHtlcInterceptor>>, _: serde_json::Value| async move {
-                    info!("Received shutdown event ... gracefully shutting down the plugin");
-                    let handle = tokio::spawn(async move {
-                        plugin.state().shutdown().await;
-                        Ok(())
                     });
                     handle.await?
                 },
@@ -189,10 +173,10 @@ impl ClnRpcService {
             Ok((
                 Self {
                     socket,
-                    task_group,
                     interceptor,
                 },
                 listen,
+                plugin,
             ))
         } else {
             Err(ClnExtensionError::Error(anyhow!(
@@ -511,23 +495,17 @@ type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 /// Functional structure to filter intercepted HTLCs into subscription streams.
 /// Used as a CLN plugin
 #[derive(Clone)]
-struct ClnHtlcInterceptor {
+pub struct ClnHtlcInterceptor {
     subscriptions: Arc<Mutex<HashMap<u64, HtlcSubscriptionSender>>>,
     pub outcomes: Arc<Mutex<HashMap<sha256::Hash, HtlcOutcomeSender>>>,
-    task_group: TaskGroup,
 }
 
 impl ClnHtlcInterceptor {
-    fn new(task_group: TaskGroup) -> Self {
+    fn new() -> Self {
         Self {
             subscriptions: Arc::new(Mutex::new(HashMap::new())),
             outcomes: Arc::new(Mutex::new(HashMap::new())),
-            task_group,
         }
-    }
-
-    async fn shutdown(&self) {
-        self.task_group.shutdown().await;
     }
 
     async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
