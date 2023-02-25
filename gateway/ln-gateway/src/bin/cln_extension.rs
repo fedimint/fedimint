@@ -58,13 +58,31 @@ async fn main() -> Result<(), anyhow::Error> {
         listen
     );
 
+    // TODO: have ClnRpcService::new() return this
+    let plugin = service.plugin.clone();
+    // FIXME: better variable names
+    let handle = tg.make_handle();
+    let shutdown_rx = handle.make_shutdown_rx();
+
     Server::builder()
         .add_service(GatewayLightningServer::new(service))
         .serve_with_shutdown(listen, async {
             // Wait for a shutdown signal received from the controlling task group
             // The plugin will be shutdown when this callback returns
-            let shutdown_rx = tg.make_handle().make_shutdown_rx().await;
-            let _ = shutdown_rx.await;
+            tokio::select! {
+                // task group requested shutdown
+                _ = shutdown_rx.await => {
+                    info!("(1) Shutting down ...");
+                    std::process::exit(0);
+                }
+                // plugin encountered error and is exiting, so we kill the task group
+                _ = plugin.join() => {
+                    // shuts down task group
+                    info!("(2) Shutting down ...");
+                    tg.shutdown().await;
+                    std::process::exit(0);
+                }
+            };
         })
         .await
         .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
@@ -117,6 +135,7 @@ pub struct ClnRpcService {
     socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
     task_group: TaskGroup,
+    plugin: Plugin<Arc<ClnHtlcInterceptor>>,
 }
 
 impl ClnRpcService {
@@ -191,6 +210,7 @@ impl ClnRpcService {
                     socket,
                     task_group,
                     interceptor,
+                    plugin,
                 },
                 listen,
             ))
