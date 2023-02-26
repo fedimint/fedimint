@@ -948,9 +948,10 @@ dependencies = [
 name = "fedimint-client"
 version = "0.1.0"
 dependencies = [
- "bitcoin",
  "fedimint-core",
- "thiserror",
+ "futures",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

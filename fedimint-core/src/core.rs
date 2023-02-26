@@ -228,6 +228,7 @@ macro_rules! erased_eq_no_instance_id {
     };
 }
 
+#[macro_export]
 macro_rules! newtype_impl_eq_passthrough_with_instance_id {
     ($newtype:ty) => {
         impl PartialEq for $newtype {

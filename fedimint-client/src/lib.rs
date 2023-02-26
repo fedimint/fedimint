@@ -1,3 +1,4 @@
-//! This is a sketch/frame of future "modularized" Fedimint client library
-//!
-//! It's not being used by anything yet.
+//! Client library for fedimintd
+
+/// Client state machine interfaces and executor implementation
+pub mod sm;

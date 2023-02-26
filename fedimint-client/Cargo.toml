@@ -13,9 +13,7 @@ path = "src/lib.rs"
 
 
 [dependencies]
-bitcoin = "0.29.2"
 fedimint-core  = { path = "../fedimint-core/" }
-thiserror = "1.0.30"
-
-[dev-dependencies]
-fedimint-core ={ path = "../fedimint-core/" }
+futures = "0.3.26"
+serde = "1.0.152"
+serde_json = "1.0.91"
