@@ -1,8 +1,10 @@
+mod executor;
 /// State machine state interface
-pub(super) mod state;
+mod state;
 
 use std::sync::Arc;
 
+pub use executor::{Executor, ExecutorBuilder};
 pub use state::{Context, DynContext, DynState, State, StateTransition};
 
 // TODO: fill in useful data or make everything generic over a global context
