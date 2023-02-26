@@ -5,8 +5,8 @@ use std::fmt;
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
-    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
@@ -16,9 +16,9 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen, TransactionItemAmount,
+    ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen, PeerHandle,
+    TransactionItemAmount,
 };
-use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
@@ -109,10 +109,7 @@ impl ModuleGen for DummyConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        _connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        _our_id: &PeerId,
-        _instance_id: ModuleInstanceId,
-        _peers: &[PeerId],
+        _peers: &PeerHandle,
         _params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         let server = DummyConfig {

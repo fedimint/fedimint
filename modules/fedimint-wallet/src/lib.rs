@@ -6,7 +6,6 @@ use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
-use anyhow::format_err;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -25,8 +24,8 @@ use fedimint_core::bitcoin_rpc::{
     FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
 };
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, DkgResult, ModuleConfigResponse, ModuleGenParams,
-    ServerModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
@@ -36,10 +35,9 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
+    IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen, PeerHandle,
     TransactionItemAmount,
 };
-use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
@@ -48,6 +46,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, plugin_types_trait_impl, push_db_key_items, push_db_pair_items,
     Feerate, NumPeers, OutPoint, PeerId, ServerModule,
 };
+#[cfg(feature = "server")]
+use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::{stream, StreamExt};
 use impl_tools::autoimpl;
 use miniscript::psbt::PsbtExt;
@@ -295,12 +295,19 @@ impl ModuleGen for WalletGen {
             .collect()
     }
 
+    #[cfg(not(feature = "server"))]
     async fn distributed_gen(
         &self,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        module_instance_id: ModuleInstanceId,
-        peers: &[PeerId],
+        _peers: &PeerHandle,
+        _params: &ConfigGenParams,
+    ) -> DkgResult<ServerModuleConfig> {
+        unimplemented!();
+    }
+
+    #[cfg(feature = "server")]
+    async fn distributed_gen(
+        &self,
+        peers: &PeerHandle,
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = params
@@ -310,34 +317,17 @@ impl ModuleGen for WalletGen {
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
-        let mut peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = BTreeMap::new();
-
-        connections
-            .send(
-                peers,
-                module_instance_id,
-                DkgPeerMsg::PublicKey(our_key.key),
-            )
-            .await?;
-
-        peer_peg_in_keys.insert(*our_id, our_key);
-        while peer_peg_in_keys.len() < peers.len() {
-            match connections.receive(module_instance_id).await? {
-                (peer, DkgPeerMsg::PublicKey(key)) => {
-                    peer_peg_in_keys.insert(peer, CompressedPublicKey { key });
-                }
-                (peer, msg) => {
-                    return Err(
-                        format_err!("Invalid message received from: {peer}: {msg:?}").into(),
-                    );
-                }
-            }
-        }
+        let peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = peers
+            .exchange_pubkeys(our_key.key)
+            .await?
+            .into_iter()
+            .map(|(k, key)| (k, CompressedPublicKey { key }))
+            .collect();
 
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
-            peers.threshold(),
+            peers.peer_ids().threshold(),
             params.network,
             params.finality_delay,
         );

@@ -16,6 +16,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::module::PeerHandle;
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::PeerId;
@@ -461,16 +462,10 @@ impl ServerConfig {
         for (module_instance_id, (_kind, gen)) in registry.legacy_init_order_iter().enumerate() {
             let module_instance_id = u16::try_from(module_instance_id)
                 .expect("64k module instances should be enough for everyone");
+            let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(
-                    &connections,
-                    our_id,
-                    module_instance_id,
-                    peers,
-                    &params.modules,
-                )
-                .await?,
+                gen.distributed_gen(&dkg, &params.modules).await?,
             );
         }
 
