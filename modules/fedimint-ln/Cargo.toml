@@ -33,11 +33,11 @@ serde_json = "1.0.91"
 strum = "0.24"
 strum_macros = "0.24"
 thiserror = "1.0.37"
-threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 tracing = "0.1.37"
 rand = "0.8"
 url = { version = "2.3.1", features = ["serde"] }
-hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
+hbbft = { git = "https://github.com/fedimint/hbbft" }
 fedimint-server = { path = "../../fedimint-server", optional = true  }
 
 [dev-dependencies]

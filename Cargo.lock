@@ -1746,7 +1746,7 @@ dependencies = [
 [[package]]
 name = "hbbft"
 version = "0.1.1"
-source = "git+https://github.com/jkitman/hbbft?branch=upgrade-threshold-crypto-libs#3951544ab6834f56d300d065f43e673a6009ecad"
+source = "git+https://github.com/fedimint/hbbft#ff7069e7a276e35ded01a0f376986cbe00433031"
 dependencies = [
  "bincode",
  "byteorder",
@@ -3948,7 +3948,7 @@ dependencies = [
 [[package]]
 name = "threshold_crypto"
 version = "0.4.0"
-source = "git+https://github.com/jkitman/threshold_crypto?branch=upgrade-threshold-crypto-libs#82146b3eecd6602231c7741f508f9d910e887072"
+source = "git+https://github.com/fedimint/threshold_crypto#f5b283e74268f566eae7439a2b82bef14cdd0b2a"
 dependencies = [
  "bls12_381",
  "byteorder",
