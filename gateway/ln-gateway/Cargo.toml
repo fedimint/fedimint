@@ -21,8 +21,8 @@ name = "gateway-cln-extension"
 path = "src/bin/cln_extension.rs"
 
 [[test]]
-name = "gateway-tests"
-path = "tests/tests.rs"
+name = "gateway-authentication-tests"
+path = "tests/authentication_tests.rs"
 
 [dependencies]
 anyhow = "1.0.66"
