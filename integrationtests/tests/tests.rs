@@ -30,7 +30,7 @@ use tracing::{debug, info, instrument};
 use crate::fixtures::{peers, test, unwrap_item, FederationTest};
 
 #[tokio::test(flavor = "multi_thread")]
-async fn peg_in_and_peg_out_with_fees() -> Result<()> {
+async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         // TODO: this should not be needed, but I get errors on `peg_in` below sometimes
         let bitcoin = bitcoin.lock_exclusive().await;
@@ -86,7 +86,7 @@ async fn peg_in_and_peg_out_with_fees() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
+async fn wallet_peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         let peg_out_amount = Amount::from_sat(1000);
         let peg_out_address = bitcoin.get_new_address().await;
@@ -108,7 +108,7 @@ async fn peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 #[instrument(name = "peg_outs_are_only_allowed_once_per_epoch")]
-async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
+async fn wallet_peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         let address1 = bitcoin.get_new_address().await;
         let address2 = bitcoin.get_new_address().await;
@@ -142,7 +142,7 @@ async fn peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
+async fn wallet_peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
     test(2, |_fed, user, bitcoin, _, _| async move {
         let peg_in_address = user.client.get_new_pegin_address(rng()).await;
         let (proof, tx) = bitcoin
@@ -159,7 +159,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn peg_outs_must_wait_for_available_utxos() -> Result<()> {
+async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
         // at least one epoch needed to estabilish fees
         bitcoin.prepare_funding_wallet().await;

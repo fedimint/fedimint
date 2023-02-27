@@ -282,6 +282,7 @@
           cliTestsDeps = with pkgs; [
             bc
             bitcoind
+            electrs
             clightning-dev
             jq
             netcat

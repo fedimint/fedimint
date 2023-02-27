@@ -83,15 +83,12 @@ pub fn make_bitcoind_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoi
     Ok(retry_client.into())
 }
 
-pub fn make_electrum_rpc(url: &Url, _task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
-    Ok(ElectrumClient::new(url)?.into())
+pub fn make_electrum_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
+    Ok(RetryClient::new(ElectrumClient::new(url)?, task_handle).into())
 }
 
 pub fn make_esplora_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
-    let esplora_client = EsploraClient::new(url)?;
-    let retry_client = RetryClient::new(esplora_client, task_handle);
-
-    Ok(retry_client.into())
+    Ok(RetryClient::new(EsploraClient::new(url)?, task_handle).into())
 }
 
 /// Wrapper around [`bitcoincore_rpc::Client`] logging failures
@@ -263,9 +260,13 @@ impl IBitcoindRpc for ElectrumClient {
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
         fedimint_core::task::block_in_place(|| {
+            let estimate = self.0.estimate_fee(confirmation_target as usize)?;
+            let min_fee = self.0.relay_fee()?;
+
+            // convert fee rate estimate or min fee to sats
+            let sats_per_kvb = estimate.max(min_fee) * 100_000_000f64;
             Ok(Some(Feerate {
-                sats_per_kvb: (self.0.estimate_fee(confirmation_target as usize)? * 100_000_000f64)
-                    .ceil() as u64,
+                sats_per_kvb: sats_per_kvb.ceil() as u64,
             }))
         })
     }

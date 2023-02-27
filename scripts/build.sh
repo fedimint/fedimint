@@ -37,10 +37,12 @@ export FM_LN1_DIR="$FM_TEST_DIR/ln1"
 export FM_LN2_DIR="$FM_TEST_DIR/ln2"
 export FM_BTC_DIR="$FM_TEST_DIR/bitcoin"
 export FM_CFG_DIR="$FM_TEST_DIR/cfg"
+export FM_ELECTRS_DIR="$FM_TEST_DIR/electrs"
 mkdir -p $FM_LN1_DIR
 mkdir -p $FM_LN2_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
+mkdir -p $FM_ELECTRS_DIR
 
 # Generate federation configs
 CERTS=""
