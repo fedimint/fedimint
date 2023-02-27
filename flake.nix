@@ -189,37 +189,13 @@
           crossTargets
         ;
 
-        craneLib = crane.lib.${system}.overrideToolchain fenixToolchain;
+        craneLibNative = crane.lib.${system}.overrideToolchain fenixToolchain;
 
         craneLibCross = builtins.mapAttrs
-          (attr: target: crane.lib.${system}.overrideToolchain fenixToolchainCross.${attr})
+          (name: target: crane.lib.${system}.overrideToolchain fenixToolchainCross.${name})
           crossTargets
         ;
 
-        cargo-llvm-cov = craneLib.buildPackage rec {
-          pname = "cargo-llvm-cov";
-          version = "0.4.14";
-          buildInputs = commonArgs.buildInputs;
-
-          src = pkgs.fetchCrate {
-            inherit pname version;
-            sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
-          };
-          doCheck = false;
-        };
-
-        # some extra utilities that cli-tests require
-        cliTestsDeps = with pkgs; [
-          bc
-          bitcoind
-          clightning-dev
-          jq
-          netcat
-          perl
-          procps
-          bash
-          which
-        ];
 
         # filter source code at path `src` to include only the list of `modules`
         filterModules = modules: src:
@@ -288,337 +264,364 @@
             inherit src;
           };
 
+        craneBuild = craneLib: rec {
 
+          cargo-llvm-cov = craneLib.buildPackage rec {
+            pname = "cargo-llvm-cov";
+            version = "0.4.14";
+            buildInputs = commonArgs.buildInputs;
 
-        commonArgsBase = {
-          pname = "fedimint-workspace";
-
-          buildInputs = with pkgs; [
-            clang
-            gcc
-            openssl
-            pkg-config
-            perl
-            pkgs.llvmPackages.bintools
-            rocksdb
-            protobuf
-          ] ++ lib.optionals stdenv.isDarwin [
-            libiconv
-            darwin.apple_sdk.frameworks.Security
-            zld
-          ] ++ lib.optionals (!(stdenv.isAarch64 || stdenv.isDarwin)) [
-            # mold is currently broken on ARM and MacOS
-            mold
-          ];
-
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-          ];
-
-
-          # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
-          installCargoArtifactsMode = "use-zstd";
-
-          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-          ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
-          PROTOC = "${pkgs.protobuf}/bin/protoc";
-          PROTOC_INCLUDE = "${pkgs.protobuf}/include";
-          CI = "true";
-          HOME = "/tmp";
-        };
-
-        commonArgs = commonArgsBase // {
-          src = filterWorkspaceFiles ./.;
-        };
-
-        commonArgsDepsOnly = commonArgsBase // {
-          # TODO: use this one instead of `src` after https://github.com/ipetkov/crane/issues/249 is figured out
-          # cargoVendorDir = craneLib.vendorCargoDeps {
-          #   src = filterWorkspaceFiles ./.;
-          # };
-          src = filterWorkspaceFiles ./.;
-          # copy over the linker/ar wrapper scripts which by default would get
-          # stripped by crane
-          dummySrc = craneLib.mkDummySrc {
-            src = filterWorkspaceDepsBuildFiles ./.;
-            extraDummyScript = ''
-              cp -ar ${./.cargo} --no-target-directory $out/.cargo
-            '';
+            src = pkgs.fetchCrate {
+              inherit pname version;
+              sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
+            };
+            doCheck = false;
           };
-        };
 
-        commonCliTestArgs = commonArgs // {
-          pname = "fedimint-cli-test";
-          version = "0.0.1";
-          src = filterWorkspaceCliTestFiles ./.;
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
-          # there's no point saving the `./target/` dir
-          doInstallCargoArtifacts = false;
-          # the command is a test, no need to run any other tests
-          doCheck = false;
-        };
+          # some extra utilities that cli-tests require
+          cliTestsDeps = with pkgs; [
+            bc
+            bitcoind
+            clightning-dev
+            jq
+            netcat
+            perl
+            procps
+            bash
+            which
+          ];
 
-        workspaceDeps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
-          version = "0.0.1";
-          buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE ; cargo check --profile $CARGO_PROFILE --all-targets ; cargo build --profile $CARGO_PROFILE --all-targets";
-          doCheck = false;
-        });
+          commonArgsBase = {
+            pname = "fedimint-workspace";
 
-        workspaceBuild = craneLib.cargoBuild (commonArgs // {
-          version = "0.0.1";
-          cargoArtifacts = workspaceDeps;
-          doCheck = false;
-        });
+            buildInputs = with pkgs; [
+              clang
+              gcc
+              openssl
+              pkg-config
+              perl
+              pkgs.llvmPackages.bintools
+              rocksdb
+              protobuf
+            ] ++ lib.optionals stdenv.isDarwin [
+              libiconv
+              darwin.apple_sdk.frameworks.Security
+              zld
+            ] ++ lib.optionals (!(stdenv.isAarch64 || stdenv.isDarwin)) [
+              # mold is currently broken on ARM and MacOS
+              mold
+            ];
 
-        workspaceTest = craneLib.cargoTest (commonArgs // {
-          cargoArtifacts = workspaceDeps;
-        });
-
-        workspaceTestDoc = craneLib.cargoTest (commonArgs // {
-          cargoTestExtraArgs = "--doc";
-          cargoArtifacts = workspaceDeps;
-        });
-
-        workspaceClippy = craneLib.cargoClippy (commonArgs // {
-          cargoArtifacts = workspaceDeps;
-
-          cargoClippyExtraArgs = "--all-targets --no-deps -- --deny warnings";
-          doInstallCargoArtifacts = false;
-        });
-
-        workspaceDoc = craneLib.cargoDoc (commonArgs // {
-          cargoArtifacts = workspaceDeps;
-          preConfigure = ''
-            export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
-          '';
-          cargoDocExtraArgs = "--no-deps --document-private-items";
-          doInstallCargoArtifacts = false;
-          postInstall = ''
-            cp -a target/doc $out
-          '';
-          doCheck = false;
-        });
-
-        workspaceAudit = craneLib.cargoAudit (commonArgs // {
-          pname = commonArgs.pname + "-audit";
-          inherit advisory-db;
-        });
-
-        # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
-        workspaceDepsCov = craneLib.buildDepsOnly (commonArgsDepsOnly // {
-          pnameSuffix = "-lcov-deps";
-          version = "0.0.1";
-          buildPhaseCargoCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE --no-report";
-          cargoBuildCommand = "dontuse";
-          cargoCheckCommand = "dontuse";
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
-          doCheck = false;
-        });
-
-        workspaceCov = craneLib.buildPackage (commonArgs // {
-          pnameSuffix = "-lcov";
-          version = "0.0.1";
-          cargoArtifacts = workspaceDepsCov;
-          buildPhaseCargoCommand = "mkdir -p $out ; cargo llvm-cov --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
-          installPhaseCommand = "true";
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
-          doCheck = false;
-        });
-
-        cliTestReconnect = craneLib.buildPackage (commonCliTestArgs // {
-          pname = "${commonCliTestArgs.pname}-reconnect";
-          cargoArtifacts = workspaceBuild;
-          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/reconnect-test.sh";
-          doCheck = true;
-        });
-
-        cliTestLatency = craneLib.buildPackage (commonCliTestArgs // {
-          pname = "${commonCliTestArgs.pname}-latency";
-          cargoArtifacts = workspaceBuild;
-          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/latency-test.sh";
-          doCheck = true;
-        });
-
-        cliTestCli = craneLib.buildPackage (commonCliTestArgs // {
-          pname = "${commonCliTestArgs.pname}-cli";
-          cargoArtifacts = workspaceBuild;
-          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/cli-test.sh";
-          doCheck = true;
-        });
-
-        cliRustTests = craneLib.buildPackage (commonCliTestArgs // {
-          pname = "${commonCliTestArgs.pname}-rust-tests";
-          cargoArtifacts = workspaceBuild;
-          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/rust-tests.sh";
-          doCheck = true;
-        });
-
-        cliTestAlwaysFail = craneLib.buildPackage (commonCliTestArgs // {
-          pname = "${commonCliTestArgs.pname}-always-fail";
-          cargoArtifacts = workspaceBuild;
-          cargoTestCommand = "patchShebangs ./scripts ; ./scripts/always-fail-test.sh";
-          doCheck = true;
-        });
+            nativeBuildInputs = with pkgs; [
+              pkg-config
+            ];
 
 
-        # Compile a group of packages together
-        #
-        # This unifies their cargo features and avoids building common dependencies mulitple
-        # times, but will produce a derivation with all listed packages.
-        pkgsBuild = { name, pkgs, dirs, defaultBin ? null }:
-          let
-            # "--package x --package y" args passed to cargo
-            pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
-            deps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
-              version = "0.0.1";
-              pname = name;
-              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
-              doCheck = false;
-            });
+            # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
+            installCargoArtifactsMode = "use-zstd";
 
-          in
+            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+            ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+            PROTOC = "${pkgs.protobuf}/bin/protoc";
+            PROTOC_INCLUDE = "${pkgs.protobuf}/include";
+            CI = "true";
+            HOME = "/tmp";
+          };
 
-          craneLib.buildPackage (commonArgs // {
-            meta = { mainProgram = defaultBin; };
+          commonArgs = commonArgsBase // {
+            src = filterWorkspaceFiles ./.;
+          };
+
+          commonArgsDepsOnly = commonArgsBase // {
+            cargoVendorDir = craneLib.vendorCargoDeps {
+              src = filterWorkspaceFiles ./.;
+            };
+            # copy over the linker/ar wrapper scripts which by default would get
+            # stripped by crane
+            dummySrc = craneLib.mkDummySrc {
+              src = filterWorkspaceDepsBuildFiles ./.;
+              extraDummyScript = ''
+                cp -ar ${./.cargo} --no-target-directory $out/.cargo
+              '';
+            };
+          };
+
+          commonCliTestArgs = commonArgs // {
+            pname = "fedimint-cli-test";
             version = "0.0.1";
-            pname = "${name}";
-            cargoArtifacts = deps;
+            src = filterWorkspaceCliTestFiles ./.;
+            nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
+            # there's no point saving the `./target/` dir
+            doInstallCargoArtifacts = false;
+            # the command is a test, no need to run any other tests
+            doCheck = false;
+          };
 
-            src = filterModules dirs ./.;
-            cargoExtraArgs = pkgsArgs;
-
-            # if needed we will check the whole workspace at once with `workspaceBuild`
+          workspaceDeps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
+            version = "0.0.1";
+            buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE ; cargo check --profile $CARGO_PROFILE --all-targets ; cargo build --profile $CARGO_PROFILE --all-targets";
             doCheck = false;
           });
 
+          workspaceBuild = craneLib.cargoBuild (commonArgs // {
+            version = "0.0.1";
+            cargoArtifacts = workspaceDeps;
+            doCheck = false;
+          });
 
-        # Cross-compile a group of packages together.
-        #
-        # This unifies their cargo features and avoids building common dependencies mulitple
-        # times, but will produce a derivation with all listed packages.
-        pkgsCrossBuild = { name, pkgs, dirs, target }:
-          if target == null then
-            pkgsBuild { inherit name pkgs dirs; }
-          else
+          workspaceTest = craneLib.cargoTest (commonArgs // {
+            cargoArtifacts = workspaceDeps;
+          });
+
+          workspaceTestDoc = craneLib.cargoTest (commonArgs // {
+            cargoTestExtraArgs = "--doc";
+            cargoArtifacts = workspaceDeps;
+          });
+
+          workspaceClippy = craneLib.cargoClippy (commonArgs // {
+            cargoArtifacts = workspaceDeps;
+
+            cargoClippyExtraArgs = "--all-targets --no-deps -- --deny warnings";
+            doInstallCargoArtifacts = false;
+          });
+
+          workspaceDoc = craneLib.cargoDoc (commonArgs // {
+            cargoArtifacts = workspaceDeps;
+            preConfigure = ''
+              export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
+            '';
+            cargoDocExtraArgs = "--no-deps --document-private-items";
+            doInstallCargoArtifacts = false;
+            postInstall = ''
+              cp -a target/doc $out
+            '';
+            doCheck = false;
+          });
+
+          workspaceAudit = craneLib.cargoAudit (commonArgs // {
+            pname = commonArgs.pname + "-audit";
+            inherit advisory-db;
+          });
+
+          # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
+          workspaceDepsCov = craneLib.buildDepsOnly (commonArgsDepsOnly // {
+            pnameSuffix = "-lcov-deps";
+            version = "0.0.1";
+            buildPhaseCargoCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE --no-report";
+            cargoBuildCommand = "dontuse";
+            cargoCheckCommand = "dontuse";
+            nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+            doCheck = false;
+          });
+
+          workspaceCov = craneLib.buildPackage (commonArgs // {
+            pnameSuffix = "-lcov";
+            version = "0.0.1";
+            cargoArtifacts = workspaceDepsCov;
+            buildPhaseCargoCommand = "mkdir -p $out ; cargo llvm-cov --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
+            installPhaseCommand = "true";
+            nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+            doCheck = false;
+          });
+
+          cliTestReconnect = craneLib.buildPackage (commonCliTestArgs // {
+            pname = "${commonCliTestArgs.pname}-reconnect";
+            cargoArtifacts = workspaceBuild;
+            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/reconnect-test.sh";
+            doCheck = true;
+          });
+
+          cliTestLatency = craneLib.buildPackage (commonCliTestArgs // {
+            pname = "${commonCliTestArgs.pname}-latency";
+            cargoArtifacts = workspaceBuild;
+            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/latency-test.sh";
+            doCheck = true;
+          });
+
+          cliTestCli = craneLib.buildPackage (commonCliTestArgs // {
+            pname = "${commonCliTestArgs.pname}-cli";
+            cargoArtifacts = workspaceBuild;
+            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/cli-test.sh";
+            doCheck = true;
+          });
+
+          cliRustTests = craneLib.buildPackage (commonCliTestArgs // {
+            pname = "${commonCliTestArgs.pname}-rust-tests";
+            cargoArtifacts = workspaceBuild;
+            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/rust-tests.sh";
+            doCheck = true;
+          });
+
+          cliTestAlwaysFail = craneLib.buildPackage (commonCliTestArgs // {
+            pname = "${commonCliTestArgs.pname}-always-fail";
+            cargoArtifacts = workspaceBuild;
+            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/always-fail-test.sh";
+            doCheck = true;
+          });
+
+
+          # Compile a group of packages together
+          #
+          # This unifies their cargo features and avoids building common dependencies mulitple
+          # times, but will produce a derivation with all listed packages.
+          pkgsBuild = { name, pkgs, dirs, defaultBin ? null }:
             let
               # "--package x --package y" args passed to cargo
               pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
-              craneLib = craneLibCross.${target.name};
               deps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
+                version = "0.0.1";
+                pname = name;
+                buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
+                doCheck = false;
+              });
+
+            in
+
+            craneLib.buildPackage (commonArgs // {
+              meta = { mainProgram = defaultBin; };
+              version = "0.0.1";
+              pname = "${name}";
+              cargoArtifacts = deps;
+
+              src = filterModules dirs ./.;
+              cargoExtraArgs = pkgsArgs;
+
+              # if needed we will check the whole workspace at once with `workspaceBuild`
+              doCheck = false;
+            });
+
+
+          # Cross-compile a group of packages together.
+          #
+          # This unifies their cargo features and avoids building common dependencies mulitple
+          # times, but will produce a derivation with all listed packages.
+          pkgsCrossBuild = { name, pkgs, dirs, target }:
+            if target == null then
+              pkgsBuild { inherit name pkgs dirs; }
+            else
+              let
+                # "--package x --package y" args passed to cargo
+                pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
+                craneLib = craneLibCross.${target.name};
+                deps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
+                  pname = "${name}-${target.name}";
+                  version = "0.0.1";
+                  # workaround: on wasm, we can't compile all deps, so narrow dependency build
+                  # to ones used by the client package only
+                  buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} ${pkgsArgs}";
+                  doCheck = false;
+
+                  preBuild = ''
+                    patchShebangs .cargo/
+                  '' + target.extraEnvs;
+                });
+
+              in
+              craneLib.buildPackage (commonArgs // {
                 pname = "${name}-${target.name}";
                 version = "0.0.1";
-                # workaround: on wasm, we can't compile all deps, so narrow dependency build
-                # to ones used by the client package only
-                buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} ${pkgsArgs}";
-                doCheck = false;
+                cargoArtifacts = deps;
 
+                src = filterModules dirs ./.;
+                cargoExtraArgs = "--target ${target.name} ${pkgsArgs}";
+
+                # if needed we will check the whole workspace at once with `workspaceBuild`
+                doCheck = false;
                 preBuild = ''
                   patchShebangs .cargo/
                 '' + target.extraEnvs;
               });
 
-            in
-            craneLib.buildPackage (commonArgs // {
-              pname = "${name}-${target.name}";
-              version = "0.0.1";
-              cargoArtifacts = deps;
+          fedimint-pkgs = pkgsBuild {
+            name = "fedimint-pkgs";
 
-              src = filterModules dirs ./.;
-              cargoExtraArgs = "--target ${target.name} ${pkgsArgs}";
+            pkgs = {
+              fedimintd = { };
+              fedimint-cli = { };
+              fedimint-tests = { };
+            };
 
-              # if needed we will check the whole workspace at once with `workspaceBuild`
-              doCheck = false;
-              preBuild = ''
-                patchShebangs .cargo/
-              '' + target.extraEnvs;
-            });
-
-        fedimint-pkgs = pkgsBuild {
-          name = "fedimint-pkgs";
-
-          pkgs = {
-            fedimintd = { };
-            fedimint-cli = { };
-            fedimint-tests = { };
+            defaultBin = "fedimintd";
+            dirs = [
+              "client/client-lib"
+              "client/cli"
+              "crypto/aead"
+              "crypto/derive-secret"
+              "crypto/hkdf"
+              "crypto/tbs"
+              "fedimintd"
+              "fedimint-bitcoind"
+              "fedimint-build"
+              "fedimint-core"
+              "fedimint-derive"
+              "fedimint-dbtool"
+              "fedimint-rocksdb"
+              "fedimint-server"
+              "fedimint-logging"
+              "gateway/ln-gateway"
+              "modules"
+            ];
           };
 
-          defaultBin = "fedimintd";
-          dirs = [
-            "client/client-lib"
-            "client/cli"
-            "crypto/aead"
-            "crypto/derive-secret"
-            "crypto/hkdf"
-            "crypto/tbs"
-            "fedimintd"
-            "fedimint-bitcoind"
-            "fedimint-build"
-            "fedimint-core"
-            "fedimint-derive"
-            "fedimint-dbtool"
-            "fedimint-rocksdb"
-            "fedimint-server"
-            "fedimint-logging"
-            "gateway/ln-gateway"
-            "modules"
-          ];
-        };
+          ln-gateway-pkgs = pkgsBuild {
+            name = "ln-gateway-pkgs";
 
-        ln-gateway-pkgs = pkgsBuild {
-          name = "ln-gateway-pkgs";
+            pkgs = {
+              ln-gateway = { };
+              gateway-cli = { };
+              gateway-tests = { };
+            };
 
-          pkgs = {
-            ln-gateway = { };
-            gateway-cli = { };
-            gateway-tests = { };
+            dirs = [
+              "crypto/aead"
+              "crypto/derive-secret"
+              "crypto/tbs"
+              "crypto/hkdf"
+              "client/client-lib"
+              "modules/fedimint-ln"
+              "fedimint-bitcoind"
+              "fedimint-core"
+              "fedimint-derive"
+              "fedimint-dbtool"
+              "fedimint-rocksdb"
+              "fedimint-build"
+              "fedimint-logging"
+              "gateway/ln-gateway"
+              "gateway/cli"
+              "modules"
+            ];
           };
 
-          dirs = [
-            "crypto/aead"
-            "crypto/derive-secret"
-            "crypto/tbs"
-            "crypto/hkdf"
-            "client/client-lib"
-            "modules/fedimint-ln"
-            "fedimint-bitcoind"
-            "fedimint-core"
-            "fedimint-derive"
-            "fedimint-dbtool"
-            "fedimint-rocksdb"
-            "fedimint-build"
-            "fedimint-logging"
-            "gateway/ln-gateway"
-            "gateway/cli"
-            "modules"
-          ];
-        };
+          client-pkgs = { target ? null }: pkgsCrossBuild {
+            name = "client-pkgs";
+            inherit target;
 
-        client-pkgs = { target ? null }: pkgsCrossBuild {
-          name = "client-pkgs";
-          inherit target;
-
-          pkgs = {
-            mint-client = { };
-          } // lib.optionalAttrs (target == null || target.name != "wasm32-unknown-unknown") {
-            # broken on wasm32
-            fedimint-sqlite = { };
+            pkgs = {
+              mint-client = { };
+            } // lib.optionalAttrs (target == null || target.name != "wasm32-unknown-unknown") {
+              # broken on wasm32
+              fedimint-sqlite = { };
+            };
+            dirs = [
+              "client/client-lib"
+              "crypto/aead"
+              "crypto/derive-secret"
+              "crypto/tbs"
+              "crypto/hkdf"
+              "fedimint-bitcoind"
+              "fedimint-core"
+              "fedimint-derive"
+              "fedimint-dbtool"
+              "fedimint-rocksdb"
+              "fedimint-sqlite"
+              "fedimint-logging"
+              "modules"
+            ];
           };
-          dirs = [
-            "client/client-lib"
-            "crypto/aead"
-            "crypto/derive-secret"
-            "crypto/tbs"
-            "crypto/hkdf"
-            "fedimint-bitcoind"
-            "fedimint-core"
-            "fedimint-derive"
-            "fedimint-dbtool"
-            "fedimint-rocksdb"
-            "fedimint-sqlite"
-            "fedimint-logging"
-            "modules"
-          ];
         };
+
+        craneBuildNative = craneBuild craneLibNative;
+        craneBuildCross = target: craneBuild craneLibCross.${target};
 
         # Replace placeholder git hash in a binary
         #
@@ -657,23 +660,23 @@
 
         # outputs that do something over the whole workspace
         outputsWorkspace = {
-          inherit workspaceDeps
-            workspaceBuild
-            workspaceClippy
-            workspaceTest
-            workspaceTestDoc
-            workspaceDoc
-            workspaceCov
-            workspaceAudit;
-
+          workspaceDeps = craneBuildNative.workspaceDeps;
+          workspaceBuild = craneBuildNative.workspaceBuild;
+          workspaceClippy = craneBuildNative.workspaceClippy;
+          workspaceTest = craneBuildNative.workspaceTest;
+          workspaceTestDoc = craneBuildNative.workspaceTestDoc;
+          workspaceDoc = craneBuildNative.workspaceDoc;
+          workspaceCov = craneBuildNative.workspaceCov;
+          workspaceAudit = craneBuildNative.workspaceAudit;
         };
 
         # outputs that build a particular package
         outputsPackages = {
-          default = fedimint-pkgs;
+          default = craneBuildNative.fedimint-pkgs;
 
-          inherit fedimint-pkgs ln-gateway-pkgs;
-          client-pkgs = client-pkgs { };
+          fedimint-pkgs = craneBuildNative.fedimint-pkgs;
+          ln-gateway-pkgs = craneBuildNative.ln-gateway-pkgs;
+          client-pkgs = craneBuildNative.client-pkgs { };
         };
 
         packages = outputsWorkspace //
@@ -684,88 +687,95 @@
         devShells =
 
           let
-            shellCommon = {
-              buildInputs = commonArgs.buildInputs;
-              nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
-                fenix.packages.${system}.rust-analyzer
-                fenixToolchainRustfmt
-                cargo-llvm-cov
-                cargo-udeps
-                pkgs.parallel
-                pkgs.just
-                cargo-spellcheck
+            shellCommon = craneLib:
+              let
+                build = craneBuild craneBuild;
+                commonArgs = build.commonArgs;
+              in
+              {
+                buildInputs = commonArgs.buildInputs;
+                nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
+                  fenix.packages.${system}.rust-analyzer
+                  fenixToolchainRustfmt
+                  cargo-llvm-cov
+                  cargo-udeps
+                  pkgs.parallel
+                  pkgs.just
+                  cargo-spellcheck
 
-                (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
+                  (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
 
-                # This is required to prevent a mangled bash shell in nix develop
-                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
-                (hiPrio pkgs.bashInteractive)
-                tmux
-                tmuxinator
-                docker-compose
-                pkgs.tokio-console
+                  # This is required to prevent a mangled bash shell in nix develop
+                  # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
+                  (hiPrio pkgs.bashInteractive)
+                  tmux
+                  tmuxinator
+                  docker-compose
+                  pkgs.tokio-console
 
-                # Nix
-                pkgs.nixpkgs-fmt
-                pkgs.shellcheck
-                pkgs.rnix-lsp
-                pkgs-unstable.convco
-                pkgs.nodePackages.bash-language-server
-              ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
-                pkgs.semgrep
-              ] ++ cliTestsDeps;
-              RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
-              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-              ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+                  # Nix
+                  pkgs.nixpkgs-fmt
+                  pkgs.shellcheck
+                  pkgs.rnix-lsp
+                  pkgs-unstable.convco
+                  pkgs.nodePackages.bash-language-server
+                ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
+                  pkgs.semgrep
+                ] ++ build.cliTestsDeps;
+                RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
+                LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+                ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
 
-              shellHook = ''
-                # auto-install git hooks
-                dot_git="$(git rev-parse --git-common-dir)"
-                if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
-                for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
-                ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
+                shellHook = ''
+                  # auto-install git hooks
+                  dot_git="$(git rev-parse --git-common-dir)"
+                  if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
+                  for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
+                  ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
 
-                # workaround https://github.com/rust-lang/cargo/issues/11020
-                cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
-                if (( ''${#cargo_cmd_bins[@]} != 0 )); then
-                  >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
-                  >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
-                fi
-
-                # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
-                if [ -n "$TMUX" ]; then
-                  # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
-                  if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
-                    echo
-                    >&2 echo "⚠️  tmux's 'default-command' not set"
-                    >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
+                  # workaround https://github.com/rust-lang/cargo/issues/11020
+                  cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
+                  if (( ''${#cargo_cmd_bins[@]} != 0 )); then
+                    >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
+                    >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
                   fi
-                fi
 
-                # if runing in direnv
-                if [ -n "''${DIRENV_IN_ENVRC:-}" ]; then
-                  # and not set DIRENV_LOG_FORMAT
-                  if [ -n "''${DIRENV_LOG_FORMAT:-}" ]; then
-                    >&2 echo "💡 Set 'DIRENV_LOG_FORMAT=\"\"' in your shell environment variables for a cleaner output of direnv"
+                  # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
+                  if [ -n "$TMUX" ]; then
+                    # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
+                    if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
+                      echo
+                      >&2 echo "⚠️  tmux's 'default-command' not set"
+                      >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
+                    fi
                   fi
-                fi
 
-                >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
+                  # if runing in direnv
+                  if [ -n "''${DIRENV_IN_ENVRC:-}" ]; then
+                    # and not set DIRENV_LOG_FORMAT
+                    if [ -n "''${DIRENV_LOG_FORMAT:-}" ]; then
+                      >&2 echo "💡 Set 'DIRENV_LOG_FORMAT=\"\"' in your shell environment variables for a cleaner output of direnv"
+                    fi
+                  fi
 
-                if [ "$(ulimit -Sn)" -lt "1024" ]; then
-                    >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
-                fi
-              '';
-            };
+                  >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
+
+                  if [ "$(ulimit -Sn)" -lt "1024" ]; then
+                      >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
+                  fi
+                '';
+              };
+            shellCommonNative = shellCommon craneLibNative;
+            shellCommonCross = shellCommon craneLibCross;
 
           in
           {
             # The default shell - meant to developers working on the project,
             # so notably not building any project binaries, but including all
             # the settings and tools neccessary to build and work with the codebase.
-            default = pkgs.mkShell (shellCommon
+            default = pkgs.mkShell (shellCommonNative
               // {
-              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchain ];
+              nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ fenixToolchain ];
             });
 
 
@@ -773,10 +783,10 @@
             #
             # This will pull extra stuff so to save time and download time to most common developers,
             # was moved into another shell.
-            cross = pkgs.mkShell (shellCommon // {
-              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchainCrossAll ];
+            cross = pkgs.mkShell (shellCommonCross // {
+              nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ fenixToolchainCrossAll ];
 
-              shellHook = shellCommon.shellHook +
+              shellHook = shellCommonCross.shellHook +
 
                 # Android NDK not available for Arm MacOS
                 (if isArch64Darwin then "" else androidCrossEnvVars)
@@ -784,10 +794,10 @@
             });
 
             # Like `cross` but only with wasm
-            crossWasm = pkgs.mkShell (shellCommon // {
-              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchainCrossWasm ];
+            crossWasm = pkgs.mkShell (shellCommonCross // {
+              nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ fenixToolchainCrossWasm ];
 
-              shellHook = shellCommon.shellHook + wasm32CrossEnvVars;
+              shellHook = shellCommonCross.shellHook + wasm32CrossEnvVars;
             });
 
             # this shell is used only in CI, so it should contain minimum amount
@@ -821,7 +831,10 @@
       {
         inherit packages devShells;
 
-        lib = { inherit replaceGitHash devShells commonArgsBase; };
+        lib = {
+          inherit replaceGitHash devShells;
+          commonArgsBase = craneBuildNative.commonArgsBase;
+        };
 
         # Technically nested sets are not allowed in `packages`, so we can
         # dump the nested things here. They'll work the same way for most
@@ -848,16 +861,16 @@
           ;
 
           cli-test = {
-            reconnect = cliTestReconnect;
-            latency = cliTestLatency;
-            cli = cliTestCli;
-            rust-tests = cliRustTests;
-            always-fail = cliTestAlwaysFail;
+            reconnect = craneBuildNative.cliTestReconnect;
+            latency = craneBuildNative.cliTestLatency;
+            cli = craneBuildNative.cliTestCli;
+            rust-tests = craneBuildNative.cliRustTests;
+            always-fail = craneBuildNative.cliTestAlwaysFail;
           };
 
           cross = builtins.mapAttrs
-            (attr: target: {
-              client-pkgs = client-pkgs { inherit target; };
+            (name: target: {
+              client-pkgs = (craneBuildCross name).client-pkgs { inherit target; };
             })
             crossTargets;
 
@@ -906,7 +919,7 @@
                 in
                 pkgs.dockerTools.buildLayeredImage {
                   name = "ln-gateway";
-                  contents = [ ln-gateway-pkgs pkgs.bash pkgs.coreutils ];
+                  contents = [ craneBuildNative.ln-gateway-pkgs pkgs.bash pkgs.coreutils ];
                   config = {
                     Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
                     Entrypoint = [
@@ -934,7 +947,7 @@
                     rpc-file-mode=0660
                     log-timestamps=false
 
-                    plugin=${ln-gateway-pkgs}/bin/ln_gateway
+                    plugin=${craneBuildNative.ln-gateway-pkgs}/bin/ln_gateway
                     fedimint-cfg=/var/fedimint/fedimint-gw
 
                     announce-addr=104.244.73.68:9735
@@ -947,10 +960,10 @@
                 in
                 pkgs.dockerTools.buildLayeredImage {
                   name = "ln-gateway-clightning";
-                  contents = [ ln-gateway-pkgs clightning-dev pkgs.bash pkgs.coreutils ];
+                  contents = [ craneBuildNative.ln-gateway-pkgs clightning-dev pkgs.bash pkgs.coreutils ];
                   config = {
                     Cmd = [
-                      "${ln-gateway-pkgs}/bin/ln_gateway"
+                      "${craneBuildNative.ln-gateway-pkgs}/bin/ln_gateway"
                     ];
                     ExposedPorts = {
                       "${builtins.toString 9735}/tcp" = { };
@@ -964,10 +977,10 @@
 
               fedimint-cli = pkgs.dockerTools.buildLayeredImage {
                 name = "fedimint-cli";
-                contents = [ fedimint-pkgs pkgs.bash pkgs.coreutils ];
+                contents = [ craneBuildNative.fedimint-pkgs pkgs.bash pkgs.coreutils ];
                 config = {
                   Cmd = [
-                    "${fedimint-pkgs}/bin/fedimint-cli"
+                    "${craneBuildNative.fedimint-pkgs}/bin/fedimint-cli"
                   ];
                 };
               };
@@ -975,9 +988,8 @@
         };
 
         checks = {
-          inherit
-            workspaceBuild
-            workspaceClippy;
+          workspaceBuild = craneBuildNative.workspaceBuild;
+          workspaceClippy = craneBuildNative.workspaceClippy;
         };
 
       });
