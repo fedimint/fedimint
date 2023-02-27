@@ -12,6 +12,7 @@ use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
 use ln_gateway::lnrpc_client::DynLnRpcClient;
+use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::Gateway;
 use mint_client::module_decode_stubs;
 use mint_client::modules::wallet::WalletClientGen;
@@ -25,6 +26,7 @@ pub struct Fixtures {
     pub bitcoin: Box<dyn BitcoinTest>,
     pub lightning: Box<dyn LightningTest>,
     pub gateway: Gateway,
+    pub rpc: RpcClient,
 }
 
 pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
@@ -33,7 +35,7 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
 
     // Create federation client builder
     let client_builder: DynGatewayClientBuilder =
-        client::TestGatewayClientBuilder::new(MemDbFactory.into(), api_addr).into();
+        client::TestGatewayClientBuilder::new(MemDbFactory.into(), api_addr.clone()).into();
 
     let decoders = module_decode_stubs();
     let module_gens = ClientModuleGenRegistry::from(vec![
@@ -54,6 +56,8 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
     )
     .await;
 
+    let rpc = RpcClient::new(api_addr);
+
     let bitcoin = Box::new(FakeBitcoinTest::new());
     let lightning = Box::new(FakeLightningTest::new());
 
@@ -62,6 +66,7 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
         bitcoin,
         lightning,
         gateway,
+        rpc,
     })
 }
 
@@ -71,7 +76,7 @@ pub async fn test<B>(
     api_addr: Url,
     listen: Option<SocketAddr>,
     password: Option<String>,
-    testfn: impl FnOnce(Box<dyn BitcoinTest>, Box<dyn LightningTest>, Option<Gateway>) -> B,
+    testfn: impl FnOnce(Box<dyn BitcoinTest>, Box<dyn LightningTest>, Option<Gateway>, RpcClient) -> B,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
@@ -81,6 +86,7 @@ where
         bitcoin,
         lightning,
         gateway,
+        rpc,
     } = fixtures(api_addr).await?;
 
     if listen.is_some() && password.is_some() {
@@ -94,11 +100,11 @@ where
             .await;
 
         // Tests a running (live) gateway instance
-        testfn(bitcoin, lightning, None).await;
+        testfn(bitcoin, lightning, None, rpc).await;
     } else {
         // Test a gateway instance that is not running.
         // Maybe the scenario want to run it manually.
-        testfn(bitcoin, lightning, Some(gateway)).await;
+        testfn(bitcoin, lightning, Some(gateway), rpc).await;
     }
 
     task_group.shutdown_join_all(None).await

@@ -18,7 +18,7 @@ use std::time::Duration;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::FederationId;
 use fedimint_logging::TracingSetup;
-use ln_gateway::rpc::rpc_client::{Error, Response, RpcClient};
+use ln_gateway::rpc::rpc_client::{Error, Response};
 use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
@@ -40,9 +40,9 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
         gw_api_addr.clone(),
         Some(gw_listen),
         Some(gw_password.clone()),
-        |bitcoin, _, _| async move {
+        |bitcoin, _, _, rpc| async move {
             // Create an RPC client reference
-            let client_ref = &RpcClient::new(gw_api_addr);
+            let client_ref = &rpc;
 
             // Create a test federation ID
             let federation_id = FederationId::dummy();
