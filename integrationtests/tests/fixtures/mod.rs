@@ -158,7 +158,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
 
     let decoders = module_decode_stubs();
 
-    let fixtures = match env::var("FM_TEST_DISABLE_MOCKS") {
+    let fixtures = match env::var("FM_TEST_USE_REAL_DAEMONS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
