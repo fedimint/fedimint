@@ -27,21 +27,22 @@ mod wasm {
         Encodable,
         Decodable,
     )]
-    pub struct SystemTime(Duration);
+    pub struct SystemTime(std::time::SystemTime);
 
     impl SystemTime {
-        pub const UNIX_EPOCH: SystemTime = SystemTime(Duration::from_secs(0));
+        pub const UNIX_EPOCH: SystemTime = SystemTime(std::time::SystemTime::UNIX_EPOCH);
 
         pub fn now() -> SystemTime {
-            SystemTime(Duration::from_secs_f64(
-                js_sys::Date::new_0().get_time() / 1000.,
-            ))
+            SystemTime(
+                std::time::SystemTime::UNIX_EPOCH
+                    + Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.),
+            )
         }
 
         pub fn duration_since(&self, earlier: SystemTime) -> anyhow::Result<Duration> {
             self.0
-                .checked_sub(earlier.0)
-                .ok_or_else(|| anyhow!("Earlier time larger than self"))
+                .duration_since(earlier.0)
+                .map_err(|_| anyhow!("Earlier time larger than self"))
         }
     }
 
