@@ -1,3 +1,14 @@
+//! Gatewayd authentication test suite
+//!
+//! This crate contains authentication tests for gatewayd API.
+//!
+//! The tests run instances of gatewayd with the following mocks:
+//!
+//! * mock of `ILnRpcClient` - Use a fake implementation of `ILnRpcClient` that
+//!   simulates gateway lightning dependency.
+//!
+//! * mock of `IFederationApi` - Use a fake implementation of `IFederationApi`
+//!   that simulates gateway federation client dependency.
 mod fixtures;
 
 use std::future::Future;
