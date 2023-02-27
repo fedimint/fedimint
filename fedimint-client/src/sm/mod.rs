@@ -2,15 +2,15 @@ mod executor;
 /// State machine state interface
 mod state;
 
-use std::sync::Arc;
+use std::fmt::Debug;
 
 pub use executor::{Executor, ExecutorBuilder};
 pub use state::{Context, DynContext, DynState, State, StateTransition};
 
-// TODO: fill in useful data or make everything generic over a global context
-// type parameter
-/// Context that every state machine is supplied by its executor
-pub type GlobalContext = Arc<()>;
+/// Context given to all state machines
+pub trait GlobalContext: Debug + Sync + Send + 'static {}
+
+impl GlobalContext for () {}
 
 /// Unique identifier for one semantic, correlatable operation.
 ///

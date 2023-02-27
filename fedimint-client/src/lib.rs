@@ -9,11 +9,20 @@ pub mod sm;
 
 /// Fedimint module client
 pub trait ClientModule {
-    /// Data and API clients available to state machine transitions
-    type StateMachineContext: Clone;
+    /// Data and API clients available to state machine transitions of this
+    /// module
+    type ModuleStateMachineContext;
+
+    /// Data and API clients available to state machine transitions of all
+    /// modules
+    type GlobalStateMachineContext;
+
     /// All possible states this client can submit to the executor
-    type States: State<ModuleContext = Self::StateMachineContext>;
+    type States: State<
+        Self::GlobalStateMachineContext,
+        ModuleContext = Self::ModuleStateMachineContext,
+    >;
 
     fn decoder(&self) -> Decoder;
-    fn context(&self) -> Self::StateMachineContext;
+    fn context(&self) -> Self::ModuleStateMachineContext;
 }

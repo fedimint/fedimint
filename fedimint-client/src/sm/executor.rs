@@ -1,13 +1,16 @@
 use std::collections::BTreeMap;
+use std::fmt::Debug;
+use std::io::{Error, Read, Write};
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{impl_db_lookup, impl_db_record};
 use futures::future::select_all;
 use futures::stream::StreamExt;
 use tokio::select;
@@ -39,13 +42,13 @@ enum ExecutorDbPrefixes {
 /// The executor is aware of the concept of Fedimint modules and can give state
 /// machines a different [execution context](super::state::Context) depending on
 /// the owning module, making it very flexible.
-pub struct Executor {
-    inner: Arc<ExecutorInner>,
+pub struct Executor<GC> {
+    inner: Arc<ExecutorInner<GC>>,
 }
 
-struct ExecutorInner {
+struct ExecutorInner<GC> {
     db: Database,
-    context: GlobalContext,
+    context: GC,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
 }
 
@@ -56,7 +59,10 @@ pub struct ExecutorBuilder {
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
 }
 
-impl Executor {
+impl<GC> Executor<GC>
+where
+    GC: GlobalContext,
+{
     /// Creates an [`ExecutorBuilder`]
     pub fn builder() -> ExecutorBuilder {
         ExecutorBuilder::default()
@@ -64,7 +70,7 @@ impl Executor {
 
     /// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
-    pub async fn add_state_machines(&self, states: Vec<DynState>) -> anyhow::Result<()> {
+    pub async fn add_state_machines(&self, states: Vec<DynState<GC>>) -> anyhow::Result<()> {
         self.inner.db
             .autocommit(
                 |dbtx| {
@@ -76,12 +82,12 @@ impl Executor {
                             }
 
                             let is_active_state = dbtx
-                                .get_value(&ActiveStateKey(state.clone()))
+                                .get_value(&ActiveStateKey::<GC>(state.clone()))
                                 .await
                                 .expect("DB error")
                                 .is_some();
                             let is_inactive_state = dbtx
-                                .get_value(&InactiveStateKey(state.clone()))
+                                .get_value(&InactiveStateKey::<GC>(state.clone()))
                                 .await
                                 .expect("DB error")
                                 .is_some();
@@ -117,7 +123,7 @@ impl Executor {
     ///
     /// Check if state exists in the database as part of an actively running
     /// state machine.
-    pub async fn contains_active_state<S: State>(
+    pub async fn contains_active_state<S: State<GC>>(
         &self,
         instance: ModuleInstanceId,
         state: S,
@@ -137,7 +143,7 @@ impl Executor {
     /// terminal it means the corresponding state machine finished its
     /// execution. If the state is non-terminal it means the state machine was
     /// in that state at some point but moved on since then.
-    pub async fn contains_inactive_state<S: State>(
+    pub async fn contains_inactive_state<S: State<GC>>(
         &self,
         instance: ModuleInstanceId,
         state: S,
@@ -151,7 +157,10 @@ impl Executor {
     }
 }
 
-impl ExecutorInner {
+impl<GC> ExecutorInner<GC>
+where
+    GC: GlobalContext,
+{
     async fn run(&self) {
         info!("Starting state machine executor task");
         loop {
@@ -261,11 +270,11 @@ impl ExecutorInner {
         Ok(())
     }
 
-    async fn get_active_states(&self) -> Vec<(DynState, ActiveState)> {
+    async fn get_active_states(&self) -> Vec<(DynState<GC>, ActiveState)> {
         self.db
             .begin_transaction()
             .await
-            .find_by_prefix(&ActiveStateKeyPrefix)
+            .find_by_prefix(&ActiveStateKeyPrefix::<GC>::new())
             .await
             .map(|res| {
                 let (ActiveStateKey(state), meta) = res.expect("DB error");
@@ -275,11 +284,11 @@ impl ExecutorInner {
             .await
     }
 
-    async fn get_inactive_states(&self) -> Vec<(DynState, InactiveState)> {
+    async fn get_inactive_states(&self) -> Vec<(DynState<GC>, InactiveState)> {
         self.db
             .begin_transaction()
             .await
-            .find_by_prefix(&InactiveStateKeyPrefix)
+            .find_by_prefix(&InactiveStateKeyPrefix::new())
             .await
             .map(|res| {
                 let (InactiveStateKey(state), meta) = res.expect("DB error");
@@ -296,7 +305,7 @@ impl ExecutorBuilder {
     pub fn with_module<M>(&mut self, instance_id: ModuleInstanceId, module: M)
     where
         M: ClientModule,
-        M::StateMachineContext: IntoDynInstance<DynType = DynContext>,
+        M::ModuleStateMachineContext: IntoDynInstance<DynType = DynContext>,
     {
         let context = module.context();
 
@@ -312,12 +321,10 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build(
-        self,
-        tasks: &mut TaskGroup,
-        db: Database,
-        context: GlobalContext,
-    ) -> Executor {
+    pub async fn build<GC>(self, tasks: &mut TaskGroup, db: Database, context: GC) -> Executor<GC>
+    where
+        GC: GlobalContext,
+    {
         let inner = Arc::new(ExecutorInner {
             db,
             context,
@@ -349,25 +356,62 @@ impl ExecutorBuilder {
 }
 
 /// A state that is able to make progress eventually
-#[derive(Debug, Decodable, Encodable)]
-struct ActiveStateKey(DynState);
+#[derive(Debug)]
+struct ActiveStateKey<GC>(DynState<GC>);
 
-#[derive(Debug, Encodable)]
-struct ActiveStateKeyPrefix;
+impl<GC> Encodable for ActiveStateKey<GC> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.0.consensus_encode(writer)
+    }
+}
+
+impl<GC> Decodable for ActiveStateKey<GC>
+where
+    GC: GlobalContext,
+{
+    fn consensus_decode<R: Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(ActiveStateKey(DynState::consensus_decode(reader, modules)?))
+    }
+}
+
+#[derive(Debug)]
+struct ActiveStateKeyPrefix<GC>(PhantomData<GC>);
+
+impl<GC> ActiveStateKeyPrefix<GC> {
+    pub fn new() -> Self {
+        ActiveStateKeyPrefix(PhantomData)
+    }
+}
+
+impl<GC> Encodable for ActiveStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
+        Ok(0)
+    }
+}
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
 struct ActiveState {
     created_at: SystemTime,
 }
 
-impl_db_record!(
-    key = ActiveStateKey,
-    value = ActiveState,
-    db_prefix = ExecutorDbPrefixes::ActiveStates,
-);
-
-impl_db_lookup!(key = ActiveStateKey, query_prefix = ActiveStateKeyPrefix,);
-
+impl<GC> ::fedimint_core::db::DatabaseRecord for ActiveStateKey<GC>
+where
+    GC: GlobalContext,
+{
+    const DB_PREFIX: u8 = ExecutorDbPrefixes::ActiveStates as u8;
+    type Key = Self;
+    type Value = ActiveState;
+}
+impl<GC> ::fedimint_core::db::DatabaseLookup for ActiveStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = ActiveStateKey<GC>;
+    type Key = ActiveStateKey<GC>;
+}
 impl ActiveState {
     fn new() -> ActiveState {
         ActiveState {
@@ -384,11 +428,46 @@ impl ActiveState {
 }
 
 /// A past or final state of a state machine
-#[derive(Debug, Clone, Decodable, Encodable)]
-struct InactiveStateKey(DynState);
+#[derive(Debug, Clone)]
+struct InactiveStateKey<GC>(DynState<GC>);
 
-#[derive(Debug, Clone, Decodable, Encodable)]
-struct InactiveStateKeyPrefix;
+impl<GC> Encodable for InactiveStateKey<GC>
+where
+    GC: GlobalContext,
+{
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.0.consensus_encode(writer)
+    }
+}
+
+impl<GC> Decodable for InactiveStateKey<GC>
+where
+    GC: GlobalContext,
+{
+    fn consensus_decode<R: Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(InactiveStateKey(DynState::consensus_decode(
+            reader, modules,
+        )?))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct InactiveStateKeyPrefix<GC>(PhantomData<GC>);
+
+impl<GC> InactiveStateKeyPrefix<GC> {
+    pub fn new() -> Self {
+        InactiveStateKeyPrefix(PhantomData)
+    }
+}
+
+impl<GC> Encodable for InactiveStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
+        Ok(0)
+    }
+}
 
 #[derive(Debug, Copy, Clone, Decodable, Encodable)]
 struct InactiveState {
@@ -396,21 +475,26 @@ struct InactiveState {
     exited_at: SystemTime,
 }
 
-impl_db_record!(
-    key = InactiveStateKey,
-    value = InactiveState,
-    db_prefix = ExecutorDbPrefixes::InactiveStates
-);
+impl<GC> ::fedimint_core::db::DatabaseRecord for InactiveStateKey<GC>
+where
+    GC: GlobalContext,
+{
+    const DB_PREFIX: u8 = ExecutorDbPrefixes::InactiveStates as u8;
+    type Key = Self;
+    type Value = InactiveState;
+}
 
-impl_db_lookup!(
-    key = InactiveStateKey,
-    query_prefix = InactiveStateKeyPrefix
-);
+impl<GC> ::fedimint_core::db::DatabaseLookup for InactiveStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = InactiveStateKey<GC>;
+    type Key = InactiveStateKey<GC>;
+}
 
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
-    use std::sync::Arc;
     use std::time::Duration;
 
     use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
@@ -422,7 +506,6 @@ mod tests {
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
-    use crate::sm::executor::GlobalContext;
     use crate::sm::state::{Context, DynContext, DynState};
     use crate::sm::{Executor, OperationId, StateTransition};
     use crate::{ClientModule, State};
@@ -436,13 +519,13 @@ mod tests {
         Final,
     }
 
-    impl State for MockStateMachine {
+    impl State<()> for MockStateMachine {
         type ModuleContext = MockContext;
 
         fn transitions(
             &self,
             context: &Self::ModuleContext,
-            _global_context: &GlobalContext,
+            _global_context: &(),
         ) -> Vec<StateTransition<Self>> {
             match self {
                 MockStateMachine::Start => {
@@ -505,7 +588,7 @@ mod tests {
     }
 
     impl IntoDynInstance for MockStateMachine {
-        type DynType = DynState;
+        type DynType = DynState<()>;
 
         fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
             DynState::from_typed(instance_id, self)
@@ -528,7 +611,8 @@ mod tests {
     impl Context for MockContext {}
 
     impl ClientModule for MockClientModule {
-        type StateMachineContext = MockContext;
+        type ModuleStateMachineContext = MockContext;
+        type GlobalStateMachineContext = ();
         type States = MockStateMachine;
 
         fn decoder(&self) -> Decoder {
@@ -537,23 +621,23 @@ mod tests {
             decoder_builder.build()
         }
 
-        fn context(&self) -> Self::StateMachineContext {
+        fn context(&self) -> Self::ModuleStateMachineContext {
             MockContext {
                 broadcast: self.0.clone(),
             }
         }
     }
 
-    async fn get_executor(tg: &mut TaskGroup) -> (Executor, Sender<u64>, Database) {
+    async fn get_executor(tg: &mut TaskGroup) -> (Executor<()>, Sender<u64>, Database) {
         let (broadcast, _) = tokio::sync::broadcast::channel(10);
         let module = MockClientModule(broadcast.clone());
 
         let decoders = ModuleDecoderRegistry::new(vec![(42, module.decoder())]);
         let db = Database::new(MemDatabase::new(), decoders);
 
-        let mut executor_builder = Executor::builder();
+        let mut executor_builder = Executor::<()>::builder();
         executor_builder.with_module::<MockClientModule>(42, module);
-        let executor = executor_builder.build(tg, db.clone(), Arc::new(())).await;
+        let executor = executor_builder.build(tg, db.clone(), ()).await;
 
         info!("Initialized test executor");
         (executor, broadcast, db)
