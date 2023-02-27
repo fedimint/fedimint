@@ -20,7 +20,7 @@ use fedimint_core::Amount;
 use fedimint_server::config::io::{
     create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
-use fedimint_server::config::{ServerConfig, ServerConfigParams};
+use fedimint_server::config::{ServerConfig, ServerConfigConsensus, ServerConfigParams};
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
@@ -67,11 +67,17 @@ async fn run_page(axum::extract::State(state): axum::extract::State<MutableState
     RunTemplate {
         state: match state.dkg_state {
             Some(DkgState::Success) => {
-                let path = state.data_dir.join("client.json");
+                let path = state
+                    .data_dir
+                    .join(CONSENSUS_CONFIG)
+                    .with_extension(JSON_EXT);
                 // TODO: refactor be a standalone function
                 match std::fs::File::open(path) {
                     Ok(file) => match serde_json::from_reader(file) {
-                        Ok(cfg) => {
+                        Ok::<ServerConfigConsensus, _>(consensus_config) => {
+                            let cfg = consensus_config
+                                .to_config_response(&state.module_gens)
+                                .client;
                             let connect_info = WsClientConnectInfo::from_honest_peers(&cfg);
 
                             RunTemplateState::DkgDone(connect_info.to_string())
