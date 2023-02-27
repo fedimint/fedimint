@@ -154,28 +154,30 @@ impl GatewayActor {
 
                     let amount_msat = Amount::from_msats(outgoing_amount_msat);
 
-                    let (outpoint, contract_id) =
-                        match actor.buy_preimage_internal(&hash, &amount_msat).await {
-                            Ok((outpoint, contract_id)) => (outpoint, contract_id),
-                            Err(e) => {
-                                error!("Failed to buy preimage: {:?}", e);
-                                // Note: this specific complete htlc requires no futher action.
-                                // If we fail to send the complete htlc message, or get an error
-                                // result, lightning node will still
-                                // cancel HTCL after expiry period lapses.
-                                // Result can be safely ignored.
-                                // TODO: make sure this succeeded?
-                                let _ = lnrpc_copy
-                                    .complete_htlc(CompleteHtlcsRequest {
-                                        intercepted_htlc_id,
-                                        action: Some(Action::Cancel(Cancel {
-                                            reason: e.to_string(),
-                                        })),
-                                    })
-                                    .await;
-                                return;
-                            }
-                        };
+                    let (outpoint, contract_id) = match actor
+                        .buy_preimage_from_federation(&hash, &amount_msat)
+                        .await
+                    {
+                        Ok((outpoint, contract_id)) => (outpoint, contract_id),
+                        Err(e) => {
+                            error!("Failed to buy preimage: {:?}", e);
+                            // Note: this specific complete htlc requires no futher action.
+                            // If we fail to send the complete htlc message, or get an error
+                            // result, lightning node will still
+                            // cancel HTCL after expiry period lapses.
+                            // Result can be safely ignored.
+                            // TODO: make sure this succeeded?
+                            let _ = lnrpc_copy
+                                .complete_htlc(CompleteHtlcsRequest {
+                                    intercepted_htlc_id,
+                                    action: Some(Action::Cancel(Cancel {
+                                        reason: e.to_string(),
+                                    })),
+                                })
+                                .await;
+                            return;
+                        }
+                    };
 
                     match actor
                         .pay_invoice_buy_preimage_finalize(BuyPreimage::Internal((
@@ -298,7 +300,7 @@ impl GatewayActor {
 
         Ok(if is_internal_payment {
             BuyPreimage::Internal(
-                self.buy_preimage_internal(
+                self.buy_preimage_from_federation(
                     &payment_params.payment_hash,
                     &payment_params.invoice_amount,
                 )
@@ -306,8 +308,11 @@ impl GatewayActor {
             )
         } else {
             BuyPreimage::External(
-                self.buy_preimage_external(contract_account.contract.invoice, &payment_params)
-                    .await?,
+                self.buy_preimage_over_lightning(
+                    contract_account.contract.invoice,
+                    &payment_params,
+                )
+                .await?,
             )
         })
     }
@@ -318,7 +323,7 @@ impl GatewayActor {
     ) -> Result<Preimage> {
         match buy_preimage {
             BuyPreimage::Internal((out_point, contract_id)) => {
-                self.buy_preimage_internal_await_decryption(out_point, contract_id)
+                self.buy_preimage_from_federation_await_decryption(out_point, contract_id)
                     .await
             }
             BuyPreimage::External(preimage) => Ok(preimage),
@@ -351,7 +356,7 @@ impl GatewayActor {
     }
 
     #[instrument(skip(self), ret, err)]
-    pub async fn buy_preimage_internal(
+    pub async fn buy_preimage_from_federation(
         &self,
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
@@ -367,7 +372,7 @@ impl GatewayActor {
     }
 
     #[instrument(skip(self), ret, err)]
-    pub async fn buy_preimage_internal_await_decryption(
+    pub async fn buy_preimage_from_federation_await_decryption(
         &self,
         out_point: OutPoint,
         contract_id: ContractId,
@@ -386,7 +391,7 @@ impl GatewayActor {
         }
     }
 
-    pub async fn buy_preimage_external(
+    pub async fn buy_preimage_over_lightning(
         &self,
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
