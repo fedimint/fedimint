@@ -2,6 +2,7 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
@@ -426,10 +427,11 @@ async fn main() {
 
         match cli_result {
             Ok(output) => {
-                println!("{output}");
+                // ignore if there's anyone reading the stuff we're writting out
+                let _ = writeln!(std::io::stdout(), "{output}");
             }
             Err(err) => {
-                eprintln!("{err}");
+                let _ = writeln!(std::io::stderr(), "{err}");
                 exit(1);
             }
         }

@@ -1,3 +1,4 @@
+use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -52,7 +53,9 @@ impl TracingSetup {
     pub fn init(&self) -> anyhow::Result<()> {
         let filter_layer =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-        let fmt_layer = tracing_subscriber::fmt::layer().with_filter(filter_layer);
+        let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_writer(io::stderr)
+            .with_filter(filter_layer);
 
         let console_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
             #[cfg(feature = "telemetry")]
