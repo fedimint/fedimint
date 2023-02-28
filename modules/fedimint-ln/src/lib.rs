@@ -202,6 +202,15 @@ pub enum LightningOutputOutcome {
     },
 }
 
+impl LightningOutputOutcome {
+    pub fn is_permanent(&self) -> bool {
+        match self {
+            LightningOutputOutcome::Contract { id: _, outcome } => outcome.is_permanent(),
+            LightningOutputOutcome::Offer { .. } => true,
+        }
+    }
+}
+
 impl std::fmt::Display for LightningOutputOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
