@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
-use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::Database;
-use fedimint_core::module::ModuleGen;
+use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_ln::LightningGen;
 use fedimint_logging::TracingSetup;
@@ -72,7 +72,7 @@ pub struct ServerOpts {
 /// }
 /// ```
 pub struct Fedimintd {
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
     opts: ServerOpts,
 }
 
@@ -95,14 +95,14 @@ impl Fedimintd {
             .init()?;
 
         Ok(Self {
-            module_gens: ModuleGenRegistry::new(),
+            module_gens: ServerModuleGenRegistry::new(),
             opts,
         })
     }
 
     pub fn with_module<T>(mut self, gen: T) -> Self
     where
-        T: ModuleGen + 'static + Send + Sync,
+        T: ServerModuleGen + 'static + Send + Sync,
     {
         self.module_gens.attach(gen);
         self
@@ -172,7 +172,7 @@ impl Fedimintd {
 async fn run(
     opts: ServerOpts,
     mut task_group: TaskGroup,
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
 ) -> anyhow::Result<()> {
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 

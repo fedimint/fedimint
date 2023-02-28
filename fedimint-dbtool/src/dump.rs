@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use erased_serde::Serialize;
-use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::{DatabaseTransaction, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::DynModuleGen;
+use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
@@ -43,7 +43,7 @@ pub struct DatabaseDump<'a> {
     modules: Vec<String>,
     prefixes: Vec<String>,
     cfg: Option<ServerConfig>,
-    module_inits: ModuleGenRegistry,
+    module_inits: ServerModuleGenRegistry,
 }
 
 impl<'a> DatabaseDump<'a> {
@@ -75,10 +75,10 @@ impl<'a> DatabaseDump<'a> {
             };
         }
 
-        let module_inits = ModuleGenRegistry::from(vec![
-            DynModuleGen::from(WalletGen),
-            DynModuleGen::from(MintGen),
-            DynModuleGen::from(LightningGen),
+        let module_inits = ServerModuleGenRegistry::from(vec![
+            DynServerModuleGen::from(WalletGen),
+            DynServerModuleGen::from(MintGen),
+            DynServerModuleGen::from(LightningGen),
         ]);
 
         let cfg = read_server_config(&password, cfg_dir).unwrap();

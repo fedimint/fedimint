@@ -16,7 +16,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen, PeerHandle,
+    ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
     TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -51,7 +51,7 @@ pub struct DummyVerificationCache;
 pub struct DummyConfigGenerator;
 
 #[async_trait]
-impl ModuleGen for DummyConfigGenerator {
+impl ServerModuleGen for DummyConfigGenerator {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 

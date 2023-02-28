@@ -35,8 +35,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen, PeerHandle,
-    TransactionItemAmount,
+    IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle,
+    ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
@@ -232,7 +232,7 @@ impl std::fmt::Display for WalletOutputOutcome {
 pub struct WalletGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ModuleGen for WalletGen {
+impl ServerModuleGen for WalletGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 

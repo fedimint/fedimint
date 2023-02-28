@@ -22,7 +22,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use fedimint_core::api::WsClientConnectInfo;
-use fedimint_core::config::{FederationId, ModuleGenRegistry};
+use fedimint_core::config::{FederationId, ServerModuleGenRegistry};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, TransactionId};
@@ -68,7 +68,7 @@ impl IntoResponse for GatewayError {
 }
 pub struct Gateway {
     decoders: ModuleDecoderRegistry,
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
     lnrpc: DynLnRpcClient,
     actors: Mutex<HashMap<String, Arc<GatewayActor>>>,
     client_builder: DynGatewayClientBuilder,
@@ -84,7 +84,7 @@ impl Gateway {
         lnrpc: DynLnRpcClient,
         client_builder: DynGatewayClientBuilder,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ServerModuleGenRegistry,
         task_group: TaskGroup,
     ) -> Self {
         // Create message channels for the webserver
@@ -134,7 +134,7 @@ impl Gateway {
     async fn load_federation_actors(
         &self,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ServerModuleGenRegistry,
         route_hints: Vec<RouteHint>,
     ) {
         if let Ok(configs) = self.client_builder.load_configs() {

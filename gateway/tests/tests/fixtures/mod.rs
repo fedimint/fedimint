@@ -1,6 +1,6 @@
 use anyhow::Result;
-use fedimint_core::config::ModuleGenRegistry;
-use fedimint_core::module::DynModuleGen;
+use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln::LightningGen;
 use fedimint_mint::MintGen;
@@ -32,10 +32,10 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
         client::TestGatewayClientBuilder::new(MemDbFactory.into(), api_addr).into();
 
     let decoders = module_decode_stubs();
-    let module_gens = ModuleGenRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
+    let module_gens = ServerModuleGenRegistry::from(vec![
+        DynServerModuleGen::from(WalletGen),
+        DynServerModuleGen::from(MintGen),
+        DynServerModuleGen::from(LightningGen),
     ]);
 
     // Create task group for controlled shutdown of the gateway

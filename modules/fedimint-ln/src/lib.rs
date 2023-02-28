@@ -33,8 +33,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
-    PeerHandle, TransactionItemAmount,
+    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle,
+    ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
@@ -262,7 +262,7 @@ pub struct LightningVerificationCache;
 pub struct LightningGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ModuleGen for LightningGen {
+impl ServerModuleGen for LightningGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 

@@ -25,7 +25,7 @@ use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
-use crate::module::{DynModuleGen, ModuleGen};
+use crate::module::{DynServerModuleGen, ServerModuleGen};
 use crate::PeerId;
 
 /// [`serde_json::Value`] that must contain `kind: String` field
@@ -173,7 +173,7 @@ impl ClientConfig {
     /// Returns the consensus hash for a given client config
     pub fn consensus_hash(
         &self,
-        module_config_gens: &ModuleGenRegistry,
+        module_config_gens: &ServerModuleGenRegistry,
     ) -> anyhow::Result<sha256::Hash> {
         let modules: BTreeMap<ModuleInstanceId, sha256::Hash> = self
             .modules
@@ -260,33 +260,33 @@ impl ConfigGenParams {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ModuleGenRegistry(BTreeMap<ModuleKind, DynModuleGen>);
+pub struct ServerModuleGenRegistry(BTreeMap<ModuleKind, DynServerModuleGen>);
 
-impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
-    fn from(value: Vec<DynModuleGen>) -> Self {
+impl From<Vec<DynServerModuleGen>> for ServerModuleGenRegistry {
+    fn from(value: Vec<DynServerModuleGen>) -> Self {
         Self(BTreeMap::from_iter(
             value.into_iter().map(|i| (i.module_kind(), i)),
         ))
     }
 }
 
-impl ModuleGenRegistry {
+impl ServerModuleGenRegistry {
     pub fn new() -> Self {
         Default::default()
     }
 
     pub fn attach<T>(&mut self, gen: T)
     where
-        T: ModuleGen + 'static + Send + Sync,
+        T: ServerModuleGen + 'static + Send + Sync,
     {
-        let gen: DynModuleGen = gen.into();
+        let gen: DynServerModuleGen = gen.into();
         let kind = gen.module_kind();
         if self.0.insert(kind.clone(), gen).is_some() {
             panic!("Can't insert module of same kind twice: {kind}");
         }
     }
 
-    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
+    pub fn get(&self, k: &ModuleKind) -> Option<&DynServerModuleGen> {
         self.0.get(k)
     }
 
@@ -333,11 +333,11 @@ impl ModuleGenRegistry {
 pub struct LegacyInitOrderIter {
     /// Counter of what module id will this returned value get assigned
     next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, DynModuleGen>,
+    rest: BTreeMap<ModuleKind, DynServerModuleGen>,
 }
 
 impl Iterator for LegacyInitOrderIter {
-    type Item = (ModuleKind, DynModuleGen);
+    type Item = (ModuleKind, DynServerModuleGen);
 
     fn next(&mut self) -> Option<Self::Item> {
         let ret = match self.next_id {

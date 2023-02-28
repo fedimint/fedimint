@@ -2,13 +2,13 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
-use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::DynModuleGen;
+use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::ServerModule;
 use fedimint_logging::TracingSetup;
@@ -103,10 +103,10 @@ async fn main() -> Result<(), anyhow::Error> {
     ]);
 
     // Create module generator registry
-    let module_gens = ModuleGenRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
+    let module_gens = ServerModuleGenRegistry::from(vec![
+        DynServerModuleGen::from(WalletGen),
+        DynServerModuleGen::from(MintGen),
+        DynServerModuleGen::from(LightningGen),
     ]);
 
     // Create gateway instance

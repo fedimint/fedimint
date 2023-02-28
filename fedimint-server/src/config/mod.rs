@@ -12,7 +12,7 @@ use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
     ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
-    JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
+    JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry,
     TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
@@ -170,7 +170,7 @@ impl ServerConfigConsensus {
     /// TODO use the derive macro to automatically pick up new fields here
     fn try_to_config_response(
         &self,
-        module_config_gens: &ModuleGenRegistry,
+        module_config_gens: &ServerModuleGenRegistry,
     ) -> anyhow::Result<ConfigResponse> {
         let modules: BTreeMap<ModuleInstanceId, ModuleConfigResponse> = self
             .modules
@@ -210,7 +210,10 @@ impl ServerConfigConsensus {
         })
     }
 
-    pub fn to_config_response(&self, module_config_gens: &ModuleGenRegistry) -> ConfigResponse {
+    pub fn to_config_response(
+        &self,
+        module_config_gens: &ServerModuleGenRegistry,
+    ) -> ConfigResponse {
         self.try_to_config_response(module_config_gens)
             .expect("configuration mismatch")
     }
@@ -324,7 +327,7 @@ impl ServerConfig {
     pub fn validate_config(
         &self,
         identity: &PeerId,
-        module_config_gens: &ModuleGenRegistry,
+        module_config_gens: &ServerModuleGenRegistry,
     ) -> anyhow::Result<()> {
         let peers = self.local.p2p.clone();
         let consensus = self.consensus.clone();
@@ -363,7 +366,7 @@ impl ServerConfig {
 
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ServerConfigParams>,
-        registry: ModuleGenRegistry,
+        registry: ServerModuleGenRegistry,
     ) -> BTreeMap<PeerId, Self> {
         let mut rng = OsRng;
         let peer0 = &params[&PeerId::from(0)];
@@ -419,7 +422,7 @@ impl ServerConfig {
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
         params: &ServerConfigParams,
-        registry: ModuleGenRegistry,
+        registry: ServerModuleGenRegistry,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
         let server_conn = connect(params.fed_network.clone(), params.tls.clone(), task_group).await;

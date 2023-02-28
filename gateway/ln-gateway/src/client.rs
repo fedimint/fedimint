@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use fedimint_core::api::{
     DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_core::config::{load_from_file, FederationId, ModuleGenRegistry};
+use fedimint_core::config::{load_from_file, FederationId, ServerModuleGenRegistry};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::dyn_newtype_define;
@@ -74,7 +74,7 @@ pub trait IGatewayClientBuilder: Debug {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ServerModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>>;
 
     /// Create a new gateway federation client config from connect info
@@ -83,7 +83,7 @@ pub trait IGatewayClientBuilder: Debug {
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        module_gens: ModuleGenRegistry,
+        module_gens: ServerModuleGenRegistry,
     ) -> Result<GatewayClientConfig>;
 
     /// Save and persist the configuration of the gateway federation client
@@ -122,7 +122,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ServerModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>> {
         let federation_id = config.client_config.federation_id.clone();
 
@@ -141,7 +141,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        module_gens: ModuleGenRegistry,
+        module_gens: ServerModuleGenRegistry,
     ) -> Result<GatewayClientConfig> {
         let api: DynFederationApi = WsFederationApi::from_urls(&connect).into();
 

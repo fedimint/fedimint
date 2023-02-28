@@ -19,8 +19,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen,
-    PeerHandle, TransactionItemAmount,
+    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle,
+    ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
@@ -148,7 +148,7 @@ pub struct VerifiedNotes {
 pub struct MintGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ModuleGen for MintGen {
+impl ServerModuleGen for MintGen {
     const KIND: ModuleKind = KIND;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -1234,7 +1234,7 @@ mod test {
     use fedimint_core::config::{
         ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
     };
-    use fedimint_core::module::ModuleGen;
+    use fedimint_core::module::ServerModuleGen;
     use fedimint_core::{Amount, PeerId, TieredMulti};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 

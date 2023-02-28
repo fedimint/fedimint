@@ -12,7 +12,7 @@ use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiError, InputMeta, ModuleCommon, ModuleError, ModuleGen, TransactionItemAmount,
+    ApiError, InputMeta, ModuleCommon, ModuleError, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::{OutPoint, PeerId, ServerModule};
 
@@ -45,7 +45,7 @@ where
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<FakeFed<Module>>
     where
-        ConfGen: ModuleGen,
+        ConfGen: ServerModuleGen,
         F: Fn(ServerModuleConfig, Database) -> FF,
         FF: Future<Output = anyhow::Result<Module>>,
     {
