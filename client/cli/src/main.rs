@@ -285,6 +285,14 @@ enum Command {
     /// Decode connection info into its JSON representation
     DecodeConnectInfo { connect_info: WsClientConnectInfo },
 
+    /// Encode connection info from its constituent parts
+    EncodeConnectInfo {
+        #[clap(long = "urls", required = true, value_delimiter = ',')]
+        urls: Vec<Url>,
+        #[clap(long = "id")]
+        id: FederationId,
+    },
+
     /// Config enabling client to establish websocket connection to federation
     ConnectInfo,
 
@@ -633,6 +641,9 @@ async fn handle_command(
         Command::DecodeConnectInfo { connect_info } => Ok(CliOutput::DecodeConnectInfo {
             urls: connect_info.urls,
             id: connect_info.id,
+        }),
+        Command::EncodeConnectInfo { urls, id } => Ok(CliOutput::ConnectInfo {
+            connect_info: WsClientConnectInfo { urls, id },
         }),
         Command::JoinFederation { .. } => {
             unreachable!()
