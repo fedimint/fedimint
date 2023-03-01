@@ -51,6 +51,15 @@ pub enum ContractOutcome {
     Outgoing(OutgoingContractOutcome),
 }
 
+impl ContractOutcome {
+    pub fn is_permanent(&self) -> bool {
+        match self {
+            ContractOutcome::Account(_) => true,
+            ContractOutcome::Incoming(o) => o.is_permanent(),
+            ContractOutcome::Outgoing(_) => true,
+        }
+    }
+}
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct AccountContractOutcome {}
 
@@ -146,6 +155,15 @@ pub enum DecryptedPreimage {
     Invalid,
 }
 
+impl DecryptedPreimage {
+    pub fn is_permanent(&self) -> bool {
+        match self {
+            DecryptedPreimage::Pending => false,
+            DecryptedPreimage::Some(_) => true,
+            DecryptedPreimage::Invalid => true,
+        }
+    }
+}
 /// Threshold-encrypted [`Preimage`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct EncryptedPreimage(pub threshold_crypto::Ciphertext);

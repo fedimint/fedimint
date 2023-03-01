@@ -13,8 +13,9 @@ pub mod modules {
 
 use std::fmt::{Debug, Formatter};
 use std::iter::once;
+use std::ops::Add;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
@@ -1415,16 +1416,39 @@ impl Client<GatewayClientConfig> {
     /// Wait for a lightning preimage gateway has purchased to be decrypted by
     /// the federation
     pub async fn await_preimage_decryption(&self, outpoint: OutPoint) -> Result<Preimage> {
-        Ok(self
-            .context
-            .api
-            .await_output_outcome::<OutputOutcome>(
-                outpoint,
-                Duration::from_secs(10),
-                &self.context.decoders,
+        let deadline = Instant::now().add(Duration::from_secs(30));
+
+        let poll = || async {
+            loop {
+                match self
+                    .context
+                    .api
+                    .await_output_outcome::<OutputOutcome>(
+                        outpoint,
+                        deadline.saturating_duration_since(Instant::now()),
+                        &self.context.decoders,
+                    )
+                    .await
+                {
+                    Ok(OutputOutcome::LN(o)) if !o.is_permanent() => {
+                        info!(outcome = %o, "Retrying on temporary outcome");
+                        sleep(Duration::from_secs(1)).await;
+                    }
+                    Ok(t) => return t.try_into_variant(),
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            }
+        };
+        Ok(
+            fedimint_core::task::timeout(
+                deadline.saturating_duration_since(Instant::now()),
+                poll(),
             )
-            .await?
-            .try_into_variant()?)
+            .await
+            .map_err(|_| ClientError::Timeout)??,
+        )
     }
 
     // TODO: improve error propagation on tx transmission
