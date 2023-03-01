@@ -12,7 +12,7 @@ use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_core::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
-use tracing::warn;
+use tracing::{instrument, warn};
 use url::Url;
 
 use super::*;
@@ -137,6 +137,13 @@ impl<T> IBitcoindRpc for Client<T>
 where
     T: ::bitcoincore_rpc::RpcApi + Debug + Send + Sync,
 {
+    #[instrument(
+        skip(self),
+        name = "bitcoincore_rpc::get_network",
+        level = "DEBUG",
+        ret,
+        err
+    )]
     async fn get_network(&self) -> Result<Network> {
         let network = fedimint_core::task::block_in_place(|| {
             self.0.get_blockchain_info().map_err(anyhow::Error::from)
@@ -150,6 +157,13 @@ where
         })
     }
 
+    #[instrument(
+        skip(self),
+        name = "bitcoincore_rpc::get_block_height",
+        level = "DEBUG",
+        ret,
+        err
+    )]
     async fn get_block_height(&self) -> Result<u64> {
         fedimint_core::task::block_in_place(|| {
             self.0
@@ -159,6 +173,13 @@ where
         })
     }
 
+    #[instrument(
+        skip(self),
+        name = "bitcoincore_rpc::get_block_hash",
+        level = "DEBUG",
+        ret,
+        err
+    )]
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
         fedimint_core::task::block_in_place(|| {
             bitcoincore_rpc::RpcApi::get_block_hash(&self.0, height)
@@ -167,6 +188,13 @@ where
         })
     }
 
+    #[instrument(
+        skip(self),
+        name = "bitcoincore_rpc::get_block",
+        level = "DEBUG",
+        ret,
+        err
+    )]
     async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
         fedimint_core::task::block_in_place(|| {
             bitcoincore_rpc::RpcApi::get_block(&self.0, hash)
@@ -175,6 +203,13 @@ where
         })
     }
 
+    #[instrument(
+        skip(self),
+        name = "bitcoincore_rpc::get_fee_rate",
+        level = "DEBUG",
+        ret,
+        err
+    )]
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
         Ok(fedimint_core::task::block_in_place(|| {
             self.0
@@ -188,6 +223,13 @@ where
         }))
     }
 
+    #[instrument(
+        skip(self),
+        name = "bitcoincore_rpc::submit_transaction",
+        level = "DEBUG",
+        ret,
+        err
+    )]
     async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
         fedimint_core::task::block_in_place(|| match self.0.send_raw_transaction(&transaction) {
             // for our purposes, this is not an error
