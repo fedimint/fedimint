@@ -96,3 +96,11 @@ The client is not currently modularized, so nothing is prepended to the below pr
 | Name                    | Entity Prefix | Key        | Value                        |
 |-------------------------|---------------|------------|------------------------------|
 | PegIn                   |     `0x22`    | `Script`   | `[u8; 32]`                   |
+
+## State Machine Client DB Layout
+### Executor
+
+| Name          | Entity Prefix | Key     | Value                                       |
+|---------------|---------------|---------|---------------------------------------------|
+| ActiveState   | `0xa1`        | `State` | Creation time                               |
+| InactiveState | `0xa2`        | `State` | Creation time and time of becoming inactive |
