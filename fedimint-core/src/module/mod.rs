@@ -398,6 +398,14 @@ pub struct ApiVersion {
     pub minor: u32,
 }
 
+pub trait CommonModuleGen: Debug + Sized {
+    const KIND: ModuleKind;
+
+    fn decoder() -> Decoder;
+
+    fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+}
+
 /// Module Generation trait with associated types
 ///
 /// Needs to be implemented by module generation type
@@ -406,7 +414,7 @@ pub struct ApiVersion {
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModuleGen: Debug + Sized {
-    const KIND: ModuleKind;
+    type Common: CommonModuleGen;
 
     /// This represents the module's database version that the current code is
     /// compatible with. It is important to increment this value whenever a
@@ -415,8 +423,6 @@ pub trait ServerModuleGen: Debug + Sized {
     /// migration function in `get_database_migrations` which should define how
     /// to move from the previous database version to the current version.
     const DATABASE_VERSION: DatabaseVersion;
-
-    fn decoder(&self) -> Decoder;
 
     /// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].
@@ -465,8 +471,6 @@ pub trait ServerModuleGen: Debug + Sized {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
-    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
-
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -480,11 +484,11 @@ where
     T: ServerModuleGen + 'static + Sync,
 {
     fn decoder(&self) -> Decoder {
-        ServerModuleGen::decoder(self)
+        <Self as ServerModuleGen>::Common::decoder()
     }
 
     fn module_kind(&self) -> ModuleKind {
-        <Self as ServerModuleGen>::KIND
+        <Self as ServerModuleGen>::Common::KIND
     }
 
     fn database_version(&self) -> DatabaseVersion {
@@ -533,7 +537,7 @@ where
     }
 
     fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<Hash> {
-        <Self as ServerModuleGen>::hash_client_module(self, config)
+        <Self as ServerModuleGen>::Common::hash_client_module(config)
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
@@ -637,7 +641,7 @@ pub trait ServerModule: Debug + Sized {
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
         // allocate
-        Self::Gen::KIND
+        <Self::Gen as ServerModuleGen>::Common::KIND
     }
 
     /// Returns a decoder for the following associated types of this module:

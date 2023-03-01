@@ -18,9 +18,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle,
-    ServerModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CommonModuleGen, ConsensusProposal,
+    CoreConsensusVersion, InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion,
+    ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
@@ -145,16 +145,29 @@ pub struct VerifiedNotes {
 }
 
 #[derive(Debug)]
+pub struct MintCommonGen;
+
+impl CommonModuleGen for MintCommonGen {
+    const KIND: ModuleKind = KIND;
+
+    fn decoder() -> Decoder {
+        <Mint as ServerModule>::decoder()
+    }
+
+    fn hash_client_module(
+        config: serde_json::Value,
+    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
+        serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
+    }
+}
+
+#[derive(Debug)]
 pub struct MintGen;
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for MintGen {
-    const KIND: ModuleKind = KIND;
+    type Common = MintCommonGen;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
-
-    fn decoder(&self) -> Decoder {
-        <Mint as ServerModule>::decoder()
-    }
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[ModuleConsensusVersion(0)]
@@ -295,13 +308,6 @@ impl ServerModuleGen for MintGen {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<MintConfig>()?.validate_config(identity)
-    }
-
-    fn hash_client_module(
-        &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
-        serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
     }
 
     async fn dump_database(

@@ -15,9 +15,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, CommonModuleGen, ConsensusProposal,
+    CoreConsensusVersion, InputMeta, ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle,
+    ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
@@ -48,16 +48,29 @@ pub struct DummyConsensusItem;
 pub struct DummyVerificationCache;
 
 #[derive(Debug)]
-pub struct DummyConfigGenerator;
+pub struct DummyCommonGen;
 
 #[async_trait]
-impl ServerModuleGen for DummyConfigGenerator {
+impl CommonModuleGen for DummyCommonGen {
     const KIND: ModuleKind = KIND;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
-    fn decoder(&self) -> Decoder {
+    fn decoder() -> Decoder {
         <Dummy as ServerModule>::decoder()
     }
+
+    fn hash_client_module(config: Value) -> anyhow::Result<sha256::Hash> {
+        serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash()
+    }
+}
+
+#[derive(Debug)]
+pub struct DummyServerGen;
+
+#[async_trait]
+impl ServerModuleGen for DummyServerGen {
+    type Common = DummyCommonGen;
+
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[ModuleConsensusVersion(0)]
@@ -138,10 +151,6 @@ impl ServerModuleGen for DummyConfigGenerator {
         config.to_typed::<DummyConfig>()?.validate_config(identity)
     }
 
-    fn hash_client_module(&self, config: Value) -> anyhow::Result<sha256::Hash> {
-        serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash()
-    }
-
     async fn dump_database(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
@@ -208,7 +217,7 @@ impl ModuleCommon for DummyModuleTypes {
 #[async_trait]
 impl ServerModule for Dummy {
     type Common = DummyModuleTypes;
-    type Gen = DummyConfigGenerator;
+    type Gen = DummyServerGen;
     type VerificationCache = DummyVerificationCache;
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {

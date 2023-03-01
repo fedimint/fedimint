@@ -32,9 +32,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, PeerHandle,
-    ServerModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CommonModuleGen, ConsensusProposal,
+    CoreConsensusVersion, InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion,
+    ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
@@ -259,16 +259,28 @@ impl std::fmt::Display for LightningConsensusItem {
 pub struct LightningVerificationCache;
 
 #[derive(Debug)]
+pub struct LightningCommonGen;
+
+impl CommonModuleGen for LightningCommonGen {
+    const KIND: ModuleKind = KIND;
+    fn decoder() -> Decoder {
+        <Lightning as ServerModule>::decoder()
+    }
+    fn hash_client_module(
+        config: serde_json::Value,
+    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
+        serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash()
+    }
+}
+
+#[derive(Debug)]
 pub struct LightningGen;
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for LightningGen {
-    const KIND: ModuleKind = KIND;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+    type Common = LightningCommonGen;
 
-    fn decoder(&self) -> Decoder {
-        <Lightning as ServerModule>::decoder()
-    }
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[ModuleConsensusVersion(0)]
@@ -365,13 +377,6 @@ impl ServerModuleGen for LightningGen {
         config
             .to_typed::<LightningConfig>()?
             .validate_config(identity)
-    }
-
-    fn hash_client_module(
-        &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
-        serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash()
     }
 
     async fn dump_database(
