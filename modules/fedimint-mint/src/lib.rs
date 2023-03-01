@@ -18,9 +18,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CommonModuleGen, ConsensusProposal,
-    CoreConsensusVersion, InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion,
-    ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ClientModuleGen, CommonModuleGen,
+    ConsensusProposal, CoreConsensusVersion, InputMeta, IntoModuleError, ModuleCommon,
+    ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
@@ -159,6 +159,14 @@ impl CommonModuleGen for MintCommonGen {
     ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
         serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
     }
+}
+
+#[derive(Debug)]
+pub struct MintClientGen;
+
+#[apply(async_trait_maybe_send!)]
+impl ClientModuleGen for MintClientGen {
+    type Common = MintCommonGen;
 }
 
 #[derive(Debug)]

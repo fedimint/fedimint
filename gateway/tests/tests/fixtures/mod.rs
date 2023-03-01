@@ -1,9 +1,9 @@
 use anyhow::Result;
-use fedimint_core::config::ServerModuleGenRegistry;
-use fedimint_core::module::DynServerModuleGen;
+use fedimint_core::config::ClientModuleGenRegistry;
+use fedimint_core::module::DynClientModuleGen;
 use fedimint_core::task::TaskGroup;
-use fedimint_ln::LightningGen;
-use fedimint_mint::MintGen;
+use fedimint_ln::LightningClientGen;
+use fedimint_mint::MintClientGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::fixtures::FakeLightningTest;
@@ -11,7 +11,7 @@ use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
 use ln_gateway::lnrpc_client::DynLnRpcClient;
 use ln_gateway::Gateway;
 use mint_client::module_decode_stubs;
-use mint_client::modules::wallet::WalletGen;
+use mint_client::modules::wallet::WalletClientGen;
 use url::Url;
 
 pub mod client;
@@ -32,10 +32,10 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
         client::TestGatewayClientBuilder::new(MemDbFactory.into(), api_addr).into();
 
     let decoders = module_decode_stubs();
-    let module_gens = ServerModuleGenRegistry::from(vec![
-        DynServerModuleGen::from(WalletGen),
-        DynServerModuleGen::from(MintGen),
-        DynServerModuleGen::from(LightningGen),
+    let module_gens = ClientModuleGenRegistry::from(vec![
+        DynClientModuleGen::from(WalletClientGen),
+        DynClientModuleGen::from(MintClientGen),
+        DynClientModuleGen::from(LightningClientGen),
     ]);
 
     // Create task group for controlled shutdown of the gateway

@@ -16,7 +16,7 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ClientModuleGenRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -232,7 +232,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 create_user_client(
                     user_cfg,
                     decoders.clone(),
-                    module_inits.clone(),
+                    module_inits.to_client(),
                     peers,
                     user_db,
                 )
@@ -244,7 +244,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lnrpc_adapter,
                 client_config.clone(),
                 decoders,
-                module_inits,
+                module_inits.to_client(),
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -321,7 +321,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 create_user_client(
                     user_cfg,
                     decoders.clone(),
-                    module_inits.clone(),
+                    module_inits.to_client(),
                     peers,
                     user_db,
                 )
@@ -333,7 +333,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lnrpc_adapter,
                 client_config.clone(),
                 decoders,
-                module_inits,
+                module_inits.to_client(),
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -373,7 +373,7 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
 pub async fn create_user_client(
     config: UserClientConfig,
     decoders: ModuleDecoderRegistry,
-    module_gens: ServerModuleGenRegistry,
+    module_gens: ClientModuleGenRegistry,
     peers: Vec<PeerId>,
     db: Database,
 ) -> UserClient {
@@ -448,7 +448,7 @@ impl GatewayTest {
         adapter: LnRpcAdapter,
         client_config: ClientConfig,
         decoders: ModuleDecoderRegistry,
-        module_gens: ServerModuleGenRegistry,
+        module_gens: ClientModuleGenRegistry,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
     ) -> Self {

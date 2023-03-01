@@ -28,7 +28,7 @@ use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::{DynServerModule, VerificationCache};
-use crate::task::{MaybeSend, TaskGroup};
+use crate::task::{MaybeSend, MaybeSync, TaskGroup};
 use crate::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
     OutPoint, PeerId,
@@ -263,6 +263,83 @@ where
     }
 }
 
+/// Operations common to Server and Client side module gen dyn newtypes
+///
+/// Due to conflict of `impl Trait for T` for both `ServerModuleGen` and
+/// `ClientModuleGen`, we can't really have a `ICommonModuleGen`, so to unify
+/// them in `ModuleGenRegistry` we move the common functionality to be an
+/// interface over their dyn newtype wrappers. A bit weird, but works.
+pub trait IDynCommonModuleGen: Debug {
+    fn decoder(&self) -> Decoder;
+
+    fn module_kind(&self) -> ModuleKind;
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+
+    fn to_dyn_client(&self) -> DynClientModuleGen;
+}
+
+impl IDynCommonModuleGen for DynClientModuleGen {
+    fn decoder(&self) -> Decoder {
+        (**self).decoder()
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        (**self).module_kind()
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        (**self).hash_client_module(config)
+    }
+
+    fn to_dyn_client(&self) -> DynClientModuleGen {
+        self.clone()
+    }
+}
+
+impl IDynCommonModuleGen for DynServerModuleGen {
+    fn decoder(&self) -> Decoder {
+        (**self).decoder()
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        (**self).module_kind()
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        (**self).hash_client_module(config)
+    }
+
+    fn to_dyn_client(&self) -> DynClientModuleGen {
+        DynClientModuleGen(Arc::new(self.clone()) as Arc<_>)
+    }
+}
+
+// To be able to convert `DynServerModuleGen` to `DynClientModuleGen`,
+// we just impl `IClientModuleGen` for it, and wrap it in `Arc` inside
+// `IDynCommonModuleGen::to_dyn_client`.
+impl IClientModuleGen for DynServerModuleGen {
+    fn decoder(&self) -> Decoder {
+        <Self as IDynCommonModuleGen>::decoder(self)
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        <Self as IDynCommonModuleGen>::module_kind(self)
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        <Self as IDynCommonModuleGen>::hash_client_module(self, config)
+    }
+}
+
+pub trait IClientModuleGen: Debug + MaybeSend + MaybeSync {
+    fn decoder(&self) -> Decoder;
+
+    fn module_kind(&self) -> ModuleKind;
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+}
+
 /// Interface for Module Generation
 ///
 /// This trait contains the methods responsible for the module's
@@ -321,6 +398,11 @@ pub trait IServerModuleGen: Debug {
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
+
+dyn_newtype_define!(
+    #[derive(Clone)]
+    pub DynClientModuleGen(Arc<IClientModuleGen>)
+);
 
 dyn_newtype_define!(
     #[derive(Clone)]
@@ -406,6 +488,11 @@ pub trait CommonModuleGen: Debug + Sized {
     fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
 }
 
+#[apply(async_trait_maybe_send!)]
+pub trait ClientModuleGen: Debug + Sized {
+    type Common: CommonModuleGen;
+}
+
 /// Module Generation trait with associated types
 ///
 /// Needs to be implemented by module generation type
@@ -476,6 +563,24 @@ pub trait ServerModuleGen: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IClientModuleGen for T
+where
+    T: ClientModuleGen + 'static + MaybeSend + Sync,
+{
+    fn decoder(&self) -> Decoder {
+        <Self as ClientModuleGen>::Common::decoder()
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        <Self as ClientModuleGen>::Common::KIND
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<Hash> {
+        <Self as ClientModuleGen>::Common::hash_client_module(config)
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

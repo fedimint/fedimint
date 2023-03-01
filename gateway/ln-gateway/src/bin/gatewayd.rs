@@ -2,22 +2,22 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::ClientModuleGenRegistry;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::DynServerModuleGen;
+use fedimint_core::module::DynClientModuleGen;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::ServerModule;
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
-use mint_client::modules::ln::{Lightning, LightningGen};
-use mint_client::modules::mint::{Mint, MintGen};
-use mint_client::modules::wallet::{Wallet, WalletGen};
+use mint_client::modules::ln::{Lightning, LightningClientGen};
+use mint_client::modules::mint::{Mint, MintClientGen};
+use mint_client::modules::wallet::{Wallet, WalletClientGen};
 use tracing::{error, info};
 use url::Url;
 
@@ -103,10 +103,10 @@ async fn main() -> Result<(), anyhow::Error> {
     ]);
 
     // Create module generator registry
-    let module_gens = ServerModuleGenRegistry::from(vec![
-        DynServerModuleGen::from(WalletGen),
-        DynServerModuleGen::from(MintGen),
-        DynServerModuleGen::from(LightningGen),
+    let module_gens = ClientModuleGenRegistry::from(vec![
+        DynClientModuleGen::from(WalletClientGen),
+        DynClientModuleGen::from(MintClientGen),
+        DynClientModuleGen::from(LightningClientGen),
     ]);
 
     // Create gateway instance

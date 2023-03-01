@@ -34,7 +34,7 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, CommonModuleGen, ConsensusProposal,
+    api_endpoint, ApiEndpoint, ApiVersion, ClientModuleGen, CommonModuleGen, ConsensusProposal,
     CoreConsensusVersion, InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion,
     ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
@@ -240,6 +240,14 @@ impl CommonModuleGen for WalletCommonGen {
     fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
         serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
     }
+}
+
+#[derive(Debug)]
+pub struct WalletClientGen;
+
+#[apply(async_trait_maybe_send!)]
+impl ClientModuleGen for WalletClientGen {
+    type Common = WalletCommonGen;
 }
 
 #[derive(Debug)]
