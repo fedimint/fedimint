@@ -41,8 +41,11 @@ lint:
 # run all checks recommended before opening a PR
 final-check: lint
   cargo test --doc
-  nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package mint-client
+  just check-wasm
   just test
+
+check-wasm:
+  nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package mint-client
 
 # check files you've touched for spelling errors
 spell:
