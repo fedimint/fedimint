@@ -16,6 +16,7 @@ pub mod db;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::ops::Sub;
+use std::time::SystemTime;
 
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::FeeConsensus;
@@ -38,7 +39,6 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::time::SystemTime;
 use fedimint_core::{
     apply, async_trait_maybe_send, plugin_types_trait_impl, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule,
@@ -1078,7 +1078,7 @@ impl Lightning {
             .filter_map(|res| async {
                 let gw = res.expect("DB error").1;
                 // FIXME: actually remove from DB
-                if gw.valid_until > SystemTime::now() {
+                if gw.valid_until > fedimint_core::time::now() {
                     Some(gw)
                 } else {
                     None

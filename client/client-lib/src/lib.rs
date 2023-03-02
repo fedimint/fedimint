@@ -15,7 +15,7 @@ use std::fmt::{Debug, Formatter};
 use std::iter::once;
 use std::ops::Add;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
@@ -37,7 +37,6 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::time::SystemTime;
 use fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln::Lightning;
@@ -140,7 +139,7 @@ impl GatewayClientConfig {
             node_pub_key: self.node_pub_key,
             api: self.api.clone(),
             route_hints,
-            valid_until: SystemTime::now() + time_to_live,
+            valid_until: fedimint_core::time::now() + time_to_live,
         }
     }
 }
@@ -758,7 +757,7 @@ impl Client<UserClientConfig> {
             .get_value(&LightningGatewayKey)
             .await
             .expect("DB error")
-            .filter(|gw| gw.valid_until > SystemTime::now())
+            .filter(|gw| gw.valid_until > fedimint_core::time::now())
         {
             return Ok(gateway);
         }
@@ -1013,7 +1012,7 @@ impl Client<UserClientConfig> {
                 .collect()
         };
 
-        let duration_since_epoch = SystemTime::now()
+        let duration_since_epoch = fedimint_core::time::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
