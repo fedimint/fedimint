@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v19
+      - uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v19
+      - uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
@@ -94,7 +94,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v19
+      - uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
@@ -129,7 +129,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v19
+      - uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
@@ -152,7 +152,7 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
       - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v19
+      - uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
@@ -217,7 +217,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v19
+      - uses: cachix/install-nix-action@v20
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
