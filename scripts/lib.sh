@@ -180,15 +180,23 @@ function await_gateway_registered() {
 }
 
 function switch_to_cln_gateway() {
+    echo "switching to CLN gateway"
+    echo
     # FIXME: we should have a better way to filter than by API url
     local PUBKEY
     PUBKEY=$($FM_MINT_CLIENT list-gateways | jq -e '.gateways[] | select(.api == "http://127.0.0.1:8175/")' | jq -r -e '.node_pub_key')
     $FM_MINT_CLIENT switch-gateway $PUBKEY
+    echo "switched to CLN gateway"
+    echo
 }
 
 function switch_to_lnd_gateway() {
+    echo "switching to LND gateway"
+    echo
     # FIXME: we should have a better way to filter than by API url
     local PUBKEY
     PUBKEY=$($FM_MINT_CLIENT list-gateways | jq -e '.gateways[] | select(.api == "http://127.0.0.1:18175/")' | jq -r -e '.node_pub_key')
     $FM_MINT_CLIENT switch-gateway $PUBKEY
+    echo "switched to LND gateway"
+    echo
 }

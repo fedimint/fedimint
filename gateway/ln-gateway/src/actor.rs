@@ -84,12 +84,14 @@ impl GatewayActor {
             task_group,
         };
 
+        info!("outside: calling subscribe_htlcs()");
         actor.subscribe_htlcs().await?;
 
         Ok(actor)
     }
 
     async fn subscribe_htlcs(&self) -> Result<()> {
+        info!("calling subscribe_htlcs()");
         let short_channel_id = self.client.config().mint_channel_id;
         let mut tg = self.task_group.clone();
 

@@ -3,11 +3,12 @@ root: .
 socket_name: fedimint-dev
 pre_window:
   - source .tmpenv
-  - alias lightning-cli="\$FM_CLN"
-  - alias lncli="\$FM_LND"
+  - alias cln="\$FM_CLN"
+  - alias lnd="\$FM_LND"
   - alias bitcoin-cli="\$FM_BTC_CLIENT"
   - alias fedimint-cli="\$FM_MINT_CLIENT"
-  - alias gateway-cli="\$FM_GWCLI_CLN"
+  - alias cln-gateway="\$FM_GWCLI_CLN"
+  - alias lnd-gateway="\$FM_GWCLI_LND"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
   - alias dbtool="\$FM_DB_TOOL"
   - alias restart="./scripts/restart-tmux.sh"

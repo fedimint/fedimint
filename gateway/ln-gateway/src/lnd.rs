@@ -117,45 +117,63 @@ impl ILnRpcClient for GatewayLndClient {
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> crate::Result<HtlcStream<'a>> {
-        let mut client = self.client.clone();
         let channel_size = 1024;
 
         // Channel to send responses to LND after processing intercepted HTLC
         let (lnd_tx, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(channel_size);
 
-        let mut htlc_stream = client
-            .router()
-            .htlc_interceptor(ReceiverStream::new(lnd_rx))
-            .await
-            .map_err(|e| {
-                error!("Failed to connect to lnrpc server: {:?}", e);
-                GatewayError::Other(anyhow!("Failed to subscribe to LND htlc stream"))
-            })?
-            .into_inner();
-
-        let scid = subscription.short_channel_id.clone();
-
         // Channel to send intercepted htlc to gatewayd for processing
         let (gwd_tx, gwd_rx) =
             mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, tonic::Status>>(channel_size);
 
-        let shutdown_future = self.task_group.make_handle().make_shutdown_rx().await;
-        let streaming_future = async move {
-            while let Some(htlc) = match htlc_stream.message().await {
-                Ok(htlc) => htlc,
-                Err(e) => {
-                    error!("Error received over HTLC subscriprion: {:?}", e);
-                    let _ = gwd_tx
-                        .send(Err(tonic::Status::new(
-                            tonic::Code::Internal,
-                            e.to_string(),
-                        )))
-                        .await;
-                    None
-                }
-            } {
-                let response: Option<ForwardHtlcInterceptResponse> =
-                    if htlc.outgoing_requested_chan_id != scid {
+        info!("subscribing");
+        let scid = subscription.short_channel_id.clone();
+        let mut client = self.client.clone();
+
+        let mut tg = self.task_group.clone();
+        let outcomes = self.outcomes.clone();
+
+        // Spawn an LND interceptor task
+        tg.spawn("LND HTLC Subscription", move |handle| async move {
+            let shutdown_rx = handle.make_shutdown_rx().await;
+            let streaming_future = async move {
+                let mut htlc_stream = match client
+                    .router()
+                    .htlc_interceptor(ReceiverStream::new(lnd_rx))
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to connect to lnrpc server: {:?}", e);
+                        GatewayError::Other(anyhow!("Failed to subscribe to LND htlc stream"))
+                    }) {
+                    Ok(stream) => stream.into_inner(),
+                    Err(e) => {
+                        let _ = gwd_tx
+                            .send(Err(tonic::Status::new(
+                                tonic::Code::Internal,
+                                e.to_string(),
+                            )))
+                            .await;
+                        return;
+                    }
+                };
+
+                while let Some(htlc) = match htlc_stream.message().await {
+                    Ok(htlc) => htlc,
+                    Err(e) => {
+                        error!("Error received over HTLC subscriprion: {:?}", e);
+                        let _ = gwd_tx
+                            .send(Err(tonic::Status::new(
+                                tonic::Code::Internal,
+                                e.to_string(),
+                            )))
+                            .await;
+                        None
+                    }
+                } {
+                    let response: Option<ForwardHtlcInterceptResponse> = if htlc
+                        .outgoing_requested_chan_id
+                        != scid
+                    {
                         // Pass through: This HTLC doesn't belong to the current subscription
                         // Forward it to the next interceptor or next node
                         Some(ForwardHtlcInterceptResponse {
@@ -184,7 +202,7 @@ impl ILnRpcClient for GatewayLndClient {
                             Ok(_) => {
                                 // Keep a reference to LND sender reference so we can later forward
                                 // outcomes on `complete_htlc` rpc
-                                self.outcomes
+                                outcomes
                                     .lock()
                                     .await
                                     .insert(intercepted_htlc_id, Arc::new(lnd_tx.clone()));
@@ -198,26 +216,28 @@ impl ILnRpcClient for GatewayLndClient {
                         }
                     };
 
-                if response.is_some() {
-                    // TODO: Consider retrying this if the send fails
-                    let _ = lnd_tx.send(response.unwrap()).await.map_err(|e| {
-                        error!("Failed to send response to LND: {:?}", e);
-                        // The HTLC will timeout and LND will automatically cancel it.
-                        GatewayError::Other(anyhow!("Failed to send response to LND"))
-                    });
+                    if response.is_some() {
+                        // TODO: Consider retrying this if the send fails
+                        let _ = lnd_tx.send(response.unwrap()).await.map_err(|e| {
+                            error!("Failed to send response to LND: {:?}", e);
+                            // The HTLC will timeout and LND will automatically cancel it.
+                            GatewayError::Other(anyhow!("Failed to send response to LND"))
+                        });
+                    }
+                }
+            };
+
+            info!("HTLC subscription stream ended");
+            select! {
+                _ = shutdown_rx => {
+                    debug!("Shutting down HTLC subscription");
+                },
+                _ = streaming_future => {
+                    debug!("HTLC subscription stream ended");
                 }
             }
-        };
-
-        debug!("Starting HTLC subscription");
-        select! {
-            _ = shutdown_future => {
-                debug!("Shutting down HTLC subscription");
-            }
-            _ = streaming_future => {
-                debug!("HTLC subscription ended");
-            }
-        }
+        })
+        .await;
 
         Ok(Box::pin(ReceiverStream::new(gwd_rx)))
     }

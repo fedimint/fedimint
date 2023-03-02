@@ -19,8 +19,10 @@ cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/con
 ./scripts/pegin.sh # peg in user
 
 export PEG_IN_AMOUNT=99999
+await_cln_block_processing
 start_gatewayd
-# ./scripts/pegin.sh $PEG_IN_AMOUNT CLN # peg in CLN gateway
+
+./scripts/pegin.sh $PEG_IN_AMOUNT CLN # peg in CLN gateway
 ./scripts/pegin.sh $PEG_IN_AMOUNT LND # peg in LND gateway
 
 #### BEGIN TESTS ####
@@ -55,8 +57,10 @@ mine_blocks 10
 RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 [[ "$RECEIVED" = "0.00000500" ]]
 
-# fedimint-cli pays CLN via LND gateaway
+# LND Gateway Tests
 switch_to_lnd_gateway
+
+# OUTGOING: fedimint-cli pays CLN via LND gateaway
 INVOICE="$($FM_CLN invoice 100000 lnd-gw-to-cln test 1m | jq -e -r '.bolt11')"
 await_cln_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
@@ -70,8 +74,16 @@ INVOICE_RESULT="$($FM_CLN waitinvoice lnd-gw-to-cln)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
-# fedimint-cli pays LND via CLN gateaway
+# # INCOMING: User can receive payments via LND gateway
+# INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
+# INVOICE_RESULT=$($FM_CLN pay $INVOICE)
+# INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
+# [[ "$INVOICE_STATUS" = "complete" ]]
+
+# CLN Gateway Tests
 switch_to_cln_gateway
+
+# OUTGOING: fedimint-cli pays LND via CLN gateaway
 ADD_INVOICE="$($FM_LND addinvoice --amt_msat 100000)"
 INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
 PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
@@ -86,13 +98,23 @@ LN_GATEWAY_BALANCE="$($FM_GWCLI_CLN balance $FED_ID | jq -e -r '.balance_msat')"
 INVOICE_STATUS="$($FM_LND lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
 [[ "$INVOICE_STATUS" = "SETTLED" ]]
 
-# LND pays CLN directly
+# INCOMING: User can receive payments via CLN gateway
+INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'incoming-over-lnd-gw' | jq -e -r '.invoice')"
+PAYMENT="$($FM_LND payinvoice --force $INVOICE)"
+PAYMENT_HASH="$(echo $PAYMENT | awk '{ print $30 }')"
+LND_PAYMENTS="$($FM_LND listpayments --include_incomplete)"
+PAYMENT_STATUS="$(echo $LND_PAYMENTS | jq -e -r '.payments[] | select(.payment_hash == "'$PAYMENT_HASH'") | .status')"
+[[ "$PAYMENT_STATUS" = "SUCCEEDED" ]]
+
+# Lightning Node tests
+
+# LN DIRECT: LND pays CLN directly
 INVOICE="$($FM_CLN invoice 42000 lnd-to-cln test 1m | jq -e -r '.bolt11')"
 $FM_LND payinvoice --force "$INVOICE"
 INVOICE_STATUS="$($FM_CLN waitinvoice lnd-to-cln | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
-# CLN pays LND directly
+# LN DIRECT: CLN pays LND directly
 ADD_INVOICE="$($FM_LND addinvoice --amt_msat 42000)"
 INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
 PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"

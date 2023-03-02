@@ -16,6 +16,7 @@ mine_blocks 101 | show_verbose_output
 
 echo Setting up lightning channel ...
 # sleep 5
+await_cln_block_processing
 open_channel | show_verbose_output
 
 echo Funding user e-cash wallet ...
