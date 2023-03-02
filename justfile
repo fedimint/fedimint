@@ -36,7 +36,7 @@ test-count:
 lint:
   env NO_STASH=true misc/git-hooks/pre-commit
   just clippy
-  cargo doc --profile dev --no-deps --document-private-items
+  env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --profile dev --no-deps --document-private-items
 
 # run all checks recommended before opening a PR
 final-check: lint
