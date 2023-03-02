@@ -107,7 +107,7 @@ function gw_connect_fed() {
 }
 
 function get_finality_delay() {
-    cat $FM_CFG_DIR/client.json | jq -e -r ".modules.\"${LEGACY_HARDCODED_INSTANCE_ID_WALLET}\".finality_delay"
+    cat $FM_CFG_DIR/client.json | jq -e -r ".modules.\"${LEGACY_HARDCODED_INSTANCE_ID_WALLET}\".config.finality_delay"
 }
 
 function sat_to_btc() {

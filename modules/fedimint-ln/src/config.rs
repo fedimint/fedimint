@@ -56,14 +56,14 @@ pub struct LightningClientConfig {
 
 impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        ClientModuleConfig::new(
+        ClientModuleConfig::from_typed(
             KIND,
-            serde_json::to_value(&LightningClientConfig {
+            &LightningClientConfig {
                 threshold_pub_key: self.threshold_pub_keys.public_key(),
                 fee_consensus: self.fee_consensus.clone(),
-            })
-            .expect("Serialization can't fail"),
+            },
         )
+        .expect("Serialization can't fail")
     }
 }
 

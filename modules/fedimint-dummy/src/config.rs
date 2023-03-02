@@ -4,7 +4,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 
@@ -43,13 +42,13 @@ impl TypedClientModuleConfig for DummyClientConfig {
 
 impl TypedServerModuleConsensusConfig for DummyConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        ClientModuleConfig::new(
+        ClientModuleConfig::from_typed(
             KIND,
-            serde_json::to_value(&DummyClientConfig {
+            &(DummyClientConfig {
                 something: self.something,
-            })
-            .expect("Serialization can't fail"),
+            }),
         )
+        .expect("Serialization can't fail")
     }
 }
 
