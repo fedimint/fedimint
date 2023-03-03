@@ -1,4 +1,3 @@
-pub mod account;
 pub mod incoming;
 pub mod outgoing;
 
@@ -28,7 +27,6 @@ hash_newtype!(
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Contract {
-    Account(account::AccountContract),
     Incoming(incoming::IncomingContract),
     Outgoing(outgoing::OutgoingContract),
 }
@@ -37,7 +35,6 @@ pub enum Contract {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub enum FundedContract {
-    Account(account::AccountContract),
     Incoming(incoming::FundedIncomingContract),
     Outgoing(outgoing::OutgoingContract),
 }
@@ -46,7 +43,6 @@ pub enum FundedContract {
 /// anything back to the user (the decrypted preimage).
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum ContractOutcome {
-    Account(AccountContractOutcome),
     Incoming(DecryptedPreimage),
     Outgoing(OutgoingContractOutcome),
 }
@@ -54,14 +50,11 @@ pub enum ContractOutcome {
 impl ContractOutcome {
     pub fn is_permanent(&self) -> bool {
         match self {
-            ContractOutcome::Account(_) => true,
             ContractOutcome::Incoming(o) => o.is_permanent(),
             ContractOutcome::Outgoing(_) => true,
         }
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct AccountContractOutcome {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutgoingContractOutcome {}
@@ -69,7 +62,6 @@ pub struct OutgoingContractOutcome {}
 impl IdentifyableContract for Contract {
     fn contract_id(&self) -> ContractId {
         match self {
-            Contract::Account(c) => c.contract_id(),
             Contract::Incoming(c) => c.contract_id(),
             Contract::Outgoing(c) => c.contract_id(),
         }
@@ -79,7 +71,6 @@ impl IdentifyableContract for Contract {
 impl IdentifyableContract for FundedContract {
     fn contract_id(&self) -> ContractId {
         match self {
-            FundedContract::Account(c) => c.contract_id(),
             FundedContract::Incoming(c) => c.contract.contract_id(),
             FundedContract::Outgoing(c) => c.contract_id(),
         }
@@ -91,7 +82,6 @@ impl Contract {
     /// acceptance. Depending on the contract type it is not yet final.
     pub fn to_outcome(&self) -> ContractOutcome {
         match self {
-            Contract::Account(_) => ContractOutcome::Account(AccountContractOutcome {}),
             Contract::Incoming(_) => ContractOutcome::Incoming(DecryptedPreimage::Pending),
             Contract::Outgoing(_) => ContractOutcome::Outgoing(OutgoingContractOutcome {}),
         }
@@ -100,7 +90,6 @@ impl Contract {
     /// Converts a contract to its executed version.
     pub fn to_funded(self, out_point: OutPoint) -> FundedContract {
         match self {
-            Contract::Account(account) => FundedContract::Account(account),
             Contract::Incoming(incoming) => {
                 FundedContract::Incoming(incoming::FundedIncomingContract {
                     contract: incoming,

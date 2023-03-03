@@ -9,8 +9,7 @@ pub mod legacy {
     use fedimint_core::{CoreError, ServerModule};
     use fedimint_ln::contracts::incoming::OfferId;
     use fedimint_ln::contracts::{
-        AccountContractOutcome, ContractOutcome, DecryptedPreimage, OutgoingContractOutcome,
-        Preimage,
+        ContractOutcome, DecryptedPreimage, OutgoingContractOutcome, Preimage,
     };
     use fedimint_ln::{Lightning, LightningOutputOutcome};
     use fedimint_mint::{Mint, MintOutputOutcome};
@@ -121,20 +120,6 @@ pub mod legacy {
                 Ok(id)
             } else {
                 Err(CoreError::MismatchingVariant("ln::incoming", "other"))
-            }
-        }
-    }
-
-    impl TryIntoOutcome for AccountContractOutcome {
-        fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-            if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
-                outcome: ContractOutcome::Account(o),
-                ..
-            }) = common_outcome
-            {
-                Ok(o)
-            } else {
-                Err(CoreError::MismatchingVariant("ln::account", "other"))
             }
         }
     }
