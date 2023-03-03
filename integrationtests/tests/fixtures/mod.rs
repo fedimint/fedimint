@@ -30,8 +30,9 @@ use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
 use fedimint_ln::{LightningGateway, LightningGen};
 use fedimint_logging::TracingSetup;
-use fedimint_mint::db::NonceKeyPrefix;
-use fedimint_mint::{MintGen, MintOutput};
+use fedimint_mint_server::common::db::NonceKeyPrefix;
+use fedimint_mint_server::common::MintOutput;
+use fedimint_mint_server::MintGen;
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
 use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,

@@ -932,7 +932,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln",
  "fedimint-logging",
- "fedimint-mint",
+ "fedimint-mint-client",
  "fedimint-rocksdb",
  "lightning-invoice",
  "mint-client",
@@ -1020,7 +1020,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln",
  "fedimint-logging",
- "fedimint-mint",
+ "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet",
@@ -1166,7 +1166,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-mint"
+name = "fedimint-mint-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1176,6 +1176,66 @@ dependencies = [
  "counter",
  "erased-serde",
  "fedimint-core",
+ "fedimint-mint-common",
+ "futures",
+ "impl-tools",
+ "itertools",
+ "rand",
+ "rayon",
+ "secp256k1",
+ "secp256k1-zkp",
+ "serde",
+ "strum",
+ "strum_macros",
+ "tbs",
+ "test-log",
+ "thiserror",
+ "threshold_crypto",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-mint-common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bitcoin_hashes",
+ "counter",
+ "erased-serde",
+ "fedimint-core",
+ "futures",
+ "impl-tools",
+ "itertools",
+ "rand",
+ "rayon",
+ "secp256k1",
+ "secp256k1-zkp",
+ "serde",
+ "strum",
+ "strum_macros",
+ "tbs",
+ "test-log",
+ "thiserror",
+ "threshold_crypto",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-mint-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bitcoin_hashes",
+ "counter",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-mint-common",
  "fedimint-server",
  "futures",
  "impl-tools",
@@ -1307,7 +1367,8 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln",
  "fedimint-logging",
- "fedimint-mint",
+ "fedimint-mint-client",
+ "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-sqlite",
@@ -1378,7 +1439,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln",
  "fedimint-logging",
- "fedimint-mint",
+ "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet",
@@ -1644,7 +1705,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln",
  "fedimint-logging",
- "fedimint-mint",
+ "fedimint-mint-client",
  "fedimint-testing",
  "lightning-invoice",
  "ln-gateway",
@@ -2574,7 +2635,8 @@ dependencies = [
  "fedimint-derive-secret",
  "fedimint-ln",
  "fedimint-logging",
- "fedimint-mint",
+ "fedimint-mint-client",
+ "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-wallet",
@@ -3240,7 +3302,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln",
  "fedimint-logging",
- "fedimint-mint",
+ "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet",

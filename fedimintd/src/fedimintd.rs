@@ -9,7 +9,7 @@ use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_ln::LightningGen;
 use fedimint_logging::TracingSetup;
-use fedimint_mint::MintGen;
+use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{
     read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG,
 };
@@ -54,7 +54,7 @@ pub struct ServerOpts {
 ///
 /// ```
 /// use fedimint_ln::LightningGen;
-/// use fedimint_mint::MintGen;
+/// use fedimint_mint_server::MintGen;
 /// use fedimint_wallet::WalletGen;
 /// use fedimintd::fedimintd::Fedimintd;
 ///

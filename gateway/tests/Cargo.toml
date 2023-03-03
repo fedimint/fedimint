@@ -17,7 +17,7 @@ bitcoin = "0.29.2"
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
 fedimint-testing = { path = "../../fedimint-testing" }
-fedimint-mint = { path = "../../modules/fedimint-mint" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-logging = { path = "../../fedimint-logging" }
 lightning-invoice = "0.21.0"
 ln-gateway = { path = "../ln-gateway" }

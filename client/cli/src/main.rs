@@ -21,7 +21,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_ln::LightningClientGen;
 use fedimint_logging::TracingSetup;
-use fedimint_mint::MintClientGen;
+use fedimint_mint_client::MintClientGen;
 use mint_client::mint::SpendableNote;
 use mint_client::modules::ln::contracts::ContractId;
 use mint_client::modules::wallet::txoproof::TxOutProof;

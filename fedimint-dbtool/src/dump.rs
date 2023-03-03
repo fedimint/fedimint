@@ -10,7 +10,7 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
 use fedimint_ln::LightningGen;
-use fedimint_mint::MintGen;
+use fedimint_mint_server::MintGen;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;

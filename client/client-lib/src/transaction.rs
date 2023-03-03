@@ -57,7 +57,7 @@ pub mod legacy {
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
         // TODO: maybe treat every note as a seperate input?
-        Mint(<<fedimint_mint::Mint as ServerModule>::Common as ModuleCommon>::Input),
+        Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Input),
         Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Input),
         LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Input),
     }
@@ -66,7 +66,7 @@ pub mod legacy {
     #[allow(clippy::large_enum_variant)]
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Output {
-        Mint(<<fedimint_mint::Mint as ServerModule>::Common as ModuleCommon>::Output),
+        Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Output),
         Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Output),
         LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Output),
     }
