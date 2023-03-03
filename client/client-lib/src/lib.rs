@@ -78,7 +78,7 @@ use crate::mint::{MintClient, MintClientError, SpendableNote};
 use crate::modules::ln::config::LightningClientConfig;
 use crate::modules::ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use crate::modules::ln::contracts::{
-    Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
+    Contract, ContractId, DecryptedPreimage, IdentifiableContract, Preimage,
 };
 use crate::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
 use crate::modules::mint::config::MintClientConfig;

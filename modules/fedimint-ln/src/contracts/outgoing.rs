@@ -2,7 +2,7 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::encoding::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
 
-use crate::contracts::{ContractId, IdentifyableContract};
+use crate::contracts::{ContractId, IdentifiableContract};
 
 const CANCELLATION_TAG: &str = "outgoing contract cancellation";
 
@@ -32,7 +32,7 @@ pub struct OutgoingContract {
     pub cancelled: bool,
 }
 
-impl IdentifyableContract for OutgoingContract {
+impl IdentifiableContract for OutgoingContract {
     fn contract_id(&self) -> ContractId {
         let mut engine = ContractId::engine();
         Encodable::consensus_encode(&self.hash, &mut engine).expect("Hashing never fails");

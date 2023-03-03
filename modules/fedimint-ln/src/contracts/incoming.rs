@@ -7,7 +7,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::OutPoint;
 use serde::{Deserialize, Serialize};
 
-use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
+use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContractOffer {
@@ -90,7 +90,7 @@ hash_newtype!(
     doc = "The hash of a LN incoming contract offer"
 );
 
-impl IdentifyableContract for IncomingContract {
+impl IdentifiableContract for IncomingContract {
     fn contract_id(&self) -> ContractId {
         ContractId::from_hash(self.hash)
     }
