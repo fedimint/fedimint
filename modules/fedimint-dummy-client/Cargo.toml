@@ -1,5 +1,5 @@
 [package]
-name = "fedimint-dummy"
+name = "fedimint-dummy-client"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
@@ -7,12 +7,8 @@ description = "fedimint-dummy is a dummy example fedimint module."
 license = "MIT"
 
 [lib]
-name = "fedimint_dummy"
+name = "fedimint_dummy_client"
 path = "src/lib.rs"
-
-[features]
-# FIXME: Currently required because the client depends on the server modules
-server = ["fedimint-server"]
 
 [dependencies]
 anyhow = "1.0.66"
@@ -20,6 +16,7 @@ async-trait = "0.1"
 bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
+fedimint-dummy-common ={ path = "../fedimint-dummy-common" }
 fedimint-core ={ path = "../../fedimint-core" }
 rand = "0.8"
 rayon = "1.6.1"
@@ -28,5 +25,4 @@ strum = "0.24"
 strum_macros = "0.24"
 impl-tools = "0.8.0"
 thiserror = "1.0.37"
-fedimint-server = { path = "../../fedimint-server", optional = true  }
 tracing = "0.1.37"

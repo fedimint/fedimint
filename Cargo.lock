@@ -1058,7 +1058,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-dummy"
+name = "fedimint-dummy-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1066,6 +1066,48 @@ dependencies = [
  "bitcoin_hashes",
  "erased-serde",
  "fedimint-core",
+ "fedimint-dummy-common",
+ "futures",
+ "impl-tools",
+ "rand",
+ "rayon",
+ "serde",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-dummy-common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin_hashes",
+ "erased-serde",
+ "fedimint-core",
+ "futures",
+ "impl-tools",
+ "rand",
+ "rayon",
+ "serde",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-dummy-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin_hashes",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-dummy-common",
  "fedimint-server",
  "futures",
  "impl-tools",
