@@ -909,10 +909,10 @@ impl FederationTest {
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
             let svr = server.lock().await;
-            let mut dbtx = block_on(svr.database.begin_transaction());
-            let module_dbtx = dbtx.with_module_prefix(self.wallet_id);
+            let db = svr.database.new_isolated(self.wallet_id);
+            let dbtx = block_on(db.begin_transaction());
             block_on(fedimint_wallet::broadcast_pending_tx(
-                module_dbtx,
+                dbtx,
                 &svr.bitcoin_rpc,
             ));
         }

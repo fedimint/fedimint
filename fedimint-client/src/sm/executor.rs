@@ -223,8 +223,12 @@ where
                     let transition_fn = transition_fn.clone();
                     let transition_outcome = transition_outcome.clone();
                     Box::pin(async move {
-                        let new_state =
-                            transition_fn(dbtx, transition_outcome, state.clone()).await;
+                        let new_state = transition_fn(
+                            &mut dbtx.with_module_prefix(state.module_instance_id()),
+                            transition_outcome,
+                            state.clone(),
+                        )
+                        .await;
                         dbtx.remove_entry(&ActiveStateKey(state.clone()))
                             .await
                             .expect("DB error");

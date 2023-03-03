@@ -11,7 +11,9 @@ use std::sync::Mutex;
 
 use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
+use fedimint_core::db::{
+    apply_migrations, Database, DatabaseTransaction, IsolatedDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
@@ -500,7 +502,7 @@ impl FedimintConsensus {
         outcome: &HbbftConsensusOutcome,
         drop_peers: &mut Vec<PeerId>,
     ) {
-        let config = self.get_config_with_sig(dbtx).await;
+        let config = self.get_config_with_sig(&mut dbtx.get_isolated()).await;
 
         if config.client_hash_signature.is_none() {
             let maybe_client_hash = config.client.consensus_hash(&self.module_inits);
@@ -549,7 +551,10 @@ impl FedimintConsensus {
         }
     }
 
-    pub async fn get_config_with_sig(&self, dbtx: &mut DatabaseTransaction<'_>) -> ConfigResponse {
+    pub async fn get_config_with_sig(
+        &self,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+    ) -> ConfigResponse {
         let mut client = self.client_cfg.clone();
         let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
         if let Ok(Some(SerdeSignature(sig))) = maybe_sig {
@@ -699,7 +704,7 @@ impl FedimintConsensus {
 
         // Add a signature share for the client config hash if we don't have it signed
         // yet
-        let client = self.get_config_with_sig(&mut dbtx).await;
+        let client = self.get_config_with_sig(&mut dbtx.get_isolated()).await;
         if client.client_hash_signature.is_none() {
             let maybe_client_hash = client.client.consensus_hash(&self.module_inits);
             let client_hash = maybe_client_hash.expect("Client config hashes");

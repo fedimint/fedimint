@@ -28,7 +28,7 @@ use fedimint_core::config::{
 use fedimint_core::core::{
     Decoder, ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
+use fedimint_core::db::{Database, DatabaseVersion, IsolatedDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
@@ -384,7 +384,7 @@ impl ServerModuleGen for LightningGen {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut lightning: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -483,7 +483,10 @@ impl ServerModule for Lightning {
         )
     }
 
-    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn await_consensus_proposal(
+        &self,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+    ) {
         if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
         }
@@ -491,7 +494,7 @@ impl ServerModule for Lightning {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
     ) -> ConsensusProposal<LightningConsensusItem> {
         ConsensusProposal::new_auto_trigger(
             dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
@@ -507,7 +510,7 @@ impl ServerModule for Lightning {
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
         consensus_items: Vec<(PeerId, LightningConsensusItem)>,
     ) {
         for (peer, decryption_share) in consensus_items.into_iter() {
@@ -533,7 +536,7 @@ impl ServerModule for Lightning {
     async fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
         _verification_cache: &Self::VerificationCache,
         input: &'a LightningInput,
     ) -> Result<InputMeta, ModuleError> {
@@ -605,7 +608,7 @@ impl ServerModule for Lightning {
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut IsolatedDatabaseTransaction<'c, '_, ModuleInstanceId>,
         input: &'b LightningInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
@@ -629,7 +632,7 @@ impl ServerModule for Lightning {
 
     async fn validate_output(
         &self,
-        dbtx: &mut DatabaseTransaction,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
         output: &LightningOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         match output {
@@ -703,7 +706,7 @@ impl ServerModule for Lightning {
 
     async fn apply_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
         output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -807,7 +810,7 @@ impl ServerModule for Lightning {
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
     ) -> Vec<PeerId> {
         // Decrypt preimages
         let preimage_decryption_shares = dbtx
@@ -976,7 +979,7 @@ impl ServerModule for Lightning {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
         out_point: OutPoint,
     ) -> Option<LightningOutputOutcome> {
         dbtx.get_value(&ContractUpdateKey(out_point))
@@ -984,7 +987,11 @@ impl ServerModule for Lightning {
             .expect("DB error")
     }
 
-    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
+    async fn audit(
+        &self,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        audit: &mut Audit,
+    ) {
         audit
             .add_items(dbtx, &ContractKeyPrefix, |_, v| -(v.amount.msats as i64))
             .await;
@@ -1050,7 +1057,7 @@ impl Lightning {
 
     pub async fn get_offer(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -> Option<IncomingContractOffer> {
         dbtx.get_value(&OfferKey(payment_hash))
@@ -1060,7 +1067,7 @@ impl Lightning {
 
     pub async fn get_offers(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
     ) -> Vec<IncomingContractOffer> {
         dbtx.find_by_prefix(&OfferKeyPrefix)
             .await
@@ -1071,7 +1078,7 @@ impl Lightning {
 
     pub async fn get_contract_account(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
         contract_id: ContractId,
     ) -> Option<ContractAccount> {
         dbtx.get_value(&ContractKey(contract_id))
@@ -1079,7 +1086,10 @@ impl Lightning {
             .expect("DB error")
     }
 
-    pub async fn list_gateways(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<LightningGateway> {
+    pub async fn list_gateways(
+        &self,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+    ) -> Vec<LightningGateway> {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
             .filter_map(|res| async {
@@ -1097,7 +1107,7 @@ impl Lightning {
 
     pub async fn register_gateway(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
         gateway: LightningGateway,
     ) {
         dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)

@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
 use fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, IsolatedDatabaseTransaction};
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -89,7 +89,7 @@ where
 
         async fn member_validate<M: ServerModule>(
             member: &M,
-            dbtx: &mut DatabaseTransaction<'_>,
+            dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
             fake_ic: &FakeInterconnect,
             input: &<M::Common as ModuleCommon>::Input,
         ) -> Result<TestInputMeta, ModuleError> {

@@ -429,36 +429,65 @@ impl Drop for CommitTracker {
 struct ModuleDatabaseTransaction<'a> {
     dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     prefix: ModuleInstanceId,
+    decoders: ModuleDecoderRegistry,
+    commit_tracker: CommitTracker,
 }
 
 impl<'a> ModuleDatabaseTransaction<'a> {
     pub fn new(
         dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
         prefix: ModuleInstanceId,
+        decoders: ModuleDecoderRegistry,
+        commit_tracker: CommitTracker,
     ) -> ModuleDatabaseTransaction<'a> {
-        ModuleDatabaseTransaction { dbtx, prefix }
+        ModuleDatabaseTransaction {
+            dbtx,
+            prefix,
+            decoders,
+            commit_tracker,
+        }
     }
 }
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let mut isolated = IsolatedDatabaseTransaction::new(
+            self.dbtx.as_mut(),
+            Some(self.prefix),
+            &self.decoders,
+            &mut self.commit_tracker,
+        );
         isolated.raw_insert_bytes(key, value).await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let mut isolated = IsolatedDatabaseTransaction::new(
+            self.dbtx.as_mut(),
+            Some(self.prefix),
+            &self.decoders,
+            &mut self.commit_tracker,
+        );
         isolated.raw_get_bytes(key).await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let mut isolated = IsolatedDatabaseTransaction::new(
+            self.dbtx.as_mut(),
+            Some(self.prefix),
+            &self.decoders,
+            &mut self.commit_tracker,
+        );
         isolated.raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let mut isolated = IsolatedDatabaseTransaction::new(
+            self.dbtx.as_mut(),
+            Some(self.prefix),
+            &self.decoders,
+            &mut self.commit_tracker,
+        );
         let stream = isolated
             .raw_find_by_prefix(key_prefix)
             .await?
@@ -468,7 +497,12 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let mut isolated = IsolatedDatabaseTransaction::new(
+            self.dbtx.as_mut(),
+            Some(self.prefix),
+            &self.decoders,
+            &mut self.commit_tracker,
+        );
         isolated.raw_remove_by_prefix(key_prefix).await
     }
 
@@ -477,12 +511,22 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     }
 
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let mut isolated = IsolatedDatabaseTransaction::new(
+            self.dbtx.as_mut(),
+            Some(self.prefix),
+            &self.decoders,
+            &mut self.commit_tracker,
+        );
         isolated.rollback_tx_to_savepoint().await
     }
 
     async fn set_tx_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), self.prefix);
+        let mut isolated = IsolatedDatabaseTransaction::new(
+            self.dbtx.as_mut(),
+            Some(self.prefix),
+            &self.decoders,
+            &mut self.commit_tracker,
+        );
         isolated.set_tx_savepoint().await
     }
 }
@@ -494,9 +538,15 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
 /// to isolate modules/module instances from each other inside the database,
 /// which allows the same module to be instantiated twice or two different
 /// modules to use the same key.
-struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated, T: Send + Encodable> {
+pub struct IsolatedDatabaseTransaction<
+    'isolated,
+    'parent: 'isolated,
+    T: Send + Encodable + 'isolated,
+> {
     inner_tx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
     prefix: Vec<u8>,
+    decoders: &'isolated ModuleDecoderRegistry,
+    commit_tracker: &'isolated mut CommitTracker,
     _marker: PhantomData<T>,
 }
 
@@ -505,17 +555,130 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
 {
     pub fn new(
         dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-        module_prefix: T,
+        module_prefix: Option<T>,
+        decoders: &'isolated ModuleDecoderRegistry,
+        commit_tracker: &'isolated mut CommitTracker,
     ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
-        let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
-        module_prefix
-            .consensus_encode(&mut prefix_bytes)
-            .expect("Error encoding module instance id as prefix");
+        let mut prefix_bytes = vec![];
+        if let Some(module_prefix) = module_prefix {
+            prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
+            module_prefix
+                .consensus_encode(&mut prefix_bytes)
+                .expect("Error encoding module instance id as prefix");
+        }
+
         IsolatedDatabaseTransaction {
             inner_tx: dbtx,
             prefix: prefix_bytes,
             _marker: PhantomData::<T>,
+            decoders,
+            commit_tracker,
         }
+    }
+
+    #[instrument(level = "debug", skip_all, fields(?key), ret)]
+    pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseRecord,
+    {
+        let key_bytes = key.to_bytes();
+        let value_bytes = match self.raw_get_bytes(&key_bytes).await? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        Ok(Some(decode_value::<K::Value>(&value_bytes, self.decoders)?))
+    }
+
+    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
+    pub async fn find_by_prefix<KP>(
+        &mut self,
+        key_prefix: &KP,
+    ) -> impl Stream<
+        Item = Result<(
+            KP::Key,
+            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+        )>,
+    > + '_
+    where
+        KP: DatabaseLookup,
+    {
+        debug!("find by prefix");
+        let decoders = self.decoders.clone();
+        let prefix_bytes = key_prefix.to_bytes();
+        self.raw_find_by_prefix(&prefix_bytes)
+            .await
+            .expect("Error doing prefix search in database")
+            .map(move |(key_bytes, value_bytes)| {
+                let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
+                let value = decode_value(&value_bytes, &decoders)?;
+                Ok((key, value))
+            })
+    }
+
+    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
+    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseRecord,
+    {
+        self.commit_tracker.has_writes = true;
+        match self
+            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .await?
+        {
+            Some(old_val_bytes) => Ok(Some(decode_value(&old_val_bytes, self.decoders)?)),
+            None => Ok(None),
+        }
+    }
+
+    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
+    pub async fn insert_new_entry<K>(
+        &mut self,
+        key: &K,
+        value: &K::Value,
+    ) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseRecord,
+    {
+        self.commit_tracker.has_writes = true;
+        match self
+            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .await?
+        {
+            Some(_) => {
+                warn!(
+                    target: LOG_DB,
+                    "Database overwriting element when expecting insertion of new entry. Key: {:?}",
+                    key
+                );
+                Ok(None)
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
+    pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseRecord,
+    {
+        self.commit_tracker.has_writes = true;
+        let key_bytes = key.to_bytes();
+        let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        Ok(Some(K::Value::from_bytes(&value_bytes, self.decoders)?))
+    }
+
+    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix), ret)]
+    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
+    where
+        KP: DatabaseLookup,
+    {
+        self.commit_tracker.has_writes = true;
+        self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
     }
 }
 
@@ -616,22 +779,27 @@ impl<'parent> DatabaseTransaction<'parent> {
     pub fn with_module_prefix<'isolated>(
         &'isolated mut self,
         module_instance_id: ModuleInstanceId,
-    ) -> DatabaseTransaction<'isolated>
+    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, ModuleInstanceId>
     where
         'parent: 'isolated,
     {
-        let decoders = self.decoders.clone();
-        let isolated = IsolatedDatabaseTransaction::new(self.tx.as_mut(), module_instance_id);
-        DatabaseTransaction {
-            tx: Box::new(isolated),
-            decoders,
-            // DatabaseTransaction passed to modules cannot be committed, so the commit tracker is
-            // set to committed to surpress the warning
-            commit_tracker: CommitTracker {
-                is_committed: true,
-                has_writes: true,
-            },
-        }
+        IsolatedDatabaseTransaction::new(
+            self.tx.as_mut(),
+            Some(module_instance_id),
+            &self.decoders,
+            &mut self.commit_tracker,
+        )
+    }
+
+    pub fn get_isolated<'isolated>(
+        &'isolated mut self,
+    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, ModuleInstanceId> {
+        IsolatedDatabaseTransaction::new(
+            self.tx.as_mut(),
+            None,
+            &self.decoders,
+            &mut self.commit_tracker,
+        )
     }
 
     pub fn new_module_tx(
@@ -640,7 +808,12 @@ impl<'parent> DatabaseTransaction<'parent> {
     ) -> DatabaseTransaction<'parent> {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
-        let single_use = ModuleDatabaseTransaction::new(self.tx, module_instance_id);
+        let single_use = ModuleDatabaseTransaction::new(
+            self.tx,
+            module_instance_id,
+            self.decoders,
+            self.commit_tracker,
+        );
         DatabaseTransaction {
             tx: Box::new(single_use),
             decoders,
