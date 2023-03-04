@@ -203,7 +203,6 @@ impl Final for OutputOutcome {
             OutputOutcome::Wallet(_) => true,
             OutputOutcome::LN(LightningOutputOutcome::Offer { .. }) => true,
             OutputOutcome::LN(LightningOutputOutcome::Contract { outcome, .. }) => match outcome {
-                ContractOutcome::Account(_) => true,
                 ContractOutcome::Incoming(DecryptedPreimage::Some(_)) => true,
                 ContractOutcome::Incoming(_) => false,
                 ContractOutcome::Outgoing(_) => true,

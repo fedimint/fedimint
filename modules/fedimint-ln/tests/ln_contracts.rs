@@ -3,12 +3,11 @@ use fedimint_core::config::ConfigGenParams;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_ln::config::LightningClientConfig;
-use fedimint_ln::contracts::account::AccountContract;
 use fedimint_ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln::contracts::outgoing::OutgoingContract;
 use fedimint_ln::contracts::{
-    AccountContractOutcome, Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage,
-    IdentifyableContract, OutgoingContractOutcome, Preimage,
+    Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage, IdentifyableContract,
+    OutgoingContractOutcome, Preimage,
 };
 use fedimint_ln::{
     ContractOutput, Lightning, LightningError, LightningGen, LightningInput, LightningOutput,
@@ -16,57 +15,6 @@ use fedimint_ln::{
 };
 use fedimint_testing::FakeFed;
 use secp256k1::KeyPair;
-
-#[test_log::test(tokio::test)]
-async fn test_account() {
-    let mut rng = secp256k1::rand::rngs::OsRng;
-
-    let mut fed = FakeFed::<Lightning>::new(
-        4,
-        |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
-        &ConfigGenParams::new(),
-        &LightningGen,
-        LEGACY_HARDCODED_INSTANCE_ID_LN,
-    )
-    .await
-    .unwrap();
-
-    let ctx = secp256k1::Secp256k1::new();
-    let kp = KeyPair::new(&ctx, &mut rng);
-    let contract = Contract::Account(AccountContract {
-        key: kp.x_only_public_key().0,
-    });
-
-    let account_output = LightningOutput::Contract(ContractOutput {
-        amount: Amount::from_sats(42),
-        contract: contract.clone(),
-    });
-    let account_out_point = OutPoint {
-        txid: sha256::Hash::hash(b"").into(),
-        out_idx: 0,
-    };
-    let outputs = [(account_out_point, account_output)];
-
-    fed.consensus_round(&[], &outputs).await;
-    match fed.output_outcome(account_out_point).await.unwrap() {
-        LightningOutputOutcome::Contract { outcome, .. } => {
-            assert_eq!(outcome, ContractOutcome::Account(AccountContractOutcome {}));
-        }
-        _ => panic!(),
-    };
-
-    let account_input = LightningInput {
-        contract_id: contract.contract_id(),
-        amount: Amount::from_sats(42),
-        witness: None,
-    };
-    let meta = fed.verify_input(&account_input).await.unwrap();
-    assert_eq!(meta.keys, vec![kp.x_only_public_key().0]);
-
-    fed.consensus_round(&[account_input.clone()], &[]).await;
-
-    assert!(fed.verify_input(&account_input).await.is_err());
-}
 
 #[test_log::test(tokio::test)]
 async fn test_outgoing() {

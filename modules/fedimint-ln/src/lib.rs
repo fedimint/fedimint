@@ -75,7 +75,6 @@ const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 /// contracting. There exist three contract types that can be used to "lock"
 /// accounts:
 ///
-///   * [Account]: an account locked with a schnorr public key
 ///   * [Outgoing]: an account locked with an HTLC-like contract allowing to
 ///     incentivize an external Lightning node to make payments for the funder
 ///   * [Incoming]: a contract type that represents the acquisition of a
@@ -90,7 +89,6 @@ const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 /// Lightning network through a centralized but untrusted (except for
 /// availability) Lightning gateway server.
 ///
-/// [Account]: contracts::account::AccountContract
 /// [Outgoing]: contracts::outgoing::OutgoingContract
 /// [Incoming]: contracts::incoming::IncomingContract
 #[derive(Debug)]
@@ -151,9 +149,6 @@ impl std::fmt::Display for LightningOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LightningOutput::Contract(ContractOutput { amount, contract }) => match contract {
-                Contract::Account(acc) => {
-                    write!(f, "LN Account Contract for {} key {}", amount, acc.key)
-                }
                 Contract::Incoming(incoming) => {
                     write!(
                         f,
@@ -568,7 +563,6 @@ impl ServerModule for Lightning {
                     outgoing.user_key
                 }
             }
-            FundedContract::Account(acc_contract) => acc_contract.key,
             FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
                 // Once the preimage has been decrypted …
                 DecryptedPreimage::Pending => {
