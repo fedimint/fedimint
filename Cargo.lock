@@ -1218,6 +1218,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode",
+ "bitcoin",
  "bitcoin_hashes",
  "erased-serde",
  "fedimint-core",

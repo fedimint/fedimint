@@ -341,7 +341,8 @@ mod tests {
     use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
     use fedimint_ln_server::{Lightning, LightningGen};
     use fedimint_testing::FakeFed;
-    use lightning_invoice::Invoice;
+    use lightning::ln::PaymentSecret;
+    use lightning_invoice::{Currency, InvoiceBuilder};
     use tokio::sync::Mutex;
     use url::Url;
 
@@ -471,18 +472,23 @@ mod tests {
 
         fed.lock().await.set_block_height(1);
 
+        let hash = sha256::Hash::hash(b"txid");
         let out_point = OutPoint {
-            txid: sha256::Hash::hash(b"txid").into(),
+            txid: hash.into(),
             out_idx: 0,
         };
 
-        let invoice: Invoice =
-            "lnbcrt1u1pslya9jpp58005t06rezrqx2g6e84j44gs0aalcxfc47nzu97040fjzfrl\
-        cmasdq8w3jhxaqxqyjw5qcqp2sp5huz0lzk5v47kfdd58d0k96gm06kr2rkedgr5j8488jaqk44puz6s9qyyssqexyz\
-        s9rzrhu73625ag4ndtw4fqmstrnuaukh3z427la6mn2m2u25zy7j2jfk36pcsz5hl4m07ehcmhvh729424tjagv4lx2\
-        vgdsgy3sqphsc92"
-                .parse()
-                .unwrap();
+        let (sec_key, _) = client.context.secp.generate_keypair(&mut rng);
+        let invoice = InvoiceBuilder::new(Currency::Regtest)
+            .description("".to_string())
+            .payment_hash(hash)
+            .current_timestamp()
+            .min_final_cltv_expiry(0)
+            .payment_secret(PaymentSecret([0; 32]))
+            .amount_milli_satoshis(100000)
+            .build_signed(|m| client.context.secp.sign_ecdsa_recoverable(m, &sec_key))
+            .unwrap();
+
         let invoice_amt_msat = invoice.amount_milli_satoshis().unwrap();
         let gateway = {
             let mint_pub_key = secp256k1_zkp::XOnlyPublicKey::from_slice(&[42; 32][..]).unwrap();

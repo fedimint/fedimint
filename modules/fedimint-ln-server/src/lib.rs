@@ -999,6 +999,7 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::str::FromStr;
+    use std::time::UNIX_EPOCH;
 
     use bitcoin_hashes::Hash;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
@@ -1026,7 +1027,6 @@ mod fedimint_migration_tests {
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
-    use std::time::UNIX_EPOCH;
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
     use url::Url;

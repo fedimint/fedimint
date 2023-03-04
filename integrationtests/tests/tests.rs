@@ -22,11 +22,12 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
+use fedimint_core::api::OutputOutcomeError;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
-use fedimint_ln_client::{DecryptionShareCI, LightningConsensusItem, LightningError};
+use fedimint_ln_client::{DecryptionShareCI, LightningConsensusItem};
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_server::common::{MintConsensusItem, MintOutputSignatureShare};
 use fedimint_server::consensus::TransactionSubmissionError::{
@@ -38,7 +39,6 @@ use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
 use fedimint_wallet_server::common::{PegOutFees, PegOutSignatureItem, Rbf};
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
-// use mint_client::ln::LnClientError;
 use mint_client::mint::MintClient;
 use mint_client::transaction::legacy::Output;
 use mint_client::transaction::TransactionBuilder;
@@ -441,7 +441,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .generate_unconfirmed_invoice_and_submit(payment_amount, "".into(), &mut rng(), None)
             .await
             .unwrap();
-        fed.run_consensus_epochs(2).await;
+        fed.run_empty_epochs(2).await;
 
         let invoice = user
             .client
@@ -791,31 +791,36 @@ async fn set_lightning_invoice_expiry() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn client_cannot_pay_expired_invoice() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, lightning| async move {
+    lightning_test(2, |fed, user, bitcoin, _, lightning| async move {
         fed.mine_and_mint(&user, &*bitcoin, sats(1100)).await;
-        fed.run_consensus_epochs(1).await;
+
         let invoice = lightning.invoice(sats(1000), 1.into()).await;
-        let (contract_id, outpoint) = user
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let (_, outpoint) = user
             .client
             .fund_outgoing_ln_contract(invoice, rng())
             .await
             .unwrap();
 
-        let ln_client = user.client.ln_client();
-        let (contract_account, _) = tokio::join!(
-            ln_client.get_contract_account(contract_id),
-            fed.run_consensus_epochs(1)
-        );
-        assert_eq!(contract_account.unwrap().amount, sats(1010)); // 1% LN fee
-        user.client
-            .await_outgoing_contract_acceptance(outpoint)
-            .await
-            .unwrap();
+        fed.run_consensus_epochs(1).await;
 
-        // tokio::time::sleep(Duration::from_secs(2)).await;
-        // let response = user.client.fund_outgoing_ln_contract(invoice, rng());
-        // info!("{:#?}", response.await);
-        // assert_matches!(response.await, Err(LightningError::ExpiredInvoice));
+        let response = user
+            .client
+            .await_outgoing_contract_acceptance(outpoint)
+            .await;
+
+        if let Err(mint_client::ClientError::OutputOutcome(OutputOutcomeError::Rejected(reason))) =
+            response
+        {
+            assert!(
+                reason.contains("Expired invoice"),
+                "Expected rejected transaction with 'Expired invoice'",
+            );
+        } else {
+            panic!("Expected rejected transaction with 'Expired invoice'");
+        }
     })
     .await
 }
@@ -986,7 +991,11 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
         assert!(response.is_err());
 
         fed.run_empty_epochs(1).await; // if valid would create contract to mint notes
-        assert_eq!(fed.find_module_item(fed.ln_id).await, None);
+        if let LightningConsensusItem::DecryptionShare(_) =
+            unwrap_item(&fed.find_module_item(fed.ln_id).await)
+        {
+            panic!("There should not be a DecryptionShare due to invalid preimage");
+        }
         assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await

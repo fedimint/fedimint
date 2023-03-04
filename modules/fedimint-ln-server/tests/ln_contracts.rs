@@ -1,3 +1,4 @@
+use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_core::config::ConfigGenParams;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
@@ -14,6 +15,9 @@ use fedimint_ln_common::{
 };
 use fedimint_ln_server::{Lightning, LightningGen};
 use fedimint_testing::FakeFed;
+use lightning::ln::PaymentSecret;
+use lightning_invoice::{Currency, InvoiceBuilder};
+use rand::rngs::OsRng;
 use secp256k1::KeyPair;
 
 #[test_log::test(tokio::test)]
@@ -31,25 +35,22 @@ async fn test_outgoing() {
     .unwrap();
 
     let ctx = secp256k1::Secp256k1::new();
-    let gw_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
+    let kp = KeyPair::new(&ctx, &mut OsRng);
+    let gw_pk = PublicKey::from_keypair(&kp).x_only_public_key().0;
+    let sec_key = SecretKey::from_keypair(&kp);
     let user_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
     let preimage = Preimage([42u8; 32]);
     let hash = secp256k1::hashes::sha256::Hash::hash(&preimage.0);
 
-    let invoice: lightning_invoice::Invoice =
-        "lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
-h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
-5gflssp5nf55ny5gcrfl30xuhzj3nphgj27rstekmr9fw3ny5989s300gyus9qyysgqcqpcrzjqw2sxwe993\
-h5pcm4dxzpvttgza8zhkqxpgffcrf5v25nwpr3cmfg7z54kuqq8rgqqqqqqqq2qqqqq9qq9qrzjqd0ylaqcl\
-j9424x9m8h2vcukcgnm6s56xfgu3j78zyqzhgs4hlpzvznlugqq9vsqqqqqqqlgqqqqqeqq9qrzjqwldmj9d\
-ha74df76zhx6l9we0vjdquygcdt3kssupehe64g6yyp5yz5rhuqqwccqqyqqqqlgqqqqjcqq9qrzjqf9e58a\
-guqr0rcun0ajlvmzq3ek63cw2w282gv3z5uupmuwvgjtq2z55qsqqg6qqqyqqqrtnqqqzq3cqygrzjqvphms\
-ywntrrhqjcraumvc4y6r8v4z5v593trte429v4hredj7ms5z52usqq9ngqqqqqqqlgqqqqqqgq9qrzjq2v0v\
-p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
-8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
-j5r6drg6k6zcqj0fcwg"
-            .parse()
-            .unwrap();
+    let invoice = InvoiceBuilder::new(Currency::Bitcoin)
+        .description("".to_string())
+        .payment_hash(hash)
+        .current_timestamp()
+        .min_final_cltv_expiry(0)
+        .payment_secret(PaymentSecret([0; 32]))
+        .amount_milli_satoshis(42000)
+        .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &sec_key))
+        .unwrap();
 
     let contract = Contract::Outgoing(OutgoingContract {
         hash,
