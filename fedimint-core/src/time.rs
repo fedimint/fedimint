@@ -1,3 +1,4 @@
+// nosemgrep: ban-system-time-now
 use std::time::SystemTime;
 
 #[cfg(not(target_family = "wasm"))]
