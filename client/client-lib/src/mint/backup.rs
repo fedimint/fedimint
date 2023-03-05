@@ -392,7 +392,7 @@ impl EcashBackup {
     pub fn into_backup_request(self, keypair: &KeyPair) -> Result<SignedBackupRequest> {
         let request = BackupRequest {
             id: keypair.x_only_public_key().0,
-            timestamp: std::time::SystemTime::now(),
+            timestamp: fedimint_core::time::now(),
             payload: self.0,
         };
 

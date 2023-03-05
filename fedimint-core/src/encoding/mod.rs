@@ -692,7 +692,7 @@ mod tests {
 
     #[test_log::test]
     fn test_systemtime() {
-        test_roundtrip(SystemTime::now());
+        test_roundtrip(fedimint_core::time::now());
     }
 
     #[test]

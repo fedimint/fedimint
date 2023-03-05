@@ -92,7 +92,8 @@ function check_semgrep() {
     return 0
   fi
 
-  semgrep -q --error --config .semgrep.yaml fedimint-server/ fedimint-core/
+  semgrep -q --error --config .semgrep.log.yaml fedimint-server/ fedimint-core/
+  semgrep -q --error --config .semgrep.all.yaml
 }
 export -f check_semgrep
 

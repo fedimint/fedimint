@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicI64, AtomicU16, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, KeyPair};
@@ -466,7 +466,7 @@ impl GatewayTest {
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
-            valid_until: SystemTime::now(),
+            valid_until: fedimint_core::time::now(),
         };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();

@@ -1,0 +1,9 @@
+rules:
+
+- id: ban-system-time-now
+  languages:
+    - rust
+  message: Use fedimint_core::time::now instead of std::time::SystemTime::now for better wasm compat.
+  pattern: std::time::SystemTime::now
+
+  severity: WARNING

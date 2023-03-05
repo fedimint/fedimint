@@ -415,14 +415,14 @@ where
 impl ActiveState {
     fn new() -> ActiveState {
         ActiveState {
-            created_at: SystemTime::now(),
+            created_at: fedimint_core::time::now(),
         }
     }
 
     fn into_inactive(self) -> InactiveState {
         InactiveState {
             created_at: self.created_at,
-            exited_at: SystemTime::now(),
+            exited_at: fedimint_core::time::now(),
         }
     }
 }
