@@ -734,6 +734,10 @@ pub trait ModuleCommon {
         decoder_builder.with_decodable_type::<Self::ConsensusItem>();
         decoder_builder
     }
+
+    fn decoder() -> Decoder {
+        Self::decoder_builder().build()
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

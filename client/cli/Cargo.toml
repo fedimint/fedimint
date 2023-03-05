@@ -20,7 +20,7 @@ lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
 mint-client = { path = "../client-lib" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
-fedimint-mint = { path = "../../modules/fedimint-mint" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
 fedimint-logging = { path = "../../fedimint-logging" }
 rand = "0.8"

@@ -6,8 +6,8 @@ use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::core::client::ClientModule;
 use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::module::TransactionItemAmount;
-use fedimint_core::{Amount, ServerModule};
+use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
+use fedimint_core::Amount;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
@@ -15,7 +15,7 @@ use tracing::debug;
 use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::tweakable::Tweakable;
 use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-use crate::modules::wallet::{Wallet, WalletInput, WalletOutput, WalletOutputOutcome};
+use crate::modules::wallet::{WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome};
 use crate::outcome::legacy::OutputOutcome;
 use crate::utils::ClientContext;
 use crate::MemberError;
@@ -32,10 +32,10 @@ pub struct WalletClient {
 
 impl ClientModule for WalletClient {
     const KIND: &'static str = "wallet";
-    type Module = Wallet;
+    type Module = WalletModuleTypes;
 
     fn decoder(&self) -> Decoder {
-        <Self::Module as ServerModule>::decoder()
+        WalletModuleTypes::decoder()
     }
 
     fn input_amount(&self, input: &WalletInput) -> TransactionItemAmount {

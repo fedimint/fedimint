@@ -8,7 +8,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::DynClientModuleGen;
+use fedimint_core::module::{DynClientModuleGen, ModuleCommon};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::ServerModule;
 use fedimint_logging::TracingSetup;
@@ -16,7 +16,7 @@ use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewa
 use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
 use mint_client::modules::ln::{Lightning, LightningClientGen};
-use mint_client::modules::mint::{Mint, MintClientGen};
+use mint_client::modules::mint::{MintClientGen, MintModuleTypes};
 use mint_client::modules::wallet::{Wallet, WalletClientGen};
 use tracing::{error, info};
 use url::Url;
@@ -94,7 +94,7 @@ async fn main() -> Result<(), anyhow::Error> {
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            <Mint as ServerModule>::decoder(),
+            MintModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,

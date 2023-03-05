@@ -19,7 +19,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::ServerModule;
 use fedimint_ln::Lightning;
 use fedimint_logging::TracingSetup;
-use fedimint_mint::Mint;
+use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::db::EpochHistoryKeyPrefix;

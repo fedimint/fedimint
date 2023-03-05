@@ -12,12 +12,12 @@ pub mod legacy {
         ContractOutcome, DecryptedPreimage, OutgoingContractOutcome, Preimage,
     };
     use fedimint_ln::{Lightning, LightningOutputOutcome};
-    use fedimint_mint::{Mint, MintOutputOutcome};
+    use fedimint_mint_client::{MintModuleTypes, MintOutputOutcome};
     use fedimint_wallet::{Wallet, WalletOutputOutcome};
 
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     pub enum OutputOutcome {
-        Mint(<<Mint as ServerModule>::Common as ModuleCommon>::OutputOutcome),
+        Mint(<MintModuleTypes as ModuleCommon>::OutputOutcome),
         Wallet(<<Wallet as ServerModule>::Common as ModuleCommon>::OutputOutcome),
         LN(<<Lightning as ServerModule>::Common as ModuleCommon>::OutputOutcome),
     }

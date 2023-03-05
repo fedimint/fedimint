@@ -8,7 +8,7 @@ pub mod utils;
 pub mod wallet;
 
 pub mod modules {
-    pub use {fedimint_ln as ln, fedimint_mint as mint, fedimint_wallet as wallet};
+    pub use {fedimint_ln as ln, fedimint_mint_client as mint, fedimint_wallet as wallet};
 }
 
 use std::fmt::{Debug, Formatter};
@@ -34,6 +34,7 @@ use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::ModuleCommon;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
@@ -42,7 +43,7 @@ use fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln::Lightning;
 use fedimint_logging::LOG_WALLET;
-use fedimint_mint::Mint;
+use fedimint_mint_client::MintModuleTypes;
 use fedimint_wallet::Wallet;
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
@@ -54,6 +55,7 @@ use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_T
 use ln::db::LightningGatewayKey;
 use ln::PayInvoicePayload;
 use mint::NoteIssuanceRequests;
+use modules::mint::MintOutputOutcome;
 use rand::distributions::Standard;
 use rand::prelude::*;
 use rand::{thread_rng, CryptoRng, Rng, RngCore};
@@ -81,7 +83,7 @@ use crate::modules::ln::contracts::{
 };
 use crate::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
 use crate::modules::mint::config::MintClientConfig;
-use crate::modules::mint::{BlindNonce, MintOutput, MintOutputOutcome};
+use crate::modules::mint::{BlindNonce, MintOutput};
 use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::txoproof::TxOutProof;
 use crate::modules::wallet::{PegOut, WalletInput, WalletOutput};
@@ -1535,7 +1537,7 @@ pub fn module_decode_stubs() -> ModuleDecoderRegistry {
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            <Mint as ServerModule>::decoder(),
+            MintModuleTypes::decoder(),
         ),
     ])
 }

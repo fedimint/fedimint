@@ -12,9 +12,9 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::client::ClientModule;
 use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::module::TransactionItemAmount;
+use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::timeout;
-use fedimint_core::{Amount, ServerModule};
+use fedimint_core::Amount;
 use futures::StreamExt;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -34,7 +34,8 @@ use crate::modules::ln::contracts::{
     Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
 };
 use crate::modules::ln::{
-    ContractAccount, ContractOutput, Lightning, LightningGateway, LightningInput, LightningOutput,
+    ContractAccount, ContractOutput, LightningGateway, LightningInput, LightningModuleTypes,
+    LightningOutput,
 };
 use crate::utils::ClientContext;
 
@@ -46,10 +47,10 @@ pub struct LnClient {
 
 impl ClientModule for LnClient {
     const KIND: &'static str = "ln";
-    type Module = Lightning;
+    type Module = LightningModuleTypes;
 
     fn decoder(&self) -> Decoder {
-        <Self::Module as ServerModule>::decoder()
+        <Self::Module as ModuleCommon>::decoder()
     }
 
     fn input_amount(&self, input: &LightningInput) -> TransactionItemAmount {

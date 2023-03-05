@@ -29,7 +29,7 @@ fedimint-core = { path = "../../fedimint-core" }
 fedimint-derive-secret = { path = "../../crypto/derive-secret" }
 fedimint-ln = { path = "../../modules/fedimint-ln" }
 fedimint-logging = { path = "../../fedimint-logging" }
-fedimint-mint = { path = "../../modules/fedimint-mint" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet = { path = "../../modules/fedimint-wallet", default-features = false }
 itertools = "0.10.5"
 rand = "0.8"
@@ -64,3 +64,4 @@ test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 fedimint-testing = { path = "../../fedimint-testing" }
 once_cell = "1.16.0"
+fedimint-mint-server = { path = "../../modules/fedimint-mint-server" }

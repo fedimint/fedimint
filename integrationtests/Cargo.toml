@@ -28,7 +28,8 @@ fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-core ={ path = "../fedimint-core" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
 fedimint-logging = { path = "../fedimint-logging", features = ["telemetry"] }
-fedimint-mint = { path = "../modules/fedimint-mint" }
+fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
+fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-sqlite = { path = "../fedimint-sqlite" }
 fedimint-testing = { path = "../fedimint-testing" }

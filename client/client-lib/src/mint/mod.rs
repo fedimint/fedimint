@@ -12,9 +12,10 @@ use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::TransactionItemAmount;
+use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
+use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
+use fedimint_mint_client::MintModuleTypes;
 use futures::{Future, StreamExt};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -25,8 +26,7 @@ use tracing::{debug, error, trace, warn};
 use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
 use crate::modules::mint::config::MintClientConfig;
 use crate::modules::mint::{
-    BlindNonce, Mint, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce,
-    Note,
+    BlindNonce, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note,
 };
 use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::{Input, Output, Transaction};
@@ -156,10 +156,10 @@ pub struct SpendableNote {
 
 impl ClientModule for MintClient {
     const KIND: &'static str = "mint";
-    type Module = Mint;
+    type Module = MintModuleTypes;
 
     fn decoder(&self) -> Decoder {
-        <Self::Module as ServerModule>::decoder()
+        <Self::Module as ModuleCommon>::decoder()
     }
 
     fn input_amount(&self, input: &MintInput) -> TransactionItemAmount {
@@ -689,6 +689,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TransactionId};
+    use fedimint_mint_server::{Mint, MintGen, MintGenParams};
     use fedimint_testing::FakeFed;
     use futures::executor::block_on;
     use tokio::sync::Mutex;
@@ -697,7 +698,7 @@ mod tests {
     use crate::mint::db::NextECashNoteIndexKey;
     use crate::mint::MintClient;
     use crate::modules::mint::config::MintClientConfig;
-    use crate::modules::mint::{Mint, MintGen, MintGenParams, MintOutput};
+    use crate::modules::mint::MintOutput;
     use crate::transaction::legacy::Input;
     use crate::{
         module_decode_stubs, BlindNonce, ClientContext, DerivableSecret, TransactionBuilder,

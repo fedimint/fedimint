@@ -15,7 +15,7 @@ use fedimint_core::query::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
-use fedimint_mint::db::ECashUserBackupSnapshot;
+use fedimint_mint_client::db::ECashUserBackupSnapshot;
 
 use crate::modules::ln::contracts::incoming::IncomingContractOffer;
 use crate::modules::ln::contracts::ContractId;
@@ -90,7 +90,7 @@ where
 pub trait MintFederationApi {
     async fn upload_ecash_backup(
         &self,
-        request: &fedimint_mint::SignedBackupRequest,
+        request: &fedimint_mint_client::SignedBackupRequest,
     ) -> FederationResult<()>;
     async fn download_ecash_backup(
         &self,
@@ -105,7 +105,7 @@ where
 {
     async fn upload_ecash_backup(
         &self,
-        request: &fedimint_mint::SignedBackupRequest,
+        request: &fedimint_mint_client::SignedBackupRequest,
     ) -> FederationResult<()> {
         self.request_with_strategy(
             CurrentConsensus::new(self.all_members().threshold()),
