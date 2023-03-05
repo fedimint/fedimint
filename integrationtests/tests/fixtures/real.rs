@@ -195,6 +195,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     Err(e) => {
                         if e.to_string().contains("not yet in block") {
                             // mostly to yield, as we no other yield points
+                            echo "Waiting for tx to be in block"
                             sleep(Duration::from_millis(1)).await;
                             continue;
                         }

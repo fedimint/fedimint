@@ -20,7 +20,8 @@ export FM_TEST_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
 export FM_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
 
 until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.chain')" == "regtest" ]; do
-  sleep $POLL_INTERVAL
+  echo "Waiting for bitcoind to become ready..." >&2
+  sleep $POLL_INTERVAL 2>/dev/null
 done
 $FM_BTC_CLIENT createwallet ""
 

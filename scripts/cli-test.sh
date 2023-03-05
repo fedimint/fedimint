@@ -48,7 +48,8 @@ $FM_MINT_CLIENT fetch
 PEG_OUT_ADDR="$($FM_BTC_CLIENT getnewaddress)"
 $FM_MINT_CLIENT peg-out $PEG_OUT_ADDR 500
 until [ "$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00000500" ]; do
-  sleep $POLL_INTERVAL
+  echo "Waiting to get received by address..." >&2
+  sleep $POLL_INTERVAL 2>/dev/null
 done
 mine_blocks 10
 RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
