@@ -29,7 +29,7 @@ bitcoin_hashes = "0.11.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 cln-rpc = "0.1.1"
-cln-plugin = "0.1.1"
+cln-plugin = { git = "https://github.com/fedimint/lightning", rev = "2db131d5" }
 futures = "0.3.24"
 lightning-invoice = "0.21.0"
 fedimint-core ={ path = "../../fedimint-core" }

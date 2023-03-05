@@ -86,8 +86,6 @@ function await_cln_block_processing() {
 
 # Function for killing processes stored in FM_PID_FILE
 function kill_fedimint_processes {
-  $FM_LN1 plugin stop "gateway-cln-extension" 2>/dev/null || true;
-
   # shellcheck disable=SC2046
   kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') 2>/dev/null #sed reverses the order here
   rm -f $FM_PID_FILE
