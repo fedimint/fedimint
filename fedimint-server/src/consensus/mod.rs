@@ -9,7 +9,7 @@ use std::iter::FromIterator;
 use std::os::unix::prelude::OsStrExt;
 use std::sync::Mutex;
 
-use fedimint_core::config::{ConfigResponse, ModuleGenRegistry};
+use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -87,7 +87,7 @@ pub struct FedimintConsensus {
     /// `Self::get_config_with_sig`
     client_cfg: ConfigResponse,
 
-    pub module_inits: ModuleGenRegistry,
+    pub module_inits: ServerModuleGenRegistry,
 
     pub modules: ServerModuleRegistry,
     /// KV Database into which all state is persisted to recover from in case of
@@ -134,7 +134,7 @@ impl FedimintConsensus {
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ModuleGenRegistry,
+        module_inits: ServerModuleGenRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<(Self, Receiver<Transaction>)> {
         let mut modules = BTreeMap::new();
@@ -199,7 +199,7 @@ impl FedimintConsensus {
     pub fn new_with_modules(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ModuleGenRegistry,
+        module_inits: ServerModuleGenRegistry,
         modules: ModuleRegistry<DynServerModule>,
     ) -> (Self, Receiver<Transaction>) {
         let (tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);

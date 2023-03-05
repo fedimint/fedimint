@@ -25,7 +25,7 @@ use fedimint_core::api::{
     DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
     WsFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ClientModuleGenRegistry, FederationId};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -157,7 +157,7 @@ impl<C> Client<C> {
         &self.context.decoders
     }
 
-    pub fn module_gens(&self) -> &ModuleGenRegistry {
+    pub fn module_gens(&self) -> &ClientModuleGenRegistry {
         &self.context.module_gens
     }
 }
@@ -281,7 +281,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     pub async fn new(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ClientModuleGenRegistry,
         db: Database,
         secp: Secp256k1<All>,
     ) -> Self {
@@ -292,7 +292,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     pub async fn new_with_api(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ClientModuleGenRegistry,
         db: Database,
         api: DynFederationApi,
         secp: Secp256k1<All>,

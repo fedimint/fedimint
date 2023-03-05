@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use aead::{encrypted_read, encrypted_write, get_key};
 use clap::{Parser, Subcommand};
-use fedimint_core::config::{DkgError, ModuleGenRegistry};
-use fedimint_core::module::ModuleGen;
+use fedimint_core::config::{DkgError, ServerModuleGenRegistry};
+use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{self, TaskGroup};
 use fedimint_core::Amount;
 use fedimint_ln::LightningGen;
@@ -133,7 +133,7 @@ enum Command {
 ///
 /// See [`super::fedimintd::Fedimintd`] for more info.
 pub struct DistributedGen {
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
     opts: Cli,
 }
 
@@ -145,14 +145,14 @@ impl DistributedGen {
         TracingSetup::default().init()?;
 
         Ok(Self {
-            module_gens: ModuleGenRegistry::new(),
+            module_gens: ServerModuleGenRegistry::new(),
             opts,
         })
     }
 
     pub fn with_module<T>(mut self, gen: T) -> Self
     where
-        T: ModuleGen + 'static + task::MaybeSend + task::MaybeSync,
+        T: ServerModuleGen + 'static + task::MaybeSend + task::MaybeSync,
     {
         self.module_gens.attach(gen);
         self

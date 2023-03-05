@@ -28,7 +28,7 @@ use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::{DynServerModule, VerificationCache};
-use crate::task::{MaybeSend, TaskGroup};
+use crate::task::{MaybeSend, MaybeSync, TaskGroup};
 use crate::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
     OutPoint, PeerId,
@@ -263,6 +263,83 @@ where
     }
 }
 
+/// Operations common to Server and Client side module gen dyn newtypes
+///
+/// Due to conflict of `impl Trait for T` for both `ServerModuleGen` and
+/// `ClientModuleGen`, we can't really have a `ICommonModuleGen`, so to unify
+/// them in `ModuleGenRegistry` we move the common functionality to be an
+/// interface over their dyn newtype wrappers. A bit weird, but works.
+pub trait IDynCommonModuleGen: Debug {
+    fn decoder(&self) -> Decoder;
+
+    fn module_kind(&self) -> ModuleKind;
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+
+    fn to_dyn_client(&self) -> DynClientModuleGen;
+}
+
+impl IDynCommonModuleGen for DynClientModuleGen {
+    fn decoder(&self) -> Decoder {
+        (**self).decoder()
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        (**self).module_kind()
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        (**self).hash_client_module(config)
+    }
+
+    fn to_dyn_client(&self) -> DynClientModuleGen {
+        self.clone()
+    }
+}
+
+impl IDynCommonModuleGen for DynServerModuleGen {
+    fn decoder(&self) -> Decoder {
+        (**self).decoder()
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        (**self).module_kind()
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        (**self).hash_client_module(config)
+    }
+
+    fn to_dyn_client(&self) -> DynClientModuleGen {
+        DynClientModuleGen(Arc::new(self.clone()) as Arc<_>)
+    }
+}
+
+// To be able to convert `DynServerModuleGen` to `DynClientModuleGen`,
+// we just impl `IClientModuleGen` for it, and wrap it in `Arc` inside
+// `IDynCommonModuleGen::to_dyn_client`.
+impl IClientModuleGen for DynServerModuleGen {
+    fn decoder(&self) -> Decoder {
+        <Self as IDynCommonModuleGen>::decoder(self)
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        <Self as IDynCommonModuleGen>::module_kind(self)
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        <Self as IDynCommonModuleGen>::hash_client_module(self, config)
+    }
+}
+
+pub trait IClientModuleGen: Debug + MaybeSend + MaybeSync {
+    fn decoder(&self) -> Decoder;
+
+    fn module_kind(&self) -> ModuleKind;
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+}
+
 /// Interface for Module Generation
 ///
 /// This trait contains the methods responsible for the module's
@@ -273,7 +350,7 @@ where
 /// Once the module configuration is ready, the module can be instantiated via
 /// `[Self::init]`.
 #[apply(async_trait_maybe_send!)]
-pub trait IModuleGen: Debug {
+pub trait IServerModuleGen: Debug {
     fn decoder(&self) -> Decoder;
 
     fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion>;
@@ -324,7 +401,12 @@ pub trait IModuleGen: Debug {
 
 dyn_newtype_define!(
     #[derive(Clone)]
-    pub DynModuleGen(Arc<IModuleGen>)
+    pub DynClientModuleGen(Arc<IClientModuleGen>)
+);
+
+dyn_newtype_define!(
+    #[derive(Clone)]
+    pub DynServerModuleGen(Arc<IServerModuleGen>)
 );
 
 /// Consensus version of a core server
@@ -398,6 +480,19 @@ pub struct ApiVersion {
     pub minor: u32,
 }
 
+pub trait CommonModuleGen: Debug + Sized {
+    const KIND: ModuleKind;
+
+    fn decoder() -> Decoder;
+
+    fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
+}
+
+#[apply(async_trait_maybe_send!)]
+pub trait ClientModuleGen: Debug + Sized {
+    type Common: CommonModuleGen;
+}
+
 /// Module Generation trait with associated types
 ///
 /// Needs to be implemented by module generation type
@@ -405,8 +500,8 @@ pub struct ApiVersion {
 /// For examples, take a look at one of the `MintConfigGenerator`,
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
-pub trait ModuleGen: Debug + Sized {
-    const KIND: ModuleKind;
+pub trait ServerModuleGen: Debug + Sized {
+    type Common: CommonModuleGen;
 
     /// This represents the module's database version that the current code is
     /// compatible with. It is important to increment this value whenever a
@@ -416,19 +511,18 @@ pub trait ModuleGen: Debug + Sized {
     /// to move from the previous database version to the current version.
     const DATABASE_VERSION: DatabaseVersion;
 
-    fn decoder(&self) -> Decoder;
-
     /// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].
     ///
     /// Refer to [`ModuleConsensusVersion`] for more information about
     /// versioning.
     ///
-    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can
-    /// potentially implement multiple versions of the consensus, and
-    /// depending on the config module instance config, instantiate the
-    /// desired one. This method should expose all the available
-    /// versions, purely for information, setup UI and sanity checking purposes.
+    /// One module implementation ([`ServerModuleGen`] of a given
+    /// [`ModuleKind`]) can potentially implement multiple versions of the
+    /// consensus, and depending on the config module instance config,
+    /// instantiate the desired one. This method should expose all the
+    /// available versions, purely for information, setup UI and sanity
+    /// checking purposes.
     fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
 
     /// Initialize the [`DynServerModule`] instance from its config
@@ -464,8 +558,6 @@ pub trait ModuleGen: Debug + Sized {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
-    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
-
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -474,24 +566,42 @@ pub trait ModuleGen: Debug + Sized {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T> IModuleGen for T
+impl<T> IClientModuleGen for T
 where
-    T: ModuleGen + 'static + Sync,
+    T: ClientModuleGen + 'static + MaybeSend + Sync,
 {
     fn decoder(&self) -> Decoder {
-        ModuleGen::decoder(self)
+        <Self as ClientModuleGen>::Common::decoder()
     }
 
     fn module_kind(&self) -> ModuleKind {
-        <Self as ModuleGen>::KIND
+        <Self as ClientModuleGen>::Common::KIND
+    }
+
+    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<Hash> {
+        <Self as ClientModuleGen>::Common::hash_client_module(config)
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IServerModuleGen for T
+where
+    T: ServerModuleGen + 'static + Sync,
+{
+    fn decoder(&self) -> Decoder {
+        <Self as ServerModuleGen>::Common::decoder()
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        <Self as ServerModuleGen>::Common::KIND
     }
 
     fn database_version(&self) -> DatabaseVersion {
-        <Self as ModuleGen>::DATABASE_VERSION
+        <Self as ServerModuleGen>::DATABASE_VERSION
     }
 
     fn versions(&self, core: CoreConsensusVersion) -> Vec<ModuleConsensusVersion> {
-        <Self as ModuleGen>::versions(self, core).to_vec()
+        <Self as ServerModuleGen>::versions(self, core).to_vec()
     }
 
     async fn init(
@@ -501,11 +611,11 @@ where
         env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        <Self as ModuleGen>::init(self, cfg, db, env, task_group).await
+        <Self as ServerModuleGen>::init(self, cfg, db, env, task_group).await
     }
 
     fn get_database_migrations(&self) -> MigrationMap {
-        <Self as ModuleGen>::get_database_migrations(self)
+        <Self as ServerModuleGen>::get_database_migrations(self)
     }
 
     fn trusted_dealer_gen(
@@ -513,7 +623,7 @@ where
         peers: &[PeerId],
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ModuleGen>::trusted_dealer_gen(self, peers, params)
+        <Self as ServerModuleGen>::trusted_dealer_gen(self, peers, params)
     }
 
     async fn distributed_gen(
@@ -521,22 +631,22 @@ where
         peers: &PeerHandle,
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
-        <Self as ModuleGen>::distributed_gen(self, peers, params).await
+        <Self as ServerModuleGen>::distributed_gen(self, peers, params).await
     }
 
     fn to_config_response(
         &self,
         config: serde_json::Value,
     ) -> anyhow::Result<ModuleConfigResponse> {
-        <Self as ModuleGen>::to_config_response(self, config)
+        <Self as ServerModuleGen>::to_config_response(self, config)
     }
 
     fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<Hash> {
-        <Self as ModuleGen>::hash_client_module(self, config)
+        <Self as ServerModuleGen>::Common::hash_client_module(config)
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        <Self as ModuleGen>::validate_config(self, identity, config)
+        <Self as ServerModuleGen>::validate_config(self, identity, config)
     }
 
     async fn dump_database(
@@ -544,7 +654,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        <Self as ModuleGen>::dump_database(self, dbtx, prefix_names).await
+        <Self as ServerModuleGen>::dump_database(self, dbtx, prefix_names).await
     }
 }
 
@@ -630,13 +740,13 @@ pub trait ModuleCommon {
 pub trait ServerModule: Debug + Sized {
     type Common: ModuleCommon;
 
-    type Gen: ModuleGen;
+    type Gen: ServerModuleGen;
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
         // allocate
-        Self::Gen::KIND
+        <Self::Gen as ServerModuleGen>::Common::KIND
     }
 
     /// Returns a decoder for the following associated types of this module:
@@ -800,7 +910,7 @@ impl<T: Encodable + Decodable> SerdeModuleEncoding<T> {
     }
 }
 
-/// A handle passed to [`ModuleGen::distributed_gen`]
+/// A handle passed to [`ServerModuleGen::distributed_gen`]
 ///
 /// This struct encapsulates dkg data that the module should not have a direct
 /// access to, and implements higher level dkg operations available to the

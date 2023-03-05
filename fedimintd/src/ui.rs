@@ -13,7 +13,7 @@ use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
@@ -374,7 +374,7 @@ struct State {
     password: String,
     task_group: TaskGroup,
     dkg_task_group: Option<TaskGroup>,
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
     dkg_state: Option<DkgState>,
 }
 type MutableState = Arc<Mutex<State>>;
@@ -399,7 +399,7 @@ pub async fn run_ui(
     bind_addr: SocketAddr,
     password: String,
     task_group: TaskGroup,
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,

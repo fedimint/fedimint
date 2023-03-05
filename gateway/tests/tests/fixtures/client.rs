@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
-use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ClientModuleGenRegistry, FederationId};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::PeerId;
@@ -38,7 +38,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         &self,
         config: GatewayClientConfig,
         decoders: ModuleDecoderRegistry,
-        _module_gens: ModuleGenRegistry,
+        _module_gens: ClientModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>, GatewayError> {
         let federation_id = config.client_config.federation_id.clone();
         // Ignore `config`s, hardcode one peer.
@@ -70,7 +70,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         _connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        _module_gens: ModuleGenRegistry,
+        _module_gens: ClientModuleGenRegistry,
     ) -> Result<GatewayClientConfig, GatewayError> {
         // TODO: use the connect info urls to get the federation name?
         // Simulate clients in the same federation by seeding the generated

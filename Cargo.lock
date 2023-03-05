@@ -930,6 +930,7 @@ dependencies = [
  "clap",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-ln",
  "fedimint-logging",
  "fedimint-mint",
  "fedimint-rocksdb",

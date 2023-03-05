@@ -25,7 +25,7 @@ use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
-use crate::module::{DynModuleGen, ModuleGen};
+use crate::module::{DynClientModuleGen, DynServerModuleGen, IDynCommonModuleGen};
 use crate::PeerId;
 
 /// [`serde_json::Value`] that must contain `kind: String` field
@@ -171,10 +171,13 @@ impl FromStr for FederationId {
 
 impl ClientConfig {
     /// Returns the consensus hash for a given client config
-    pub fn consensus_hash(
+    pub fn consensus_hash<M>(
         &self,
-        module_config_gens: &ModuleGenRegistry,
-    ) -> anyhow::Result<sha256::Hash> {
+        module_config_gens: &ModuleGenRegistry<M>,
+    ) -> anyhow::Result<sha256::Hash>
+    where
+        M: IDynCommonModuleGen,
+    {
         let modules: BTreeMap<ModuleInstanceId, sha256::Hash> = self
             .modules
             .iter()
@@ -259,39 +262,56 @@ impl ConfigGenParams {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct ModuleGenRegistry(BTreeMap<ModuleKind, DynModuleGen>);
+#[derive(Clone, Debug)]
+pub struct ModuleGenRegistry<M>(BTreeMap<ModuleKind, M>);
 
-impl From<Vec<DynModuleGen>> for ModuleGenRegistry {
-    fn from(value: Vec<DynModuleGen>) -> Self {
+impl<M> Default for ModuleGenRegistry<M> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
+
+pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
+
+impl<M> From<Vec<M>> for ModuleGenRegistry<M>
+where
+    M: IDynCommonModuleGen,
+{
+    fn from(value: Vec<M>) -> Self {
         Self(BTreeMap::from_iter(
             value.into_iter().map(|i| (i.module_kind(), i)),
         ))
     }
 }
 
-impl ModuleGenRegistry {
+impl<M> ModuleGenRegistry<M> {
     pub fn new() -> Self {
         Default::default()
     }
 
     pub fn attach<T>(&mut self, gen: T)
     where
-        T: ModuleGen + 'static + Send + Sync,
+        T: Into<M> + 'static + Send + Sync,
+        M: IDynCommonModuleGen,
     {
-        let gen: DynModuleGen = gen.into();
+        let gen: M = gen.into();
         let kind = gen.module_kind();
         if self.0.insert(kind.clone(), gen).is_some() {
             panic!("Can't insert module of same kind twice: {kind}");
         }
     }
 
-    pub fn get(&self, k: &ModuleKind) -> Option<&DynModuleGen> {
+    pub fn get(&self, k: &ModuleKind) -> Option<&M> {
         self.0.get(k)
     }
 
     /// Return legacy initialization order. See [`LegacyInitOrderIter`].
-    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter {
+    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter<M>
+    where
+        M: Clone,
+    {
         for hardcoded_module in ["mint", "ln", "wallet"] {
             if !self
                 .0
@@ -307,6 +327,23 @@ impl ModuleGenRegistry {
         }
     }
 
+    pub fn to_client(&self) -> ClientModuleGenRegistry
+    where
+        M: IDynCommonModuleGen,
+    {
+        ModuleGenRegistry(
+            self.0
+                .iter()
+                .map(|(k, v)| (k.clone(), v.to_dyn_client()))
+                .collect(),
+        )
+    }
+}
+
+impl<M> ModuleGenRegistry<M>
+where
+    M: IDynCommonModuleGen,
+{
     pub fn decoders<'a>(
         &self,
         module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
@@ -330,14 +367,14 @@ impl ModuleGenRegistry {
 /// We would like to get rid of it eventually, but old client and test code
 /// assumes it in multiple places, and it will take work to fix it, while we
 /// want new code to not assume this 1:1 relationship.
-pub struct LegacyInitOrderIter {
+pub struct LegacyInitOrderIter<M> {
     /// Counter of what module id will this returned value get assigned
     next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, DynModuleGen>,
+    rest: BTreeMap<ModuleKind, M>,
 }
 
-impl Iterator for LegacyInitOrderIter {
-    type Item = (ModuleKind, DynModuleGen);
+impl<M> Iterator for LegacyInitOrderIter<M> {
+    type Item = (ModuleKind, M);
 
     fn next(&mut self) -> Option<Self::Item> {
         let ret = match self.next_id {

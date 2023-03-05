@@ -34,9 +34,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleCommon, ModuleConsensusVersion, ModuleError, ModuleGen, PeerHandle,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ClientModuleGen, CommonModuleGen, ConsensusProposal,
+    CoreConsensusVersion, InputMeta, IntoModuleError, ModuleCommon, ModuleConsensusVersion,
+    ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
@@ -229,16 +229,35 @@ impl std::fmt::Display for WalletOutputOutcome {
 }
 
 #[derive(Debug)]
+pub struct WalletCommonGen;
+
+impl CommonModuleGen for WalletCommonGen {
+    const KIND: ModuleKind = KIND;
+    fn decoder() -> Decoder {
+        <Wallet as ServerModule>::decoder()
+    }
+
+    fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
+        serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
+    }
+}
+
+#[derive(Debug)]
+pub struct WalletClientGen;
+
+#[apply(async_trait_maybe_send!)]
+impl ClientModuleGen for WalletClientGen {
+    type Common = WalletCommonGen;
+}
+
+#[derive(Debug)]
 pub struct WalletGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ModuleGen for WalletGen {
-    const KIND: ModuleKind = KIND;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+impl ServerModuleGen for WalletGen {
+    type Common = WalletCommonGen;
 
-    fn decoder(&self) -> Decoder {
-        <Wallet as ServerModule>::decoder()
-    }
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[ModuleConsensusVersion(0)]
@@ -350,11 +369,6 @@ impl ModuleGen for WalletGen {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<WalletConfig>()?.validate_config(identity)
     }
-
-    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
-        serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
-    }
-
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,

@@ -16,7 +16,7 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ClientModuleGenRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -24,7 +24,7 @@ use fedimint_core::core::{
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_core::module::DynModuleGen;
+use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
@@ -150,10 +150,10 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     );
     let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
 
-    let module_inits = ModuleGenRegistry::from(vec![
-        DynModuleGen::from(WalletGen),
-        DynModuleGen::from(MintGen),
-        DynModuleGen::from(LightningGen),
+    let module_inits = ServerModuleGenRegistry::from(vec![
+        DynServerModuleGen::from(WalletGen),
+        DynServerModuleGen::from(MintGen),
+        DynServerModuleGen::from(LightningGen),
     ]);
 
     let decoders = module_decode_stubs();
@@ -232,7 +232,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 create_user_client(
                     user_cfg,
                     decoders.clone(),
-                    module_inits.clone(),
+                    module_inits.to_client(),
                     peers,
                     user_db,
                 )
@@ -244,7 +244,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lnrpc_adapter,
                 client_config.clone(),
                 decoders,
-                module_inits,
+                module_inits.to_client(),
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -321,7 +321,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 create_user_client(
                     user_cfg,
                     decoders.clone(),
-                    module_inits.clone(),
+                    module_inits.to_client(),
                     peers,
                     user_db,
                 )
@@ -333,7 +333,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lnrpc_adapter,
                 client_config.clone(),
                 decoders,
-                module_inits,
+                module_inits.to_client(),
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -373,7 +373,7 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
 pub async fn create_user_client(
     config: UserClientConfig,
     decoders: ModuleDecoderRegistry,
-    module_gens: ModuleGenRegistry,
+    module_gens: ClientModuleGenRegistry,
     peers: Vec<PeerId>,
     db: Database,
 ) -> UserClient {
@@ -395,7 +395,7 @@ pub async fn create_user_client(
 async fn distributed_config(
     peers: &[PeerId],
     params: HashMap<PeerId, ServerConfigParams>,
-    registry: ModuleGenRegistry,
+    registry: ServerModuleGenRegistry,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
     let configs: Vec<(PeerId, ServerConfig)> = join_all(peers.iter().map(|peer| {
@@ -448,7 +448,7 @@ impl GatewayTest {
         adapter: LnRpcAdapter,
         client_config: ClientConfig,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ClientModuleGenRegistry,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
     ) -> Self {
@@ -1154,7 +1154,7 @@ impl FederationTest {
         database_gen: &impl Fn(ModuleDecoderRegistry) -> Database,
         bitcoin_gen: &impl Fn() -> DynBitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
-        module_inits: ModuleGenRegistry,
+        module_inits: ServerModuleGenRegistry,
         override_modules: impl Fn(
             ServerConfig,
             Database,

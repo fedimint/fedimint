@@ -7,7 +7,7 @@ use aead::{encrypted_read, encrypted_write, get_key, LessSafeKey};
 use anyhow::{ensure, format_err};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_core::api::WsClientConnectInfo;
-use fedimint_core::config::ModuleGenRegistry;
+use fedimint_core::config::ServerModuleGenRegistry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_rustls::rustls;
@@ -126,7 +126,7 @@ pub fn write_server_config(
     server: &ServerConfig,
     path: PathBuf,
     password: &str,
-    module_config_gens: &ModuleGenRegistry,
+    module_config_gens: &ServerModuleGenRegistry,
 ) -> anyhow::Result<()> {
     let key = get_key(password, path.join(SALT_FILE))?;
 

@@ -13,19 +13,19 @@ use clap::{Parser, Subcommand};
 use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_core::config::{load_from_file, ClientConfig, FederationId, ModuleGenRegistry};
+use fedimint_core::config::{load_from_file, ClientConfig, ClientModuleGenRegistry, FederationId};
 use fedimint_core::db::Database;
-use fedimint_core::module::DynModuleGen;
+use fedimint_core::module::DynClientModuleGen;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_ln::LightningClientGen;
 use fedimint_logging::TracingSetup;
-use fedimint_mint::MintGen;
+use fedimint_mint::MintClientGen;
 use mint_client::mint::SpendableNote;
 use mint_client::modules::ln::contracts::ContractId;
-use mint_client::modules::ln::LightningGen;
 use mint_client::modules::wallet::txoproof::TxOutProof;
-use mint_client::modules::wallet::WalletGen;
+use mint_client::modules::wallet::WalletClientGen;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     serialize_ecash,
@@ -384,10 +384,10 @@ async fn main() {
             );
         };
     } else {
-        let module_gens = ModuleGenRegistry::from(vec![
-            DynModuleGen::from(WalletGen),
-            DynModuleGen::from(MintGen),
-            DynModuleGen::from(LightningGen),
+        let module_gens = ClientModuleGenRegistry::from(vec![
+            DynClientModuleGen::from(WalletClientGen),
+            DynClientModuleGen::from(MintClientGen),
+            DynClientModuleGen::from(LightningClientGen),
         ]);
 
         let cli = Cli::parse();
