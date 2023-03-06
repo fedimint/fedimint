@@ -4,7 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::dyn_newtype_define_with_instance_id;
 use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
@@ -14,7 +14,16 @@ use crate::sm::{GlobalContext, OperationId};
 
 /// Implementors act as state machines that can be executed
 pub trait State<GC>:
-    Debug + Clone + Eq + PartialEq + Encodable + Decodable + Send + Sync + 'static
+    Debug
+    + Clone
+    + Eq
+    + PartialEq
+    + Encodable
+    + Decodable
+    + IntoDynInstance<DynType = DynState<GC>>
+    + Send
+    + Sync
+    + 'static
 {
     /// Additional resources made available in the state transitions
     type ModuleContext: Context;

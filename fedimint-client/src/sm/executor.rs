@@ -483,15 +483,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Debug;
+    use std::fmt::{Debug, Display, Formatter};
     use std::time::Duration;
 
-    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+    use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::ModuleCommon;
+    use fedimint_core::plugin_types_trait_impl_common;
     use fedimint_core::task::TaskGroup;
+    use impl_tools::autoimpl;
+    use serde::{Deserialize, Serialize};
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
@@ -500,6 +504,65 @@ mod tests {
     use crate::{ClientModule, State};
 
     struct MockClientModule(tokio::sync::broadcast::Sender<u64>);
+
+    struct MockCommon;
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockInput(());
+
+    impl Display for MockInput {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockOutput(());
+
+    impl Display for MockOutput {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockOutputOutcome(());
+
+    impl Display for MockOutputOutcome {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockConsensusItem(());
+
+    impl Display for MockConsensusItem {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    plugin_types_trait_impl_common!(MockInput, MockOutput, MockOutputOutcome, MockConsensusItem);
+
+    impl ModuleCommon for MockCommon {
+        type Input = MockInput;
+        type Output = MockOutput;
+        type OutputOutcome = MockOutputOutcome;
+        type ConsensusItem = MockConsensusItem;
+    }
 
     #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     enum MockStateMachine {
@@ -600,15 +663,10 @@ mod tests {
     impl Context for MockContext {}
 
     impl ClientModule for MockClientModule {
+        type Common = MockCommon;
         type ModuleStateMachineContext = MockContext;
         type GlobalStateMachineContext = ();
         type States = MockStateMachine;
-
-        fn decoder(&self) -> Decoder {
-            let mut decoder_builder = Decoder::builder();
-            decoder_builder.with_decodable_type::<MockStateMachine>();
-            decoder_builder.build()
-        }
 
         fn context(&self) -> Self::ModuleStateMachineContext {
             MockContext {
@@ -621,7 +679,7 @@ mod tests {
         let (broadcast, _) = tokio::sync::broadcast::channel(10);
         let module = MockClientModule(broadcast.clone());
 
-        let decoders = ModuleDecoderRegistry::new(vec![(42, module.decoder())]);
+        let decoders = ModuleDecoderRegistry::new(vec![(42, MockClientModule::decoder())]);
         let db = Database::new(MemDatabase::new(), decoders);
 
         let mut executor_builder = Executor::<()>::builder();

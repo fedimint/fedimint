@@ -952,6 +952,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
+ "impl-tools",
  "rand",
  "serde",
  "serde_json",
