@@ -108,7 +108,7 @@ export -f check_shellcheck
 
 function check_eof() {
   errors=""
-  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg)'); do
+  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png)'); do
     # extra branches for clarity
     if [ ! -s "$path" ]; then
        # echo "$path is empty"
