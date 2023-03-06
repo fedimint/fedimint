@@ -1,13 +1,11 @@
 on: [push, pull_request]
 
-name: Markdown Link Check
+name: Link Check
 
 jobs:
   markdown-link-check:
     runs-on: ubuntu-22.04
     continue-on-error: true # can fail for external reasons, so don't be a blocker
     steps:
-      - uses: actions/checkout@v3
-      - uses: gaurav-nelson/github-action-markdown-link-check@v1
-        with:
-          use-quiet-mode: 'yes'
+      - name: Check links with linkcheck
+        uses: filiph/linkcheck@2.0.23
