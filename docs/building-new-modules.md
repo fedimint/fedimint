@@ -1,6 +1,6 @@
 One way to think of Fedimint is as a framework for building federated applications with no single point of trust.
 
-In order to build such an application, you need to fork the `fedimint` git repo. Create a new crate in the `modules` folder - you can use [`fedimint-dummy`](https://github.com/fedimint/fedimint/tree/master/modules/fedimint-dummy) as inspiration. Next `impl` two traits:
+In order to build such an application, you need to fork the `fedimint` git repo. Create a new crate in the `modules` folder - you can use the [`fedimint-dummy-*`](https://github.com/fedimint/fedimint/tree/master/modules) crates as inspiration. Next `impl` two traits:
 
 * [ServerModluePlugin](https://github.com/fedimint/fedimint/blob/c0651f88068b5818cb42a1d038d3b55d26b41e56/fedimint-api/src/module/mod.rs#L229-L360): defines how your module will interact with Fedimint consensus.
 * [FederationModuleConfigGen](https://github.com/fedimint/fedimint/blob/99e5b50f1809b5d5d144dcfcde1dafd113e1c0fe/fedimint-api/src/module/mod.rs#L202-L227): defines how configuration for your module will be generated.
