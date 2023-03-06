@@ -47,14 +47,17 @@ You can view your client's holdings using the `info` command:
 $ fedimint-cli info
 
 {
-  "info": {
-    "network" : "Regtest",
-    "total_amount": 120005000,
-    "total_num_notes": 17,
-    "details":  {
-      "1000": 5,
-      "10000000": 12,
-    }
+  "federation_id": "b0d8dc13caff84c3e050a891c06966abfc55874b8173e3523eea323b827e6754270bb975b8693081b903a319c2d33591",
+  "network": "regtest",
+  "meta": {
+    "federation_name": "Hals_trusty_mint"
+  },
+  "total_amount": 10000000,
+  "total_num_notes": 52,
+  "details": {
+    "1": 2,
+    "2": 3,
+    ...
   }
 }
 ```
@@ -63,24 +66,25 @@ The `spend` subcommand allows sending notes to another client. This will select 
 The notes are base64 encoded into a note and printed as the `note` field.
 
 ```shell
-$ fedimint-cli spend 400000
+$ fedimint-cli spend 100000
 
 {
-  "spend": {
-    "note": "AQAAAAAAAACAlpgAAAAAAAEAA..."
-  }
+  "note": "BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt..."
 }
 ```
 
 The `validate` subcommand checks the validity of the signatures without claiming the notes. It does not check if the nonce is unspent. Validity will be printed as the `all_valid` boolean.
 
 ```shell
-$ fedimint-cli validate AQAAAAAAAABAQg8AAA...
+$ fedimint-cli validate BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
 
 {
-  "validate": {
-    "all_valid": true,
-    "details": {}
+  "all_valid": true,
+  "details": {
+    "32": 1,
+    "128": 1,
+    "512": 1,
+    ...
   }
 }
 ```
@@ -88,20 +92,24 @@ $ fedimint-cli validate AQAAAAAAAABAQg8AAA...
 A receiving client can now reissue these notes to claim them and avoid double spends:
 
 ```shell
-$ fedimint-cli reissue AQAAAAAAAABAQg8AAA...
-> ...
+$ fedimint-cli reissue BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
+
+{
+  "id": {
+    "txid": "9b0ba12ae4295d4c393afee6a0ba7c9b0336ab6243a048265fd837a82a9c9059",
+    "out_idx": 0
+  }
+}
 
 $ fedimint-cli fetch
 
 {
-  "fetch": {
-    "issuance": [
-      {
-        "txid": "46f2948b772ae8b8...",
-        "out_idx": 0
-      }
-    ]
-  }
+  "issuance": [
+    {
+      "txid": "9b0ba12ae4295d4c393afee6a0ba7c9b0336ab6243a048265fd837a82a9c9059",
+      "out_idx": 0
+    }
+  ]
 }
 ```
 
@@ -119,8 +127,9 @@ Now we can use `gateway-cli` of the node where the gateway plugin is running to 
 
 ```shell
 $ gateway-cli balance <FEDERATION-ID>
+
 {
-   "balance_msat": 10000000
+  "balance_msat": 30000000
 }
 ```
 
@@ -162,22 +171,20 @@ Create our own invoice:
 $ fedimint-cli ln-invoice 1000 "description"
 
 {
-  "ln_invoice": {
-    "invoice": "lnbcrt10u1p33lg..."
-  }
+  "invoice": "lnbcrt10n1pjq2zwxdqjv..."
 }
 ```
 
 Have `ln2` pay it:
 
 ```shell
-$ ln2 pay lnbcrt1u1p3vcp...
+$ ln2 pay lnbcrt10n1pjq2zwxdqjv...
 ```
 
 Have mint client check that payment succeeded, fetch notes, and display new balances:
 
 ```shell
-$ fedimint-cli wait-invoice lnbcrt1u1p3vcp...
+$ fedimint-cli wait-invoice lnbcrt10n1pjq2zwxdqjv...
 $ fedimint-cli fetch
 $ fedimint-cli info
 ```
@@ -191,33 +198,35 @@ There also exist some other, more experimental commands that can be explored usi
 ```shell
 $ fedimint-cli help
 
-fedimint-cli 
+Usage: fedimint-cli --workdir <WORKDIR> <COMMAND>
 
-USAGE:
-    fedimint-cli --workdir <WORKDIR> <SUBCOMMAND>
+Commands:
+  version-hash         Print the latest git commit hash this bin. was build with
+  peg-in-address       Generate a new peg-in address, funds sent to it can later be claimed
+  api                  Send direct method call to the API, waiting for all peers to agree on a response
+  peg-in               Issue notes in exchange for a peg-in proof
+  reissue              Reissue notes received from a third party to avoid double spends
+  validate             Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
+  spend                Prepare notes to send to a third party as a payment
+  peg-out              Withdraw funds from the federation
+  ln-pay               Pay a lightning invoice via a gateway
+  fetch                Fetch (re-)issued notes and finalize issuance process
+  info                 Display wallet info (holdings, tiers)
+  ln-invoice           Create a lightning invoice to receive payment via gateway
+  wait-invoice         Wait for incoming invoice to be paid
+  wait-block-height    Wait for the fed to reach a consensus block height
+  decode-connect-info  Decode connection info into its JSON representation
+  encode-connect-info  Encode connection info from its constituent parts
+  connect-info         Config enabling client to establish websocket connection to federation
+  join-federation      Join a federation using it's ConnectInfo
+  list-gateways        List registered gateways
+  switch-gateway       Switch active gateway
+  backup               Upload the (encrypted) snapshot of mint notes to federation
+  restore              Restore the previously created backup of mint notes (with `backup` command)
+  help                 Print this message or the help of the given subcommand(s)
 
-ARGS:
-    <WORKDIR>    
-
-OPTIONS:
-    -h, --help    Print help information
-
-SUBCOMMANDS:
-    connect-info      Config enabling client to establish websocket connection to federation
-    fetch             Fetch (re-)issued notes and finalize issuance process
-    help              Print this message or the help of the given subcommand(s)
-    info              Display wallet info (holdings, tiers)
-    join-federation   Join a federation using it's ConnectInfo
-    ln-invoice        Create a lightning invoice to receive payment via gateway
-    ln-pay            Pay a lightning invoice via a gateway
-    peg-in            Issue notes in exchange for a peg-in proof (not yet implemented, just
-                          creates notes)
-    peg-in-address    Generate a new peg-in address, funds sent to it can later be claimed
-    peg-out           Withdraw funds from the federation
-    reissue           Reissue notes received from a third party to avoid double spends
-    spend             Prepare notes to send to a third party as a payment
-    validate          Validate notes without claiming them (only checks if signatures valid,
-                          does not check if nonce unspent)
-    wait-block-height Wait for the fed to reach a consensus block height
-    wait-invoice      Wait for incoming invoice to be paid
+Options:
+      --workdir <WORKDIR>  The working directory of the client containing the config and db
+  -h, --help               Print help
+  -V, --version            Print version
 ```
