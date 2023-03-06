@@ -376,15 +376,18 @@
           });
 
           workspaceTest = craneLib.cargoTest (commonArgs // {
+            version = "0.0.1";
             cargoArtifacts = workspaceDeps;
           });
 
           workspaceTestDoc = craneLib.cargoTest (commonArgs // {
+            version = "0.0.1";
             cargoTestExtraArgs = "--doc";
             cargoArtifacts = workspaceDeps;
           });
 
           workspaceClippy = craneLib.cargoClippy (commonArgs // {
+            version = "0.0.1";
             cargoArtifacts = workspaceDeps;
 
             cargoClippyExtraArgs = "--all-targets --no-deps -- --deny warnings";
@@ -392,6 +395,7 @@
           });
 
           workspaceDoc = craneLib.cargoDoc (commonArgs // {
+            version = "0.0.1";
             cargoArtifacts = workspaceDeps;
             preConfigure = ''
               export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
@@ -405,6 +409,7 @@
           });
 
           workspaceAudit = craneLib.cargoAudit (commonArgs // {
+            version = "0.0.1";
             pname = commonArgs.pname + "-audit";
             inherit advisory-db;
           });
@@ -432,6 +437,7 @@
 
           cliTestReconnect = craneLib.buildPackage (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-reconnect";
+            version = "0.0.1";
             cargoArtifacts = workspaceBuild;
             cargoTestCommand = "patchShebangs ./scripts ; ./scripts/reconnect-test.sh";
             doCheck = true;
@@ -439,6 +445,7 @@
 
           cliTestLatency = craneLib.buildPackage (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-latency";
+            version = "0.0.1";
             cargoArtifacts = workspaceBuild;
             cargoTestCommand = "patchShebangs ./scripts ; ./scripts/latency-test.sh";
             doCheck = true;
@@ -446,6 +453,7 @@
 
           cliTestCli = craneLib.buildPackage (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-cli";
+            version = "0.0.1";
             cargoArtifacts = workspaceBuild;
             cargoTestCommand = "patchShebangs ./scripts ; ./scripts/cli-test.sh";
             doCheck = true;
@@ -453,6 +461,7 @@
 
           cliRustTests = craneLib.buildPackage (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-rust-tests";
+            version = "0.0.1";
             cargoArtifacts = workspaceBuild;
             cargoTestCommand = "patchShebangs ./scripts ; ./scripts/rust-tests.sh";
             doCheck = true;
@@ -460,6 +469,7 @@
 
           cliTestAlwaysFail = craneLib.buildPackage (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-always-fail";
+            version = "0.0.1";
             cargoArtifacts = workspaceBuild;
             cargoTestCommand = "patchShebangs ./scripts ; ./scripts/always-fail-test.sh";
             doCheck = true;
@@ -475,8 +485,8 @@
               # "--package x --package y" args passed to cargo
               pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
               deps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
-                version = "0.0.1";
                 pname = name;
+                version = "0.0.1";
                 buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
                 doCheck = false;
               });
@@ -485,8 +495,8 @@
 
             craneLib.buildPackage (commonArgs // {
               meta = { mainProgram = defaultBin; };
-              version = "0.0.1";
               pname = "${name}";
+              version = "0.0.1";
               cargoArtifacts = deps;
 
               src = filterModules dirs ./.;
