@@ -7,11 +7,11 @@ pub mod legacy {
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::ModuleCommon;
     use fedimint_core::{CoreError, ServerModule};
-    use fedimint_ln::contracts::incoming::OfferId;
-    use fedimint_ln::contracts::{
+    use fedimint_ln_client::contracts::incoming::OfferId;
+    use fedimint_ln_client::contracts::{
         ContractOutcome, DecryptedPreimage, OutgoingContractOutcome, Preimage,
     };
-    use fedimint_ln::{Lightning, LightningOutputOutcome};
+    use fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
     use fedimint_mint_client::{MintModuleTypes, MintOutputOutcome};
     use fedimint_wallet::{Wallet, WalletOutputOutcome};
 
@@ -19,7 +19,7 @@ pub mod legacy {
     pub enum OutputOutcome {
         Mint(<MintModuleTypes as ModuleCommon>::OutputOutcome),
         Wallet(<<Wallet as ServerModule>::Common as ModuleCommon>::OutputOutcome),
-        LN(<<Lightning as ServerModule>::Common as ModuleCommon>::OutputOutcome),
+        LN(<LightningModuleTypes as ModuleCommon>::OutputOutcome),
     }
 
     impl From<fedimint_core::core::DynOutputOutcome> for OutputOutcome {
@@ -84,7 +84,7 @@ pub mod legacy {
         }
     }
 
-    impl TryIntoOutcome for fedimint_ln::LightningOutputOutcome {
+    impl TryIntoOutcome for fedimint_ln_client::LightningOutputOutcome {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
             match common_outcome {
                 OutputOutcome::Mint(_) => Err(CoreError::MismatchingVariant("ln", "mint")),
@@ -96,7 +96,7 @@ pub mod legacy {
 
     impl TryIntoOutcome for Preimage {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-            if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
+            if let OutputOutcome::LN(fedimint_ln_client::LightningOutputOutcome::Contract {
                 outcome: ContractOutcome::Incoming(decrypted_preimage),
                 ..
             }) = common_outcome
@@ -114,7 +114,7 @@ pub mod legacy {
 
     impl TryIntoOutcome for OfferId {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-            if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Offer { id }) =
+            if let OutputOutcome::LN(fedimint_ln_client::LightningOutputOutcome::Offer { id }) =
                 common_outcome
             {
                 Ok(id)
@@ -126,7 +126,7 @@ pub mod legacy {
 
     impl TryIntoOutcome for OutgoingContractOutcome {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-            if let OutputOutcome::LN(fedimint_ln::LightningOutputOutcome::Contract {
+            if let OutputOutcome::LN(fedimint_ln_client::LightningOutputOutcome::Contract {
                 outcome: ContractOutcome::Outgoing(o),
                 ..
             }) = common_outcome

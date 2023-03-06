@@ -8,7 +8,7 @@ pub mod utils;
 pub mod wallet;
 
 pub mod modules {
-    pub use {fedimint_ln as ln, fedimint_mint_client as mint, fedimint_wallet as wallet};
+    pub use {fedimint_ln_client as ln, fedimint_mint_client as mint, fedimint_wallet as wallet};
 }
 
 use std::fmt::{Debug, Formatter};
@@ -40,7 +40,7 @@ use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_ln::Lightning;
+use fedimint_ln_client::LightningModuleTypes;
 use fedimint_logging::LOG_WALLET;
 use fedimint_mint_client::MintModuleTypes;
 use fedimint_wallet::Wallet;
@@ -1528,7 +1528,7 @@ pub fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            <Lightning as ServerModule>::decoder(),
+            LightningModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,

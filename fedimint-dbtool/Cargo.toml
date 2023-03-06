@@ -19,7 +19,7 @@ fedimint-core ={ path = "../fedimint-core" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
-fedimint-ln = { path = "../modules/fedimint-ln" }
+fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-wallet = { path = "../modules/fedimint-wallet" }
 fedimintd = { path = "../fedimintd" }

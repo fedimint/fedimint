@@ -26,7 +26,8 @@ lightning = "0.0.113"
 fedimint-server = { path = "../fedimint-server" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-core ={ path = "../fedimint-core" }
-fedimint-ln = { path = "../modules/fedimint-ln" }
+fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
+fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 fedimint-logging = { path = "../fedimint-logging", features = ["telemetry"] }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }

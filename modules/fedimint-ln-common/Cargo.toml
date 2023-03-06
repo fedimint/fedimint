@@ -1,0 +1,42 @@
+[package]
+name = "fedimint-ln-common"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-ln is a lightning payment service module."
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "fedimint_ln_common"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+async-trait = "0.1"
+bincode = "1"
+bitcoin_hashes = "0.11.0"
+erased-serde = "0.3"
+futures = "0.3.24"
+itertools = "0.10.5"
+lightning = "0.0.113"
+lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
+fedimint-core ={ path = "../../fedimint-core" }
+secp256k1 = { version="0.24.2", default-features=false }
+serde = {version = "1.0.149", features = [ "derive" ] }
+serde_json = "1.0.91"
+strum = "0.24"
+strum_macros = "0.24"
+thiserror = "1.0.37"
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+tracing = "0.1.37"
+rand = "0.8"
+url = { version = "2.3.1", features = ["serde"] }
+hbbft = { git = "https://github.com/fedimint/hbbft" }
+
+[dev-dependencies]
+tokio = {version = "1.25.0", features = [ "full" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }
+fedimint-testing = { path = "../../fedimint-testing" }

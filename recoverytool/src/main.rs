@@ -17,7 +17,7 @@ use fedimint_core::core::{
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::ServerModule;
-use fedimint_ln::Lightning;
+use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;

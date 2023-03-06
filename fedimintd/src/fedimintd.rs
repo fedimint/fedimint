@@ -7,7 +7,7 @@ use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_ln::LightningGen;
+use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{
@@ -53,7 +53,7 @@ pub struct ServerOpts {
 /// Example:
 ///
 /// ```
-/// use fedimint_ln::LightningGen;
+/// use fedimint_ln_server::LightningGen;
 /// use fedimint_mint_server::MintGen;
 /// use fedimint_wallet::WalletGen;
 /// use fedimintd::fedimintd::Fedimintd;

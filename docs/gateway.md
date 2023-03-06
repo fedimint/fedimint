@@ -25,7 +25,7 @@ A webserver daemon that runs all the business logic of a gateway. Think of this 
 > - To receive incoming lightning payments, the client within a gateway actor calls to **FederationAPI**s to complete certain incoming contract functions
 > - To make outgoing lightning payments, clients within a federation served by the gateway will use gatewayd `pay_invoice` API.
 >
-> Read [more about the gateway <-> federation interactions and contracts](../modules/fedimint-ln/src/contracts/mod.rs) here
+> Read [more about the gateway <-> federation interactions and contracts](../modules/fedimint-ln-common/src/contracts/mod.rs) here
 
 ### Gateway-lnrpc-extension
 

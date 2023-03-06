@@ -19,7 +19,7 @@ use fedimint_core::module::DynClientModuleGen;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
-use fedimint_ln::LightningClientGen;
+use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintClientGen;
 use mint_client::mint::SpendableNote;

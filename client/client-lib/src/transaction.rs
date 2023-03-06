@@ -59,7 +59,7 @@ pub mod legacy {
         // TODO: maybe treat every note as a seperate input?
         Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Input),
         Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Input),
-        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Input),
+        LN(<fedimint_ln_client::LightningModuleTypes as ModuleCommon>::Input),
     }
 
     // TODO: check if clippy is right
@@ -68,7 +68,7 @@ pub mod legacy {
     pub enum Output {
         Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Output),
         Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Output),
-        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Output),
+        LN(<fedimint_ln_client::LightningModuleTypes as ModuleCommon>::Output),
     }
 
     impl Transaction {

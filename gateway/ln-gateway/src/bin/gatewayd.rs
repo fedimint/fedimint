@@ -15,7 +15,7 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
-use mint_client::modules::ln::{Lightning, LightningClientGen};
+use mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
 use mint_client::modules::mint::{MintClientGen, MintModuleTypes};
 use mint_client::modules::wallet::{Wallet, WalletClientGen};
 use tracing::{error, info};
@@ -90,7 +90,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let decoders = ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            <Lightning as ServerModule>::decoder(),
+            LightningModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
