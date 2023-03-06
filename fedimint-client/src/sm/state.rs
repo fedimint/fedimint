@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::dyn_newtype_define_with_instance_id;
 use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
 use futures::future::BoxFuture;
@@ -83,7 +83,11 @@ where
 type TriggerFuture = Pin<Box<dyn Future<Output = serde_json::Value> + Send + 'static>>;
 // TODO: remove Arc, maybe make it a fn pointer?
 type StateTransitionFunction<S> = Arc<
-    dyn for<'a> Fn(&'a mut DatabaseTransaction<'_>, serde_json::Value, S) -> BoxFuture<'a, S>
+    dyn for<'a> Fn(
+            &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+            serde_json::Value,
+            S,
+        ) -> BoxFuture<'a, S>
         + Send
         + Sync,
 >;
@@ -129,7 +133,11 @@ impl<S> StateTransition<S> {
         S: Send + Sync + Clone + 'static,
         V: serde::Serialize + serde::de::DeserializeOwned + Send,
         Trigger: Future<Output = V> + Send + 'static,
-        TransitionFn: for<'a> Fn(&'a mut DatabaseTransaction<'_>, V, S) -> BoxFuture<'a, S>
+        TransitionFn: for<'a> Fn(
+                &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+                V,
+                S,
+            ) -> BoxFuture<'a, S>
             + Send
             + Sync
             + Copy
@@ -174,11 +182,13 @@ where
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                move |dbtx: &mut DatabaseTransaction, val, state: DynState<GC>| {
+                move |dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+                      val,
+                      state: DynState<GC>| {
                     let transition = st.transition.clone();
                     Box::pin(async move {
                         let new_state = transition(
-                            &mut dbtx.with_module_prefix(state.module_instance_id()),
+                            dbtx,
                             val,
                             state
                                 .as_any()

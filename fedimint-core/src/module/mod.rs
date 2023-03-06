@@ -22,7 +22,7 @@ use crate::core::{
     Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
     OutputOutcome,
 };
-use crate::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
+use crate::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
@@ -89,7 +89,7 @@ pub trait TypedApiEndpoint {
 
     async fn handle<'a, 'b>(
         state: &'a Self::State,
-        dbtx: &'a mut fedimint_core::db::DatabaseTransaction<'b>,
+        dbtx: &'a mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         params: Self::Param,
     ) -> Result<Self::Response, ApiError>;
 }
@@ -102,7 +102,7 @@ pub mod __reexports {
 /// # Example
 ///
 /// ```rust
-/// # use fedimint_core::module::{api_endpoint, ApiEndpoint};
+/// # use fedimint_core::module::{api_endpoint, ApiEndpoint, registry::ModuleInstanceId};
 /// struct State;
 ///
 /// let _: ApiEndpoint<State> = api_endpoint! {
@@ -129,7 +129,7 @@ macro_rules! __api_endpoint {
 
             async fn handle<'a, 'b>(
                 $state: &'a Self::State,
-                $dbtx: &'a mut fedimint_core::db::DatabaseTransaction<'b>,
+                $dbtx: &'a mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
@@ -188,7 +188,7 @@ impl ApiEndpoint<()> {
         )]
         async fn handle_request<'a, 'b, E>(
             state: &'a E::State,
-            dbtx: &mut fedimint_core::db::DatabaseTransaction<'b>,
+            dbtx: &mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
             param: E::Param,
         ) -> Result<E::Response, ApiError>
         where
@@ -216,7 +216,7 @@ impl ApiEndpoint<()> {
                             let mut module_dbtx = dbtx.with_module_prefix(module_instance_id);
                             handle_request::<E>(m, &mut module_dbtx, params).await?
                         }
-                        None => handle_request::<E>(m, &mut dbtx, params).await?,
+                        None => handle_request::<E>(m, &mut dbtx.get_isolated(), params).await?,
                     };
 
                     dbtx.commit_tx()
@@ -394,7 +394,7 @@ pub trait IServerModuleGen: Debug {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
@@ -560,7 +560,7 @@ pub trait ServerModuleGen: Debug + Sized {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
@@ -651,7 +651,7 @@ where
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         <Self as ServerModuleGen>::dump_database(self, dbtx, prefix_names).await
@@ -767,12 +767,15 @@ pub trait ServerModule: Debug + Sized {
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut DatabaseTransaction<'_>);
+    async fn await_consensus_proposal<'a>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+    );
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once before transaction processing starts. All
@@ -782,7 +785,7 @@ pub trait ServerModule: Debug + Sized {
     /// results are available when processing transactions.
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         consensus_items: Vec<(PeerId, <Self::Common as ModuleCommon>::ConsensusItem)>,
     );
 
@@ -804,7 +807,7 @@ pub trait ServerModule: Debug + Sized {
     async fn validate_input<'a, 'b>(
         &self,
         interconnect: &dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         verification_cache: &Self::VerificationCache,
         input: &'a <Self::Common as ModuleCommon>::Input,
     ) -> Result<InputMeta, ModuleError>;
@@ -820,7 +823,7 @@ pub trait ServerModule: Debug + Sized {
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut ModuleDatabaseTransaction<'c, ModuleInstanceId>,
         input: &'b <Self::Common as ModuleCommon>::Input,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError>;
@@ -832,7 +835,7 @@ pub trait ServerModule: Debug + Sized {
     /// them and merely generate a warning.
     async fn validate_output(
         &self,
-        dbtx: &mut DatabaseTransaction,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -850,7 +853,7 @@ pub trait ServerModule: Debug + Sized {
     /// once all transactions have been processed.
     async fn apply_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
@@ -864,7 +867,7 @@ pub trait ServerModule: Debug + Sized {
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
     ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this
@@ -873,7 +876,7 @@ pub trait ServerModule: Debug + Sized {
     /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         out_point: OutPoint,
     ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
 
@@ -882,7 +885,11 @@ pub trait ServerModule: Debug + Sized {
     ///
     /// Summing over all modules, if liabilities > assets then an error has
     /// occurred in the database and consensus should halt.
-    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit);
+    async fn audit(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        audit: &mut Audit,
+    );
 
     /// Returns a list of custom API endpoints defined by the module. These are
     /// made available both to users as well as to other modules. They thus
