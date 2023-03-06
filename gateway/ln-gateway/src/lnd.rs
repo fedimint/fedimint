@@ -134,46 +134,43 @@ impl ILnRpcClient for GatewayLndClient {
         let outcomes = self.outcomes.clone();
 
         // Spawn an LND interceptor task
-        tg.spawn("LND HTLC Subscription", move |handle| async move {
-            let shutdown_rx = handle.make_shutdown_rx().await;
-            let streaming_future = async move {
-                let mut htlc_stream = match client
-                    .router()
-                    .htlc_interceptor(ReceiverStream::new(lnd_rx))
-                    .await
-                    .map_err(|e| {
-                        error!("Failed to connect to lnrpc server: {:?}", e);
-                        GatewayError::Other(anyhow!("Failed to subscribe to LND htlc stream"))
-                    }) {
-                    Ok(stream) => stream.into_inner(),
-                    Err(e) => {
-                        let _ = gwd_tx
-                            .send(Err(tonic::Status::new(
-                                tonic::Code::Internal,
-                                e.to_string(),
-                            )))
-                            .await;
-                        return;
-                    }
-                };
+        tg.spawn("LND HTLC Subscription", move |_handle| async move {
+            let mut htlc_stream = match client
+                .router()
+                .htlc_interceptor(ReceiverStream::new(lnd_rx))
+                .await
+                .map_err(|e| {
+                    error!("Failed to connect to lnrpc server: {:?}", e);
+                    GatewayError::Other(anyhow!("Failed to subscribe to LND htlc stream"))
+                }) {
+                Ok(stream) => stream.into_inner(),
+                Err(e) => {
+                    let _ = gwd_tx
+                        .send(Err(tonic::Status::new(
+                            tonic::Code::Internal,
+                            e.to_string(),
+                        )))
+                        .await;
+                    return;
+                }
+            };
 
-                while let Some(htlc) = match htlc_stream.message().await {
-                    Ok(htlc) => htlc,
-                    Err(e) => {
-                        error!("Error received over HTLC subscriprion: {:?}", e);
-                        let _ = gwd_tx
-                            .send(Err(tonic::Status::new(
-                                tonic::Code::Internal,
-                                e.to_string(),
-                            )))
-                            .await;
-                        None
-                    }
-                } {
-                    let response: Option<ForwardHtlcInterceptResponse> = if htlc
-                        .outgoing_requested_chan_id
-                        != scid
-                    {
+            // TODO: poll shutdowns as well ...
+            while let Some(htlc) = match htlc_stream.message().await {
+                Ok(htlc) => htlc,
+                Err(e) => {
+                    error!("Error received over HTLC subscriprion: {:?}", e);
+                    let _ = gwd_tx
+                        .send(Err(tonic::Status::new(
+                            tonic::Code::Internal,
+                            e.to_string(),
+                        )))
+                        .await;
+                    None
+                }
+            } {
+                let response: Option<ForwardHtlcInterceptResponse> =
+                    if htlc.outgoing_requested_chan_id != scid {
                         // Pass through: This HTLC doesn't belong to the current subscription
                         // Forward it to the next interceptor or next node
                         Some(ForwardHtlcInterceptResponse {
@@ -216,26 +213,17 @@ impl ILnRpcClient for GatewayLndClient {
                         }
                     };
 
-                    if response.is_some() {
-                        // TODO: Consider retrying this if the send fails
-                        let _ = lnd_tx.send(response.unwrap()).await.map_err(|e| {
-                            error!("Failed to send response to LND: {:?}", e);
-                            // The HTLC will timeout and LND will automatically cancel it.
-                            GatewayError::Other(anyhow!("Failed to send response to LND"))
-                        });
-                    }
-                }
-            };
-
-            info!("HTLC subscription stream ended");
-            select! {
-                _ = shutdown_rx => {
-                    debug!("Shutting down HTLC subscription");
-                },
-                _ = streaming_future => {
-                    debug!("HTLC subscription stream ended");
+                if response.is_some() {
+                    // TODO: Consider retrying this if the send fails
+                    let _ = lnd_tx.send(response.unwrap()).await.map_err(|e| {
+                        error!("Failed to send response to LND: {:?}", e);
+                        // The HTLC will timeout and LND will automatically cancel it.
+                        GatewayError::Other(anyhow!("Failed to send response to LND"))
+                    });
                 }
             }
+
+            info!("HTLC subscription stream ended");
         })
         .await;
 
