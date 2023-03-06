@@ -16,8 +16,8 @@ use fedimint_server::consensus::TransactionSubmissionError::{
 };
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
-use fedimint_wallet::PegOutSignatureItem;
-use fedimint_wallet::WalletConsensusItem::PegOutSignature;
+use fedimint_wallet_server::common::PegOutSignatureItem;
+use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
 use mint_client::mint::MintClient;

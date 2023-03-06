@@ -14,7 +14,7 @@ use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
-use fedimint_wallet::WalletGen;
+use fedimint_wallet_server::WalletGen;
 use tracing::info;
 use url::Url;
 

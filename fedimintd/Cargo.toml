@@ -40,7 +40,7 @@ fedimint-core ={ path = "../fedimint-core" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-logging = { path = "../fedimint-logging", features = ["telemetry"] }
-fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native", "server"] }
+fedimint-wallet-server = { path = "../modules/fedimint-wallet-server", features = ["native"] }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 rand = "0.8"

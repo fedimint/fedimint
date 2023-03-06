@@ -16,7 +16,7 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::Amount;
 use fedimint_testing::btc::BitcoinTest;
-use fedimint_wallet::txoproof::TxOutProof;
+use fedimint_wallet_server::common::txoproof::TxOutProof;
 use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use lightning_invoice::Invoice;

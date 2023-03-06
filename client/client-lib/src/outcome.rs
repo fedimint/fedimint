@@ -6,19 +6,19 @@ pub mod legacy {
     };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::ModuleCommon;
-    use fedimint_core::{CoreError, ServerModule};
+    use fedimint_core::CoreError;
     use fedimint_ln_client::contracts::incoming::OfferId;
     use fedimint_ln_client::contracts::{
         ContractOutcome, DecryptedPreimage, OutgoingContractOutcome, Preimage,
     };
     use fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
     use fedimint_mint_client::{MintModuleTypes, MintOutputOutcome};
-    use fedimint_wallet::{Wallet, WalletOutputOutcome};
+    use fedimint_wallet_client::{WalletModuleTypes, WalletOutputOutcome};
 
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
     pub enum OutputOutcome {
         Mint(<MintModuleTypes as ModuleCommon>::OutputOutcome),
-        Wallet(<<Wallet as ServerModule>::Common as ModuleCommon>::OutputOutcome),
+        Wallet(<WalletModuleTypes as ModuleCommon>::OutputOutcome),
         LN(<LightningModuleTypes as ModuleCommon>::OutputOutcome),
     }
 

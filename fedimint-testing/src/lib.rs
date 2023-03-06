@@ -235,7 +235,7 @@ where
             let mut dbtx = db.begin_transaction().await;
             let out_point = bitcoin::OutPoint::default();
             let tweak = [42; 32];
-            let utxo = fedimint_wallet::SpendableUTXO {
+            let utxo = fedimint_wallet_client::SpendableUTXO {
                 tweak,
                 amount: bitcoin::Amount::from_sat(48000),
             };
@@ -243,14 +243,14 @@ where
             {
                 let mut module_dbtx = dbtx.with_module_prefix(*module_instance_id);
                 module_dbtx
-                    .insert_entry(&fedimint_wallet::db::UTXOKey(out_point), &utxo)
+                    .insert_entry(&fedimint_wallet_client::db::UTXOKey(out_point), &utxo)
                     .await
                     .unwrap();
 
                 module_dbtx
                     .insert_entry(
-                        &fedimint_wallet::db::RoundConsensusKey,
-                        &fedimint_wallet::RoundConsensus {
+                        &fedimint_wallet_client::db::RoundConsensusKey,
+                        &fedimint_wallet_client::RoundConsensus {
                             block_height: 0,
                             fee_rate: fedimint_core::Feerate { sats_per_kvb: 0 },
                             randomness_beacon: tweak,

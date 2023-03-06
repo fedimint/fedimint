@@ -47,9 +47,10 @@ use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::fixtures::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;
-use fedimint_wallet::config::WalletConfig;
-use fedimint_wallet::db::UTXOKey;
-use fedimint_wallet::{SpendableUTXO, Wallet, WalletGen};
+use fedimint_wallet_server::common::config::WalletConfig;
+use fedimint_wallet_server::common::db::UTXOKey;
+use fedimint_wallet_server::common::SpendableUTXO;
+use fedimint_wallet_server::{Wallet, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
@@ -914,7 +915,7 @@ impl FederationTest {
             let svr = server.lock().await;
             let db = svr.database.new_isolated(self.wallet_id);
             let dbtx = block_on(db.begin_transaction());
-            block_on(fedimint_wallet::broadcast_pending_tx(
+            block_on(fedimint_wallet_server::broadcast_pending_tx(
                 dbtx,
                 &svr.bitcoin_rpc,
             ));

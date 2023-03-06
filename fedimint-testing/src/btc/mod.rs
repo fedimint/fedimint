@@ -4,7 +4,7 @@ pub mod fixtures;
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction};
 use fedimint_core::Amount;
-use fedimint_wallet::txoproof::TxOutProof;
+use fedimint_wallet_client::txoproof::TxOutProof;
 
 #[async_trait]
 pub trait BitcoinTest {

@@ -10,7 +10,7 @@ use bitcoin::{
 };
 use fedimint_bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};
 use fedimint_core::{Amount, Feerate};
-use fedimint_wallet::txoproof::TxOutProof;
+use fedimint_wallet_client::txoproof::TxOutProof;
 use rand::rngs::OsRng;
 
 use super::BitcoinTest;

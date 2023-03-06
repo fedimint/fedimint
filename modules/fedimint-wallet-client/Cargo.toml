@@ -1,5 +1,5 @@
 [package]
-name = "fedimint-wallet"
+name = "fedimint-wallet-client"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
@@ -7,15 +7,8 @@ description = "fedimint-wallet is a n on-chain bitcoin wallet module. It uses a 
 license = "MIT"
 
 [lib]
-name = "fedimint_wallet"
+name = "fedimint_wallet_client"
 path = "src/lib.rs"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[features]
-native = ["tokio", "fedimint-bitcoind/bitcoincore-rpc"]
-default = []
-# FIXME: Currently required because the client depends on the server modules
-server = ["fedimint-server"]
 
 [dependencies]
 anyhow = "1.0.66"
@@ -23,7 +16,7 @@ async-trait = "0.1"
 bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
 erased-serde = "0.3"
 fedimint-core ={ path = "../../fedimint-core" }
-fedimint-bitcoind = { path = "../../fedimint-bitcoind", features = [] }
+fedimint-wallet-common ={ path = "../fedimint-wallet-common" }
 futures = "0.3"
 miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92", features = [ "compiler", "serde" ] }
 impl-tools = "0.8.0"
@@ -37,7 +30,6 @@ tokio = { version = "1.25.0", features = ["sync"], optional = true }
 tracing ="0.1.37"
 url = "2.3.1"
 validator = { version = "0.16", features = ["derive"] }
-fedimint-server = { path = "../../fedimint-server", optional = true  }
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

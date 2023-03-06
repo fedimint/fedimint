@@ -15,7 +15,7 @@ use fedimint_server::config::io::{
 };
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
-use fedimint_wallet::WalletGen;
+use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
@@ -55,7 +55,7 @@ pub struct ServerOpts {
 /// ```
 /// use fedimint_ln_server::LightningGen;
 /// use fedimint_mint_server::MintGen;
-/// use fedimint_wallet::WalletGen;
+/// use fedimint_wallet_server::WalletGen;
 /// use fedimintd::fedimintd::Fedimintd;
 ///
 /// // Note: not called `main` to avoid rustdoc executing it

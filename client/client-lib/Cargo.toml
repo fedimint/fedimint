@@ -30,7 +30,7 @@ fedimint-derive-secret = { path = "../../crypto/derive-secret" }
 fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
-fedimint-wallet = { path = "../../modules/fedimint-wallet", default-features = false }
+fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client", default-features = false }
 itertools = "0.10.5"
 rand = "0.8"
 ring = "0.16.20"
@@ -66,3 +66,4 @@ fedimint-testing = { path = "../../fedimint-testing" }
 once_cell = "1.16.0"
 fedimint-mint-server = { path = "../../modules/fedimint-mint-server" }
 fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
+fedimint-wallet-server = { path = "../../modules/fedimint-wallet-server" }
