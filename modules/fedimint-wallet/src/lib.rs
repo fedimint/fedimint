@@ -29,7 +29,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IsolatedDatabaseTransaction,
+    Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::__reexports::serde_json;
@@ -373,7 +373,7 @@ impl ServerModuleGen for WalletGen {
     }
     async fn dump_database(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut wallet: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
@@ -509,7 +509,7 @@ impl ServerModule for Wallet {
 
     async fn await_consensus_proposal(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) {
         while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             // FIXME: remove after modularization finishes
@@ -520,7 +520,7 @@ impl ServerModule for Wallet {
 
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> ConsensusProposal<WalletConsensusItem> {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
@@ -578,7 +578,7 @@ impl ServerModule for Wallet {
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         consensus_items: Vec<(PeerId, WalletConsensusItem)>,
     ) {
         trace!(?consensus_items, "Received consensus proposals");
@@ -638,7 +638,7 @@ impl ServerModule for Wallet {
     async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         _verification_cache: &Self::VerificationCache,
         input: &'a WalletInput,
     ) -> Result<InputMeta, ModuleError> {
@@ -672,7 +672,7 @@ impl ServerModule for Wallet {
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut IsolatedDatabaseTransaction<'c, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'c, ModuleInstanceId>,
         input: &'b WalletInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
@@ -696,7 +696,7 @@ impl ServerModule for Wallet {
 
     async fn validate_output(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         output: &WalletOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if !output
@@ -728,7 +728,7 @@ impl ServerModule for Wallet {
 
     async fn apply_output<'a, 'b>(
         &'a self,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         output: &'a WalletOutput,
         out_point: fedimint_core::OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -800,7 +800,7 @@ impl ServerModule for Wallet {
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
     ) -> Vec<PeerId> {
         // Sign and finalize any unsigned transactions that have signatures
         let unsigned_txs = dbtx
@@ -868,7 +868,7 @@ impl ServerModule for Wallet {
 
     async fn output_status(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         out_point: OutPoint,
     ) -> Option<WalletOutputOutcome> {
         dbtx.get_value(&PegOutBitcoinTransaction(out_point))
@@ -878,7 +878,7 @@ impl ServerModule for Wallet {
 
     async fn audit(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         audit: &mut Audit,
     ) {
         audit
@@ -1021,7 +1021,7 @@ impl Wallet {
 
     async fn save_peg_out_signatures<'a>(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'a, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
         signatures: Vec<(PeerId, PegOutSignatureItem)>,
     ) {
         let mut cache: BTreeMap<Txid, UnsignedTransaction> = dbtx
@@ -1164,7 +1164,7 @@ impl Wallet {
     /// * If proposals is empty
     async fn process_block_height_proposals<'a>(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'a, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
         mut proposals: Vec<u32>,
     ) -> u32 {
         assert!(!proposals.is_empty());
@@ -1189,7 +1189,7 @@ impl Wallet {
 
     pub async fn current_round_consensus(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> Option<RoundConsensus> {
         dbtx.get_value(&RoundConsensusKey).await.expect("DB error")
     }
@@ -1205,7 +1205,7 @@ impl Wallet {
 
     pub async fn consensus_height(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> Option<u32> {
         self.current_round_consensus(dbtx)
             .await
@@ -1214,7 +1214,7 @@ impl Wallet {
 
     async fn sync_up_to_consensus_height<'a>(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'a, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
         new_height: u32,
     ) {
         let old_height = self
@@ -1306,7 +1306,7 @@ impl Wallet {
     /// in a block that we got consensus on.
     async fn recognize_change_utxo<'a>(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'a, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
         pending_tx: &PendingTransaction,
     ) {
         let script_pk = self
@@ -1339,7 +1339,7 @@ impl Wallet {
 
     async fn block_is_known(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         block_hash: BlockHash,
     ) -> bool {
         dbtx.get_value(&BlockHashKey(block_hash))
@@ -1350,7 +1350,7 @@ impl Wallet {
 
     async fn create_peg_out_tx(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         peg_out: &PegOut,
     ) -> Result<UnsignedTransaction, WalletError> {
         let change_tweak = self
@@ -1369,7 +1369,7 @@ impl Wallet {
 
     async fn available_utxos(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .await
@@ -1383,7 +1383,7 @@ impl Wallet {
 
     pub async fn get_wallet_value(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> bitcoin::Amount {
         let sat_sum = self
             .available_utxos(dbtx)

@@ -7,7 +7,8 @@ use fedimint_core::config::{
     ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::db::{Database, IsolatedDatabaseTransaction, DatabaseVersion};
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
@@ -205,7 +206,7 @@ impl ServerModuleGen for MintGen {
 
     async fn dump_database(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
@@ -289,7 +290,7 @@ impl ServerModule for Mint {
 
     async fn await_consensus_proposal(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) {
         if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
@@ -305,7 +306,7 @@ impl ServerModule for Mint {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> ConsensusProposal<MintConsensusItem> {
         ConsensusProposal::new_auto_trigger(
             dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
@@ -324,7 +325,7 @@ impl ServerModule for Mint {
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         consensus_items: Vec<(PeerId, MintConsensusItem)>,
     ) {
         for (peer, consensus_item) in consensus_items {
@@ -367,7 +368,7 @@ impl ServerModule for Mint {
     async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         verification_cache: &Self::VerificationCache,
         input: &'a MintInput,
     ) -> Result<InputMeta, ModuleError> {
@@ -407,7 +408,7 @@ impl ServerModule for Mint {
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut IsolatedDatabaseTransaction<'c, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'c, ModuleInstanceId>,
         input: &'b MintInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
@@ -428,7 +429,7 @@ impl ServerModule for Mint {
 
     async fn validate_output(
         &self,
-        _dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         output: &MintOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         if output.longest_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
@@ -458,7 +459,7 @@ impl ServerModule for Mint {
 
     async fn apply_output<'a, 'b>(
         &'a self,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -486,7 +487,7 @@ impl ServerModule for Mint {
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut IsolatedDatabaseTransaction<'b, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
     ) -> Vec<PeerId> {
         struct IssuanceData {
             out_point: OutPoint,
@@ -613,7 +614,7 @@ impl ServerModule for Mint {
 
     async fn output_status(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         out_point: OutPoint,
     ) -> Option<MintOutputOutcome> {
         let we_proposed = dbtx
@@ -645,7 +646,7 @@ impl ServerModule for Mint {
 
     async fn audit(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         audit: &mut Audit,
     ) {
         audit
@@ -682,7 +683,7 @@ impl ServerModule for Mint {
 impl Mint {
     async fn handle_backup_request(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -717,7 +718,7 @@ impl Mint {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await.expect("DB error")
@@ -940,7 +941,7 @@ impl Mint {
 
     async fn process_partial_signature<'a>(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'a, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
         peer: PeerId,
         output_id: OutPoint,
         partial_sig: MintOutputSignatureShare,

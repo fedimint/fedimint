@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::IsolatedDatabaseTransaction;
+use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::dyn_newtype_define_with_instance_id;
 use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
 use futures::future::BoxFuture;
@@ -84,7 +84,7 @@ type TriggerFuture = Pin<Box<dyn Future<Output = serde_json::Value> + Send + 'st
 // TODO: remove Arc, maybe make it a fn pointer?
 type StateTransitionFunction<S> = Arc<
     dyn for<'a> Fn(
-            &'a mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+            &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
             serde_json::Value,
             S,
         ) -> BoxFuture<'a, S>
@@ -134,7 +134,7 @@ impl<S> StateTransition<S> {
         V: serde::Serialize + serde::de::DeserializeOwned + Send,
         Trigger: Future<Output = V> + Send + 'static,
         TransitionFn: for<'a> Fn(
-                &'a mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+                &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
                 V,
                 S,
             ) -> BoxFuture<'a, S>
@@ -182,7 +182,7 @@ where
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                move |dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+                move |dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
                       val,
                       state: DynState<GC>| {
                     let transition = st.transition.clone();

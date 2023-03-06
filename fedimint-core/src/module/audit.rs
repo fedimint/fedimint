@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use futures::StreamExt;
 
 use crate::core::ModuleInstanceId;
-use crate::db::{DatabaseLookup, DatabaseRecord, IsolatedDatabaseTransaction};
+use crate::db::{DatabaseLookup, DatabaseRecord, ModuleDatabaseTransaction};
 
 #[derive(Default)]
 pub struct Audit {
@@ -25,7 +25,7 @@ impl Audit {
 
     pub async fn add_items<KP, F>(
         &mut self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         key_prefix: &KP,
         to_milli_sat: F,
     ) where

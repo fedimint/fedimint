@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    apply_migrations, Database, DatabaseTransaction, IsolatedDatabaseTransaction,
+    apply_migrations, Database, DatabaseTransaction, ModuleDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
@@ -553,7 +553,7 @@ impl FedimintConsensus {
 
     pub async fn get_config_with_sig(
         &self,
-        dbtx: &mut IsolatedDatabaseTransaction<'_, '_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> ConfigResponse {
         let mut client = self.client_cfg.clone();
         let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;

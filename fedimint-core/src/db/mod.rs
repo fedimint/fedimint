@@ -417,77 +417,52 @@ impl Drop for CommitTracker {
     }
 }
 
-/// `ModuleDatabaseTransaction` is an isolated database transaction that
-/// consumes an existing `DatabaseTransaction`. Unlike
-/// `IsolatedDatabaseTransaction`, `ModuleDatabaseTransaction` can be owned by
-/// the module as long as it has a handle to the isolated `Database`. This
-/// allows the module to make changes only affecting it's own portion of the
-/// database and also being able to commit those changes. From the module's
-/// perspective, the `Database` is isolated and calling `begin_transaction` will
-/// always produce a `ModuleDatabaseTransaction`, which is isolated from other
+/// `CommitableIsolatedDatabaseTransaction` is a private, isolated database
+/// transaction that consumes an existing `ISingleUseDatabaseTransaction`.
+/// Unlike `IsolatedDatabaseTransaction`,
+/// `CommitableIsolatedDatabaseTransaction` can be owned by the module as long
+/// as it has a handle to the isolated `Database`. This allows the module to
+/// make changes only affecting it's own portion of the database and also being
+/// able to commit those changes. From the module's perspective, the `Database`
+/// is isolated and calling `begin_transaction` will always produce a
+/// `CommitableIsolatedDatabaseTransaction`, which is isolated from other
 /// modules by prepending a prefix to each key.
-struct ModuleDatabaseTransaction<'a> {
+///
+/// `CommitableIsolatedDatabaseTransaction` cannot be used as an atomic database
+/// transaction across modules.
+struct CommitableIsolatedDatabaseTransaction<'a> {
     dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     prefix: ModuleInstanceId,
-    decoders: ModuleDecoderRegistry,
-    commit_tracker: CommitTracker,
 }
 
-impl<'a> ModuleDatabaseTransaction<'a> {
+impl<'a> CommitableIsolatedDatabaseTransaction<'a> {
     pub fn new(
         dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
         prefix: ModuleInstanceId,
-        decoders: ModuleDecoderRegistry,
-        commit_tracker: CommitTracker,
-    ) -> ModuleDatabaseTransaction<'a> {
-        ModuleDatabaseTransaction {
-            dbtx,
-            prefix,
-            decoders,
-            commit_tracker,
-        }
+    ) -> CommitableIsolatedDatabaseTransaction<'a> {
+        CommitableIsolatedDatabaseTransaction { dbtx, prefix }
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
+impl<'a> ISingleUseDatabaseTransaction<'a> for CommitableIsolatedDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(
-            self.dbtx.as_mut(),
-            Some(self.prefix),
-            &self.decoders,
-            &mut self.commit_tracker,
-        );
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.raw_insert_bytes(key, value).await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(
-            self.dbtx.as_mut(),
-            Some(self.prefix),
-            &self.decoders,
-            &mut self.commit_tracker,
-        );
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.raw_get_bytes(key).await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(
-            self.dbtx.as_mut(),
-            Some(self.prefix),
-            &self.decoders,
-            &mut self.commit_tracker,
-        );
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(
-            self.dbtx.as_mut(),
-            Some(self.prefix),
-            &self.decoders,
-            &mut self.commit_tracker,
-        );
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         let stream = isolated
             .raw_find_by_prefix(key_prefix)
             .await?
@@ -497,12 +472,7 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(
-            self.dbtx.as_mut(),
-            Some(self.prefix),
-            &self.decoders,
-            &mut self.commit_tracker,
-        );
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.raw_remove_by_prefix(key_prefix).await
     }
 
@@ -511,68 +481,43 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for ModuleDatabaseTransaction<'a> {
     }
 
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(
-            self.dbtx.as_mut(),
-            Some(self.prefix),
-            &self.decoders,
-            &mut self.commit_tracker,
-        );
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.rollback_tx_to_savepoint().await
     }
 
     async fn set_tx_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(
-            self.dbtx.as_mut(),
-            Some(self.prefix),
-            &self.decoders,
-            &mut self.commit_tracker,
-        );
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.set_tx_savepoint().await
     }
 }
 
-/// IsolatedDatabaseTransaction is a wrapper around DatabaseTransaction that is
-/// responsible for inserting and striping prefixes before reading or writing to
-/// the database. It does this by implementing IDatabaseTransaction and
-/// manipulating the prefix bytes in the raw insert/get functions. This is done
-/// to isolate modules/module instances from each other inside the database,
-/// which allows the same module to be instantiated twice or two different
-/// modules to use the same key.
-pub struct IsolatedDatabaseTransaction<
-    'isolated,
-    'parent: 'isolated,
-    T: Send + Encodable + 'isolated,
-> {
-    inner_tx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-    prefix: Vec<u8>,
+/// `ModuleDatabaseTransaction` is the public wrapper structure that allows
+/// modules to modify the database. It takes a `ISingleUseDatabaseTransaction`
+/// that handles the details of interacting with the database. The APIs that the
+/// modules are allowed to interact with are a subset of `DatabaseTransaction`,
+/// since modules do not manage the lifetime of database transactions.
+/// Committing to the database or rolling back a transaction is not exposed.
+pub struct ModuleDatabaseTransaction<'isolated, T: Send + Encodable + 'isolated> {
+    isolated_tx: Box<dyn ISingleUseDatabaseTransaction<'isolated>>,
     decoders: &'isolated ModuleDecoderRegistry,
     commit_tracker: &'isolated mut CommitTracker,
     _marker: PhantomData<T>,
 }
 
-impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
-    IsolatedDatabaseTransaction<'isolated, 'parent, T>
-{
-    pub fn new(
+impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
+    pub fn new<'parent: 'isolated>(
         dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
         module_prefix: Option<T>,
         decoders: &'isolated ModuleDecoderRegistry,
         commit_tracker: &'isolated mut CommitTracker,
-    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
-        let mut prefix_bytes = vec![];
-        if let Some(module_prefix) = module_prefix {
-            prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
-            module_prefix
-                .consensus_encode(&mut prefix_bytes)
-                .expect("Error encoding module instance id as prefix");
-        }
+    ) -> ModuleDatabaseTransaction<'isolated, T> {
+        let isolated = IsolatedDatabaseTransaction::new(dbtx, module_prefix);
 
-        IsolatedDatabaseTransaction {
-            inner_tx: dbtx,
-            prefix: prefix_bytes,
-            _marker: PhantomData::<T>,
+        ModuleDatabaseTransaction {
+            isolated_tx: Box::new(isolated),
             decoders,
             commit_tracker,
+            _marker: PhantomData::<T>,
         }
     }
 
@@ -582,7 +527,7 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
         K: DatabaseKey + DatabaseRecord,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_get_bytes(&key_bytes).await? {
+        let value_bytes = match self.isolated_tx.raw_get_bytes(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -606,7 +551,8 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
         debug!("find by prefix");
         let decoders = self.decoders.clone();
         let prefix_bytes = key_prefix.to_bytes();
-        self.raw_find_by_prefix(&prefix_bytes)
+        self.isolated_tx
+            .raw_find_by_prefix(&prefix_bytes)
             .await
             .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
@@ -623,6 +569,7 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
     {
         self.commit_tracker.has_writes = true;
         match self
+            .isolated_tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
         {
@@ -642,6 +589,7 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
     {
         self.commit_tracker.has_writes = true;
         match self
+            .isolated_tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await?
         {
@@ -664,7 +612,7 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
     {
         self.commit_tracker.has_writes = true;
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_remove_entry(&key_bytes).await? {
+        let value_bytes = match self.isolated_tx.raw_remove_entry(&key_bytes).await? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -678,7 +626,45 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
         KP: DatabaseLookup,
     {
         self.commit_tracker.has_writes = true;
-        self.raw_remove_by_prefix(&key_prefix.to_bytes()).await
+        self.isolated_tx
+            .raw_remove_by_prefix(&key_prefix.to_bytes())
+            .await
+    }
+}
+
+/// IsolatedDatabaseTransaction is a private wrapper around
+/// ISingleUseDatabaseTransaction that is responsible for inserting and striping
+/// prefixes before reading or writing to the database. It does this by
+/// implementing ISingleUseDatabaseTransaction and manipulating the prefix bytes
+/// in the raw insert/get functions. This is done to isolate modules/module
+/// instances from each other inside the database, which allows the same module
+/// to be instantiated twice or two different modules to use the same key.
+struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated, T: Send + Encodable + 'isolated> {
+    inner_tx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
+    prefix: Vec<u8>,
+    _marker: PhantomData<T>,
+}
+
+impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
+    IsolatedDatabaseTransaction<'isolated, 'parent, T>
+{
+    pub fn new(
+        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
+        module_prefix: Option<T>,
+    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
+        let mut prefix_bytes = vec![];
+        if let Some(module_prefix) = module_prefix {
+            prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
+            module_prefix
+                .consensus_encode(&mut prefix_bytes)
+                .expect("Error encoding module instance id as prefix");
+        }
+
+        IsolatedDatabaseTransaction {
+            inner_tx: dbtx,
+            prefix: prefix_bytes,
+            _marker: PhantomData::<T>,
+        }
     }
 }
 
@@ -742,6 +728,16 @@ impl<'isolated, 'parent, T: Send + Encodable + 'isolated> ISingleUseDatabaseTran
     }
 }
 
+/// `DatabaseTransaction` is the parent-level database transaction that can
+/// modify the database. The owner of the `DatabaseTransaction` is responsible
+/// for managing the lifetime of the `DatabaseTransaction`, either by committing
+/// the modifications to the database or rolling back the transaction. From this
+/// parent-level `DatabaseTransaction`, a `ModuleDatabaseTransaction`
+/// can be created which operates like a child transaction where the child
+/// transaction only has access to the modules database namespace.
+///
+/// `DatabaseTransaction` is intended to be used for atomic database operations
+/// that span across modules.
 #[doc = " A handle to a type-erased database implementation"]
 pub struct DatabaseTransaction<'a> {
     tx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
@@ -776,14 +772,11 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
     }
 
-    pub fn with_module_prefix<'isolated>(
-        &'isolated mut self,
+    pub fn with_module_prefix(
+        &mut self,
         module_instance_id: ModuleInstanceId,
-    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, ModuleInstanceId>
-    where
-        'parent: 'isolated,
-    {
-        IsolatedDatabaseTransaction::new(
+    ) -> ModuleDatabaseTransaction<'_, ModuleInstanceId> {
+        ModuleDatabaseTransaction::new(
             self.tx.as_mut(),
             Some(module_instance_id),
             &self.decoders,
@@ -791,10 +784,8 @@ impl<'parent> DatabaseTransaction<'parent> {
         )
     }
 
-    pub fn get_isolated<'isolated>(
-        &'isolated mut self,
-    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, ModuleInstanceId> {
-        IsolatedDatabaseTransaction::new(
+    pub fn get_isolated(&mut self) -> ModuleDatabaseTransaction<'_, ModuleInstanceId> {
+        ModuleDatabaseTransaction::new(
             self.tx.as_mut(),
             None,
             &self.decoders,
@@ -808,12 +799,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     ) -> DatabaseTransaction<'parent> {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
-        let single_use = ModuleDatabaseTransaction::new(
-            self.tx,
-            module_instance_id,
-            self.decoders,
-            self.commit_tracker,
-        );
+        let single_use = CommitableIsolatedDatabaseTransaction::new(self.tx, module_instance_id);
         DatabaseTransaction {
             tx: Box::new(single_use),
             decoders,
