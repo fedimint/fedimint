@@ -11,7 +11,7 @@ use fedimint_core::OutPoint;
 use serde::{Deserialize, Serialize};
 
 /// Anything representing a contract which thus has an associated [`ContractId`]
-pub trait IdentifyableContract: Encodable {
+pub trait IdentifiableContract: Encodable {
     fn contract_id(&self) -> ContractId;
 }
 
@@ -59,7 +59,7 @@ impl ContractOutcome {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutgoingContractOutcome {}
 
-impl IdentifyableContract for Contract {
+impl IdentifiableContract for Contract {
     fn contract_id(&self) -> ContractId {
         match self {
             Contract::Incoming(c) => c.contract_id(),
@@ -68,7 +68,7 @@ impl IdentifyableContract for Contract {
     }
 }
 
-impl IdentifyableContract for FundedContract {
+impl IdentifiableContract for FundedContract {
     fn contract_id(&self) -> ContractId {
         match self {
             FundedContract::Incoming(c) => c.contract.contract_id(),

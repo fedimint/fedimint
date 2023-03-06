@@ -60,7 +60,7 @@ use crate::config::{
 use crate::contracts::incoming::{IncomingContractOffer, OfferId};
 use crate::contracts::{
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
-    IdentifyableContract, Preimage, PreimageDecryptionShare,
+    IdentifiableContract, Preimage, PreimageDecryptionShare,
 };
 use crate::db::{
     AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,

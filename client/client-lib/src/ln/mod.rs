@@ -31,7 +31,7 @@ use crate::modules::ln::config::LightningClientConfig;
 use crate::modules::ln::contracts::incoming::IncomingContractOffer;
 use crate::modules::ln::contracts::outgoing::OutgoingContract;
 use crate::modules::ln::contracts::{
-    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
+    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
 };
 use crate::modules::ln::{
     ContractAccount, ContractOutput, LightningGateway, LightningInput, LightningModuleTypes,
@@ -351,7 +351,7 @@ mod tests {
     use crate::api::fake::FederationApiFaker;
     use crate::ln::LnClient;
     use crate::modules::ln::config::LightningClientConfig;
-    use crate::modules::ln::contracts::{ContractId, IdentifyableContract};
+    use crate::modules::ln::contracts::{ContractId, IdentifiableContract};
     use crate::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
     use crate::{module_decode_stubs, ClientContext};
 

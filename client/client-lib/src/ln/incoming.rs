@@ -5,7 +5,7 @@ use lightning_invoice::Invoice;
 use serde::Serialize;
 
 use crate::modules::ln::contracts::incoming::IncomingContract;
-use crate::modules::ln::contracts::{ContractId, IdentifyableContract};
+use crate::modules::ln::contracts::{ContractId, IdentifiableContract};
 use crate::modules::ln::LightningInput;
 
 #[derive(Debug, Clone, Encodable, Decodable)]

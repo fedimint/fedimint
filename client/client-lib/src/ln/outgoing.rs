@@ -3,7 +3,7 @@ use fedimint_core::Amount;
 use serde::Serialize;
 
 use crate::modules::ln::contracts::outgoing::OutgoingContract;
-use crate::modules::ln::contracts::{IdentifyableContract, Preimage};
+use crate::modules::ln::contracts::{IdentifiableContract, Preimage};
 use crate::modules::ln::LightningInput;
 
 #[derive(Debug, Encodable, Decodable, Serialize)]

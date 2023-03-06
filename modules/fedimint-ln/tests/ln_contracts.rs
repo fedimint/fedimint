@@ -6,7 +6,7 @@ use fedimint_ln::config::LightningClientConfig;
 use fedimint_ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln::contracts::outgoing::OutgoingContract;
 use fedimint_ln::contracts::{
-    Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage, IdentifyableContract,
+    Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage, IdentifiableContract,
     OutgoingContractOutcome, Preimage,
 };
 use fedimint_ln::{
