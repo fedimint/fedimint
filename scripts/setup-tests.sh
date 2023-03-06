@@ -25,12 +25,16 @@ done
 $FM_BTC_CLIENT createwallet ""
 
 # Start electrs
-ELECTRS_CFG="$FM_ELECTRS_DIR"/electrs.toml
+ELECTRS_CFG="$FM_TEST_DIR/electrs.toml"
 echo 'auth = "bitcoin:bitcoin"' > $ELECTRS_CFG
 echo 'daemon_rpc_addr = "127.0.0.1:18443"' >> $ELECTRS_CFG
 echo 'daemon_p2p_addr = "127.0.0.1:18444"' >> $ELECTRS_CFG
 echo 'electrum_rpc_addr = "127.0.0.1:50001"' >> $ELECTRS_CFG
-electrs --network "regtest" --conf "$ELECTRS_CFG" --db-dir "$FM_ELECTRS_DIR" &
+electrs --network "regtest" --conf "$ELECTRS_CFG" --db-dir "$FM_TEST_DIR/electrs" --daemon-dir "$FM_BTC_DIR" &
+echo $! >> $FM_PID_FILE
+
+# Start esplora
+esplora --cookie "bitcoin:bitcoin" --network "regtest" --daemon-dir "$FM_BTC_DIR" --http-addr "127.0.0.1:50002" --daemon-rpc-addr "127.0.0.1:18443" --monitoring-addr "127.0.0.1:50003" --db-dir "$FM_TEST_DIR/esplora" &
 echo $! >> $FM_PID_FILE
 
 if [[ "$(lightningd --bitcoin-cli "$(which false)" --dev-no-plugin-checksum 2>&1 )" =~ .*"--dev-no-plugin-checksum: unrecognized option".* ]]; then

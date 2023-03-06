@@ -20,3 +20,8 @@ env RUST_BACKTRACE=1 cargo test -p fedimint-tests -- --test-threads=$(($(nproc) 
 unset FM_BITCOIND_RPC
 export FM_ELECTRUM_RPC="tcp://127.0.0.1:50001"
 env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
+
+# Switch to esplora and run wallet tests
+unset FM_ELECTRUM_RPC
+export FM_ESPLORA_RPC="http://127.0.0.1:50002"
+env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"

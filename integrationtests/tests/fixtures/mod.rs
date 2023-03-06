@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, KeyPair};
-use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc};
+use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
@@ -189,11 +189,13 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                         make_electrum_rpc(&url, task_group.make_handle())
                             .expect("Could not create Electrum rpc")
                     }
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Esplora(_) => {
-                        panic!("Esplora backend not supported for tests")
+                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Esplora(url) => {
+                        info!("Running tests with Esplora rpc");
+                        make_esplora_rpc(&url, task_group.make_handle())
+                            .expect("Could not create Esplora rpc")
                     }
                 };
-            let bitcoin = RealBitcoinTest::new(&url);
+            let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
 
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");

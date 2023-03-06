@@ -358,7 +358,10 @@ pub struct EsploraClient(esplora_client::AsyncClient);
 
 impl EsploraClient {
     fn new(url: &Url) -> anyhow::Result<Self> {
-        let builder = esplora_client::Builder::new(url.as_str());
+        // Url needs to have any trailing path including '/' removed
+        let without_trailing = url.as_str().trim_end_matches('/');
+
+        let builder = esplora_client::Builder::new(without_trailing);
         let client = builder.build_async()?;
         Ok(Self(client))
     }

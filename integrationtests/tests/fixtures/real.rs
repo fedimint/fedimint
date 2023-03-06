@@ -11,6 +11,7 @@ use bitcoincore_rpc::{Client, RpcApi};
 use cln_rpc::model::requests;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{ClnRpc, Request, Response};
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::Amount;
@@ -136,6 +137,8 @@ impl RealLightningTest {
 #[derive(Clone)]
 struct RealBitcoinTestNoLock {
     client: Arc<Client>,
+    /// RPC used to connect to bitcoind, used for waiting for the RPC to sync
+    rpc: DynBitcoindRpc,
 }
 
 impl RealBitcoinTestNoLock {
@@ -157,12 +160,15 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             .expect(Self::ERROR)
             .last()
         {
-            // if this is not true, we will have to add some delay mechanism here, because
-            // tests expect it
-            let _ = self
-                .client
-                .get_block(block_hash)
-                .expect("there should be no delay between block being generated and available");
+            let block = self.client.get_block(block_hash).expect("rpc failed");
+            // waits for the rpc client to catch up to bitcoind
+            loop {
+                let height = self.rpc.get_block_height().await.expect("rpc failed");
+
+                if height >= block.bip34_block_height().expect("has height") {
+                    break;
+                }
+            }
         };
     }
 
@@ -237,13 +243,13 @@ pub struct RealBitcoinTest {
 impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
-    pub fn new(url: &Url) -> Self {
+    pub fn new(url: &Url, rpc: DynBitcoindRpc) -> Self {
         let (host, auth) =
             fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(url).expect("corrent url");
         let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));
 
         Self {
-            inner: RealBitcoinTestNoLock { client },
+            inner: RealBitcoinTestNoLock { client, rpc },
         }
     }
 }
