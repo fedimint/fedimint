@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::Arc;
@@ -77,28 +78,29 @@ dyn_newtype_define! {
     pub DynBitcoindRpc(Arc<IBitcoindRpc>)
 }
 
+const RETRY_SLEEP_MIN_MS: Duration = Duration::from_millis(10);
+const RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(1000);
+
 /// Wrapper around [`IBitcoindRpc`] that will retry failed calls
 #[derive(Debug)]
 pub struct RetryClient<C> {
     inner: C,
-    sleep: Duration,
     task_handle: TaskHandle,
 }
 
 impl<C> RetryClient<C> {
     pub fn new(inner: C, task_handle: TaskHandle) -> Self {
-        Self {
-            inner,
-            sleep: Duration::from_millis(10),
-            task_handle,
-        }
+        Self { inner, task_handle }
     }
 
+    /// Retries with an exponential backoff from `RETRY_SLEEP_MIN_MS` to
+    /// `RETRY_SLEEP_MAX_MS`
     async fn retry_call<T, F, R>(&self, call_fn: F) -> Result<T>
     where
         F: Fn() -> R,
         R: Future<Output = Result<T>>,
     {
+        let mut retry_time = RETRY_SLEEP_MIN_MS;
         let ret = loop {
             match call_fn().await {
                 Ok(ret) => {
@@ -110,7 +112,8 @@ impl<C> RetryClient<C> {
                     }
 
                     info!("Bitcoind error {:?}, retrying", e);
-                    std::thread::sleep(self.sleep);
+                    std::thread::sleep(retry_time);
+                    retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * 2);
                 }
             }
         };

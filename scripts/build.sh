@@ -42,7 +42,6 @@ mkdir -p $FM_LN1_DIR
 mkdir -p $FM_LN2_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
-mkdir -p $FM_ELECTRS_DIR
 
 # Generate federation configs
 CERTS=""
