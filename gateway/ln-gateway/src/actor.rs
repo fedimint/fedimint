@@ -175,7 +175,7 @@ impl GatewayActor {
                                     })),
                                 })
                                 .await;
-                            return;
+                            continue;
                         }
                     };
 
