@@ -33,7 +33,7 @@ use mint_client::{ClientError, GatewayClient};
 use secp256k1::PublicKey;
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
@@ -117,7 +117,7 @@ impl Gateway {
             tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
 
-        info!("fetched route hints {:?}", route_hints);
+        debug!("Fetched route hints {:?}", route_hints);
         let gw = Self {
             lnrpc,
             actors: Mutex::new(HashMap::new()),
@@ -132,7 +132,6 @@ impl Gateway {
 
         gw.load_federation_actors(decoders, module_gens, route_hints)
             .await;
-        info!("loaded actors");
 
         gw
     }
@@ -351,7 +350,6 @@ impl Gateway {
             }
         })
         .await;
-        info!("Spawned gateway webserver");
 
         // TODO: try to drive forward outgoing and incoming payments that were
         // interrupted
@@ -366,7 +364,7 @@ impl Gateway {
 
             // Handle messages from webserver and plugin
             while let Ok(msg) = self.receiver.try_recv() {
-                tracing::info!("Gateway received message {:?}", msg);
+                trace!("Gateway received message {:?}", msg);
                 match msg {
                     GatewayRequest::Info(inner) => {
                         inner.handle(|payload| self.handle_get_info(payload)).await;

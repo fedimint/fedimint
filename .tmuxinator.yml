@@ -4,7 +4,7 @@ socket_name: fedimint-dev
 pre_window:
   - source .tmpenv
   - alias cln="\$FM_CLN"
-  - alias lnd="\$FM_LND"
+  - alias lncli="\$FM_LND"
   - alias bitcoin-cli="\$FM_BTC_CLIENT"
   - alias fedimint-cli="\$FM_MINT_CLIENT"
   - alias cln-gateway="\$FM_GWCLI_CLN"

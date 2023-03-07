@@ -34,7 +34,7 @@ function await_cln_start() {
 
 function await_lnd_start() {
     until [ -e "$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon" ]; do
-        >&2 echo "LND gateway not ready yet. Waiting ..."
+        >&2 echo "LND not ready yet. Waiting ..."
         sleep "$POLL_INTERVAL"
     done
 }

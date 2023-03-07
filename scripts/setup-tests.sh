@@ -58,3 +58,4 @@ mine_blocks 101
 
 # Open channel
 open_channel
+

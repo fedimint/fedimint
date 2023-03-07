@@ -7,13 +7,12 @@ use async_trait::async_trait;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::task::TaskGroup;
 use secp256k1::PublicKey;
-use tokio::select;
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic_lnd::lnrpc::{GetInfoRequest, SendRequest};
 use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse};
 use tonic_lnd::{connect, LndClient};
-use tracing::{debug, error, info};
+use tracing::{error, info, trace};
 
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
@@ -25,9 +24,11 @@ use crate::gatewaylnrpc::{
 use crate::lnrpc_client::{HtlcStream, ILnRpcClient};
 use crate::GatewayError;
 
+type OutcomeMap = Arc<Mutex<HashMap<sha256::Hash, (LndSenderRef, Option<CircuitKey>)>>>;
+
 pub struct GatewayLndClient {
     client: LndClient,
-    outcomes: Arc<Mutex<HashMap<sha256::Hash, LndSenderRef>>>,
+    outcomes: OutcomeMap,
     task_group: TaskGroup,
 }
 
@@ -73,7 +74,6 @@ impl ILnRpcClient for GatewayLndClient {
             .expect("failed to get info")
             .into_inner();
         let pub_key: PublicKey = info.identity_pubkey.parse().expect("invalid pubkey");
-        info!("fetched pubkey {:?}", pub_key);
         Ok(GetPubKeyResponse {
             pub_key: pub_key.serialize().to_vec(),
         })
@@ -99,7 +99,6 @@ impl ILnRpcClient for GatewayLndClient {
             .await
             .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
             .into_inner();
-        info!("send response {:?}", send_response);
 
         if send_response.payment_preimage.is_empty() {
             return Err(GatewayError::LnRpcError(tonic::Status::new(
@@ -126,8 +125,7 @@ impl ILnRpcClient for GatewayLndClient {
         let (gwd_tx, gwd_rx) =
             mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, tonic::Status>>(channel_size);
 
-        info!("subscribing");
-        let scid = subscription.short_channel_id.clone();
+        let scid = subscription.short_channel_id;
         let mut client = self.client.clone();
 
         let mut tg = self.task_group.clone();
@@ -169,6 +167,7 @@ impl ILnRpcClient for GatewayLndClient {
                     None
                 }
             } {
+                trace!("handling htlc {:?}", htlc);
                 let response: Option<ForwardHtlcInterceptResponse> =
                     if htlc.outgoing_requested_chan_id != scid {
                         // Pass through: This HTLC doesn't belong to the current subscription
@@ -199,10 +198,10 @@ impl ILnRpcClient for GatewayLndClient {
                             Ok(_) => {
                                 // Keep a reference to LND sender reference so we can later forward
                                 // outcomes on `complete_htlc` rpc
-                                outcomes
-                                    .lock()
-                                    .await
-                                    .insert(intercepted_htlc_id, Arc::new(lnd_tx.clone()));
+                                outcomes.lock().await.insert(
+                                    intercepted_htlc_id,
+                                    (Arc::new(lnd_tx.clone()), htlc.incoming_circuit_key),
+                                );
 
                                 None
                             }
@@ -251,18 +250,15 @@ impl ILnRpcClient for GatewayLndClient {
 
         info!("Completing htlc with reference, {:?}", hash);
 
-        if let Some(outcome) = self.outcomes.lock().await.remove(&hash) {
+        if let Some((outcome, incoming_circuit_key)) = self.outcomes.lock().await.remove(&hash) {
             let htlca_res = match action {
-                Some(Action::Settle(Settle { preimage })) => {
-                    // FIXME: Specify a failure code and message, use proper incoming circuit key
-                    ForwardHtlcInterceptResponse {
-                        incoming_circuit_key: None,
-                        action: 0,
-                        preimage,
-                        failure_message: vec![],
-                        failure_code: 0,
-                    }
-                }
+                Some(Action::Settle(Settle { preimage })) => ForwardHtlcInterceptResponse {
+                    incoming_circuit_key,
+                    action: 0,
+                    preimage,
+                    failure_message: vec![],
+                    failure_code: 0,
+                },
                 Some(Action::Cancel(Cancel { reason: _ })) => cancel_intercepted_htlc(None),
                 None => {
                     error!("No action specified for intercepted htlc id: {:?}", hash);

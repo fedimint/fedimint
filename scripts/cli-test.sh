@@ -64,6 +64,7 @@ switch_to_lnd_gateway
 INVOICE="$($FM_CLN invoice 100000 lnd-gw-to-cln test 1m | jq -e -r '.bolt11')"
 await_cln_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
+
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
 # FIXME ^^ comment isn't right
@@ -74,11 +75,11 @@ INVOICE_RESULT="$($FM_CLN waitinvoice lnd-gw-to-cln)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
-# # INCOMING: User can receive payments via LND gateway
-# INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
-# INVOICE_RESULT=$($FM_CLN pay $INVOICE)
-# INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
-# [[ "$INVOICE_STATUS" = "complete" ]]
+# INCOMING: receive from CLN via LND gateway
+INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
+INVOICE_RESULT=$($FM_CLN pay $INVOICE)
+INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
+[[ "$INVOICE_STATUS" = "complete" ]]
 
 # CLN Gateway Tests
 switch_to_cln_gateway
