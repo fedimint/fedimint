@@ -49,7 +49,7 @@ use fedimint_testing::ln::fixtures::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
-use fedimint_wallet_server::common::SpendableUTXO;
+use fedimint_wallet_server::common::{PegOutFees, SpendableUTXO};
 use fedimint_wallet_server::{Wallet, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
@@ -581,14 +581,14 @@ impl<T: AsRef<ClientConfig> + Clone + Send> UserTest<T> {
     }
 
     /// Helper to simplify the peg_out method calls
-    pub async fn peg_out(&self, amount: u64, address: &Address) -> (Amount, OutPoint) {
+    pub async fn peg_out(&self, amount: u64, address: &Address) -> (PegOutFees, OutPoint) {
         let peg_out = self
             .client
             .new_peg_out_with_fees(bitcoin::Amount::from_sat(amount), address.clone())
             .await
             .unwrap();
         let out_point = self.client.peg_out(peg_out.clone(), rng()).await.unwrap();
-        (peg_out.fees.amount().into(), out_point)
+        (peg_out.fees, out_point)
     }
 
     /// Returns sum total of all notes

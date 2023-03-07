@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::iter::repeat;
 use std::sync::{Arc, Mutex};
 
@@ -6,7 +7,7 @@ use bitcoin::hash_types::Txid;
 use bitcoin::hashes::Hash;
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
-    Address, Block, BlockHash, BlockHeader, Network, PackedLockTime, Transaction, TxOut,
+    Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Transaction, TxOut,
 };
 use fedimint_bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};
 use fedimint_core::{Amount, Feerate};
@@ -17,8 +18,13 @@ use super::BitcoinTest;
 
 #[derive(Clone, Debug)]
 pub struct FakeBitcoinTest {
+    /// Simulates mined bitcoin blocks
     blocks: Arc<Mutex<Vec<Block>>>,
+    /// Simulates pending transactions in the mempool
     pending: Arc<Mutex<Vec<Transaction>>>,
+    /// Tracks how much bitcoin was sent to an address (doesn't track sending
+    /// out of it)
+    addresses: Arc<Mutex<BTreeMap<Txid, Amount>>>,
 }
 
 impl Default for FakeBitcoinTest {
@@ -32,6 +38,7 @@ impl FakeBitcoinTest {
         FakeBitcoinTest {
             blocks: Arc::new(Mutex::new(vec![])),
             pending: Arc::new(Mutex::new(vec![])),
+            addresses: Arc::new(Mutex::new(Default::default())),
         }
     }
 
@@ -108,11 +115,13 @@ impl BitcoinTest for FakeBitcoinTest {
     ) -> (TxOutProof, Transaction) {
         let mut blocks = self.blocks.lock().unwrap();
         let mut pending = self.pending.lock().unwrap();
+        let mut addresses = self.addresses.lock().unwrap();
 
         let transaction = FakeBitcoinTest::new_transaction(vec![TxOut {
             value: amount.to_sat(),
             script_pubkey: address.payload.script_pubkey(),
         }]);
+        addresses.insert(transaction.txid(), amount.into());
 
         pending.push(transaction.clone());
         let merkle_proof = FakeBitcoinTest::pending_merkle_tree(&pending);
@@ -150,6 +159,29 @@ impl BitcoinTest for FakeBitcoinTest {
             .unwrap_or(0);
         Amount::from_sats(sats)
     }
+
+    async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
+        let pending = self.pending.lock().unwrap();
+        let addresses = self.addresses.lock().unwrap();
+
+        let mut fee = Amount::ZERO;
+        let tx = pending
+            .iter()
+            .find(|tx| tx.txid() == *txid)
+            .expect("tx was broadcast");
+
+        for input in tx.input.iter() {
+            fee += *addresses
+                .get(&input.previous_output.txid)
+                .expect("tx has sats");
+        }
+
+        for output in tx.output.iter() {
+            fee -= Amount::from_sats(output.value);
+        }
+
+        fee
+    }
 }
 
 #[async_trait]
@@ -185,9 +217,30 @@ impl IBitcoindRpc for FakeBitcoinTest {
 
     async fn submit_transaction(&self, transaction: Transaction) -> BitcoinRpcResult<()> {
         let mut pending = self.pending.lock().unwrap();
-        if !pending.contains(&transaction) {
-            pending.push(transaction);
+        pending.push(transaction);
+
+        let mut filtered = BTreeMap::<Vec<OutPoint>, Transaction>::new();
+
+        // Simulate the mempool keeping txs with higher fees (less output)
+        for tx in pending.iter() {
+            match filtered.get(&inputs(tx)) {
+                Some(found) if output_sum(tx) > output_sum(found) => {}
+                _ => {
+                    filtered.insert(inputs(tx), tx.clone());
+                }
+            }
         }
+
+        *pending = filtered.into_values().collect();
+
         Ok(())
     }
+}
+
+fn output_sum(tx: &Transaction) -> u64 {
+    tx.output.iter().map(|output| output.value).sum()
+}
+
+fn inputs(tx: &Transaction) -> Vec<OutPoint> {
+    tx.input.iter().map(|input| input.previous_output).collect()
 }

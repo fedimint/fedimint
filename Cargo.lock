@@ -1414,6 +1414,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2761,6 +2762,7 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-wallet-client",
+ "fedimint-wallet-common",
  "fedimint-wallet-server",
  "futures",
  "hkdf",
