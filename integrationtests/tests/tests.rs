@@ -6,7 +6,7 @@ use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{msats, sats, TieredMulti};
+use fedimint_core::{msats, sats, Feerate, TieredMulti};
 use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln_client::LightningConsensusItem;
 use fedimint_logging::LOG_TEST;
@@ -16,8 +16,8 @@ use fedimint_server::consensus::TransactionSubmissionError::{
 };
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
-use fedimint_wallet_server::common::PegOutSignatureItem;
 use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
+use fedimint_wallet_server::common::{PegOutFees, PegOutSignatureItem, Rbf};
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
 use mint_client::mint::MintClient;
@@ -25,6 +25,7 @@ use mint_client::transaction::legacy::Output;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::{ClientError, ConfigVerifyError};
 use threshold_crypto::{SecretKey, SecretKeyShare};
+use tracing::log::warn;
 use tracing::{debug, info, instrument};
 
 use crate::fixtures::{peers, test, unwrap_item, FederationTest};
@@ -78,7 +79,7 @@ async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
             bitcoin.mine_block_and_get_received(&peg_out_address).await,
             sats(peg_out_amount)
         );
-        user.assert_total_notes(sats(peg_in_amount - peg_out_amount) - fees)
+        user.assert_total_notes(sats(peg_in_amount - peg_out_amount) - fees.amount().into())
             .await;
         assert_eq!(fed.max_balance_sheet(), 0);
     })
@@ -115,6 +116,7 @@ async fn wallet_peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
 
         fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
         let (fees, _) = user.peg_out(1000, &address1).await;
+        let fees = fees.amount().into();
         user.peg_out(1000, &address2).await;
         info!(target: LOG_TEST, ?fees, "Tx fee");
 
@@ -137,6 +139,65 @@ async fn wallet_peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
         user.client.fetch_all_notes().await.unwrap();
 
         assert_eq!(user.total_notes().await, sats(5000 - 1000) - fees);
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn wallet_peg_outs_support_rbf() -> Result<()> {
+    test(2, |fed, user, bitcoin, _, _| async move {
+        // Need lock to keep tx in mempool from getting mined
+        let bitcoin = bitcoin.lock_exclusive().await;
+        let address = bitcoin.get_new_address().await;
+
+        fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
+        let (fees, out_point) = user.peg_out(1000, &address).await;
+        fed.run_consensus_epochs(2).await;
+        fed.broadcast_transactions().await;
+
+        let txid = user
+            .client
+            .wallet_client()
+            .await_peg_out_outcome(out_point)
+            .await
+            .unwrap();
+        assert_eq!(
+            bitcoin.get_mempool_tx_fee(&txid).await,
+            fees.amount().into()
+        );
+
+        // RBF by increasing sats per kvb by 1000
+        let rbf = Rbf {
+            fees: PegOutFees {
+                fee_rate: Feerate { sats_per_kvb: 1000 },
+                total_weight: fees.total_weight,
+            },
+            txid,
+        };
+        let out_point = user.client.rbf_tx(rbf.clone()).await.unwrap();
+        fed.run_consensus_epochs(2).await;
+        fed.broadcast_transactions().await;
+        let txid = user
+            .client
+            .wallet_client()
+            .await_peg_out_outcome(out_point)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            bitcoin.get_mempool_tx_fee(&txid).await,
+            (fees.amount() + rbf.fees.amount()).into()
+        );
+
+        assert_eq!(
+            bitcoin.mine_block_and_get_received(&address).await,
+            sats(1000)
+        );
+        bitcoin
+            .mine_blocks(fed.wallet.consensus.finality_delay as u64)
+            .await;
+        fed.run_consensus_epochs(1).await;
+        assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
 }

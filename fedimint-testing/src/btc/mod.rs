@@ -2,7 +2,7 @@ pub mod bitcoind;
 pub mod fixtures;
 
 use async_trait::async_trait;
-use bitcoin::{Address, Transaction};
+use bitcoin::{Address, Transaction, Txid};
 use fedimint_core::Amount;
 use fedimint_wallet_client::txoproof::TxOutProof;
 
@@ -38,4 +38,6 @@ pub trait BitcoinTest {
     /// Mine a block to include any pending transactions then get the amount
     /// received to an address
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount;
+
+    async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount;
 }

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin::{secp256k1, Address, Transaction};
+use bitcoin::{secp256k1, Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
 use cln_rpc::model::requests;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
@@ -225,6 +225,15 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     async fn get_new_address(&self) -> Address {
         self.client.get_new_address(None, None).expect(Self::ERROR)
     }
+
+    async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
+        self.client
+            .get_mempool_entry(txid)
+            .unwrap()
+            .fees
+            .base
+            .into()
+    }
 }
 
 lazy_static! {
@@ -297,6 +306,11 @@ impl BitcoinTest for RealBitcoinTest {
         let _lock = self.lock_exclusive().await;
         self.inner.mine_block_and_get_received(address).await
     }
+
+    async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
+        let _lock = self.lock_exclusive().await;
+        self.inner.get_mempool_tx_fee(txid).await
+    }
 }
 
 #[async_trait]
@@ -330,5 +344,9 @@ impl BitcoinTest for RealBitcoinTestLocked {
 
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
         self.inner.mine_block_and_get_received(address).await
+    }
+
+    async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
+        self.inner.get_mempool_tx_fee(txid).await
     }
 }

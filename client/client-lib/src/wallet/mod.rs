@@ -47,7 +47,7 @@ impl ClientModule for WalletClient {
 
     fn output_amount(&self, output: &WalletOutput) -> TransactionItemAmount {
         TransactionItemAmount {
-            amount: (output.amount + output.fees.amount()).into(),
+            amount: output.amount().into(),
             fee: self.config.fee_consensus.peg_out_abs,
         }
     }
@@ -323,9 +323,8 @@ mod tests {
             context: Arc::new(client_context),
         };
 
-        // Set fees low forever
         btc_rpc
-            .set_fee_rate(Some(Feerate { sats_per_kvb: 0 }))
+            .set_fee_rate(Some(Feerate { sats_per_kvb: 1000 }))
             .await;
 
         // generate fake UTXO
@@ -342,7 +341,7 @@ mod tests {
             recipient: addr.clone(),
             amount,
             fees: PegOutFees {
-                fee_rate: Feerate { sats_per_kvb: 0 },
+                fee_rate: Feerate { sats_per_kvb: 1000 },
                 total_weight: 0,
             },
         };
@@ -351,7 +350,7 @@ mod tests {
         btc_rpc.set_block_height(100).await;
         fed.lock()
             .await
-            .consensus_round(&[], &[(out_point, WalletOutput(output))])
+            .consensus_round(&[], &[(out_point, WalletOutput::PegOut(output))])
             .await;
 
         // begin pegout

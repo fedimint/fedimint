@@ -46,6 +46,7 @@ use fedimint_ln_client::LightningModuleTypes;
 use fedimint_logging::LOG_WALLET;
 use fedimint_mint_client::MintModuleTypes;
 use fedimint_wallet_client::WalletModuleTypes;
+use fedimint_wallet_common::Rbf;
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
 use itertools::{Either, Itertools};
@@ -59,6 +60,7 @@ use mint::NoteIssuanceRequests;
 use modules::mint::MintOutputOutcome;
 use rand::distributions::Standard;
 use rand::prelude::*;
+use rand::rngs::OsRng;
 use rand::{thread_rng, CryptoRng, Rng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -501,6 +503,22 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         .ok_or(ClientError::PegOutWaitingForUTXOs)
     }
 
+    pub async fn rbf_tx(&self, rbf: Rbf) -> Result<OutPoint> {
+        let mut tx = TransactionBuilder::default();
+
+        let amount = rbf.fees.amount().into();
+        let (mut keys, input) = self.mint_client().select_input(amount).await?;
+        tx.input(&mut keys, input);
+        let peg_out_idx = tx.output(Output::Wallet(WalletOutput::Rbf(rbf)));
+
+        let fedimint_tx_id = self.submit_tx_with_change(tx, &mut OsRng).await?;
+
+        Ok(OutPoint {
+            txid: fedimint_tx_id,
+            out_idx: peg_out_idx,
+        })
+    }
+
     pub async fn peg_out<R: RngCore + CryptoRng>(
         &self,
         peg_out: PegOut,
@@ -519,7 +537,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             + (peg_out.amount + peg_out.fees.amount()).into();
         let (mut keys, input) = self.mint_client().select_input(funding_amount).await?;
         tx.input(&mut keys, input);
-        let peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
+        let peg_out_idx = tx.output(Output::Wallet(WalletOutput::PegOut(peg_out)));
 
         let fedimint_tx_id = self.submit_tx_with_change(tx, &mut rng).await?;
 

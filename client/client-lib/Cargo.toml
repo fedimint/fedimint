@@ -31,6 +31,7 @@ fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client", default-features = false }
+fedimint-wallet-common = { path = "../../modules/fedimint-wallet-common", default-features = false }
 itertools = "0.10.5"
 rand = "0.8"
 ring = "0.16.20"

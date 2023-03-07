@@ -4,7 +4,7 @@ use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::sha256;
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::{Amount, BlockHash, Network, Transaction, Txid};
+use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::__reexports::serde_json;
@@ -19,6 +19,7 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::config::WalletClientConfig;
+use crate::db::UTXOKey;
 use crate::keys::CompressedPublicKey;
 use crate::txoproof::{PegInProof, PegInProofError};
 
@@ -78,7 +79,7 @@ pub struct RoundConsensus {
     pub randomness_beacon: [u8; 32],
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct SpendableUTXO {
     pub tweak: [u8; 32],
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
@@ -91,6 +92,11 @@ pub struct PendingTransaction {
     pub tx: Transaction,
     pub tweak: [u8; 32],
     pub change: bitcoin::Amount,
+    pub destination: Script,
+    pub fees: PegOutFees,
+    pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
+    pub peg_out_amount: Amount,
+    pub rbf: Option<Rbf>,
 }
 
 impl Serialize for PendingTransaction {
@@ -117,6 +123,10 @@ pub struct UnsignedTransaction {
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
     pub change: bitcoin::Amount,
     pub fees: PegOutFees,
+    pub destination: Script,
+    pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
+    pub peg_out_amount: Amount,
+    pub rbf: Option<Rbf>,
 }
 
 impl Serialize for UnsignedTransaction {
@@ -202,13 +212,38 @@ impl std::fmt::Display for WalletInput {
     }
 }
 
-#[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletOutput(pub PegOut);
+pub enum WalletOutput {
+    PegOut(PegOut),
+    Rbf(Rbf),
+}
+
+/// Allows a user to bump the fees of a `PendingTransaction`
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct Rbf {
+    /// Fees expressed as an increase over existing peg-out fees
+    pub fees: PegOutFees,
+    /// Bitcoin tx id to bump the fees for
+    pub txid: Txid,
+}
+
+impl WalletOutput {
+    pub fn amount(&self) -> Amount {
+        match self {
+            WalletOutput::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
+            WalletOutput::Rbf(rbf) => rbf.fees.amount(),
+        }
+    }
+}
 
 impl std::fmt::Display for WalletOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Wallet PegOut {} to {}", self.0.amount, self.0.recipient)
+        match self {
+            WalletOutput::PegOut(pegout) => {
+                write!(f, "Wallet PegOut {} to {}", pegout.amount, pegout.recipient)
+            }
+            WalletOutput::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
+        }
     }
 }
 
@@ -273,6 +308,10 @@ pub enum WalletError {
     NotEnoughSpendableUTXO,
     #[error("Peg out amount was under the dust limit")]
     PegOutUnderDustLimit,
+    #[error("RBF transaction id not found")]
+    RbfTransactionIdNotFound,
+    #[error("RBF has tx weight set incorrectly")]
+    RbfTxWeightIncorrect,
 }
 
 #[derive(Debug, Error)]
