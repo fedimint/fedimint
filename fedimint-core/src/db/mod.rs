@@ -45,7 +45,6 @@ pub trait DatabaseRecord: DatabaseKeyPrefix {
 /// Extends `DatabaseKeyPrefix` to prepend the key's prefix.
 pub trait DatabaseLookup: DatabaseKeyPrefix {
     type Record: DatabaseRecord;
-    type Key: DatabaseKey + Debug;
 }
 
 // Every `DatabaseRecord` is automatically a `DatabaseLookup`
@@ -54,7 +53,6 @@ where
     Record: DatabaseRecord + Debug + Decodable + Encodable,
 {
     type Record = Record;
-    type Key = Record;
 }
 
 /// `DatabaseKey` that represents the lookup structure for retrieving key/value
@@ -541,12 +539,13 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
         key_prefix: &KP,
     ) -> impl Stream<
         Item = Result<(
-            KP::Key,
+            KP::Record,
             <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
         )>,
     > + '_
     where
         KP: DatabaseLookup,
+        KP::Record: DatabaseKey,
     {
         debug!("find by prefix");
         let decoders = self.decoders.clone();
@@ -556,7 +555,7 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
             .await
             .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
-                let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
+                let key = KP::Record::from_bytes(&key_bytes, &decoders)?;
                 let value = decode_value(&value_bytes, &decoders)?;
                 Ok((key, value))
             })
@@ -835,12 +834,13 @@ impl<'parent> DatabaseTransaction<'parent> {
         key_prefix: &KP,
     ) -> impl Stream<
         Item = Result<(
-            KP::Key,
+            KP::Record,
             <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
         )>,
     > + '_
     where
         KP: DatabaseLookup,
+        KP::Record: DatabaseKey,
     {
         debug!("find by prefix");
         let decoders = self.decoders.clone();
@@ -850,7 +850,7 @@ impl<'parent> DatabaseTransaction<'parent> {
             .await
             .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
-                let key = KP::Key::from_bytes(&key_bytes, &decoders)?;
+                let key = KP::Record::from_bytes(&key_bytes, &decoders)?;
                 let value = decode_value(&value_bytes, &decoders)?;
                 Ok((key, value))
             })
@@ -1064,7 +1064,6 @@ macro_rules! impl_db_lookup{
         $(
             impl $crate::db::DatabaseLookup for $query_prefix {
                 type Record = $key;
-                type Key = $key;
             }
         )*
     };

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use futures::StreamExt;
 
 use crate::core::ModuleInstanceId;
-use crate::db::{DatabaseLookup, DatabaseRecord, ModuleDatabaseTransaction};
+use crate::db::{DatabaseKey, DatabaseLookup, DatabaseRecord, ModuleDatabaseTransaction};
 
 #[derive(Default)]
 pub struct Audit {
@@ -30,7 +30,8 @@ impl Audit {
         to_milli_sat: F,
     ) where
         KP: DatabaseLookup + 'static,
-        F: Fn(KP::Key, <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value) -> i64,
+        KP::Record: DatabaseKey,
+        F: Fn(KP::Record, <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value) -> i64,
     {
         let mut new_items = dbtx
             .find_by_prefix(key_prefix)
