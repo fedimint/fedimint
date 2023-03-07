@@ -414,7 +414,6 @@ where
     GC: GlobalContext,
 {
     type Record = ActiveStateKey<GC>;
-    type Key = ActiveStateKey<GC>;
 }
 impl ActiveState {
     fn new() -> ActiveState {
@@ -493,7 +492,6 @@ where
     GC: GlobalContext,
 {
     type Record = InactiveStateKey<GC>;
-    type Key = InactiveStateKey<GC>;
 }
 
 #[cfg(test)]
