@@ -520,17 +520,23 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
     }
 
     #[instrument(level = "debug", skip_all, fields(?key), ret)]
-    pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.isolated_tx.raw_get_bytes(&key_bytes).await? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(decode_value::<K::Value>(&value_bytes, self.decoders)?))
+        let value_bytes = self
+            .isolated_tx
+            .raw_get_bytes(&key_bytes)
+            .await
+            .expect("Unrecoverable error when reading from database");
+        match value_bytes {
+            Some(value_bytes) => Some(
+                decode_value::<K::Value>(&value_bytes, self.decoders)
+                    .expect("Unrecoverable error when decoding the database value"),
+            ),
+            None => None,
+        }
     }
 
     #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
@@ -538,10 +544,10 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
         &mut self,
         key_prefix: &KP,
     ) -> impl Stream<
-        Item = Result<(
+        Item = (
             KP::Record,
             <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-        )>,
+        ),
     > + '_
     where
         KP: DatabaseLookup,
@@ -555,14 +561,16 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
             .await
             .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
-                let key = KP::Record::from_bytes(&key_bytes, &decoders)?;
-                let value = decode_value(&value_bytes, &decoders)?;
-                Ok((key, value))
+                let key = KP::Record::from_bytes(&key_bytes, &decoders)
+                    .expect("Unrecoverable error reading the DatabaseKey");
+                let value = decode_value(&value_bytes, &decoders)
+                    .expect("Unrecoverable error decoding the DatabaseValue");
+                (key, value)
             })
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
+    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
@@ -570,19 +578,19 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
         match self
             .isolated_tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
-            .await?
+            .await
+            .expect("Unrecoverable error while inserting into the database")
         {
-            Some(old_val_bytes) => Ok(Some(decode_value(&old_val_bytes, self.decoders)?)),
-            None => Ok(None),
+            Some(old_val_bytes) => Some(
+                decode_value(&old_val_bytes, self.decoders)
+                    .expect("Unrecoverable error while decoding the database value"),
+            ),
+            None => None,
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_new_entry<K>(
-        &mut self,
-        key: &K,
-        value: &K::Value,
-    ) -> Result<Option<K::Value>>
+    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
@@ -590,7 +598,8 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
         match self
             .isolated_tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
-            .await?
+            .await
+            .expect("Unrecoverable error occurred while inserting new entry into database")
         {
             Some(_) => {
                 warn!(
@@ -598,29 +607,35 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
                     "Database overwriting element when expecting insertion of new entry. Key: {:?}",
                     key
                 );
-                Ok(None)
+                None
             }
-            None => Ok(None),
+            None => None,
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
-    pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    pub async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.isolated_tx.raw_remove_entry(&key_bytes).await? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(K::Value::from_bytes(&value_bytes, self.decoders)?))
+        match self
+            .isolated_tx
+            .raw_remove_entry(&key_bytes)
+            .await
+            .expect("Unrecoverable error occurred while removing an entry from the database")
+        {
+            Some(value) => Some(
+                K::Value::from_bytes(&value, self.decoders)
+                    .expect("Unrecoverable error when decoding the database value"),
+            ),
+            None => None,
+        }
     }
 
     #[instrument(level = "debug", skip_all, fields(key = ?key_prefix), ret)]
-    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
+    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
     where
         KP: DatabaseLookup,
     {
@@ -628,6 +643,7 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
         self.isolated_tx
             .raw_remove_by_prefix(&key_prefix.to_bytes())
             .await
+            .expect("Unrecoverable error occurred while removing by prefix");
     }
 }
 
@@ -811,21 +827,32 @@ impl<'parent> DatabaseTransaction<'parent> {
         return self.tx.commit_tx().await;
     }
 
+    pub async fn expect_commit_tx(mut self) {
+        self.commit_tracker.is_committed = true;
+        self.tx
+            .commit_tx()
+            .await
+            .expect("Unrecoverable error occurred while committing to the database.");
+    }
+
     #[instrument(level = "debug", skip_all, fields(?key), ret)]
-    pub async fn get_value<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.tx.raw_get_bytes(&key_bytes).await? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(decode_value::<K::Value>(
-            &value_bytes,
-            &self.decoders,
-        )?))
+        let value_bytes = self
+            .tx
+            .raw_get_bytes(&key_bytes)
+            .await
+            .expect("Unrecoverable error when reading from database");
+        match value_bytes {
+            Some(value_bytes) => Some(
+                decode_value::<K::Value>(&value_bytes, &self.decoders)
+                    .expect("Unrecoverable error when decoding the database value"),
+            ),
+            None => None,
+        }
     }
 
     #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
@@ -833,10 +860,10 @@ impl<'parent> DatabaseTransaction<'parent> {
         &mut self,
         key_prefix: &KP,
     ) -> impl Stream<
-        Item = Result<(
+        Item = (
             KP::Record,
             <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-        )>,
+        ),
     > + '_
     where
         KP: DatabaseLookup,
@@ -850,14 +877,16 @@ impl<'parent> DatabaseTransaction<'parent> {
             .await
             .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
-                let key = KP::Record::from_bytes(&key_bytes, &decoders)?;
-                let value = decode_value(&value_bytes, &decoders)?;
-                Ok((key, value))
+                let key = KP::Record::from_bytes(&key_bytes, &decoders)
+                    .expect("Unrecoverable error reading DatabaseKey");
+                let value = decode_value(&value_bytes, &decoders)
+                    .expect("Unrecoverable decoding DatabaseValue");
+                (key, value)
             })
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
+    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
@@ -865,19 +894,19 @@ impl<'parent> DatabaseTransaction<'parent> {
         match self
             .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
-            .await?
+            .await
+            .expect("Unrecoverable error while inserting into the database")
         {
-            Some(old_val_bytes) => Ok(Some(decode_value(&old_val_bytes, &self.decoders)?)),
-            None => Ok(None),
+            Some(old_val_bytes) => Some(
+                decode_value(&old_val_bytes, &self.decoders)
+                    .expect("Unrecoverable error while decoding the database value"),
+            ),
+            None => None,
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_new_entry<K>(
-        &mut self,
-        key: &K,
-        value: &K::Value,
-    ) -> Result<Option<K::Value>>
+    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
@@ -885,7 +914,8 @@ impl<'parent> DatabaseTransaction<'parent> {
         match self
             .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
-            .await?
+            .await
+            .expect("Unrecoverable error while inserting new entry into the database")
         {
             Some(_) => {
                 warn!(
@@ -893,34 +923,43 @@ impl<'parent> DatabaseTransaction<'parent> {
                     "Database overwriting element when expecting insertion of new entry. Key: {:?}",
                     key
                 );
-                Ok(None)
+                None
             }
-            None => Ok(None),
+            None => None,
         }
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
-    pub async fn remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    pub async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.tx.raw_remove_entry(&key_bytes).await? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(K::Value::from_bytes(&value_bytes, &self.decoders)?))
+        match self
+            .tx
+            .raw_remove_entry(&key_bytes)
+            .await
+            .expect("Unrecoverable error occurred while removing an entry from the database")
+        {
+            Some(value) => Some(
+                K::Value::from_bytes(&value, &self.decoders)
+                    .expect("Unrecoverable error occurred while decoding the database value"),
+            ),
+            None => None,
+        }
     }
 
     #[instrument(level = "debug", skip_all, fields(key = ?key_prefix), ret)]
-    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP) -> Result<()>
+    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
     where
         KP: DatabaseLookup,
     {
         self.commit_tracker.has_writes = true;
-        self.tx.raw_remove_by_prefix(&key_prefix.to_bytes()).await
+        self.tx
+            .raw_remove_by_prefix(&key_prefix.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while removing by prefix");
     }
 
     #[instrument(level = "debug", skip_all, ret)]
@@ -1135,10 +1174,6 @@ macro_rules! push_db_pair_items {
         let db_items = $dbtx
             .find_by_prefix(&$prefix_type)
             .await
-            .map(|res| {
-                let (key, val) = res.expect("DB Error");
-                (key, val)
-            })
             .collect::<Vec<($key_type, $value_type)>>()
             .await;
 
@@ -1152,10 +1187,7 @@ macro_rules! push_db_pair_items_no_serde {
         let db_items = $dbtx
             .find_by_prefix(&$prefix_type)
             .await
-            .map(|res| {
-                let (key, val) = res.expect("DB Error");
-                (key, SerdeWrapper::from_encodable(val))
-            })
+            .map(|(key, val)| (key, SerdeWrapper::from_encodable(val)))
             .collect::<Vec<_>>()
             .await;
 
@@ -1169,10 +1201,7 @@ macro_rules! push_db_key_items {
         let db_items = $dbtx
             .find_by_prefix(&$prefix_type)
             .await
-            .map(|res| {
-                let (key, _) = res.expect("DB Error");
-                key
-            })
+            .map(|(key, _)| key)
             .collect::<Vec<$key_type>>()
             .await;
 
@@ -1205,7 +1234,7 @@ pub async fn apply_migrations<'a>(
     migrations: MigrationMap<'a>,
 ) -> Result<(), anyhow::Error> {
     let mut dbtx = db.begin_transaction().await;
-    let disk_version = dbtx.get_value(&DatabaseVersionKey).await?;
+    let disk_version = dbtx.get_value(&DatabaseVersionKey).await;
     let db_version = if let Some(disk_version) = disk_version {
         let mut current_db_version = disk_version;
 
@@ -1224,13 +1253,13 @@ pub async fn apply_migrations<'a>(
 
             current_db_version.increment();
             dbtx.insert_entry(&DatabaseVersionKey, &current_db_version)
-                .await?;
+                .await;
         }
 
         current_db_version
     } else {
         dbtx.insert_entry(&DatabaseVersionKey, &target_db_version)
-            .await?;
+            .await;
         target_db_version
     };
 
@@ -1320,103 +1349,70 @@ mod tests {
 
     pub async fn verify_insert_elements(db: Database) {
         let mut dbtx = db.begin_transaction().await;
-        assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
-            .await
-            .unwrap()
-            .is_none());
+        assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
 
-        assert!(dbtx
-            .insert_entry(&TestKey(2), &TestVal(3))
-            .await
-            .unwrap()
-            .is_none());
+        assert!(dbtx.insert_entry(&TestKey(2), &TestVal(3)).await.is_none());
 
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
     }
 
     pub async fn verify_remove_nonexisting(db: Database) {
         let mut dbtx = db.begin_transaction().await;
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, None);
         let removed = dbtx.remove_entry(&TestKey(1)).await;
-        assert!(removed.is_ok());
+        assert!(removed.is_none());
 
         // Commit to surpress the warning message
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
     }
 
     pub async fn verify_remove_existing(db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
-            .await
-            .unwrap()
-            .is_none());
+        assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
 
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), Some(TestVal(2)));
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(2)));
 
         let removed = dbtx.remove_entry(&TestKey(1)).await;
-        assert!(removed.is_ok());
-        assert_eq!(removed.unwrap(), Some(TestVal(2)));
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), None);
+        assert_eq!(removed, Some(TestVal(2)));
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, None);
 
         // Commit to surpress the warning message
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
     }
 
     pub async fn verify_read_own_writes(db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
-            .await
-            .unwrap()
-            .is_none());
+        assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
 
-        assert_eq!(dbtx.get_value(&TestKey(1)).await.unwrap(), Some(TestVal(2)));
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(2)));
 
         // Commit to surpress the warning message
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
     }
 
     pub async fn verify_prevent_dirty_reads(db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
-            .await
-            .unwrap()
-            .is_none());
+        assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
 
         // dbtx2 should not be able to see uncommitted changes
         let mut dbtx2 = db.begin_transaction().await;
-        assert_eq!(dbtx2.get_value(&TestKey(1)).await.unwrap(), None);
+        assert_eq!(dbtx2.get_value(&TestKey(1)).await, None);
 
         // Commit to surpress the warning message
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
         let mut dbtx = db.begin_transaction().await;
-        assert!(dbtx
-            .insert_entry(&TestKey(55), &TestVal(9999))
-            .await
-            .is_ok());
-        assert!(dbtx
-            .insert_entry(&TestKey(54), &TestVal(8888))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(55), &TestVal(9999)).await;
+        dbtx.insert_entry(&TestKey(54), &TestVal(8888)).await;
 
-        assert!(dbtx
-            .insert_entry(&AltTestKey(55), &TestVal(7777))
-            .await
-            .is_ok());
-        assert!(dbtx
-            .insert_entry(&AltTestKey(54), &TestVal(6666))
-            .await
-            .is_ok());
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.insert_entry(&AltTestKey(55), &TestVal(7777)).await;
+        dbtx.insert_entry(&AltTestKey(54), &TestVal(6666)).await;
+        dbtx.expect_commit_tx().await;
 
         // Verify finding by prefix returns the correct set of key pairs
         let mut dbtx = db.begin_transaction().await;
@@ -1425,8 +1421,7 @@ mod tests {
         let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 match key {
                     TestKey(55) => {
                         assert!(value.eq(&TestVal(9999)));
@@ -1447,8 +1442,7 @@ mod tests {
         let returned_keys = dbtx
             .find_by_prefix(&AltDbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 match key {
                     AltTestKey(55) => {
                         assert!(value.eq(&TestVal(7777)));
@@ -1468,45 +1462,36 @@ mod tests {
     pub async fn verify_commit(db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(1), &TestVal(2))
-            .await
-            .unwrap()
-            .is_none());
-        dbtx.commit_tx().await.expect("DB Error");
+        assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
+        dbtx.expect_commit_tx().await;
 
         // Verify dbtx2 can see committed transactions
         let mut dbtx2 = db.begin_transaction().await;
-        assert_eq!(
-            dbtx2.get_value(&TestKey(1)).await.unwrap(),
-            Some(TestVal(2))
-        );
+        assert_eq!(dbtx2.get_value(&TestKey(1)).await, Some(TestVal(2)));
     }
 
     pub async fn verify_rollback_to_savepoint(db: Database) {
         let mut dbtx_rollback = db.begin_transaction().await;
 
-        assert!(dbtx_rollback
+        dbtx_rollback
             .insert_entry(&TestKey(20), &TestVal(2000))
-            .await
-            .is_ok());
+            .await;
 
         dbtx_rollback
             .set_tx_savepoint()
             .await
             .expect("Error setting transaction savepoint");
 
-        assert!(dbtx_rollback
+        dbtx_rollback
             .insert_entry(&TestKey(21), &TestVal(2001))
-            .await
-            .is_ok());
+            .await;
 
         assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await.unwrap(),
+            dbtx_rollback.get_value(&TestKey(20)).await,
             Some(TestVal(2000))
         );
         assert_eq!(
-            dbtx_rollback.get_value(&TestKey(21)).await.unwrap(),
+            dbtx_rollback.get_value(&TestKey(21)).await,
             Some(TestVal(2001))
         );
 
@@ -1516,41 +1501,37 @@ mod tests {
             .expect("Error setting transaction savepoint");
 
         assert_eq!(
-            dbtx_rollback.get_value(&TestKey(20)).await.unwrap(),
+            dbtx_rollback.get_value(&TestKey(20)).await,
             Some(TestVal(2000))
         );
 
-        assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await.unwrap(), None);
+        assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await, None);
 
         // Commit to surpress the warning message
-        dbtx_rollback.commit_tx().await.expect("DB Error");
+        dbtx_rollback.expect_commit_tx().await;
     }
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
         let mut dbtx = db.begin_transaction().await;
-        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey(100)).await, None);
 
         let mut dbtx2 = db.begin_transaction().await;
 
-        assert!(dbtx2
-            .insert_entry(&TestKey(100), &TestVal(101))
-            .await
-            .is_ok());
+        dbtx2.insert_entry(&TestKey(100), &TestVal(101)).await;
 
-        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey(100)).await, None);
 
-        dbtx2.commit_tx().await.expect("DB Error");
+        dbtx2.expect_commit_tx().await;
 
         // dbtx should still read None because it is operating over a snapshot
         // of the data when the transaction started
-        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(dbtx.get_value(&TestKey(100)).await, None);
 
         let expected_keys = 0;
         let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 if let TestKey(100) = key {
                     assert!(value.eq(&TestVal(101)));
                 }
@@ -1564,25 +1545,18 @@ mod tests {
     pub async fn verify_phantom_entry(db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(100), &TestVal(101))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(100), &TestVal(101)).await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(101), &TestVal(102))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(101), &TestVal(102)).await;
 
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
 
         let mut dbtx = db.begin_transaction().await;
         let expected_keys = 2;
         let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 match key {
                     TestKey(100) => {
                         assert!(value.eq(&TestVal(101)));
@@ -1600,18 +1574,14 @@ mod tests {
 
         let mut dbtx2 = db.begin_transaction().await;
 
-        assert!(dbtx2
-            .insert_entry(&TestKey(102), &TestVal(103))
-            .await
-            .is_ok());
+        dbtx2.insert_entry(&TestKey(102), &TestVal(103)).await;
 
-        dbtx2.commit_tx().await.expect("DB Error");
+        dbtx2.expect_commit_tx().await;
 
         let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 match key {
                     TestKey(100) => {
                         assert!(value.eq(&TestVal(101)));
@@ -1630,76 +1600,47 @@ mod tests {
 
     pub async fn expect_write_conflict(db: Database) {
         let mut dbtx = db.begin_transaction().await;
-        assert!(dbtx
-            .insert_entry(&TestKey(100), &TestVal(101))
-            .await
-            .is_ok());
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.insert_entry(&TestKey(100), &TestVal(101)).await;
+        dbtx.expect_commit_tx().await;
 
         let mut dbtx2 = db.begin_transaction().await;
         let mut dbtx3 = db.begin_transaction().await;
 
-        assert!(dbtx2
-            .insert_entry(&TestKey(100), &TestVal(102))
-            .await
-            .is_ok());
+        dbtx2.insert_entry(&TestKey(100), &TestVal(102)).await;
 
         // Depending on if the database implementation supports optimistic or
         // pessimistic transactions, this test should generate an error here
         // (pessimistic) or at commit time (optimistic)
-        let res = dbtx3
-            .insert_entry(&TestKey(100), &TestVal(103))
-            .await
-            .is_ok();
+        dbtx3.insert_entry(&TestKey(100), &TestVal(103)).await;
 
-        dbtx2.commit_tx().await.expect("DB Error");
-
-        // We do not need to commit the second transaction if the insert failed.
-        if res {
-            dbtx3.commit_tx().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
-        }
+        dbtx2.expect_commit_tx().await;
+        dbtx3.commit_tx().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
     }
 
     pub async fn verify_string_prefix(db: Database) {
         let mut dbtx = db.begin_transaction().await;
-        assert!(dbtx
-            .insert_entry(&PercentTestKey(100), &TestVal(101))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&PercentTestKey(100), &TestVal(101)).await;
 
         assert_eq!(
-            dbtx.get_value(&PercentTestKey(100)).await.unwrap(),
+            dbtx.get_value(&PercentTestKey(100)).await,
             Some(TestVal(101))
         );
 
-        assert!(dbtx
-            .insert_entry(&PercentTestKey(101), &TestVal(100))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&PercentTestKey(101), &TestVal(100)).await;
 
-        assert!(dbtx
-            .insert_entry(&PercentTestKey(101), &TestVal(100))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&PercentTestKey(101), &TestVal(100)).await;
 
-        assert!(dbtx
-            .insert_entry(&PercentTestKey(101), &TestVal(100))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&PercentTestKey(101), &TestVal(100)).await;
 
         // If the wildcard character ('%') is not handled properly, this will make
         // find_by_prefix return 5 results instead of 4
-        assert!(dbtx
-            .insert_entry(&TestKey(101), &TestVal(100))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(101), &TestVal(100)).await;
 
         let expected_keys = 4;
         let returned_keys = dbtx
             .find_by_prefix(&PercentPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 if let PercentTestKey(101) = key {
                     assert!(value.eq(&TestVal(100)));
                 }
@@ -1713,32 +1654,22 @@ mod tests {
     pub async fn verify_remove_by_prefix(db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(100), &TestVal(101))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(100), &TestVal(101)).await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(101), &TestVal(102))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(101), &TestVal(102)).await;
 
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
 
         let mut remove_dbtx = db.begin_transaction().await;
-        remove_dbtx
-            .remove_by_prefix(&DbPrefixTestPrefix)
-            .await
-            .expect("DB Error");
-        remove_dbtx.commit_tx().await.expect("DB Error");
+        remove_dbtx.remove_by_prefix(&DbPrefixTestPrefix).await;
+        remove_dbtx.expect_commit_tx().await;
 
         let mut dbtx = db.begin_transaction().await;
         let expected_keys = 0;
         let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 match key {
                     TestKey(100) => {
                         assert!(value.eq(&TestVal(101)));
@@ -1758,57 +1689,38 @@ mod tests {
     pub async fn verify_module_db(db: Database, module_db: Database) {
         let mut dbtx = db.begin_transaction().await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(100), &TestVal(101))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(100), &TestVal(101)).await;
 
-        assert!(dbtx
-            .insert_entry(&TestKey(101), &TestVal(102))
-            .await
-            .is_ok());
+        dbtx.insert_entry(&TestKey(101), &TestVal(102)).await;
 
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
 
         // verify module_dbtx can only read key/value pairs from its own module
         let mut module_dbtx = module_db.begin_transaction().await;
-        assert_eq!(module_dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(module_dbtx.get_value(&TestKey(100)).await, None);
 
-        assert_eq!(module_dbtx.get_value(&TestKey(101)).await.unwrap(), None);
+        assert_eq!(module_dbtx.get_value(&TestKey(101)).await, None);
 
         // verify module_dbtx can read key/value pairs that it wrote
         let mut dbtx = db.begin_transaction().await;
-        assert_eq!(
-            dbtx.get_value(&TestKey(100)).await.unwrap(),
-            Some(TestVal(101))
-        );
+        assert_eq!(dbtx.get_value(&TestKey(100)).await, Some(TestVal(101)));
 
-        assert_eq!(
-            dbtx.get_value(&TestKey(101)).await.unwrap(),
-            Some(TestVal(102))
-        );
+        assert_eq!(dbtx.get_value(&TestKey(101)).await, Some(TestVal(102)));
 
         let mut module_dbtx = module_db.begin_transaction().await;
 
-        assert!(module_dbtx
-            .insert_entry(&TestKey(100), &TestVal(103))
-            .await
-            .is_ok());
+        module_dbtx.insert_entry(&TestKey(100), &TestVal(103)).await;
 
-        assert!(module_dbtx
-            .insert_entry(&TestKey(101), &TestVal(104))
-            .await
-            .is_ok());
+        module_dbtx.insert_entry(&TestKey(101), &TestVal(104)).await;
 
-        module_dbtx.commit_tx().await.expect("DB Error");
+        module_dbtx.expect_commit_tx().await;
 
         let expected_keys = 2;
         let mut dbtx = db.begin_transaction().await;
         let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 match key {
                     TestKey(100) => {
                         assert!(value.eq(&TestVal(101)));
@@ -1825,13 +1737,12 @@ mod tests {
         assert_eq!(returned_keys, expected_keys);
 
         let removed = dbtx.remove_entry(&TestKey(100)).await;
-        assert!(removed.is_ok());
-        assert_eq!(removed.unwrap(), Some(TestVal(101)));
-        assert_eq!(dbtx.get_value(&TestKey(100)).await.unwrap(), None);
+        assert_eq!(removed, Some(TestVal(101)));
+        assert_eq!(dbtx.get_value(&TestKey(100)).await, None);
 
         let mut module_dbtx = module_db.begin_transaction().await;
         assert_eq!(
-            module_dbtx.get_value(&TestKey(100)).await.unwrap(),
+            module_dbtx.get_value(&TestKey(100)).await,
             Some(TestVal(103))
         );
     }
@@ -1841,46 +1752,42 @@ mod tests {
         {
             let mut test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
 
-            assert!(test_module_dbtx
+            test_module_dbtx
                 .insert_entry(&TestKey(100), &TestVal(101))
-                .await
-                .is_ok());
+                .await;
 
-            assert!(test_module_dbtx
+            test_module_dbtx
                 .insert_entry(&TestKey(101), &TestVal(102))
-                .await
-                .is_ok());
+                .await;
         }
 
-        test_dbtx.commit_tx().await.expect("DB Error");
+        test_dbtx.expect_commit_tx().await;
 
         let mut alt_dbtx = db.begin_transaction().await;
         {
             let mut alt_module_dbtx = alt_dbtx.with_module_prefix(ALT_MODULE_PREFIX);
 
-            assert!(alt_module_dbtx
+            alt_module_dbtx
                 .insert_entry(&TestKey(100), &TestVal(103))
-                .await
-                .is_ok());
+                .await;
 
-            assert!(alt_module_dbtx
+            alt_module_dbtx
                 .insert_entry(&TestKey(101), &TestVal(104))
-                .await
-                .is_ok());
+                .await;
         }
 
-        alt_dbtx.commit_tx().await.expect("DB Error");
+        alt_dbtx.expect_commit_tx().await;
 
         // verfiy test_module_dbtx can only see key/value pairs from its own module
         let mut test_dbtx = db.begin_transaction().await;
         let mut test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
         assert_eq!(
-            test_module_dbtx.get_value(&TestKey(100)).await.unwrap(),
+            test_module_dbtx.get_value(&TestKey(100)).await,
             Some(TestVal(101))
         );
 
         assert_eq!(
-            test_module_dbtx.get_value(&TestKey(101)).await.unwrap(),
+            test_module_dbtx.get_value(&TestKey(101)).await,
             Some(TestVal(102))
         );
 
@@ -1888,8 +1795,7 @@ mod tests {
         let returned_keys = test_module_dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, kv| async move {
-                let (key, value) = kv.unwrap();
+            .fold(0, |returned_keys, (key, value)| async move {
                 match key {
                     TestKey(100) => {
                         assert!(value.eq(&TestVal(101)));
@@ -1906,19 +1812,15 @@ mod tests {
         assert_eq!(returned_keys, expected_keys);
 
         let removed = test_module_dbtx.remove_entry(&TestKey(100)).await;
-        assert!(removed.is_ok());
-        assert_eq!(removed.unwrap(), Some(TestVal(101)));
-        assert_eq!(
-            test_module_dbtx.get_value(&TestKey(100)).await.unwrap(),
-            None
-        );
+        assert_eq!(removed, Some(TestVal(101)));
+        assert_eq!(test_module_dbtx.get_value(&TestKey(100)).await, None);
 
         // test_dbtx on its own wont find the key because it does not use a module
         // prefix
         let mut test_dbtx = db.begin_transaction().await;
-        assert_eq!(test_dbtx.get_value(&TestKey(101)).await.unwrap(), None);
+        assert_eq!(test_dbtx.get_value(&TestKey(101)).await, None);
 
-        test_dbtx.commit_tx().await.expect("DB Error");
+        test_dbtx.expect_commit_tx().await;
     }
 
     #[cfg(test)]
@@ -1930,14 +1832,12 @@ mod tests {
         let mut dbtx = db.begin_transaction().await;
         for i in 0..expected_test_keys_size {
             dbtx.insert_new_entry(&TestKeyV0(i as u64, (i + 1) as u64), &TestVal(i as u64))
-                .await
-                .expect("DB Error");
+                .await;
         }
 
         dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
-            .await
-            .expect("DB Error");
-        dbtx.commit_tx().await.expect("DB Error");
+            .await;
+        dbtx.expect_commit_tx().await;
 
         let mut migrations = MigrationMap::new();
 
@@ -1965,8 +1865,7 @@ mod tests {
             .await;
         let test_keys_size = test_keys.len();
         assert_eq!(test_keys_size, expected_test_keys_size);
-        for test_key in test_keys {
-            let (key, val) = test_key.unwrap();
+        for (key, val) in test_keys {
             assert_eq!(key.0, val.0 + 1);
         }
     }
@@ -1980,11 +1879,10 @@ mod tests {
             .await
             .collect::<Vec<_>>()
             .await;
-        dbtx.remove_by_prefix(&DbPrefixTestPrefixV0).await?;
-        for pair in example_keys_v0 {
-            let (key, val) = pair?;
+        dbtx.remove_by_prefix(&DbPrefixTestPrefixV0).await;
+        for (key, val) in example_keys_v0 {
             let key_v2 = TestKey(key.1);
-            dbtx.insert_new_entry(&key_v2, &val).await?;
+            dbtx.insert_new_entry(&key_v2, &val).await;
         }
         Ok(())
     }

@@ -800,11 +800,10 @@ impl FederationTest {
                             amount: bitcoin::Amount::from_sat(input.tx_output().value),
                         },
                     )
-                    .await
-                    .expect("DB Error");
+                    .await;
             }
 
-            dbtx.commit_tx().await.expect("DB Error");
+            dbtx.expect_commit_tx().await;
         }
         bitcoin
             .mine_blocks(user.client.wallet_client().config.finality_delay as u64)
@@ -822,13 +821,10 @@ impl FederationTest {
                 {
                     let mut module_dbtx = dbtx.with_module_prefix(self.mint_id);
 
-                    module_dbtx
-                        .remove_by_prefix(&NonceKeyPrefix)
-                        .await
-                        .expect("DB Error");
+                    module_dbtx.remove_by_prefix(&NonceKeyPrefix).await;
                 }
 
-                dbtx.commit_tx().await.expect("DB Error");
+                dbtx.expect_commit_tx().await;
             });
         }
     }
@@ -885,8 +881,7 @@ impl FederationTest {
                             transaction,
                         },
                     )
-                    .await
-                    .expect("DB Error");
+                    .await;
 
                     svr.fedimint
                         .consensus
@@ -899,7 +894,7 @@ impl FederationTest {
                         )
                         .await
                         .unwrap();
-                    dbtx.commit_tx().await.expect("DB Error");
+                    dbtx.expect_commit_tx().await;
                 }
                 out_point
             })

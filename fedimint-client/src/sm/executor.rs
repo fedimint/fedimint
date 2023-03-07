@@ -84,12 +84,10 @@ where
                             let is_active_state = dbtx
                                 .get_value(&ActiveStateKey::<GC>(state.clone()))
                                 .await
-                                .expect("DB error")
                                 .is_some();
                             let is_inactive_state = dbtx
                                 .get_value(&InactiveStateKey::<GC>(state.clone()))
                                 .await
-                                .expect("DB error")
                                 .is_some();
 
                             if is_active_state || is_inactive_state {
@@ -100,7 +98,7 @@ where
                                 bail!("State is already terminal, adding it to the executor doesn't make sense.")
                             }
 
-                            dbtx.insert_entry(&ActiveStateKey(state), &ActiveState::new()).await.expect("DB error");
+                            dbtx.insert_entry(&ActiveStateKey(state), &ActiveState::new()).await;
                         }
 
                         Ok(())
@@ -229,12 +227,9 @@ where
                             state.clone(),
                         )
                         .await;
-                        dbtx.remove_entry(&ActiveStateKey(state.clone()))
-                            .await
-                            .expect("DB error");
+                        dbtx.remove_entry(&ActiveStateKey(state.clone())).await;
                         dbtx.insert_entry(&InactiveStateKey(state.clone()), &meta.into_inactive())
-                            .await
-                            .expect("DB error");
+                            .await;
 
                         let context = &self
                             .module_contexts
@@ -249,12 +244,10 @@ where
                                 &InactiveStateKey(new_state),
                                 &ActiveState::new().into_inactive(),
                             )
-                            .await
-                            .expect("DB error");
+                            .await;
                         } else {
                             dbtx.insert_entry(&ActiveStateKey(new_state), &ActiveState::new())
-                                .await
-                                .expect("DB error");
+                                .await;
                         }
 
                         Ok(())
@@ -280,10 +273,7 @@ where
             .await
             .find_by_prefix(&ActiveStateKeyPrefix::<GC>::new())
             .await
-            .map(|res| {
-                let (ActiveStateKey(state), meta) = res.expect("DB error");
-                (state, meta)
-            })
+            .map(|(state, meta)| (state.0, meta))
             .collect::<Vec<_>>()
             .await
     }
@@ -294,10 +284,7 @@ where
             .await
             .find_by_prefix(&InactiveStateKeyPrefix::new())
             .await
-            .map(|res| {
-                let (InactiveStateKey(state), meta) = res.expect("DB error");
-                (state, meta)
-            })
+            .map(|(state, meta)| (state.0, meta))
             .collect::<Vec<_>>()
             .await
     }

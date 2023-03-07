@@ -1,7 +1,7 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use fedimint_core::db::{
     IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, PrefixStream,
@@ -16,7 +16,11 @@ use tracing::{info, warn};
 #[derive(Debug)]
 pub struct SqliteDb(SqlitePool);
 
-pub struct SqliteDbTransaction<'a>(Transaction<'a, Sqlite>);
+pub struct SqliteDbTransaction<'a> {
+    tx: Transaction<'a, Sqlite>,
+    // Set an error flag that indicates the transaction should fail at commit time
+    error: bool,
+}
 
 impl SqliteDb {
     pub async fn open(connection_string: &str) -> Result<SqliteDb, Error> {
@@ -58,7 +62,10 @@ impl SqliteDb {
 #[async_trait]
 impl IDatabase for SqliteDb {
     async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
-        let mut tx = SqliteDbTransaction(self.0.begin().await.unwrap());
+        let mut tx = SqliteDbTransaction {
+            tx: self.0.begin().await.unwrap(),
+            error: false,
+        };
         tx.set_tx_savepoint().await;
         let single_use = SingleUseDatabaseTransaction::new(tx);
         Box::new(single_use)
@@ -72,14 +79,14 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         let query_prepared = sqlx::query("INSERT INTO kv (key, value) VALUES (?, ?)")
             .bind(key)
             .bind(value);
-        self.0.execute(query_prepared).await?;
+        self.error |= self.tx.execute(query_prepared).await.is_err();
         Ok(val)
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let query_prepared =
             sqlx::query("SELECT value FROM kv WHERE key = ? ORDER BY value DESC LIMIT 1").bind(key);
-        self.0
+        self.tx
             .fetch_optional(query_prepared)
             .await
             .map(|result| result.map(|result| result.get::<Vec<u8>, &str>("value")))
@@ -90,13 +97,13 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         let query_prepared =
             sqlx::query("SELECT rowid, value FROM kv WHERE key = ? ORDER BY value DESC LIMIT 1")
                 .bind(key);
-        let res = self.0.fetch_optional(query_prepared).await;
+        let res = self.tx.fetch_optional(query_prepared).await;
         if let Ok(Some(row)) = res {
             let rowid = row.get::<i64, &str>("rowid");
             let value = row.get::<Vec<u8>, &str>("value");
 
             let query_prepared = sqlx::query("DELETE FROM kv WHERE rowid = ?").bind(rowid);
-            self.0.execute(query_prepared).await?;
+            self.error |= self.tx.execute(query_prepared).await.is_err();
             return Ok(Some(value));
         }
 
@@ -112,7 +119,7 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         str_prefix = format!("{}{}", str_prefix, "%");
         let query = "SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY value DESC";
         let query_prepared = sqlx::query(query).bind(str_prefix);
-        let results = self.0.fetch_all(query_prepared).await;
+        let results = self.tx.fetch_all(query_prepared).await;
 
         if results.is_err() {
             warn!("sqlite find_by_prefix failed to retrieve key range. Returning empty iterator");
@@ -137,22 +144,25 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         str_prefix = format!("{}{}", str_prefix, "%");
         let query = "DELETE FROM kv WHERE hex(key) LIKE ?";
         let query_prepared = sqlx::query(query).bind(str_prefix);
-        self.0.execute(query_prepared).await?;
+        self.error |= self.tx.execute(query_prepared).await.is_err();
         Ok(())
     }
 
     async fn commit_tx(self) -> Result<()> {
-        self.0.commit().await.map_err(anyhow::Error::from)
+        if self.error {
+            return Err(anyhow!("Error occurred during the database transaction"));
+        }
+        self.tx.commit().await.map_err(anyhow::Error::from)
     }
 
     async fn rollback_tx_to_savepoint(&mut self) {
         let query_prepared = sqlx::query("ROLLBACK TO SAVEPOINT tx_savepoint");
-        self.0.execute(query_prepared).await.unwrap();
+        self.error |= self.tx.execute(query_prepared).await.is_err();
     }
 
     async fn set_tx_savepoint(&mut self) {
         let query_prepared = sqlx::query("SAVEPOINT tx_savepoint");
-        self.0.execute(query_prepared).await.unwrap();
+        self.error |= self.tx.execute(query_prepared).await.is_err();
     }
 }
 

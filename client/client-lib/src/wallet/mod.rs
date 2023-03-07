@@ -93,8 +93,7 @@ impl WalletClient {
             },
             &peg_in_keypair.secret_bytes(),
         )
-        .await
-        .expect("DB Error");
+        .await;
 
         address
     }
@@ -116,7 +115,6 @@ impl WalletClient {
                         peg_in_script: out.script_pubkey.clone(),
                     })
                     .await
-                    .expect("DB error")
                     .map(|tweak_secret| (idx, tweak_secret));
                 if result.is_some() {
                     return result;

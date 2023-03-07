@@ -17,11 +17,10 @@ pub async fn migrate_dummy_db_version_0<'a, 'b>(
         .await
         .collect::<Vec<_>>()
         .await;
-    dbtx.remove_by_prefix(&ExampleKeyPrefixV0).await?;
-    for pair in example_keys_v0 {
-        let (key, val) = pair?;
+    dbtx.remove_by_prefix(&ExampleKeyPrefixV0).await;
+    for (key, val) in example_keys_v0 {
         let key_v2 = ExampleKey(key.0, "Example String".to_string());
-        dbtx.insert_new_entry(&key_v2, &val).await?;
+        dbtx.insert_new_entry(&key_v2, &val).await;
     }
     Ok(())
 }

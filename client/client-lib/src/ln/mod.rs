@@ -122,8 +122,7 @@ impl LnClient {
             &OutgoingPaymentKey(contract.contract_id()),
             &outgoing_payment,
         )
-        .await
-        .expect("DB Error");
+        .await;
 
         Ok(LightningOutput::Contract(ContractOutput {
             amount: contract_amount,
@@ -202,8 +201,7 @@ impl LnClient {
             .await
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .await
-            .filter_map(|res| async {
-                let (_key, outgoing_data) = res.expect("DB error");
+            .filter_map(|(_, outgoing_data)| async {
                 let cancelled = outgoing_data.contract_account.contract.cancelled;
                 let timed_out =
                     outgoing_data.contract_account.contract.timelock as u64 <= block_height;
@@ -266,9 +264,8 @@ impl LnClient {
     pub async fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
-            .await
-            .expect("Db error");
-        dbtx.commit_tx().await.expect("DB Error");
+            .await;
+        dbtx.expect_commit_tx().await;
     }
 
     pub async fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
@@ -279,7 +276,6 @@ impl LnClient {
             .await
             .get_value(&ConfirmedInvoiceKey(contract_id))
             .await
-            .expect("Db error")
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
         Ok(confirmed_invoice)
     }
@@ -491,7 +487,7 @@ mod tests {
             .await
             .unwrap();
 
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.expect_commit_tx().await;
 
         let contract = match &output {
             LightningOutput::Contract(c) => &c.contract,
