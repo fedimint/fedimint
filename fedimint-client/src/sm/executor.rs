@@ -18,7 +18,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::sm::state::{DynContext, DynState};
 use crate::sm::{GlobalContext, State, StateTransition};
-use crate::ClientModule;
 
 /// After how many retries a DB transaction is aborted with an error
 const MAX_DB_RETRIES: Option<usize> = Some(100);
@@ -293,13 +292,10 @@ where
 impl ExecutorBuilder {
     /// Allow executor being built to run state machines associated with the
     /// supplied module
-    pub fn with_module<M>(&mut self, instance_id: ModuleInstanceId, module: M)
+    pub fn with_module<C>(&mut self, instance_id: ModuleInstanceId, context: C)
     where
-        M: ClientModule,
-        M::ModuleStateMachineContext: IntoDynInstance<DynType = DynContext>,
+        C: IntoDynInstance<DynType = DynContext>,
     {
-        let context = module.context();
-
         if self
             .module_contexts
             .insert(instance_id, context.into_dyn(instance_id))
@@ -683,7 +679,7 @@ mod tests {
         let db = Database::new(MemDatabase::new(), decoders);
 
         let mut executor_builder = Executor::<()>::builder();
-        executor_builder.with_module::<MockClientModule>(42, module);
+        executor_builder.with_module(42, module.context());
         let executor = executor_builder.build(tg, db.clone(), ()).await;
 
         info!("Initialized test executor");
