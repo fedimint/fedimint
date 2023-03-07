@@ -21,7 +21,7 @@ mint-client = { path = "../client-lib" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
-fedimint-ln = { path = "../../modules/fedimint-ln" }
+fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../../fedimint-logging" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }

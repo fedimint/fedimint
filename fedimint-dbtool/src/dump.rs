@@ -9,13 +9,13 @@ use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
-use fedimint_ln::LightningGen;
+use fedimint_ln_server::LightningGen;
 use fedimint_mint_server::MintGen;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::db as ConsensusRange;
-use fedimint_wallet::WalletGen;
+use fedimint_wallet_server::WalletGen;
 use futures::StreamExt;
 use mint_client::db as ClientRange;
 use mint_client::ln::db as ClientLightningRange;
@@ -249,7 +249,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientLightningRange::LightningGatewayKeyPrefix,
                         ClientLightningRange::LightningGatewayKey,
-                        fedimint_ln::LightningGateway,
+                        fedimint_ln_server::common::LightningGateway,
                         ln_client,
                         "Lightning Gateways"
                     );

@@ -209,13 +209,12 @@ mod tests {
     use fedimint_core::{Feerate, OutPoint, ServerModule, TransactionId};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
+    use fedimint_wallet_server::{Wallet, WalletGen, WalletGenParams};
     use tokio::sync::Mutex;
 
     use crate::api::fake::FederationApiFaker;
     use crate::modules::wallet::config::WalletClientConfig;
-    use crate::modules::wallet::{
-        PegOut, PegOutFees, Wallet, WalletGen, WalletGenParams, WalletOutput, WalletOutputOutcome,
-    };
+    use crate::modules::wallet::{PegOut, PegOutFees, WalletOutput, WalletOutputOutcome};
     use crate::wallet::WalletClient;
     use crate::{module_decode_stubs, ClientContext};
 

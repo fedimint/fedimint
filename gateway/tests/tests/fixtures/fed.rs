@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::PeerId;
-use fedimint_ln::LightningGateway;
+use fedimint_ln_client::LightningGateway;
 use mint_client::api::fake::FederationApiFaker;
 use tokio::sync::Mutex;
 

@@ -24,7 +24,7 @@ pub mod legacy {
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::ModuleCommon;
     use fedimint_core::transaction::{agg_keys, TransactionError};
-    use fedimint_core::{ServerModule, TransactionId};
+    use fedimint_core::TransactionId;
     use secp256k1_zkp::{schnorr, XOnlyPublicKey};
     use serde::{Deserialize, Serialize};
 
@@ -58,8 +58,8 @@ pub mod legacy {
     pub enum Input {
         // TODO: maybe treat every note as a seperate input?
         Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Input),
-        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Input),
-        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Input),
+        Wallet(<fedimint_wallet_client::WalletModuleTypes as ModuleCommon>::Input),
+        LN(<fedimint_ln_client::LightningModuleTypes as ModuleCommon>::Input),
     }
 
     // TODO: check if clippy is right
@@ -67,8 +67,8 @@ pub mod legacy {
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Output {
         Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Output),
-        Wallet(<<fedimint_wallet::Wallet as ServerModule>::Common as ModuleCommon>::Output),
-        LN(<<fedimint_ln::Lightning as ServerModule>::Common as ModuleCommon>::Output),
+        Wallet(<fedimint_wallet_client::WalletModuleTypes as ModuleCommon>::Output),
+        LN(<fedimint_ln_client::LightningModuleTypes as ModuleCommon>::Output),
     }
 
     impl Transaction {

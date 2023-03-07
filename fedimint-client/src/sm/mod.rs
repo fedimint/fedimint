@@ -35,4 +35,4 @@ impl GlobalContext for () {}
 /// submitted the transaction's ID can be used as operation ID. If there is no
 /// transaction related to it, it should be generated randomly. Since it is a
 /// 256bit value collisions are impossible for all intents and purposes.
-type OperationId = [u8; 32];
+pub type OperationId = [u8; 32];

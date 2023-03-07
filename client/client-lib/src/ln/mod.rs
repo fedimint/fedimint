@@ -343,6 +343,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
+    use fedimint_ln_server::{Lightning, LightningGen};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
     use tokio::sync::Mutex;
@@ -352,7 +353,7 @@ mod tests {
     use crate::ln::LnClient;
     use crate::modules::ln::config::LightningClientConfig;
     use crate::modules::ln::contracts::{ContractId, IdentifiableContract};
-    use crate::modules::ln::{Lightning, LightningGateway, LightningGen, LightningOutput};
+    use crate::modules::ln::{LightningGateway, LightningOutput};
     use crate::{module_decode_stubs, ClientContext};
 
     type Fed = FakeFed<Lightning>;

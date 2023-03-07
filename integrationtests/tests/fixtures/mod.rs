@@ -28,7 +28,8 @@ use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
-use fedimint_ln::{LightningGateway, LightningGen};
+use fedimint_ln_client::LightningGateway;
+use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
@@ -46,9 +47,10 @@ use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::fixtures::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;
-use fedimint_wallet::config::WalletConfig;
-use fedimint_wallet::db::UTXOKey;
-use fedimint_wallet::{SpendableUTXO, Wallet, WalletGen};
+use fedimint_wallet_server::common::config::WalletConfig;
+use fedimint_wallet_server::common::db::UTXOKey;
+use fedimint_wallet_server::common::SpendableUTXO;
+use fedimint_wallet_server::{Wallet, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
@@ -913,7 +915,7 @@ impl FederationTest {
             let svr = server.lock().await;
             let db = svr.database.new_isolated(self.wallet_id);
             let dbtx = block_on(db.begin_transaction());
-            block_on(fedimint_wallet::broadcast_pending_tx(
+            block_on(fedimint_wallet_server::broadcast_pending_tx(
                 dbtx,
                 &svr.bitcoin_rpc,
             ));

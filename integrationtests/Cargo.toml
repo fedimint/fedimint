@@ -26,14 +26,16 @@ lightning = "0.0.113"
 fedimint-server = { path = "../fedimint-server" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-core ={ path = "../fedimint-core" }
-fedimint-ln = { path = "../modules/fedimint-ln" }
+fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
+fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 fedimint-logging = { path = "../fedimint-logging", features = ["telemetry"] }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-sqlite = { path = "../fedimint-sqlite" }
 fedimint-testing = { path = "../fedimint-testing" }
-fedimint-wallet = { path = "../modules/fedimint-wallet" }
+fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
+fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimintd = { path = "../fedimintd" }
 mint-client = { path = "../client/client-lib" }
 rand = "0.8"

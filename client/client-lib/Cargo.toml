@@ -27,10 +27,10 @@ lightning = "0.0.113"
 miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-derive-secret = { path = "../../crypto/derive-secret" }
-fedimint-ln = { path = "../../modules/fedimint-ln" }
+fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
-fedimint-wallet = { path = "../../modules/fedimint-wallet", default-features = false }
+fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client", default-features = false }
 itertools = "0.10.5"
 rand = "0.8"
 ring = "0.16.20"
@@ -65,3 +65,5 @@ tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 fedimint-testing = { path = "../../fedimint-testing" }
 once_cell = "1.16.0"
 fedimint-mint-server = { path = "../../modules/fedimint-mint-server" }
+fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
+fedimint-wallet-server = { path = "../../modules/fedimint-wallet-server" }

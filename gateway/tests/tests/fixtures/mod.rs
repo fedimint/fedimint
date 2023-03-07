@@ -2,7 +2,7 @@ use anyhow::Result;
 use fedimint_core::config::ClientModuleGenRegistry;
 use fedimint_core::module::DynClientModuleGen;
 use fedimint_core::task::TaskGroup;
-use fedimint_ln::LightningClientGen;
+use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;

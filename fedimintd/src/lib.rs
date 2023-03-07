@@ -2,7 +2,7 @@ use bitcoin::Network;
 use fedimint_core::config::ConfigGenParams;
 use fedimint_core::{Amount, Tiered};
 use fedimint_mint_server::MintGenParams;
-use fedimint_wallet::WalletGenParams;
+use fedimint_wallet_server::WalletGenParams;
 
 mod ui;
 

@@ -19,9 +19,9 @@ bitcoin = "0.29.2"
 mint-client = { path = "../client/client-lib" }
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
-fedimint-ln = { path = "../modules/fedimint-ln" }
+fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-server = { path = "../fedimint-server" }
-fedimint-wallet  = { path = "../modules/fedimint-wallet" }
+fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 ln-gateway = { path = "../gateway/ln-gateway" }
 futures = "0.3"
 lightning = "0.0.113"

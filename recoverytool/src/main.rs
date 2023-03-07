@@ -17,7 +17,7 @@ use fedimint_core::core::{
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::ServerModule;
-use fedimint_ln::Lightning;
+use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
@@ -25,11 +25,14 @@ use fedimint_server::config::io::read_server_config;
 use fedimint_server::db::EpochHistoryKeyPrefix;
 use fedimint_server::epoch::{IterUnzipConsensusItem, SignedEpochOutcome, UnzipConsensusItem};
 use fedimint_server::transaction::Transaction;
-use fedimint_wallet::config::WalletConfig;
-use fedimint_wallet::db::{UTXOKey, UTXOPrefixKey};
-use fedimint_wallet::keys::CompressedPublicKey;
-use fedimint_wallet::tweakable::Tweakable;
-use fedimint_wallet::{PegInDescriptor, SpendableUTXO, Wallet, WalletConsensusItem, WalletInput};
+use fedimint_wallet_server::common::config::WalletConfig;
+use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
+use fedimint_wallet_server::common::keys::CompressedPublicKey;
+use fedimint_wallet_server::common::tweakable::Tweakable;
+use fedimint_wallet_server::common::{
+    PegInDescriptor, SpendableUTXO, WalletConsensusItem, WalletInput,
+};
+use fedimint_wallet_server::Wallet;
 use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;

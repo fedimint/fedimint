@@ -9,12 +9,12 @@ use fedimint_core::config::{DkgError, ServerModuleGenRegistry};
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{self, TaskGroup};
 use fedimint_core::Amount;
-use fedimint_ln::LightningGen;
+use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
-use fedimint_wallet::WalletGen;
+use fedimint_wallet_server::WalletGen;
 use tracing::info;
 use url::Url;
 
