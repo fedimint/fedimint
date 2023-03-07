@@ -361,7 +361,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
 
         let (txid, invoice, payment_keypair) = user
             .client
-            .generate_unsigned_invoice_and_submit(payment_amount, "".into(), &mut rng(), None)
+            .generate_unconfirmed_invoice_and_submit(payment_amount, "".into(), &mut rng(), None)
             .await
             .unwrap();
         fed.run_consensus_epochs(1).await;
@@ -470,7 +470,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         let confirmed_invoice = {
             let (txid, invoice, payment_keypair) = receiving_user
                 .client
-                .generate_unsigned_invoice_and_submit(sats(1000), "".into(), &mut rng(), None)
+                .generate_unconfirmed_invoice_and_submit(sats(1000), "".into(), &mut rng(), None)
                 .await
                 .unwrap();
             fed.run_consensus_epochs(1).await;
@@ -631,7 +631,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
 
         let (txid, invoice, payment_keypair) = receiving_client
             .client
-            .generate_unsigned_invoice_and_submit(sats(1000), "".into(), &mut rng(), None)
+            .generate_unconfirmed_invoice_and_submit(sats(1000), "".into(), &mut rng(), None)
             .await
             .unwrap();
         fed.run_consensus_epochs(1).await;
@@ -727,7 +727,7 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         // consensus
         let (txid, invoice, payment_keypair) = user
             .client
-            .generate_unsigned_invoice_and_submit(preimage_price, "".into(), &mut rng(), None)
+            .generate_unconfirmed_invoice_and_submit(preimage_price, "".into(), &mut rng(), None)
             .await
             .unwrap();
         fed.run_consensus_epochs(1).await;
