@@ -44,8 +44,8 @@ mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
 
 # Copy bitcoind and lnd configs to directories
-cp misc/bitcoin.conf $FM_BTC_DIR
-cp misc/lnd.conf $FM_LND_DIR
+cp misc/test/bitcoin.conf $FM_BTC_DIR
+cp misc/test/lnd.conf $FM_LND_DIR
 
 # Generate federation configs
 CERTS=""
