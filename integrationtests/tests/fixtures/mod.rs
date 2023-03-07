@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, KeyPair};
+use cln_rpc::ClnRpc;
 use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::api::WsFederationApi;
@@ -70,6 +71,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
 use tokio::sync::Mutex;
+use tonic_lnd::connect;
 use tracing::info;
 use url::Url;
 
@@ -200,10 +202,16 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
 
             // FIXME: these are wrong now
-            let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
-            let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
-            let lightning =
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
+            let socket_cln = PathBuf::from(dir.clone()).join("cln/regtest/lightning-rpc");
+            let rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).await.unwrap()));
+            let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR").unwrap();
+            let lnd_macaroon = env::var("FM_LND_MACAROON").unwrap();
+            let lnd_tls_cert = env::var("FM_LND_TLS_CERT").unwrap();
+            let lnd_client = connect(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
+                .await
+                .unwrap();
+            let rpc_lnd = Arc::new(Mutex::new(lnd_client));
+            let lightning = RealLightningTest::new(rpc_cln, rpc_lnd).await;
 
             let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
                 .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
@@ -266,7 +274,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             }
         }
         _ => {
-            info!("Testing with FAKE Bitcoin and Lightning services");
+            info!("Testing with F/clnAKE Bitcoin and Lightning services");
             let server_config = ServerConfig::trusted_dealer_gen(&params, module_inits.clone());
             let client_config = server_config[&PeerId::from(0)]
                 .consensus

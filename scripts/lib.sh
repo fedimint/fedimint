@@ -93,7 +93,7 @@ function kill_fedimint_processes {
 
 function start_gatewayd() {
   # start cln gw
-  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw1
+  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw-cln
   export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
   export FM_GATEWAY_API_ADDR="http://127.0.0.1:8175"
   $FM_BIN_DIR/gatewayd &
@@ -101,12 +101,9 @@ function start_gatewayd() {
 
   # start lnd gw
   unset FM_GATEWAY_LIGHTNING_ADDR
-  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw2
+  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw-lnd
   export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:18175"
   export FM_GATEWAY_API_ADDR="http://127.0.0.1:18175"
-  export FM_LND_RPC_ADDR="http://localhost:11009"
-  export FM_LND_TLS_CERT=$FM_LND_DIR/tls.cert
-  export FM_LND_MACAROON=$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon
   $FM_BIN_DIR/gatewayd &
   echo $! >> $FM_PID_FILE
 

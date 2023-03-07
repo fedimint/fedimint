@@ -73,6 +73,11 @@ wait
 # Move the client config to root dir
 mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 
+# LND config variables
+export FM_LND_RPC_ADDR="http://localhost:11009"
+export FM_LND_TLS_CERT=$FM_LND_DIR/tls.cert
+export FM_LND_MACAROON=$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon
+
 # Generate gateway config
 export FM_GATEWAY_DATA_DIR=$FM_CFG_DIR/gateway
 export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
