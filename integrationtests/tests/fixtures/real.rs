@@ -67,7 +67,6 @@ impl LightningTest for RealLightningTest {
         let invoice_resp = lnd_rpc
             .lightning()
             .add_invoice(TonicInvoice {
-                expiry: expiry_time.unwrap() as i64,
                 value_msat: amount.msats as i64,
                 ..Default::default()
             })
