@@ -941,13 +941,13 @@ impl Client<UserClientConfig> {
         expiry_time: Option<u64>,
     ) -> Result<ConfirmedInvoice> {
         let (txid, invoice, payment_keypair) = self
-            .generate_unsigned_invoice_and_submit(amount, description, &mut rng, expiry_time)
+            .generate_unconfirmed_invoice_and_submit(amount, description, &mut rng, expiry_time)
             .await?;
 
         self.await_invoice_confirmation(txid, invoice, payment_keypair)
             .await
     }
-    pub async fn generate_unsigned_invoice_and_submit<R: RngCore + CryptoRng>(
+    pub async fn generate_unconfirmed_invoice_and_submit<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
         description: String,
@@ -956,7 +956,13 @@ impl Client<UserClientConfig> {
     ) -> Result<(TransactionId, Invoice, KeyPair)> {
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
         let (invoice, ln_output) = self
-            .generate_unsigned_invoice(amount, description, payment_keypair, &mut rng, expiry_time)
+            .generate_unconfirmed_invoice(
+                amount,
+                description,
+                payment_keypair,
+                &mut rng,
+                expiry_time,
+            )
             .await?;
 
         // There is no input here because this is just an announcement
@@ -967,7 +973,7 @@ impl Client<UserClientConfig> {
         Ok((txid, invoice, payment_keypair))
     }
 
-    pub async fn generate_unsigned_invoice<R: RngCore + CryptoRng>(
+    pub async fn generate_unconfirmed_invoice<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
         description: String,
