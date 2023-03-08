@@ -71,27 +71,27 @@ impl LightningTest for RealLightningTest {
 impl RealLightningTest {
     pub async fn new(rpc_cln: Arc<Mutex<ClnRpc>>, rpc_lnd: Arc<Mutex<LndClient>>) -> Self {
         let initial_balance = Self::channel_balance(rpc_cln.clone()).await;
-
-        let getinfo_resp = if let Response::Getinfo(data) = rpc_cln
-            .lock()
-            .await
-            .call(Request::Getinfo(requests::GetinfoRequest {}))
-            .await
-            .unwrap()
-        {
-            data
-        } else {
-            panic!("cln-rpc response did not match expected GetinfoResponse")
-        };
-
-        let gateway_node_pub_key =
-            secp256k1::PublicKey::from_str(&getinfo_resp.id.to_string()).unwrap();
+        let gateway_node_pub_key = Self::pubkey(rpc_cln.clone()).await;
 
         RealLightningTest {
             rpc_cln,
             rpc_lnd,
             initial_balance,
             gateway_node_pub_key,
+        }
+    }
+
+    async fn pubkey(rpc: Arc<Mutex<ClnRpc>>) -> secp256k1::PublicKey {
+        if let Response::Getinfo(get_info) = rpc
+            .lock()
+            .await
+            .call(Request::Getinfo(requests::GetinfoRequest {}))
+            .await
+            .unwrap()
+        {
+            secp256k1::PublicKey::from_str(&get_info.id.to_string()).unwrap()
+        } else {
+            panic!("cln-rpc response did not match expected GetinfoResponse")
         }
     }
 
