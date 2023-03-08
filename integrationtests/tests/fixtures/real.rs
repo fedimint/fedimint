@@ -35,7 +35,7 @@ pub struct RealLightningTest {
 
 #[async_trait]
 impl LightningTest for RealLightningTest {
-    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
+    async fn invoice(&self, amount: Amount, _expiry_time: Option<u64>) -> Invoice {
         // let random: u64 = rand::random();
         // let invoice_req = requests::InvoiceRequest {
         //     amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
