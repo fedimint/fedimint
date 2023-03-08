@@ -35,41 +35,22 @@ pub struct RealLightningTest {
 
 #[async_trait]
 impl LightningTest for RealLightningTest {
-    async fn invoice(&self, amount: Amount, _expiry_time: Option<u64>) -> Invoice {
-        // let random: u64 = rand::random();
-        // let invoice_req = requests::InvoiceRequest {
-        //     amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
-        //     description: "".to_string(),
-        //     label: random.to_string(),
-        //     expiry: expiry_time,
-        //     fallbacks: None,
-        //     preimage: None,
-        //     exposeprivatechannels: None,
-        //     cltv: None,
-        //     deschashonly: None,
-        // };
-
-        // let invoice_resp = if let Response::Invoice(data) = self
-        //     // FIXME: this  was reversed
-        //     .rpc_cln
-        //     .lock()
-        //     .await
-        //     .call(Request::Invoice(invoice_req))
-        //     .await
-        //     .unwrap()
-        // {
-        //     data
-        // } else {
-        //     panic!("cln-rpc response did not match expected InvoiceResponse")
-        // };
-
+    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let mut lnd_rpc = self.rpc_lnd.lock().await;
-        let invoice_resp = lnd_rpc
-            .lightning()
-            .add_invoice(TonicInvoice {
+        let tonic_invoice = match expiry_time {
+            Some(expiry) => TonicInvoice {
+                value_msat: amount.msats as i64,
+                expiry: expiry as i64,
+                ..Default::default()
+            },
+            None => TonicInvoice {
                 value_msat: amount.msats as i64,
                 ..Default::default()
-            })
+            },
+        };
+        let invoice_resp = lnd_rpc
+            .lightning()
+            .add_invoice(tonic_invoice)
             .await
             .unwrap()
             .into_inner();
