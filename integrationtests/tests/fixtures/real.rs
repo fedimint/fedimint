@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use bitcoin::{secp256k1, Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
 use cln_rpc::model::requests;
+use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{ClnRpc, Request, Response};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
@@ -19,16 +20,18 @@ use lazy_static::lazy_static;
 use lightning_invoice::Invoice;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
-use tonic_lnd::lnrpc::Invoice as TonicInvoice;
+use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as TonicInvoice, ListChannelsRequest};
 use tonic_lnd::LndClient;
+use tracing::info;
 use url::Url;
 
 use crate::fixtures::LightningTest;
 
+#[allow(dead_code)]
 #[derive(Clone)]
-enum GatewayNode {
-    CLN,
-    LND,
+pub enum GatewayNode {
+    Cln,
+    Lnd,
 }
 
 #[derive(Clone)]
@@ -43,31 +46,71 @@ pub struct RealLightningTest {
 #[async_trait]
 impl LightningTest for RealLightningTest {
     async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
-        let mut lnd_rpc = self.rpc_lnd.lock().await;
-        let tonic_invoice = match expiry_time {
-            Some(expiry) => TonicInvoice {
-                value_msat: amount.msats as i64,
-                expiry: expiry as i64,
-                ..Default::default()
-            },
-            None => TonicInvoice {
-                value_msat: amount.msats as i64,
-                ..Default::default()
-            },
-        };
-        let invoice_resp = lnd_rpc
-            .lightning()
-            .add_invoice(tonic_invoice)
-            .await
-            .unwrap()
-            .into_inner();
+        match self.gateway_node {
+            // If we're using CLN as the gateway, use LND to fetch an invoice
+            GatewayNode::Cln => {
+                info!("fetching invoice from lnd");
+                let mut lnd_rpc = self.rpc_lnd.lock().await;
+                let tonic_invoice = match expiry_time {
+                    Some(expiry) => TonicInvoice {
+                        value_msat: amount.msats as i64,
+                        expiry: expiry as i64,
+                        ..Default::default()
+                    },
+                    None => TonicInvoice {
+                        value_msat: amount.msats as i64,
+                        ..Default::default()
+                    },
+                };
+                let invoice_resp = lnd_rpc
+                    .lightning()
+                    .add_invoice(tonic_invoice)
+                    .await
+                    .unwrap()
+                    .into_inner();
 
-        Invoice::from_str(&invoice_resp.payment_request).unwrap()
+                Invoice::from_str(&invoice_resp.payment_request).unwrap()
+            }
+            // If we're using LND as the gateway, use CLN to fetch an invoice
+            GatewayNode::Lnd => {
+                info!("fetching invoice from cln");
+                let random: u64 = rand::random();
+                let invoice_req = requests::InvoiceRequest {
+                    amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
+                    description: "".to_string(),
+                    label: random.to_string(),
+                    expiry: expiry_time,
+                    fallbacks: None,
+                    preimage: None,
+                    exposeprivatechannels: None,
+                    cltv: None,
+                    deschashonly: None,
+                };
+
+                let invoice_resp = if let Response::Invoice(data) = self
+                    .rpc_cln
+                    .lock()
+                    .await
+                    .call(Request::Invoice(invoice_req))
+                    .await
+                    .unwrap()
+                {
+                    data
+                } else {
+                    panic!("cln-rpc response did not match expected InvoiceResponse")
+                };
+
+                Invoice::from_str(&invoice_resp.bolt11).unwrap()
+            }
+        }
     }
 
     async fn amount_sent(&self) -> Amount {
-        self.initial_balance
-            .sub(Self::channel_balance(self.rpc_cln.clone()).await)
+        let current_balance = match self.gateway_node {
+            GatewayNode::Cln => Self::channel_balance_cln(self.rpc_cln.clone()).await,
+            GatewayNode::Lnd => Self::channel_balance_lnd(self.rpc_lnd.clone()).await,
+        };
+        self.initial_balance.sub(current_balance)
     }
 
     fn is_shared(&self) -> bool {
@@ -76,11 +119,21 @@ impl LightningTest for RealLightningTest {
 }
 
 impl RealLightningTest {
-    pub async fn new(rpc_cln: Arc<Mutex<ClnRpc>>, rpc_lnd: Arc<Mutex<LndClient>>) -> Self {
-        let initial_balance = Self::channel_balance(rpc_cln.clone()).await;
-        let gateway_node_pub_key = Self::pubkey(rpc_cln.clone()).await;
-        // FIXME: don't hard-code
-        let gateway_node = GatewayNode::CLN;
+    pub async fn new(
+        rpc_cln: Arc<Mutex<ClnRpc>>,
+        rpc_lnd: Arc<Mutex<LndClient>>,
+        gateway_node: GatewayNode,
+    ) -> Self {
+        let (initial_balance, gateway_node_pub_key) = match gateway_node {
+            GatewayNode::Cln => (
+                Self::channel_balance_cln(rpc_cln.clone()).await,
+                Self::pubkey_cln(rpc_cln.clone()).await,
+            ),
+            GatewayNode::Lnd => (
+                Self::channel_balance_lnd(rpc_lnd.clone()).await,
+                Self::pubkey_lnd(rpc_lnd.clone()).await,
+            ),
+        };
 
         RealLightningTest {
             rpc_cln,
@@ -91,7 +144,8 @@ impl RealLightningTest {
         }
     }
 
-    async fn pubkey(rpc: Arc<Mutex<ClnRpc>>) -> secp256k1::PublicKey {
+    async fn pubkey_cln(rpc: Arc<Mutex<ClnRpc>>) -> secp256k1::PublicKey {
+        info!("fetching pubkey from cln");
         if let Response::Getinfo(get_info) = rpc
             .lock()
             .await
@@ -104,8 +158,22 @@ impl RealLightningTest {
             panic!("cln-rpc response did not match expected GetinfoResponse")
         }
     }
+    async fn pubkey_lnd(rpc: Arc<Mutex<LndClient>>) -> secp256k1::PublicKey {
+        info!("fetching pubkey from lnd");
+        let info = rpc
+            .lock()
+            .await
+            .lightning()
+            .get_info(GetInfoRequest {})
+            .await
+            .expect("failed to get info")
+            .into_inner();
+        let pub_key: secp256k1::PublicKey = info.identity_pubkey.parse().expect("invalid pubkey");
+        pub_key
+    }
 
-    async fn channel_balance(rpc: Arc<Mutex<ClnRpc>>) -> Amount {
+    async fn channel_balance_cln(rpc: Arc<Mutex<ClnRpc>>) -> Amount {
+        info!("fetching balance from cln");
         let listfunds_req = requests::ListfundsRequest { spent: Some(false) };
         let listfunds_resp = if let Response::ListFunds(data) = rpc
             .lock()
@@ -126,6 +194,29 @@ impl RealLightningTest {
             .map(|channel| channel.our_amount_msat.msat())
             .sum();
         Amount::from_msats(funds)
+    }
+    async fn channel_balance_lnd(rpc: Arc<Mutex<LndClient>>) -> Amount {
+        info!("fetching balance from lnd");
+        let list_channels = rpc
+            .lock()
+            .await
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: true,
+                ..Default::default()
+            })
+            .await
+            .expect("failed to get info")
+            .into_inner();
+
+        let funds: i64 = list_channels
+            .channels
+            .iter()
+            // FIXME: is this sort of filtering needed?
+            // .filter(|channel| channel.short_channel_id.is_some() && channel.connected)
+            .map(|channel| channel.local_balance)
+            .sum();
+        Amount::from_msats(funds as u64)
     }
 }
 

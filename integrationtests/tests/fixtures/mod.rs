@@ -59,6 +59,7 @@ use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
+use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
 use mint_client::mint::SpendableNote;
@@ -75,6 +76,7 @@ use tonic_lnd::connect;
 use tracing::info;
 use url::Url;
 
+use crate::fixtures::real::GatewayNode;
 use crate::fixtures::utils::LnRpcAdapter;
 use crate::ConsensusItem;
 
@@ -207,18 +209,41 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR").unwrap();
             let lnd_macaroon = env::var("FM_LND_MACAROON").unwrap();
             let lnd_tls_cert = env::var("FM_LND_TLS_CERT").unwrap();
-            let lnd_client = connect(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
-                .await
-                .unwrap();
-            let rpc_lnd = Arc::new(Mutex::new(lnd_client));
-            let lightning = RealLightningTest::new(rpc_cln, rpc_lnd).await;
+            let lnd_client = connect(
+                lnd_rpc_addr.clone(),
+                lnd_tls_cert.clone(),
+                lnd_macaroon.clone(),
+            )
+            .await
+            .unwrap();
+            let rpc_lnd = Arc::new(Mutex::new(lnd_client.clone()));
+            let gateway_node = GatewayNode::Cln;
+            let lightning = RealLightningTest::new(rpc_cln, rpc_lnd, gateway_node.clone()).await;
 
             let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
                 .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
                 .parse::<Url>()
                 .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
-            let lnrpc: DynLnRpcClient = NetworkLnRpcClient::new(lnrpc_addr).await.unwrap().into();
-            let lnrpc_adapter = LnRpcAdapter::new(lnrpc);
+
+            let lnrpc_adapter = match gateway_node {
+                GatewayNode::Cln => {
+                    let lnrpc: DynLnRpcClient =
+                        NetworkLnRpcClient::new(lnrpc_addr).await.unwrap().into();
+                    LnRpcAdapter::new(lnrpc)
+                }
+                GatewayNode::Lnd => {
+                    let gateway_lnd_client = GatewayLndClient::new(
+                        lnd_rpc_addr.clone(),
+                        lnd_tls_cert.clone(),
+                        lnd_macaroon.clone(),
+                        task_group.make_subgroup().await,
+                    )
+                    .await
+                    .unwrap();
+                    let lnrpc = DynLnRpcClient::new(Arc::new(gateway_lnd_client));
+                    LnRpcAdapter::new(lnrpc)
+                }
+            };
 
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
@@ -274,7 +299,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             }
         }
         _ => {
-            info!("Testing with F/clnAKE Bitcoin and Lightning services");
+            info!("Testing with FAKE Bitcoin and Lightning services");
             let server_config = ServerConfig::trusted_dealer_gen(&params, module_inits.clone());
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
