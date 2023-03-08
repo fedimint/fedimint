@@ -26,10 +26,17 @@ use url::Url;
 use crate::fixtures::LightningTest;
 
 #[derive(Clone)]
+enum GatewayNode {
+    CLN,
+    LND,
+}
+
+#[derive(Clone)]
 pub struct RealLightningTest {
     rpc_cln: Arc<Mutex<ClnRpc>>,
     rpc_lnd: Arc<Mutex<LndClient>>,
     initial_balance: Amount,
+    gateway_node: GatewayNode,
     pub gateway_node_pub_key: secp256k1::PublicKey,
 }
 
@@ -72,11 +79,14 @@ impl RealLightningTest {
     pub async fn new(rpc_cln: Arc<Mutex<ClnRpc>>, rpc_lnd: Arc<Mutex<LndClient>>) -> Self {
         let initial_balance = Self::channel_balance(rpc_cln.clone()).await;
         let gateway_node_pub_key = Self::pubkey(rpc_cln.clone()).await;
+        // FIXME: don't hard-code
+        let gateway_node = GatewayNode::CLN;
 
         RealLightningTest {
             rpc_cln,
             rpc_lnd,
             initial_balance,
+            gateway_node,
             gateway_node_pub_key,
         }
     }
