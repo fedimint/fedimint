@@ -160,6 +160,7 @@ where
         mut connection_senders: HashMap<PeerId, Sender<AnyFramedTransport<PeerMessage<T>>>>,
         task_handle: TaskHandle,
     ) {
+        info!("bindin {:?}", cfg.bind_addr);
         let mut listener = connect
             .listen(cfg.bind_addr)
             .await
