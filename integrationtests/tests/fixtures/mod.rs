@@ -208,7 +208,15 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
                 .parse::<Url>()
                 .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
-            let lnrpc: DynLnRpcClient = NetworkLnRpcClient::new(lnrpc_addr).await.unwrap().into();
+            let cln_rpc_socket = env::var("FM_GATEWAY_CLN_RPC_SOCKET")
+                .expect("FM_GATEWAY_CLN_RPC_SOCKET not set")
+                .parse::<PathBuf>()
+                .expect("Invalid FM_GATEWAY_CLN_RPC_SOCKET");
+
+            let lnrpc: DynLnRpcClient = NetworkLnRpcClient::new(lnrpc_addr, cln_rpc_socket)
+                .await
+                .unwrap()
+                .into();
             let lnrpc_adapter = LnRpcAdapter::new(lnrpc);
 
             let connect_gen =

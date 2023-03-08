@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -63,10 +64,11 @@ impl DynLnRpcClient {
 #[derive(Debug)]
 pub struct NetworkLnRpcClient {
     client: GatewayLightningClient<Channel>,
+    cln_rpc_socket: PathBuf,
 }
 
 impl NetworkLnRpcClient {
-    pub async fn new(url: Url) -> Result<Self> {
+    pub async fn new(url: Url, cln_rpc_socket: PathBuf) -> Result<Self> {
         let endpoint = Endpoint::from_shared(url.to_string()).map_err(|e| {
             error!("Failed to create lnrpc endpoint from url : {:?}", e);
             GatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
@@ -79,7 +81,14 @@ impl NetworkLnRpcClient {
                 GatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
             })?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            cln_rpc_socket,
+        })
+    }
+
+    async fn cln_client(&self) -> anyhow::Result<cln_rpc::ClnRpc> {
+        cln_rpc::ClnRpc::new(&self.cln_rpc_socket).await
     }
 }
 

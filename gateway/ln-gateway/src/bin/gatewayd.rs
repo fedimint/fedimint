@@ -34,6 +34,10 @@ pub struct GatewayOpts {
     #[arg(long = "api-addr", env = "FM_GATEWAY_API_ADDR")]
     pub api_addr: Url,
 
+    /// CLN RPC Socket
+    #[arg(long = "cln-rpc-socket", env = "FM_GATEWAY_CLN_RPC_SOCKET")]
+    pub cln_rpc_socket: PathBuf,
+
     /// Gateway webserver authentication password
     #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
     pub password: String,
@@ -68,6 +72,7 @@ async fn main() -> Result<(), anyhow::Error> {
         api_addr,
         lnrpc_addr,
         password,
+        cln_rpc_socket,
     } = GatewayOpts::parse();
 
     info!(
@@ -83,7 +88,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let task_group = TaskGroup::new();
 
     // Create a lightning rpc client
-    let lnrpc: DynLnRpcClient = NetworkLnRpcClient::new(lnrpc_addr).await?.into();
+    let lnrpc: DynLnRpcClient = NetworkLnRpcClient::new(lnrpc_addr, cln_rpc_socket)
+        .await?
+        .into();
 
     // Create module decoder registry
     let decoders = ModuleDecoderRegistry::from_iter([
