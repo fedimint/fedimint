@@ -338,10 +338,7 @@ mod tests {
         let output = PegOut {
             recipient: addr.clone(),
             amount,
-            fees: PegOutFees {
-                fee_rate: Feerate { sats_per_kvb: 1000 },
-                total_weight: 0,
-            },
+            fees: PegOutFees::new(1000, 883),
         };
 
         // agree on output

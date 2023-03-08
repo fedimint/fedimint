@@ -152,6 +152,13 @@ pub struct PegOutFees {
 }
 
 impl PegOutFees {
+    pub fn new(sats_per_kvb: u64, total_weight: u64) -> Self {
+        PegOutFees {
+            fee_rate: Feerate { sats_per_kvb },
+            total_weight,
+        }
+    }
+
     pub fn amount(&self) -> Amount {
         self.fee_rate.calculate_fee(self.total_weight)
     }
@@ -303,15 +310,17 @@ pub enum WalletError {
     #[error("The peg-in was already claimed")]
     PegInAlreadyClaimed,
     #[error("Peg-out fee rate {0:?} is set below consensus {1:?}")]
-    PegOutFeeRate(Feerate, Feerate),
+    PegOutFeeBelowConsensus(Feerate, Feerate),
     #[error("Not enough SpendableUTXO")]
     NotEnoughSpendableUTXO,
     #[error("Peg out amount was under the dust limit")]
     PegOutUnderDustLimit,
     #[error("RBF transaction id not found")]
     RbfTransactionIdNotFound,
-    #[error("RBF has tx weight set incorrectly")]
-    RbfTxWeightIncorrect,
+    #[error("Peg-out fee weight {0} doesn't match actual weight {1}")]
+    TxWeightIncorrect(u64, u64),
+    #[error("Peg-out fee rate is below min relay fee")]
+    BelowMinRelayFee,
 }
 
 #[derive(Debug, Error)]
