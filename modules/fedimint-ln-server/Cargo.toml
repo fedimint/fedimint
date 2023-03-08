@@ -38,7 +38,7 @@ hbbft = { git = "https://github.com/fedimint/hbbft" }
 fedimint-server = { path = "../../fedimint-server" }
 
 [dev-dependencies]
-tokio = {version = "1.25.0", features = [ "full" ] }
+tokio = {version = "1.26.0", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 fedimint-testing = { path = "../../fedimint-testing" }
