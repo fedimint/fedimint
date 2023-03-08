@@ -82,7 +82,7 @@ impl ILnRpcClient for FakeLightningTest {
         Ok(self.gateway_node_pub_key)
     }
 
-    async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
+    async fn route_hints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
         Ok(GetRouteHintsResponse {
             route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
         })

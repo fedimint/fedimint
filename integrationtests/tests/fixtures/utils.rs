@@ -50,8 +50,8 @@ impl ILnRpcClient for LnRpcAdapter {
         self.client.node_pubkey().await
     }
 
-    async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
-        self.client.routehints().await
+    async fn route_hints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
+        self.client.route_hints().await
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {

@@ -91,7 +91,7 @@ impl Gateway {
         let mut num_retries = 0;
         let route_hints = loop {
             let route_hints: Vec<RouteHint> = lnrpc
-                .routehints()
+                .route_hints()
                 .await
                 .expect("Could not fetch route hints")
                 .try_into()
@@ -361,7 +361,7 @@ impl Gateway {
                     }
                     GatewayRequest::ConnectFederation(inner) => {
                         let route_hints: Vec<RouteHint> =
-                            self.lnrpc.routehints().await?.try_into()?;
+                            self.lnrpc.route_hints().await?.try_into()?;
                         inner
                             .handle(|payload| {
                                 self.handle_connect_federation(payload, route_hints.clone())
