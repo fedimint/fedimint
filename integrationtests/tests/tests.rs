@@ -6,7 +6,7 @@ use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{msats, sats, Feerate, TieredMulti};
+use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln_client::LightningConsensusItem;
 use fedimint_logging::LOG_TEST;
@@ -168,10 +168,7 @@ async fn wallet_peg_outs_support_rbf() -> Result<()> {
 
         // RBF by increasing sats per kvb by 1000
         let rbf = Rbf {
-            fees: PegOutFees {
-                fee_rate: Feerate { sats_per_kvb: 1000 },
-                total_weight: fees.total_weight,
-            },
+            fees: PegOutFees::new(1000, fees.total_weight),
             txid,
         };
         let out_point = user.client.rbf_tx(rbf.clone()).await.unwrap();

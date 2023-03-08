@@ -6,12 +6,13 @@ use std::ops::Sub;
 use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
+use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
 use bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::{
-    Address, BlockHash, EcdsaSig, EcdsaSighashType, PackedLockTime, Script, Sequence, Transaction,
-    TxIn, TxOut, Txid,
+    Address, BlockHash, EcdsaSig, EcdsaSighashType, Network, PackedLockTime, Script, Sequence,
+    Transaction, TxIn, TxOut, Txid,
 };
 use common::config::WalletConfigConsensus;
 use common::db::DbKeyPrefix;
@@ -475,29 +476,16 @@ impl ServerModule for Wallet {
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         output: &WalletOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        if let WalletOutput::PegOut(pegout) = output {
-            if !pegout
-                .recipient
-                .is_valid_for_network(self.cfg.consensus.network)
-            {
-                return Err(WalletError::WrongNetwork(
-                    self.cfg.consensus.network,
-                    pegout.recipient.network,
-                ))
-                .into_module_error_other();
-            }
-            let consensus_fee_rate = self.current_round_consensus(dbtx).await.unwrap().fee_rate;
-            if pegout.fees.fee_rate < consensus_fee_rate {
-                return Err(WalletError::PegOutFeeRate(
-                    pegout.fees.fee_rate,
-                    consensus_fee_rate,
-                ))
-                .into_module_error_other();
-            }
-        }
-        if let Err(err) = self.create_peg_out_tx(dbtx, output).await {
-            return Err(err).into_module_error_other();
-        }
+        let fee_rate = self.current_round_consensus(dbtx).await.unwrap().fee_rate;
+        let tx = self
+            .create_peg_out_tx(dbtx, output)
+            .await
+            .into_module_error_other()?;
+
+        self.offline_wallet()
+            .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)
+            .into_module_error_other()?;
+
         Ok(TransactionItemAmount {
             amount: output.amount().into(),
             fee: self.cfg.consensus.fee_consensus.peg_out_abs,
@@ -1201,10 +1189,6 @@ impl Wallet {
                     .expect("DB error")
                     .ok_or(WalletError::RbfTransactionIdNotFound)?;
 
-                if tx.fees.total_weight != rbf.fees.total_weight {
-                    return Err(WalletError::RbfTxWeightIncorrect);
-                }
-
                 self.offline_wallet().create_tx(
                     tx.peg_out_amount,
                     tx.destination,
@@ -1305,8 +1289,59 @@ struct StatelessWallet<'a> {
 }
 
 impl<'a> StatelessWallet<'a> {
+    /// Given a tx created from an `WalletOutput`, validate there will be no
+    /// issues submitting the transaction to the Bitcoin network
+    fn validate_tx(
+        &self,
+        tx: &UnsignedTransaction,
+        output: &WalletOutput,
+        consensus_fee_rate: Feerate,
+        network: Network,
+    ) -> Result<(), WalletError> {
+        if let WalletOutput::PegOut(peg_out) = output {
+            if !peg_out.recipient.is_valid_for_network(network) {
+                return Err(WalletError::WrongNetwork(
+                    network,
+                    peg_out.recipient.network,
+                ));
+            }
+        }
+
+        // Validate the tx amount is over the dust limit
+        if tx.peg_out_amount < tx.destination.dust_value() {
+            return Err(WalletError::PegOutUnderDustLimit);
+        }
+
+        // Validate tx fee rate is above the consensus fee rate
+        if tx.fees.fee_rate < consensus_fee_rate {
+            return Err(WalletError::PegOutFeeBelowConsensus(
+                tx.fees.fee_rate,
+                consensus_fee_rate,
+            ));
+        }
+
+        // Validate added fees are above the min relay tx fee
+        // BIP-0125 requires 1 sat/vb for RBF by default (same as normal txs)
+        let fees = match output {
+            WalletOutput::PegOut(pegout) => pegout.fees.clone(),
+            WalletOutput::Rbf(rbf) => rbf.fees.clone(),
+        };
+        if fees.fee_rate.sats_per_kvb < DEFAULT_MIN_RELAY_TX_FEE as u64 {
+            return Err(WalletError::BelowMinRelayFee);
+        }
+
+        // Validate fees weight matches the actual weight
+        if fees.total_weight != tx.fees.total_weight {
+            return Err(WalletError::TxWeightIncorrect(
+                fees.total_weight,
+                tx.fees.total_weight,
+            ));
+        }
+
+        Ok(())
+    }
+
     /// Attempts to create a tx ready to be signed from available UTXOs.
-    /// Returns `None` if there are not enough `SpendableUTXO`
     //
     // * `peg_out_amount`: How much the peg-out should be
     // * `destination`: The address the user is pegging-out to
@@ -1326,11 +1361,6 @@ impl<'a> StatelessWallet<'a> {
         change_tweak: &[u8],
         rbf: Option<Rbf>,
     ) -> Result<UnsignedTransaction, WalletError> {
-        // If the peg out amount is under the dust limit fail immediately
-        if peg_out_amount < destination.dust_value() {
-            return Err(WalletError::PegOutUnderDustLimit);
-        }
-
         // Add the rbf fees to the existing tx fees
         if let Some(rbf) = &rbf {
             fee_rate.sats_per_kvb += rbf.fees.fee_rate.sats_per_kvb;
@@ -1596,8 +1626,10 @@ impl<'a> StatelessWallet<'a> {
 mod tests {
     use std::str::FromStr;
 
-    use bitcoin::{Address, Amount, OutPoint};
-    use fedimint_core::Feerate;
+    use bitcoin::Network::{Bitcoin, Testnet};
+    use bitcoin::{Address, Amount, Network, OutPoint, Txid};
+    use fedimint_core::{BitcoinHash, Feerate};
+    use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutput};
     use miniscript::descriptor::Wsh;
 
     use crate::common::PegInDescriptor;
@@ -1628,47 +1660,81 @@ mod tests {
 
         let spendable = SpendableUTXO {
             tweak: [0; 32],
-            amount: Amount::from_sat(2000),
+            amount: Amount::from_sat(3000),
         };
 
-        let destination = Address::from_str("msFGPqHVk8rbARMd69FfGYxwcboZLemdBi")
-            .unwrap()
-            .script_pubkey();
+        let recipient = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap();
+
+        let fee = Feerate { sats_per_kvb: 1000 };
+        let weight = 875;
 
         // not enough SpendableUTXO
         let tx = wallet.create_tx(
             Amount::from_sat(2000),
-            destination.clone(),
+            recipient.script_pubkey(),
             vec![],
             vec![(UTXOKey(OutPoint::null()), spendable.clone())],
-            Feerate { sats_per_kvb: 0 },
+            fee,
             &[],
             None,
         );
         assert_eq!(tx, Err(WalletError::NotEnoughSpendableUTXO));
 
-        // peg out amount is under dust limit
-        let tx = wallet.create_tx(
-            Amount::from_sat(1),
-            destination.clone(),
-            vec![],
-            vec![(UTXOKey(OutPoint::null()), spendable.clone())],
-            Feerate { sats_per_kvb: 0 },
-            &[],
-            None,
-        );
-        assert_eq!(tx, Err(WalletError::PegOutUnderDustLimit));
-
         // successful tx creation
-        let tx = wallet.create_tx(
-            Amount::from_sat(1000),
-            destination,
-            vec![],
-            vec![(UTXOKey(OutPoint::null()), spendable)],
-            Feerate { sats_per_kvb: 0 },
-            &[],
-            None,
+        let mut tx = wallet
+            .create_tx(
+                Amount::from_sat(1000),
+                recipient.script_pubkey(),
+                vec![],
+                vec![(UTXOKey(OutPoint::null()), spendable)],
+                fee,
+                &[],
+                None,
+            )
+            .expect("is ok");
+
+        // peg out weight is incorrectly set to 0
+        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, 0), fee, Network::Bitcoin);
+        assert_eq!(res, Err(WalletError::TxWeightIncorrect(0, weight)));
+
+        // fee rate set below min relay fee to 0
+        let res = wallet.validate_tx(&tx, &rbf(0, weight), fee, Bitcoin);
+        assert_eq!(res, Err(WalletError::BelowMinRelayFee));
+
+        // fees are okay
+        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        assert_eq!(res, Ok(()));
+
+        // tx has fee below consensus
+        tx.fees = PegOutFees::new(0, weight);
+        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        assert_eq!(
+            res,
+            Err(WalletError::PegOutFeeBelowConsensus(
+                Feerate { sats_per_kvb: 0 },
+                fee
+            ))
         );
-        assert!(tx.is_ok());
+
+        // tx has peg-out amount under dust limit
+        tx.peg_out_amount = Amount::ZERO;
+        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        assert_eq!(res, Err(WalletError::PegOutUnderDustLimit));
+
+        // tx is invalid for network
+        let output = WalletOutput::PegOut(PegOut {
+            recipient,
+            amount: Amount::from_sat(1000),
+            fees: PegOutFees::new(100, weight),
+        });
+        let res = wallet.validate_tx(&tx, &output, fee, Testnet);
+        assert_eq!(res, Err(WalletError::WrongNetwork(Testnet, Bitcoin)));
+    }
+
+    fn rbf(sats_per_kvb: u64, total_weight: u64) -> WalletOutput {
+        WalletOutput::Rbf(Rbf {
+            fees: PegOutFees::new(sats_per_kvb, total_weight),
+            txid: Txid::all_zeros(),
+        })
     }
 }
