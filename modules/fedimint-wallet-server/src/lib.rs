@@ -238,7 +238,7 @@ impl ServerModuleGen for WalletGen {
                     );
                 }
                 DbKeyPrefix::RoundConsensus => {
-                    let round_consensus = dbtx.get_value(&RoundConsensusKey).await.unwrap();
+                    let round_consensus = dbtx.get_value(&RoundConsensusKey).await;
                     if let Some(round_consensus) = round_consensus {
                         wallet.insert("Round Consensus".to_string(), Box::new(round_consensus));
                     }
@@ -332,8 +332,7 @@ impl ServerModule for Wallet {
         let items = dbtx
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .await
-            .map(|res| {
-                let (key, val) = res.expect("FB error");
+            .map(|(key, val)| {
                 WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
                     txid: key.0,
                     signature: val,
@@ -400,8 +399,7 @@ impl ServerModule for Wallet {
         };
 
         dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
-            .await
-            .expect("DB Error");
+            .await;
     }
 
     fn build_verification_cache<'a>(
@@ -427,12 +425,7 @@ impl ServerModule for Wallet {
             .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)
             .into_module_error_other()?;
 
-        if dbtx
-            .get_value(&UTXOKey(input.outpoint()))
-            .await
-            .expect("DB error")
-            .is_some()
-        {
+        if dbtx.get_value(&UTXOKey(input.outpoint())).await.is_some() {
             return Err(WalletError::PegInAlreadyClaimed).into_module_error_other();
         }
 
@@ -464,8 +457,7 @@ impl ServerModule for Wallet {
                 amount: bitcoin::Amount::from_sat(input.tx_output().value),
             },
         )
-        .await
-        .expect("DB Error");
+        .await;
 
         Ok(meta)
     }
@@ -551,23 +543,18 @@ impl ServerModule for Wallet {
 
         // Delete used UTXOs
         for input in tx.psbt.unsigned_tx.input.iter() {
-            dbtx.remove_entry(&UTXOKey(input.previous_output))
-                .await
-                .expect("DB Error");
+            dbtx.remove_entry(&UTXOKey(input.previous_output)).await;
         }
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
-            .await
-            .expect("DB Error");
+            .await;
         dbtx.insert_new_entry(&PegOutTxSignatureCI(txid), &sigs)
-            .await
-            .expect("DB Error");
+            .await;
         dbtx.insert_new_entry(
             &PegOutBitcoinTransaction(out_point),
             &WalletOutputOutcome(txid),
         )
-        .await
-        .expect("DB Error");
+        .await;
         Ok(amount)
     }
 
@@ -580,10 +567,6 @@ impl ServerModule for Wallet {
         let unsigned_txs = dbtx
             .find_by_prefix(&UnsignedTransactionPrefixKey)
             .await
-            .map(|res| {
-                let (key, val) = res.expect("DB error");
-                (key, val)
-            })
             .collect::<Vec<(UnsignedTransactionKey, UnsignedTransaction)>>()
             .await;
 
@@ -619,12 +602,9 @@ impl ServerModule for Wallet {
                     // and to accept the change into our wallet eventually once
                     // it confirms.
                     dbtx.insert_new_entry(&PendingTransactionKey(key.0), &pending_tx)
-                        .await
-                        .expect("DB Error");
-                    dbtx.remove_entry(&PegOutTxSignatureCI(key.0))
-                        .await
-                        .expect("DB Error");
-                    dbtx.remove_entry(&key).await.expect("DB Error");
+                        .await;
+                    dbtx.remove_entry(&PegOutTxSignatureCI(key.0)).await;
+                    dbtx.remove_entry(&key).await;
                 }
                 Err(e) => {
                     warn!("Unable to finalize PSBT due to {:?}", e)
@@ -639,9 +619,7 @@ impl ServerModule for Wallet {
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         out_point: OutPoint,
     ) -> Option<WalletOutputOutcome> {
-        dbtx.get_value(&PegOutBitcoinTransaction(out_point))
-            .await
-            .expect("DB error")
+        dbtx.get_value(&PegOutBitcoinTransaction(out_point)).await
     }
 
     async fn audit(
@@ -806,10 +784,7 @@ impl Wallet {
         let mut cache: BTreeMap<Txid, UnsignedTransaction> = dbtx
             .find_by_prefix(&UnsignedTransactionPrefixKey)
             .await
-            .map(|res| {
-                let (key, val) = res.expect("DB error");
-                (key.0, val)
-            })
+            .map(|(key, val)| (key.0, val))
             .collect()
             .await;
 
@@ -825,8 +800,7 @@ impl Wallet {
 
         for (txid, unsigned) in cache.into_iter() {
             dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
-                .await
-                .expect("DB Error");
+                .await;
         }
     }
 
@@ -975,7 +949,7 @@ impl Wallet {
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> Option<RoundConsensus> {
-        dbtx.get_value(&RoundConsensusKey).await.expect("DB error")
+        dbtx.get_value(&RoundConsensusKey).await
     }
 
     pub async fn target_height(&self) -> u32 {
@@ -1040,10 +1014,7 @@ impl Wallet {
             let pending_transactions = dbtx
                 .find_by_prefix(&PendingTransactionPrefixKey)
                 .await
-                .map(|res| {
-                    let (key, transaction) = res.expect("DB error");
-                    (key.0, transaction)
-                })
+                .map(|(key, transaction)| (key.0, transaction))
                 .collect::<HashMap<_, _>>()
                 .await;
 
@@ -1081,8 +1052,7 @@ impl Wallet {
                 &BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
                 &(),
             )
-            .await
-            .expect("DB Error");
+            .await;
         }
     }
 
@@ -1113,8 +1083,7 @@ impl Wallet {
                         amount: bitcoin::Amount::from_sat(output.value),
                     },
                 )
-                .await
-                .expect("DB Error");
+                .await;
             }
         }
     }
@@ -1128,10 +1097,7 @@ impl Wallet {
         let mut all_transactions: BTreeMap<Txid, PendingTransaction> = dbtx
             .find_by_prefix(&PendingTransactionPrefixKey)
             .await
-            .map(|res| {
-                let (key, val) = res.expect("DB Error");
-                (key.0, val)
-            })
+            .map(|(key, val)| (key.0, val))
             .collect::<BTreeMap<Txid, PendingTransaction>>()
             .await;
 
@@ -1141,8 +1107,7 @@ impl Wallet {
             let removed = pending_to_remove.pop().expect("exists");
             all_transactions.remove(&removed.tx.txid());
             dbtx.remove_entry(&PendingTransactionKey(removed.tx.txid()))
-                .await
-                .expect("DB error");
+                .await;
 
             // Search for tx that this `removed` has as RBF
             if let Some(rbf) = &removed.rbf {
@@ -1167,10 +1132,7 @@ impl Wallet {
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         block_hash: BlockHash,
     ) -> bool {
-        dbtx.get_value(&BlockHashKey(block_hash))
-            .await
-            .expect("DB error")
-            .is_some()
+        dbtx.get_value(&BlockHashKey(block_hash)).await.is_some()
     }
 
     async fn create_peg_out_tx(
@@ -1198,7 +1160,6 @@ impl Wallet {
                 let tx = dbtx
                     .get_value(&PendingTransactionKey(rbf.txid))
                     .await
-                    .expect("DB error")
                     .ok_or(WalletError::RbfTransactionIdNotFound)?;
 
                 if tx.fees.total_weight != rbf.fees.total_weight {
@@ -1224,10 +1185,6 @@ impl Wallet {
     ) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .await
-            .map(|res| {
-                let (key, val) = res.expect("FB error");
-                (key, val)
-            })
             .collect::<Vec<(UTXOKey, SpendableUTXO)>>()
             .await
     }
@@ -1268,10 +1225,7 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
     let pending_tx: Vec<PendingTransaction> = dbtx
         .find_by_prefix(&PendingTransactionPrefixKey)
         .await
-        .map(|res| {
-            let (_key, val) = res.expect("DB Error");
-            val
-        })
+        .map(|(_, val)| val)
         .collect::<Vec<_>>()
         .await;
     let rbf_txids: BTreeSet<Txid> = pending_tx

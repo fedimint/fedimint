@@ -199,13 +199,9 @@ impl MintClient {
                         amount,
                         nonce: note.0,
                     };
-                    let spendable = dbtx
-                        .get_value(&key)
-                        .await
-                        .expect("DB Error")
-                        .expect("Missing note");
+                    let spendable = dbtx.get_value(&key).await.expect("Missing note");
                     input_ecash.push((amount, spendable));
-                    dbtx.remove_entry(&key).await.expect("DB Error");
+                    dbtx.remove_entry(&key).await;
                 }
             }
         }
@@ -228,9 +224,7 @@ impl MintClient {
         // move ecash to pending state, awaiting a transaction
         if !input_ecash.is_empty() {
             let pending = TieredMulti::from_iter(input_ecash.into_iter());
-            dbtx.insert_entry(&PendingNotesKey(txid), &pending)
-                .await
-                .expect("DB Error");
+            dbtx.insert_entry(&PendingNotesKey(txid), &pending).await;
         }
 
         // write ecash outputs to db to await for tx success to be fetched later
@@ -242,23 +236,19 @@ impl MintClient {
                 }),
                 &notes.clone(),
             )
-            .await
-            .expect("DB Error");
+            .await;
         }
     }
 
     pub async fn set_notes_per_denomination(&self, notes: u16) {
         let mut dbtx = self.start_dbtx().await;
-        dbtx.insert_entry(&NotesPerDenominationKey, &notes)
-            .await
-            .expect("DB error");
-        dbtx.commit_tx().await.expect("DB error");
+        dbtx.insert_entry(&NotesPerDenominationKey, &notes).await;
+        dbtx.commit_tx().await;
     }
 
     async fn notes_per_denomination(&self, dbtx: &mut DatabaseTransaction<'_>) -> u16 {
         dbtx.get_value(&NotesPerDenominationKey)
             .await
-            .expect("DB Error")
             .unwrap_or(self.config.max_notes_per_denomination - 1)
     }
 
@@ -325,10 +315,7 @@ impl MintClient {
             .await
             .find_by_prefix(&NoteKeyPrefix)
             .await
-            .map(|res| {
-                let (key, spendable_note) = res.expect("DB error");
-                (key.amount, spendable_note)
-            })
+            .map(|(key, spendable_note)| (key.amount, spendable_note))
             .collect()
             .await
     }
@@ -340,10 +327,7 @@ impl MintClient {
     ) -> TieredMulti<SpendableNote> {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
-            .map(|res| {
-                let (key, spendable_note) = res.expect("DB error");
-                (key.amount, spendable_note)
-            })
+            .map(|(key, spendable_note)| (key.amount, spendable_note))
             .collect()
             .await
     }
@@ -356,7 +340,6 @@ impl MintClient {
         NoteIndex(
             dbtx.get_value(&NextECashNoteIndexKey(amount))
                 .await
-                .expect("DB error")
                 .unwrap_or(0),
         )
     }
@@ -368,8 +351,7 @@ impl MintClient {
     ) -> DerivableSecret {
         let new_idx = self.get_next_note_index(dbtx, amount).await;
         dbtx.insert_entry(&NextECashNoteIndexKey(amount), &new_idx.next().as_u64())
-            .await
-            .expect("DB Error");
+            .await;
         Self::new_note_secret_static(&self.secret, amount, new_idx)
     }
 
@@ -426,8 +408,7 @@ impl MintClient {
             .await;
         let out_point = create_tx(notes).await;
         dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
-            .await
-            .expect("DB Error");
+            .await;
     }
 
     pub async fn await_fetch_notes<'a>(
@@ -470,7 +451,6 @@ impl MintClient {
             .await
             .get_value(&OutputFinalizationKey(outpoint))
             .await
-            .expect("DB error")
             .ok_or(MintClientError::FinalizationError(
                 NoteFinalizationError::UnknownIssuance,
             ))?;
@@ -493,11 +473,9 @@ impl MintClient {
                 nonce: note.note.0,
             };
             let value = note;
-            dbtx.insert_new_entry(&key, &value).await.expect("DB Error");
+            dbtx.insert_new_entry(&key, &value).await;
         }
-        dbtx.remove_entry(&OutputFinalizationKey(outpoint))
-            .await
-            .expect("DB Error");
+        dbtx.remove_entry(&OutputFinalizationKey(outpoint)).await;
 
         Ok(())
     }
@@ -509,10 +487,7 @@ impl MintClient {
             .await
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .await
-            .map(|res| {
-                let (OutputFinalizationKey(outpoint), cfd) = res.expect("DB error");
-                (outpoint, cfd)
-            })
+            .map(|(OutputFinalizationKey(outpoint), cfd)| (outpoint, cfd))
             .collect()
             .await
     }
@@ -529,7 +504,7 @@ impl MintClient {
             futures.push(Box::pin(async {
                 let mut dbtx = self.context.db.begin_transaction().await;
                 let res = self.await_fetch_notes(&mut dbtx, outpoint).await;
-                dbtx.commit_tx().await.expect("DB Error");
+                dbtx.commit_tx().await;
                 res
             }))
         }
@@ -801,7 +776,7 @@ mod tests {
                 out_point
             })
             .await;
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.commit_tx().await;
 
         client.fetch_all_notes().await;
     }
@@ -860,7 +835,7 @@ mod tests {
                 secp,
             )
             .await;
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.commit_tx().await;
 
         if let Input::Mint(input) = ecash_input {
             let meta = fed.lock().await.verify_input(&input).await.unwrap();
@@ -902,7 +877,7 @@ mod tests {
                 secp,
             )
             .await;
-        dbtx.commit_tx().await.expect("DB Error");
+        dbtx.commit_tx().await;
 
         if let Input::Mint(input) = ecash_input {
             let meta = fed.lock().await.verify_input(&input).await.unwrap();
@@ -962,7 +937,7 @@ mod tests {
                             let (_, nonce) = client
                                 .new_ecash_note(secp256k1_zkp::SECP256K1, amount, &mut dbtx)
                                 .await;
-                            dbtx.commit_tx().await.map(|_| nonce).ok()
+                            dbtx.commit_tx_result().await.map(|_| nonce).ok()
                         })
                     }
                 })
@@ -996,7 +971,6 @@ mod tests {
             .await
             .get_value(&NextECashNoteIndexKey(amount))
             .await
-            .expect("DB error")
             .unwrap_or(0);
         // Ensure we didn't skip any keys
         assert_eq!(last_idx, result_count as u64);

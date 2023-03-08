@@ -146,9 +146,7 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .find_by_prefix(&UTXOPrefixKey)
                 .await
-                .map(|res| {
-                    let (UTXOKey(outpoint), SpendableUTXO { tweak, amount }) =
-                        res.expect("DB error");
+                .map(|(UTXOKey(outpoint), SpendableUTXO { tweak, amount })| {
                     let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
 
                     ImportableWallet {
@@ -182,12 +180,8 @@ async fn main() -> anyhow::Result<()> {
             let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
             let mut dbtx = db.begin_transaction().await;
 
-            let tweaks = dbtx
-                .find_by_prefix(&EpochHistoryKeyPrefix)
-                .await
-                .flat_map(|res| {
-                    let (_, SignedEpochOutcome { outcome, .. }) = res.expect("DB error");
-
+            let tweaks = dbtx.find_by_prefix(&EpochHistoryKeyPrefix).await.flat_map(
+                |(_, SignedEpochOutcome { outcome, .. })| {
                     let UnzipConsensusItem {
                         transaction: transaction_cis,
                         module: module_cis,
@@ -209,7 +203,8 @@ async fn main() -> anyhow::Result<()> {
                     }
 
                     futures::stream::iter(peg_in_tweaks.into_iter())
-                });
+                },
+            );
 
             let wallets = tweaks
                 .map(|tweak| {

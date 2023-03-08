@@ -81,21 +81,19 @@ impl MintClient {
                 amount,
                 nonce: note.note.0,
             };
-            dbtx.insert_entry(&key, &note).await.expect("DB error");
+            dbtx.insert_entry(&key, &note).await;
         }
 
         for (txid, issuance_requests) in snapshot.unconfirmed_notes {
             dbtx.insert_entry(&OutputFinalizationKey(txid), &issuance_requests)
-                .await
-                .expect("DB Error");
+                .await;
         }
 
         for (amount, note_idx) in snapshot.next_note_idx.iter() {
             dbtx.insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
-                .await
-                .expect("DB Error");
+                .await;
         }
-        dbtx.commit_tx().await?;
+        dbtx.commit_tx_result().await?;
 
         Ok(Ok(()))
     }
@@ -103,7 +101,7 @@ impl MintClient {
     pub async fn wipe_notes(&self) -> Result<()> {
         let mut dbtx = self.start_dbtx().await;
         Self::wipe_notes_static(&mut dbtx).await?;
-        dbtx.commit_tx().await?;
+        dbtx.commit_tx_result().await?;
         Ok(())
     }
 
@@ -112,9 +110,9 @@ impl MintClient {
     /// Useful for cleaning previous data before restoring data recovered from
     /// backup.
     async fn wipe_notes_static(dbtx: &mut DatabaseTransaction<'_>) -> Result<()> {
-        dbtx.remove_by_prefix(&NoteKeyPrefix).await?;
-        dbtx.remove_by_prefix(&OutputFinalizationKeyPrefix).await?;
-        dbtx.remove_by_prefix(&NextECashNoteIndexKeyPrefix).await?;
+        dbtx.remove_by_prefix(&NoteKeyPrefix).await;
+        dbtx.remove_by_prefix(&OutputFinalizationKeyPrefix).await;
+        dbtx.remove_by_prefix(&NextECashNoteIndexKeyPrefix).await;
         Ok(())
     }
 
@@ -196,7 +194,6 @@ impl MintClient {
         let pending_notes: Vec<_> = dbtx
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .await
-            .map(|res| res.expect("DB error"))
             .collect()
             .await;
 

@@ -252,8 +252,8 @@ impl FedimintServer {
         let db = self.consensus.db.clone();
         let mut tx = db.begin_transaction().await;
 
-        if let Some(key) = tx.get_value(&LastEpochKey).await.expect("DB error") {
-            self.last_processed_epoch = tx.get_value(&key).await.expect("DB error");
+        if let Some(key) = tx.get_value(&LastEpochKey).await {
+            self.last_processed_epoch = tx.get_value(&key).await;
         }
 
         let epoch = self.next_epoch_to_process();

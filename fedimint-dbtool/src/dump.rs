@@ -199,7 +199,7 @@ impl<'a> DatabaseDump<'a> {
                     );
                 }
                 ConsensusRange::DbKeyPrefix::LastEpoch => {
-                    let last_epoch = dbtx.get_value(&ConsensusRange::LastEpochKey).await.unwrap();
+                    let last_epoch = dbtx.get_value(&ConsensusRange::LastEpochKey).await;
                     if let Some(last_epoch) = last_epoch {
                         consensus.insert("LastEpoch".to_string(), Box::new(last_epoch));
                     }
@@ -344,8 +344,7 @@ impl<'a> DatabaseDump<'a> {
                 ClientMintRange::DbKeyPrefix::NotesPerDenomination => {
                     let notes = dbtx
                         .get_value(&ClientMintRange::NotesPerDenominationKey)
-                        .await
-                        .unwrap();
+                        .await;
                     if let Some(notes) = notes {
                         mint_client.insert("NotesPerDenomination".to_string(), Box::new(notes));
                     }
@@ -400,8 +399,7 @@ impl<'a> DatabaseDump<'a> {
                     let secret = self
                         .read_only
                         .get_value(&ClientRange::ClientSecretKey)
-                        .await
-                        .unwrap();
+                        .await;
                     if let Some(secret) = secret {
                         client.insert("Client Secret".to_string(), Box::new(secret));
                     }

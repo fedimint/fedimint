@@ -219,12 +219,12 @@ impl ApiEndpoint<()> {
                         None => handle_request::<E>(m, &mut dbtx.get_isolated(), params).await?,
                     };
 
-                    dbtx.commit_tx()
-                        .await
-                        .map_err(|_err| fedimint_core::module::ApiError {
+                    dbtx.commit_tx_result().await.map_err(|_err| {
+                        fedimint_core::module::ApiError {
                             code: 500,
                             message: "Internal Server Error".to_string(),
-                        })?;
+                        }
+                    })?;
                     Ok(serde_json::to_value(ret).expect("encoding error"))
                 })
             }),

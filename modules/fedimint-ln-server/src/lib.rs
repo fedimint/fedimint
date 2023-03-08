@@ -278,10 +278,12 @@ impl ServerModule for Lightning {
         ConsensusProposal::new_auto_trigger(
             dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
                 .await
-                .map(|res| {
-                    let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
-                    LightningConsensusItem { contract_id, share }
-                })
+                .map(
+                    |(ProposeDecryptionShareKey(contract_id), share)| LightningConsensusItem {
+                        contract_id,
+                        share,
+                    },
+                )
                 .collect::<Vec<LightningConsensusItem>>()
                 .await,
         )
@@ -300,8 +302,7 @@ impl ServerModule for Lightning {
                 &AgreedDecryptionShareKey(decryption_share.contract_id, peer),
                 &decryption_share.share,
             )
-            .await
-            .expect("DB Error");
+            .await;
         }
     }
 
@@ -399,12 +400,9 @@ impl ServerModule for Lightning {
         let mut contract_account = dbtx
             .get_value(&account_db_key)
             .await
-            .expect("DB error")
             .expect("Should fail validation if contract account doesn't exist");
         contract_account.amount -= meta.amount.amount;
-        dbtx.insert_entry(&account_db_key, &contract_account)
-            .await
-            .expect("DB Error");
+        dbtx.insert_entry(&account_db_key, &contract_account).await;
 
         Ok(meta)
     }
@@ -421,7 +419,6 @@ impl ServerModule for Lightning {
                     let offer = dbtx
                         .get_value(&OfferKey(incoming.hash))
                         .await
-                        .expect("DB error")
                         .ok_or(LightningError::NoOffer(incoming.hash))
                         .into_module_error_other()?;
 
@@ -458,7 +455,6 @@ impl ServerModule for Lightning {
                 let contract_account = dbtx
                     .get_value(&ContractKey(*contract))
                     .await
-                    .expect("DB error")
                     .ok_or(LightningError::UnknownContract(*contract))
                     .into_module_error_other()?;
 
@@ -497,7 +493,6 @@ impl ServerModule for Lightning {
                 let updated_contract_account = dbtx
                     .get_value(&contract_db_key)
                     .await
-                    .expect("DB error")
                     .map(|mut value: ContractAccount| {
                         value.amount += amount.amount;
                         value
@@ -507,8 +502,7 @@ impl ServerModule for Lightning {
                         contract: contract.contract.clone().to_funded(out_point),
                     });
                 dbtx.insert_entry(&contract_db_key, &updated_contract_account)
-                    .await
-                    .expect("DB Error");
+                    .await;
 
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
@@ -517,14 +511,12 @@ impl ServerModule for Lightning {
                         outcome: contract.contract.to_outcome(),
                     },
                 )
-                .await
-                .expect("DB Error");
+                .await;
 
                 if let Contract::Incoming(incoming) = &contract.contract {
                     let offer = dbtx
                         .get_value(&OfferKey(incoming.hash))
                         .await
-                        .expect("DB error")
                         .expect("offer exists if output is valid");
 
                     let decryption_share = self
@@ -537,11 +529,8 @@ impl ServerModule for Lightning {
                         &ProposeDecryptionShareKey(contract.contract.contract_id()),
                         &PreimageDecryptionShare(decryption_share),
                     )
-                    .await
-                    .expect("DB Error");
-                    dbtx.remove_entry(&OfferKey(offer.hash))
-                        .await
-                        .expect("DB Error");
+                    .await;
+                    dbtx.remove_entry(&OfferKey(offer.hash)).await;
                 }
             }
             LightningOutput::Offer(offer) => {
@@ -549,19 +538,16 @@ impl ServerModule for Lightning {
                     &ContractUpdateKey(out_point),
                     &LightningOutputOutcome::Offer { id: offer.id() },
                 )
-                .await
-                .expect("DB Error");
+                .await;
                 // TODO: sanity-check encrypted preimage size
                 dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
-                    .await
-                    .expect("DB Error");
+                    .await;
             }
             LightningOutput::CancelOutgoing { contract, .. } => {
                 let updated_contract_account = {
                     let mut contract_account = dbtx
                         .get_value(&ContractKey(*contract))
                         .await
-                        .expect("DB error")
                         .expect("Contract exists if output is valid");
 
                     let outgoing_contract = match &mut contract_account.contract {
@@ -577,8 +563,7 @@ impl ServerModule for Lightning {
                 };
 
                 dbtx.insert_entry(&ContractKey(*contract), &updated_contract_account)
-                    .await
-                    .expect("DB Error");
+                    .await;
             }
         }
 
@@ -595,10 +580,7 @@ impl ServerModule for Lightning {
         let preimage_decryption_shares = dbtx
             .find_by_prefix(&AgreedDecryptionShareKeyPrefix)
             .await
-            .map(|res| {
-                let (key, value) = res.expect("DB error");
-                (key.0, (key.1, value))
-            })
+            .map(|(key, value)| (key.0, (key.1, value)))
             .collect::<Vec<_>>()
             .await
             .into_iter()
@@ -619,8 +601,7 @@ impl ServerModule for Lightning {
                     warn!("Received decryption share for non-existent incoming contract");
                     for peer in peers {
                         dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
-                            .await
-                            .expect("DB Error");
+                            .await;
                     }
                     continue;
                 }
@@ -688,12 +669,10 @@ impl ServerModule for Lightning {
 
             // Delete decryption shares once we've decrypted the preimage
             dbtx.remove_entry(&ProposeDecryptionShareKey(contract_id))
-                .await
-                .expect("DB Error");
+                .await;
             for peer in peers {
                 dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
-                    .await
-                    .expect("DB Error");
+                    .await;
             }
 
             let decrypted_preimage = if preimage_vec.len() == 32
@@ -721,7 +700,6 @@ impl ServerModule for Lightning {
             let mut contract_account = dbtx
                 .get_value(&contract_db_key)
                 .await
-                .expect("DB error")
                 .expect("checked before that it exists");
             let mut incoming = match &mut contract_account.contract {
                 FundedContract::Incoming(incoming) => incoming,
@@ -729,16 +707,13 @@ impl ServerModule for Lightning {
             };
             incoming.contract.decrypted_preimage = decrypted_preimage.clone();
             trace!(?contract_account, "Updating contract account");
-            dbtx.insert_entry(&contract_db_key, &contract_account)
-                .await
-                .expect("DB Error");
+            dbtx.insert_entry(&contract_db_key, &contract_account).await;
 
             // Update output outcome
             let outcome_db_key = ContractUpdateKey(out_point);
             let mut outcome = dbtx
                 .get_value(&outcome_db_key)
                 .await
-                .expect("DB error")
                 .expect("outcome was created on funding");
             let incoming_contract_outcome_preimage = match &mut outcome {
                 LightningOutputOutcome::Contract {
@@ -748,9 +723,7 @@ impl ServerModule for Lightning {
                 _ => panic!("We are expeccting an incoming contract"),
             };
             *incoming_contract_outcome_preimage = decrypted_preimage.clone();
-            dbtx.insert_entry(&outcome_db_key, &outcome)
-                .await
-                .expect("DB Error");
+            dbtx.insert_entry(&outcome_db_key, &outcome).await;
         }
 
         bad_peers
@@ -761,9 +734,7 @@ impl ServerModule for Lightning {
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         out_point: OutPoint,
     ) -> Option<LightningOutputOutcome> {
-        dbtx.get_value(&ContractUpdateKey(out_point))
-            .await
-            .expect("DB error")
+        dbtx.get_value(&ContractUpdateKey(out_point)).await
     }
 
     async fn audit(
@@ -838,9 +809,7 @@ impl Lightning {
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -> Option<IncomingContractOffer> {
-        dbtx.get_value(&OfferKey(payment_hash))
-            .await
-            .expect("DB error")
+        dbtx.get_value(&OfferKey(payment_hash)).await
     }
 
     pub async fn get_offers(
@@ -849,7 +818,7 @@ impl Lightning {
     ) -> Vec<IncomingContractOffer> {
         dbtx.find_by_prefix(&OfferKeyPrefix)
             .await
-            .map(|res| res.expect("DB error").1)
+            .map(|(_, value)| value)
             .collect::<Vec<IncomingContractOffer>>()
             .await
     }
@@ -859,9 +828,7 @@ impl Lightning {
         dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         contract_id: ContractId,
     ) -> Option<ContractAccount> {
-        dbtx.get_value(&ContractKey(contract_id))
-            .await
-            .expect("DB error")
+        dbtx.get_value(&ContractKey(contract_id)).await
     }
 
     pub async fn list_gateways(
@@ -870,8 +837,7 @@ impl Lightning {
     ) -> Vec<LightningGateway> {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
-            .filter_map(|res| async {
-                let gw = res.expect("DB error").1;
+            .filter_map(|(_, gw)| async {
                 // FIXME: actually remove from DB
                 if gw.valid_until > fedimint_core::time::now() {
                     Some(gw)
@@ -889,8 +855,7 @@ impl Lightning {
         gateway: LightningGateway,
     ) {
         dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
-            .await
-            .expect("DB error");
+            .await;
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

@@ -36,8 +36,7 @@ impl Audit {
         let mut new_items = dbtx
             .find_by_prefix(key_prefix)
             .await
-            .map(|res| {
-                let (key, value) = res.expect("DB error");
+            .map(|(key, value)| {
                 let name = format!("{key:?}");
                 let milli_sat = to_milli_sat(key, value);
                 AuditItem { name, milli_sat }

@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
             for (key, value) in prefix_iter {
                 print_kv(&key, &value);
             }
-            dbtx.commit_tx().await.expect("DB Error");
+            dbtx.commit_tx().await.expect("Error committing to RocksDb");
         }
         DbCommand::Write { key, value } => {
             let rocksdb: Box<dyn IDatabase> =
@@ -93,15 +93,17 @@ async fn main() -> Result<()> {
             let mut dbtx = rocksdb.begin_transaction().await;
             dbtx.raw_insert_bytes(&key, value.into())
                 .await
-                .expect("DB error");
-            dbtx.commit_tx().await.expect("DB Error");
+                .expect("Error inserting entry into RocksDb");
+            dbtx.commit_tx().await.expect("Error committing to RocksDb");
         }
         DbCommand::Delete { key } => {
             let rocksdb: Box<dyn IDatabase> =
                 Box::new(fedimint_rocksdb::RocksDb::open(&options.database).unwrap());
             let mut dbtx = rocksdb.begin_transaction().await;
-            dbtx.raw_remove_entry(&key).await.expect("DB error");
-            dbtx.commit_tx().await.expect("DB Error");
+            dbtx.raw_remove_entry(&key)
+                .await
+                .expect("Error removing entry from RocksDb");
+            dbtx.commit_tx().await.expect("Error committing to RocksDb");
         }
         DbCommand::Dump {
             cfg_dir,

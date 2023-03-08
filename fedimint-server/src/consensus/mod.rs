@@ -437,8 +437,7 @@ impl FedimintConsensus {
                             &AcceptedTransactionKey(txid),
                             &AcceptedTransaction { epoch, transaction },
                         )
-                        .await
-                        .expect("DB Error");
+                        .await;
                     }
                     Err(error) => {
                         rejected_txs.insert(txid);
@@ -447,8 +446,7 @@ impl FedimintConsensus {
                             .expect("Error rolling back to transaction savepoint");
                         warn!(target: LOG_CONSENSUS, %error, "Transaction failed");
                         dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{error:?}"))
-                            .await
-                            .expect("DB Error");
+                            .await;
                     }
                 }
             }
@@ -486,9 +484,7 @@ impl FedimintConsensus {
         }
 
         for peer in drop_peers {
-            dbtx.insert_entry(&DropPeerKey(peer), &())
-                .await
-                .expect("DB Error");
+            dbtx.insert_entry(&DropPeerKey(peer), &()).await;
         }
 
         epoch_history
@@ -534,8 +530,8 @@ impl FedimintConsensus {
             if let Ok(final_sig) = pks.combine_signatures(shares) {
                 assert!(pks.public_key().verify(&final_sig, client_hash));
                 let serde_sig = SerdeSignature(final_sig);
-                let tx = dbtx.insert_entry(&ClientConfigSignatureKey, &serde_sig);
-                tx.await.expect("DB Error");
+                dbtx.insert_entry(&ClientConfigSignatureKey, &serde_sig)
+                    .await;
             } else {
                 warn!(
                     target: LOG_CONSENSUS,
@@ -557,7 +553,7 @@ impl FedimintConsensus {
     ) -> ConfigResponse {
         let mut client = self.client_cfg.clone();
         let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
-        if let Ok(Some(SerdeSignature(sig))) = maybe_sig {
+        if let Some(SerdeSignature(sig)) = maybe_sig {
             client.client_hash_signature = Some(sig);
         }
         client
@@ -569,7 +565,6 @@ impl FedimintConsensus {
             .await
             .get_value(&LastEpochKey)
             .await
-            .expect("db query must not fail")
             .map(|ep_hist_key| ep_hist_key.0 + 1)
             .unwrap_or(0)
     }
@@ -580,7 +575,6 @@ impl FedimintConsensus {
             .await
             .get_value(&EpochHistoryKey(epoch))
             .await
-            .unwrap()
     }
 
     async fn save_epoch_history<'a>(
@@ -592,7 +586,7 @@ impl FedimintConsensus {
     ) -> SignedEpochOutcome {
         let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
-        let maybe_prev_epoch = dbtx.get_value(&prev_epoch_key).await.expect("DB error");
+        let maybe_prev_epoch = dbtx.get_value(&prev_epoch_key).await;
 
         let current = SignedEpochOutcome::new(
             outcome.epoch,
@@ -607,9 +601,7 @@ impl FedimintConsensus {
 
             match current.add_sig_to_prev(pks, prev_epoch) {
                 Ok(prev_epoch) => {
-                    dbtx.insert_entry(&prev_epoch_key, &prev_epoch)
-                        .await
-                        .expect("DB Error");
+                    dbtx.insert_entry(&prev_epoch_key, &prev_epoch).await;
                 }
                 Err(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) => {
                     warn!(
@@ -631,11 +623,9 @@ impl FedimintConsensus {
         }
 
         dbtx.insert_entry(&LastEpochKey, &EpochHistoryKey(current.outcome.epoch))
-            .await
-            .expect("DB Error");
+            .await;
         dbtx.insert_entry(&EpochHistoryKey(current.outcome.epoch), &current)
-            .await
-            .expect("DB Error");
+            .await;
 
         current
     }
@@ -662,10 +652,7 @@ impl FedimintConsensus {
         let drop_peers = dbtx
             .find_by_prefix(&DropPeerKeyPrefix)
             .await
-            .map(|res| {
-                let key = res.expect("DB error").0;
-                key.0
-            })
+            .map(|(key, _)| key.0)
             .collect()
             .await;
 
@@ -695,8 +682,8 @@ impl FedimintConsensus {
             );
         }
 
-        if let Some(epoch) = dbtx.get_value(&LastEpochKey).await.unwrap() {
-            let last_epoch = dbtx.get_value(&epoch).await.unwrap().unwrap();
+        if let Some(epoch) = dbtx.get_value(&LastEpochKey).await {
+            let last_epoch = dbtx.get_value(&epoch).await.unwrap();
             let sig = self.cfg.private.epoch_sks.0.sign(last_epoch.hash);
             let item = ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig));
             items.push(item);
@@ -733,7 +720,6 @@ impl FedimintConsensus {
         if dbtx
             .get_value(&AcceptedTransactionKey(tx_hash))
             .await
-            .expect("DB Error")
             .is_some()
         {
             return Err(TransactionReplayError(tx_hash));
@@ -786,10 +772,8 @@ impl FedimintConsensus {
     ) -> Option<crate::outcome::TransactionStatus> {
         let mut dbtx = self.db.begin_transaction().await;
 
-        let accepted: Option<AcceptedTransaction> = dbtx
-            .get_value(&AcceptedTransactionKey(txid))
-            .await
-            .expect("DB error");
+        let accepted: Option<AcceptedTransaction> =
+            dbtx.get_value(&AcceptedTransactionKey(txid)).await;
 
         if let Some(accepted_tx) = accepted {
             let mut outputs = Vec::new();
@@ -822,8 +806,7 @@ impl FedimintConsensus {
             .begin_transaction()
             .await
             .get_value(&RejectedTransactionKey(txid))
-            .await
-            .expect("DB error");
+            .await;
 
         if let Some(message) = rejected {
             return Some(TransactionStatus::Rejected(message));

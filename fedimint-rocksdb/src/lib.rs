@@ -100,7 +100,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
 
             let rocksdb_iter = iter
                 .map_while(move |res| {
-                    let (key_bytes, value_bytes) = res.expect("DB error");
+                    let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                     key_bytes
                         .starts_with(&prefix)
                         .then_some((key_bytes, value_bytes))
@@ -156,7 +156,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
                 .0
                 .prefix_iterator(prefix.clone())
                 .map_while(move |res| {
-                    let (key_bytes, value_bytes) = res.expect("DB error");
+                    let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                     key_bytes
                         .starts_with(&prefix)
                         .then_some((key_bytes, value_bytes))

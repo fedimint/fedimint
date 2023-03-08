@@ -116,7 +116,7 @@ where
                 )
                 .await,
             );
-            dbtx.commit_tx().await.expect("DB tx failed");
+            dbtx.commit_tx().await;
         }
 
         assert_all_equal_result(results.into_iter())
@@ -197,7 +197,7 @@ where
                 member.end_consensus_epoch(&peers, &mut module_dbtx).await;
             }
 
-            dbtx.commit_tx().await.expect("DB Error");
+            dbtx.commit_tx().await;
         }
     }
 
@@ -244,8 +244,7 @@ where
                 let mut module_dbtx = dbtx.with_module_prefix(*module_instance_id);
                 module_dbtx
                     .insert_entry(&fedimint_wallet_client::db::UTXOKey(out_point), &utxo)
-                    .await
-                    .unwrap();
+                    .await;
 
                 module_dbtx
                     .insert_entry(
@@ -256,11 +255,10 @@ where
                             randomness_beacon: tweak,
                         },
                     )
-                    .await
-                    .unwrap();
+                    .await;
             }
 
-            dbtx.commit_tx().await.expect("DB Error");
+            dbtx.commit_tx().await;
         }
     }
 
