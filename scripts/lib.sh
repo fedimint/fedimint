@@ -68,10 +68,9 @@ function await_server_on_port() {
 
 # Check that core-lightning block-proccessing is caught up
 # CLI integration tests should call this before attempting to pay invoices
-function await_cln_block_processing() {
-  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
-
+function await_lightning_node_block_processing() {
   # cln
+  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
   until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_CLN getinfo | jq -e -r '.blockheight')" ]
   do
       sleep $POLL_INTERVAL

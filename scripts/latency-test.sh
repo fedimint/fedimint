@@ -29,6 +29,7 @@ done
 time2=$(date +%s.%N)
 
 await_gateway_registered
+await_lightning_node_block_processing
 
 # make sure we're using LND gateway because CLN is paying
 switch_to_lnd_gateway

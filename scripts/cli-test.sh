@@ -19,7 +19,7 @@ cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/con
 ./scripts/pegin.sh # peg in user
 
 export PEG_IN_AMOUNT=99999
-await_cln_block_processing
+await_lightning_node_block_processing
 start_gatewayd
 
 ./scripts/pegin.sh $PEG_IN_AMOUNT CLN # peg in CLN gateway
@@ -62,7 +62,7 @@ switch_to_lnd_gateway
 
 # OUTGOING: fedimint-cli pays CLN via LND gateaway
 INVOICE="$($FM_CLN invoice 100000 lnd-gw-to-cln test 1m | jq -e -r '.bolt11')"
-await_cln_block_processing
+await_lightning_node_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 
 # Check that ln-gateway has received the ecash notes from the user payment
@@ -88,7 +88,7 @@ switch_to_cln_gateway
 ADD_INVOICE="$($FM_LND addinvoice --amt_msat 100000)"
 INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
 PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
-await_cln_block_processing
+await_lightning_node_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
