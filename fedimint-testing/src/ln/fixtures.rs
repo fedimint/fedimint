@@ -78,7 +78,7 @@ impl LightningTest for FakeLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for FakeLightningTest {
-    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
+    async fn node_pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
         Ok(self.gateway_node_pub_key)
     }
 

@@ -205,7 +205,7 @@ impl Gateway {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
-        let node_pub_key = self.lnrpc.pubkey().await?;
+        let node_pub_key = self.lnrpc.node_pubkey().await?;
 
         // The gateway deterministically assigns a channel id (u64) to each federation
         // connected. TODO: explicitly handle the case where the channel id

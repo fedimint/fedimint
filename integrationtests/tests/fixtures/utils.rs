@@ -46,8 +46,8 @@ impl LnRpcAdapter {
 
 #[async_trait]
 impl ILnRpcClient for LnRpcAdapter {
-    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
-        self.client.pubkey().await
+    async fn node_pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
+        self.client.node_pubkey().await
     }
 
     async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {

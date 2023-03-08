@@ -26,8 +26,7 @@ pub type HtlcStream<'a> =
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
     /// Get the public key of the lightning node
-    /// TODO: rename to `node_pubkey`
-    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey>;
+    async fn node_pubkey(&self) -> anyhow::Result<secp256k1::PublicKey>;
 
     /// Get route hints to the lightning node
     async fn routehints(&self) -> Result<GetRouteHintsResponse>;
@@ -96,7 +95,7 @@ impl NetworkLnRpcClient {
 
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
-    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
+    async fn node_pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
         self.cln_client()
             .await?
             .call(cln_rpc::Request::Getinfo(GetinfoRequest {}))
