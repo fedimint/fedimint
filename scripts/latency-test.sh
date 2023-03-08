@@ -30,6 +30,9 @@ time2=$(date +%s.%N)
 
 await_gateway_registered
 
+# make sure we're using LND gateway because CLN is paying
+switch_to_lnd_gateway
+
 ## outgoing lightning
 for i in $( seq 1 $ITERATIONS )
 do
