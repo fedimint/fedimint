@@ -245,7 +245,7 @@
         filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" ] src;
 
         # Like `filterWorkspaceFiles` but with `./scripts/` and `./misc/test/` included
-        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" "misc/test/.*" ] src;
+        filterWorkspaceTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" "misc/test/.*" ] src;
 
         filterSrcWithRegexes = regexes: src:
           let
@@ -282,22 +282,6 @@
             doCheck = false;
           };
 
-          # some extra utilities that cli-tests require
-          cliTestsDeps = with pkgs; [
-            bc
-            bitcoind
-            electrs
-            pkgs-kitman.esplora
-            clightning-dev
-            jq
-            lnd
-            netcat
-            perl
-            procps
-            bash
-            which
-          ];
-
           commonArgsBase = {
             pname = "fedimint-workspace";
 
@@ -322,6 +306,20 @@
             nativeBuildInputs = with pkgs; [
               pkg-config
               moreutils
+
+              # tests
+              bash
+              bc
+              bitcoind
+              clightning-dev
+              electrs
+              jq
+              lnd
+              netcat
+              perl
+              pkgs-kitman.esplora
+              procps
+              which
             ];
 
 
@@ -355,14 +353,13 @@
           };
 
           commonCliTestArgs = commonArgs // {
-            pname = "fedimint-cli-test";
+            pname = "fedimint-test";
             version = "0.0.1";
-            src = filterWorkspaceCliTestFiles ./.;
-            nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
+            src = filterWorkspaceTestFiles ./.;
             # there's no point saving the `./target/` dir
             doInstallCargoArtifacts = false;
-            # the command is a test, no need to run any other tests
-            doCheck = false;
+            # the build command will be the test
+            doCheck = true;
           };
 
           workspaceDeps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
@@ -437,44 +434,39 @@
             doCheck = false;
           });
 
-          cliTestReconnect = craneLib.buildPackage (commonCliTestArgs // {
+          cliTestReconnect = craneLib.mkCargoDerivation (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-reconnect";
             version = "0.0.1";
             cargoArtifacts = workspaceBuild;
-            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/reconnect-test.sh";
-            doCheck = true;
+            buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/reconnect-test.sh";
           });
 
-          cliTestLatency = craneLib.buildPackage (commonCliTestArgs // {
+          cliTestLatency = craneLib.mkCargoDerivation (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-latency";
             version = "0.0.1";
             cargoArtifacts = workspaceBuild;
-            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/latency-test.sh";
-            doCheck = true;
+            buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/latency-test.sh";
           });
 
-          cliTestCli = craneLib.buildPackage (commonCliTestArgs // {
+          cliTestCli = craneLib.mkCargoDerivation (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-cli";
             version = "0.0.1";
             cargoArtifacts = workspaceBuild;
-            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/cli-test.sh";
-            doCheck = true;
+            buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/cli-test.sh";
           });
 
-          cliRustTests = craneLib.buildPackage (commonCliTestArgs // {
+          cliRustTests = craneLib.mkCargoDerivation (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-rust-tests";
             version = "0.0.1";
             cargoArtifacts = workspaceBuild;
-            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/rust-tests.sh";
-            doCheck = true;
+            buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/rust-tests.sh";
           });
 
-          cliTestAlwaysFail = craneLib.buildPackage (commonCliTestArgs // {
+          cliTestAlwaysFail = craneLib.mkCargoDerivation (commonCliTestArgs // {
             pname = "${commonCliTestArgs.pname}-always-fail";
             version = "0.0.1";
             cargoArtifacts = workspaceBuild;
-            cargoTestCommand = "patchShebangs ./scripts ; ./scripts/always-fail-test.sh";
-            doCheck = true;
+            buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/always-fail-test.sh";
           });
 
 
@@ -743,7 +735,7 @@
                   pkgs.nodePackages.bash-language-server
                 ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
                   pkgs.semgrep
-                ] ++ build.cliTestsDeps;
+                ];
                 RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
                 LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
                 ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
