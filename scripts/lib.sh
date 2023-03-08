@@ -8,6 +8,9 @@ function mine_blocks() {
 }
 
 function open_channel() {
+    # check that both nodes are synced
+    await_lightning_node_block_processing
+
     LN_ADDR="$($FM_CLN newaddr | jq -e -r '.bech32')"
     $FM_BTC_CLIENT sendtoaddress $LN_ADDR 1
     mine_blocks 10
@@ -21,20 +24,6 @@ function open_channel() {
 function await_bitcoin_rpc() {
     until $FM_BTC_CLIENT getblockchaininfo 1>/dev/null 2>/dev/null ; do
         >&2 echo "Bitcoind rpc not ready yet. Waiting ..."
-        sleep "$POLL_INTERVAL"
-    done
-}
-
-function await_cln_start() {
-    until [ -e "$FM_CLN_DIR/regtest/lightning-rpc" ]; do
-        >&2 echo "CLN gateway not ready yet. Waiting ..."
-        sleep "$POLL_INTERVAL"
-    done
-}
-
-function await_lnd_start() {
-    until [ -e "$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon" ]; do
-        >&2 echo "LND not ready yet. Waiting ..."
         sleep "$POLL_INTERVAL"
     done
 }

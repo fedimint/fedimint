@@ -7,7 +7,8 @@ export POLL_INTERVAL
 
 # wait for cln, bitcoind and fedimint servers to start up
 await_bitcoin_rpc | show_verbose_output
-await_cln_start | show_verbose_output
+await_gateways_registered | show_verbose_output
+await_lightning_node_block_processing | show_verbose_output
 await_fedimint_block_sync | show_verbose_output
 
 echo Setting up bitcoind ...

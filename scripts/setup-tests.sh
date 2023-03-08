@@ -46,12 +46,10 @@ fi
 # Start CLN node
 lightningd $LIGHTNING_FLAGS --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_CLN_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/gateway-cln-extension &
 echo $! >> $FM_PID_FILE
-await_cln_start
 
 # Start LND node
 lnd --lnddir=$FM_LND_DIR &
 echo $! >> $FM_PID_FILE
-await_lnd_start
 
 # Initialize wallet and get ourselves some money
 mine_blocks 101
