@@ -16,7 +16,7 @@ BASE_PORT=$((8173 + 10000))
 if [[ "${TMP:-}" == *"/nix-shell."* ]]; then
   FM_TMP_DIR="${2-$TMP}/fm-$(LC_ALL=C tr -dc A-Za-z0-9 </dev/urandom | head -c 4 || true)"
 else
-  FM_TMP_DIR="${2-"$(mktemp -d)"}"
+  FM_TMP_DIR="${2-"$(mktemp --tmpdir -d XXXXX)"}"
 fi
 export FM_TMP_DIR
 export FM_TEST_FAST_WEAK_CRYPTO="1"
