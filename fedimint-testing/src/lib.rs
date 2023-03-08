@@ -1,14 +1,16 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::future::Future;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::{env, fs, io};
 
 use async_trait::async_trait;
 use fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
 use fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -16,6 +18,10 @@ use fedimint_core::module::{
     TransactionItemAmount,
 };
 use fedimint_core::{OutPoint, PeerId, ServerModule};
+use fedimint_rocksdb::RocksDb;
+use futures::future::BoxFuture;
+use rand::rngs::OsRng;
+use rand::RngCore;
 
 pub mod btc;
 pub mod ln;
@@ -338,6 +344,92 @@ where
     }
 
     first
+}
+
+/// Creates the database backup directory by appending the `snapshot_name`
+/// to the `FM_TEST_DB_BACKUP_DIR`. Then this function will execute the provided
+/// `prepare_fn` which is expected to populate the database with the appropriate
+/// data for testing a migration. If `FM_TEST_DB_BACKUP_DIR` is not set, this
+/// function doesn't do anything.
+pub async fn prepare_snapshot<F>(
+    snapshot_name: &str,
+    prepare_fn: F,
+    decoders: ModuleDecoderRegistry,
+) where
+    F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
+{
+    if let Ok(parent_dir) = env::var("FM_TEST_DB_BACKUP_DIR") {
+        let snapshot_dir = Path::new(&parent_dir).join(snapshot_name);
+        let db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
+        let dbtx = db.begin_transaction().await;
+        prepare_fn(dbtx).await;
+    }
+}
+
+/// Iterates over all of the databases supplied in the database backup
+/// directory, which is specified by `FM_TEST_DB_BACKUP_DIR` environment
+/// variable. First, a temporary database will be created and the contents will
+/// be populated from the database backup directory. Next, this function will
+/// execute the provided `validate` closure. The `validate` closure is expected
+/// to do any validation necessary on the temporary database, such as applying
+/// the appropriate database migrations and then reading all of the data to
+/// verify the migrations were successful.
+pub async fn validate_migrations<F, Fut>(validate: F, decoders: ModuleDecoderRegistry)
+where
+    F: Fn(Database) -> Fut,
+    Fut: futures::Future<Output = ()>,
+{
+    if let Ok(parent_dir) = env::var("FM_TEST_DB_BACKUP_DIR") {
+        let db_dir = Path::new(&parent_dir);
+        let files = fs::read_dir(db_dir).unwrap();
+        for file in files.flatten() {
+            let name = file.file_name().into_string().unwrap();
+            let temp_db = open_temp_db_and_copy(
+                format!("{}-{}", name.as_str(), OsRng.next_u64()),
+                &file.path(),
+                decoders.clone(),
+            );
+            validate(temp_db).await;
+        }
+    }
+}
+
+/// Open a temporary database located at `temp_path` and copy the contents from
+/// the folder `src_dir` to the temporary database's path.
+fn open_temp_db_and_copy(
+    temp_path: String,
+    src_dir: &Path,
+    decoders: ModuleDecoderRegistry,
+) -> Database {
+    // First copy the contents from src_dir to the path where the database will be
+    // opened
+    let path = tempfile::Builder::new()
+        .prefix(temp_path.as_str())
+        .tempdir()
+        .unwrap();
+    copy_directory(src_dir, path.path()).expect("Error copying database to temporary directory");
+
+    Database::new(RocksDb::open(path).unwrap(), decoders)
+}
+
+/// Helper function that recursively copies all of the contents from
+/// `src` to `dst`.
+pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
+    // Create the destination directory if it doesn't exist
+    fs::create_dir_all(dst)?;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            copy_directory(&path, &dst.join(entry.file_name()))?;
+        } else {
+            let dst_path = dst.join(entry.file_name());
+            fs::copy(&path, &dst_path)?;
+        }
+    }
+
+    Ok(())
 }
 
 struct FakeInterconnect(

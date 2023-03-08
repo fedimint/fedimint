@@ -1402,6 +1402,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-ln-client",
+ "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-wallet-client",
  "futures",
@@ -1413,6 +1414,7 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]
