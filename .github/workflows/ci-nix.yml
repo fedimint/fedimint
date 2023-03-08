@@ -68,22 +68,8 @@ jobs:
       - name: Test docs
         run: nix build -L .#debug.workspaceTestDoc
 
-      - name: Reconnect Tests
-        run: nix build -L .#debug.cli-test.reconnect
-
-      - name: Latency Tests
-        run: nix build -L .#debug.cli-test.latency
-
-      - name: CLI Tests
-        run: nix build -L .#debug.cli-test.cli
-
-      - name: Integration Tests (no fixtures)
-        run: nix build -L .#debug.cli-test.rust-tests
-
-      - name: Always fail
-        # this must fail, so we know nix build is actually running tests
-        run: "! nix build -L .#debug.cli-test.always-fail"
-
+      - name: Tests
+        run: nix develop --ignore-environment .#lint --command ./scripts/test-ci-all.sh
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another

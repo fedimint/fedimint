@@ -321,6 +321,7 @@
 
             nativeBuildInputs = with pkgs; [
               pkg-config
+              moreutils
             ];
 
 
@@ -732,6 +733,7 @@
                   tmuxinator
                   docker-compose
                   pkgs.tokio-console
+                  moreutils
 
                   # Nix
                   pkgs.nixpkgs-fmt
@@ -823,13 +825,15 @@
             # this shell is used only in CI, so it should contain minimum amount
             # of stuff to avoid building and caching things we don't need
             lint = pkgs.mkShell {
-              nativeBuildInputs = [
+              nativeBuildInputs = with pkgs; [
                 fenixToolchainCargoFmt
-                pkgs.nixpkgs-fmt
-                pkgs.shellcheck
-                pkgs.git
-                pkgs.parallel
-                pkgs.semgrep
+                nixpkgs-fmt
+                shellcheck
+                git
+                parallel
+                semgrep
+                moreutils
+                nix
               ];
             };
 
