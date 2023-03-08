@@ -243,7 +243,7 @@ impl MintClient {
     pub async fn set_notes_per_denomination(&self, notes: u16) {
         let mut dbtx = self.start_dbtx().await;
         dbtx.insert_entry(&NotesPerDenominationKey, &notes).await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     async fn notes_per_denomination(&self, dbtx: &mut DatabaseTransaction<'_>) -> u16 {
@@ -504,7 +504,7 @@ impl MintClient {
             futures.push(Box::pin(async {
                 let mut dbtx = self.context.db.begin_transaction().await;
                 let res = self.await_fetch_notes(&mut dbtx, outpoint).await;
-                dbtx.expect_commit_tx().await;
+                dbtx.commit_tx().await;
                 res
             }))
         }
@@ -776,7 +776,7 @@ mod tests {
                 out_point
             })
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         client.fetch_all_notes().await;
     }
@@ -835,7 +835,7 @@ mod tests {
                 secp,
             )
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         if let Input::Mint(input) = ecash_input {
             let meta = fed.lock().await.verify_input(&input).await.unwrap();
@@ -877,7 +877,7 @@ mod tests {
                 secp,
             )
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         if let Input::Mint(input) = ecash_input {
             let meta = fed.lock().await.verify_input(&input).await.unwrap();
@@ -937,7 +937,7 @@ mod tests {
                             let (_, nonce) = client
                                 .new_ecash_note(secp256k1_zkp::SECP256K1, amount, &mut dbtx)
                                 .await;
-                            dbtx.commit_tx().await.map(|_| nonce).ok()
+                            dbtx.commit_tx_result().await.map(|_| nonce).ok()
                         })
                     }
                 })

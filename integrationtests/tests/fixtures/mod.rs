@@ -803,7 +803,7 @@ impl FederationTest {
                     .await;
             }
 
-            dbtx.expect_commit_tx().await;
+            dbtx.commit_tx().await;
         }
         bitcoin
             .mine_blocks(user.client.wallet_client().config.finality_delay as u64)
@@ -824,7 +824,7 @@ impl FederationTest {
                     module_dbtx.remove_by_prefix(&NonceKeyPrefix).await;
                 }
 
-                dbtx.expect_commit_tx().await;
+                dbtx.commit_tx().await;
             });
         }
     }
@@ -894,7 +894,7 @@ impl FederationTest {
                         )
                         .await
                         .unwrap();
-                    dbtx.expect_commit_tx().await;
+                    dbtx.commit_tx().await;
                 }
                 out_point
             })

@@ -116,7 +116,7 @@ where
                 )
                 .await,
             );
-            dbtx.expect_commit_tx().await;
+            dbtx.commit_tx().await;
         }
 
         assert_all_equal_result(results.into_iter())
@@ -197,7 +197,7 @@ where
                 member.end_consensus_epoch(&peers, &mut module_dbtx).await;
             }
 
-            dbtx.expect_commit_tx().await;
+            dbtx.commit_tx().await;
         }
     }
 
@@ -258,7 +258,7 @@ where
                     .await;
             }
 
-            dbtx.expect_commit_tx().await;
+            dbtx.commit_tx().await;
         }
     }
 

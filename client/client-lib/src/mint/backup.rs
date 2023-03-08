@@ -93,7 +93,7 @@ impl MintClient {
             dbtx.insert_entry(&NextECashNoteIndexKey(amount), &note_idx.as_u64())
                 .await;
         }
-        dbtx.commit_tx().await?;
+        dbtx.commit_tx_result().await?;
 
         Ok(Ok(()))
     }
@@ -101,7 +101,7 @@ impl MintClient {
     pub async fn wipe_notes(&self) -> Result<()> {
         let mut dbtx = self.start_dbtx().await;
         Self::wipe_notes_static(&mut dbtx).await?;
-        dbtx.commit_tx().await?;
+        dbtx.commit_tx_result().await?;
         Ok(())
     }
 

@@ -265,7 +265,7 @@ impl LnClient {
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
@@ -487,7 +487,7 @@ mod tests {
             .await
             .unwrap();
 
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         let contract = match &output {
             LightningOutput::Contract(c) => &c.contract,

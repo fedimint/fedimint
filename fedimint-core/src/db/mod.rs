@@ -185,7 +185,7 @@ impl Database {
 
             match tx_fn(&mut dbtx).await {
                 Ok(val) => {
-                    match dbtx.commit_tx().await {
+                    match dbtx.commit_tx_result().await {
                         Ok(()) => {
                             return Ok(val);
                         }
@@ -575,41 +575,34 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
-        match self
-            .isolated_tx
+        self.isolated_tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await
             .expect("Unrecoverable error while inserting into the database")
-        {
-            Some(old_val_bytes) => Some(
+            .map(|old_val_bytes| {
                 decode_value(&old_val_bytes, self.decoders)
-                    .expect("Unrecoverable error while decoding the database value"),
-            ),
-            None => None,
-        }
+                    .expect("Unrecoverable error while decoding the database value")
+            })
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
     where
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
-        match self
+        let prev_val = self
             .isolated_tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await
-            .expect("Unrecoverable error occurred while inserting new entry into database")
-        {
-            Some(_) => {
-                warn!(
-                    target: LOG_DB,
-                    "Database overwriting element when expecting insertion of new entry. Key: {:?}",
-                    key
-                );
-                None
-            }
-            None => None,
+            .expect("Unrecoverable error occurred while inserting new entry into database");
+        if let Some(prev_val) = prev_val {
+            warn!(
+                target: LOG_DB,
+                "Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}",
+                key,
+                prev_val,
+            );
         }
     }
 
@@ -822,12 +815,12 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
     }
 
-    pub async fn commit_tx(mut self) -> Result<()> {
+    pub async fn commit_tx_result(mut self) -> Result<()> {
         self.commit_tracker.is_committed = true;
         return self.tx.commit_tx().await;
     }
 
-    pub async fn expect_commit_tx(mut self) {
+    pub async fn commit_tx(mut self) {
         self.commit_tracker.is_committed = true;
         self.tx
             .commit_tx()
@@ -891,41 +884,34 @@ impl<'parent> DatabaseTransaction<'parent> {
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
-        match self
-            .tx
+        self.tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await
             .expect("Unrecoverable error while inserting into the database")
-        {
-            Some(old_val_bytes) => Some(
+            .map(|old_val_bytes| {
                 decode_value(&old_val_bytes, &self.decoders)
-                    .expect("Unrecoverable error while decoding the database value"),
-            ),
-            None => None,
-        }
+                    .expect("Unrecoverable error while decoding the database value")
+            })
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
     where
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
-        match self
+        let prev_val = self
             .tx
             .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
             .await
-            .expect("Unrecoverable error while inserting new entry into the database")
-        {
-            Some(_) => {
-                warn!(
-                    target: LOG_DB,
-                    "Database overwriting element when expecting insertion of new entry. Key: {:?}",
-                    key
-                );
-                None
-            }
-            None => None,
+            .expect("Unrecoverable error occurred while inserting new entry into database");
+        if let Some(prev_val) = prev_val {
+            warn!(
+                target: LOG_DB,
+                "Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}",
+                key,
+                prev_val,
+            );
         }
     }
 
@@ -1263,7 +1249,7 @@ pub async fn apply_migrations<'a>(
         target_db_version
     };
 
-    dbtx.commit_tx().await?;
+    dbtx.commit_tx_result().await?;
     info!(target: LOG_DB, "{} module db version: {}", kind, db_version);
     Ok(())
 }
@@ -1353,7 +1339,7 @@ mod tests {
 
         assert!(dbtx.insert_entry(&TestKey(2), &TestVal(3)).await.is_none());
 
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn verify_remove_nonexisting(db: Database) {
@@ -1363,7 +1349,7 @@ mod tests {
         assert!(removed.is_none());
 
         // Commit to surpress the warning message
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn verify_remove_existing(db: Database) {
@@ -1378,7 +1364,7 @@ mod tests {
         assert_eq!(dbtx.get_value(&TestKey(1)).await, None);
 
         // Commit to surpress the warning message
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn verify_read_own_writes(db: Database) {
@@ -1389,7 +1375,7 @@ mod tests {
         assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(2)));
 
         // Commit to surpress the warning message
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn verify_prevent_dirty_reads(db: Database) {
@@ -1402,7 +1388,7 @@ mod tests {
         assert_eq!(dbtx2.get_value(&TestKey(1)).await, None);
 
         // Commit to surpress the warning message
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn verify_find_by_prefix(db: Database) {
@@ -1412,7 +1398,7 @@ mod tests {
 
         dbtx.insert_entry(&AltTestKey(55), &TestVal(7777)).await;
         dbtx.insert_entry(&AltTestKey(54), &TestVal(6666)).await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         // Verify finding by prefix returns the correct set of key pairs
         let mut dbtx = db.begin_transaction().await;
@@ -1463,7 +1449,7 @@ mod tests {
         let mut dbtx = db.begin_transaction().await;
 
         assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         // Verify dbtx2 can see committed transactions
         let mut dbtx2 = db.begin_transaction().await;
@@ -1508,7 +1494,7 @@ mod tests {
         assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await, None);
 
         // Commit to surpress the warning message
-        dbtx_rollback.expect_commit_tx().await;
+        dbtx_rollback.commit_tx().await;
     }
 
     pub async fn verify_prevent_nonrepeatable_reads(db: Database) {
@@ -1521,7 +1507,7 @@ mod tests {
 
         assert_eq!(dbtx.get_value(&TestKey(100)).await, None);
 
-        dbtx2.expect_commit_tx().await;
+        dbtx2.commit_tx().await;
 
         // dbtx should still read None because it is operating over a snapshot
         // of the data when the transaction started
@@ -1549,7 +1535,7 @@ mod tests {
 
         dbtx.insert_entry(&TestKey(101), &TestVal(102)).await;
 
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         let mut dbtx = db.begin_transaction().await;
         let expected_keys = 2;
@@ -1576,7 +1562,7 @@ mod tests {
 
         dbtx2.insert_entry(&TestKey(102), &TestVal(103)).await;
 
-        dbtx2.expect_commit_tx().await;
+        dbtx2.commit_tx().await;
 
         let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
@@ -1601,7 +1587,7 @@ mod tests {
     pub async fn expect_write_conflict(db: Database) {
         let mut dbtx = db.begin_transaction().await;
         dbtx.insert_entry(&TestKey(100), &TestVal(101)).await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         let mut dbtx2 = db.begin_transaction().await;
         let mut dbtx3 = db.begin_transaction().await;
@@ -1613,8 +1599,8 @@ mod tests {
         // (pessimistic) or at commit time (optimistic)
         dbtx3.insert_entry(&TestKey(100), &TestVal(103)).await;
 
-        dbtx2.expect_commit_tx().await;
-        dbtx3.commit_tx().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
+        dbtx2.commit_tx().await;
+        dbtx3.commit_tx_result().await.expect_err("Expecting an error to be returned because this transaction is in a write-write conflict with dbtx");
     }
 
     pub async fn verify_string_prefix(db: Database) {
@@ -1658,11 +1644,11 @@ mod tests {
 
         dbtx.insert_entry(&TestKey(101), &TestVal(102)).await;
 
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         let mut remove_dbtx = db.begin_transaction().await;
         remove_dbtx.remove_by_prefix(&DbPrefixTestPrefix).await;
-        remove_dbtx.expect_commit_tx().await;
+        remove_dbtx.commit_tx().await;
 
         let mut dbtx = db.begin_transaction().await;
         let expected_keys = 0;
@@ -1693,7 +1679,7 @@ mod tests {
 
         dbtx.insert_entry(&TestKey(101), &TestVal(102)).await;
 
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         // verify module_dbtx can only read key/value pairs from its own module
         let mut module_dbtx = module_db.begin_transaction().await;
@@ -1713,7 +1699,7 @@ mod tests {
 
         module_dbtx.insert_entry(&TestKey(101), &TestVal(104)).await;
 
-        module_dbtx.expect_commit_tx().await;
+        module_dbtx.commit_tx().await;
 
         let expected_keys = 2;
         let mut dbtx = db.begin_transaction().await;
@@ -1761,7 +1747,7 @@ mod tests {
                 .await;
         }
 
-        test_dbtx.expect_commit_tx().await;
+        test_dbtx.commit_tx().await;
 
         let mut alt_dbtx = db.begin_transaction().await;
         {
@@ -1776,7 +1762,7 @@ mod tests {
                 .await;
         }
 
-        alt_dbtx.expect_commit_tx().await;
+        alt_dbtx.commit_tx().await;
 
         // verfiy test_module_dbtx can only see key/value pairs from its own module
         let mut test_dbtx = db.begin_transaction().await;
@@ -1820,7 +1806,7 @@ mod tests {
         let mut test_dbtx = db.begin_transaction().await;
         assert_eq!(test_dbtx.get_value(&TestKey(101)).await, None);
 
-        test_dbtx.expect_commit_tx().await;
+        test_dbtx.commit_tx().await;
     }
 
     #[cfg(test)]
@@ -1837,7 +1823,7 @@ mod tests {
 
         dbtx.insert_new_entry(&DatabaseVersionKey, &DatabaseVersion(0))
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         let mut migrations = MigrationMap::new();
 

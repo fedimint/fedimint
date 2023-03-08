@@ -332,7 +332,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             );
             secret
         };
-        tx.expect_commit_tx().await;
+        tx.commit_tx().await;
         secret.into_root_secret()
     }
 
@@ -369,7 +369,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     ) -> Result<TransactionId> {
         let mut dbtx = self.context.db.begin_transaction().await;
         let final_tx = tx.build(self, &mut dbtx, rng).await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
         let result = self
             .context
             .api
@@ -404,7 +404,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             };
             dbtx.insert_entry(&key, &note).await;
         }
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         let mut tx = TransactionBuilder::default();
         let (mut keys, input) = MintClient::ecash_input(notes)?;
@@ -478,7 +478,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         self.mint_client()
             .receive_notes(amount, &mut dbtx, create_tx)
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn new_peg_out_with_fees(
@@ -559,7 +559,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             .wallet_client()
             .get_new_pegin_address(&mut dbtx, rng)
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
         address
     }
 
@@ -601,7 +601,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             })
             .await;
         }
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         Ok(final_notes)
     }
@@ -641,7 +641,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             })
             .await;
         }
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         Ok(notes)
     }
@@ -653,7 +653,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     pub async fn fetch_notes<'a>(&self, outpoint: OutPoint) -> Result<()> {
         let mut dbtx = self.context.db.begin_transaction().await;
         self.mint_client().fetch_notes(&mut dbtx, outpoint).await?;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
         Ok(())
     }
 
@@ -690,7 +690,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             notes_to_reissue.extend(notes);
             dbtx.remove_entry(&key).await;
         }
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         debug!(target: LOG_WALLET, notes_to_reissue = ?notes_to_reissue.summary(), total = %notes_to_reissue.total_amount());
         trace!(target: LOG_WALLET, ?notes_to_reissue, "foo");
@@ -809,7 +809,7 @@ impl Client<UserClientConfig> {
         };
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.insert_entry(&LightningGatewayKey, &gateway).await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
         Ok(gateway)
     }
 
@@ -836,7 +836,7 @@ impl Client<UserClientConfig> {
             )
             .await?;
 
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         let (contract_id, amount) = match &contract {
             LightningOutput::Contract(c) => {
@@ -889,7 +889,7 @@ impl Client<UserClientConfig> {
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
             .await
             .ok_or(ClientError::DeleteUnknownOutgoingContract)?;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         Ok(OutPoint { txid, out_idx: 0 })
     }
@@ -1242,7 +1242,7 @@ impl Client<GatewayClientConfig> {
             &contract,
         )
         .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
     }
 
     /// Lists all previously saved transactions that have not been driven to
@@ -1267,7 +1267,7 @@ impl Client<GatewayClientConfig> {
             .remove_entry(&OutgoingContractAccountKey(contract_id))
             .await
             .ok_or(ClientError::CancelUnknownOutgoingContract)?;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         self.cancel_outgoing_contract(contract_account).await
     }
@@ -1326,7 +1326,7 @@ impl Client<GatewayClientConfig> {
             .await;
         dbtx.insert_entry(&OutgoingPaymentClaimKey(contract_id), &())
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
 
         tx.input(&mut vec![self.config.redeem_key], input);
         let txid = self.submit_tx_with_change(tx, rng).await?;
@@ -1486,7 +1486,7 @@ impl Client<GatewayClientConfig> {
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.remove_entry(&OutgoingPaymentClaimKey(contract_id))
             .await;
-        dbtx.expect_commit_tx().await;
+        dbtx.commit_tx().await;
         Ok(())
     }
 
