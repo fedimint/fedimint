@@ -20,7 +20,7 @@ cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/con
 
 export PEG_IN_AMOUNT=99999
 await_lightning_node_block_processing
-start_gatewayd
+start_gateways
 
 ./scripts/pegin.sh $PEG_IN_AMOUNT CLN # peg in CLN gateway
 ./scripts/pegin.sh $PEG_IN_AMOUNT LND # peg in LND gateway

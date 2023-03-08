@@ -90,7 +90,7 @@ function kill_fedimint_processes {
   rm -f $FM_PID_FILE
 }
 
-function start_gatewayd() {
+function start_gateways() {
   # start cln gw
   export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw-cln
   export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
