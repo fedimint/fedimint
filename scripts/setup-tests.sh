@@ -44,7 +44,7 @@ else
 fi
 
 # Start CLN node
-lightningd $LIGHTNING_FLAGS --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_CLN_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/gateway-cln-extension &
+lightningd $LIGHTNING_FLAGS --rpc-file rpc --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_CLN_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/gateway-cln-extension &
 echo $! >> $FM_PID_FILE
 
 # Start LND node

@@ -90,7 +90,7 @@ export FM_GATEWAY_LIGHTNING_ADDR="http://localhost:8177"
 mkdir -p $FM_GATEWAY_DATA_DIR
 
 # Define clients
-export FM_CLN="lightning-cli --network regtest --lightning-dir=$FM_CLN_DIR"
+export FM_CLN="lightning-cli --rpc-file=rpc --network regtest --lightning-dir=$FM_CLN_DIR"
 export FM_LND="lncli -n regtest --lnddir=$FM_LND_DIR --rpcserver=localhost:11009"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
