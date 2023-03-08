@@ -2,8 +2,9 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
+use cln_rpc::model::{GetinfoRequest, GetinfoResponse};
 use fedimint_core::dyn_newtype_define;
 use futures::stream::BoxStream;
 use tonic::transport::{Channel, Endpoint};
@@ -13,8 +14,8 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
-    GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetRouteHintsResponse,
+    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
 use crate::{GatewayError, Result};
@@ -25,7 +26,8 @@ pub type HtlcStream<'a> =
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
     /// Get the public key of the lightning node
-    async fn pubkey(&self) -> Result<GetPubKeyResponse>;
+    /// TODO: rename to `node_pubkey`
+    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey>;
 
     /// Get route hints to the lightning node
     async fn routehints(&self) -> Result<GetRouteHintsResponse>;
@@ -94,13 +96,15 @@ impl NetworkLnRpcClient {
 
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
-    async fn pubkey(&self) -> Result<GetPubKeyResponse> {
-        let req = Request::new(EmptyRequest {});
-
-        let mut client = self.client.clone();
-        let res = client.get_pub_key(req).await?;
-
-        Ok(res.into_inner())
+    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
+        self.cln_client()
+            .await?
+            .call(cln_rpc::Request::Getinfo(GetinfoRequest {}))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::Getinfo(GetinfoResponse { id, .. }) => Ok(id),
+                _ => bail!("Wrong response from CLN"),
+            })?
     }
 
     async fn routehints(&self) -> Result<GetRouteHintsResponse> {

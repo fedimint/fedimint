@@ -10,8 +10,8 @@ use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 use ln_gateway::gatewaylnrpc::{
-    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetRouteHintsResponse, PayInvoiceRequest,
+    PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
 use mint_client::modules::ln::contracts::Preimage;
@@ -78,10 +78,8 @@ impl LightningTest for FakeLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for FakeLightningTest {
-    async fn pubkey(&self) -> ln_gateway::Result<GetPubKeyResponse> {
-        Ok(GetPubKeyResponse {
-            pub_key: self.gateway_node_pub_key.serialize().to_vec(),
-        })
+    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
+        Ok(self.gateway_node_pub_key)
     }
 
     async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {

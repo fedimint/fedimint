@@ -3,9 +3,10 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use bitcoin::secp256k1;
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetRouteHintsResponse, PayInvoiceRequest,
+    PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
 use ln_gateway::GatewayError;
@@ -45,7 +46,7 @@ impl LnRpcAdapter {
 
 #[async_trait]
 impl ILnRpcClient for LnRpcAdapter {
-    async fn pubkey(&self) -> ln_gateway::Result<GetPubKeyResponse> {
+    async fn pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
         self.client.pubkey().await
     }
 

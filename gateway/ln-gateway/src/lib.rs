@@ -17,7 +17,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::anyhow;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
@@ -29,14 +28,12 @@ use fedimint_core::{Amount, TransactionId};
 use mint_client::ln::PayInvoicePayload;
 use mint_client::modules::ln::route_hints::RouteHint;
 use mint_client::{ClientError, GatewayClient};
-use secp256k1::PublicKey;
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info, warn};
 
 use crate::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
-use crate::gatewaylnrpc::GetPubKeyResponse;
 use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
@@ -208,9 +205,7 @@ impl Gateway {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
-        let GetPubKeyResponse { pub_key } = self.lnrpc.pubkey().await?;
-        let node_pub_key = PublicKey::from_slice(&pub_key)
-            .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
+        let node_pub_key = self.lnrpc.pubkey().await?;
 
         // The gateway deterministically assigns a channel id (u64) to each federation
         // connected. TODO: explicitly handle the case where the channel id
