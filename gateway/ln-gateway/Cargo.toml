@@ -32,6 +32,7 @@ cln-rpc = "0.1.1"
 cln-plugin = { git = "https://github.com/fedimint/lightning", rev = "2db131d5" }
 futures = "0.3.24"
 lightning-invoice = "0.21.0"
+fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 fedimint-logging = { path = "../../fedimint-logging" }

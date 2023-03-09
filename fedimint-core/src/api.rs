@@ -14,7 +14,7 @@ use bech32::{FromBase32, ToBase32};
 use bitcoin::consensus::ReadExt;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{
-    ApiEndpoint, ClientConfig, ClientModuleGenRegistry, ConfigResponse, FederationId,
+    ApiEndpoint, ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId,
 };
 use fedimint_core::core::DynOutputOutcome;
 use fedimint_core::fmt_utils::AbbreviateDebug;
@@ -395,7 +395,7 @@ pub trait GlobalFederationApi {
     async fn download_client_config(
         &self,
         id: &FederationId,
-        module_gens: ClientModuleGenRegistry,
+        module_gens: CommonModuleGenRegistry,
     ) -> FederationResult<ClientConfig>;
 
     /// Fetches the server consensus hash if enough peers agree on it
@@ -543,7 +543,7 @@ where
     async fn download_client_config(
         &self,
         id: &FederationId,
-        module_gens: ClientModuleGenRegistry,
+        module_gens: CommonModuleGenRegistry,
     ) -> FederationResult<ClientConfig> {
         let id = id.clone();
         let qs = VerifiableResponse::new(

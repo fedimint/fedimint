@@ -4,8 +4,9 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
+use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
-use fedimint_core::config::{ClientConfig, ClientModuleGenRegistry, FederationId};
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::PeerId;

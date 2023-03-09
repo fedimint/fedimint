@@ -13,10 +13,11 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, KeyPair};
 use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
 use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ClientModuleGenRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -28,9 +29,10 @@ use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
-use fedimint_ln_client::LightningGateway;
+use fedimint_ln_client::{LightningClientGen, LightningGateway};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
+use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
 use fedimint_mint_server::MintGen;
@@ -47,6 +49,7 @@ use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::fixtures::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;
+use fedimint_wallet_client::WalletClientGen;
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
 use fedimint_wallet_server::common::{PegOutFees, SpendableUTXO};
@@ -153,10 +156,16 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     );
     let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
 
-    let module_inits = ServerModuleGenRegistry::from(vec![
+    let server_module_inits = ServerModuleGenRegistry::from(vec![
         DynServerModuleGen::from(WalletGen),
         DynServerModuleGen::from(MintGen),
         DynServerModuleGen::from(LightningGen),
+    ]);
+
+    let client_module_inits = ClientModuleGenRegistry::from(vec![
+        DynClientModuleGen::from(WalletClientGen),
+        DynClientModuleGen::from(MintClientGen),
+        DynClientModuleGen::from(LightningClientGen),
     ]);
 
     let decoders = module_decode_stubs();
@@ -165,10 +174,14 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
-            let (server_config, client_config) =
-                distributed_config(&peers, params, module_inits.clone(), &mut config_task_group)
-                    .await
-                    .expect("distributed config should not be canceled");
+            let (server_config, client_config) = distributed_config(
+                &peers,
+                params,
+                server_module_inits.clone(),
+                &mut config_task_group,
+            )
+            .await
+            .expect("distributed config should not be canceled");
             config_task_group
                 .shutdown_join_all(None)
                 .await
@@ -219,7 +232,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
-                module_inits.clone(),
+                server_module_inits.clone(),
                 |_cfg: ServerConfig, _db| Box::pin(async { BTreeMap::default() }),
                 &mut task_group,
             )
@@ -237,7 +250,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 create_user_client(
                     user_cfg,
                     decoders.clone(),
-                    module_inits.to_client(),
+                    client_module_inits.clone(),
                     peers,
                     user_db,
                 )
@@ -249,7 +262,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lnrpc_adapter,
                 client_config.clone(),
                 decoders,
-                module_inits.to_client(),
+                client_module_inits.clone(),
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )
@@ -266,10 +279,11 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config = ServerConfig::trusted_dealer_gen(&params, module_inits.clone());
+            let server_config =
+                ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
-                .to_config_response(&module_inits)
+                .to_config_response(&server_module_inits)
                 .client;
 
             let bitcoin = FakeBitcoinTest::new();
@@ -290,7 +304,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 &fed_db,
                 &bitcoin_rpc,
                 &connect_gen,
-                module_inits.clone(),
+                server_module_inits.clone(),
                 // the things dealing with async makes us do...
                 // if you know how to make it better, please do --dpc
                 |cfg: ServerConfig, db: Database| {
@@ -326,7 +340,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 create_user_client(
                     user_cfg,
                     decoders.clone(),
-                    module_inits.to_client(),
+                    client_module_inits.clone(),
                     peers,
                     user_db,
                 )
@@ -338,7 +352,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 lnrpc_adapter,
                 client_config.clone(),
                 decoders,
-                module_inits.to_client(),
+                client_module_inits,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
             )

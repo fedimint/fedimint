@@ -5,6 +5,7 @@ use fedimint_core::module::ModuleCommon;
 
 use crate::sm::State;
 
+pub mod module;
 /// Client state machine interfaces and executor implementation
 pub mod sm;
 

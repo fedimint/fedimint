@@ -15,8 +15,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
-    TransactionItemAmount,
+    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
+    PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
@@ -66,12 +66,15 @@ impl ModuleGenParams for MintGenParams {
     const MODULE_NAME: &'static str = "mint";
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MintGen;
+
+impl ExtendsCommonModuleGen for MintGen {
+    type Common = MintCommonGen;
+}
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for MintGen {
-    type Common = MintCommonGen;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {

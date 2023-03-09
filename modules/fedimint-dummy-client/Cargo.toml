@@ -17,6 +17,7 @@ bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3"
 fedimint-dummy-common ={ path = "../fedimint-dummy-common" }
+fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 rand = "0.8"
 rayon = "1.6.1"

@@ -12,8 +12,8 @@ use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiError, CommonModuleGen, InputMeta, ModuleCommon, ModuleError, ServerModuleGen,
-    TransactionItemAmount,
+    ApiError, CommonModuleGen, ExtendsCommonModuleGen, InputMeta, ModuleCommon, ModuleError,
+    ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::{OutPoint, PeerId, ServerModule};
 
@@ -63,7 +63,7 @@ where
                 MemDatabase::new(),
                 ModuleDecoderRegistry::from_iter([(
                     module_instance_id,
-                    <ConfGen as ServerModuleGen>::Common::decoder(),
+                    <ConfGen as ExtendsCommonModuleGen>::Common::decoder(),
                 )]),
             );
             let member = constructor(cfg, db.clone()).await?;

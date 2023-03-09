@@ -1,6 +1,5 @@
 use anyhow::Result;
-use fedimint_core::config::ClientModuleGenRegistry;
-use fedimint_core::module::DynClientModuleGen;
+use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
