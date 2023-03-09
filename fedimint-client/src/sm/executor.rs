@@ -495,9 +495,9 @@ mod tests {
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
+    use crate::module::ClientModule;
     use crate::sm::state::{Context, DynContext, DynState};
-    use crate::sm::{Executor, OperationId, StateTransition};
-    use crate::{ClientModule, State};
+    use crate::sm::{Executor, OperationId, State, StateTransition};
 
     struct MockClientModule(tokio::sync::broadcast::Sender<u64>);
 
