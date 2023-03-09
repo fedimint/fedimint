@@ -42,7 +42,7 @@ serde = "1.0.149"
 strum = "0.24"
 strum_macros = "0.24"
 tbs = { path = "../../crypto/tbs" }
-thiserror = "1.0.37"
+thiserror = "1.0.39"
 tokio = { version = "1.26.0", features = ["sync"] }
 tracing = "0.1.37"
 jsonrpsee-types = "0.16.0"
