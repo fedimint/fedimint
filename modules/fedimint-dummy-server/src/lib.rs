@@ -24,7 +24,7 @@ use fedimint_dummy_common::config::{DummyConfig, DummyConfigConsensus, DummyConf
 use fedimint_dummy_common::db::migrate_dummy_db_version_0;
 use fedimint_dummy_common::{
     DummyCommonGen, DummyConsensusItem, DummyInput, DummyModuleTypes, DummyOutput,
-    DummyOutputOutcome, DummyVerificationCache,
+    DummyOutputOutcome,
 };
 use futures::FutureExt;
 
@@ -243,6 +243,11 @@ impl ServerModule for Dummy {
         }]
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct DummyVerificationCache;
+
+impl fedimint_core::server::VerificationCache for DummyVerificationCache {}
 
 impl Dummy {
     /// Create new module instance

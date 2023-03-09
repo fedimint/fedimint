@@ -7,7 +7,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::{CommonModuleGen, ModuleCommon};
-use fedimint_core::plugin_types_trait_impl;
+use fedimint_core::plugin_types_trait_impl_common;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -20,9 +20,6 @@ const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct DummyConsensusItem;
-
-#[derive(Debug, Clone)]
-pub struct DummyVerificationCache;
 
 #[derive(Debug)]
 pub struct DummyCommonGen;
@@ -94,12 +91,11 @@ impl ModuleCommon for DummyModuleTypes {
     type ConsensusItem = DummyConsensusItem;
 }
 
-plugin_types_trait_impl!(
+plugin_types_trait_impl_common!(
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
-    DummyConsensusItem,
-    DummyVerificationCache
+    DummyConsensusItem
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
