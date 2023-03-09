@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use erased_serde::Serialize;
 use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::db::notifications::Notifications;
 use fedimint_core::db::{DatabaseTransaction, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::DynServerModuleGen;
@@ -62,9 +63,14 @@ impl<'a> DatabaseDump<'a> {
         };
         let single_use = SingleUseDatabaseTransaction::new(read_only);
 
+        // leak here is OK, it only happens once.
+        let notifications = Box::leak(Box::new(Notifications::new()));
         if modules.contains(&"client".to_string()) {
-            let dbtx =
-                DatabaseTransaction::new(Box::new(single_use), ModuleDecoderRegistry::default());
+            let dbtx = DatabaseTransaction::new(
+                Box::new(single_use),
+                ModuleDecoderRegistry::default(),
+                notifications,
+            );
             return DatabaseDump {
                 serialized: BTreeMap::new(),
                 read_only: dbtx,
@@ -83,7 +89,7 @@ impl<'a> DatabaseDump<'a> {
 
         let cfg = read_server_config(&password, cfg_dir).unwrap();
         let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
-        let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders);
+        let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
 
         DatabaseDump {
             serialized: BTreeMap::new(),
