@@ -1,18 +1,21 @@
 use std::net::SocketAddr;
 
+use axum::extract::rejection::JsonRejection;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router};
+use axum_extra::extract::WithRejection;
 use axum_macros::debug_handler;
 use mint_client::ln::PayInvoicePayload;
 use serde_json::json;
+use thiserror::Error;
 use tower_http::auth::RequireAuthorizationLayer;
 use tower_http::cors::CorsLayer;
 use tracing::instrument;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
+    GatewayRpcSender, HtlcPayload, InfoPayload, RestorePayload, WithdrawPayload,
 };
 use crate::GatewayError;
 
@@ -34,6 +37,7 @@ pub async fn run_webserver(
         .route("/connect", post(connect))
         .route("/backup", post(backup))
         .route("/restore", post(restore))
+        .route("/htlc", post(htlc))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -142,4 +146,42 @@ async fn restore(
 ) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())
+}
+
+// Receive HTLC from Core Lightning
+#[instrument(skip_all, err)]
+async fn htlc(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    WithRejection(Json(payload), _): WithRejection<Json<HtlcPayload>, ApiError>,
+) -> Result<impl IntoResponse, GatewayError> {
+    tracing::info!("/htlc called {:?}", payload);
+    let response = rpc.send(payload).await?;
+    Ok(Json(response))
+}
+
+// We derive `thiserror::Error`
+#[derive(Debug, Error)]
+pub enum ApiError {
+    // The `#[from]` attribute generates `From<JsonRejection> for ApiError`
+    // implementation. See `thiserror` docs for more information
+    #[error(transparent)]
+    JsonExtractorRejection(#[from] JsonRejection),
+}
+
+// We implement `IntoResponse` so ApiError can be used as a response
+impl IntoResponse for ApiError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, message) = match self {
+            ApiError::JsonExtractorRejection(json_rejection) => {
+                (json_rejection.status(), json_rejection.body_text())
+            }
+        };
+
+        let payload = json!({
+            "message": message,
+            "origin": "with_rejection"
+        });
+
+        (status, Json(payload)).into_response()
+    }
 }

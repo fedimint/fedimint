@@ -72,28 +72,24 @@ impl DynLnRpcClient {
 /// `GatewayLightningServer`.
 #[derive(Debug)]
 pub struct NetworkLnRpcClient {
-    client: GatewayLightningClient<Channel>,
     cln_rpc_socket: PathBuf,
 }
 
 impl NetworkLnRpcClient {
     pub async fn new(url: Url, cln_rpc_socket: PathBuf) -> Result<Self> {
-        let endpoint = Endpoint::from_shared(url.to_string()).map_err(|e| {
-            error!("Failed to create lnrpc endpoint from url : {:?}", e);
-            GatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
-        })?;
+        // let endpoint = Endpoint::from_shared(url.to_string()).map_err(|e| {
+        //     error!("Failed to create lnrpc endpoint from url : {:?}", e);
+        //     GatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
+        // })?;
 
-        let client = GatewayLightningClient::connect(endpoint)
-            .await
-            .map_err(|e| {
-                error!("Failed to connect to lnrpc server: {:?}", e);
-                GatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
-            })?;
+        // let client = GatewayLightningClient::connect(endpoint)
+        //     .await
+        //     .map_err(|e| {
+        //         error!("Failed to connect to lnrpc server: {:?}", e);
+        //         GatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
+        //     })?;
 
-        Ok(Self {
-            client,
-            cln_rpc_socket,
-        })
+        Ok(Self { cln_rpc_socket })
     }
 
     async fn cln_client(&self) -> anyhow::Result<ClnRpc> {
@@ -238,22 +234,12 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn subscribe_htlcs<'a>(
         &self,
-        subscription: SubscribeInterceptHtlcsRequest,
+        _subscription: SubscribeInterceptHtlcsRequest,
     ) -> Result<HtlcStream<'a>> {
-        let req = TonicRequest::new(subscription);
-
-        let mut client = self.client.clone();
-        let res = client.subscribe_intercept_htlcs(req).await?;
-
-        Ok(Box::pin(res.into_inner()))
+        unimplemented!()
     }
 
-    async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
-        let req = TonicRequest::new(outcome);
-
-        let mut client = self.client.clone();
-        let res = client.complete_htlc(req).await?;
-
-        Ok(res.into_inner())
+    async fn complete_htlc(&self, _outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
+        unimplemented!()
     }
 }

@@ -51,6 +51,8 @@ tonic = { version = "0.8", features = ["transport", "tls"] }
 tower-http = { version = "0.3.5", features = ["cors", "auth"] }
 url = { version = "2.3.1", features = ["serde"] }
 
+axum-extra = "0.7.0"
+
 [build-dependencies]
 fedimint-build = { path = "../../fedimint-build" }
 tonic-build = "0.8"

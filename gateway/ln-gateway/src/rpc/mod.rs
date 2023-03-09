@@ -16,6 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
+use crate::cln::HtlcAccepted;
 use crate::{GatewayError, Result};
 
 #[derive(Debug, Clone)]
@@ -74,6 +75,11 @@ pub struct RestorePayload {
     pub federation_id: FederationId,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HtlcPayload {
+    pub htlc_accepted: HtlcAccepted,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
@@ -126,6 +132,7 @@ pub enum GatewayRequest {
     Withdraw(GatewayRequestInner<WithdrawPayload>),
     Backup(GatewayRequestInner<BackupPayload>),
     Restore(GatewayRequestInner<RestorePayload>),
+    Htlc(GatewayRequestInner<HtlcPayload>),
 }
 
 #[derive(Debug)]
@@ -167,6 +174,7 @@ impl_gateway_request_trait!(DepositPayload, TransactionId, GatewayRequest::Depos
 impl_gateway_request_trait!(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
 impl_gateway_request_trait!(BackupPayload, (), GatewayRequest::Backup);
 impl_gateway_request_trait!(RestorePayload, (), GatewayRequest::Restore);
+impl_gateway_request_trait!(HtlcPayload, serde_json::Value, GatewayRequest::Htlc);
 
 impl<T> GatewayRequestInner<T>
 where

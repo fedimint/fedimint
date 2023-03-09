@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
+use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::{ClientModuleGenRegistry, FederationId};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -29,12 +30,14 @@ use fedimint_core::{Amount, TransactionId};
 use mint_client::ln::PayInvoicePayload;
 use mint_client::modules::ln::route_hints::RouteHint;
 use mint_client::{ClientError, GatewayClient};
+use rpc::HtlcPayload;
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info, warn};
 
 use crate::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
+use crate::cln::scid_to_u64;
 use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
@@ -53,6 +56,8 @@ pub enum GatewayError {
     ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
     LnRpcError(#[from] tonic::Status),
+    #[error("Actor not found")]
+    ActorNotFound,
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }
@@ -171,6 +176,16 @@ impl Gateway {
                 "No federation with id {}",
                 federation_id.to_string()
             )))
+    }
+
+    async fn select_actor_by_scid(&self, scid: u64) -> Result<Arc<GatewayActor>> {
+        self.actors
+            .lock()
+            .await
+            .values()
+            .find(|actor| scid == actor.scid())
+            .cloned()
+            .ok_or(GatewayError::ActorNotFound)
     }
 
     pub async fn connect_federation(
@@ -325,6 +340,33 @@ impl Gateway {
         self.select_actor(federation_id).await?.restore().await
     }
 
+    async fn handle_htlc_msg(
+        &self,
+        HtlcPayload { htlc_accepted }: HtlcPayload,
+    ) -> Result<serde_json::Value> {
+        info!("Intercepted htlc with payload, {:?}", htlc_accepted);
+
+        let short_channel_id = match htlc_accepted.onion.short_channel_id.clone() {
+            Some(scid) => match ShortChannelId::from_str(&scid) {
+                Ok(scid) => scid_to_u64(scid),
+                Err(_) => {
+                    // Ignore invalid SCID
+                    error!("Received invalid short channel id {:?}", scid);
+                    return Ok(serde_json::json!({ "result": "continue" }));
+                }
+            },
+            None => {
+                // This is a HTLC terminating at the gateway node. DO NOT intercept
+                return Ok(serde_json::json!({ "result": "continue" }));
+            }
+        };
+
+        self.select_actor_by_scid(short_channel_id)
+            .await?
+            .intercept_htlc(htlc_accepted)
+            .await
+    }
+
     pub async fn run(mut self, listen: SocketAddr, password: String) -> Result<()> {
         let mut tg = self.task_group.clone();
 
@@ -400,6 +442,10 @@ impl Gateway {
                         inner
                             .handle(|payload| self.handle_restore_msg(payload))
                             .await;
+                    }
+                    GatewayRequest::Htlc(inner) => {
+                        tracing::info!("routing htlc messsage");
+                        inner.handle(|payload| self.handle_htlc_msg(payload)).await;
                     }
                 }
             }

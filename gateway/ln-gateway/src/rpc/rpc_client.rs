@@ -6,9 +6,10 @@ use url::Url;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    RestorePayload, WithdrawPayload,
+    HtlcPayload, RestorePayload, WithdrawPayload,
 };
 
+#[derive(Clone)]
 pub struct RpcClient {
     // Base URL to gateway web server
     base_url: Url,
@@ -89,6 +90,15 @@ impl RpcClient {
         payload: RestorePayload,
     ) -> Result<Response, Error> {
         let url = self.base_url.join("/restore").expect("invalid base url");
+        self.call(url, password, payload).await
+    }
+
+    pub async fn intercept_htlc(
+        &self,
+        password: String,
+        payload: HtlcPayload,
+    ) -> Result<Response, Error> {
+        let url = self.base_url.join("/htlc").expect("invalid base url");
         self.call(url, password, payload).await
     }
 
