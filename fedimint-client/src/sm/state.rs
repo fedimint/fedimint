@@ -6,8 +6,9 @@ use std::sync::Arc;
 
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::ModuleDatabaseTransaction;
-use fedimint_core::dyn_newtype_define_with_instance_id;
 use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
+use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send_sync};
 use futures::future::BoxFuture;
 
 use crate::sm::{GlobalContext, OperationId};
@@ -66,7 +67,7 @@ pub trait IState<GC>: Debug + DynEncodable + Send + Sync {
 ///
 /// General purpose code should use [`DynContext`] instead
 pub trait IContext: Debug {
-    fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
 }
 
 dyn_newtype_define_with_instance_id! {
@@ -77,14 +78,16 @@ dyn_newtype_define_with_instance_id! {
 
 /// Additional data made available to state machines of a module (e.g. API
 /// clients)
-pub trait Context: std::fmt::Debug + Send + Sync + 'static {}
+pub trait Context: std::fmt::Debug + MaybeSend + MaybeSync + 'static {}
+
+impl Context for () {}
 
 /// Type-erased version of [`Context`]
 impl<T> IContext for T
 where
-    T: Context + 'static + Send + Sync,
+    T: Context + 'static + MaybeSend + MaybeSync,
 {
-    fn as_any(&self) -> &(dyn Any + Send + Sync) {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
     }
 }

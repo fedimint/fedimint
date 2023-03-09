@@ -499,6 +499,7 @@ mod tests {
     use crate::sm::state::{Context, DynContext, DynState};
     use crate::sm::{Executor, OperationId, State, StateTransition};
 
+    #[derive(Debug)]
     struct MockClientModule(tokio::sync::broadcast::Sender<u64>);
 
     struct MockCommon;

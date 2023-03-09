@@ -2,11 +2,16 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use bitcoin_hashes::sha256;
-use fedimint_core::config::{CommonModuleGenRegistry, ModuleGenRegistry};
+use fedimint_core::config::{
+    ClientModuleConfig, CommonModuleGenRegistry, ModuleGenRegistry, TypedClientModuleConfig,
+};
 use fedimint_core::core::{Decoder, ModuleKind};
+use fedimint_core::db::Database;
 use fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
+
+use crate::module::{ClientModule, DynClientModule};
 
 pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
 
@@ -23,8 +28,15 @@ impl ClientModuleGenRegistryExt for ClientModuleGenRegistry {
 }
 
 #[apply(async_trait_maybe_send!)]
-pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {}
+pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
+    type Module: ClientModule;
+    type Config: TypedClientModuleConfig;
 
+    /// Initialize a [`ClientModule`] instance from its config
+    async fn init(&self, cfg: Self::Config, db: Database) -> anyhow::Result<Self::Module>;
+}
+
+#[apply(async_trait_maybe_send!)]
 pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync {
     fn decoder(&self) -> Decoder;
 
@@ -33,6 +45,8 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
     fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
 
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static);
+
+    async fn init(&self, cfg: ClientModuleConfig, db: Database) -> anyhow::Result<DynClientModule>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -54,6 +68,11 @@ where
 
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
         self
+    }
+
+    async fn init(&self, cfg: ClientModuleConfig, db: Database) -> anyhow::Result<DynClientModule> {
+        let typed_cfg = cfg.cast::<T::Config>()?;
+        Ok(self.init(typed_cfg, db).await?.into())
     }
 }
 

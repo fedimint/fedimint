@@ -26,6 +26,7 @@ use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
 use crate::module::{DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen};
+use crate::task::{MaybeSend, MaybeSync};
 use crate::{maybe_add_send_sync, PeerId};
 
 /// [`serde_json::Value`] that must contain `kind: String` field
@@ -549,7 +550,9 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 }
 
 /// Typed client side module config
-pub trait TypedClientModuleConfig: DeserializeOwned + Serialize + Encodable {
+pub trait TypedClientModuleConfig:
+    DeserializeOwned + Serialize + Encodable + MaybeSend + MaybeSync
+{
     fn kind(&self) -> ModuleKind;
 
     fn to_erased(&self) -> ClientModuleConfig {
