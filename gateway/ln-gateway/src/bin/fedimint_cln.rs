@@ -1,3 +1,7 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use anyhow::bail;
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use fedimint_core::task::TaskGroup;
@@ -5,7 +9,9 @@ use ln_gateway::cln::HtlcAccepted;
 use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::rpc::HtlcPayload;
 use reqwest::Url;
+use serde_json::json;
 use tokio::io::{stdin, stdout};
+use tokio::sync::Mutex;
 use tracing::{debug, info};
 
 #[derive(Parser)]
@@ -23,6 +29,7 @@ pub struct Args {
 struct HtlcInterceptor {
     gateway_rpc: RpcClient,
     gateway_password: String,
+    scids: Arc<Mutex<HashSet<u64>>>,
 }
 
 impl HtlcInterceptor {
@@ -30,6 +37,7 @@ impl HtlcInterceptor {
         Self {
             gateway_rpc: RpcClient::new(gateway_api),
             gateway_password,
+            scids: Arc::new(Mutex::new(HashSet::new())),
         }
     }
     async fn intercept_htlc(&self, htlc_accepted: HtlcAccepted) -> serde_json::Value {
@@ -82,6 +90,20 @@ async fn main() -> Result<(), anyhow::Error> {
                     Ok(plugin.state().intercept_htlc(htlc_accepted).await)
                 });
                 handle.await?
+            },
+        )
+        .rpcmethod(
+            "registerscid",
+            "Subscribe to HTLC which match a given SCID. This is used to filter HTLCs in the plugin",
+            |plugin: Plugin<HtlcInterceptor>, value: serde_json::Value| async move {
+                info!("register_scid {:?}", value);
+                let mut scids = plugin.state().scids.lock().await;
+                let scid: u64 = match value[0].as_u64() {
+                    Some(scid) => scid,
+                    None => bail!("Invalid SCID")
+                };
+                scids.insert(scid);
+                Ok(json!(*scids))
             },
         )
         // Shutdown the plugin when lightningd is shutting down or when the plugin is stopped
