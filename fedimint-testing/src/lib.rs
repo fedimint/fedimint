@@ -366,6 +366,12 @@ pub async fn prepare_snapshot<F>(
     }
 }
 
+pub const STRING_64: &str = "0123456789012345678901234567890101234567890123456789012345678901";
+pub const BYTE_8: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+pub const BYTE_32: [u8; 32] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1,
+];
+
 /// Iterates over all of the databases supplied in the database backup
 /// directory, which is specified by `FM_TEST_DB_BACKUP_DIR` environment
 /// variable. First, a temporary database will be created and the contents will
@@ -374,8 +380,11 @@ pub async fn prepare_snapshot<F>(
 /// to do any validation necessary on the temporary database, such as applying
 /// the appropriate database migrations and then reading all of the data to
 /// verify the migrations were successful.
-pub async fn validate_migrations<F, Fut>(validate: F, decoders: ModuleDecoderRegistry)
-where
+pub async fn validate_migrations<F, Fut>(
+    db_prefix: &str,
+    validate: F,
+    decoders: ModuleDecoderRegistry,
+) where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = ()>,
 {
@@ -384,12 +393,14 @@ where
         let files = fs::read_dir(db_dir).unwrap();
         for file in files.flatten() {
             let name = file.file_name().into_string().unwrap();
-            let temp_db = open_temp_db_and_copy(
-                format!("{}-{}", name.as_str(), OsRng.next_u64()),
-                &file.path(),
-                decoders.clone(),
-            );
-            validate(temp_db).await;
+            if name.starts_with(db_prefix) {
+                let temp_db = open_temp_db_and_copy(
+                    format!("{}-{}", name.as_str(), OsRng.next_u64()),
+                    &file.path(),
+                    decoders.clone(),
+                );
+                validate(temp_db).await;
+            }
         }
     }
 }

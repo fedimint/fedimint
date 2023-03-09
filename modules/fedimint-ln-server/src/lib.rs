@@ -905,7 +905,7 @@ mod fedimint_migration_tests {
         LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
         ProposeDecryptionShareKeyPrefix,
     };
-    use fedimint_testing::{prepare_snapshot, validate_migrations};
+    use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     use futures::StreamExt;
     use lightning_invoice::Invoice;
     use rand::distributions::Standard;
@@ -918,13 +918,6 @@ mod fedimint_migration_tests {
     use crate::{
         ContractAccount, Lightning, LightningGateway, LightningGen, LightningOutputOutcome,
     };
-
-    const STRING_64: &str = "0123456789012345678901234567890101234567890123456789012345678901";
-    const BYTE_8: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
-    const BYTE_32: [u8; 32] = [
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-        0, 1,
-    ];
 
     /// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -1044,6 +1037,7 @@ mod fedimint_migration_tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_migrations() {
         validate_migrations(
+            "lightning",
             |db| async move {
                 let module = DynServerModuleGen::from(LightningGen);
                 apply_migrations(
