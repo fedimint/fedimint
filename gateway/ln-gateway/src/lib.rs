@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod client;
+pub mod cln;
 pub mod lnrpc_client;
 pub mod rpc;
 pub mod types;
@@ -93,9 +94,7 @@ impl Gateway {
             let route_hints: Vec<RouteHint> = lnrpc
                 .route_hints()
                 .await
-                .expect("Could not fetch route hints")
-                .try_into()
-                .expect("Could not parse route hints");
+                .expect("Could not fetch route hints");
 
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
                 break route_hints;
@@ -360,8 +359,7 @@ impl Gateway {
                         inner.handle(|payload| self.handle_get_info(payload)).await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
-                        let route_hints: Vec<RouteHint> =
-                            self.lnrpc.route_hints().await?.try_into()?;
+                        let route_hints: Vec<RouteHint> = self.lnrpc.route_hints().await?;
                         inner
                             .handle(|payload| {
                                 self.handle_connect_federation(payload, route_hints.clone())

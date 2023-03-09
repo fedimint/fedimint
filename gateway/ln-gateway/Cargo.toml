@@ -34,6 +34,7 @@ futures = "0.3.24"
 lightning-invoice = "0.21.0"
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
+fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-logging = { path = "../../fedimint-logging" }
 mint-client = { path = "../../client/client-lib" }
 prost = "0.11"

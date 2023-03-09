@@ -4,9 +4,10 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use bitcoin::secp256k1;
+use fedimint_ln_client::route_hints::RouteHint;
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetRouteHintsResponse, PayInvoiceRequest,
-    PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, PayInvoiceRequest, PayInvoiceResponse,
+    SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
 use ln_gateway::GatewayError;
@@ -50,7 +51,7 @@ impl ILnRpcClient for LnRpcAdapter {
         self.client.node_pubkey().await
     }
 
-    async fn route_hints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
+    async fn route_hints(&self) -> anyhow::Result<Vec<RouteHint>> {
         self.client.route_hints().await
     }
 

@@ -22,6 +22,7 @@ fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
+fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
 ln-gateway = { path = "../gateway/ln-gateway" }
 futures = "0.3"
 lightning = "0.0.113"

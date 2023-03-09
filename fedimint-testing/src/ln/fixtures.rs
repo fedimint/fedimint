@@ -6,12 +6,13 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_core::Amount;
+use fedimint_ln_common::route_hints::RouteHint;
 use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 use ln_gateway::gatewaylnrpc::{
-    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetRouteHintsResponse, PayInvoiceRequest,
-    PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, PayInvoiceRequest, PayInvoiceResponse,
+    SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
 use mint_client::modules::ln::contracts::Preimage;
@@ -82,10 +83,8 @@ impl ILnRpcClient for FakeLightningTest {
         Ok(self.gateway_node_pub_key)
     }
 
-    async fn route_hints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
-        Ok(GetRouteHintsResponse {
-            route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
-        })
+    async fn route_hints(&self) -> anyhow::Result<Vec<RouteHint>> {
+        Ok(vec![])
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {

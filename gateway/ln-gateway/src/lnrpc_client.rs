@@ -4,19 +4,20 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
-use cln_rpc::model::{GetinfoRequest, GetinfoResponse};
+use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_core::dyn_newtype_define;
+use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
 use futures::stream::BoxStream;
 use tonic::transport::{Channel, Endpoint};
-use tonic::Request;
-use tracing::error;
+use tonic::Request as TonicRequest;
+use tracing::{debug, error, trace, warn};
 use url::Url;
 
+use crate::cln::scid_to_u64;
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetRouteHintsResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
-    SubscribeInterceptHtlcsResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, PayInvoiceRequest, PayInvoiceResponse,
+    SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
 };
 use crate::{GatewayError, Result};
 
@@ -29,7 +30,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn node_pubkey(&self) -> anyhow::Result<secp256k1::PublicKey>;
 
     /// Get route hints to the lightning node
-    async fn route_hints(&self) -> Result<GetRouteHintsResponse>;
+    async fn route_hints(&self) -> anyhow::Result<Vec<RouteHint>>;
 
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
@@ -88,8 +89,8 @@ impl NetworkLnRpcClient {
         })
     }
 
-    async fn cln_client(&self) -> anyhow::Result<cln_rpc::ClnRpc> {
-        cln_rpc::ClnRpc::new(&self.cln_rpc_socket).await
+    async fn cln_client(&self) -> anyhow::Result<ClnRpc> {
+        ClnRpc::new(&self.cln_rpc_socket).await
     }
 }
 
@@ -98,25 +99,106 @@ impl ILnRpcClient for NetworkLnRpcClient {
     async fn node_pubkey(&self) -> anyhow::Result<secp256k1::PublicKey> {
         self.cln_client()
             .await?
-            .call(cln_rpc::Request::Getinfo(GetinfoRequest {}))
+            .call(Request::Getinfo(model::GetinfoRequest {}))
             .await
             .map(|response| match response {
-                cln_rpc::Response::Getinfo(GetinfoResponse { id, .. }) => Ok(id),
+                Response::Getinfo(model::GetinfoResponse { id, .. }) => Ok(id),
                 _ => bail!("Wrong response from CLN"),
             })?
     }
 
-    async fn route_hints(&self) -> Result<GetRouteHintsResponse> {
-        let req = Request::new(EmptyRequest {});
+    async fn route_hints(&self) -> anyhow::Result<Vec<RouteHint>> {
+        let our_pub_key = self
+            .node_pubkey()
+            .await
+            .map_err(|err| anyhow!("Lightning error: {:?}", err))?;
 
-        let mut client = self.client.clone();
-        let res = client.get_route_hints(req).await?;
+        let peers_response = self
+            .cln_client()
+            .await?
+            .call(Request::ListPeers(model::ListpeersRequest {
+                id: None,
+                level: None,
+            }))
+            .await?;
+        let peers = match peers_response {
+            Response::ListPeers(peers) => peers.peers,
+            _ => {
+                panic!("Unexpected response")
+            }
+        };
 
-        Ok(res.into_inner())
+        let active_peer_channels = peers
+            .into_iter()
+            .flat_map(|peer| peer.channels.into_iter().map(move |chan| (peer.id, chan)))
+            .filter_map(|(peer_id, chan)| {
+                // TODO: upstream eq derive
+                if !matches!(
+                    chan.state,
+                    model::ListpeersPeersChannelsState::CHANNELD_NORMAL
+                ) {
+                    return None;
+                }
+
+                let Some(scid) = chan.short_channel_id else {
+                    warn!("Encountered channel without short channel id");
+                    return None;
+                };
+
+                Some((peer_id, scid))
+            })
+            .collect::<Vec<_>>();
+
+        debug!(
+            "Found {} active channels to use as route hints",
+            active_peer_channels.len()
+        );
+
+        let mut route_hints = vec![];
+        for (peer_id, scid) in active_peer_channels {
+            let channels_response = self
+                .cln_client()
+                .await?
+                .call(Request::ListChannels(model::ListchannelsRequest {
+                    short_channel_id: Some(scid),
+                    source: None,
+                    destination: None,
+                }))
+                .await
+                .map_err(|err| anyhow!("Lightning error: {:?}", err))?;
+            let channel = match channels_response {
+                Response::ListChannels(channels) => {
+                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == our_pub_key) else {
+                        warn!("Channel {:?} not found in graph", scid);
+                        continue;
+                    };
+                    channel
+                }
+                _ => panic!("Unexpected response"),
+            };
+
+            let route_hint_hop = RouteHintHop {
+                src_node_id: peer_id,
+                short_channel_id: scid_to_u64(scid),
+                base_msat: channel.base_fee_millisatoshi,
+                proportional_millionths: channel.fee_per_millionth,
+                cltv_expiry_delta: channel
+                    .delay
+                    .try_into()
+                    .expect("CLN returned too big cltv expiry delta"),
+                htlc_minimum_msat: Some(channel.htlc_minimum_msat.msat()),
+                htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
+            };
+
+            trace!("Constructed route hint {:?}", route_hint_hop);
+            route_hints.push(RouteHint(vec![route_hint_hop]))
+        }
+
+        Ok(route_hints)
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
-        let req = Request::new(invoice);
+        let req = TonicRequest::new(invoice);
 
         let mut client = self.client.clone();
         let res = client.pay_invoice(req).await?;
@@ -128,7 +210,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> Result<HtlcStream<'a>> {
-        let req = Request::new(subscription);
+        let req = TonicRequest::new(subscription);
 
         let mut client = self.client.clone();
         let res = client.subscribe_intercept_htlcs(req).await?;
@@ -137,7 +219,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
     }
 
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
-        let req = Request::new(outcome);
+        let req = TonicRequest::new(outcome);
 
         let mut client = self.client.clone();
         let res = client.complete_htlc(req).await?;
