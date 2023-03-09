@@ -26,7 +26,7 @@ use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
 use crate::module::{DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen};
-use crate::PeerId;
+use crate::{maybe_add_send_sync, PeerId};
 
 /// [`serde_json::Value`] that must contain `kind: String` field
 ///
@@ -285,7 +285,7 @@ where
 
 impl<M> FromIterator<M> for ModuleGenRegistry<M>
 where
-    M: AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static>,
+    M: AsRef<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)>,
 {
     fn from_iter<T: IntoIterator<Item = M>>(iter: T) -> Self {
         Self(BTreeMap::from_iter(

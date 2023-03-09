@@ -365,14 +365,14 @@ dyn_newtype_define!(
     pub DynCommonModuleGen(Arc<IDynCommonModuleGen>)
 );
 
-impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynCommonModuleGen {
-    fn as_ref(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
+impl AsRef<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)> for DynCommonModuleGen {
+    fn as_ref(&self) -> &(maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)) {
         self.0.as_ref()
     }
 }
 
 impl DynCommonModuleGen {
-    pub fn from_inner(inner: Arc<dyn IDynCommonModuleGen + Send + Sync + 'static>) -> Self {
+    pub fn from_inner(inner: Arc<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)>) -> Self {
         DynCommonModuleGen(inner)
     }
 }

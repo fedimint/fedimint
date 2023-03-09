@@ -319,7 +319,7 @@ impl ExecutorBuilder {
         });
 
         let task_runner_inner = inner.clone();
-        tasks
+        let _handle = tasks
             .spawn("state_machine_executor", move |handle| async move {
                 let shutdown_future = handle.make_shutdown_rx().await;
                 let executor_runner = task_runner_inner.run();

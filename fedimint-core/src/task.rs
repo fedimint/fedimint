@@ -343,7 +343,6 @@ impl TaskHandle {
     ///
     /// Tasks can use `select` on the return value to handle shutdown
     /// signal during otherwise blocking operation.
-    #[cfg(not(target_family = "wasm"))]
     pub async fn make_shutdown_rx(&self) -> oneshot::Receiver<()> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         self.on_shutdown(Box::new(|| {

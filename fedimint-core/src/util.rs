@@ -1,7 +1,14 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
+use std::future::Future;
+use std::pin::Pin;
 
 use url::Url;
+
+use crate::maybe_add_send;
+
+/// Future that is `Send` unless targeting WASM
+pub type BoxFuture<'a, T> = Pin<Box<maybe_add_send!(dyn Future<Output = T> + 'a)>>;
 
 // TODO: make fully RFC1738 conformant
 /// Wrapper for `Url` that only prints the scheme, domain, port and path portion
