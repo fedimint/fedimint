@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use erased_serde::Serialize;
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::notifications::Notifications;
-use fedimint_core::db::{DatabaseTransaction, SingleUseDatabaseTransaction};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::module::__reexports::serde_json;
@@ -112,7 +112,7 @@ impl<'a> DatabaseDump<'a> {
     /// Iterates through all the specified ranges in the database and retrieves
     /// the data for each range. Prints serialized contents at the end.
     pub async fn dump_database(&mut self) {
-        if !self.modules.is_empty() && self.modules.contains(&"consensus".to_string()) {
+        if self.modules.is_empty() || self.modules.contains(&"consensus".to_string()) {
             self.retrieve_consensus_data().await;
         }
 
@@ -129,13 +129,20 @@ impl<'a> DatabaseDump<'a> {
                     continue;
                 }
 
-                let module_serialized = init
-                    .dump_database(
-                        &mut self.read_only.with_module_prefix(*module_id),
-                        self.prefixes.clone(),
-                    )
+                let mut isolated_dbtx = self.read_only.with_module_prefix(*module_id);
+                let mut module_serialized = init
+                    .dump_database(&mut isolated_dbtx, self.prefixes.clone())
                     .await
                     .collect::<BTreeMap<String, _>>();
+
+                let db_version = isolated_dbtx.get_value(&DatabaseVersionKey).await;
+                if let Some(db_version) = db_version {
+                    module_serialized.insert("Version".to_string(), Box::new(db_version));
+                } else {
+                    module_serialized
+                        .insert("Version".to_string(), Box::new("Not Specified".to_string()));
+                }
+
                 self.serialized
                     .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
             }
