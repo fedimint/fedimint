@@ -70,14 +70,6 @@ async fn main() -> Result<(), anyhow::Error> {
     debug!("Starting fedimint_cln with gateway API: {}", gateway_api);
 
     if let Some(plugin) = Builder::new(stdin(), stdout())
-        .option(options::ConfigOption::new(
-            "listen",
-            // Set an invalid default address in the extension to force the extension plugin
-            // user to supply a valid address via an environment variable or
-            // cln plugin config option.
-            options::Value::String("default-dont-use".into()),
-            "gateway cln extension address",
-        ))
         .hook(
             "htlc_accepted",
             |plugin: Plugin<HtlcInterceptor>, value: serde_json::Value| async move {
