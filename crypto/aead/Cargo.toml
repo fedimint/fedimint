@@ -1,5 +1,5 @@
 [package]
-name = "aead"
+name = "fedimint-aead"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"

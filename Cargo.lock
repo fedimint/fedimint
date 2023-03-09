@@ -9,16 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
-name = "aead"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "hex",
- "rand",
- "ring",
-]
-
-[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -898,6 +888,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-aead"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "rand",
+ "ring",
+]
+
+[[package]]
 name = "fedimint-bitcoind"
 version = "0.1.0"
 dependencies = [
@@ -1015,12 +1015,12 @@ dependencies = [
 name = "fedimint-dbtool"
 version = "0.1.0"
 dependencies = [
- "aead",
  "anyhow",
  "bitcoin_hashes",
  "bytes",
  "clap",
  "erased-serde",
+ "fedimint-aead",
  "fedimint-core",
  "fedimint-ln-server",
  "fedimint-logging",
@@ -1346,13 +1346,13 @@ dependencies = [
 name = "fedimint-server"
 version = "0.1.0"
 dependencies = [
- "aead",
  "anyhow",
  "async-trait",
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
  "bytes",
+ "fedimint-aead",
  "fedimint-build",
  "fedimint-core",
  "fedimint-logging",
@@ -1554,7 +1554,6 @@ dependencies = [
 name = "fedimintd"
 version = "0.1.0"
 dependencies = [
- "aead",
  "anyhow",
  "askama",
  "askama_axum",
@@ -1566,6 +1565,7 @@ dependencies = [
  "bytes",
  "clap",
  "console-subscriber",
+ "fedimint-aead",
  "fedimint-build",
  "fedimint-core",
  "fedimint-ln-server",
@@ -2757,13 +2757,13 @@ dependencies = [
 name = "mint-client"
 version = "0.1.0"
 dependencies = [
- "aead",
  "anyhow",
  "async-trait",
  "base64 0.20.0",
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
+ "fedimint-aead",
  "fedimint-client",
  "fedimint-core",
  "fedimint-derive-secret",
@@ -3432,10 +3432,10 @@ dependencies = [
 name = "recoverytool"
 version = "0.1.0"
 dependencies = [
- "aead",
  "anyhow",
  "bitcoin",
  "clap",
+ "fedimint-aead",
  "fedimint-core",
  "fedimint-ln-server",
  "fedimint-logging",

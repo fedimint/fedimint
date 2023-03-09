@@ -23,7 +23,7 @@ name = "distributedgen"
 path  = "src/bin/distributedgen.rs"
 
 [dependencies]
-aead = { path = "../crypto/aead" }
+fedimint-aead = { path = "../crypto/aead" }
 ring = "0.16.20"
 anyhow = "1.0.66"
 async-trait = "0.1.64"
