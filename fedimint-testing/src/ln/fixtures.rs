@@ -9,10 +9,9 @@ use fedimint_core::Amount;
 use fedimint_ln_common::route_hints::RouteHint;
 use futures::stream;
 use lightning::ln::PaymentSecret;
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
+use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, PayInvoiceRequest, PayInvoiceResponse,
-    SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
 use mint_client::modules::ln::contracts::Preimage;
@@ -87,16 +86,14 @@ impl ILnRpcClient for FakeLightningTest {
         Ok(vec![])
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
-        let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
-        *self.amount_sent.lock().unwrap() += Invoice::from_signed(signed)
-            .unwrap()
-            .amount_milli_satoshis()
-            .unwrap();
-
-        Ok(PayInvoiceResponse {
-            preimage: self.preimage.0.to_vec(),
-        })
+    async fn pay(
+        &self,
+        invoice: &Invoice,
+        _max_delay: u64,
+        _max_fee_percent: f64,
+    ) -> anyhow::Result<Preimage> {
+        *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
+        Ok(self.preimage.clone())
     }
 
     async fn subscribe_htlcs<'a>(

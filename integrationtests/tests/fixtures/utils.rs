@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::bail;
 use async_trait::async_trait;
 use bitcoin::secp256k1;
+use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::route_hints::RouteHint;
+use lightning_invoice::Invoice;
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, PayInvoiceRequest, PayInvoiceResponse,
-    SubscribeInterceptHtlcsRequest,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, PayInvoiceRequest, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
-use ln_gateway::GatewayError;
 use tokio::sync::Mutex;
 
 /// A proxy for the underlying LnRpc which can be used to add behavoir to it
@@ -55,21 +55,27 @@ impl ILnRpcClient for LnRpcAdapter {
         self.client.route_hints().await
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
+    async fn pay(
+        &self,
+        invoice: &Invoice,
+        max_delay: u64,
+        max_fee_percent: f64,
+    ) -> anyhow::Result<Preimage> {
+        let bolt11 = invoice.to_string();
         self.fail_invoices
             .lock()
             .await
-            .entry(invoice.invoice.clone())
+            .entry(bolt11.clone())
             .and_modify(|counter| {
                 *counter -= 1;
             });
-        if let Some(counter) = self.fail_invoices.lock().await.get(&invoice.invoice) {
+        if let Some(counter) = self.fail_invoices.lock().await.get(&bolt11) {
             if *counter > 0 {
-                return Err(GatewayError::Other(anyhow!("expected test error")));
+                bail!("expected test error");
             }
         }
-        self.fail_invoices.lock().await.remove(&invoice.invoice);
-        self.client.pay(invoice).await
+        self.fail_invoices.lock().await.remove(&bolt11);
+        self.client.pay(invoice, max_delay, max_fee_percent).await
     }
 
     async fn subscribe_htlcs<'a>(

@@ -15,8 +15,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
-    SubscribeInterceptHtlcsResponse,
+    CompleteHtlcsRequest, SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
 };
 use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::FederationInfo;
@@ -396,21 +395,14 @@ impl GatewayActor {
         invoice: lightning_invoice::Invoice,
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
-        match self
-            .lnrpc
-            .pay(PayInvoiceRequest {
-                invoice: invoice.to_string(),
-                max_delay: payment_params.max_delay,
-                max_fee_percent: payment_params.max_fee_percent(),
-            })
+        self.lnrpc
+            .pay(
+                &invoice,
+                payment_params.max_delay,
+                payment_params.max_fee_percent(),
+            )
             .await
-        {
-            Ok(PayInvoiceResponse { preimage, .. }) => {
-                let slice: [u8; 32] = preimage.try_into().expect("Failed to parse preimage");
-                Ok(Preimage(slice))
-            }
-            Err(e) => Err(e),
-        }
+            .map_err(GatewayError::Other)
     }
 
     pub async fn await_outgoing_contract_claimed(

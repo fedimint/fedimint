@@ -6,8 +6,10 @@ use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_core::dyn_newtype_define;
+use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
 use futures::stream::BoxStream;
+use lightning_invoice::Invoice;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request as TonicRequest;
 use tracing::{debug, error, trace, warn};
@@ -16,8 +18,8 @@ use url::Url;
 use crate::cln::scid_to_u64;
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, PayInvoiceRequest, PayInvoiceResponse,
-    SubscribeInterceptHtlcsRequest, SubscribeInterceptHtlcsResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, SubscribeInterceptHtlcsRequest,
+    SubscribeInterceptHtlcsResponse,
 };
 use crate::{GatewayError, Result};
 
@@ -33,7 +35,12 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn route_hints(&self) -> anyhow::Result<Vec<RouteHint>>;
 
     /// Attempt to pay an invoice using the lightning node
-    async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
+    async fn pay(
+        &self,
+        invoice: &Invoice,
+        max_delay: u64,
+        max_fee_percent: f64,
+    ) -> anyhow::Result<Preimage>;
 
     /// Subscribe to intercept htlcs that belong to a specific mint identified
     /// by `short_channel_id`
@@ -197,13 +204,36 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(route_hints)
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
-        let req = TonicRequest::new(invoice);
-
-        let mut client = self.client.clone();
-        let res = client.pay_invoice(req).await?;
-
-        Ok(res.into_inner())
+    async fn pay(
+        &self,
+        invoice: &Invoice,
+        max_delay: u64,
+        max_fee_percent: f64,
+    ) -> anyhow::Result<Preimage> {
+        tracing::info!("paying ...");
+        self.cln_client()
+            .await?
+            .call(Request::Pay(model::PayRequest {
+                bolt11: invoice.to_string(),
+                amount_msat: None,
+                label: None,
+                riskfactor: None,
+                maxfeepercent: Some(max_fee_percent),
+                retry_for: None,
+                maxdelay: Some(max_delay as u16),
+                exemptfee: None,
+                localinvreqid: None,
+                exclude: None,
+                maxfee: None,
+                description: None,
+            }))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::Pay(model::PayResponse {
+                    payment_preimage, ..
+                }) => Ok(Preimage(payment_preimage.into())),
+                _ => bail!("Wrong response from CLN"),
+            })?
     }
 
     async fn subscribe_htlcs<'a>(
