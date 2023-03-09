@@ -6,8 +6,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
-use futures::future::BoxFuture;
 use futures::{stream, Stream, StreamExt};
 use macro_rules_attribute::apply;
 use serde::Serialize;

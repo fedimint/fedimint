@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex::FromHex;
+use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::api::DynFederationApi;
-use fedimint_core::config::ClientModuleGenRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;

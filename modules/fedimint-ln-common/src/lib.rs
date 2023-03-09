@@ -16,8 +16,8 @@ use std::time::SystemTime;
 
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ClientModuleGen, CommonModuleGen, ModuleCommon};
-use fedimint_core::{apply, async_trait_maybe_send, plugin_types_trait_impl_common, Amount};
+use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -195,14 +195,6 @@ impl CommonModuleGen for LightningCommonGen {
     ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
         serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash()
     }
-}
-
-#[derive(Debug)]
-pub struct LightningClientGen;
-
-#[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for LightningClientGen {
-    type Common = LightningCommonGen;
 }
 
 pub struct LightningModuleTypes;

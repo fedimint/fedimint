@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use fedimint_client::module::gen::{ClientModuleGenRegistry, ClientModuleGenRegistryExt};
 use fedimint_core::api::{
     DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_core::config::{load_from_file, ClientModuleGenRegistry, FederationId};
+use fedimint_core::config::{load_from_file, FederationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::dyn_newtype_define;
@@ -146,7 +147,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         let api: DynFederationApi = WsFederationApi::from_urls(&connect).into();
 
         let client_config = api
-            .download_client_config(&connect.id, module_gens)
+            .download_client_config(&connect.id, module_gens.to_common())
             .await
             .expect("Failed to get client config");
 

@@ -4,12 +4,9 @@ pub use common::{BackupRequest, SignedBackupRequest};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
-use fedimint_core::module::{ClientModuleGen, CommonModuleGen, ModuleCommon};
+use fedimint_core::module::{CommonModuleGen, ModuleCommon};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{
-    apply, async_trait_maybe_send, plugin_types_trait_impl_common, Amount, OutPoint, PeerId,
-    TieredMulti,
-};
+use fedimint_core::{plugin_types_trait_impl_common, Amount, OutPoint, PeerId, TieredMulti};
 use impl_tools::autoimpl;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -106,14 +103,6 @@ impl CommonModuleGen for MintCommonGen {
     ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
         serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
     }
-}
-
-#[derive(Debug)]
-pub struct MintClientGen;
-
-#[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for MintClientGen {
-    type Common = MintCommonGen;
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]

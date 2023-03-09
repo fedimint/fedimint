@@ -25,8 +25,9 @@ use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
-use crate::module::{DynClientModuleGen, DynServerModuleGen, IDynCommonModuleGen};
-use crate::PeerId;
+use crate::module::{DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen};
+use crate::task::{MaybeSend, MaybeSync};
+use crate::{maybe_add_send_sync, PeerId};
 
 /// [`serde_json::Value`] that must contain `kind: String` field
 ///
@@ -171,13 +172,10 @@ impl FromStr for FederationId {
 
 impl ClientConfig {
     /// Returns the consensus hash for a given client config
-    pub fn consensus_hash<M>(
+    pub fn consensus_hash(
         &self,
-        module_config_gens: &ModuleGenRegistry<M>,
-    ) -> anyhow::Result<sha256::Hash>
-    where
-        M: IDynCommonModuleGen,
-    {
+        module_config_gens: &CommonModuleGenRegistry,
+    ) -> anyhow::Result<sha256::Hash> {
         let modules: BTreeMap<ModuleInstanceId, sha256::Hash> = self
             .modules
             .iter()
@@ -273,15 +271,26 @@ impl<M> Default for ModuleGenRegistry<M> {
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
-pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
+pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
 
 impl<M> From<Vec<M>> for ModuleGenRegistry<M>
 where
-    M: IDynCommonModuleGen,
+    M: AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static>,
 {
     fn from(value: Vec<M>) -> Self {
         Self(BTreeMap::from_iter(
-            value.into_iter().map(|i| (i.module_kind(), i)),
+            value.into_iter().map(|i| (i.as_ref().module_kind(), i)),
+        ))
+    }
+}
+
+impl<M> FromIterator<M> for ModuleGenRegistry<M>
+where
+    M: AsRef<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)>,
+{
+    fn from_iter<T: IntoIterator<Item = M>>(iter: T) -> Self {
+        Self(BTreeMap::from_iter(
+            iter.into_iter().map(|i| (i.as_ref().module_kind(), i)),
         ))
     }
 }
@@ -294,10 +303,10 @@ impl<M> ModuleGenRegistry<M> {
     pub fn attach<T>(&mut self, gen: T)
     where
         T: Into<M> + 'static + Send + Sync,
-        M: IDynCommonModuleGen,
+        M: AsRef<dyn IDynCommonModuleGen + 'static + Send + Sync>,
     {
         let gen: M = gen.into();
-        let kind = gen.module_kind();
+        let kind = gen.as_ref().module_kind();
         if self.0.insert(kind.clone(), gen).is_some() {
             panic!("Can't insert module of same kind twice: {kind}");
         }
@@ -326,15 +335,14 @@ impl<M> ModuleGenRegistry<M> {
             rest: self.0.clone(),
         }
     }
+}
 
-    pub fn to_client(&self) -> ClientModuleGenRegistry
-    where
-        M: IDynCommonModuleGen,
-    {
+impl ServerModuleGenRegistry {
+    pub fn to_common(&self) -> CommonModuleGenRegistry {
         ModuleGenRegistry(
             self.0
                 .iter()
-                .map(|(k, v)| (k.clone(), v.to_dyn_client()))
+                .map(|(k, v)| (k.clone(), v.to_dyn_common()))
                 .collect(),
         )
     }
@@ -342,7 +350,7 @@ impl<M> ModuleGenRegistry<M> {
 
 impl<M> ModuleGenRegistry<M>
 where
-    M: IDynCommonModuleGen,
+    M: AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static>,
 {
     pub fn decoders<'a>(
         &self,
@@ -354,7 +362,7 @@ where
                 anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
             };
 
-            modules.insert(id, init.decoder());
+            modules.insert(id, init.as_ref().decoder());
         }
         Ok(ModuleDecoderRegistry::from_iter(modules))
     }
@@ -542,7 +550,9 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 }
 
 /// Typed client side module config
-pub trait TypedClientModuleConfig: DeserializeOwned + Serialize + Encodable {
+pub trait TypedClientModuleConfig:
+    DeserializeOwned + Serialize + Encodable + MaybeSend + MaybeSync
+{
     fn kind(&self) -> ModuleKind;
 
     fn to_erased(&self) -> ClientModuleConfig {

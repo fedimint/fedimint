@@ -14,8 +14,8 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
-    TransactionItemAmount,
+    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
+    PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
@@ -50,13 +50,15 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LightningGen;
+
+impl ExtendsCommonModuleGen for LightningGen {
+    type Common = LightningCommonGen;
+}
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for LightningGen {
-    type Common = LightningCommonGen;
-
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {

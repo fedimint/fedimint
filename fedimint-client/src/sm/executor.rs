@@ -18,7 +18,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::sm::state::{DynContext, DynState};
 use crate::sm::{GlobalContext, State, StateTransition};
-use crate::ClientModule;
 
 /// After how many retries a DB transaction is aborted with an error
 const MAX_DB_RETRIES: Option<usize> = Some(100);
@@ -293,13 +292,10 @@ where
 impl ExecutorBuilder {
     /// Allow executor being built to run state machines associated with the
     /// supplied module
-    pub fn with_module<M>(&mut self, instance_id: ModuleInstanceId, module: M)
+    pub fn with_module<C>(&mut self, instance_id: ModuleInstanceId, context: C)
     where
-        M: ClientModule,
-        M::ModuleStateMachineContext: IntoDynInstance<DynType = DynContext>,
+        C: IntoDynInstance<DynType = DynContext>,
     {
-        let context = module.context();
-
         if self
             .module_contexts
             .insert(instance_id, context.into_dyn(instance_id))
@@ -323,7 +319,7 @@ impl ExecutorBuilder {
         });
 
         let task_runner_inner = inner.clone();
-        tasks
+        let _handle = tasks
             .spawn("state_machine_executor", move |handle| async move {
                 let shutdown_future = handle.make_shutdown_rx().await;
                 let executor_runner = task_runner_inner.run();
@@ -483,23 +479,87 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Debug;
+    use std::fmt::{Debug, Display, Formatter};
     use std::time::Duration;
 
-    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+    use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::ModuleCommon;
+    use fedimint_core::plugin_types_trait_impl_common;
     use fedimint_core::task::TaskGroup;
+    use impl_tools::autoimpl;
+    use serde::{Deserialize, Serialize};
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
+    use crate::module::ClientModule;
     use crate::sm::state::{Context, DynContext, DynState};
-    use crate::sm::{Executor, OperationId, StateTransition};
-    use crate::{ClientModule, State};
+    use crate::sm::{Executor, OperationId, State, StateTransition};
 
+    #[derive(Debug)]
     struct MockClientModule(tokio::sync::broadcast::Sender<u64>);
+
+    struct MockCommon;
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockInput(());
+
+    impl Display for MockInput {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockOutput(());
+
+    impl Display for MockOutput {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockOutputOutcome(());
+
+    impl Display for MockOutputOutcome {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    #[autoimpl(Deref, DerefMut using self.0)]
+    #[derive(
+        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    )]
+    struct MockConsensusItem(());
+
+    impl Display for MockConsensusItem {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(self, f)
+        }
+    }
+
+    plugin_types_trait_impl_common!(MockInput, MockOutput, MockOutputOutcome, MockConsensusItem);
+
+    impl ModuleCommon for MockCommon {
+        type Input = MockInput;
+        type Output = MockOutput;
+        type OutputOutcome = MockOutputOutcome;
+        type ConsensusItem = MockConsensusItem;
+    }
 
     #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     enum MockStateMachine {
@@ -600,15 +660,10 @@ mod tests {
     impl Context for MockContext {}
 
     impl ClientModule for MockClientModule {
+        type Common = MockCommon;
         type ModuleStateMachineContext = MockContext;
         type GlobalStateMachineContext = ();
         type States = MockStateMachine;
-
-        fn decoder(&self) -> Decoder {
-            let mut decoder_builder = Decoder::builder();
-            decoder_builder.with_decodable_type::<MockStateMachine>();
-            decoder_builder.build()
-        }
 
         fn context(&self) -> Self::ModuleStateMachineContext {
             MockContext {
@@ -621,11 +676,11 @@ mod tests {
         let (broadcast, _) = tokio::sync::broadcast::channel(10);
         let module = MockClientModule(broadcast.clone());
 
-        let decoders = ModuleDecoderRegistry::new(vec![(42, module.decoder())]);
+        let decoders = ModuleDecoderRegistry::new(vec![(42, MockClientModule::decoder())]);
         let db = Database::new(MemDatabase::new(), decoders);
 
         let mut executor_builder = Executor::<()>::builder();
-        executor_builder.with_module::<MockClientModule>(42, module);
+        executor_builder.with_module(42, module.context());
         let executor = executor_builder.build(tg, db.clone(), ()).await;
 
         info!("Initialized test executor");

@@ -2,13 +2,13 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
-use fedimint_core::config::ClientModuleGenRegistry;
+use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{DynClientModuleGen, ModuleCommon};
+use fedimint_core::module::ModuleCommon;
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};

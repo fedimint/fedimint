@@ -148,9 +148,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.64"
+version = "0.1.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cd7fce9ba8c3c042128ce72d8b2ddbf3a05747efb67ea0313c635e10bda47a2"
+checksum = "b84f9ebcc6c1f5b8cb160f6990096a5c127f423fcb6e1ccc46c370cbdfb75dfc"
 dependencies = [
  "proc-macro2",
  "quote 1.0.23",
@@ -928,6 +928,7 @@ dependencies = [
  "bitcoin_hashes",
  "clap",
  "fedimint-build",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-logging",
@@ -949,9 +950,12 @@ name = "fedimint-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "bitcoin_hashes",
  "fedimint-core",
  "fedimint-logging",
  "futures",
+ "impl-tools",
  "rand",
  "serde",
  "serde_json",
@@ -1065,6 +1069,7 @@ dependencies = [
  "async-trait",
  "bitcoin_hashes",
  "erased-serde",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-common",
  "futures",
@@ -1129,6 +1134,7 @@ dependencies = [
  "bincode",
  "bitcoin_hashes",
  "erased-serde",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-testing",
@@ -1239,6 +1245,7 @@ dependencies = [
  "bitcoin_hashes",
  "counter",
  "erased-serde",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-mint-common",
  "futures",
@@ -1429,6 +1436,7 @@ dependencies = [
  "bitcoincore-rpc",
  "cln-rpc",
  "fedimint-bitcoind",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-ln-server",
@@ -1466,6 +1474,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "erased-serde",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-wallet-common",
  "futures",
@@ -1824,6 +1833,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-logging",
@@ -2599,6 +2609,7 @@ dependencies = [
  "cln-plugin",
  "cln-rpc",
  "fedimint-build",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-rocksdb",
@@ -2753,6 +2764,7 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-ln-client",

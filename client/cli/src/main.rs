@@ -10,12 +10,14 @@ use std::sync::Arc;
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
+use fedimint_client::module::gen::{
+    ClientModuleGenRegistry, ClientModuleGenRegistryExt, DynClientModuleGen,
+};
 use fedimint_core::api::{
     FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
-use fedimint_core::config::{load_from_file, ClientConfig, ClientModuleGenRegistry, FederationId};
+use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::db::Database;
-use fedimint_core::module::DynClientModuleGen;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
@@ -398,7 +400,7 @@ async fn main() {
             let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;
             let cfg: ClientConfig = api
-                .download_client_config(&connect_obj.id, module_gens.clone())
+                .download_client_config(&connect_obj.id, module_gens.to_common())
                 .await
                 .or_terminate(
                     CliErrorKind::NetworkError,

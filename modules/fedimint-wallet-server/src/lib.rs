@@ -41,9 +41,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion,
+    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
+    PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
@@ -85,13 +85,15 @@ impl ModuleGenParams for WalletGenParams {
     const MODULE_NAME: &'static str = "wallet";
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WalletGen;
+
+impl ExtendsCommonModuleGen for WalletGen {
+    type Common = WalletCommonGen;
+}
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for WalletGen {
-    type Common = WalletCommonGen;
-
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {

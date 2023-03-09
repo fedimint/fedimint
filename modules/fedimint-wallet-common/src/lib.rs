@@ -8,10 +8,8 @@ use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::__reexports::serde_json;
-use fedimint_core::module::{ClientModuleGen, CommonModuleGen, ModuleCommon};
-use fedimint_core::{
-    apply, async_trait_maybe_send, plugin_types_trait_impl_common, Feerate, PeerId,
-};
+use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::{plugin_types_trait_impl_common, Feerate, PeerId};
 use impl_tools::autoimpl;
 use miniscript::Descriptor;
 use serde::{Deserialize, Serialize};
@@ -195,14 +193,6 @@ impl CommonModuleGen for WalletCommonGen {
     fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
         serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
     }
-}
-
-#[derive(Debug)]
-pub struct WalletClientGen;
-
-#[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for WalletClientGen {
-    type Common = WalletCommonGen;
 }
 
 #[autoimpl(Deref, DerefMut using self.0)]
