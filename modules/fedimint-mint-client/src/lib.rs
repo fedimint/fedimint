@@ -3,7 +3,7 @@ use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ExtendsCommonModuleGen;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_mint_common::config::MintClientConfig;
