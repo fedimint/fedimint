@@ -73,12 +73,18 @@ impl DerivableSecret {
         Scalar::from_bytes_wide(&self.kdf.derive(&tagged_derive(BLS12_381_TAG, ChildId(0))))
     }
 
+    // `ring` does not support any way to get raw bytes from a key,
+    // so we need to be able to get just the raw bytes here, so we can serialize
+    // them, and convert to ring type from it.
+    pub fn to_chacha20_poly1305_key_raw(&self) -> [u8; 32] {
+        self.kdf
+            .derive::<32>(&tagged_derive(CHACHA20_POLY1305, ChildId(0)))
+    }
+
     pub fn to_chacha20_poly1305_key(&self) -> aead::UnboundKey {
         aead::UnboundKey::new(
             &aead::CHACHA20_POLY1305,
-            &self
-                .kdf
-                .derive::<32>(&tagged_derive(CHACHA20_POLY1305, ChildId(0))),
+            &self.to_chacha20_poly1305_key_raw(),
         )
         .expect("created key")
     }
