@@ -199,10 +199,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 };
             let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
 
-            let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
-            let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
-            let lightning =
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
+            let lightning = RealLightningTest::new().await;
 
             let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
                 .expect("FM_GATEWAY_LIGHTNING_ADDR not set")

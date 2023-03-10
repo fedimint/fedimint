@@ -1,3 +1,4 @@
+use std::env;
 use std::io::Cursor;
 use std::ops::Sub;
 use std::path::PathBuf;
@@ -9,7 +10,6 @@ use async_trait::async_trait;
 use bitcoin::{secp256k1, Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
 use cln_rpc::model::requests;
-use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{ClnRpc, Request, Response};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
@@ -21,14 +21,16 @@ use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use lightning_invoice::Invoice;
 use tokio::time::sleep;
+use tonic_lnd::lnrpc::Invoice as LndInvoice;
+use tonic_lnd::{connect, LndClient};
 use url::Url;
 
 use crate::fixtures::LightningTest;
 
 #[derive(Clone)]
 pub struct RealLightningTest {
-    rpc_gateway: Arc<Mutex<ClnRpc>>,
-    rpc_other: Arc<Mutex<ClnRpc>>,
+    rpc_cln: Arc<Mutex<ClnRpc>>,
+    rpc_lnd: Arc<Mutex<LndClient>>,
     initial_balance: Amount,
     pub gateway_node_pub_key: secp256k1::PublicKey,
 }
@@ -36,38 +38,31 @@ pub struct RealLightningTest {
 #[async_trait]
 impl LightningTest for RealLightningTest {
     async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
-        let random: u64 = rand::random();
-        let invoice_req = requests::InvoiceRequest {
-            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
-            description: "".to_string(),
-            label: random.to_string(),
-            expiry: expiry_time,
-            fallbacks: None,
-            preimage: None,
-            exposeprivatechannels: None,
-            cltv: None,
-            deschashonly: None,
+        let mut lnd_rpc = self.rpc_lnd.lock().await;
+        let tonic_invoice = match expiry_time {
+            Some(expiry) => LndInvoice {
+                value_msat: amount.msats as i64,
+                expiry: expiry as i64,
+                ..Default::default()
+            },
+            None => LndInvoice {
+                value_msat: amount.msats as i64,
+                ..Default::default()
+            },
         };
-
-        let invoice_resp = if let Response::Invoice(data) = self
-            .rpc_other
-            .lock()
-            .await
-            .call(Request::Invoice(invoice_req))
+        let invoice_resp = lnd_rpc
+            .lightning()
+            .add_invoice(tonic_invoice)
             .await
             .unwrap()
-        {
-            data
-        } else {
-            panic!("cln-rpc response did not match expected InvoiceResponse")
-        };
+            .into_inner();
 
-        Invoice::from_str(&invoice_resp.bolt11).unwrap()
+        Invoice::from_str(&invoice_resp.payment_request).unwrap()
     }
 
     async fn amount_sent(&self) -> Amount {
         self.initial_balance
-            .sub(Self::channel_balance(self.rpc_gateway.clone()).await)
+            .sub(Self::channel_balance(self.rpc_cln.clone()).await)
     }
 
     fn is_shared(&self) -> bool {
@@ -76,13 +71,26 @@ impl LightningTest for RealLightningTest {
 }
 
 impl RealLightningTest {
-    pub async fn new(socket_gateway: PathBuf, socket_other: PathBuf) -> Self {
-        let rpc_other = Arc::new(Mutex::new(ClnRpc::new(socket_other).await.unwrap()));
-        let rpc_gateway = Arc::new(Mutex::new(ClnRpc::new(socket_gateway).await.unwrap()));
+    pub async fn new() -> Self {
+        let test_dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
+        let cln_rpc_socket = PathBuf::from(test_dir).join("cln/regtest/lightning-rpc");
+        let rpc_cln = Arc::new(Mutex::new(ClnRpc::new(cln_rpc_socket).await.unwrap()));
 
-        let initial_balance = Self::channel_balance(rpc_gateway.clone()).await;
+        let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR").unwrap();
+        let lnd_macaroon = env::var("FM_LND_MACAROON").unwrap();
+        let lnd_tls_cert = env::var("FM_LND_TLS_CERT").unwrap();
+        let lnd_client = connect(
+            lnd_rpc_addr.clone(),
+            lnd_tls_cert.clone(),
+            lnd_macaroon.clone(),
+        )
+        .await
+        .unwrap();
+        let rpc_lnd = Arc::new(Mutex::new(lnd_client.clone()));
 
-        let getinfo_resp = if let Response::Getinfo(data) = rpc_gateway
+        let initial_balance = Self::channel_balance(rpc_cln.clone()).await;
+
+        let getinfo_resp = if let Response::Getinfo(data) = rpc_cln
             .lock()
             .await
             .call(Request::Getinfo(requests::GetinfoRequest {}))
@@ -98,8 +106,8 @@ impl RealLightningTest {
             secp256k1::PublicKey::from_str(&getinfo_resp.id.to_string()).unwrap();
 
         RealLightningTest {
-            rpc_gateway,
-            rpc_other,
+            rpc_cln,
+            rpc_lnd,
             initial_balance,
             gateway_node_pub_key,
         }
