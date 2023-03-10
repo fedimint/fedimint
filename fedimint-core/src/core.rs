@@ -169,53 +169,6 @@ macro_rules! module_plugin_trait_define{
 /// Implements the necessary traits for all associated types of a
 /// `FederationServer` module.
 #[macro_export]
-macro_rules! plugin_types_trait_impl {
-    ($input:ty, $output:ty, $outcome:ty, $ci:ty, $cache:ty) => {
-        impl fedimint_core::core::Input for $input {}
-
-        impl fedimint_core::core::IntoDynInstance for $input {
-            type DynType = fedimint_core::core::DynInput;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynInput::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::core::Output for $output {}
-
-        impl fedimint_core::core::IntoDynInstance for $output {
-            type DynType = fedimint_core::core::DynOutput;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynOutput::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::core::OutputOutcome for $outcome {}
-
-        impl fedimint_core::core::IntoDynInstance for $outcome {
-            type DynType = fedimint_core::core::DynOutputOutcome;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynOutputOutcome::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::core::ModuleConsensusItem for $ci {}
-
-        impl fedimint_core::core::IntoDynInstance for $ci {
-            type DynType = fedimint_core::core::DynModuleConsensusItem;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynModuleConsensusItem::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::server::VerificationCache for $cache {}
-    };
-}
-
-#[macro_export]
 macro_rules! plugin_types_trait_impl_common {
     ($input:ty, $output:ty, $outcome:ty, $ci:ty) => {
         impl fedimint_core::core::Input for $input {}
