@@ -44,6 +44,10 @@
           NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
         });
 
+        # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
+        # the binary we need from `moreutils`
+        ts = pkgs.writeShellScriptBin "ts" "exec ${pkgs.moreutils}/bin/ts \"$@\"";
+
         isArch64Darwin = stdenv.isAarch64 || stdenv.isDarwin;
 
         # Env vars we need for wasm32 cross compilation
@@ -305,7 +309,7 @@
 
             nativeBuildInputs = with pkgs; [
               pkg-config
-              moreutils
+              ts
 
               # tests
               (hiPrio pkgs.bashInteractive)
@@ -725,7 +729,7 @@
                   tmuxinator
                   docker-compose
                   pkgs.tokio-console
-                  moreutils
+                  ts
 
                   # Nix
                   pkgs.nixpkgs-fmt
@@ -824,7 +828,7 @@
                 git
                 parallel
                 semgrep
-                moreutils
+                ts
                 nix
               ];
             };
