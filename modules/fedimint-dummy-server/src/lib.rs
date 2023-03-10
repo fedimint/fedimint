@@ -244,14 +244,14 @@ impl ServerModule for Dummy {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct DummyVerificationCache;
+
+impl fedimint_core::server::VerificationCache for DummyVerificationCache {}
+
 impl Dummy {
     /// Create new module instance
     pub fn new(cfg: DummyConfig) -> Dummy {
         Dummy { cfg }
     }
 }
-
-#[derive(Debug, Clone)]
-pub struct DummyVerificationCache;
-
-impl fedimint_core::server::VerificationCache for DummyVerificationCache {}
