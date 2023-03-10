@@ -3,8 +3,8 @@ root: .
 socket_name: fedimint-dev
 pre_window:
   - source .tmpenv
-  - alias ln1="\$FM_LN1"
-  - alias ln2="\$FM_LN2"
+  - alias lightning-cli="\$FM_LIGHTNING_CLI"
+  - alias lncli="\$FM_LNCLI"
   - alias bitcoin-cli="\$FM_BTC_CLIENT"
   - alias fedimint-cli="\$FM_MINT_CLIENT"
   - alias gateway-cli="\$FM_GATEWAY_CLI"
@@ -26,14 +26,14 @@ windows:
           - bitcoind -datadir=$FM_BTC_DIR &
           - echo $! >> $FM_PID_FILE
           - fg
-        - ln1:
+        - cln:
           - sleep 5 # wait for bitcoind and federation
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/gateway-cln-extension &
+          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --lightning-dir=$FM_CLN_DIR --plugin=$FM_BIN_DIR/gateway-cln-extension &
           - echo $! >> $FM_PID_FILE
           - fg
-        - ln2:
+        - lnd:
           - sleep 5 # wait for bitcoind and federation
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001
+          - lnd --lnddir=$FM_LND_DIR &
           - echo $! >> $FM_PID_FILE
           - fg
         - gateway:
