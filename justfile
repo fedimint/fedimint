@@ -28,6 +28,10 @@ test: build check-ulimit
 test-real: check-ulimit
   ./scripts/rust-tests.sh
 
+# run all tests in parallel like CI would
+test-ci-all: 
+  ./scripts/test-ci-all.sh
+
 # show number of tests per package
 test-count:
   ./scripts/test-cov.sh
