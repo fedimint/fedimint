@@ -244,8 +244,8 @@
         # Filter only files relevant to building the workspace
         filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" ] src;
 
-        # Like `filterWorkspaceFiles` but with `./scripts/` included
-        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" ] src;
+        # Like `filterWorkspaceFiles` but with `./scripts/` and `./misc/test/` included
+        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" "misc/test/.*" ] src;
 
         filterSrcWithRegexes = regexes: src:
           let
