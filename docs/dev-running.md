@@ -125,40 +125,40 @@ $ gateway-cli balance <FEDERATION-ID>
 }
 ```
 
-To make an outgoing payment we generate a Lightning invoice from LN2, our non-gateway lightning node:
+Tmuxinator has 2 lightning nodes running. [Core Lightning](https://github.com/ElementsProject/lightning) which is running a gateway, and [LND](https://github.com/lightningnetwork/lnd) which represents an external node that doesn't know about Fedimint. With these two nodes, you can simulate sending into and out of Fedimint via Lightning.
+
+To make an outgoing payment we generate a Lightning invoice from LND, our non-gateway lightning node:
 
 ```shell
-$ ln2 invoice 100000 test test 1m
+$ lncli addinvoice --amt_msat 100000
 
 {
-   "bolt11": "lnbcrt1u1p3vdl3ds...",
+   ...
+   "r_hash": "1072fe19b3a53b3d778f6d5b0b...",
+   "payment_request": "lnbcrt1u1p3vdl3ds...",
    ...
 }
 ```
 
-Pay the invoice by copying the `bolt11` invoice field:
+Pay the invoice by copying the `payment_request` field:
 
 ```shell
 $ fedimint-cli ln-pay "lnbcrt1u1p3vdl3ds..."
 ```
 
-Confirm the invoice was paid
+Confirm the invoice was paid, copy the `r_hash` field from the `lncli addinvoice` command above:
 
 ```shell
-$ ln2 listinvoices test
+$ lncli lookupinvoice 1072fe19b3a53b3d778f6d5b0b...
 
 {
-   "invoices": [
-      {
-         "label": "test",
-         "status": "paid",
-         ...
-      }
-   ]
+    ...
+    "state": "SETTLED",
+    ...
 }
 ```
 
-Create our own invoice:
+To receive a lightning payment inside use `fedimint-cli` to create an invoice:
 ```shell
 $ fedimint-cli ln-invoice 1000 "description"
 
@@ -167,10 +167,10 @@ $ fedimint-cli ln-invoice 1000 "description"
 }
 ```
 
-Have `ln2` pay it:
+Have `lncli` pay it:
 
 ```shell
-$ ln2 pay lnbcrt10n1pjq2zwxdqjv...
+$ lncli payinvoice --force lnbcrt10n1pjq2zwxdqjv...
 ```
 
 Have mint client check that payment succeeded, fetch notes, and display new balances:

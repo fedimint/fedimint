@@ -33,15 +33,20 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 export FM_TEST_DIR=$FM_TMP_DIR
 export FM_BIN_DIR="$SRC_DIR/target/debug"
 export FM_PID_FILE="$FM_TMP_DIR/.pid"
-export FM_LN1_DIR="$FM_TEST_DIR/ln1"
-export FM_LN2_DIR="$FM_TEST_DIR/ln2"
+export FM_CLN_DIR="$FM_TEST_DIR/cln"
+export FM_LND_DIR="$FM_TEST_DIR/lnd"
 export FM_BTC_DIR="$FM_TEST_DIR/bitcoin"
 export FM_CFG_DIR="$FM_TEST_DIR/cfg"
 export FM_ELECTRS_DIR="$FM_TEST_DIR/electrs"
-mkdir -p $FM_LN1_DIR
-mkdir -p $FM_LN2_DIR
+mkdir -p $FM_CLN_DIR
+mkdir -p $FM_LND_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
+
+# Copy configs to data directories
+cp misc/test/bitcoin.conf $FM_BTC_DIR
+cp misc/test/lnd.conf $FM_LND_DIR
+cp misc/test/lightningd.conf $FM_CLN_DIR/config
 
 # Generate federation configs
 CERTS=""
@@ -69,6 +74,11 @@ wait
 # Move the client config to root dir
 mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 
+# LND config variables
+export FM_LND_RPC_ADDR="http://localhost:11009"
+export FM_LND_TLS_CERT=$FM_LND_DIR/tls.cert
+export FM_LND_MACAROON=$FM_LND_DIR/data/chain/bitcoin/regtest/admin.macaroon
+
 # Generate gateway config
 export FM_GATEWAY_DATA_DIR=$FM_CFG_DIR/gateway
 export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
@@ -81,8 +91,8 @@ export FM_GATEWAY_LIGHTNING_ADDR="http://localhost:8177"
 mkdir -p $FM_GATEWAY_DATA_DIR
 
 # Define clients
-export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"
-export FM_LN2="lightning-cli --network regtest --lightning-dir=$FM_LN2_DIR"
+export FM_LIGHTNING_CLI="lightning-cli --network regtest --lightning-dir=$FM_CLN_DIR"
+export FM_LNCLI="lncli -n regtest --lnddir=$FM_LND_DIR --rpcserver=localhost:11009"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
@@ -91,8 +101,8 @@ export FM_DB_TOOL="$FM_BIN_DIR/dbtool"
 export FM_DISTRIBUTEDGEN="$FM_BIN_DIR/distributedgen"
 
 # Alias clients
-alias ln1="\$FM_LN1"
-alias ln2="\$FM_LN2"
+alias lightning-cli="\$FM_LIGHTNING_CLI"
+alias lncli="\$FM_LNCLI"
 alias bitcoin-cli="\$FM_BTC_CLIENT"
 alias mint_client="\$FM_MINT_CLIENT"
 alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"

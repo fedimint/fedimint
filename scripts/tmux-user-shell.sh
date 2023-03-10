@@ -5,14 +5,15 @@ source ./scripts/lib.sh
 POLL_INTERVAL=0.5
 export POLL_INTERVAL
 
-# wait for cln, bitcoind and fedimint servers to start up
+# wait for bitcoind
 await_bitcoin_rpc | show_verbose_output
-await_cln_rpc | show_verbose_output
-await_fedimint_block_sync | show_verbose_output
-
 echo Setting up bitcoind ...
 bitcoin-cli createwallet default | show_verbose_output
 mine_blocks 101 | show_verbose_output
+
+# wait for core lightning & fedimint to sync
+await_lightning_node_block_processing | show_verbose_output
+await_fedimint_block_sync | show_verbose_output
 
 echo Setting up lightning channel ...
 open_channel | show_verbose_output
@@ -31,7 +32,8 @@ echo
 echo "This shell provides the following aliases:"
 echo ""
 echo "  fedimint-cli   - cli client to interact with the federation"
-echo "  ln1, ln2       - cli clients for the two lightning nodes (1 is gateway)"
+echo "  lightning-cli  - cli client for Core Lightning"
+echo "  lncli          - cli client for LND"
 echo "  bitcoin-cli    - cli client for bitcoind"
 echo "  gateway-cli    - cli client for the gateway"
 echo
