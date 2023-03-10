@@ -1,0 +1,5 @@
+auth = "bitcoin:bitcoin"
+daemon_rpc_addr = "127.0.0.1:18443"
+daemon_p2p_addr = "127.0.0.1:18444"
+electrum_rpc_addr = "127.0.0.1:50001"
+network = "regtest"
