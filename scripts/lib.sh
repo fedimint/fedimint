@@ -14,7 +14,6 @@ function open_channel() {
     LN_ADDR="$($FM_LIGHTNING_CLI newaddr | jq -e -r '.bech32')"
     $FM_BTC_CLIENT sendtoaddress $LN_ADDR 1
     mine_blocks 10
-    $FM_LNCLI getinfo
     # FIXME: do I need these exports
     LND_PUBKEY="$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')"
     $FM_LIGHTNING_CLI connect $LND_PUBKEY@127.0.0.1:9734
