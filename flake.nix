@@ -308,7 +308,7 @@
               moreutils
 
               # tests
-              bash
+              (hiPrio pkgs.bashInteractive)
               bc
               bitcoind
               clightning-dev
