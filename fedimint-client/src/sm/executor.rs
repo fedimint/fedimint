@@ -487,7 +487,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::ModuleCommon;
+    use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
     use fedimint_core::plugin_types_trait_impl_common;
     use fedimint_core::task::TaskGroup;
     use impl_tools::autoimpl;
@@ -668,6 +668,20 @@ mod tests {
             MockContext {
                 broadcast: self.0.clone(),
             }
+        }
+
+        fn input_amount(
+            &self,
+            _input: &<Self::Common as ModuleCommon>::Input,
+        ) -> TransactionItemAmount {
+            unimplemented!()
+        }
+
+        fn output_amount(
+            &self,
+            _output: &<Self::Common as ModuleCommon>::Output,
+        ) -> TransactionItemAmount {
+            unimplemented!()
         }
     }
 

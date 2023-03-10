@@ -4,7 +4,7 @@ use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::ExtendsCommonModuleGen;
+use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
@@ -35,6 +35,20 @@ impl ClientModule for MintClientModule {
     type States = MintClientStates;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
+        unimplemented!()
+    }
+
+    fn input_amount(
+        &self,
+        _input: &<Self::Common as ModuleCommon>::Input,
+    ) -> TransactionItemAmount {
+        unimplemented!()
+    }
+
+    fn output_amount(
+        &self,
+        _output: &<Self::Common as ModuleCommon>::Output,
+    ) -> TransactionItemAmount {
         unimplemented!()
     }
 }

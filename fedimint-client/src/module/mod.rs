@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use fedimint_core::core::{Decoder, DynInput, DynOutput, KeyPair, ModuleInstanceId};
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::module::ModuleCommon;
+use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
@@ -33,12 +33,28 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     }
 
     fn context(&self) -> Self::ModuleStateMachineContext;
+
+    /// Returns the amount represented by the input and the fee its processing
+    /// requires
+    fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount;
+
+    /// Returns the amount represented by the output and the fee its processing
+    /// requires
+    fn output_amount(
+        &self,
+        output: &<Self::Common as ModuleCommon>::Output,
+    ) -> TransactionItemAmount;
 }
 
+/// Type-erased version of [`ClientModule`]
 pub trait IClientModule: Debug {
     fn decoder(&self) -> Decoder;
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
+
+    fn input_amount(&self, input: &DynInput) -> TransactionItemAmount;
+
+    fn output_amount(&self, output: &DynOutput) -> TransactionItemAmount;
 }
 
 impl<T> IClientModule for T
@@ -51,6 +67,26 @@ where
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext {
         DynContext::from_typed(instance, <T as ClientModule>::context(self))
+    }
+
+    fn input_amount(&self, input: &DynInput) -> TransactionItemAmount {
+        <T as ClientModule>::input_amount(
+            self,
+            input
+                .as_any()
+                .downcast_ref()
+                .expect("Dispatched to correct module"),
+        )
+    }
+
+    fn output_amount(&self, output: &DynOutput) -> TransactionItemAmount {
+        <T as ClientModule>::output_amount(
+            self,
+            output
+                .as_any()
+                .downcast_ref()
+                .expect("Dispatched to correct module"),
+        )
     }
 }
 
@@ -65,7 +101,7 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
     }
 }
 
-type StateGenerator<S> = Box<dyn Fn(TransactionId, u64) -> Vec<S>>;
+pub type StateGenerator<S> = Box<dyn Fn(TransactionId, u64) -> Vec<S>>;
 
 /// A client module that can be used as funding source and to generate arbitrary
 /// change outputs for unbalanced transactions.
