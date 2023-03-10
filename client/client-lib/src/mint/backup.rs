@@ -790,8 +790,6 @@ impl EcashRecoveryTracker {
     ) {
         debug!(target: LOG_ECASH_RECOVERY, ?item, "handling consensus item");
         match item {
-            ConsensusItem::ClientConfigSignatureShare(_) => {}
-            ConsensusItem::EpochOutcomeSignatureShare(_) => {}
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();
 
@@ -850,6 +848,7 @@ impl EcashRecoveryTracker {
                     self.handle_output_confirmation(peer_id, mint_item);
                 }
             }
+            _ => {}
         }
     }
 
