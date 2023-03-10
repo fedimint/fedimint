@@ -261,7 +261,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                     impl ::fedimint_core::encoding::Decodable for #ident {
                         fn consensus_decode<D: std::io::Read>(_d: &mut D, _modules: &::fedimint_core::module::registry::ModuleDecoderRegistry) -> std::result::Result<Self, ::fedimint_core::encoding::DecodeError>
                         {
-                            Err(DecodeError::new_custom(anyhow::anyhow!("Enum without variants can't be instantiated")))
+                            Err(::fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!("Enum without variants can't be instantiated")))
                         }
                     }
                 }
