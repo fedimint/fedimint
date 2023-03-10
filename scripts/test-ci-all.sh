@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-# Avoid re-building workspace in parallel in all test derivations
->&2 echo "### Making sure workspace is built..."
-nix build -L .#debug.workspaceBuild 2>&1 | ts -s
+set -e
+set -o pipefail
 
 # https://stackoverflow.com/a/72183258/134409
 # this hangs in CI (no tty?)
@@ -11,6 +10,12 @@ if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then
   mkdir -p "$HOME/.parallel"
   touch "$HOME/.parallel/will-cite"
 fi
+
+
+# Avoid re-building workspace in parallel in all test derivations
+>&2 echo "### Making sure workspace is built..."
+nix build -L .#debug.workspaceBuild 2>&1 | ts -s
+
 
 function cli_test_reconnect() {
   echo "### Starting reconnect test..."
