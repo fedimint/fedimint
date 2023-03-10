@@ -39,6 +39,8 @@ pub struct ServerOpts {
     pub tokio_console_bind: Option<SocketAddr>,
     #[arg(long, default_value = "false")]
     pub with_telemetry: bool,
+    #[arg(long = "upgrade-epoch")]
+    pub upgrade_epoch: Option<u64>,
 }
 
 /// `fedimintd` builder
@@ -228,6 +230,10 @@ async fn run(
 
     let (consensus, tx_receiver) =
         FedimintConsensus::new(cfg.clone(), db, module_gens, &mut task_group).await?;
+
+    if let Some(epoch) = opts.upgrade_epoch {
+        consensus.remove_upgrade_items(epoch).await?;
+    }
 
     FedimintServer::run(cfg, consensus, tx_receiver, decoders, &mut task_group).await?;
 

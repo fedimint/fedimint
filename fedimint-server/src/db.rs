@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
@@ -20,6 +21,7 @@ pub enum DbKeyPrefix {
     EpochHistory = 0x05,
     LastEpoch = 0x06,
     ClientConfigSignature = 0x07,
+    ConsensusUpgrade = 0x08,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -110,6 +112,15 @@ impl_db_record!(
 impl_db_lookup!(
     key = ClientConfigSignatureKey,
     query_prefix = ClientConfigSignatureKeyPrefix
+);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ConsensusUpgradeKey;
+
+impl_db_record!(
+    key = ConsensusUpgradeKey,
+    value = BTreeSet<PeerId>,
+    db_prefix = DbKeyPrefix::ConsensusUpgrade,
 );
 
 pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {

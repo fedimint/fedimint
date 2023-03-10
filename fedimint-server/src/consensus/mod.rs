@@ -9,6 +9,7 @@ use std::iter::FromIterator;
 use std::os::unix::prelude::OsStrExt;
 use std::sync::Mutex;
 
+use anyhow::format_err;
 use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
@@ -24,7 +25,7 @@ use fedimint_core::module::{ModuleError, TransactionItemAmount};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::{DynServerModule, DynVerificationCache};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
+use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use futures::future::select_all;
 use futures::StreamExt;
@@ -39,9 +40,9 @@ use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
-    get_global_database_migrations, AcceptedTransactionKey, ClientConfigSignatureKey, DropPeerKey,
-    DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
-    GLOBAL_DATABASE_VERSION,
+    get_global_database_migrations, AcceptedTransactionKey, ClientConfigSignatureKey,
+    ConsensusUpgradeKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
+    RejectedTransactionKey, GLOBAL_DATABASE_VERSION,
 };
 use crate::transaction::{Transaction, TransactionError};
 
@@ -331,6 +332,7 @@ impl FedimintConsensus {
                             epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
                             client_config_signature_share: _client_config_signature_share_cis,
                             transaction: transaction_cis,
+                            consensus_upgrade: consensus_upgrade_cis,
                             module: module_cis,
                         } = consensus_outcome
                             .contributions
@@ -339,6 +341,7 @@ impl FedimintConsensus {
                             .unzip_consensus_item();
 
                         self.process_module_consensus_items(dbtx, &module_cis).await;
+                        self.process_upgrade_items(dbtx, &consensus_upgrade_cis).await;
 
                         let rejected_txs = self
                             .process_transactions(dbtx, epoch, &transaction_cis)
@@ -544,6 +547,50 @@ impl FedimintConsensus {
                     drop_peers.push(peer);
                 }
             }
+        }
+    }
+
+    /// Adds any new upgrade items to the set of signaling peers
+    async fn process_upgrade_items(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        upgrade_signals: &[(PeerId, ConsensusUpgrade)],
+    ) {
+        if !upgrade_signals.is_empty() {
+            let maybe_exists = dbtx.get_value(&ConsensusUpgradeKey).await;
+            let mut peers = maybe_exists.unwrap_or_default();
+            peers.extend(upgrade_signals.iter().map(|(peer, _)| peer));
+            dbtx.insert_entry(&ConsensusUpgradeKey, &peers).await;
+        }
+    }
+
+    /// Returns true if a threshold of peers have signaled to upgrade
+    pub async fn is_at_upgrade_threshold(&self) -> bool {
+        self.db
+            .begin_transaction()
+            .await
+            .get_value(&ConsensusUpgradeKey)
+            .await
+            .filter(|peers| peers.len() >= self.cfg.consensus.api.threshold())
+            .is_some()
+    }
+
+    /// Called to remove the upgrade items after the upgrade is complete
+    pub async fn remove_upgrade_items(&self, epoch: u64) -> anyhow::Result<()> {
+        let last_epoch = self.get_epoch_count().await;
+        if last_epoch == epoch {
+            self.db
+                .begin_transaction()
+                .await
+                .remove_entry(&ConsensusUpgradeKey)
+                .await;
+            Ok(())
+        } else {
+            Err(format_err!(
+                "Wrong upgrade epoch {}, last epoch was {}",
+                epoch,
+                last_epoch
+            ))
         }
     }
 

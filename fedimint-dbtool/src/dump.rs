@@ -220,6 +220,12 @@ impl<'a> DatabaseDump<'a> {
                         "Client Config Signature"
                     );
                 }
+                ConsensusRange::DbKeyPrefix::ConsensusUpgrade => {
+                    let shutdown = dbtx.get_value(&ConsensusRange::ConsensusUpgradeKey).await;
+                    if let Some(shutdown) = shutdown {
+                        consensus.insert("ShutdownSignal".to_string(), Box::new(shutdown));
+                    }
+                }
                 // Module is a global prefix for all module data
                 ConsensusRange::DbKeyPrefix::Module => {}
             }

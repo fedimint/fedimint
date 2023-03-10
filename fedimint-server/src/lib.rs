@@ -32,7 +32,7 @@ use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
@@ -83,17 +83,31 @@ enum EpochTriggerEvent {
     RunEpochRequest,
 }
 
+/// Runs the main server consensus loop
 pub struct FedimintServer {
+    /// `TaskGroup` that is running the server
+    pub task_group: TaskGroup,
+    /// Delegate for processing consensus information
     pub consensus: Arc<FedimintConsensus>,
+    /// Receives tx notfications from the API (triggers epochs)
     pub tx_receiver: Peekable<ReceiverStream<Transaction>>,
+    /// P2P connections for running consensus
     pub connections: PeerConnections<EpochMessage>,
+    /// Our configuration
     pub cfg: ServerConfig,
+    /// Runs the HBBFT consensus algorithm
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
+    /// Used to make API calls to our peers
     pub api: DynFederationApi,
+    /// The list of all peers
     pub peers: BTreeSet<PeerId>,
+    /// If `Some` then we restarted and look for the epoch to rejoin at
     pub rejoin_at_epoch: Option<HashMap<u64, HashSet<PeerId>>>,
+    /// How many empty epochs peers requested we run
     pub run_empty_epochs: u64,
+    /// Tracks the last epoch outcome from consensus
     pub last_processed_epoch: Option<SignedEpochOutcome>,
+    /// Used for decoding module specific-values
     pub decoders: ModuleDecoderRegistry,
 }
 
@@ -197,6 +211,7 @@ impl FedimintServer {
         let api = WsFederationApi::new(api_endpoints.collect());
 
         FedimintServer {
+            task_group: task_group.clone(),
             connections,
             hbbft,
             consensus: Arc::new(consensus),
@@ -213,6 +228,11 @@ impl FedimintServer {
 
     /// Loop `run_conensus_epoch` until shut down
     async fn run_consensus(mut self, task_handle: TaskHandle) {
+        if self.consensus.is_at_upgrade_threshold().await {
+            error!("Restarted fedimintd after upgrade without passing in flag, shutting down");
+            return self.task_group.shutdown().await;
+        }
+
         // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a
         // problem for change, but maybe later for other use cases
         let mut rng = OsRng;
@@ -240,6 +260,12 @@ impl FedimintServer {
                 self.process_outcome(outcome)
                     .await
                     .expect("failed to process epoch");
+            }
+
+            if self.consensus.is_at_upgrade_threshold().await {
+                info!("Received a threshold of upgrade signals, shutting down");
+                self.task_group.shutdown().await;
+                break;
             }
         }
 
