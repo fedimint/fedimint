@@ -166,6 +166,14 @@ impl<C> Client<C> {
     pub fn module_gens(&self) -> &ClientModuleGenRegistry {
         &self.context.module_gens
     }
+
+    pub fn context(&self) -> &Arc<ClientContext> {
+        &self.context
+    }
+
+    pub fn root_secret(&self) -> &DerivableSecret {
+        &self.root_secret
+    }
 }
 
 #[derive(Encodable, Decodable)]
