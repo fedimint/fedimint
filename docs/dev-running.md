@@ -115,15 +115,7 @@ $ fedimint-cli fetch
 
 ### Using the Gateway
 
-First let's have the gateway execute a peg-in so it has an ecash note balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
-
-```shell
-$ ./scripts/pegin.sh 10000 1
-```
-
-Make a note of the federation id from the previous step, or run `gateway-cli info` and copy the federation id.
-
-Now we can use `gateway-cli` of the node where the gateway plugin is running to get our ecash note balance:
+The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The tmuxinator setup scripts also give it some ecash. To check its balance, run `gateway-cli info`, copy the federation id and then:
 
 ```shell
 $ gateway-cli balance <FEDERATION-ID>
