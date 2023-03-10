@@ -43,12 +43,13 @@ else
   LIGHTNING_FLAGS="--dev-fast-gossip --dev-bitcoind-poll=1"
 fi
 
-# Start lightning nodes
-lightningd $LIGHTNING_FLAGS --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/gateway-cln-extension &
+# Start Core Lightning
+lightningd $LIGHTNING_FLAGS --lightning-dir=$FM_CLN_DIR --plugin=$FM_BIN_DIR/gateway-cln-extension &
 echo $! >> $FM_PID_FILE
-lightningd $LIGHTNING_FLAGS --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 &
+
+# Start LND
+lnd --lnddir=$FM_LND_DIR &
 echo $! >> $FM_PID_FILE
-await_cln_rpc
 
 # Initialize wallet and get ourselves some money
 mine_blocks 101

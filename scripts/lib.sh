@@ -8,33 +8,24 @@ function mine_blocks() {
 }
 
 function open_channel() {
-    LN_ADDR="$($FM_LN1 newaddr | jq -e -r '.bech32')"
+    # check that both nodes are synced
+    await_lightning_node_block_processing
+
+    LN_ADDR="$($FM_LIGHTNING_CLI newaddr | jq -e -r '.bech32')"
     $FM_BTC_CLIENT sendtoaddress $LN_ADDR 1
     mine_blocks 10
-    FM_LN2_PUB_KEY="$($FM_LN2 getinfo | jq -e -r '.id')"
-    export FM_LN2_PUB_KEY
-    FM_LN1_PUB_KEY="$($FM_LN1 getinfo | jq -e -r '.id')"
-    export FM_LN1_PUB_KEY
-    $FM_LN1 connect $FM_LN2_PUB_KEY@127.0.0.1:9001
-    until $FM_LN1 -k fundchannel id=$FM_LN2_PUB_KEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
+    $FM_LNCLI getinfo
+    # FIXME: do I need these exports
+    LND_PUBKEY="$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')"
+    $FM_LIGHTNING_CLI connect $LND_PUBKEY@127.0.0.1:9734
+    until $FM_LIGHTNING_CLI -k fundchannel id=$LND_PUBKEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
     mine_blocks 10
-    until [[ $($FM_LN1 listpeers | jq -e -r ".peers[] | select(.id == \"$FM_LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
+    until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
 }
 
 function await_bitcoin_rpc() {
     until $FM_BTC_CLIENT getblockchaininfo 1>/dev/null 2>/dev/null ; do
         >&2 echo "Bitcoind rpc not ready yet. Waiting ..."
-        sleep "$POLL_INTERVAL"
-    done
-}
-
-function await_cln_rpc() {
-    until [ -e "$FM_LN1_DIR/regtest/lightning-rpc" ]; do
-        >&2 echo "LN gateway 1 not ready yet. Waiting ..."
-        sleep "$POLL_INTERVAL"
-    done
-    until [ -e "$FM_LN2_DIR/regtest/lightning-rpc" ]; do
-        >&2 echo "LN gateway 2 not ready yet. Waiting ..."
         sleep "$POLL_INTERVAL"
     done
 }
@@ -66,22 +57,24 @@ function await_server_on_port() {
   done
 }
 
-# Check that core-lightning block-proccessing is caught up
+# Check that lightning block-proccessing is caught up
 # CLI integration tests should call this before attempting to pay invoices
-function await_cln_block_processing() {
+function await_lightning_node_block_processing() {
+  # CLN
   EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
-
-  # ln1
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN1 getinfo | jq -e -r '.blockheight')" ]
+  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
   do
-      sleep $POLL_INTERVAL
+    sleep $POLL_INTERVAL
   done
+  echo "done waiting for cln"
 
-  # ln2
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN2 getinfo | jq -e -r '.blockheight')" ]
+  # LND
+  until [ "true" == "$($FM_LNCLI getinfo | jq -r '.synced_to_chain')" ]
   do
-      sleep $POLL_INTERVAL
+    echo "sleeping"
+    sleep $POLL_INTERVAL
   done
+  echo "done waiting for lnd"
 }
 
 # Function for killing processes stored in FM_PID_FILE
@@ -157,7 +150,7 @@ function show_verbose_output()
 }
 
 function await_gateway_registered() {
-    until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" -gt "0" ]; do
+    until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" = "1" ]; do
         sleep $POLL_INTERVAL
     done
 }

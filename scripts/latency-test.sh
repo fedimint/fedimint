@@ -34,13 +34,12 @@ await_gateway_registered
 for i in $( seq 1 $ITERATIONS )
 do
   echo "LN SEND $i"
-  LABEL=test$RANDOM$RANDOM
-  INVOICE="$($FM_LN2 invoice 50000000 $LABEL $LABEL 1m | jq -e -r '.bolt11')"
+  ADD_INVOICE="$($FM_LNCLI addinvoice --amt_msat 100000)"
+  INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
+  PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
   $FM_MINT_CLIENT ln-pay $INVOICE
-  INVOICE_RESULT="$($FM_LN2 waitinvoice $LABEL)"
-  INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
-  echo "RESULT $INVOICE_STATUS"
-  [[ "$INVOICE_STATUS" = "paid" ]]
+  INVOICE_STATUS="$($FM_LNCLI lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
+  [[ "$INVOICE_STATUS" = "SETTLED" ]]
 done
 time3=$(date +%s.%N)
 
@@ -48,11 +47,12 @@ time3=$(date +%s.%N)
 for i in $( seq 1 $ITERATIONS )
 do
   echo "LN RECEIVE $i"
-  INVOICE="$($FM_MINT_CLIENT ln-invoice '50000000msat' '$RANDOM' | jq -e -r '.invoice')"
-  INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
-  INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
-  echo "RESULT $INVOICE_STATUS"
-  [[ "$INVOICE_STATUS" = "complete" ]]
+  INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'incoming-over-lnd-gw' | jq -e -r '.invoice')"
+  PAYMENT="$($FM_LNCLI payinvoice --force $INVOICE)"
+  PAYMENT_HASH="$(echo $PAYMENT | awk '{ print $30 }')"
+  LND_PAYMENTS="$($FM_LNCLI listpayments --include_incomplete)"
+  PAYMENT_STATUS="$(echo $LND_PAYMENTS | jq -e -r '.payments[] | select(.payment_hash == "'$PAYMENT_HASH'") | .status')"
+  [[ "$PAYMENT_STATUS" = "SUCCEEDED" ]]
 done
 time4=$(date +%s.%N)
 
