@@ -39,6 +39,7 @@ impl_db_record!(
     key = AcceptedTransactionKey,
     value = AcceptedTransaction,
     db_prefix = DbKeyPrefix::AcceptedTransaction,
+    notify_on_modify = true,
 );
 impl_db_lookup!(
     key = AcceptedTransactionKey,
@@ -55,6 +56,7 @@ impl_db_record!(
     key = RejectedTransactionKey,
     value = String,
     db_prefix = DbKeyPrefix::RejectedTransaction,
+    notify_on_modify = true,
 );
 impl_db_lookup!(
     key = RejectedTransactionKey,

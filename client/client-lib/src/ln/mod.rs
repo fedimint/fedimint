@@ -371,6 +371,24 @@ mod tests {
                 "/fetch_transaction",
                 move |mint: Arc<Mutex<FakeFed<Lightning>>>, tx: TransactionId| async move {
                     let mint = mint.lock().await;
+                    Ok(Some(TransactionStatus::Accepted {
+                        epoch: 0,
+                        outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
+                            module_id,
+                            mint.output_outcome(OutPoint {
+                                txid: tx,
+                                out_idx: 0,
+                            })
+                            .await
+                            .unwrap(),
+                        ))],
+                    }))
+                },
+            )
+            .with(
+                "/wait_transaction",
+                move |mint: Arc<Mutex<FakeFed<Lightning>>>, tx: TransactionId| async move {
+                    let mint = mint.lock().await;
                     Ok(TransactionStatus::Accepted {
                         epoch: 0,
                         outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(

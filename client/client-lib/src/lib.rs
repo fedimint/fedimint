@@ -681,7 +681,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
 
         let stream = stream::iter(pending)
             .map(|(key, notes)| async move {
-                match self.context.api.fetch_tx_outcome(&key.0).await {
+                match self.context.api.await_tx_outcome(&key.0).await {
                     Ok(TransactionStatus::Rejected(_)) => Ok((key, notes)),
                     Ok(TransactionStatus::Accepted { .. }) => {
                         Ok((key, TieredMulti::<SpendableNote>::default()))

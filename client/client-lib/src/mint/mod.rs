@@ -460,6 +460,7 @@ impl MintClient {
             .api
             .fetch_output_outcome::<OutputOutcome>(outpoint, &self.context.decoders)
             .await?
+            .ok_or(MintClientError::OutputNotReadyYet(outpoint))?
             .try_into_variant::<MintOutputOutcome>()?
             .as_ref()
             .cloned()
@@ -693,24 +694,43 @@ mod tests {
             .iter()
             .map(|(peer_id, _, _, _)| *peer_id)
             .collect();
-        FederationApiFaker::new(fed, members).with(
-            "/fetch_transaction",
-            move |mint: Arc<Mutex<FakeFed<Mint>>>, tx: TransactionId| async move {
-                let mint = mint.lock().await;
-                Ok(TransactionStatus::Accepted {
-                    epoch: 0,
-                    outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
-                        module_id,
-                        mint.output_outcome(OutPoint {
-                            txid: tx,
-                            out_idx: 0,
-                        })
-                        .await
-                        .unwrap(),
-                    ))],
-                })
-            },
-        )
+        FederationApiFaker::new(fed, members)
+            .with(
+                "/fetch_transaction",
+                move |mint: Arc<Mutex<FakeFed<Mint>>>, tx: TransactionId| async move {
+                    let mint = mint.lock().await;
+                    Ok(Some(TransactionStatus::Accepted {
+                        epoch: 0,
+                        outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
+                            module_id,
+                            mint.output_outcome(OutPoint {
+                                txid: tx,
+                                out_idx: 0,
+                            })
+                            .await
+                            .unwrap(),
+                        ))],
+                    }))
+                },
+            )
+            .with(
+                "/wait_transaction",
+                move |mint: Arc<Mutex<FakeFed<Mint>>>, tx: TransactionId| async move {
+                    let mint = mint.lock().await;
+                    Ok(TransactionStatus::Accepted {
+                        epoch: 0,
+                        outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
+                            module_id,
+                            mint.output_outcome(OutPoint {
+                                txid: tx,
+                                out_idx: 0,
+                            })
+                            .await
+                            .unwrap(),
+                        ))],
+                    })
+                },
+            )
     }
 
     async fn new_mint_and_client() -> (

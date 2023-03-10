@@ -204,10 +204,23 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/fetch_transaction",
+            async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> Option<TransactionStatus> {
+                debug!(transaction = %tx_hash, "Recieved request");
+
+                let tx_status = fedimint.transaction_status(tx_hash)
+                    .await;
+
+                debug!(transaction = %tx_hash, "Sending outcome");
+                Ok(tx_status)
+            }
+        },
+        api_endpoint! {
+            "/wait_transaction",
             async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
-                let tx_status = fedimint.transaction_status(tx_hash).await.ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
+                let tx_status = fedimint.wait_transaction_status(tx_hash)
+                    .await;
 
                 debug!(transaction = %tx_hash, "Sending outcome");
                 Ok(tx_status)

@@ -236,18 +236,31 @@ mod tests {
             .iter()
             .map(|(peer_id, _, _, _)| *peer_id)
             .collect();
-        FederationApiFaker::new(fed, members).with(
-            "/fetch_transaction",
-            move |_mint: Arc<Mutex<FakeFed<Wallet>>>, _tx: TransactionId| async move {
-                Ok(TransactionStatus::Accepted {
-                    epoch: 0,
-                    outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
-                        module_id,
-                        WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()),
-                    ))],
-                })
-            },
-        )
+        FederationApiFaker::new(fed, members)
+            .with(
+                "/fetch_transaction",
+                move |_mint: Arc<Mutex<FakeFed<Wallet>>>, _tx: TransactionId| async move {
+                    Ok(Some(TransactionStatus::Accepted {
+                        epoch: 0,
+                        outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
+                            module_id,
+                            WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()),
+                        ))],
+                    }))
+                },
+            )
+            .with(
+                "/wait_transaction",
+                move |_mint: Arc<Mutex<FakeFed<Wallet>>>, _tx: TransactionId| async move {
+                    Ok(TransactionStatus::Accepted {
+                        epoch: 0,
+                        outputs: vec![SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(
+                            module_id,
+                            WalletOutputOutcome(Txid::from_slice([0; 32].as_slice()).unwrap()),
+                        ))],
+                    })
+                },
+            )
     }
 
     async fn new_mint_and_client(
