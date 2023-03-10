@@ -32,7 +32,6 @@ pub struct WalletClientModule {}
 impl ClientModule for WalletClientModule {
     type Common = WalletModuleTypes;
     type ModuleStateMachineContext = ();
-    type GlobalStateMachineContext = ();
     type States = WalletClientStates;
 
     fn context(&self) -> Self::ModuleStateMachineContext {

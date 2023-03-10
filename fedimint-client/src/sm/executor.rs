@@ -662,7 +662,6 @@ mod tests {
     impl ClientModule for MockClientModule {
         type Common = MockCommon;
         type ModuleStateMachineContext = MockContext;
-        type GlobalStateMachineContext = ();
         type States = MockStateMachine;
 
         fn context(&self) -> Self::ModuleStateMachineContext {

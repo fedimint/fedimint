@@ -32,7 +32,6 @@ pub struct MintClientModule {}
 impl ClientModule for MintClientModule {
     type Common = MintModuleTypes;
     type ModuleStateMachineContext = ();
-    type GlobalStateMachineContext = ();
     type States = MintClientStates;
 
     fn context(&self) -> Self::ModuleStateMachineContext {

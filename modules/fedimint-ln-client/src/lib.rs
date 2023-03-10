@@ -32,7 +32,6 @@ pub struct LightningClientModule {}
 impl ClientModule for LightningClientModule {
     type Common = LightningModuleTypes;
     type ModuleStateMachineContext = ();
-    type GlobalStateMachineContext = ();
     type States = LightningClientStates;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
