@@ -12,7 +12,7 @@ source ./scripts/build.sh $FM_FED_SIZE
 POLL_INTERVAL=1
 
 # Start bitcoind and wait for it to become ready
-bitcoind -regtest -fallbackfee=0.00001 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$FM_BTC_DIR &
+bitcoind -datadir=$FM_BTC_DIR &
 echo $! >> $FM_PID_FILE
 
 # Required by tests to manipulate bitcoind

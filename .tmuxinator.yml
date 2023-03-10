@@ -23,7 +23,7 @@ windows:
         - user:
           - # empty user shell
         - bitcoind:
-          - bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$FM_BTC_DIR &
+          - bitcoind -datadir=$FM_BTC_DIR &
           - echo $! >> $FM_PID_FILE
           - fg
         - ln1:

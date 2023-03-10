@@ -43,6 +43,9 @@ mkdir -p $FM_LN2_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
 
+# Copy configs to data directories
+cp misc/test/bitcoin.conf $FM_BTC_DIR
+
 # Generate federation configs
 CERTS=""
 for ((ID=0; ID<FM_FED_SIZE; ID++));
