@@ -2,9 +2,6 @@
 
 source ./scripts/lib.sh
 
-POLL_INTERVAL=0.5
-export POLL_INTERVAL
-
 # wait for bitcoin RPC, lightningd & fedimint block sync
 await_bitcoin_rpc
 await_lightning_node_block_processing | show_verbose_output

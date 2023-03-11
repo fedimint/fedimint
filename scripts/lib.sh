@@ -16,15 +16,15 @@ function open_channel() {
     mine_blocks 10
     LND_PUBKEY="$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')"
     $FM_LIGHTNING_CLI connect $LND_PUBKEY@127.0.0.1:9734
-    until $FM_LIGHTNING_CLI -k fundchannel id=$LND_PUBKEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
+    until $FM_LIGHTNING_CLI -k fundchannel id=$LND_PUBKEY amount=0.1btc push_msat=5000000000; do sleep $FM_POLL_INTERVAL; done
     mine_blocks 10
-    until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
+    until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $FM_POLL_INTERVAL; done
 }
 
 function await_bitcoin_rpc() {
     until $FM_BTC_CLIENT getblockchaininfo 1>/dev/null 2>/dev/null ; do
         >&2 echo "Bitcoind rpc not ready yet. Waiting ..."
-        sleep "$POLL_INTERVAL"
+        sleep "$FM_POLL_INTERVAL"
     done
 }
 
@@ -51,7 +51,7 @@ function await_all_peers() {
 function await_server_on_port() {
   until nc -z 127.0.0.1 $1
   do
-      sleep $POLL_INTERVAL
+      sleep $FM_POLL_INTERVAL
   done
 }
 
@@ -62,7 +62,7 @@ function await_lightning_node_block_processing() {
   EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
   until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
   do
-    sleep $POLL_INTERVAL
+    sleep $FM_POLL_INTERVAL
   done
   echo "done waiting for cln"
 
@@ -70,7 +70,7 @@ function await_lightning_node_block_processing() {
   until [ "true" == "$($FM_LNCLI getinfo | jq -r '.synced_to_chain')" ]
   do
     echo "sleeping"
-    sleep $POLL_INTERVAL
+    sleep $FM_POLL_INTERVAL
   done
   echo "done waiting for lnd"
 }
@@ -146,7 +146,7 @@ function show_verbose_output()
 
 function await_gateway_registered() {
     until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" = "1" ]; do
-        sleep $POLL_INTERVAL
+        sleep $FM_POLL_INTERVAL
     done
 }
 
