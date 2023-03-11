@@ -40,5 +40,5 @@ windows:
           - fg
         - federation:
           - sleep 1 # wait for bitcoind
-          - ./scripts/start-fed.sh
-
+          - run_dkg
+          - start_federation &
