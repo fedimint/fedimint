@@ -15,7 +15,6 @@ $FM_DISTRIBUTEDGEN config-encrypt --in-file $FM_CFG_DIR/server-0/config-plaintex
 $FM_DISTRIBUTEDGEN config-decrypt --in-file $FM_CFG_DIR/server-0/config-2 --out-file $FM_CFG_DIR/server-0/config-plaintext-2.json
 cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/config-plaintext-2.json
 
-./scripts/start-fed.sh
 ./scripts/pegin.sh # peg in user
 
 export PEG_IN_AMOUNT=99999
