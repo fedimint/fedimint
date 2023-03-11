@@ -102,6 +102,10 @@ export FM_GATEWAY_CLI="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
 export FM_DB_TOOL="$FM_BIN_DIR/dbtool"
 export FM_DISTRIBUTEDGEN="$FM_BIN_DIR/distributedgen"
 
+# Fedimint config variables
+export FM_TEST_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
+export FM_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
+
 # Alias clients
 alias lightning-cli="\$FM_LIGHTNING_CLI"
 alias lncli="\$FM_LNCLI"

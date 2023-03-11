@@ -82,17 +82,14 @@ function kill_fedimint_processes {
   rm -f $FM_PID_FILE
 }
 
-function start_gatewayd() {
-  $FM_BIN_DIR/gatewayd &
-  echo $! >> $FM_PID_FILE
-  echo "started gatewayd"
-  gw_connect_fed
-}
-
 function gw_connect_fed() {
   # connect federation with the gateway
   FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info')"
-  $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
+  until $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
+  do
+    echo "gateway-cli connect-fed failed ... retrying"
+    sleep 1
+  done
 }
 
 function get_finality_delay() {
@@ -151,4 +148,55 @@ function await_gateway_registered() {
     until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" = "1" ]; do
         sleep $POLL_INTERVAL
     done
+}
+
+### Start Daemons ###
+
+function start_bitcoind() {
+  bitcoind -datadir=$FM_BTC_DIR &
+  echo $! >> $FM_PID_FILE
+  until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.chain')" == "regtest" ]; do
+    sleep $POLL_INTERVAL
+  done
+  # create a default RPC wallet
+  $FM_BTC_CLIENT createwallet ""
+  # mine some blocks
+  mine_blocks 101 | show_verbose_output
+}
+
+function start_lightningd() {
+  await_bitcoin_rpc
+  # if we're running developer build, enable some flags to make it lightningd run faster
+  if [[ "$(lightningd --bitcoin-cli "$(which false)" --dev-no-plugin-checksum 2>&1 )" =~ .*"--dev-no-plugin-checksum: unrecognized option".* ]]; then
+    LIGHTNING_FLAGS=""
+  else
+    LIGHTNING_FLAGS="--dev-fast-gossip --dev-bitcoind-poll=1"
+  fi
+  lightningd $LIGHTNING_FLAGS --lightning-dir=$FM_CLN_DIR --plugin=$FM_BIN_DIR/gateway-cln-extension &
+  echo $! >> $FM_PID_FILE
+}
+
+function start_lnd() {
+  await_bitcoin_rpc
+  lnd --lnddir=$FM_LND_DIR &
+  echo $! >> $FM_PID_FILE
+}
+
+function start_gatewayd() {
+  await_fedimint_block_sync
+  $FM_BIN_DIR/gatewayd &
+  echo $! >> $FM_PID_FILE
+  gw_connect_fed
+}
+
+function start_electrs() {
+  await_bitcoin_rpc
+  electrs --conf-dir "$FM_ELECTRS_DIR" --db-dir "$FM_ELECTRS_DIR" --daemon-dir "$FM_BTC_DIR" &
+  echo $! >> $FM_PID_FILE
+}
+
+function start_esplora() {
+  await_bitcoin_rpc
+  esplora --cookie "bitcoin:bitcoin" --network "regtest" --daemon-dir "$FM_BTC_DIR" --http-addr "127.0.0.1:50002" --daemon-rpc-addr "127.0.0.1:18443" --monitoring-addr "127.0.0.1:50003" --db-dir "$FM_TEST_DIR/esplora" &
+  echo $! >> $FM_PID_FILE
 }
