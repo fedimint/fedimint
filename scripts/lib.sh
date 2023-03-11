@@ -75,10 +75,11 @@ function await_lightning_node_block_processing() {
   echo "done waiting for lnd"
 }
 
-# Function for killing processes stored in FM_PID_FILE
+# Function for killing processes stored in FM_PID_FILE in reverse-order they were created in
 function kill_fedimint_processes {
-  # shellcheck disable=SC2046
-  kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') 2>/dev/null #sed reverses the order here
+  echo "Killing fedimint processes"
+  PIDS=$(cat $FM_PID_FILE | sed '1!G;h;$!d') # sed reverses order
+  kill $PIDS 2>/dev/null
   rm -f $FM_PID_FILE
 }
 
