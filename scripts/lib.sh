@@ -85,7 +85,11 @@ function kill_fedimint_processes {
 function gw_connect_fed() {
   # connect federation with the gateway
   FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info')"
-  $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
+  until $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
+  do
+    echo "gateway-cli connect-fed failed ... retrying"
+    sleep 1
+  done
 }
 
 function get_finality_delay() {
