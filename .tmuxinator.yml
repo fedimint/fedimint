@@ -11,6 +11,7 @@ pre_window:
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
   - alias dbtool="\$FM_DB_TOOL"
   - alias restart="./scripts/restart-tmux.sh"
+  - source scripts/lib.sh
 tmux_detached: false
 windows:
   - main:
@@ -23,23 +24,19 @@ windows:
         - user:
           - # empty user shell
         - bitcoind:
-          - bitcoind -datadir=$FM_BTC_DIR &
-          - echo $! >> $FM_PID_FILE
+          - start_bitcoind &
           - fg
         - cln:
           - sleep 5 # wait for bitcoind and federation
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --lightning-dir=$FM_CLN_DIR --plugin=$FM_BIN_DIR/gateway-cln-extension &
-          - echo $! >> $FM_PID_FILE
+          - start_lightningd &
           - fg
         - lnd:
           - sleep 5 # wait for bitcoind and federation
-          - lnd --lnddir=$FM_LND_DIR &
-          - echo $! >> $FM_PID_FILE
+          - start_lnd &
           - fg
         - gateway:
           - sleep 7 # wait for gateway-cln-extension to start
-          - $FM_BIN_DIR/gatewayd
-          - echo $! >> $FM_PID_FILE
+          - start_gatewayd &
           - fg
         - federation:
           - sleep 1 # wait for bitcoind
