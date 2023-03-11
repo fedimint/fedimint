@@ -155,9 +155,7 @@ function await_gateway_registered() {
 function start_bitcoind() {
   bitcoind -datadir=$FM_BTC_DIR &
   echo $! >> $FM_PID_FILE
-  until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.chain')" == "regtest" ]; do
-    sleep $POLL_INTERVAL
-  done
+  await_bitcoin_rpc
   # create a default RPC wallet
   $FM_BTC_CLIENT createwallet ""
   # mine some blocks
