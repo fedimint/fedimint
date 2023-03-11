@@ -96,15 +96,38 @@ impl Gateway {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
 
-        // Source route hints form the LN node
+        let gw = Self {
+            lnrpc,
+            actors: Mutex::new(HashMap::new()),
+            sender,
+            receiver,
+            client_builder,
+            task_group,
+            channel_id_generator: AtomicU64::new(0),
+            decoders: decoders.clone(),
+            module_gens: module_gens.clone(),
+        };
+
+        gw.load_federation_actors(decoders, module_gens).await?;
+
+        Ok(gw)
+    }
+
+    async fn load_federation_actors(
+        &self,
+        decoders: ModuleDecoderRegistry,
+        module_gens: ClientModuleGenRegistry,
+    ) -> Result<()> {
+        // Fetch route hints form the LN node
         let mut num_retries = 0;
         let route_hints = loop {
-            let route_hints: Vec<RouteHint> = lnrpc
+            let route_hints: Vec<RouteHint> = self
+                .lnrpc
                 .routehints()
                 .await
-                .map_err(|_| GatewayError::FailedToFetchRouteHints)?
+                .expect("Could not fetch route hints")
                 .try_into()
-                .map_err(|_| GatewayError::FailedToFetchRouteHints)?;
+                .expect("Could not parse route hints");
 
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
                 break route_hints;
@@ -118,31 +141,6 @@ impl Gateway {
             num_retries += 1;
             tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
-
-        let gw = Self {
-            lnrpc,
-            actors: Mutex::new(HashMap::new()),
-            sender,
-            receiver,
-            client_builder,
-            task_group,
-            channel_id_generator: AtomicU64::new(0),
-            decoders: decoders.clone(),
-            module_gens: module_gens.clone(),
-        };
-
-        gw.load_federation_actors(decoders, module_gens, route_hints)
-            .await;
-
-        Ok(gw)
-    }
-
-    async fn load_federation_actors(
-        &self,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-        route_hints: Vec<RouteHint>,
-    ) {
         if let Ok(configs) = self.client_builder.load_configs() {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
 
@@ -169,6 +167,7 @@ impl Gateway {
         } else {
             warn!("Could not load any previous federation configs");
         }
+        Ok(())
     }
 
     async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
