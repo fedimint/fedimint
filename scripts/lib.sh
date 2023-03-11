@@ -157,13 +157,9 @@ function run_dkg() {
   CERTS=""
   for ((ID=0; ID<FM_FED_SIZE; ID++));
   do
-    echo "making dir"
-    mkdir $FM_CFG_DIR/server-$ID
-    FED_PORT=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-    API_PORT=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
-    export FM_PASSWORD="pass$ID"
-    echo "making creating cert for port $FED_PORT $API_PORT"
-    RUST_BACKTRACE=1 $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://127.0.0.1:$FED_PORT --api-url ws://127.0.0.1:$API_PORT --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
+    setup_fedimintd_env $ID
+    echo "making creating cert for ports server $ID"
+    $FM_BIN_DIR/distributedgen create-cert --p2p-url $FM_P2P_URL --api-url $FM_API_URL --out-dir $FM_FEDIMINTD_DATA_DIR --name "Server-$ID"
     CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
   done
   CERTS=${CERTS:1}
@@ -172,10 +168,8 @@ function run_dkg() {
   DKG_PIDS=""
   for ((ID=0; ID<FM_FED_SIZE; ID++));
   do
-    export FM_PASSWORD="pass$ID"
-    fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-    api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
-    $FM_BIN_DIR/distributedgen run  --bind-p2p 127.0.0.1:$fed_port --bind-api 127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS &
+    setup_fedimintd_env $ID
+    $FM_BIN_DIR/distributedgen run  --bind-p2p $FM_BIND_P2P --bind-api $FM_BIND_API --out-dir $FM_FEDIMINTD_DATA_DIR --certs $CERTS &
     DKG_PIDS="$DKG_PIDS $!"
   done
   wait $DKG_PIDS
@@ -274,8 +268,8 @@ function start_federation() {
   # Start the federation members inside the temporary directory
   for ((ID=START_SERVER; ID<END_SERVER; ID++)); do
     echo "starting mint $ID"
-    export FM_PASSWORD="pass$ID"
-    ( ($FM_BIN_DIR/fedimintd $FM_CFG_DIR/server-$ID 2>&1 & echo $! >&3 ) 3>>$FM_PID_FILE | sed -e "s/^/mint $ID: /" ) &
+    setup_fedimintd_env $ID
+    ( ($FM_BIN_DIR/fedimintd $FM_FEDIMINTD_DATA_DIR 2>&1 & echo $! >&3 ) 3>>$FM_PID_FILE | sed -e "s/^/mint $ID: /" ) &
   done
   echo "started federation"
 }
