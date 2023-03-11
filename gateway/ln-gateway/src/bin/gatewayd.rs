@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::process::exit;
 
 use clap::{Parser, Subcommand};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -164,7 +165,11 @@ async fn main() -> Result<(), anyhow::Error> {
         module_gens,
         task_group.make_subgroup().await,
     )
-    .await;
+    .await
+    .unwrap_or_else(|e| {
+        eprintln!("Failed to start gateway: {e:?}");
+        exit(1)
+    });
 
     if let Err(e) = gateway.run(listen, password).await {
         task_group.shutdown_join_all(None).await?;

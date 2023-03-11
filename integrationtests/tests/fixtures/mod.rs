@@ -609,7 +609,8 @@ impl GatewayTest {
             module_gens.clone(),
             TaskGroup::new(),
         )
-        .await;
+        .await
+        .unwrap();
 
         let client = Arc::new(
             client_builder

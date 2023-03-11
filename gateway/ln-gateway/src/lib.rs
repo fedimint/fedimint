@@ -61,6 +61,8 @@ pub enum GatewayError {
     FederationError(#[from] FederationError),
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
+    #[error("Failed to fetch route hints")]
+    FailedToFetchRouteHints,
 }
 
 impl IntoResponse for GatewayError {
@@ -90,7 +92,7 @@ impl Gateway {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
-    ) -> Self {
+    ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
 
@@ -100,9 +102,9 @@ impl Gateway {
             let route_hints: Vec<RouteHint> = lnrpc
                 .routehints()
                 .await
-                .expect("Could not fetch route hints")
+                .map_err(|_| GatewayError::FailedToFetchRouteHints)?
                 .try_into()
-                .expect("Could not parse route hints");
+                .map_err(|_| GatewayError::FailedToFetchRouteHints)?;
 
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
                 break route_hints;
@@ -132,7 +134,7 @@ impl Gateway {
         gw.load_federation_actors(decoders, module_gens, route_hints)
             .await;
 
-        gw
+        Ok(gw)
     }
 
     async fn load_federation_actors(
