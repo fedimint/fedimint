@@ -184,6 +184,25 @@ function run_dkg() {
   mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 }
 
+function setup_fedimintd_env() {
+  ID=$1
+  BASE_PORT=$((8173 + 10000))
+  P2P_PORT=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+  API_PORT=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+  UI_PORT=$(echo "$BASE_PORT + $ID * 10 + 2" | bc -l)
+  export FM_BIND_P2P=127.0.0.1:$P2P_PORT
+  export FM_P2P_URL=fedimint://127.0.0.1:$P2P_PORT
+  export FM_BIND_API=127.0.0.1:$API_PORT
+  export FM_API_URL=ws://127.0.0.1:$API_PORT
+  export FM_LISTEN_UI=127.0.0.1:$UI_PORT
+  export FM_PASSWORD="pass$ID"
+  export FM_FEDIMINTD_DATA_DIR="$FM_CFG_DIR/server-$ID"
+
+  # ensure datadir exists ... pipe to `true` because run_dkg() and setup_federation()
+  # both call this so the directory might already be here ...
+  mkdir $FM_FEDIMINTD_DATA_DIR || true
+}
+
 ### Start Daemons ###
 
 function start_bitcoind() {
