@@ -24,7 +24,5 @@ export FM_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
 
 SHELL=$(which bash) tmuxinator local
 tmux -L fedimint-dev kill-session -t fedimint-dev || true
-pkill bitcoind
-pkill lightningd
 
 rm .tmpenv
