@@ -159,7 +159,7 @@ function start_bitcoind() {
   # create a default RPC wallet
   $FM_BTC_CLIENT createwallet ""
   # mine some blocks
-  mine_blocks 101 | show_verbose_output
+  mine_blocks 101
 }
 
 function start_lightningd() {
