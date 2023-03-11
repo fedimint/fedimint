@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use aead::{encrypted_read, encrypted_write, get_key};
+use aead::{encrypted_read, encrypted_write, get_encryption_key_with_path};
 use clap::{Parser, Subcommand};
 use fedimint_core::config::{DkgError, ServerModuleGenRegistry};
 use fedimint_core::module::ServerModuleGen;
@@ -221,7 +221,7 @@ impl DistributedGen {
             } => {
                 let salt_file =
                     salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&in_file));
-                let key = get_key(&password, salt_file)?;
+                let key = get_encryption_key_with_path(&password, salt_file)?;
                 let decrypted_bytes = encrypted_read(&key, in_file)?;
 
                 let mut out_file_handle =
@@ -242,7 +242,7 @@ impl DistributedGen {
 
                 let salt_file =
                     salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&out_file));
-                let key = get_key(&password, salt_file)?;
+                let key = get_encryption_key_with_path(&password, salt_file)?;
                 encrypted_write(plaintext_bytes, &key, out_file)
             }
         }

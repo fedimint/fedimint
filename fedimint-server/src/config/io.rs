@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use aead::{encrypted_read, encrypted_write, get_key, LessSafeKey};
+use aead::{encrypted_read, encrypted_write, get_encryption_key_with_path, LessSafeKey};
 use anyhow::{ensure, format_err};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_core::api::WsClientConnectInfo;
@@ -57,7 +57,7 @@ pub fn create_cert(
 ) -> anyhow::Result<String> {
     let salt: [u8; 16] = rand::random();
     fs::write(dir_out_path.join(SALT_FILE), salt.to_hex())?;
-    let key = get_key(password, dir_out_path.join(SALT_FILE))?;
+    let key = get_encryption_key_with_path(password, dir_out_path.join(SALT_FILE))?;
     gen_tls(&dir_out_path, p2p_url, api_url, guardian_name, &key)
 }
 
@@ -96,7 +96,7 @@ fn gen_tls(
 /// Reads the server from the local, private, and consensus cfg files
 pub fn read_server_config(password: &str, path: PathBuf) -> anyhow::Result<ServerConfig> {
     let salt_path = path.join(SALT_FILE);
-    let key = get_key(password, salt_path)?;
+    let key = get_encryption_key_with_path(password, salt_path)?;
 
     Ok(ServerConfig {
         consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))?,
@@ -128,7 +128,7 @@ pub fn write_server_config(
     password: &str,
     module_config_gens: &ServerModuleGenRegistry,
 ) -> anyhow::Result<()> {
-    let key = get_key(password, path.join(SALT_FILE))?;
+    let key = get_encryption_key_with_path(password, path.join(SALT_FILE))?;
 
     let client_config = server
         .consensus
