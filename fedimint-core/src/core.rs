@@ -19,7 +19,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     dyn_newtype_define_with_instance_id, dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id,
-    ModuleDecoderRegistry,
 };
 
 pub mod client;
@@ -359,7 +358,8 @@ impl Debug for Decoder {
     }
 }
 
-/// Something that can be an [`DynInput`] in a [`Transaction`]
+/// Something that can be an [`DynInput`] in a
+/// [`Transaction`](fedimint_core::transaction::Transaction)
 ///
 /// General purpose code should use [`DynInput`] instead
 pub trait IInput: Debug + Display + DynEncodable {
@@ -378,7 +378,7 @@ module_plugin_trait_define! {
 }
 
 dyn_newtype_define_with_instance_id! {
-    /// An owned, immutable input to a [`Transaction`]
+    /// An owned, immutable input to a [`Transaction`](fedimint_core::transaction::Transaction)
     pub DynInput(Box<IInput>)
 }
 module_dyn_newtype_impl_encode_decode!(DynInput);
@@ -389,7 +389,8 @@ newtype_impl_eq_passthrough_with_instance_id!(DynInput);
 
 newtype_impl_display_passthrough_with_instance_id!(DynInput);
 
-/// Something that can be an [`DynOutput`] in a [`Transaction`]
+/// Something that can be an [`DynOutput`] in a
+/// [`Transaction`](fedimint_core::transaction::Transaction)
 ///
 /// General purpose code should use [`DynOutput`] instead
 pub trait IOutput: Debug + Display + DynEncodable {
@@ -400,7 +401,7 @@ pub trait IOutput: Debug + Display + DynEncodable {
 }
 
 dyn_newtype_define_with_instance_id! {
-    /// An owned, immutable output of a [`Transaction`]
+    /// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction)
     pub DynOutput(Box<IOutput>)
 }
 module_plugin_trait_define! {
@@ -430,7 +431,7 @@ pub trait IOutputOutcome: Debug + Display + DynEncodable {
 }
 
 dyn_newtype_define_with_instance_id! {
-    /// An owned, immutable output of a [`Transaction`] before it was finalized
+    /// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction) before it was finalized
     pub DynOutputOutcome(Box<IOutputOutcome>)
 }
 module_plugin_trait_define! {
@@ -456,7 +457,7 @@ pub trait IModuleConsensusItem: Debug + Display + DynEncodable {
 }
 
 dyn_newtype_define_with_instance_id! {
-    /// An owned, immutable output of a [`Transaction`] before it was finalized
+    /// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction) before it was finalized
     pub DynModuleConsensusItem(Box<IModuleConsensusItem>)
 }
 module_plugin_trait_define! {
@@ -473,31 +474,3 @@ dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynModuleConsensusItem
 newtype_impl_eq_passthrough_with_instance_id!(DynModuleConsensusItem);
 
 newtype_impl_display_passthrough!(DynModuleConsensusItem);
-
-#[derive(Encodable, Decodable)]
-pub struct Signature;
-
-/// Transaction that was already signed
-#[derive(Encodable)]
-pub struct Transaction {
-    pub inputs: Vec<DynInput>,
-    pub outputs: Vec<DynOutput>,
-    pub signature: Signature,
-}
-
-impl Decodable for Transaction
-where
-    DynInput: Decodable,
-    DynOutput: Decodable,
-{
-    fn consensus_decode<R: std::io::Read>(
-        r: &mut R,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        Ok(Self {
-            inputs: Decodable::consensus_decode(r, modules)?,
-            outputs: Decodable::consensus_decode(r, modules)?,
-            signature: Decodable::consensus_decode(r, modules)?,
-        })
-    }
-}
