@@ -287,7 +287,7 @@ function start_federation() {
   echo "started federation"
 }
 
-function start_fixtures() {
-  $FM_BIN_DIR/fixtures &
+function start_daemons() {
+  $FM_BIN_DIR/fixtures daemons &
   echo $! >> $FM_PID_FILE
 }
