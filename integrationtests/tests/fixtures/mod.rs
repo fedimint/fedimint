@@ -620,7 +620,7 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .connect_federation(client.clone(), vec![])
+            .load_actor(client.clone(), vec![])
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios

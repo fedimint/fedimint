@@ -167,18 +167,6 @@ impl Gateway {
         Ok(())
     }
 
-    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
-        self.actors
-            .lock()
-            .await
-            .get(&federation_id.to_string())
-            .cloned()
-            .ok_or(GatewayError::Other(anyhow::anyhow!(
-                "No federation with id {}",
-                federation_id.to_string()
-            )))
-    }
-
     pub async fn load_actor(
         &self,
         client: Arc<GatewayClient>,
@@ -199,6 +187,18 @@ impl Gateway {
             actor.clone(),
         );
         Ok(actor)
+    }
+
+    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+        self.actors
+            .lock()
+            .await
+            .get(&federation_id.to_string())
+            .cloned()
+            .ok_or(GatewayError::Other(anyhow::anyhow!(
+                "No federation with id {}",
+                federation_id.to_string()
+            )))
     }
 
     async fn handle_connect_federation(
