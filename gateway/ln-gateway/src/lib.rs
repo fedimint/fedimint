@@ -151,10 +151,7 @@ impl Gateway {
                     .await
                     .expect("Could not build federation client");
 
-                if let Err(e) = self
-                    .connect_federation(Arc::new(client), route_hints.clone())
-                    .await
-                {
+                if let Err(e) = self.load_actor(Arc::new(client), route_hints.clone()).await {
                     error!("Failed to connect federation: {}", e);
                 }
 
@@ -182,7 +179,7 @@ impl Gateway {
             )))
     }
 
-    pub async fn connect_federation(
+    pub async fn load_actor(
         &self,
         client: Arc<GatewayClient>,
         route_hints: Vec<RouteHint>,
@@ -238,7 +235,7 @@ impl Gateway {
                 .expect("Failed to build gateway client"),
         );
 
-        if let Err(e) = self.connect_federation(client.clone(), route_hints).await {
+        if let Err(e) = self.load_actor(client.clone(), route_hints).await {
             error!("Failed to connect federation: {}", e);
         }
 
