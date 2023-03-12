@@ -87,12 +87,20 @@ function await_gateway_cln_extension() {
 }
 
 function gw_connect_fed() {
-  # connect federation with the gateway
-  FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info')"
-  until $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
+  # get connection string ... retry in case fedimint-cli command fails
+  FM_CONNECT_STR=""
+  while [[ $FM_CONNECT_STR = "" ]]
+  do
+    FM_CONNECT_STR=$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info') || true
+    echo "fedimint-cli connect-info failed ... retrying"
+    sleep $FM_POLL_INTERVAL
+  done
+
+  # get connection string ... retry in case gateway-cli command fails
+  while ! $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
   do
     echo "gateway-cli connect-fed failed ... retrying"
-    sleep 1
+    sleep $FM_POLL_INTERVAL
   done
 }
 
