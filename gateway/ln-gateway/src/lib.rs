@@ -22,7 +22,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
-use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
@@ -56,6 +56,8 @@ pub enum GatewayError {
     ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
     LnRpcError(#[from] tonic::Status),
+    #[error("Federation error: {0:?}")]
+    FederationError(#[from] FederationError),
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }
@@ -221,8 +223,7 @@ impl Gateway {
         let gw_client_cfg = self
             .client_builder
             .create_config(connect, channel_id, node_pub_key, self.module_gens.clone())
-            .await
-            .expect("Failed to create gateway client config");
+            .await?;
 
         let client = Arc::new(
             self.client_builder
