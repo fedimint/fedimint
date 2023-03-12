@@ -82,6 +82,10 @@ function kill_fedimint_processes {
   rm -f $FM_PID_FILE
 }
 
+function await_gateway_cln_extension() {
+  while ! echo exit | nc localhost 8177; do sleep $FM_POLL_INTERVAL; done
+}
+
 function gw_connect_fed() {
   # connect federation with the gateway
   FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info')"
@@ -221,6 +225,7 @@ function start_lnd() {
 
 function start_gatewayd() {
   echo "starting gatewayd"
+  await_gateway_cln_extension
   await_fedimint_block_sync
   $FM_BIN_DIR/gatewayd &
   echo $! >> $FM_PID_FILE
