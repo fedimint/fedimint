@@ -7,13 +7,14 @@ use clap::{Parser, Subcommand};
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_logging::TracingSetup;
 use tokio::process::Command;
-use tokio::sync::Mutex;
 use tracing::{error, info, trace};
 use url::Url;
 
 #[derive(Subcommand)]
 enum Cmd {
     Bitcoind,
+    Lightningd,
+    Lnd,
     Daemons,
 }
 
@@ -22,44 +23,6 @@ enum Cmd {
 struct Args {
     #[clap(subcommand)]
     command: Cmd,
-}
-
-#[derive(Default, Clone)]
-struct State {
-    bitcoin_rpc: bool,
-}
-
-impl State {
-    fn new() -> Self {
-        Self {
-            ..Default::default()
-        }
-    }
-}
-
-#[derive(Clone)]
-struct MutableState(Arc<Mutex<State>>);
-
-impl MutableState {
-    fn new() -> Self {
-        Self(Arc::new(Mutex::new(State::new())))
-    }
-    async fn state(&self) -> State {
-        (*self.0.lock().await).clone()
-    }
-    async fn await_bitcoin_rpc(&self, waiter_name: &str) {
-        loop {
-            if self.state().await.bitcoin_rpc {
-                break;
-            }
-            sleep(Duration::from_secs(1)).await;
-            info!("{waiter_name} waiting for bitcoin rpc ...");
-        }
-    }
-    async fn bitcoin_rpc_ready(&self) {
-        self.0.lock().await.bitcoin_rpc = true;
-        info!("bitcoind ready");
-    }
 }
 
 fn bitcoin_rpc() -> anyhow::Result<Arc<BitcoinClient>> {
@@ -74,7 +37,18 @@ fn bitcoin_rpc() -> anyhow::Result<Arc<BitcoinClient>> {
     Ok(client)
 }
 
-async fn run_bitcoind(state: MutableState) -> anyhow::Result<()> {
+async fn await_bitcoin_rpc(waiter_name: &str) -> anyhow::Result<()> {
+    let rpc = bitcoin_rpc()?;
+
+    while rpc.get_blockchain_info().is_err() {
+        sleep(Duration::from_secs(1)).await;
+        info!("{waiter_name} waiting for bitcoin rpc ...");
+    }
+
+    Ok(())
+}
+
+async fn run_bitcoind() -> anyhow::Result<()> {
     let btc_dir = env::var("FM_BTC_DIR").unwrap();
 
     // spawn bitcoind
@@ -98,17 +72,14 @@ async fn run_bitcoind(state: MutableState) -> anyhow::Result<()> {
     let address = client.get_new_address(None, None)?;
     client.generate_to_address(101, &address)?;
 
-    // update state so other services know bitcoin rpc is ready
-    state.bitcoin_rpc_ready().await;
-
     bitcoind.wait().await?;
 
     Ok(())
 }
 
-async fn run_lightningd(state: MutableState) -> anyhow::Result<()> {
+async fn run_lightningd() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
-    state.await_bitcoin_rpc("lightningd").await;
+    await_bitcoin_rpc("lightningd").await?;
 
     let cln_dir = env::var("FM_CLN_DIR").unwrap();
     let bin_dir = env::var("FM_BIN_DIR").unwrap();
@@ -128,9 +99,9 @@ async fn run_lightningd(state: MutableState) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run_lnd(state: MutableState) -> anyhow::Result<()> {
+async fn run_lnd() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
-    state.await_bitcoin_rpc("lnd").await;
+    await_bitcoin_rpc("lnd").await?;
 
     let lnd_dir = env::var("FM_LND_DIR").unwrap();
 
@@ -146,30 +117,25 @@ async fn run_lnd(state: MutableState) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn daemons(state: MutableState) -> anyhow::Result<()> {
+async fn daemons() -> anyhow::Result<()> {
     let mut root_task_group = TaskGroup::new();
     root_task_group.install_kill_handler();
 
-    let bitcoind_state = state.clone();
     root_task_group
         .spawn("bitcoind", move |_| async move {
-            run_bitcoind(bitcoind_state).await.expect("bitcoind failed")
+            run_bitcoind().await.expect("bitcoind failed")
         })
         .await;
 
-    let lightningd_state = state.clone();
     root_task_group
         .spawn("lightningd", move |_| async move {
-            run_lightningd(lightningd_state)
-                .await
-                .expect("lightningd failed")
+            run_lightningd().await.expect("lightningd failed")
         })
         .await;
 
-    let lnd_state = state.clone();
     root_task_group
         .spawn("lnd", move |_| async move {
-            run_lnd(lnd_state).await.expect("lnd failed")
+            run_lnd().await.expect("lnd failed")
         })
         .await;
 
@@ -182,12 +148,12 @@ async fn daemons(state: MutableState) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
-    let state = MutableState::new();
-
     let args = Args::parse();
     match args.command {
-        Cmd::Bitcoind => run_bitcoind(state).await.expect("bitcoind failed"),
-        Cmd::Daemons => daemons(state).await.expect("daemons failed"),
+        Cmd::Bitcoind => run_bitcoind().await.expect("bitcoind failed"),
+        Cmd::Lightningd => run_lightningd().await.expect("lightningd failed"),
+        Cmd::Lnd => run_lnd().await.expect("lnd failed"),
+        Cmd::Daemons => daemons().await.expect("daemons failed"),
     }
 
     Ok(())
