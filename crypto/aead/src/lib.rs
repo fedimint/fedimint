@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, format_err, Result};
 use argon2::password_hash::{Salt, SaltString};
-use argon2::{Argon2, PasswordHasher};
+use argon2::{Argon2, Params, PasswordHasher};
 use rand::rngs::OsRng;
 use rand::Rng;
 use ring::aead::Nonce;
@@ -126,7 +126,7 @@ pub fn random_salt() -> String {
 fn argon2() -> Argon2<'static> {
     let mut params = argon2::ParamsBuilder::default();
     if let Ok("1") = std::env::var("FM_TEST_FAST_WEAK_CRYPTO").as_deref() {
-        params.m_cost(1);
+        params.m_cost(Params::MIN_M_COST);
     }
     Argon2::from(params.build().expect("valid params"))
 }
