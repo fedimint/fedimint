@@ -15,6 +15,8 @@ enum Cmd {
     Bitcoind,
     Lightningd,
     Lnd,
+    Electrs,
+    Esplora,
     Daemons,
 }
 
@@ -55,7 +57,7 @@ async fn run_bitcoind() -> anyhow::Result<()> {
     let mut bitcoind = Command::new("bitcoind")
         .arg(format!("-datadir={btc_dir}"))
         .spawn()
-        .expect("failed to spawn");
+        .expect("failed to spawn bitcoind");
     info!("bitcoind started");
 
     // create client
@@ -91,7 +93,7 @@ async fn run_lightningd() -> anyhow::Result<()> {
         .arg(format!("--lightning-dir={cln_dir}"))
         .arg(format!("--plugin={bin_dir}/gateway-cln-extension"))
         .spawn()
-        .expect("failed to spawn");
+        .expect("failed to spawn lightningd");
     info!("lightningd started");
 
     lightningd.wait().await?;
@@ -109,10 +111,53 @@ async fn run_lnd() -> anyhow::Result<()> {
     let mut lnd = Command::new("lnd")
         .arg(format!("--lnddir={lnd_dir}"))
         .spawn()
-        .expect("failed to spawn");
+        .expect("failed to spawn lnd");
     info!("lnd started");
 
     lnd.wait().await?;
+
+    Ok(())
+}
+
+async fn run_electrs() -> anyhow::Result<()> {
+    // wait for bitcoin RPC to be ready ...
+    await_bitcoin_rpc("electrs").await?;
+
+    let electrs_dir = env::var("FM_ELECTRS_DIR").unwrap();
+
+    // spawn electrs
+    let mut electrs = Command::new("electrs")
+        .arg(format!("--conf-dir={electrs_dir}"))
+        .arg(format!("--db-dir={electrs_dir}"))
+        .spawn()
+        .expect("failed to spawn electrs");
+    info!("electrs started");
+
+    electrs.wait().await?;
+
+    Ok(())
+}
+async fn run_esplora() -> anyhow::Result<()> {
+    // wait for bitcoin RPC to be ready ...
+    await_bitcoin_rpc("esplora").await?;
+
+    let daemon_dir = env::var("FM_BTC_DIR").unwrap();
+    let test_dir = env::var("FM_TEST_DIR").unwrap();
+
+    // spawn esplora
+    let mut esplora = Command::new("esplora")
+        .arg(format!("--daemon-dir={daemon_dir}"))
+        .arg(format!("--db-dir={test_dir}/esplora"))
+        .arg("--cookie=bitcoin:bitcoin")
+        .arg("--network=regtest")
+        .arg("--daemon-rpc-addr=127.0.0.1:18443")
+        .arg("--http-addr=127.0.0.1:50002")
+        .arg("--monitoring-addr=127.0.0.1:50003")
+        .spawn()
+        .expect("failed to spawn esplora");
+    info!("esplora started");
+
+    esplora.wait().await?;
 
     Ok(())
 }
@@ -139,6 +184,18 @@ async fn daemons() -> anyhow::Result<()> {
         })
         .await;
 
+    root_task_group
+        .spawn("electrs", move |_| async move {
+            run_lnd().await.expect("electrs failed")
+        })
+        .await;
+
+    root_task_group
+        .spawn("esplora", move |_| async move {
+            run_lnd().await.expect("esplora failed")
+        })
+        .await;
+
     root_task_group.join_all(None).await?;
 
     Ok(())
@@ -153,6 +210,8 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Bitcoind => run_bitcoind().await.expect("bitcoind failed"),
         Cmd::Lightningd => run_lightningd().await.expect("lightningd failed"),
         Cmd::Lnd => run_lnd().await.expect("lnd failed"),
+        Cmd::Electrs => run_electrs().await.expect("electrs failed"),
+        Cmd::Esplora => run_esplora().await.expect("esplora failed"),
         Cmd::Daemons => daemons().await.expect("daemons failed"),
     }
 
