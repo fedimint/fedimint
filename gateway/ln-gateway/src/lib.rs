@@ -108,12 +108,12 @@ impl Gateway {
             module_gens: module_gens.clone(),
         };
 
-        gw.load_federation_actors(decoders, module_gens).await?;
+        gw.load_actors(decoders, module_gens).await?;
 
         Ok(gw)
     }
 
-    async fn load_federation_actors(
+    async fn load_actors(
         &self,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
