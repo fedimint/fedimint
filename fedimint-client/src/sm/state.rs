@@ -2,7 +2,6 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
 use std::io::{Error, Read, Write};
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -17,27 +16,30 @@ use futures::future::BoxFuture;
 use crate::sm::{GlobalContext, OperationId};
 
 /// Implementors act as state machines that can be executed
-pub trait State<GC>:
+pub trait State:
     Debug
     + Clone
     + Eq
     + PartialEq
     + Encodable
     + Decodable
-    + IntoDynInstance<DynType = DynState<GC>>
+    + IntoDynInstance<DynType = DynState<Self::GlobalContext>>
     + Send
     + Sync
     + 'static
 {
-    /// Additional resources made available in the state transitions
+    /// Additional resources made available in this module's state transitions
     type ModuleContext: Context;
+
+    /// Additional resources made available for all state transitions
+    type GlobalContext: GlobalContext;
 
     /// All possible transitions from the current state to other states. See
     /// [`StateTransition`] for details.
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &GC,
+        global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>>;
 
     // TODO: move out of this interface into wrapper struct (see OperationState)
@@ -178,7 +180,7 @@ impl<S> StateTransition<S> {
 impl<GC, T> IState<GC> for T
 where
     GC: GlobalContext,
-    T: State<GC>,
+    T: State<GlobalContext = GC>,
 {
     fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
@@ -189,7 +191,7 @@ where
         context: &DynContext,
         global_context: &GC,
     ) -> Vec<StateTransition<DynState<GC>>> {
-        <T as State<GC>>::transitions(
+        <T as State>::transitions(
             self,
             context.as_any().downcast_ref().expect("Wrong module"),
             global_context,
@@ -222,7 +224,7 @@ where
     }
 
     fn operation_id(&self) -> OperationId {
-        <T as State<GC>>::operation_id(self)
+        <T as State>::operation_id(self)
     }
 
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState<GC> {
@@ -328,27 +330,26 @@ impl<GC> DynState<GC> {
 }
 
 #[derive(Debug)]
-pub struct OperationState<S, GC> {
+pub struct OperationState<S> {
     operation_id: OperationId,
     state: S,
-    _pd: PhantomData<GC>,
 }
 
 /// Wrapper for states that don't want to carry around their operation id. `S`
 /// is allowed to panic when `operation_id` is called.
-impl<GC, S> State<GC> for OperationState<S, GC>
+impl<S> State for OperationState<S>
 where
-    S: State<GC>,
-    GC: GlobalContext,
+    S: State,
 {
     type ModuleContext = S::ModuleContext;
+    type GlobalContext = S::GlobalContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &GC,
+        global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>> {
-        let transitions: Vec<StateTransition<OperationState<S, GC>>> = self
+        let transitions: Vec<StateTransition<OperationState<S>>> = self
             .state
             .transitions(context, global_context)
             .into_iter()
@@ -365,7 +366,6 @@ where
                                 OperationState {
                                     operation_id: op_state.operation_id,
                                     state,
-                                    _pd: Default::default(),
                                 }
                             })
                         });
@@ -387,21 +387,20 @@ where
 
 // TODO: can we get rid of `GC`? Maybe make it an associated type of `State`
 // instead?
-impl<S, GC> IntoDynInstance for OperationState<S, GC>
+impl<S> IntoDynInstance for OperationState<S>
 where
-    S: State<GC>,
-    GC: GlobalContext,
+    S: State,
 {
-    type DynType = DynState<GC>;
+    type DynType = DynState<S::GlobalContext>;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
     }
 }
 
-impl<S, GC> Encodable for OperationState<S, GC>
+impl<S> Encodable for OperationState<S>
 where
-    S: State<GC>,
+    S: State,
 {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
@@ -411,9 +410,9 @@ where
     }
 }
 
-impl<S, GC> Decodable for OperationState<S, GC>
+impl<S> Decodable for OperationState<S>
 where
-    S: State<GC>,
+    S: State,
 {
     fn consensus_decode<R: Read>(
         read: &mut R,
@@ -425,32 +424,30 @@ where
         Ok(OperationState {
             operation_id,
             state,
-            _pd: Default::default(),
         })
     }
 }
 
 // TODO: derive after getting rid of `GC` type arg
-impl<S, GC> PartialEq for OperationState<S, GC>
+impl<S> PartialEq for OperationState<S>
 where
-    S: State<GC>,
+    S: State,
 {
     fn eq(&self, other: &Self) -> bool {
         self.operation_id.eq(&other.operation_id) && self.state.eq(&other.state)
     }
 }
 
-impl<S, GC> Eq for OperationState<S, GC> where S: State<GC> {}
+impl<S> Eq for OperationState<S> where S: State {}
 
-impl<S, GC> Clone for OperationState<S, GC>
+impl<S> Clone for OperationState<S>
 where
-    S: State<GC>,
+    S: State,
 {
     fn clone(&self) -> Self {
         OperationState {
             operation_id: self.operation_id,
             state: self.state.clone(),
-            _pd: Default::default(),
         }
     }
 }

@@ -120,7 +120,7 @@ where
     ///
     /// Check if state exists in the database as part of an actively running
     /// state machine.
-    pub async fn contains_active_state<S: State<GC>>(
+    pub async fn contains_active_state<S: State<GlobalContext = GC>>(
         &self,
         instance: ModuleInstanceId,
         state: S,
@@ -140,7 +140,7 @@ where
     /// terminal it means the corresponding state machine finished its
     /// execution. If the state is non-terminal it means the state machine was
     /// in that state at some point but moved on since then.
-    pub async fn contains_inactive_state<S: State<GC>>(
+    pub async fn contains_inactive_state<S: State<GlobalContext = GC>>(
         &self,
         instance: ModuleInstanceId,
         state: S,
@@ -568,8 +568,9 @@ mod tests {
         Final,
     }
 
-    impl State<()> for MockStateMachine {
+    impl State for MockStateMachine {
         type ModuleContext = MockContext;
+        type GlobalContext = ();
 
         fn transitions(
             &self,

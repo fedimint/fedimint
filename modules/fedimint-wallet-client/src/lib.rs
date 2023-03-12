@@ -64,8 +64,9 @@ impl IntoDynInstance for WalletClientStates {
     }
 }
 
-impl State<()> for WalletClientStates {
+impl State for WalletClientStates {
     type ModuleContext = ();
+    type GlobalContext = ();
 
     fn transitions(
         &self,

@@ -64,8 +64,9 @@ impl IntoDynInstance for LightningClientStates {
     }
 }
 
-impl State<()> for LightningClientStates {
+impl State for LightningClientStates {
     type ModuleContext = ();
+    type GlobalContext = ();
 
     fn transitions(
         &self,

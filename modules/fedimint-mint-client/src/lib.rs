@@ -64,8 +64,9 @@ impl IntoDynInstance for MintClientStates {
     }
 }
 
-impl State<()> for MintClientStates {
+impl State for MintClientStates {
     type ModuleContext = ();
+    type GlobalContext = ();
 
     fn transitions(
         &self,

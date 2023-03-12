@@ -24,7 +24,10 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     type ModuleStateMachineContext: Context;
 
     /// All possible states this client can submit to the executor
-    type States: State<GlobalClientContext, ModuleContext = Self::ModuleStateMachineContext>;
+    type States: State<
+        GlobalContext = GlobalClientContext,
+        ModuleContext = Self::ModuleStateMachineContext,
+    >;
 
     fn decoder() -> Decoder {
         let mut decoder_builder = Self::Common::decoder_builder();
@@ -222,7 +225,7 @@ fn state_gen_to_dyn<S>(
     module_instance: ModuleInstanceId,
 ) -> StateGenerator<DynState<GlobalClientContext>>
 where
-    S: State<GlobalClientContext>,
+    S: State<GlobalContext = GlobalClientContext>,
 {
     Box::new(move |txid, index| {
         let states = state_gen(txid, index);
