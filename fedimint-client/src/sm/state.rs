@@ -1,12 +1,15 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
+use std::io::{Error, Read, Write};
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::ModuleDatabaseTransaction;
-use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send_sync};
 use futures::future::BoxFuture;
@@ -37,6 +40,7 @@ pub trait State<GC>:
         global_context: &GC,
     ) -> Vec<StateTransition<Self>>;
 
+    // TODO: move out of this interface into wrapper struct (see OperationState)
     /// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     fn operation_id(&self) -> OperationId;
@@ -320,5 +324,133 @@ impl<GC> DynState<GC> {
     /// `true` if this state allows no further transitions
     pub fn is_terminal(&self, context: &DynContext, global_context: &GC) -> bool {
         self.transitions(context, global_context).is_empty()
+    }
+}
+
+#[derive(Debug)]
+pub struct OperationState<S, GC> {
+    operation_id: OperationId,
+    state: S,
+    _pd: PhantomData<GC>,
+}
+
+/// Wrapper for states that don't want to carry around their operation id. `S`
+/// is allowed to panic when `operation_id` is called.
+impl<GC, S> State<GC> for OperationState<S, GC>
+where
+    S: State<GC>,
+    GC: GlobalContext,
+{
+    type ModuleContext = S::ModuleContext;
+
+    fn transitions(
+        &self,
+        context: &Self::ModuleContext,
+        global_context: &GC,
+    ) -> Vec<StateTransition<Self>> {
+        let transitions: Vec<StateTransition<OperationState<S, GC>>> = self
+            .state
+            .transitions(context, global_context)
+            .into_iter()
+            .map(
+                |StateTransition {
+                     trigger,
+                     transition,
+                 }| {
+                    let op_transition: StateTransitionFunction<Self> =
+                        Arc::new(move |dbtx, value, op_state| {
+                            let transition = transition.clone();
+                            Box::pin(async move {
+                                let state = transition(dbtx, value, op_state.state).await;
+                                OperationState {
+                                    operation_id: op_state.operation_id,
+                                    state,
+                                    _pd: Default::default(),
+                                }
+                            })
+                        });
+
+                    StateTransition {
+                        trigger,
+                        transition: op_transition,
+                    }
+                },
+            )
+            .collect();
+        transitions
+    }
+
+    fn operation_id(&self) -> OperationId {
+        self.operation_id
+    }
+}
+
+// TODO: can we get rid of `GC`? Maybe make it an associated type of `State`
+// instead?
+impl<S, GC> IntoDynInstance for OperationState<S, GC>
+where
+    S: State<GC>,
+    GC: GlobalContext,
+{
+    type DynType = DynState<GC>;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        DynState::from_typed(instance_id, self)
+    }
+}
+
+impl<S, GC> Encodable for OperationState<S, GC>
+where
+    S: State<GC>,
+{
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += self.state.consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl<S, GC> Decodable for OperationState<S, GC>
+where
+    S: State<GC>,
+{
+    fn consensus_decode<R: Read>(
+        read: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let operation_id = OperationId::consensus_decode(read, modules)?;
+        let state = S::consensus_decode(read, modules)?;
+
+        Ok(OperationState {
+            operation_id,
+            state,
+            _pd: Default::default(),
+        })
+    }
+}
+
+// TODO: derive after getting rid of `GC` type arg
+impl<S, GC> PartialEq for OperationState<S, GC>
+where
+    S: State<GC>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.operation_id.eq(&other.operation_id) && self.state.eq(&other.state)
+    }
+}
+
+impl<S, GC> Eq for OperationState<S, GC> where S: State<GC> {}
+
+impl<S, GC> Clone for OperationState<S, GC>
+where
+    S: State<GC>,
+{
+    fn clone(&self) -> Self {
+        OperationState {
+            operation_id: self.operation_id,
+            state: self.state.clone(),
+            _pd: Default::default(),
+        }
     }
 }
