@@ -22,6 +22,7 @@ enum Cmd {
     Esplora,
     Daemons,
     Fedimintd { id: usize },
+    Gatewayd,
     Federation { start_id: usize, stop_id: usize },
 }
 
@@ -42,6 +43,21 @@ fn bitcoin_rpc() -> anyhow::Result<Arc<BitcoinClient>> {
     let client =
         Arc::new(BitcoinClient::new(&host, auth).expect("couldn't create Bitcoin RPC client"));
     Ok(client)
+}
+
+async fn record_pid(process: &Child) -> anyhow::Result<()> {
+    let pid_file = env::var("FM_PID_FILE").unwrap();
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(pid_file)
+        .await?;
+
+    let mut buf = Vec::<u8>::new();
+    writeln!(buf, "{}", process.id().expect("PID missing"))?;
+    file.write_all(&buf).await?;
+
+    Ok(())
 }
 
 async fn await_bitcoin_rpc(waiter_name: &str) -> anyhow::Result<()> {
@@ -168,21 +184,6 @@ async fn run_esplora() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn record_pid(process: &Child) -> anyhow::Result<()> {
-    let pid_file = env::var("FM_PID_FILE").unwrap();
-    let mut file = OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(pid_file)
-        .await?;
-
-    let mut buf = Vec::<u8>::new();
-    writeln!(buf, "{}", process.id().expect("PID missing"))?;
-    file.write_all(&buf).await?;
-
-    Ok(())
-}
-
 async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoin_rpc(&format!("fedimint-{id}")).await?;
@@ -203,8 +204,22 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     info!("fedimintd started");
 
     // TODO: pass in optional task group to this function and select on it to wait
-    // for shutdown
+    // for shutdown (because multiple can be spawned by run_federation)
     fedimintd.wait().await?;
+
+    Ok(())
+}
+
+async fn run_gatewayd() -> anyhow::Result<()> {
+    let bin_dir = env::var("FM_BIN_DIR").unwrap();
+
+    let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd"))
+        .spawn()
+        .expect("failed to spawn gatewayd");
+    record_pid(&gatewayd).await?;
+    info!("gatewayd started");
+
+    gatewayd.wait().await?;
 
     Ok(())
 }
@@ -278,7 +293,8 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Lnd => run_lnd().await.expect("lnd failed"),
         Cmd::Electrs => run_electrs().await.expect("electrs failed"),
         Cmd::Esplora => run_esplora().await.expect("esplora failed"),
-        Cmd::Fedimintd { id } => run_fedimintd(id).await.expect("esplora failed"),
+        Cmd::Fedimintd { id } => run_fedimintd(id).await.expect("fedimitn failed"),
+        Cmd::Gatewayd => run_gatewayd().await.expect("gatewayd failed"),
         Cmd::Federation { start_id, stop_id } => run_federation(start_id, stop_id)
             .await
             .expect("federation failed"),
