@@ -1438,6 +1438,7 @@ dependencies = [
  "bitcoincore-rpc",
  "clap",
  "fedimint-bitcoind",
+ "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-logging",

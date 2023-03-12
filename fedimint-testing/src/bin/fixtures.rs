@@ -1,12 +1,22 @@
 use std::env;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoincore_rpc::{Client as BitcoinClient, RpcApi};
 use clap::{Parser, Subcommand};
+use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+use fedimint_core::config::load_from_file;
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
+use fedimint_wallet_client::config::WalletClientConfig;
+use fedimint_wallet_client::WalletClientGen;
+use mint_client::modules::mint::MintClientGen;
+use mint_client::{module_decode_stubs, Client, UserClient, UserClientConfig};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
@@ -15,6 +25,7 @@ use url::Url;
 
 #[derive(Subcommand)]
 enum Cmd {
+    // daemons
     Bitcoind,
     Lightningd,
     Lnd,
@@ -24,6 +35,9 @@ enum Cmd {
     Fedimintd { id: usize },
     Gatewayd,
     Federation { start_id: usize, stop_id: usize },
+
+    // commands
+    AwaitFedimintBlockSync,
 }
 
 #[derive(Parser)]
@@ -43,6 +57,22 @@ fn bitcoin_rpc() -> anyhow::Result<Arc<BitcoinClient>> {
     let client =
         Arc::new(BitcoinClient::new(&host, auth).expect("couldn't create Bitcoin RPC client"));
     Ok(client)
+}
+
+async fn fedimint_client() -> anyhow::Result<UserClient> {
+    let workdir: PathBuf = env::var("FM_CFG_DIR").unwrap().parse()?;
+    let cfg_path = workdir.join("client.json");
+    let db_path = workdir.join("client.db");
+    let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
+    let db = fedimint_rocksdb::RocksDb::open(db_path)?;
+    let decoders = module_decode_stubs();
+    let db = Database::new(db, module_decode_stubs());
+    let module_gens = ClientModuleGenRegistry::from(vec![
+        DynClientModuleGen::from(WalletClientGen),
+        DynClientModuleGen::from(MintClientGen),
+        DynClientModuleGen::from(LightningClientGen),
+    ]);
+    Ok(Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await)
 }
 
 async fn record_pid(process: &Child) -> anyhow::Result<()> {
@@ -68,6 +98,26 @@ async fn await_bitcoin_rpc(waiter_name: &str) -> anyhow::Result<()> {
         info!("{waiter_name} waiting for bitcoin rpc ...");
     }
 
+    Ok(())
+}
+
+async fn await_fedimint_block_sync() -> anyhow::Result<()> {
+    // FIXME: make sure we've had at least 101 blocks ... probably best to call
+    // await_bitcoin_rpc and do it there? but then the function has weird name ...
+    let fedimint_client = fedimint_client().await?;
+    let wallet_cfg: WalletClientConfig = fedimint_client
+        .config()
+        .0
+        .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+        .expect("Malformed wallet config");
+    let finality_delay = wallet_cfg.finality_delay;
+    let bitcoin_rpc = bitcoin_rpc()?;
+    let bitcoin_block_height = bitcoin_rpc.get_blockchain_info()?.blocks;
+    let expected_block_height = bitcoin_block_height - (finality_delay as u64);
+
+    fedimint_client
+        .await_consensus_block_height(expected_block_height)
+        .await?;
     Ok(())
 }
 
@@ -213,11 +263,15 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
 async fn run_gatewayd() -> anyhow::Result<()> {
     let bin_dir = env::var("FM_BIN_DIR").unwrap();
 
+    // TODO: await_fedimint_block_sync()
+
     let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd"))
         .spawn()
         .expect("failed to spawn gatewayd");
     record_pid(&gatewayd).await?;
     info!("gatewayd started");
+
+    // TODO: gw_connect_fed
 
     gatewayd.wait().await?;
 
@@ -288,6 +342,7 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     match args.command {
+        // daemons
         Cmd::Bitcoind => run_bitcoind().await.expect("bitcoind failed"),
         Cmd::Lightningd => run_lightningd().await.expect("lightningd failed"),
         Cmd::Lnd => run_lnd().await.expect("lnd failed"),
@@ -299,6 +354,8 @@ async fn main() -> anyhow::Result<()> {
             .await
             .expect("federation failed"),
         Cmd::Daemons => daemons().await.expect("daemons failed"),
+        // commands
+        Cmd::AwaitFedimintBlockSync => await_fedimint_block_sync().await.expect("daemons failed"),
     }
 
     Ok(())

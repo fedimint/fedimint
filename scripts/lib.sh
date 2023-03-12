@@ -29,19 +29,7 @@ function await_bitcoin_rpc() {
 }
 
 function await_fedimint_block_sync() {
-  local node_height
-  local finality_delay
-  local expected_block_height
-
-  node_height="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
-  finality_delay="$(get_finality_delay)"
-  expected_block_height="$((node_height - finality_delay))"
-
-  echo "Node at ${node_height}H"
-
-  if [ 0 -lt $expected_block_height ]; then
-      $FM_MINT_CLIENT wait-block-height $expected_block_height
-  fi
+  $FM_BIN_DIR/fixtures await-fedimint-block-sync
 }
 
 function await_all_peers() {

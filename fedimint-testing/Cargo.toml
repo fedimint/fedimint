@@ -20,6 +20,7 @@ bitcoincore-rpc = "0.16.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 mint-client = { path = "../client/client-lib" }
 fedimint-core  = { path = "../fedimint-core" }
+fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../fedimint-logging" }
