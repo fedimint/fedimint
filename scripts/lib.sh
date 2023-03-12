@@ -248,18 +248,9 @@ function start_esplora() {
 }
 
 function start_federation() {
-  echo "starting federation"
-
   START_SERVER=${1:-0}
   END_SERVER=${2:-$FM_FED_SIZE}
-
-  # Start the federation members inside the temporary directory
-  for ((ID=START_SERVER; ID<END_SERVER; ID++)); do
-    echo "starting mint $ID"
-    $FM_BIN_DIR/fixtures fedimintd $ID &
-    echo $! >> $FM_PID_FILE
-  done
-  echo "started federation"
+  $FM_BIN_DIR/fixtures federation $START_SERVER $END_SERVER &
 }
 
 function start_daemons() {

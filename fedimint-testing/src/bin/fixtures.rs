@@ -1,4 +1,5 @@
 use std::env;
+use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -6,7 +7,9 @@ use bitcoincore_rpc::{Client as BitcoinClient, RpcApi};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_logging::TracingSetup;
-use tokio::process::Command;
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
+use tokio::process::{Child, Command};
 use tracing::{error, info, trace};
 use url::Url;
 
@@ -19,6 +22,7 @@ enum Cmd {
     Esplora,
     Daemons,
     Fedimintd { id: usize },
+    Federation { start_id: usize, stop_id: usize },
 }
 
 #[derive(Parser)]
@@ -164,13 +168,27 @@ async fn run_esplora() -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn record_pid(process: &Child) -> anyhow::Result<()> {
+    let pid_file = env::var("FM_PID_FILE").unwrap();
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(pid_file)
+        .await?;
+
+    let mut buf = Vec::<u8>::new();
+    writeln!(buf, "{}", process.id().expect("PID missing"))?;
+    file.write_all(&buf).await?;
+
+    Ok(())
+}
+
 async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoin_rpc(&format!("fedimint-{id}")).await?;
 
     // set password env var
     let password = format!("pass{id}");
-    env::set_var("FM_PASSWORD", password);
 
     let bin_dir = env::var("FM_BIN_DIR").unwrap();
     let cfg_dir = env::var("FM_CFG_DIR").unwrap();
@@ -178,11 +196,34 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // spawn fedimintd
     let mut fedimintd = Command::new(format!("{bin_dir}/fedimintd"))
         .arg(format!("{cfg_dir}/server-{id}"))
+        .env("FM_PASSWORD", password)
         .spawn()
         .expect("failed to spawn fedimintd");
+    record_pid(&fedimintd).await?;
     info!("fedimintd started");
 
+    // TODO: pass in optional task group to this function and select on it to wait
+    // for shutdown
     fedimintd.wait().await?;
+
+    Ok(())
+}
+
+async fn run_federation(start_id: usize, stop_id: usize) -> anyhow::Result<()> {
+    let mut task_group = TaskGroup::new();
+    task_group.install_kill_handler();
+
+    for id in start_id..stop_id {
+        task_group
+            .spawn(format!("fedimintd-{id}"), move |_| async move {
+                info!("starting fedimintd-{}", id);
+                run_fedimintd(id).await.expect("fedimintd failed");
+                info!("started fedimintd-{}", id);
+            })
+            .await;
+    }
+
+    task_group.join_all(None).await?;
 
     Ok(())
 }
@@ -238,6 +279,9 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Electrs => run_electrs().await.expect("electrs failed"),
         Cmd::Esplora => run_esplora().await.expect("esplora failed"),
         Cmd::Fedimintd { id } => run_fedimintd(id).await.expect("esplora failed"),
+        Cmd::Federation { start_id, stop_id } => run_federation(start_id, stop_id)
+            .await
+            .expect("federation failed"),
         Cmd::Daemons => daemons().await.expect("daemons failed"),
     }
 
