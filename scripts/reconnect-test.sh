@@ -5,7 +5,6 @@ set -euxo pipefail
 export RUST_LOG=info
 
 source ./scripts/setup-tests.sh
-./scripts/start-fed.sh
 
 server4=$(tail -4 $FM_PID_FILE | head -1)
 server3=$(tail -3 $FM_PID_FILE | head -1)
@@ -35,7 +34,7 @@ kill_server $server1
 # FIXME increase this number once we can avoid processing epoch messages too far in the future
 generate_epochs 1
 
-./scripts/start-fed.sh
+start_federation
 # FIXME increase this number once we can avoid processing epoch messages too far in the future
 generate_epochs 1
 await_all_peers
@@ -49,6 +48,6 @@ await_fedimint_block_sync
 kill_server $server3
 kill_server $server4
 
-./scripts/start-fed.sh
+start_federation
 await_all_peers
 echo "Successfully restarted consensus!"
