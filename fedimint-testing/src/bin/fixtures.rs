@@ -18,6 +18,7 @@ enum Cmd {
     Electrs,
     Esplora,
     Daemons,
+    Fedimintd { id: usize },
 }
 
 #[derive(Parser)]
@@ -137,6 +138,7 @@ async fn run_electrs() -> anyhow::Result<()> {
 
     Ok(())
 }
+
 async fn run_esplora() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoin_rpc("esplora").await?;
@@ -158,6 +160,29 @@ async fn run_esplora() -> anyhow::Result<()> {
     info!("esplora started");
 
     esplora.wait().await?;
+
+    Ok(())
+}
+
+async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
+    // wait for bitcoin RPC to be ready ...
+    await_bitcoin_rpc(&format!("fedimint-{id}")).await?;
+
+    // set password env var
+    let password = format!("pass{id}");
+    env::set_var("FM_PASSWORD", password);
+
+    let bin_dir = env::var("FM_BIN_DIR").unwrap();
+    let cfg_dir = env::var("FM_CFG_DIR").unwrap();
+
+    // spawn fedimintd
+    let mut fedimintd = Command::new(format!("{bin_dir}/fedimintd"))
+        .arg(format!("{cfg_dir}/server-{id}"))
+        .spawn()
+        .expect("failed to spawn fedimintd");
+    info!("fedimintd started");
+
+    fedimintd.wait().await?;
 
     Ok(())
 }
@@ -212,6 +237,7 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Lnd => run_lnd().await.expect("lnd failed"),
         Cmd::Electrs => run_electrs().await.expect("electrs failed"),
         Cmd::Esplora => run_esplora().await.expect("esplora failed"),
+        Cmd::Fedimintd { id } => run_fedimintd(id).await.expect("esplora failed"),
         Cmd::Daemons => daemons().await.expect("daemons failed"),
     }
 
