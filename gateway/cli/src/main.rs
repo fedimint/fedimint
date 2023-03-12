@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_core::config::FederationId;
@@ -194,6 +196,7 @@ pub async fn print_response(response: reqwest::Response) {
         }
         _ => {
             eprintln!("\nError: {}", &response.text().await.unwrap());
+            exit(1)
         }
     }
 }
