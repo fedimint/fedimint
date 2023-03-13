@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use aead::{encrypted_read, get_key};
+use aead::{encrypted_read, get_encryption_key_with_path};
 use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
@@ -630,7 +630,7 @@ impl ServerConfigParams {
             peers.insert(PeerId::from(idx as u16), parse_peer_params(cert)?);
         }
 
-        let key = get_key(password, dir_out_path.join(SALT_FILE))?;
+        let key = get_encryption_key_with_path(password, dir_out_path.join(SALT_FILE))?;
         let tls_pk = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
         let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))?;
 
