@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use aead::{encrypted_read, encrypted_write, get_encryption_key_with_path};
+use aead::{encrypted_read, encrypted_write, get_encryption_key};
 use clap::{Parser, Subcommand};
 use fedimint_core::config::{DkgError, ServerModuleGenRegistry};
 use fedimint_core::module::ServerModuleGen;
@@ -219,9 +219,9 @@ impl DistributedGen {
                 salt_file,
                 password,
             } => {
-                let salt_file =
-                    salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&in_file));
-                let key = get_encryption_key_with_path(&password, salt_file)?;
+                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
+                let salt = fs::read_to_string(salt_file)?;
+                let key = get_encryption_key(&password, &salt)?;
                 let decrypted_bytes = encrypted_read(&key, in_file)?;
 
                 let mut out_file_handle =
@@ -240,16 +240,16 @@ impl DistributedGen {
                 let mut plaintext_bytes = vec![];
                 in_file_handle.read_to_end(&mut plaintext_bytes).unwrap();
 
-                let salt_file =
-                    salt_file.unwrap_or_else(|| salt_file_path_from_file_path(&out_file));
-                let key = get_encryption_key_with_path(&password, salt_file)?;
+                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&out_file));
+                let salt = fs::read_to_string(salt_file)?;
+                let key = get_encryption_key(&password, &salt)?;
                 encrypted_write(plaintext_bytes, &key, out_file)
             }
         }
     }
 }
 
-fn salt_file_path_from_file_path(file_path: &Path) -> PathBuf {
+fn salt_from_file_path(file_path: &Path) -> PathBuf {
     file_path
         .parent()
         .expect("File has no parent?!")

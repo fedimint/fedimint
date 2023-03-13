@@ -58,6 +58,10 @@ impl TransactionItemAmount {
     };
 }
 
+/// Authentication uses the hashed user password in PHC format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiAuth(pub String);
+
 #[derive(Debug)]
 pub struct ApiError {
     pub code: i32,

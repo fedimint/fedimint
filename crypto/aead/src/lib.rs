@@ -85,22 +85,15 @@ pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Result<Vec<u8>> {
 ///
 /// * `password` - Strong user-created password
 /// * `salt` - Nonce >8 bytes to discourage rainbow attacks
-fn get_encryption_key(password: &str, salt: &[u8]) -> Result<LessSafeKey> {
+pub fn get_encryption_key(password: &str, salt: &str) -> Result<LessSafeKey> {
     let mut key = [0u8; ring::digest::SHA256_OUTPUT_LEN];
 
     argon2()
-        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .hash_password_into(password.as_bytes(), salt.as_bytes(), &mut key)
         .map_err(|e| format_err!("could not hash password").context(e))?;
     let key = UnboundKey::new(&ring::aead::CHACHA20_POLY1305, &key)
         .map_err(|_| anyhow::Error::msg("Unable to create key"))?;
     Ok(LessSafeKey::new(key))
-}
-
-/// Helper for `get_encryption_key` reading the salt from a path
-pub fn get_encryption_key_with_path(password: &str, salt_path: PathBuf) -> Result<LessSafeKey> {
-    let salt_str = fs::read_to_string(salt_path)?;
-    let salt = hex::decode(salt_str)?;
-    get_encryption_key(password, &salt)
 }
 
 /// Memory-hard Argon2 key stretching for password-based authentication
@@ -138,7 +131,7 @@ mod tests {
     #[test]
     fn encrypts_and_decrypts() {
         let password = "test123";
-        let salt = "salt1235".as_bytes();
+        let salt = "salt1235";
         let message = "hello world";
 
         let key = get_encryption_key(password, salt).unwrap();

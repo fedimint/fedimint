@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use aead::{encrypted_read, get_encryption_key_with_path};
+use aead::{encrypted_read, get_encryption_key, get_password_hash};
 use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
@@ -16,7 +16,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::module::PeerHandle;
+use fedimint_core::module::{ApiAuth, PeerHandle};
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::PeerId;
@@ -68,6 +68,8 @@ impl ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigPrivate {
+    /// Secret API auth string
+    pub api_auth: ApiAuth,
     /// Secret key for TLS communication, required for peer authentication
     #[serde(with = "serde_tls_key")]
     pub tls_key: rustls::PrivateKey,
@@ -144,6 +146,8 @@ pub struct ServerConfigParams {
     pub our_id: PeerId,
     /// Id of all servers
     pub peer_ids: Vec<PeerId>,
+    /// Secret API auth string
+    pub api_auth: ApiAuth,
     /// How we authenticate our communication with peers during DKG
     pub tls: TlsConfig,
     /// Endpoints for P2P communication
@@ -222,7 +226,6 @@ impl ServerConfigConsensus {
 impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key
     /// setup
-    #[allow(clippy::too_many_arguments)]
     pub fn from(
         params: ServerConfigParams,
         identity: PeerId,
@@ -232,6 +235,7 @@ impl ServerConfig {
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
     ) -> Self {
         let private = ServerConfigPrivate {
+            api_auth: params.api_auth.clone(),
             tls_key: params.tls.our_private_key.clone(),
             auth_sks: auth_keys.secret_key_share,
             hbbft_sks: hbbft_keys.secret_key_share,
@@ -630,7 +634,9 @@ impl ServerConfigParams {
             peers.insert(PeerId::from(idx as u16), parse_peer_params(cert)?);
         }
 
-        let key = get_encryption_key_with_path(password, dir_out_path.join(SALT_FILE))?;
+        let salt = fs::read_to_string(dir_out_path.join(SALT_FILE))?;
+        let api_auth = get_password_hash(password, &salt)?;
+        let key = get_encryption_key(password, &salt)?;
         let tls_pk = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
         let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))?;
 
@@ -642,6 +648,7 @@ impl ServerConfigParams {
             .ok_or_else(|| anyhow::Error::msg("Our id not found"))?;
 
         Ok(ServerConfigParams::gen_params(
+            ApiAuth(api_auth),
             bind_p2p,
             bind_api,
             rustls::PrivateKey(tls_pk),
@@ -653,7 +660,9 @@ impl ServerConfigParams {
     }
 
     /// Generates the parameters necessary for running server config generation
+    #[allow(clippy::too_many_arguments)]
     pub fn gen_params(
+        api_auth: ApiAuth,
         bind_p2p: SocketAddr,
         bind_api: SocketAddr,
         key: rustls::PrivateKey,
@@ -682,6 +691,7 @@ impl ServerConfigParams {
         ServerConfigParams {
             our_id,
             peer_ids: peers.keys().cloned().collect(),
+            api_auth,
             tls,
             fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
@@ -748,6 +758,7 @@ impl ServerConfigParams {
                 let bind_api = parse_host_port(peer_params[peer].clone().api_url)?;
 
                 let params: ServerConfigParams = Self::gen_params(
+                    ApiAuth("dummy_password".to_string()),
                     bind_p2p.parse().context("when parsing bind_p2p")?,
                     bind_api.parse().context("when parsing bind_api")?,
                     keys[peer].1.clone(),
