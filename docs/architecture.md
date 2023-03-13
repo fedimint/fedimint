@@ -24,7 +24,8 @@ The [user client](#User-Client):
 * `client/cli` - cli wrapper around the client library
 
 The [LN gateway](#LN-Gateway):
-* `ln-gateway` - allows a Lightning node operator to receive or pay Lightning invoices on behalf of users
+* `gateway/ln-gateway` - allows a Lightning node operator to receive or pay Lightning invoices on behalf of users
+* `gateway/cli` - provides cli access and control of a running gatewayd instance
 
 ## Federation Nodes
 Each of the nodes spawns three long-running tasks in parallel: an API task, a [HBBFT protocol](https://docs.rs/hbbft/latest/hbbft/) task, and a Fedimint consensus task.
