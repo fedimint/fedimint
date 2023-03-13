@@ -11,30 +11,19 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3
-
-      - name: Install native packages
-        run: |
-          sudo apt-get -y install mold protobuf-compiler
-
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@nightly
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cachix/install-nix-action@v20
         with:
-          profile: minimal
-          override: true
-
-      - uses: Swatinem/rust-cache@v2
-
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
       - name: Build docs
-        env:
-          RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links -Z unstable-options --enable-index-page
-        run: |
-          cargo +nightly doc --no-deps --document-private-items
+        run: nix build -L .#debug.workspaceDocExport
 
       - name: Deploy docs
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc
+          publish_dir: ./result/
           cname: docs.fedimint.org
