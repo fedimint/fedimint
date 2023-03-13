@@ -16,15 +16,15 @@ function open_channel() {
     mine_blocks 10
     LND_PUBKEY="$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')"
     $FM_LIGHTNING_CLI connect $LND_PUBKEY@127.0.0.1:9734
-    until $FM_LIGHTNING_CLI -k fundchannel id=$LND_PUBKEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
+    until $FM_LIGHTNING_CLI -k fundchannel id=$LND_PUBKEY amount=0.1btc push_msat=5000000000; do sleep $FM_POLL_INTERVAL; done
     mine_blocks 10
-    until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
+    until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $FM_POLL_INTERVAL; done
 }
 
 function await_bitcoin_rpc() {
     until $FM_BTC_CLIENT getblockchaininfo 1>/dev/null 2>/dev/null ; do
         >&2 echo "Bitcoind rpc not ready yet. Waiting ..."
-        sleep "$POLL_INTERVAL"
+        sleep "$FM_POLL_INTERVAL"
     done
 }
 
@@ -51,7 +51,7 @@ function await_all_peers() {
 function await_server_on_port() {
   until nc -z 127.0.0.1 $1
   do
-      sleep $POLL_INTERVAL
+      sleep $FM_POLL_INTERVAL
   done
 }
 
@@ -62,7 +62,7 @@ function await_lightning_node_block_processing() {
   EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
   until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
   do
-    sleep $POLL_INTERVAL
+    sleep $FM_POLL_INTERVAL
   done
   echo "done waiting for cln"
 
@@ -70,7 +70,7 @@ function await_lightning_node_block_processing() {
   until [ "true" == "$($FM_LNCLI getinfo | jq -r '.synced_to_chain')" ]
   do
     echo "sleeping"
-    sleep $POLL_INTERVAL
+    sleep $FM_POLL_INTERVAL
   done
   echo "done waiting for lnd"
 }
@@ -82,13 +82,25 @@ function kill_fedimint_processes {
   rm -f $FM_PID_FILE
 }
 
+function await_gateway_cln_extension() {
+  while ! echo exit | nc localhost 8177; do sleep $FM_POLL_INTERVAL; done
+}
+
 function gw_connect_fed() {
-  # connect federation with the gateway
-  FM_CONNECT_STR="$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info')"
-  until $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
+  # get connection string ... retry in case fedimint-cli command fails
+  FM_CONNECT_STR=""
+  while [[ $FM_CONNECT_STR = "" ]]
+  do
+    FM_CONNECT_STR=$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info') || true
+    echo "fedimint-cli connect-info failed ... retrying"
+    sleep $FM_POLL_INTERVAL
+  done
+
+  # get connection string ... retry in case gateway-cli command fails
+  while ! $FM_GATEWAY_CLI connect-fed "$FM_CONNECT_STR"
   do
     echo "gateway-cli connect-fed failed ... retrying"
-    sleep 1
+    sleep $FM_POLL_INTERVAL
   done
 }
 
@@ -146,25 +158,59 @@ function show_verbose_output()
 
 function await_gateway_registered() {
     until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" = "1" ]; do
-        sleep $POLL_INTERVAL
+        sleep $FM_POLL_INTERVAL
     done
+}
+
+function run_dkg() {
+  # Generate federation configs
+  BASE_PORT=$((8173 + 10000))
+  CERTS=""
+  for ((ID=0; ID<FM_FED_SIZE; ID++));
+  do
+    echo "making dir"
+    mkdir $FM_CFG_DIR/server-$ID
+    FED_PORT=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+    API_PORT=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+    export FM_PASSWORD="pass$ID"
+    echo "making creating cert for port $FED_PORT $API_PORT"
+    RUST_BACKTRACE=1 $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://127.0.0.1:$FED_PORT --api-url ws://127.0.0.1:$API_PORT --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
+    CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
+  done
+  CERTS=${CERTS:1}
+  echo "Running DKG with certs: $CERTS"
+
+  DKG_PIDS=""
+  for ((ID=0; ID<FM_FED_SIZE; ID++));
+  do
+    export FM_PASSWORD="pass$ID"
+    fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+    api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+    $FM_BIN_DIR/distributedgen run  --bind-p2p 127.0.0.1:$fed_port --bind-api 127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS &
+    DKG_PIDS="$DKG_PIDS $!"
+  done
+  wait $DKG_PIDS
+
+  # Move the client config
+  mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 }
 
 ### Start Daemons ###
 
 function start_bitcoind() {
+  echo "starting bitcoind"
   bitcoind -datadir=$FM_BTC_DIR &
   echo $! >> $FM_PID_FILE
-  until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.chain')" == "regtest" ]; do
-    sleep $POLL_INTERVAL
-  done
+  await_bitcoin_rpc
   # create a default RPC wallet
   $FM_BTC_CLIENT createwallet ""
   # mine some blocks
-  mine_blocks 101 | show_verbose_output
+  mine_blocks 101
+  echo "started bitcoind"
 }
 
 function start_lightningd() {
+  echo "starting lightningd"
   await_bitcoin_rpc
   # if we're running developer build, enable some flags to make it lightningd run faster
   if [[ "$(lightningd --bitcoin-cli "$(which false)" --dev-no-plugin-checksum 2>&1 )" =~ .*"--dev-no-plugin-checksum: unrecognized option".* ]]; then
@@ -174,29 +220,55 @@ function start_lightningd() {
   fi
   lightningd $LIGHTNING_FLAGS --lightning-dir=$FM_CLN_DIR --plugin=$FM_BIN_DIR/gateway-cln-extension &
   echo $! >> $FM_PID_FILE
+  echo "started lightningd"
 }
 
 function start_lnd() {
+  echo "starting lnd"
   await_bitcoin_rpc
   lnd --lnddir=$FM_LND_DIR &
   echo $! >> $FM_PID_FILE
+  echo "started lnd"
 }
 
 function start_gatewayd() {
+  echo "starting gatewayd"
+  await_gateway_cln_extension
   await_fedimint_block_sync
   $FM_BIN_DIR/gatewayd &
   echo $! >> $FM_PID_FILE
   gw_connect_fed
+  echo "started gatewayd"
 }
 
 function start_electrs() {
+  echo "starting electrs"
   await_bitcoin_rpc
   electrs --conf-dir "$FM_ELECTRS_DIR" --db-dir "$FM_ELECTRS_DIR" --daemon-dir "$FM_BTC_DIR" &
   echo $! >> $FM_PID_FILE
+  echo "started electrs"
 }
 
 function start_esplora() {
+  echo "starting esplora"
   await_bitcoin_rpc
   esplora --cookie "bitcoin:bitcoin" --network "regtest" --daemon-dir "$FM_BTC_DIR" --http-addr "127.0.0.1:50002" --daemon-rpc-addr "127.0.0.1:18443" --monitoring-addr "127.0.0.1:50003" --db-dir "$FM_TEST_DIR/esplora" &
   echo $! >> $FM_PID_FILE
+  echo "started esplora"
+}
+
+function start_federation() {
+  echo "starting federation"
+  await_bitcoin_rpc
+
+  START_SERVER=${1:-0}
+  END_SERVER=${2:-$FM_FED_SIZE}
+
+  # Start the federation members inside the temporary directory
+  for ((ID=START_SERVER; ID<END_SERVER; ID++)); do
+    echo "starting mint $ID"
+    export FM_PASSWORD="pass$ID"
+    ( ($FM_BIN_DIR/fedimintd $FM_CFG_DIR/server-$ID 2>&1 & echo $! >&3 ) 3>>$FM_PID_FILE | sed -e "s/^/mint $ID: /" ) &
+  done
+  echo "started federation"
 }

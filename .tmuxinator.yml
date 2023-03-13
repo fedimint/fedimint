@@ -27,18 +27,14 @@ windows:
           - start_bitcoind &
           - fg
         - cln:
-          - sleep 5 # wait for bitcoind and federation
           - start_lightningd &
           - fg
         - lnd:
-          - sleep 5 # wait for bitcoind and federation
           - start_lnd &
           - fg
         - gateway:
-          - sleep 7 # wait for gateway-cln-extension to start
           - start_gatewayd &
           - fg
         - federation:
-          - sleep 1 # wait for bitcoind
-          - ./scripts/start-fed.sh
-
+          - run_dkg
+          - start_federation &

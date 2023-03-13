@@ -148,8 +148,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
 
         let client_config = api
             .download_client_config(&connect.id, module_gens.to_common())
-            .await
-            .expect("Failed to get client config");
+            .await?;
 
         let mut rng = rand::rngs::OsRng;
         let ctx = secp256k1::Secp256k1::new();

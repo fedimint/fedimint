@@ -15,7 +15,6 @@ $FM_DISTRIBUTEDGEN config-encrypt --in-file $FM_CFG_DIR/server-0/config-plaintex
 $FM_DISTRIBUTEDGEN config-decrypt --in-file $FM_CFG_DIR/server-0/config-2 --out-file $FM_CFG_DIR/server-0/config-plaintext-2.json
 cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/config-plaintext-2.json
 
-./scripts/start-fed.sh
 ./scripts/pegin.sh # peg in user
 
 export PEG_IN_AMOUNT=99999
@@ -48,7 +47,7 @@ $FM_MINT_CLIENT fetch
 PEG_OUT_ADDR="$($FM_BTC_CLIENT getnewaddress)"
 $FM_MINT_CLIENT peg-out $PEG_OUT_ADDR 500
 until [ "$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00000500" ]; do
-  sleep $POLL_INTERVAL
+  sleep $FM_POLL_INTERVAL
 done
 mine_blocks 10
 RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)

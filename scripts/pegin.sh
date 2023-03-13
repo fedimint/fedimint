@@ -5,9 +5,6 @@ echo "Run with 'source ./scripts/pegin.sh [amount] [use_gateway]"
 set -euo pipefail
 source ./scripts/lib.sh
 
-# Let's define some shortcuts for bitcoind and the mint client
-POLL_INTERVAL=1
-export POLL_INTERVAL
 # Bitcoin amount in satoshi
 
 PEG_IN_AMOUNT=${PEG_IN_AMOUNT:-$1}

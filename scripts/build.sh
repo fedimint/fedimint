@@ -5,7 +5,6 @@ echo "Run with 'source ./scripts/build.sh [fed_size] [dir]"
 
 # allow for overriding arguments
 export FM_FED_SIZE=${1:-4}
-BASE_PORT=$((8173 + 10000))
 
 # If $TMP contains '/nix-shell.' it is already unique to the
 # nix shell instance, and appending more characters to it is
@@ -20,6 +19,7 @@ else
 fi
 export FM_TMP_DIR
 export FM_TEST_FAST_WEAK_CRYPTO="1"
+export FM_POLL_INTERVAL=1
 
 echo "Setting up env variables in $FM_TMP_DIR"
 
@@ -49,32 +49,6 @@ cp misc/test/bitcoin.conf $FM_BTC_DIR
 cp misc/test/lnd.conf $FM_LND_DIR
 cp misc/test/lightningd.conf $FM_CLN_DIR/config
 cp misc/test/electrs.toml $FM_ELECTRS_DIR
-
-# Generate federation configs
-CERTS=""
-for ((ID=0; ID<FM_FED_SIZE; ID++));
-do
-  mkdir $FM_CFG_DIR/server-$ID
-  fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-  api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
-  export FM_PASSWORD="pass$ID"
-  $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://127.0.0.1:$fed_port --api-url ws://127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
-  CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
-done
-CERTS=${CERTS:1}
-echo "Running DKG with certs: $CERTS"
-
-for ((ID=0; ID<FM_FED_SIZE; ID++));
-do
-  export FM_PASSWORD="pass$ID"
-  fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-  api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
-  $FM_BIN_DIR/distributedgen run  --bind-p2p 127.0.0.1:$fed_port --bind-api 127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS &
-done
-wait
-
-# Move the client config to root dir
-mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
 
 # LND config variables
 export FM_LND_RPC_ADDR="http://localhost:11009"

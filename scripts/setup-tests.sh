@@ -15,5 +15,9 @@ start_esplora
 start_lightningd
 start_lnd
 
+# Run DKG and start federation
+run_dkg
+start_federation
+
 # Open channel
 open_channel
