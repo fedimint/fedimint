@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::ops::Sub;
 
 use bitcoin_hashes::Hash as BitcoinHash;
+use fedimint_core::api::erased_no_param;
 use fedimint_core::config::{
     ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -873,7 +874,7 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
         .call(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             "/block_height".to_owned(),
-            Default::default(),
+            erased_no_param().pop().expect("always exists"),
         )
         .await
         .expect("Wallet module not present or malfunctioning!");

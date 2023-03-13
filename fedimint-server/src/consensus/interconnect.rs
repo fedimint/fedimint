@@ -31,6 +31,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
                     self.fedimint.db.begin_transaction().await,
                     data,
                     Some(module_id),
+                    self.fedimint.cfg.private.api_auth.clone(),
                 )
                 .await;
             }

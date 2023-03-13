@@ -113,7 +113,13 @@ fn attach_endpoints(
                 // is only the last line of defense
                 AssertUnwindSafe(tokio::time::timeout(
                     API_ENDPOINT_TIMEOUT,
-                    (handler)(fedimint, dbtx, params, module_instance_id),
+                    (handler)(
+                        fedimint,
+                        dbtx,
+                        params,
+                        module_instance_id,
+                        fedimint.cfg.private.api_auth.clone(),
+                    ),
                 ))
                 .catch_unwind()
                 .await
@@ -172,6 +178,7 @@ fn attach_endpoints_erased(
                         dbtx,
                         params,
                         Some(module_instance),
+                        fedimint.cfg.private.api_auth.clone(),
                     ),
                 ))
                 .catch_unwind()

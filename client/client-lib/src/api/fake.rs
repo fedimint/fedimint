@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_core::api::{IFederationApi, JsonRpcResult};
+use fedimint_core::module::ApiRequest;
 use fedimint_core::PeerId;
 use futures::Future;
 use serde;
@@ -72,10 +73,10 @@ where
                         ));
                     }
 
-                    let params = serde_json::from_value(
+                    let request: ApiRequest<Param> = serde_json::from_value(
                         params.first().expect("just checked the len").clone(),
                     )?;
-                    let ret = f(state, params).await?;
+                    let ret = f(state, request.params).await?;
                     let ret = serde_json::to_value(ret)
                         .expect("Serialization of the return value must not fail");
 

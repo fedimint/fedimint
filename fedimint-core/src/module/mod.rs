@@ -12,6 +12,7 @@ use std::sync::Arc;
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::Hash;
 use futures::Future;
+use jsonrpsee_core::JsonValue;
 use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -58,8 +59,26 @@ impl TransactionItemAmount {
     };
 }
 
+/// All requests from client to server contain these fields
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiRequest<T> {
+    /// Hashed user password if the API requires authentication
+    pub auth: Option<ApiAuth>,
+    /// Parameters required by the API
+    pub params: T,
+}
+
+impl Default for ApiRequest<JsonValue> {
+    fn default() -> Self {
+        Self {
+            auth: None,
+            params: JsonValue::Null,
+        }
+    }
+}
+
 /// Authentication uses the hashed user password in PHC format
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiAuth(pub String);
 
 #[derive(Debug)]
@@ -95,7 +114,8 @@ pub trait TypedApiEndpoint {
     async fn handle<'a, 'b>(
         state: &'a Self::State,
         dbtx: &'a mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
-        params: Self::Param,
+        request: Self::Param,
+        has_auth: bool,
     ) -> Result<Self::Response, ApiError>;
 }
 
@@ -136,6 +156,7 @@ macro_rules! __api_endpoint {
                 $state: &'a Self::State,
                 $dbtx: &'a mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
                 $param: Self::Param,
+                has_auth: bool,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
             }
@@ -159,6 +180,7 @@ type HandlerFn<M> = Box<
             fedimint_core::db::DatabaseTransaction<'a>,
             serde_json::Value,
             Option<ModuleInstanceId>,
+            ApiAuth,
         ) -> HandlerFnReturn<'a>
     ),
 >;
@@ -194,15 +216,17 @@ impl ApiEndpoint<()> {
         async fn handle_request<'a, 'b, E>(
             state: &'a E::State,
             dbtx: &mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
-            param: E::Param,
+            request: ApiRequest<E::Param>,
+            api_auth: ApiAuth,
         ) -> Result<E::Response, ApiError>
         where
             E: TypedApiEndpoint,
             E::Param: Debug,
             E::Response: Debug,
         {
-            tracing::trace!(target: "fedimint_server::request", ?param, "recieved request");
-            let result = E::handle(state, dbtx, param).await;
+            tracing::trace!(target: "fedimint_server::request", ?request, "recieved request");
+            let has_auth = request.auth == Some(api_auth);
+            let result = E::handle(state, dbtx, request.params, has_auth).await;
             if let Err(error) = &result {
                 tracing::trace!(target: "fedimint_server::request", ?error, "error");
             }
@@ -211,7 +235,7 @@ impl ApiEndpoint<()> {
 
         ApiEndpoint {
             path: E::PATH,
-            handler: Box::new(|m, mut dbtx, param, module_instance_id| {
+            handler: Box::new(|m, mut dbtx, param, module_instance_id, api_auth| {
                 Box::pin(async move {
                     let params = serde_json::from_value(param)
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
@@ -219,9 +243,12 @@ impl ApiEndpoint<()> {
                     let ret = match module_instance_id {
                         Some(module_instance_id) => {
                             let mut module_dbtx = dbtx.with_module_prefix(module_instance_id);
-                            handle_request::<E>(m, &mut module_dbtx, params).await?
+                            handle_request::<E>(m, &mut module_dbtx, params, api_auth).await?
                         }
-                        None => handle_request::<E>(m, &mut dbtx.get_isolated(), params).await?,
+                        None => {
+                            handle_request::<E>(m, &mut dbtx.get_isolated(), params, api_auth)
+                                .await?
+                        }
                     };
 
                     dbtx.commit_tx_result().await.map_err(|_err| {

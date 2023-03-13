@@ -42,6 +42,7 @@ use tracing::{debug, error, instrument, trace};
 use url::Url;
 
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+use crate::module::ApiRequest;
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
@@ -154,7 +155,9 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
 /// Notably the caling convention of fedimintd api is a bit weird ATM, so by
 /// using this function you'll make it easier to change it in the future.
 pub fn erased_no_param() -> Vec<JsonValue> {
-    vec![JsonValue::Null]
+    let params_raw = serde_json::to_value(ApiRequest::default())
+        .expect("parameter serialization error - this should not happen");
+    vec![params_raw]
 }
 
 /// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when
@@ -162,13 +165,12 @@ pub fn erased_no_param() -> Vec<JsonValue> {
 ///
 /// Notably the caling convention of fedimintd api is a bit weird ATM, so by
 /// using this function you'll make it easier to change it in the future.
-pub fn erased_single_param<Params>(param: &Params) -> Vec<JsonValue>
+pub fn erased_single_param<Params>(params: &Params) -> Vec<JsonValue>
 where
     Params: Serialize,
 {
-    let params_raw = serde_json::to_value(param)
+    let params_raw = serde_json::to_value(ApiRequest { auth: None, params })
         .expect("parameter serialization error - this should not happen");
-
     vec![params_raw]
 }
 
@@ -179,11 +181,11 @@ where
 ///
 /// Notably the caling convention of fedimintd api is a bit weird ATM, so by
 /// using this function you'll make it easier to change it in the future.
-pub fn erased_multi_param<Params>(param: &Params) -> Vec<JsonValue>
+pub fn erased_multi_param<Params>(params: &Params) -> Vec<JsonValue>
 where
     Params: Serialize,
 {
-    let params_raw = serde_json::to_value(param)
+    let params_raw = serde_json::to_value(ApiRequest { auth: None, params })
         .expect("parameter serialization error - this should not happen");
 
     vec![params_raw]
