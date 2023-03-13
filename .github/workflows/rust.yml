@@ -4,7 +4,7 @@ on:
       - master
   pull_request:
 
-name: CI
+name: CI - basic
 
 jobs:
   build:
@@ -14,8 +14,6 @@ jobs:
       matrix:
         build:
           - macos
-          # TODO: Needs clang and possibly other binaries
-          # - android
         include:
           - build: macos
             runs-on: macos-latest
@@ -23,11 +21,6 @@ jobs:
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             build-in-pr: false
             extra-cmd: brew install protobuf
-          # - build: android
-          #   runs-on: ubuntu-22.04
-          #   target: aarch64-linux-android
-          #   use-cross: true
-
 
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 30
@@ -38,25 +31,26 @@ jobs:
         # is not supported and workarounds are very gnarly
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
 
-      - uses: dtolnay/rust-toolchain@stable
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        with:
-          target: ${{ matrix.target }}
-          default: true
-          profile: minimal
-
-      - uses: Swatinem/rust-cache@v2
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-
       - name: Extra command
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.extra-cmd != ''
         run: |
           ${{ matrix.extra-cmd }}
 
-      - name: Build
+      - uses: cachix/install-nix-action@v20
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        run: cargo build
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v12
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
-      - name: Clippy
+      - name: Build workspace
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        run: cargo clippy -- --deny warnings
+        run: nix build -L .#debug.workspaceBuild
+
+      - name: Clippy workspace
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        run: nix build -L .#debug.workspaceClippy
