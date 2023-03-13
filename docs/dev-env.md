@@ -167,7 +167,7 @@ write the files to the host file-system (e.g. config generation). `-p` is used t
 container's port 17240.
 
 To generate federation configs and run the federation please see the `run_dkg` and `start_federation` helper functions in [lib.sh](https://github.com/fedimint/fedimint/blob/master/scripts/lib.sh), as well as the `--help` output of
-`distributedgen` and `fedimintd`:
+`distributedgen` and `fedimintd`. If you'd like to run function like `run_dkg` and `start_federation` from inside nix shell, run `source scripts/build.sh` and then `source scripts/lib.sh` and they will be available.
 
 Note that you can also start a "fake" 1-of-1 "federation" that will allow you to test most aspects of Fedimint without
 having to run e.g. 4 instances.
