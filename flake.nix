@@ -403,22 +403,22 @@
             doInstallCargoArtifacts = false;
           });
 
-          workspaceDoc = craneLib.cargoDoc (commonArgs // {
+          workspaceDoc = craneLib.mkCargoDerivation (commonArgs // {
             version = "0.0.1";
             cargoArtifacts = workspaceDeps;
             preConfigure = ''
               export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
             '';
-            cargoDocExtraArgs = "--no-deps --document-private-items";
+            buildPhaseCargoCommand = "cargo doc --no-deps --document-private-items";
             doInstallCargoArtifacts = false;
             postInstall = ''
-              cp -a target/doc $out
+              cp -a target/doc/ $out
             '';
             doCheck = false;
           });
 
           # version of `workspaceDocs` with some nighlty-only flags to publish
-          workspaceDocExport = craneLib.cargoDoc (commonArgs // {
+          workspaceDocExport = craneLib.mkCargoDerivation (commonArgs // {
             version = "0.0.1";
             # no need for inheriting any artifacts, as we are using it as a one-off, and only care
             # about the docs
@@ -426,10 +426,10 @@
             preConfigure = ''
               export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -Z unstable-options --enable-index-page'
             '';
-            cargoDocExtraArgs = "--no-deps --document-private-items";
+            buildPhaseCargoCommand = "cargo doc --no-deps --document-private-items";
             doInstallCargoArtifacts = false;
-            postInstall = ''
-              cp -a target/doc $out
+            installPhase = ''
+              cp -a target/doc/ $out
             '';
             doCheck = false;
           });
