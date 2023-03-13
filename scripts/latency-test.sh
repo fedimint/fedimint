@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Runs a test to determine the latency of certain user actions
 
+exit 1 # this should cause CI to fail
+
 set -eu
 FM_FED_SIZE=${1:-4}
 ITERATIONS=${2:-10}
