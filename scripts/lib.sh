@@ -75,10 +75,11 @@ function await_lightning_node_block_processing() {
   echo "done waiting for lnd"
 }
 
-# Function for killing processes stored in FM_PID_FILE
+# Function for killing processes stored in FM_PID_FILE in reverse-order they were created in
 function kill_fedimint_processes {
-  # shellcheck disable=SC2046
-  kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') 2>/dev/null #sed reverses the order here
+  echo "Killing fedimint processes"
+  PIDS=$(cat $FM_PID_FILE | sed '1!G;h;$!d') # sed reverses order
+  kill $PIDS 2>/dev/null
   rm -f $FM_PID_FILE
 }
 
@@ -168,13 +169,9 @@ function run_dkg() {
   CERTS=""
   for ((ID=0; ID<FM_FED_SIZE; ID++));
   do
-    echo "making dir"
-    mkdir $FM_CFG_DIR/server-$ID
-    FED_PORT=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-    API_PORT=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
-    export FM_PASSWORD="pass$ID"
-    echo "making creating cert for port $FED_PORT $API_PORT"
-    RUST_BACKTRACE=1 $FM_BIN_DIR/distributedgen create-cert --p2p-url ws://127.0.0.1:$FED_PORT --api-url ws://127.0.0.1:$API_PORT --out-dir $FM_CFG_DIR/server-$ID --name "Server-$ID"
+    setup_fedimintd_env $ID
+    echo "making creating cert for ports server $ID"
+    $FM_BIN_DIR/distributedgen create-cert --p2p-url $FM_P2P_URL --api-url $FM_API_URL --out-dir $FM_FEDIMINTD_DATA_DIR --name "Server-$ID"
     CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
   done
   CERTS=${CERTS:1}
@@ -183,16 +180,33 @@ function run_dkg() {
   DKG_PIDS=""
   for ((ID=0; ID<FM_FED_SIZE; ID++));
   do
-    export FM_PASSWORD="pass$ID"
-    fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
-    api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
-    $FM_BIN_DIR/distributedgen run  --bind-p2p 127.0.0.1:$fed_port --bind-api 127.0.0.1:$api_port --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS &
+    setup_fedimintd_env $ID
+    $FM_BIN_DIR/distributedgen run  --bind-p2p $FM_BIND_P2P --bind-api $FM_BIND_API --out-dir $FM_FEDIMINTD_DATA_DIR --certs $CERTS &
     DKG_PIDS="$DKG_PIDS $!"
   done
   wait $DKG_PIDS
 
   # Move the client config
   mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
+}
+
+function setup_fedimintd_env() {
+  ID=$1
+  BASE_PORT=$((8173 + 10000))
+  P2P_PORT=$(echo "$BASE_PORT + $ID * 10" | bc -l)
+  API_PORT=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
+  UI_PORT=$(echo "$BASE_PORT + $ID * 10 + 2" | bc -l)
+  export FM_BIND_P2P=127.0.0.1:$P2P_PORT
+  export FM_P2P_URL=fedimint://127.0.0.1:$P2P_PORT
+  export FM_BIND_API=127.0.0.1:$API_PORT
+  export FM_API_URL=ws://127.0.0.1:$API_PORT
+  export FM_LISTEN_UI=127.0.0.1:$UI_PORT
+  export FM_PASSWORD="pass$ID"
+  export FM_FEDIMINTD_DATA_DIR="$FM_CFG_DIR/server-$ID"
+
+  # ensure datadir exists ... pipe to `true` because run_dkg() and setup_federation()
+  # both call this so the directory might already be here ...
+  mkdir $FM_FEDIMINTD_DATA_DIR || true
 }
 
 ### Start Daemons ###
@@ -267,8 +281,8 @@ function start_federation() {
   # Start the federation members inside the temporary directory
   for ((ID=START_SERVER; ID<END_SERVER; ID++)); do
     echo "starting mint $ID"
-    export FM_PASSWORD="pass$ID"
-    ( ($FM_BIN_DIR/fedimintd $FM_CFG_DIR/server-$ID 2>&1 & echo $! >&3 ) 3>>$FM_PID_FILE | sed -e "s/^/mint $ID: /" ) &
+    setup_fedimintd_env $ID
+    ( ($FM_BIN_DIR/fedimintd $FM_FEDIMINTD_DATA_DIR 2>&1 & echo $! >&3 ) 3>>$FM_PID_FILE | sed -e "s/^/mint $ID: /" ) &
   done
   echo "started federation"
 }
