@@ -434,6 +434,17 @@
             doCheck = false;
           });
 
+          workspaceCargoUdeps = craneLib.mkCargoDerivation (commonArgs // {
+            version = "0.0.1";
+            # no need for inheriting any artifacts, as we are using it as a one-off, and only care
+            # about the docs
+            cargoArtifacts = null;
+            nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
+            buildPhaseCargoCommand = "cargo udeps";
+            doInstallCargoArtifacts = false;
+            doCheck = false;
+          });
+
           workspaceAudit = craneLib.cargoAudit (commonArgs // {
             version = "0.0.1";
             pname = commonArgs.pname + "-audit";
@@ -708,6 +719,7 @@
           workspaceTestDoc = craneBuildNative.workspaceTestDoc;
           workspaceDoc = craneBuildNative.workspaceDoc;
           workspaceDocExport = craneBuildNativeDocExport.workspaceDocExport;
+          workspaceCargoUdeps = craneBuildNativeDocExport.workspaceCargoUdeps;
           workspaceCov = craneBuildNative.workspaceCov;
           workspaceAudit = craneBuildNative.workspaceAudit;
         };
