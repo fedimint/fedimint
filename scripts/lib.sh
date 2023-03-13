@@ -151,32 +151,6 @@ function await_gateway_registered() {
     done
 }
 
-function run_dkg() {
-  # Generate federation configs
-  BASE_PORT=$((8173 + 10000))
-  CERTS=""
-  for ((ID=0; ID<FM_FED_SIZE; ID++));
-  do
-    setup_fedimintd_env $ID
-    echo "making creating cert for ports server $ID"
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url $FM_P2P_URL --api-url $FM_API_URL --out-dir $FM_FEDIMINTD_DATA_DIR --name "Server-$ID"
-    CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
-  done
-  CERTS=${CERTS:1}
-  echo "Running DKG with certs: $CERTS"
-
-  DKG_PIDS=""
-  for ((ID=0; ID<FM_FED_SIZE; ID++));
-  do
-    setup_fedimintd_env $ID
-    $FM_BIN_DIR/distributedgen run  --bind-p2p $FM_BIND_P2P --bind-api $FM_BIND_API --out-dir $FM_FEDIMINTD_DATA_DIR --certs $CERTS &
-    DKG_PIDS="$DKG_PIDS $!"
-  done
-  wait $DKG_PIDS
-
-  # Move the client config
-  mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
-}
 
 function setup_fedimintd_env() {
   ID=$1
@@ -198,6 +172,10 @@ function setup_fedimintd_env() {
 }
 
 ### Start Daemons ###
+
+function run_dkg() {
+  $FM_BIN_DIR/fixtures dkg $FM_FED_SIZE
+}
 
 function start_bitcoind() {
   $FM_BIN_DIR/fixtures bitcoind
