@@ -578,8 +578,8 @@
             ];
           };
 
-          ln-gateway-pkgs = pkgsBuild {
-            name = "ln-gateway-pkgs";
+          gateway-pkgs = pkgsBuild {
+            name = "gateway-pkgs";
 
             pkgs = {
               ln-gateway = { };
@@ -692,7 +692,7 @@
           default = craneBuildNative.fedimint-pkgs;
 
           fedimint-pkgs = craneBuildNative.fedimint-pkgs;
-          ln-gateway-pkgs = craneBuildNative.ln-gateway-pkgs;
+          gateway-pkgs = craneBuildNative.gateway-pkgs;
           client-pkgs = craneBuildNative.client-pkgs { };
         };
 
@@ -939,7 +939,7 @@
                 in
                 pkgs.dockerTools.buildLayeredImage {
                   name = "ln-gateway";
-                  contents = [ craneBuildNative.ln-gateway-pkgs pkgs.bash pkgs.coreutils ];
+                  contents = [ craneBuildNative.gateway-pkgs pkgs.bash pkgs.coreutils ];
                   config = {
                     Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
                     Entrypoint = [
@@ -967,7 +967,7 @@
                     rpc-file-mode=0660
                     log-timestamps=false
 
-                    plugin=${craneBuildNative.ln-gateway-pkgs}/bin/ln_gateway
+                    plugin=${craneBuildNative.gateway-pkgs}/bin/ln_gateway
                     fedimint-cfg=/var/fedimint/fedimint-gw
 
                     announce-addr=104.244.73.68:9735
@@ -980,10 +980,10 @@
                 in
                 pkgs.dockerTools.buildLayeredImage {
                   name = "ln-gateway-clightning";
-                  contents = [ craneBuildNative.ln-gateway-pkgs clightning-dev pkgs.bash pkgs.coreutils ];
+                  contents = [ craneBuildNative.gateway-pkgs clightning-dev pkgs.bash pkgs.coreutils ];
                   config = {
                     Cmd = [
-                      "${craneBuildNative.ln-gateway-pkgs}/bin/ln_gateway"
+                      "${craneBuildNative.gateway-pkgs}/bin/ln_gateway"
                     ];
                     ExposedPorts = {
                       "${builtins.toString 9735}/tcp" = { };

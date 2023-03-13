@@ -197,7 +197,7 @@ jobs:
         build:
           - client-pkgs
           - fedimint-pkgs
-          - ln-gateway-pkgs
+          - gateway-pkgs
 
     runs-on: buildjet-4vcpu-ubuntu-2004
     timeout-minutes: 30
