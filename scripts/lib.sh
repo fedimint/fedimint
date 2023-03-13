@@ -272,3 +272,8 @@ function start_federation() {
   done
   echo "started federation"
 }
+
+function start_fixtures() {
+  $FM_BIN_DIR/fixtures &
+  echo $! >> $FM_PID_FILE
+}
