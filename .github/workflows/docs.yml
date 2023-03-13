@@ -11,13 +11,13 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v20
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
+
       - name: Build docs
         run: nix build -L .#debug.workspaceDocExport
 
