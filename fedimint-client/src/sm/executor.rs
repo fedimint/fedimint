@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
@@ -70,48 +70,67 @@ where
     /// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
     pub async fn add_state_machines(&self, states: Vec<DynState<GC>>) -> anyhow::Result<()> {
-        self.inner.db
+        self.inner
+            .db
             .autocommit(
-                |dbtx| {
-                    let states = states.clone();
-                    Box::pin(async move {
-                        for state in states {
-                            if !self.inner.module_contexts.contains_key(&state.module_instance_id()) {
-                                bail!("Unknown module");
-                            }
-
-                            let is_active_state = dbtx
-                                .get_value(&ActiveStateKey::<GC>(state.clone()))
-                                .await
-                                .is_some();
-                            let is_inactive_state = dbtx
-                                .get_value(&InactiveStateKey::<GC>(state.clone()))
-                                .await
-                                .is_some();
-
-                            if is_active_state || is_inactive_state {
-                                bail!("State already exists in database!")
-                            }
-
-                            if state.is_terminal(self.inner.module_contexts.get(&state.module_instance_id()).expect("No such module"), &self.inner.context) {
-                                bail!("State is already terminal, adding it to the executor doesn't make sense.")
-                            }
-
-                            dbtx.insert_entry(&ActiveStateKey(state), &ActiveState::new()).await;
-                        }
-
-                        Ok(())
-                    })
-                },
+                |dbtx| Box::pin(self.add_state_mchines_dbtx(dbtx, states.clone())),
                 MAX_DB_RETRIES,
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed { last_error , retries } => {
-                    last_error.context(format!("Failed to commit after {retries} retries"))
-                }
-                AutocommitError::ClosureError { error, .. } => {error}
+                AutocommitError::CommitFailed {
+                    last_error,
+                    retries,
+                } => last_error.context(format!("Failed to commit after {retries} retries")),
+                AutocommitError::ClosureError { error, .. } => error,
             })?;
+
+        Ok(())
+    }
+
+    /// Adds a number of state machines to the executor atomically with other DB
+    /// changes is `dbtx`. See [`Executor::add_state_machines`] for more
+    /// details.
+    pub async fn add_state_mchines_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState<GC>>,
+    ) -> anyhow::Result<()> {
+        for state in states {
+            if !self
+                .inner
+                .module_contexts
+                .contains_key(&state.module_instance_id())
+            {
+                bail!("Unknown module");
+            }
+
+            let is_active_state = dbtx
+                .get_value(&ActiveStateKey::<GC>(state.clone()))
+                .await
+                .is_some();
+            let is_inactive_state = dbtx
+                .get_value(&InactiveStateKey::<GC>(state.clone()))
+                .await
+                .is_some();
+
+            if is_active_state || is_inactive_state {
+                bail!("State already exists in database!")
+            }
+
+            if state.is_terminal(
+                self.inner
+                    .module_contexts
+                    .get(&state.module_instance_id())
+                    .expect("No such module"),
+                &self.inner.context,
+            ) {
+                bail!("State is already terminal, adding it to the executor doesn't make sense.")
+            }
+
+            dbtx.insert_entry(&ActiveStateKey(state), &ActiveState::new())
+                .await;
+        }
 
         Ok(())
     }

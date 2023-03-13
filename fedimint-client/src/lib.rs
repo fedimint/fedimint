@@ -7,16 +7,18 @@ use std::sync::Arc;
 
 use fedimint_core::api::{DynFederationApi, IFederationApi};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::{maybe_add_send_sync, Amount};
+use fedimint_core::{maybe_add_send_sync, Amount, TransactionId};
 use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 
 use crate::module::{DynClientModule, DynPrimaryClientModule, IClientModule};
-use crate::sm::{DynState, Executor, GlobalContext};
+use crate::sm::{DynState, Executor, GlobalContext, OperationId, OperationState};
 use crate::transaction::{
-    ClientInput, ClientOutput, TransactionBuilder, TransactionBuilderBalance,
+    ClientInput, ClientOutput, TransactionBuilder, TransactionBuilderBalance, TxSubmissionStates,
+    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Module client interface definitions
@@ -50,6 +52,20 @@ impl GlobalClientContext {
     pub fn api(&self) -> &(dyn IFederationApi + 'static) {
         self.inner.api.as_ref()
     }
+
+    /// Add funding and/or change to the transaction builder as needed, finalize
+    /// the transaction and submit it to the federation once `dbtx` is
+    /// committed.
+    pub async fn finalize_and_submit_transaction(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<TransactionId> {
+        self.inner
+            .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
+            .await
+    }
 }
 
 pub struct Client {
@@ -63,22 +79,26 @@ impl Client {
         }
     }
 
-    pub async fn finalize_transaction(
+    /// Add funding and/or change to the transaction builder as needed, finalize
+    /// the transaction and submit it to the federation.
+    pub async fn finalize_and_submit_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(Transaction, Vec<DynState<GlobalClientContext>>)> {
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<TransactionId> {
+        let mut dbtx = self.inner.db.begin_transaction().await;
         self.inner
-            .finalize_transaction(dbtx, partial_transaction)
+            .finalize_and_submit_transaction(&mut dbtx, operation_id, tx_builder)
             .await
     }
 }
 
 struct ClientInner {
+    db: Database,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
     modules: BTreeMap<ModuleInstanceId, DynClientModule>,
-    _executor: Executor<GlobalClientContext>,
+    executor: Executor<GlobalClientContext>,
     api: DynFederationApi,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 }
@@ -174,5 +194,32 @@ impl ClientInner {
         );
 
         Ok(partial_transaction.build(&self.secp_ctx, thread_rng()))
+    }
+
+    async fn finalize_and_submit_transaction(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<TransactionId> {
+        let (transaction, mut states) = self.finalize_transaction(dbtx, tx_builder).await?;
+        let txid = transaction.tx_hash();
+
+        let tx_submission_sm = DynState::from_typed(
+            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            OperationState {
+                operation_id,
+                state: TxSubmissionStates::Created {
+                    txid,
+                    tx: transaction,
+                    next_submission: now(),
+                },
+            },
+        );
+        states.push(tx_submission_sm);
+
+        self.executor.add_state_mchines_dbtx(dbtx, states).await?;
+
+        Ok(txid)
     }
 }

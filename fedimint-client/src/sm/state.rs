@@ -10,8 +10,8 @@ use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send_sync};
-use futures::future::BoxFuture;
+use fedimint_core::util::BoxFuture;
+use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send, maybe_add_send_sync};
 
 use crate::sm::{GlobalContext, OperationId};
 
@@ -24,8 +24,8 @@ pub trait State:
     + Encodable
     + Decodable
     + IntoDynInstance<DynType = DynState<Self::GlobalContext>>
-    + Send
-    + Sync
+    + MaybeSend
+    + MaybeSync
     + 'static
 {
     /// Additional resources made available in this module's state transitions
@@ -49,8 +49,8 @@ pub trait State:
 }
 
 /// Object-safe version of [`State`]
-pub trait IState<GC>: Debug + DynEncodable + Send + Sync {
-    fn as_any(&self) -> &(dyn Any + Send + Sync);
+pub trait IState<GC>: Debug + DynEncodable + MaybeSend + MaybeSync {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
 
     /// All possible transitions from the state
     fn transitions(
@@ -98,16 +98,16 @@ where
     }
 }
 
-type TriggerFuture = Pin<Box<dyn Future<Output = serde_json::Value> + Send + 'static>>;
+type TriggerFuture = Pin<Box<maybe_add_send!(dyn Future<Output = serde_json::Value> + 'static)>>;
 // TODO: remove Arc, maybe make it a fn pointer?
 type StateTransitionFunction<S> = Arc<
-    dyn for<'a> Fn(
+    maybe_add_send_sync!(
+        dyn for<'a> Fn(
             &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
             serde_json::Value,
             S,
         ) -> BoxFuture<'a, S>
-        + Send
-        + Sync,
+    ),
 >;
 
 /// Represents one or multiple possible state transitions triggered in a common
@@ -148,16 +148,16 @@ impl<S> StateTransition<S> {
         transition: TransitionFn,
     ) -> StateTransition<S>
     where
-        S: Send + Sync + Clone + 'static,
+        S: MaybeSend + MaybeSync + Clone + 'static,
         V: serde::Serialize + serde::de::DeserializeOwned + Send,
-        Trigger: Future<Output = V> + Send + 'static,
+        Trigger: Future<Output = V> + MaybeSend + 'static,
         TransitionFn: for<'a> Fn(
                 &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
                 V,
                 S,
             ) -> BoxFuture<'a, S>
-            + Send
-            + Sync
+            + MaybeSend
+            + MaybeSync
             + Copy
             + 'static,
     {
@@ -182,7 +182,7 @@ where
     GC: GlobalContext,
     T: State<GlobalContext = GC>,
 {
-    fn as_any(&self) -> &(dyn Any + Send + Sync) {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
     }
 
@@ -244,12 +244,12 @@ where
 /// A type-erased state of a state machine belonging to a module instance, see
 /// [`State`]
 pub struct DynState<GC>(
-    Box<dyn IState<GC> + 'static + Send + Sync>,
+    Box<maybe_add_send_sync!(dyn IState<GC> + 'static)>,
     ModuleInstanceId,
 );
 
 impl<GC> std::ops::Deref for DynState<GC> {
-    type Target = dyn IState<GC> + 'static + Send + Sync;
+    type Target = maybe_add_send_sync!(dyn IState<GC> + 'static);
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.0
@@ -257,19 +257,13 @@ impl<GC> std::ops::Deref for DynState<GC> {
 }
 
 impl<GC> DynState<GC> {
-    pub fn module_instance_id(&self) -> ::fedimint_core::core::ModuleInstanceId {
+    pub fn module_instance_id(&self) -> ModuleInstanceId {
         self.1
     }
 
-    pub fn from_typed<I>(
-        module_instance_id: ::fedimint_core::core::ModuleInstanceId,
-        typed: I,
-    ) -> Self
+    pub fn from_typed<I>(module_instance_id: ModuleInstanceId, typed: I) -> Self
     where
-        I: IState<GC>
-            + ::fedimint_core::task::MaybeSend
-            + ::fedimint_core::task::MaybeSync
-            + 'static,
+        I: IState<GC> + 'static,
     {
         Self(Box::new(typed), module_instance_id)
     }
@@ -331,8 +325,8 @@ impl<GC> DynState<GC> {
 
 #[derive(Debug)]
 pub struct OperationState<S> {
-    operation_id: OperationId,
-    state: S,
+    pub operation_id: OperationId,
+    pub state: S,
 }
 
 /// Wrapper for states that don't want to carry around their operation id. `S`

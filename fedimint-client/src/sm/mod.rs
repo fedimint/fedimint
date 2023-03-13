@@ -5,10 +5,11 @@ mod state;
 use std::fmt::Debug;
 
 pub use executor::{Executor, ExecutorBuilder};
-pub use state::{Context, DynContext, DynState, State, StateTransition};
+use fedimint_core::task::{MaybeSend, MaybeSync};
+pub use state::{Context, DynContext, DynState, OperationState, State, StateTransition};
 
 /// Context given to all state machines
-pub trait GlobalContext: Debug + Sync + Send + 'static {}
+pub trait GlobalContext: Debug + MaybeSync + MaybeSend + 'static {}
 
 impl GlobalContext for () {}
 
