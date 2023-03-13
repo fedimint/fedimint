@@ -1569,6 +1569,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-server",
+ "fedimint-testing",
  "fedimint-wallet-common",
  "futures",
  "impl-tools",
