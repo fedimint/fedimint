@@ -1,6 +1,7 @@
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
+use fedimint_client::GlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -57,7 +58,7 @@ impl ClientModule for LightningClientModule {
 pub enum LightningClientStates {}
 
 impl IntoDynInstance for LightningClientStates {
-    type DynType = DynState<()>;
+    type DynType = DynState<GlobalClientContext>;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
@@ -66,12 +67,12 @@ impl IntoDynInstance for LightningClientStates {
 
 impl State for LightningClientStates {
     type ModuleContext = ();
-    type GlobalContext = ();
+    type GlobalContext = GlobalClientContext;
 
     fn transitions(
         &self,
         _context: &Self::ModuleContext,
-        _global_context: &(),
+        _global_context: &GlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         unimplemented!()
     }

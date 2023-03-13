@@ -314,6 +314,12 @@ dyn_newtype_define! {
     pub DynFederationApi(Arc<IFederationApi>)
 }
 
+impl AsRef<dyn IFederationApi + 'static> for DynFederationApi {
+    fn as_ref(&self) -> &(dyn IFederationApi + 'static) {
+        self.0.as_ref()
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;

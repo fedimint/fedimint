@@ -2,8 +2,10 @@
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
+use fedimint_core::api::{DynFederationApi, IFederationApi};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::transaction::Transaction;
@@ -12,7 +14,7 @@ use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 
 use crate::module::{DynClientModule, DynPrimaryClientModule, IClientModule};
-use crate::sm::{DynState, Executor};
+use crate::sm::{DynState, Executor, GlobalContext};
 use crate::transaction::{
     ClientInput, ClientOutput, TransactionBuilder, TransactionBuilderBalance,
 };
@@ -24,13 +26,43 @@ pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
 
-pub type GlobalClientContext = ();
+/// Global state and functionality provided to all state machines running in the
+/// client
+#[derive(Clone)]
+pub struct GlobalClientContext {
+    inner: Arc<ClientInner>,
+}
+
+impl GlobalContext for GlobalClientContext {}
+
+// TODO: impl `Debug` for `Client` and derive here
+impl Debug for GlobalClientContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GlobalClientContext")
+    }
+}
+
+impl GlobalClientContext {
+    /// Returns a reference to the client's federation API client. The provided
+    /// interface [`IFederationApi`] typically does not provide the necessary
+    /// functionality, for this extension traits like
+    /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
+    pub fn api(&self) -> &(dyn IFederationApi + 'static) {
+        self.inner.api.as_ref()
+    }
+}
 
 pub struct Client {
     inner: Arc<ClientInner>,
 }
 
 impl Client {
+    pub fn context(&self) -> GlobalClientContext {
+        GlobalClientContext {
+            inner: self.inner.clone(),
+        }
+    }
+
     pub async fn finalize_transaction(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -47,6 +79,7 @@ struct ClientInner {
     primary_module_instance: ModuleInstanceId,
     modules: BTreeMap<ModuleInstanceId, DynClientModule>,
     _executor: Executor<GlobalClientContext>,
+    api: DynFederationApi,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 }
 
