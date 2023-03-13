@@ -42,6 +42,10 @@ lint:
   just clippy
   env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --profile dev --no-deps --document-private-items
 
+# `cargo udeps` check
+udeps:
+  nix build -L .#debug.workspaceCargoUdeps
+
 # run all checks recommended before opening a PR
 final-check: lint
   cargo test --doc
