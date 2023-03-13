@@ -199,6 +199,12 @@
 
         craneLibNative = crane.lib.${system}.overrideToolchain fenixToolchain;
 
+        # nightly toolchain for cargo docs with unstable features
+        craneLibNativeDocExport = crane.lib.${system}.overrideToolchain (fenixChannelNightly.withComponents [
+          "cargo"
+          "rustc"
+        ]);
+
         craneLibCross = builtins.mapAttrs
           (name: target: crane.lib.${system}.overrideToolchain fenixToolchainCross.${name})
           crossTargets
@@ -402,6 +408,23 @@
             cargoArtifacts = workspaceDeps;
             preConfigure = ''
               export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
+            '';
+            cargoDocExtraArgs = "--no-deps --document-private-items";
+            doInstallCargoArtifacts = false;
+            postInstall = ''
+              cp -a target/doc $out
+            '';
+            doCheck = false;
+          });
+
+          # version of `workspaceDocs` with some nighlty-only flags to publish
+          workspaceDocExport = craneLib.cargoDoc (commonArgs // {
+            version = "0.0.1";
+            # no need for inheriting any artifacts, as we are using it as a one-off, and only care
+            # about the docs
+            cargoArtifacts = null;
+            preConfigure = ''
+              export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -Z unstable-options --enable-index-page'
             '';
             cargoDocExtraArgs = "--no-deps --document-private-items";
             doInstallCargoArtifacts = false;
@@ -638,6 +661,7 @@
         };
 
         craneBuildNative = craneBuild craneLibNative;
+        craneBuildNativeDocExport = craneBuild craneLibNativeDocExport;
         craneBuildCross = target: craneBuild craneLibCross.${target};
 
         # Replace placeholder git hash in a binary
@@ -683,6 +707,7 @@
           workspaceTest = craneBuildNative.workspaceTest;
           workspaceTestDoc = craneBuildNative.workspaceTestDoc;
           workspaceDoc = craneBuildNative.workspaceDoc;
+          workspaceDocExport = craneBuildNativeDocExport.workspaceDocExport;
           workspaceCov = craneBuildNative.workspaceCov;
           workspaceAudit = craneBuildNative.workspaceAudit;
         };
