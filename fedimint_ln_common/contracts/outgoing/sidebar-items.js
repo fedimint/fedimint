@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":[["CANCELLATION_TAG",""]],"struct":[["OutgoingContract","Specialized smart contract for outgoing payments."]]};

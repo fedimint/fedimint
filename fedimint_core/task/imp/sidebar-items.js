@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["block_in_place","sleep","sleep_until","spawn","spawn_local","timeout"],"opaque":[""],"struct":["RwLock","RwLockReadGuard","RwLockWriteGuard"]};
+window.SIDEBAR_ITEMS = {"fn":[["block_in_place",""],["sleep",""],["sleep_until",""],["spawn",""],["spawn_local",""],["timeout",""]],"struct":[["RwLock","An asynchronous reader-writer lock."],["RwLockReadGuard","RAII structure used to release the shared read access of a lock when dropped."],["RwLockWriteGuard","RAII structure used to release the exclusive write access of a lock when dropped."]]};

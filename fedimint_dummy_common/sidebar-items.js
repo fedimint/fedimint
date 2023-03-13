@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":[["KIND",""]],"enum":[["DummyError",""]],"mod":[["config",""],["db",""]],"struct":[["DummyCommonGen",""],["DummyConfigGenParams",""],["DummyConsensusItem",""],["DummyInput",""],["DummyModuleTypes",""],["DummyOutput",""],["DummyOutputOutcome",""]]};

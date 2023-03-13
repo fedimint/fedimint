@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":[["gen",""]],"struct":[["DynClientModule",""]],"trait":[["ClientModule","Fedimint module client"],["IClientModule",""]]};

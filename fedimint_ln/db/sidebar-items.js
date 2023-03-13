@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["AgreedDecryptionShareKey","AgreedDecryptionShareKeyPrefix","ContractKey","ContractKeyPrefix","ContractUpdateKey","ContractUpdateKeyPrefix","DbKeyPrefixIter","LightningGatewayKey","LightningGatewayKeyPrefix","OfferKey","OfferKeyPrefix","ProposeDecryptionShareKey","ProposeDecryptionShareKeyPrefix"]};

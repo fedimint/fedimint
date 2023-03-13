@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FIELDS","VARIANTS"],"enum":["Contract","ContractOutcome","DecryptedPreimage","FundedContract","__Field"],"mod":["account","incoming","outgoing"],"struct":["AccountContractOutcome","ContractId","EncryptedPreimage","OutgoingContractOutcome","Preimage","PreimageDecryptionShare","__FieldVisitor","__Visitor"],"trait":["IdentifyableContract"]};

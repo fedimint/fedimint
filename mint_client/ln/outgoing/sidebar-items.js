@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["OutgoingContractAccount","OutgoingContractData"]};
+window.SIDEBAR_ITEMS = {"struct":[["OutgoingContractAccount",""],["OutgoingContractData",""]]};

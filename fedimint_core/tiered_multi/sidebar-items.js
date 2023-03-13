@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"opaque":[""],"struct":["TieredMulti","TieredMultiZip","__Visitor"]};
+window.SIDEBAR_ITEMS = {"struct":[["TieredMulti","Represents notes of different denominations."],["TieredMultiZip",""]]};

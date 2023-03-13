@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/api.rs`."><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/api.rs`."><title>api.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1103,7 +1103,36 @@
 <a href="#1103" id="1103">1103</a>
 <a href="#1104" id="1104">1104</a>
 <a href="#1105" id="1105">1105</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
 <span class="kw">use </span>std::io::{Cursor, Read};
 <span class="kw">use </span>std::pin::Pin;
@@ -1113,19 +1142,21 @@
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::ensure;
-<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bech32::Variant::Bech32m;
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
 <span class="kw">use </span>bitcoin::consensus::ReadExt;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{
-    ApiEndpoint, ClientConfig, ConfigResponse, FederationId, ModuleGenRegistry,
+    ApiEndpoint, ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId,
 };
 <span class="kw">use </span>fedimint_core::core::DynOutputOutcome;
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, RwLockWriteGuard};
-<span class="kw">use </span>fedimint_core::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+<span class="kw">use </span>fedimint_core::{
+    apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
+};
+<span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1240,9 +1271,8 @@
     }
 }
 
-<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
-#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">pub trait </span>IFederationApi: Debug {
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>IFederationApi: Debug + MaybeSend + MaybeSync {
     <span class="doccomment">/// List of all federation members for the purpose of iterating each member
     /// in the federation.
     ///
@@ -1306,16 +1336,15 @@
     <span class="kw">fn </span>try_into_outcome(common_outcome: DynOutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt;;
 }
 
-<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
-#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="doccomment">/// An extension trait allowing to making federation-wide API call on top
+<span class="doccomment">/// An extension trait allowing to making federation-wide API call on top
 /// [`IFederationApi`].
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>FederationApiExt: IFederationApi {
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     </span><span class="kw">async fn </span>request_with_strategy&lt;MemberRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;MemberRet, FedRet&gt; + Send,
+        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;MemberRet, FedRet&gt; + MaybeSend,
         method: String,
         params: Vec&lt;Value&gt;,
     ) -&gt; FederationResult&lt;FedRet&gt; {
@@ -1416,7 +1445,7 @@
         params: Vec&lt;Value&gt;,
     ) -&gt; FederationResult&lt;Vec&lt;Ret&gt;&gt;
     <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
             UnionResponses::new(<span class="self">self</span>.all_members().one_honest()),
@@ -1432,7 +1461,7 @@
         params: Vec&lt;Value&gt;,
     ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
             CurrentConsensus::new(<span class="self">self</span>.all_members().one_honest()),
@@ -1448,7 +1477,7 @@
         params: Vec&lt;Value&gt;,
     ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + Send,
+        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
             EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
@@ -1459,16 +1488,14 @@
     </span>}
 }
 
-<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
-#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; FederationApiExt <span class="kw">for </span>T <span class="kw">where </span>T: IFederationApi {}
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="kw">pub </span>DynFederationApi(Arc&lt;IFederationApi&gt;)
 }
 
-<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
-#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>GlobalFederationApi {
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt;;
     <span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt;;
@@ -1488,9 +1515,9 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; OutputOutcomeResult&lt;R&gt;
     <span class="kw">where
-        </span>R: DynTryIntoOutcome + Send;
+        </span>R: DynTryIntoOutcome + MaybeSend;
 
-    <span class="kw">async fn </span>await_output_outcome&lt;R: DynTryIntoOutcome + Send&gt;(
+    <span class="kw">async fn </span>await_output_outcome&lt;R: DynTryIntoOutcome + MaybeSend&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
@@ -1501,18 +1528,17 @@
     </span><span class="kw">async fn </span>download_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>FederationId,
-        module_gens: ModuleGenRegistry,
+        module_gens: CommonModuleGenRegistry,
     ) -&gt; FederationResult&lt;ClientConfig&gt;;
 
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
     </span><span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
 }
 
-<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
-#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; GlobalFederationApi <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>,
+    </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="doccomment">/// Submit a transaction for inclusion
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt; {
@@ -1591,7 +1617,7 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; OutputOutcomeResult&lt;R&gt;
     <span class="kw">where
-        </span>R: DynTryIntoOutcome + Send,
+        </span>R: DynTryIntoOutcome + MaybeSend,
     {
         <span class="kw">match </span><span class="self">self</span>.fetch_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid).<span class="kw">await</span><span class="question-mark">? </span>{
             TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(OutputOutcomeError::Rejected(e)),
@@ -1617,7 +1643,7 @@
     }
 
     <span class="comment">// TODO should become part of the API
-    </span><span class="kw">async fn </span>await_output_outcome&lt;R: DynTryIntoOutcome + Send&gt;(
+    </span><span class="kw">async fn </span>await_output_outcome&lt;R: DynTryIntoOutcome + MaybeSend&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
@@ -1633,7 +1659,10 @@
                         fedimint_core::task::sleep(interval).<span class="kw">await
                     </span>}
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">warn!</span>(<span class="string">&quot;Federation api returned error: {:?}&quot;</span>, e);
+                        <span class="macro">warn!</span>(
+                            target: LOG_NET_API,
+                            <span class="string">&quot;Federation api returned error: {:?}&quot;</span>, e
+                        );
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
                 }
@@ -1647,7 +1676,7 @@
     <span class="kw">async fn </span>download_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>FederationId,
-        module_gens: ModuleGenRegistry,
+        module_gens: CommonModuleGenRegistry,
     ) -&gt; FederationResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>id = id.clone();
         <span class="kw">let </span>qs = VerifiableResponse::new(
@@ -1695,7 +1724,7 @@
 <span class="doccomment">/// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client
-</span><span class="attr">#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>WsClientConnectInfo {
     <span class="doccomment">/// Urls that support the federation API (expected to be in PeerId order)
     </span><span class="kw">pub </span>urls: Vec&lt;Url&gt;,
@@ -1782,15 +1811,33 @@
     }
 }
 
+<span class="kw">impl </span>Serialize <span class="kw">for </span>WsClientConnectInfo {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: serde::Serializer,
+    {
+        String::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.to_string(), serializer)
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>WsClientConnectInfo {
+    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+    <span class="kw">where
+        </span>D: serde::Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
+    {
+        <span class="kw">let </span>string = Cow::&lt;str&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
+        <span class="self">Self</span>::from_str(<span class="kw-2">&amp;</span>string).map_err(serde::de::Error::custom)
+    }
+}
+
 <span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>ClientConfig&gt; <span class="kw">for </span>WsClientConnectInfo {
     <span class="kw">fn </span>from(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
         WsClientConnectInfo::new(<span class="kw-2">&amp;</span>config.federation_id, <span class="kw-2">&amp;</span>config.nodes)
     }
 }
 
-<span class="attr">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
-#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + Send + Sync&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + MaybeSend + MaybeSync&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
     <span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.peers
     }
@@ -1811,13 +1858,13 @@
     </span>}
 }
 
-<span class="attr">#[async_trait]
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized {
     <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
-<span class="attr">#[async_trait]
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
     <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1941,7 +1988,9 @@
                             .<span class="kw">await</span><span class="question-mark">?
                     </span>}
                     <span class="prelude-val">Err</span>(err) =&gt; {
-                        <span class="macro">error!</span>(%err, <span class="string">&quot;unable to connect to server&quot;</span>);
+                        <span class="macro">error!</span>(
+                            target: LOG_NET_API,
+                            %err, <span class="string">&quot;unable to connect to server&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(err)<span class="question-mark">?</span>;
                     }
                 }
@@ -1985,12 +2034,13 @@
     <span class="kw">use </span>jsonrpsee_core::traits::ToRpcParams;
     <span class="kw">use </span>once_cell::sync::Lazy;
     <span class="kw">use </span>serde::de::DeserializeOwned;
+    <span class="kw">use </span>tracing::error;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T = ()&gt; = std::result::Result&lt;T, JsonRpcError&gt;;
 
-    <span class="attr">#[async_trait]
+    <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
     </span><span class="kw">trait </span>SimpleClient: Sized {
         <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
         <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -2002,8 +2052,8 @@
 
     <span class="kw">struct </span>Client&lt;C: SimpleClient&gt;(C);
 
-    <span class="attr">#[async_trait]
-    </span><span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; JsonRpcClient <span class="kw">for </span>Client&lt;C&gt; {
+    <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+    </span><span class="kw">impl</span>&lt;C: SimpleClient + MaybeSend + MaybeSync&gt; JsonRpcClient <span class="kw">for </span>Client&lt;C&gt; {
         <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
             <span class="self">self</span>.<span class="number">0</span>.is_connected()
         }
@@ -2013,12 +2063,12 @@
         }
     }
 
-    <span class="attr">#[async_trait]
-    </span><span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; ClientT <span class="kw">for </span>Client&lt;C&gt; {
+    <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+    </span><span class="kw">impl</span>&lt;C: SimpleClient + MaybeSend + MaybeSync&gt; ClientT <span class="kw">for </span>Client&lt;C&gt; {
         <span class="kw">async fn </span>request&lt;R, P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, _params: P) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
         <span class="kw">where
             </span>R: jsonrpsee_core::DeserializeOwned,
-            P: ToRpcParams + Send,
+            P: ToRpcParams + MaybeSend,
         {
             <span class="kw">let </span>json = <span class="self">self</span>.<span class="number">0</span>.request(method).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap())
@@ -2026,7 +2076,7 @@
 
         <span class="kw">async fn </span>notification&lt;P&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _method: <span class="kw-2">&amp;</span>str, _params: P) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
         <span class="kw">where
-            </span>P: ToRpcParams + Send,
+            </span>P: ToRpcParams + MaybeSend,
         {
             <span class="macro">unimplemented!</span>()
         }
@@ -2042,7 +2092,7 @@
         }
     }
 
-    <span class="kw">fn </span>federation_member&lt;C: SimpleClient + Send + Sync&gt;() -&gt; FederationMember&lt;Client&lt;C&gt;&gt; {
+    <span class="kw">fn </span>federation_member&lt;C: SimpleClient + MaybeSend + MaybeSync&gt;() -&gt; FederationMember&lt;Client&lt;C&gt;&gt; {
         FederationMember {
             url: Url::from_str(<span class="string">&quot;http://127.0.0.1&quot;</span>).expect(<span class="string">&quot;Could not parse&quot;</span>),
             peer_id: PeerId::from(<span class="number">0</span>),
@@ -2056,7 +2106,7 @@
         <span class="kw">static </span>CONNECTED: AtomicBool = AtomicBool::new(<span class="bool-val">true</span>);
         <span class="kw">struct </span>Client;
 
-        <span class="attr">#[async_trait]
+        <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
         </span><span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
             <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
                 CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
@@ -2111,10 +2161,10 @@
 
         <span class="kw">struct </span>Client(usize);
 
-        <span class="attr">#[async_trait]
+        <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
         </span><span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
             <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-                <span class="macro">tracing::error!</span>(<span class="string">&quot;connect&quot;</span>);
+                <span class="macro">error!</span>(target: LOG_NET_API, <span class="string">&quot;connect&quot;</span>);
                 <span class="kw">let </span>id = CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
                 <span class="comment">// slow down
                 </span>tokio::time::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
@@ -2206,7 +2256,13 @@
         <span class="kw">let </span>bech32 = connect.to_string();
         <span class="kw">let </span>connect_parsed = WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>bech32).expect(<span class="string">&quot;parses&quot;</span>);
         <span class="macro">assert_eq!</span>(connect, connect_parsed);
+
+        <span class="kw">let </span>json = serde_json::to_string(<span class="kw-2">&amp;</span>connect).unwrap();
+        <span class="kw">let </span>connect_as_string: String = serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap();
+        <span class="macro">assert_eq!</span>(connect_as_string, bech32);
+        <span class="kw">let </span>connect_parsed_json: WsClientConnectInfo = serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap();
+        <span class="macro">assert_eq!</span>(connect_parsed_json, connect_parsed);
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["LOG_TEST","LOG_WALLET"]};

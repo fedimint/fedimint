@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-server/src/config/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_server/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -804,27 +804,77 @@
 <a href="#804" id="804">804</a>
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
+<span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>aead::{encrypted_read, get_encryption_key_with_path};
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
-<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
+<span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::config::{
     ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
-    JsonWithKind, ModuleConfigResponse, ModuleGenRegistry, ServerModuleConfig,
+    JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry,
     TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-<span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, MuxPeerConnections, PeerConnections};
+<span class="kw">use </span>fedimint_core::module::PeerHandle;
+<span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_core::task::{timeout, Elapsed, TaskGroup};
 <span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>hbbft::NetworkInfo;
-<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio_rustls::rustls;
@@ -832,9 +882,10 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{DkgRunner, ThresholdKeys};
+<span class="kw">use </span><span class="kw">crate</span>::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TLS_PK};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::{BitcoinHash, NumPeers};
-<span class="kw">use </span><span class="kw">crate</span>::logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
+<span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, Connector, TlsConfig};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::NetworkConfig;
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
@@ -887,8 +938,6 @@
 </span><span class="kw">pub struct </span>ServerConfigConsensus {
     <span class="doccomment">/// The version of the binary code running
     </span><span class="kw">pub </span>code_version: String,
-    <span class="doccomment">/// Configurable federation name
-    </span><span class="kw">pub </span>federation_name: String,
     <span class="doccomment">/// Public keys authenticating members of the federation and the configs
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>auth_pk_set: hbbft::crypto::PublicKeySet,
@@ -903,6 +952,8 @@
     <span class="doccomment">/// All configuration that needs to be the same for modules
     </span><span class="attr">#[encodable_ignore]
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
+    <span class="doccomment">/// Additional config the federation wants to transmit to the clients
+    </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -934,14 +985,27 @@
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="doccomment">/// network config for a server
+</span><span class="doccomment">/// All the parameters necessary for generating the `ServerConfig` during setup
+///
+/// * Guardians can create the parameters using a setup UI or CLI tool
+/// * Used for distributed or trusted config generation
 </span><span class="kw">pub struct </span>ServerConfigParams {
-    <span class="kw">pub </span>tls: TlsConfig,
-    <span class="kw">pub </span>fed_network: NetworkConfig,
-    <span class="kw">pub </span>api_network: NetworkConfig,
-    <span class="kw">pub </span>federation_name: String,
-
-    <span class="doccomment">/// extra options for extra settings and modules
+    <span class="doccomment">/// Id of this server
+    </span><span class="kw">pub </span>our_id: PeerId,
+    <span class="doccomment">/// Id of all servers
+    </span><span class="kw">pub </span>peer_ids: Vec&lt;PeerId&gt;,
+    <span class="doccomment">/// How we authenticate our communication with peers during DKG
+    </span><span class="kw">pub </span>tls: TlsConfig,
+    <span class="doccomment">/// Endpoints for P2P communication
+    </span><span class="kw">pub </span>fed_network: NetworkConfig,
+    <span class="doccomment">/// Endpoints for client API communication
+    </span><span class="kw">pub </span>api_network: NetworkConfig,
+    <span class="doccomment">/// Guardian-defined key-value pairs that will be passed to the client.
+    /// These should be the same for all guardians since they become part of
+    /// the consensus config.
+    </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
+    <span class="doccomment">/// Params for the modules we wish to configure, can contain custom
+    /// parameters
     </span><span class="kw">pub </span>modules: ConfigGenParams,
 }
 
@@ -956,7 +1020,7 @@
     /// TODO use the derive macro to automatically pick up new fields here
     </span><span class="kw">fn </span>try_to_config_response(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_config_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry,
+        module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
     ) -&gt; anyhow::Result&lt;ConfigResponse&gt; {
         <span class="kw">let </span>modules: BTreeMap&lt;ModuleInstanceId, ModuleConfigResponse&gt; = <span class="self">self
             </span>.modules
@@ -982,11 +1046,11 @@
         <span class="kw">let </span>consensus_hash = sha256::Hash::from_engine(engine);
 
         <span class="kw">let </span>client = ClientConfig {
-            federation_name: <span class="self">self</span>.federation_name.clone(),
             federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
             nodes: <span class="self">self</span>.api.values().cloned().collect(),
             modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
+            meta: <span class="self">self</span>.meta.clone(),
         };
 
         <span class="prelude-val">Ok</span>(ConfigResponse {
@@ -996,7 +1060,10 @@
         })
     }
 
-    <span class="kw">pub fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, module_config_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry) -&gt; ConfigResponse {
+    <span class="kw">pub fn </span>to_config_response(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
+    ) -&gt; ConfigResponse {
         <span class="self">self</span>.try_to_config_response(module_config_gens)
             .expect(<span class="string">&quot;configuration mismatch&quot;</span>)
     }
@@ -1007,7 +1074,6 @@
     /// setup
     </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>from(
-        code_version: <span class="kw-2">&amp;</span>str,
         params: ServerConfigParams,
         identity: PeerId,
         auth_keys: ThresholdKeys,
@@ -1032,13 +1098,13 @@
             modules: Default::default(),
         };
         <span class="kw">let </span>consensus = ServerConfigConsensus {
-            code_version: code_version.to_string(),
-            federation_name: params.federation_name.clone(),
+            code_version: CODE_VERSION.to_string(),
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
             api: params.api_nodes(),
             modules: Default::default(),
+            meta: params.meta,
         };
         <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
             consensus,
@@ -1111,7 +1177,7 @@
     <span class="kw">pub fn </span>validate_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         identity: <span class="kw-2">&amp;</span>PeerId,
-        module_config_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry,
+        module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>peers = <span class="self">self</span>.local.p2p.clone();
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
@@ -1148,14 +1214,14 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="attr">#[allow(clippy::too_many_arguments)]
-    </span><span class="kw">pub fn </span>trusted_dealer_gen(
-        code_version: <span class="kw-2">&amp;</span>str,
-        peers: <span class="kw-2">&amp;</span>[PeerId],
+    <span class="kw">pub fn </span>trusted_dealer_gen(
         params: <span class="kw-2">&amp;</span>HashMap&lt;PeerId, ServerConfigParams&gt;,
-        module_config_gens: ModuleGenRegistry,
-        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+        registry: ServerModuleGenRegistry,
     ) -&gt; BTreeMap&lt;PeerId, <span class="self">Self</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
+        <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
+        <span class="kw">let </span>peers = <span class="kw-2">&amp;</span>peer0.peer_ids;
+
         <span class="kw">let </span>netinfo = NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
         <span class="kw">let </span>epochinfo = NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
@@ -1163,10 +1229,8 @@
         <span class="kw">let </span>authinfo = NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
-        <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
-
         <span class="comment">// We assume user wants one module instance for every module kind
-        </span><span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = module_config_gens
+        </span><span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = registry
             .legacy_init_order_iter()
             .enumerate()
             .map(|(module_id, (_kind, gen))| {
@@ -1181,7 +1245,6 @@
             .iter()
             .map(|(<span class="kw-2">&amp;</span>id, _netinf)| {
                 <span class="kw">let </span>config = ServerConfig::from(
-                    code_version,
                     params[<span class="kw-2">&amp;</span>id].clone(),
                     id,
                     <span class="self">Self</span>::extract_keys(authinfo.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;peer exists&quot;</span>)),
@@ -1206,29 +1269,28 @@
         }
     }
 
-    <span class="attr">#[allow(clippy::too_many_arguments)]
+    <span class="doccomment">/// Runs the distributed key gen algorithm
     </span><span class="kw">pub async fn </span>distributed_gen(
-        code_version: <span class="kw-2">&amp;</span>str,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
-        our_id: <span class="kw-2">&amp;</span>PeerId,
-        peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ServerConfigParams,
-        module_config_gens: ModuleGenRegistry,
-        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+        registry: ServerModuleGenRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Cancellable&lt;<span class="self">Self</span>&gt;&gt; {
+    ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>server_conn = connect(params.fed_network.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
+        <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
+
+        <span class="kw">let </span>peers = <span class="kw-2">&amp;</span>params.peer_ids;
+        <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span>params.our_id;
         <span class="comment">// in case we are running by ourselves, avoid DKG
         </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
-            <span class="kw">let </span>server = <span class="self">Self</span>::trusted_dealer_gen(
-                code_version,
-                peers,
-                <span class="kw-2">&amp;</span>HashMap::from([(<span class="kw-2">*</span>our_id, params.clone())]),
-                module_config_gens,
-                rng,
-            );
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server[our_id].clone()));
+            <span class="kw">let </span>server =
+                <span class="self">Self</span>::trusted_dealer_gen(<span class="kw-2">&amp;</span>HashMap::from([(<span class="kw-2">*</span>our_id, params.clone())]), registry);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(server[our_id].clone());
         }
-        <span class="macro">info!</span>(<span class="string">&quot;Peer {} running distributed key generation...&quot;</span>, our_id);
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER_DKG,
+            <span class="string">&quot;Peer {} running distributed key generation...&quot;</span>, our_id
+        );
 
         <span class="comment">// hbbft uses a lower threshold of signing keys (f+1)
         </span><span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
@@ -1236,14 +1298,9 @@
         dkg.add(KeyType::Epoch, peers.threshold());
 
         <span class="comment">// run DKG for epoch and hbbft keys
-        </span><span class="kw">let </span>keys = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = dkg
-            .run_g1(MODULE_INSTANCE_ID_GLOBAL, connections, <span class="kw-2">&amp;mut </span>rng)
-            .<span class="kw">await
-        </span>{
-            v
-        } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
-        };
+        </span><span class="kw">let </span>keys = dkg
+            .run_g1(MODULE_INSTANCE_ID_GLOBAL, <span class="kw-2">&amp;</span>connections, <span class="kw-2">&amp;mut </span>rng)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>auth_keys = keys[<span class="kw-2">&amp;</span>KeyType::Auth].threshold_crypto();
         <span class="kw">let </span>hbbft_keys = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
         <span class="kw">let </span>epoch_keys = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
@@ -1255,32 +1312,20 @@
         // of each module that was compiled in. This is how things were
         // initially, where we consider &quot;module as a code&quot; as &quot;module as an instance at
         // runtime&quot;
-        </span><span class="kw">for </span>(module_instance_id, (_kind, gen)) <span class="kw">in
-            </span>module_config_gens.legacy_init_order_iter().enumerate()
-        {
+        </span><span class="kw">for </span>(module_instance_id, (_kind, gen)) <span class="kw">in </span>registry.legacy_init_order_iter().enumerate() {
             <span class="kw">let </span>module_instance_id = u16::try_from(module_instance_id)
                 .expect(<span class="string">&quot;64k module instances should be enough for everyone&quot;</span>);
+            <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfgs) = gen
-                    .distributed_gen(
-                        connections,
-                        our_id,
-                        module_instance_id,
-                        peers,
-                        <span class="kw-2">&amp;</span>params.modules,
-                        task_group,
-                    )
-                    .<span class="kw">await</span><span class="question-mark">?
-                </span>{
-                    cfgs
-                } <span class="kw">else </span>{
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
-                },
+                gen.distributed_gen(<span class="kw-2">&amp;</span>dkg, <span class="kw-2">&amp;</span>params.modules).<span class="kw">await</span><span class="question-mark">?</span>,
             );
         }
 
-        <span class="macro">info!</span>(<span class="string">&quot;Sending confirmations to other peers.&quot;</span>);
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER_DKG,
+            <span class="string">&quot;Sending confirmations to other peers.&quot;
+        </span>);
         <span class="comment">// Note: Since our outgoing buffers are asynchronous, we don&#39;t actually know
         // if other peers received our message, just because we received theirs.
         // That&#39;s why we need to do a one last best effort sync.
@@ -1288,14 +1333,19 @@
             .send(peers, MODULE_INSTANCE_ID_GLOBAL, DkgPeerMsg::Done)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">info!</span>(<span class="string">&quot;Waiting for confirmations from other peers.&quot;</span>);
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER_DKG,
+            <span class="string">&quot;Waiting for confirmations from other peers.&quot;
+        </span>);
         <span class="kw">if let </span><span class="prelude-val">Err</span>(Elapsed) = timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>done_peers = BTreeSet::from([<span class="kw-2">*</span>our_id]);
 
             <span class="kw">while </span>done_peers.len() &lt; peers.len() {
                 <span class="kw">match </span>connections.receive(MODULE_INSTANCE_ID_GLOBAL).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>((peer_id, DkgPeerMsg::Done)) =&gt; {
-                        <span class="macro">info!</span>(%peer_id, <span class="string">&quot;Got completion confirmation&quot;</span>);
+                        <span class="macro">info!</span>(
+                            target: LOG_NET_PEER_DKG,
+                            pper_id = %peer_id, <span class="string">&quot;Got completion confirmation&quot;</span>);
                         done_peers.insert(peer_id);
                     },
                     <span class="prelude-val">Ok</span>((peer_id, msg)) =&gt; {
@@ -1311,7 +1361,6 @@
         };
 
         <span class="kw">let </span>server = ServerConfig::from(
-            code_version,
             params.clone(),
             <span class="kw-2">*</span>our_id,
             auth_keys,
@@ -1325,7 +1374,7 @@
             <span class="string">&quot;Distributed key generation has completed successfully!&quot;
         </span>);
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(server))
+        <span class="prelude-val">Ok</span>(server)
     }
 }
 
@@ -1416,6 +1465,43 @@
             .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
     }
 
+    <span class="doccomment">/// Parses from the connect strings and TLS info on the filesystem
+    </span><span class="kw">pub fn </span>parse_from_connect_strings(
+        bind_p2p: SocketAddr,
+        bind_api: SocketAddr,
+        dir_out_path: <span class="kw-2">&amp;</span>Path,
+        federation_name: String,
+        certs: Vec&lt;String&gt;,
+        password: <span class="kw-2">&amp;</span>str,
+        module_params: ConfigGenParams,
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>peers = BTreeMap::&lt;PeerId, PeerServerParams&gt;::new();
+        <span class="kw">for </span>(idx, cert) <span class="kw">in </span>certs.into_iter().sorted().enumerate() {
+            peers.insert(PeerId::from(idx <span class="kw">as </span>u16), parse_peer_params(cert)<span class="question-mark">?</span>);
+        }
+
+        <span class="kw">let </span>key = get_encryption_key_with_path(password, dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
+        <span class="kw">let </span>tls_pk = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK))<span class="question-mark">?</span>;
+        <span class="kw">let </span>cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>our_params = parse_peer_params(cert_string)<span class="question-mark">?</span>;
+        <span class="kw">let </span>our_id = peers
+            .iter()
+            .find(|(_peer, params)| params.cert == our_params.cert)
+            .map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer)
+            .ok_or_else(|| anyhow::Error::msg(<span class="string">&quot;Our id not found&quot;</span>))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(ServerConfigParams::gen_params(
+            bind_p2p,
+            bind_api,
+            rustls::PrivateKey(tls_pk),
+            our_id,
+            <span class="kw-2">&amp;</span>peers,
+            federation_name,
+            module_params,
+        ))
+    }
+
     <span class="doccomment">/// Generates the parameters necessary for running server config generation
     </span><span class="kw">pub fn </span>gen_params(
         bind_p2p: SocketAddr,
@@ -1444,10 +1530,12 @@
         };
 
         ServerConfigParams {
+            our_id,
+            peer_ids: peers.keys().cloned().collect(),
             tls,
             fed_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, peers, |params| params.p2p_url),
             api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, peers, |params| params.api_url),
-            federation_name,
+            meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
             modules,
         }
     }
@@ -1611,4 +1699,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

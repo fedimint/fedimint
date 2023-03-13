@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FIELDS"],"enum":["__Field"],"struct":["FeeConsensus","WalletClientConfig","WalletConfig","WalletConfigConsensus","WalletConfigLocal","WalletConfigPrivate","__FieldVisitor","__Visitor"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CompleteHtlcSvc","GatewayLightningServer","GetPubKeySvc","PayInvoiceSvc","SubscribeInterceptHtlcsSvc","_Inner"],"trait":["GatewayLightning"]};
+window.SIDEBAR_ITEMS = {"struct":[["GatewayLightningServer","GatewayLightning is a service that provides limited access and functionality from a lightning node to Fedimint gateways"],["_Inner",""]],"trait":[["GatewayLightning","Generated trait containing gRPC methods that should be implemented for use with GatewayLightningServer."]]};

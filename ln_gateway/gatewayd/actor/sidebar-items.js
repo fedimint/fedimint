@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["GW_ANNOUNCEMENT_TTL"],"opaque":[""],"static":["CALLSITE","META"],"struct":["GatewayActor"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["SystemTime"]};
+window.SIDEBAR_ITEMS = {"fn":[["now",""]]};

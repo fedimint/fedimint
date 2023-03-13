@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["main"],"static":["CALLSITE","META"],"struct":["GatewayOpts"]};
+window.SIDEBAR_ITEMS = {"fn":[["main","This binary runs a webserver with an API that can be used by Fedimint clients to request routing of payments through the Lightning Network. It uses a `GatewayLightningClient`, an rpc client to communicate with a remote Lightning node accessible through a `GatewayLightningServer`."]],"struct":[["GatewayOpts",""]]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Cancelled"],"type":["Cancellable"]};
+window.SIDEBAR_ITEMS = {"struct":[["Cancelled","An error used as a “cancelled” marker in [`Cancellable`]."]],"type":[["Cancellable","Operation that can potentially get cancelled returning no result (e.g. program shutdown)."]]};

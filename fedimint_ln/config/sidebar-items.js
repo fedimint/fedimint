@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FIELDS"],"enum":["__Field"],"struct":["FeeConsensus","LightningClientConfig","LightningConfig","LightningConfigConsensus","LightningConfigPrivate","__FieldVisitor","__Visitor"]};

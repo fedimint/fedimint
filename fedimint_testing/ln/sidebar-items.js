@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["fixtures"],"trait":["LightningTest"]};
+window.SIDEBAR_ITEMS = {"mod":[["fixtures",""]],"trait":[["LightningTest",""]]};

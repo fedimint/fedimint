@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FIELDS","KIND","MODULE_KEY_DUMMY"],"enum":["DummyError","__Field"],"mod":["common","config","db"],"struct":["Dummy","DummyConfigGenParams","DummyConfigGenerator","DummyConsensusItem","DummyInput","DummyOutput","DummyOutputOutcome","DummyVerificationCache","Endpoint","__FieldVisitor","__Visitor"]};

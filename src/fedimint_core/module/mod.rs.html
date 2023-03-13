@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/module/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_core/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/module/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_core/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -791,6 +791,120 @@
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
 <a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -799,28 +913,34 @@
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::marker::PhantomData;
+<span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash;
-<span class="kw">use </span>futures::future::BoxFuture;
+<span class="kw">use </span>futures::Future;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::instrument;
 
-<span class="kw">use </span><span class="kw">crate</span>::cancellable::Cancellable;
 <span class="kw">use </span><span class="kw">crate</span>::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
-<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, DynDecoder, ModuleInstanceId, ModuleKind};
-<span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseTransaction, DatabaseVersion, MigrationMap};
+<span class="kw">use </span><span class="kw">crate</span>::core::{
+    Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
+    OutputOutcome,
+};
+<span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
 <span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::server::{DynServerModule, VerificationCache};
-<span class="kw">use </span><span class="kw">crate</span>::task::TaskGroup;
-<span class="kw">use crate</span>::{dyn_newtype_define, Amount, OutPoint, PeerId};
+<span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, TaskGroup};
+<span class="kw">use crate</span>::{
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
+    OutPoint, PeerId,
+};
 
 <span class="kw">pub struct </span>InputMeta {
     <span class="kw">pub </span>amount: TransactionItemAmount,
@@ -865,7 +985,7 @@
     }
 }
 
-<span class="attr">#[async_trait]
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>TypedApiEndpoint {
     <span class="kw">type </span>State: Sync;
 
@@ -877,7 +997,7 @@
 
     <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
-        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_core::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_core::db::ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
         params: <span class="self">Self</span>::Param,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Response, ApiError&gt;;
 }
@@ -890,7 +1010,7 @@
 <span class="doccomment">/// # Example
 ///
 /// ```rust
-/// # use fedimint_core::module::{api_endpoint, ApiEndpoint};
+/// # use fedimint_core::module::{api_endpoint, ApiEndpoint, registry::ModuleInstanceId};
 /// struct State;
 ///
 /// let _: ApiEndpoint&lt;State&gt; = api_endpoint! {
@@ -908,7 +1028,7 @@
     ) =&gt; {{
         <span class="kw">struct </span>Endpoint;
 
-        <span class="attr">#[async_trait::async_trait]
+        <span class="attr">#[<span class="macro-nonterminal">$crate::apply</span>(<span class="macro-nonterminal">$</span><span class="macro">crate::async_trait_maybe_send!</span>)]
         </span><span class="kw">impl </span><span class="macro-nonterminal">$crate::module::TypedApiEndpoint </span><span class="kw">for </span>Endpoint {
             <span class="kw">const </span>PATH: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="macro-nonterminal">$path</span>;
             <span class="kw">type </span>State = <span class="macro-nonterminal">$state_ty</span>;
@@ -917,7 +1037,7 @@
 
             <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
                 <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
-                <span class="macro-nonterminal">$dbtx</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_core::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+                <span class="macro-nonterminal">$dbtx</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_core::db::ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
             ) -&gt; ::std::result::Result&lt;<span class="self">Self</span>::Response, <span class="macro-nonterminal">$crate::module::ApiError</span>&gt; {
                 <span class="macro-nonterminal">$body
@@ -929,20 +1049,21 @@
 }
 
 <span class="kw">pub use </span>__api_endpoint <span class="kw">as </span>api_endpoint;
-<span class="kw">use </span>fedimint_core::config::ModuleConfigResponse;
+<span class="kw">use </span>fedimint_core::config::{DkgResult, ModuleConfigResponse};
 
 <span class="kw">use </span><span class="self">self</span>::registry::ModuleDecoderRegistry;
 
-<span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; = BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;;
+<span class="kw">type </span>HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt; =
+    Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt; + <span class="lifetime">&#39;a</span>)&gt;&gt;;
 <span class="kw">type </span>HandlerFn&lt;M&gt; = Box&lt;
-    <span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(
+    <span class="macro">maybe_add_send_sync!</span>(
+        <span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(
             <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>M,
             fedimint_core::db::DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
             serde_json::Value,
             <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
         ) -&gt; HandlerFnReturn&lt;<span class="lifetime">&#39;a</span>&gt;
-        + Send
-        + Sync,
+    ),
 &gt;;
 
 <span class="doccomment">/// Definition of an API endpoint defined by a module `M`.
@@ -962,7 +1083,7 @@
 </span><span class="kw">impl </span>ApiEndpoint&lt;()&gt; {
     <span class="kw">pub fn </span>from_typed&lt;E: TypedApiEndpoint&gt;() -&gt; ApiEndpoint&lt;E::State&gt;
     <span class="kw">where
-        </span>&lt;E <span class="kw">as </span>TypedApiEndpoint&gt;::Response: std::marker::Send,
+        </span>&lt;E <span class="kw">as </span>TypedApiEndpoint&gt;::Response: MaybeSend,
         E::Param: Debug,
         E::Response: Debug,
     {
@@ -975,7 +1096,7 @@
         )]
         </span><span class="kw">async fn </span>handle_request&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, E&gt;(
             state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>E::State,
-            dbtx: <span class="kw-2">&amp;mut </span>fedimint_core::db::DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+            dbtx: <span class="kw-2">&amp;mut </span>fedimint_core::db::ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
             param: E::Param,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;E::Response, ApiError&gt;
         <span class="kw">where
@@ -1003,15 +1124,15 @@
                             <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(module_instance_id);
                             handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>module_dbtx, params).<span class="kw">await</span><span class="question-mark">?
                         </span>}
-                        <span class="prelude-val">None </span>=&gt; handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>dbtx, params).<span class="kw">await</span><span class="question-mark">?</span>,
+                        <span class="prelude-val">None </span>=&gt; handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>dbtx.get_isolated(), params).<span class="kw">await</span><span class="question-mark">?</span>,
                     };
 
-                    dbtx.commit_tx()
-                        .<span class="kw">await
-                        </span>.map_err(|_err| fedimint_core::module::ApiError {
+                    dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|_err| {
+                        fedimint_core::module::ApiError {
                             code: <span class="number">500</span>,
                             message: <span class="string">&quot;Internal Server Error&quot;</span>.to_string(),
-                        })<span class="question-mark">?</span>;
+                        }
+                    })<span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(serde_json::to_value(ret).expect(<span class="string">&quot;encoding error&quot;</span>))
                 })
             }),
@@ -1050,6 +1171,47 @@
     }
 }
 
+<span class="doccomment">/// Operations common to Server and Client side module gen dyn newtypes
+///
+/// Due to conflict of `impl Trait for T` for both `ServerModuleGen` and
+/// `ClientModuleGen`, we can&#39;t really have a `ICommonModuleGen`, so to unify
+/// them in `ModuleGenRegistry` we move the common functionality to be an
+/// interface over their dyn newtype wrappers. A bit weird, but works.
+</span><span class="kw">pub trait </span>IDynCommonModuleGen: Debug {
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
+
+    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
+
+    <span class="kw">fn </span>to_dyn_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynCommonModuleGen;
+}
+
+<span class="kw">pub trait </span>ExtendsCommonModuleGen: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static </span>{
+    <span class="kw">type </span>Common: CommonModuleGen;
+}
+
+<span class="kw">impl</span>&lt;T&gt; IDynCommonModuleGen <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: ExtendsCommonModuleGen,
+{
+    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
+        T::Common::decoder()
+    }
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        T::Common::KIND
+    }
+
+    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: Value) -&gt; anyhow::Result&lt;Hash&gt; {
+        T::Common::hash_client_module(config)
+    }
+
+    <span class="kw">fn </span>to_dyn_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynCommonModuleGen {
+        DynCommonModuleGen::from_inner(Arc::new(<span class="self">self</span>.clone()))
+    }
+}
+
 <span class="doccomment">/// Interface for Module Generation
 ///
 /// This trait contains the methods responsible for the module&#39;s
@@ -1059,13 +1221,9 @@
 ///
 /// Once the module configuration is ready, the module can be instantiated via
 /// `[Self::init]`.
-</span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>IModuleGen: Debug {
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder;
-
-    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; Vec&lt;ModuleConsensusVersion&gt;;
-
-    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>IServerModuleGen: IDynCommonModuleGen {
+    <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>);
 
     <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion;
 
@@ -1091,13 +1249,9 @@
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
-        our_id: <span class="kw-2">&amp;</span>PeerId,
-        module_id: ModuleInstanceId,
-        peers: <span class="kw-2">&amp;</span>[PeerId],
+        peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt;;
+    ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
 
     <span class="kw">fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value)
         -&gt; anyhow::Result&lt;ModuleConfigResponse&gt;;
@@ -1108,15 +1262,38 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
 
 <span class="macro">dyn_newtype_define!</span>(
     <span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>DynModuleGen(Arc&lt;IModuleGen&gt;)
+    </span><span class="kw">pub </span>DynCommonModuleGen(Arc&lt;IDynCommonModuleGen&gt;)
 );
+
+<span class="kw">impl </span>AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static</span>)&gt; <span class="kw">for </span>DynCommonModuleGen {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static</span>)) {
+        <span class="self">self</span>.<span class="number">0</span>.as_ref()
+    }
+}
+
+<span class="kw">impl </span>DynCommonModuleGen {
+    <span class="kw">pub fn </span>from_inner(inner: Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static</span>)&gt;) -&gt; <span class="self">Self </span>{
+        DynCommonModuleGen(inner)
+    }
+}
+
+<span class="macro">dyn_newtype_define!</span>(
+    <span class="attr">#[derive(Clone)]
+    </span><span class="kw">pub </span>DynServerModuleGen(Arc&lt;IServerModuleGen&gt;)
+);
+
+<span class="kw">impl </span>AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>&gt; <span class="kw">for </span>DynServerModuleGen {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>) {
+        <span class="self">self</span>.<span class="number">0</span>.as_common()
+    }
+}
 
 <span class="doccomment">/// Consensus version of a core server
 ///
@@ -1189,16 +1366,22 @@
     </span><span class="kw">pub </span>minor: u32,
 }
 
+<span class="kw">pub trait </span>CommonModuleGen: Debug + Sized {
+    <span class="kw">const </span>KIND: ModuleKind;
+
+    <span class="kw">fn </span>decoder() -&gt; Decoder;
+
+    <span class="kw">fn </span>hash_client_module(config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
+}
+
 <span class="doccomment">/// Module Generation trait with associated types
 ///
 /// Needs to be implemented by module generation type
 ///
 /// For examples, take a look at one of the `MintConfigGenerator`,
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
-</span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>ModuleGen: Debug + Sized {
-    <span class="kw">const </span>KIND: ModuleKind;
-
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>ServerModuleGen: ExtendsCommonModuleGen + Sized {
     <span class="doccomment">/// This represents the module&#39;s database version that the current code is
     /// compatible with. It is important to increment this value whenever a
     /// key or a value that is persisted to the database within the module
@@ -1207,21 +1390,18 @@
     /// to move from the previous database version to the current version.
     </span><span class="kw">const </span>DATABASE_VERSION: DatabaseVersion;
 
-    <span class="kw">type </span>Decoder: Decoder;
-
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
-
     <span class="doccomment">/// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].
     ///
     /// Refer to [`ModuleConsensusVersion`] for more information about
     /// versioning.
     ///
-    /// One module implementation ([`ModuleGen`] of a given [`ModuleKind`]) can
-    /// potentially implement multiple versions of the consensus, and
-    /// depending on the config module instance config, instantiate the
-    /// desired one. This method should expose all the available
-    /// versions, purely for information, setup UI and sanity checking purposes.
+    /// One module implementation ([`ServerModuleGen`] of a given
+    /// [`ModuleKind`]) can potentially implement multiple versions of the
+    /// consensus, and depending on the config module instance config,
+    /// instantiate the desired one. This method should expose all the
+    /// available versions, purely for information, setup UI and sanity
+    /// checking purposes.
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion];
 
     <span class="doccomment">/// Initialize the [`DynServerModule`] instance from its config
@@ -1248,47 +1428,33 @@
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
-        our_id: <span class="kw-2">&amp;</span>PeerId,
-        module_id: ModuleInstanceId,
-        peers: <span class="kw-2">&amp;</span>[PeerId],
+        peer: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt;;
+    ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
 
     <span class="kw">fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value)
         -&gt; anyhow::Result&lt;ModuleConfigResponse&gt;;
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
 
-    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
-
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
 
-<span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;T&gt; IModuleGen <span class="kw">for </span>T
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl</span>&lt;T&gt; IServerModuleGen <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: ModuleGen + <span class="lifetime">&#39;static </span>+ Sync,
+    </span>T: ServerModuleGen + <span class="lifetime">&#39;static </span>+ Sync,
 {
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynDecoder {
-        DynDecoder::from_typed(ModuleGen::decoder(<span class="self">self</span>))
-    }
-
-    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::KIND
-    }
+    <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>) {
+        <span class="self">self
+    </span>}
 
     <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::DATABASE_VERSION
-    }
-
-    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; Vec&lt;ModuleConsensusVersion&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::versions(<span class="self">self</span>, core).to_vec()
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::DATABASE_VERSION
     }
 
     <span class="kw">async fn </span>init(
@@ -1298,11 +1464,11 @@
         env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::init(<span class="self">self</span>, cfg, db, env, task_group).<span class="kw">await
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::init(<span class="self">self</span>, cfg, db, env, task_group).<span class="kw">await
     </span>}
 
     <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::get_database_migrations(<span class="self">self</span>)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::get_database_migrations(<span class="self">self</span>)
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1310,51 +1476,38 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::trusted_dealer_gen(<span class="self">self</span>, peers, params)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::trusted_dealer_gen(<span class="self">self</span>, peers, params)
     }
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
-        our_id: <span class="kw-2">&amp;</span>PeerId,
-        module_id: ModuleInstanceId,
-        peers: <span class="kw-2">&amp;</span>[PeerId],
+        peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Cancellable&lt;ServerModuleConfig&gt;&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::distributed_gen(
-            <span class="self">self</span>,
-            connections,
-            our_id,
-            module_id,
-            peers,
-            params,
-            task_group,
-        )
-        .<span class="kw">await
+    ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::distributed_gen(<span class="self">self</span>, peers, params).<span class="kw">await
     </span>}
 
     <span class="kw">fn </span>to_config_response(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: serde_json::Value,
     ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::to_config_response(<span class="self">self</span>, config)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::to_config_response(<span class="self">self</span>, config)
     }
 
     <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;Hash&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::hash_client_module(<span class="self">self</span>, config)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleGen&gt;::Common::hash_client_module(config)
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::validate_config(<span class="self">self</span>, identity, config)
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::validate_config(<span class="self">self</span>, identity, config)
     }
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleGen&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
     </span>}
 }
 
@@ -1419,32 +1572,64 @@
     }
 }
 
-<span class="attr">#[async_trait]
+<span class="doccomment">/// Module associated types required by both client and server
+</span><span class="kw">pub trait </span>ModuleCommon {
+    <span class="kw">type </span>Input: Input;
+    <span class="kw">type </span>Output: Output;
+    <span class="kw">type </span>OutputOutcome: OutputOutcome;
+    <span class="kw">type </span>ConsensusItem: ModuleConsensusItem;
+
+    <span class="kw">fn </span>decoder_builder() -&gt; DecoderBuilder {
+        <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::Input&gt;();
+        decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::Output&gt;();
+        decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::OutputOutcome&gt;();
+        decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::ConsensusItem&gt;();
+        decoder_builder
+    }
+
+    <span class="kw">fn </span>decoder() -&gt; Decoder {
+        <span class="self">Self</span>::decoder_builder().build()
+    }
+}
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>ServerModule: Debug + Sized {
-    <span class="kw">type </span>Gen: ModuleGen;
-    <span class="kw">type </span>Decoder: Decoder;
+    <span class="kw">type </span>Common: ModuleCommon;
+
+    <span class="kw">type </span>Gen: ServerModuleGen;
     <span class="kw">type </span>VerificationCache: VerificationCache;
 
     <span class="kw">fn </span>module_kind() -&gt; ModuleKind {
         <span class="comment">// Note: All modules should define kinds as &amp;&#39;static str, so this doesn&#39;t
         // allocate
-        </span><span class="self">Self</span>::Gen::KIND
+        </span>&lt;<span class="self">Self</span>::Gen <span class="kw">as </span>ExtendsCommonModuleGen&gt;::Common::KIND
     }
 
-    <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Decoder;
+    <span class="doccomment">/// Returns a decoder for the following associated types of this module:
+    /// * `Input`
+    /// * `Output`
+    /// * `OutputOutcome`
+    /// * `ConsensusItem`
+    </span><span class="kw">fn </span>decoder() -&gt; Decoder {
+        <span class="self">Self</span>::Common::decoder_builder().build()
+    }
 
     <span class="doccomment">/// Module consensus version this module is running with and the API
     /// versions it supports in it
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleConsensusVersion, <span class="kw-2">&amp;</span>[ApiVersion]);
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
-    </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);
+    </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+    );
 
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ConsensusProposal&lt;&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::ConsensusItem&gt;;
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+    ) -&gt; ConsensusProposal&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All
     /// module consensus items of this round are supplied as
@@ -1453,8 +1638,8 @@
     /// results are available when processing transactions.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        consensus_items: Vec&lt;(PeerId, &lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::ConsensusItem)&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
+        consensus_items: Vec&lt;(PeerId, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem)&gt;,
     );
 
     <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction
@@ -1464,7 +1649,7 @@
     /// constructing such lookup tables.
     </span><span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input&gt; + Send,
+        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input&gt; + MaybeSend,
     ) -&gt; <span class="self">Self</span>::VerificationCache;
 
     <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed
@@ -1475,9 +1660,9 @@
     </span><span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
     <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will
@@ -1491,8 +1676,8 @@
     </span><span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Input,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>, ModuleInstanceId&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
 
@@ -1503,8 +1688,8 @@
     /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Output,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -1521,8 +1706,8 @@
     /// once all transactions have been processed.
     </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::Output,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
@@ -1535,7 +1720,7 @@
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this
@@ -1544,16 +1729,20 @@
     /// output is unknown, **NOT** if it is just not ready yet.
     </span><span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;<span class="self">Self</span>::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome&gt;;
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputOutcome&gt;;
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the
     /// module.
     ///
     /// Summing over all modules, if liabilities &gt; assets then an error has
     /// occurred in the database and consensus should halt.
-    </span><span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit);
+    </span><span class="kw">async fn </span>audit(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        audit: <span class="kw-2">&amp;mut </span>Audit,
+    );
 
     <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are
     /// made available both to users as well as to other modules. They thus
@@ -1584,5 +1773,44 @@
         Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>reader, modules)
     }
 }
+
+<span class="doccomment">/// A handle passed to [`ServerModuleGen::distributed_gen`]
+///
+/// This struct encapsulates dkg data that the module should not have a direct
+/// access to, and implements higher level dkg operations available to the
+/// module to complete its distributed initialization inside the federation.
+</span><span class="attr">#[non_exhaustive]
+</span><span class="kw">pub struct </span>PeerHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="comment">// TODO: this whole type should be a part of a `fedimint-server` and fields here inaccesible
+    // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
+    </span><span class="attr">#[doc(hidden)]
+    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
+    <span class="attr">#[doc(hidden)]
+    </span><span class="kw">pub </span>module_instance_id: ModuleInstanceId,
+    <span class="attr">#[doc(hidden)]
+    </span><span class="kw">pub </span>our_id: PeerId,
+    <span class="attr">#[doc(hidden)]
+    </span><span class="kw">pub </span>peers: Vec&lt;PeerId&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; PeerHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">pub fn </span>new(
+        connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
+        module_instance_id: ModuleInstanceId,
+        our_id: PeerId,
+        peers: Vec&lt;PeerId&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            connections,
+            module_instance_id,
+            our_id,
+            peers,
+        }
+    }
+
+    <span class="kw">pub fn </span>peer_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[PeerId] {
+        <span class="self">self</span>.peers.as_slice()
+    }
+}
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

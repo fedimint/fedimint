@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["peers"]};
+window.SIDEBAR_ITEMS = {"mod":[["peers",""]]};

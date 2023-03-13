@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["ROUTE_HINT_RETRIES","ROUTE_HINT_RETRY_SLEEP"],"opaque":[""],"static":["CALLSITE","META"],"struct":["Gateway"]};

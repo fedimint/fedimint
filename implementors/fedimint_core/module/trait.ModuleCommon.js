@@ -1,0 +1,6 @@
+(function() {var implementors = {
+"fedimint_dummy_common":[["impl ModuleCommon for <a class=\"struct\" href=\"fedimint_dummy_common/struct.DummyModuleTypes.html\" title=\"struct fedimint_dummy_common::DummyModuleTypes\">DummyModuleTypes</a>"]],
+"fedimint_ln_common":[["impl ModuleCommon for <a class=\"struct\" href=\"fedimint_ln_common/struct.LightningModuleTypes.html\" title=\"struct fedimint_ln_common::LightningModuleTypes\">LightningModuleTypes</a>"]],
+"fedimint_mint_common":[["impl ModuleCommon for <a class=\"struct\" href=\"fedimint_mint_common/struct.MintModuleTypes.html\" title=\"struct fedimint_mint_common::MintModuleTypes\">MintModuleTypes</a>"]],
+"fedimint_wallet_common":[["impl ModuleCommon for <a class=\"struct\" href=\"fedimint_wallet_common/struct.WalletModuleTypes.html\" title=\"struct fedimint_wallet_common::WalletModuleTypes\">WalletModuleTypes</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

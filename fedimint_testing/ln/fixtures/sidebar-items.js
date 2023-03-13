@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["FakeLightningTest"]};
+window.SIDEBAR_ITEMS = {"struct":[["FakeLightningTest",""]]};

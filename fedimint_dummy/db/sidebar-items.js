@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"fn":["migrate_dummy_db_version_0"],"opaque":[""],"struct":["DbKeyPrefixIter","ExampleKey","ExampleKeyPrefix","ExampleKeyPrefixV0","ExampleKeyV0"]};

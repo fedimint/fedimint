@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["BlockHashKey","BlockHashKeyPrefix","DbKeyPrefixIter","PegOutBitcoinTransaction","PegOutBitcoinTransactionPrefix","PegOutTxSignatureCI","PegOutTxSignatureCIPrefix","PendingTransactionKey","PendingTransactionPrefixKey","RoundConsensusKey","UTXOKey","UTXOPrefixKey","UnsignedTransactionKey","UnsignedTransactionPrefixKey"]};

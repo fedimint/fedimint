@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["TieredMulti","TieredMultiZip"]};
+window.SIDEBAR_ITEMS = {"struct":[["TieredMulti","Represents notes of different denominations."],["TieredMultiZip",""]]};

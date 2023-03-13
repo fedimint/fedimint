@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_testing/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_testing/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -368,21 +368,125 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
+<span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::{env, fs, io};
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
-<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::module::{ApiError, InputMeta, ModuleError, ModuleGen, TransactionItemAmount};
+<span class="kw">use </span>fedimint_core::module::{
+    ApiError, CommonModuleGen, ExtendsCommonModuleGen, InputMeta, ModuleCommon, ModuleError,
+    ServerModuleGen, TransactionItemAmount,
+};
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, ServerModule};
+<span class="kw">use </span>fedimint_rocksdb::RocksDb;
+<span class="kw">use </span>futures::future::BoxFuture;
+<span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>rand::RngCore;
 
 <span class="kw">pub mod </span>btc;
 <span class="kw">pub mod </span>ln;
@@ -404,7 +508,6 @@
 <span class="kw">impl</span>&lt;Module&gt; FakeFed&lt;Module&gt;
 <span class="kw">where
     </span>Module: ServerModule + <span class="lifetime">&#39;static </span>+ Send + Sync,
-    Module::Decoder: Sync + Send + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">pub async fn </span>new&lt;ConfGen, F, FF&gt;(
         members: usize,
@@ -414,7 +517,7 @@
         module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;FakeFed&lt;Module&gt;&gt;
     <span class="kw">where
-        </span>ConfGen: ModuleGen,
+        </span>ConfGen: ServerModuleGen,
         F: Fn(ServerModuleConfig, Database) -&gt; FF,
         FF: Future&lt;Output = anyhow::Result&lt;Module&gt;&gt;,
     {
@@ -429,7 +532,10 @@
         <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>server_cfg {
             <span class="kw">let </span>db = Database::new(
                 MemDatabase::new(),
-                ModuleDecoderRegistry::from_iter([(module_instance_id, conf_gen.decoder().into())]),
+                ModuleDecoderRegistry::from_iter([(
+                    module_instance_id,
+                    &lt;ConfGen <span class="kw">as </span>ExtendsCommonModuleGen&gt;::Common::decoder(),
+                )]),
             );
             <span class="kw">let </span>member = constructor(cfg, db.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
             members.push((peer, member, db, module_instance_id));
@@ -448,15 +554,15 @@
 
     <span class="kw">pub async fn </span>verify_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        input: <span class="kw-2">&amp;</span>&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Input,
+        input: <span class="kw-2">&amp;</span>&lt;Module::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
         <span class="kw">async fn </span>member_validate&lt;M: ServerModule&gt;(
             member: <span class="kw-2">&amp;</span>M,
-            dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+            dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
             fake_ic: <span class="kw-2">&amp;</span>FakeInterconnect,
-            input: <span class="kw-2">&amp;</span>&lt;M::Decoder <span class="kw">as </span>Decoder&gt;::Input,
+            input: <span class="kw-2">&amp;</span>&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {
             <span class="kw">let </span>cache = member.build_verification_cache(std::iter::once(input));
             <span class="kw">let </span>InputMeta {
@@ -481,13 +587,13 @@
                 )
                 .<span class="kw">await</span>,
             );
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB tx failed&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
 
         assert_all_equal_result(results.into_iter())
     }
 
-    <span class="kw">pub async fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Output) -&gt; bool {
+    <span class="kw">pub async fn </span>verify_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;Module::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; bool {
         <span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
         <span class="kw">for </span>(<span class="kw">_</span>, member, db, module_instance_id) <span class="kw">in </span><span class="self">self</span>.members.iter() {
             results.push(
@@ -509,10 +615,10 @@
     <span class="comment">// TODO: add expected result to inputs/outputs
     </span><span class="kw">pub async fn </span>consensus_round(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        inputs: <span class="kw-2">&amp;</span>[&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Input],
-        outputs: <span class="kw-2">&amp;</span>[(OutPoint, &lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::Output)],
+        inputs: <span class="kw-2">&amp;</span>[&lt;Module::Common <span class="kw">as </span>ModuleCommon&gt;::Input],
+        outputs: <span class="kw-2">&amp;</span>[(OutPoint, &lt;Module::Common <span class="kw">as </span>ModuleCommon&gt;::Output)],
     ) <span class="kw">where
-        </span>&lt;&lt;Module <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::Input: Send + Sync + Eq,
+        </span>&lt;&lt;Module <span class="kw">as </span>ServerModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::Input: Send + Sync + Eq,
     {
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
         <span class="comment">// TODO: only include some of the proposals for realism
@@ -562,16 +668,16 @@
                 member.end_consensus_epoch(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;mut </span>module_dbtx).<span class="kw">await</span>;
             }
 
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
     }
 
     <span class="kw">pub async fn </span>output_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;Module::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome&gt;
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;&lt;Module::Common <span class="kw">as </span>ModuleCommon&gt;::OutputOutcome&gt;
     <span class="kw">where
-        </span>&lt;&lt;Module <span class="kw">as </span>ServerModule&gt;::Decoder <span class="kw">as </span>Decoder&gt;::OutputOutcome: Eq,
+        </span>&lt;&lt;Module <span class="kw">as </span>ServerModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::OutputOutcome: Eq,
     {
         <span class="comment">// Since every member is in the same epoch they should have the same internal
         // state, even in terms of outcomes. This may change later once
@@ -600,7 +706,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">let </span>out_point = bitcoin::OutPoint::default();
             <span class="kw">let </span>tweak = [<span class="number">42</span>; <span class="number">32</span>];
-            <span class="kw">let </span>utxo = fedimint_wallet::SpendableUTXO {
+            <span class="kw">let </span>utxo = fedimint_wallet_client::SpendableUTXO {
                 tweak,
                 amount: bitcoin::Amount::from_sat(<span class="number">48000</span>),
             };
@@ -608,24 +714,22 @@
             {
                 <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(<span class="kw-2">*</span>module_instance_id);
                 module_dbtx
-                    .insert_entry(<span class="kw-2">&amp;</span>fedimint_wallet::db::UTXOKey(out_point), <span class="kw-2">&amp;</span>utxo)
-                    .<span class="kw">await
-                    </span>.unwrap();
+                    .insert_entry(<span class="kw-2">&amp;</span>fedimint_wallet_client::db::UTXOKey(out_point), <span class="kw-2">&amp;</span>utxo)
+                    .<span class="kw">await</span>;
 
                 module_dbtx
                     .insert_entry(
-                        <span class="kw-2">&amp;</span>fedimint_wallet::db::RoundConsensusKey,
-                        <span class="kw-2">&amp;</span>fedimint_wallet::RoundConsensus {
+                        <span class="kw-2">&amp;</span>fedimint_wallet_client::db::RoundConsensusKey,
+                        <span class="kw-2">&amp;</span>fedimint_wallet_client::RoundConsensus {
                             block_height: <span class="number">0</span>,
                             fee_rate: fedimint_core::Feerate { sats_per_kvb: <span class="number">0 </span>},
                             randomness_beacon: tweak,
                         },
                     )
-                    .<span class="kw">await
-                    </span>.unwrap();
+                    .<span class="kw">await</span>;
             }
 
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
     }
 
@@ -707,6 +811,92 @@
     first
 }
 
+<span class="doccomment">/// Creates the database backup directory by appending the `snapshot_name`
+/// to the `FM_TEST_DB_BACKUP_DIR`. Then this function will execute the provided
+/// `prepare_fn` which is expected to populate the database with the appropriate
+/// data for testing a migration. If `FM_TEST_DB_BACKUP_DIR` is not set, this
+/// function doesn&#39;t do anything.
+</span><span class="kw">pub async fn </span>prepare_snapshot&lt;F&gt;(
+    snapshot_name: <span class="kw-2">&amp;</span>str,
+    prepare_fn: F,
+    decoders: ModuleDecoderRegistry,
+) <span class="kw">where
+    </span>F: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, ()&gt;,
+{
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(parent_dir) = env::var(<span class="string">&quot;FM_TEST_DB_BACKUP_DIR&quot;</span>) {
+        <span class="kw">let </span>snapshot_dir = Path::new(<span class="kw-2">&amp;</span>parent_dir).join(snapshot_name);
+        <span class="kw">let </span>db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
+        <span class="kw">let </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        prepare_fn(dbtx).<span class="kw">await</span>;
+    }
+}
+
+<span class="doccomment">/// Iterates over all of the databases supplied in the database backup
+/// directory, which is specified by `FM_TEST_DB_BACKUP_DIR` environment
+/// variable. First, a temporary database will be created and the contents will
+/// be populated from the database backup directory. Next, this function will
+/// execute the provided `validate` closure. The `validate` closure is expected
+/// to do any validation necessary on the temporary database, such as applying
+/// the appropriate database migrations and then reading all of the data to
+/// verify the migrations were successful.
+</span><span class="kw">pub async fn </span>validate_migrations&lt;F, Fut&gt;(validate: F, decoders: ModuleDecoderRegistry)
+<span class="kw">where
+    </span>F: Fn(Database) -&gt; Fut,
+    Fut: futures::Future&lt;Output = ()&gt;,
+{
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(parent_dir) = env::var(<span class="string">&quot;FM_TEST_DB_BACKUP_DIR&quot;</span>) {
+        <span class="kw">let </span>db_dir = Path::new(<span class="kw-2">&amp;</span>parent_dir);
+        <span class="kw">let </span>files = fs::read_dir(db_dir).unwrap();
+        <span class="kw">for </span>file <span class="kw">in </span>files.flatten() {
+            <span class="kw">let </span>name = file.file_name().into_string().unwrap();
+            <span class="kw">let </span>temp_db = open_temp_db_and_copy(
+                <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, name.as_str(), OsRng.next_u64()),
+                <span class="kw-2">&amp;</span>file.path(),
+                decoders.clone(),
+            );
+            validate(temp_db).<span class="kw">await</span>;
+        }
+    }
+}
+
+<span class="doccomment">/// Open a temporary database located at `temp_path` and copy the contents from
+/// the folder `src_dir` to the temporary database&#39;s path.
+</span><span class="kw">fn </span>open_temp_db_and_copy(
+    temp_path: String,
+    src_dir: <span class="kw-2">&amp;</span>Path,
+    decoders: ModuleDecoderRegistry,
+) -&gt; Database {
+    <span class="comment">// First copy the contents from src_dir to the path where the database will be
+    // opened
+    </span><span class="kw">let </span>path = tempfile::Builder::new()
+        .prefix(temp_path.as_str())
+        .tempdir()
+        .unwrap();
+    copy_directory(src_dir, path.path()).expect(<span class="string">&quot;Error copying database to temporary directory&quot;</span>);
+
+    Database::new(RocksDb::open(path).unwrap(), decoders)
+}
+
+<span class="doccomment">/// Helper function that recursively copies all of the contents from
+/// `src` to `dst`.
+</span><span class="kw">pub fn </span>copy_directory(src: <span class="kw-2">&amp;</span>Path, dst: <span class="kw-2">&amp;</span>Path) -&gt; io::Result&lt;()&gt; {
+    <span class="comment">// Create the destination directory if it doesn&#39;t exist
+    </span>fs::create_dir_all(dst)<span class="question-mark">?</span>;
+
+    <span class="kw">for </span>entry <span class="kw">in </span>fs::read_dir(src)<span class="question-mark">? </span>{
+        <span class="kw">let </span>entry = entry<span class="question-mark">?</span>;
+        <span class="kw">let </span>path = entry.path();
+        <span class="kw">if </span>path.is_dir() {
+            copy_directory(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>dst.join(entry.file_name()))<span class="question-mark">?</span>;
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>dst_path = dst.join(entry.file_name());
+            fs::copy(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>dst_path)<span class="question-mark">?</span>;
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}
+
 <span class="kw">struct </span>FakeInterconnect(
     Box&lt;
         <span class="kw">dyn </span>Fn(ModuleInstanceId, String, serde_json::Value) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;
@@ -739,4 +929,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

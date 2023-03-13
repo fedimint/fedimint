@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimintd/src/ui.rs`."><title>ui.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimintd/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimintd/src/ui.rs`."><title>ui.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimintd/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -412,7 +412,32 @@
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
 <a href="#414" id="414">414</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::env;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -426,13 +451,14 @@
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_server::config::io::{
-    create_cert, parse_peer_params, run_dkg, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
+    create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
+<span class="kw">use </span>fedimint_server::config::{ServerConfig, ServerConfigConsensus, ServerConfigParams};
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
 <span class="kw">use </span>serde::Deserialize;
@@ -442,7 +468,7 @@
 <span class="kw">use </span>tracing::{debug, error};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use crate</span>::{configure_modules, module_registry, CODE_VERSION};
+<span class="kw">use </span><span class="kw">crate</span>::configure_modules;
 
 <span class="attr">#[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -479,11 +505,17 @@
     RunTemplate {
         state: <span class="kw">match </span>state.dkg_state {
             <span class="prelude-val">Some</span>(DkgState::Success) =&gt; {
-                <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
+                <span class="kw">let </span>path = state
+                    .data_dir
+                    .join(CONSENSUS_CONFIG)
+                    .with_extension(JSON_EXT);
                 <span class="comment">// TODO: refactor be a standalone function
                 </span><span class="kw">match </span>std::fs::File::open(path) {
                     <span class="prelude-val">Ok</span>(file) =&gt; <span class="kw">match </span>serde_json::from_reader(file) {
-                        <span class="prelude-val">Ok</span>(cfg) =&gt; {
+                        <span class="prelude-val">Ok</span>::&lt;ServerConfigConsensus, <span class="kw">_</span>&gt;(consensus_config) =&gt; {
+                            <span class="kw">let </span>cfg = consensus_config
+                                .to_config_response(<span class="kw-2">&amp;</span>state.module_gens)
+                                .client;
                             <span class="kw">let </span>connect_info = WsClientConnectInfo::from_honest_peers(<span class="kw-2">&amp;</span>cfg);
 
                             RunTemplateState::DkgDone(connect_info.to_string())
@@ -580,19 +612,22 @@
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Running DKG&quot;</span>);
 
             state_copy.lock().<span class="kw">await</span>.dkg_state = <span class="prelude-val">Some</span>(DkgState::Running);
-            <span class="kw">let </span>maybe_config = run_dkg(
+            <span class="kw">let </span>maybe_config = <span class="kw">match </span>ServerConfigParams::parse_from_connect_strings(
                 params.bind_p2p,
                 params.bind_api,
                 <span class="kw-2">&amp;</span>dir_out_path,
                 params.federation_name,
                 connection_strings,
                 <span class="kw-2">&amp;</span>password,
-                <span class="kw-2">&amp;mut </span>dkg_task_group,
-                CODE_VERSION,
                 configure_modules(max_denomination, params.network, params.finality_delay),
-                module_registry(),
-            )
-            .<span class="kw">await</span>;
+            ) {
+                <span class="prelude-val">Ok</span>(params) =&gt; {
+                    ServerConfig::distributed_gen(<span class="kw-2">&amp;</span>params, module_gens.clone(), <span class="kw-2">&amp;mut </span>dkg_task_group)
+                        .<span class="kw">await
+                        </span>.map_err(|e| <span class="macro">format_err!</span>(<span class="string">&quot;Failed {}&quot;</span>, e))
+                }
+                <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>(err),
+            };
 
             <span class="kw">let </span>write_result = maybe_config.and_then(|server| {
                 write_server_config(<span class="kw-2">&amp;</span>server, dir_out_path, <span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>module_gens)
@@ -630,6 +665,10 @@
 </span><span class="kw">struct </span>UrlConnection {
     ro_bitcoin_rpc_type: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
     ro_bitcoin_rpc_url: String,
+    bind_p2p: String,
+    p2p_url: String,
+    bind_api: String,
+    api_url: String,
 }
 
 <span class="kw">async fn </span>params_page(
@@ -645,11 +684,19 @@
                 <span class="kw">let </span>url_str = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, SanitizedUrl::new_borrowed(<span class="kw-2">&amp;</span>url));
                 (<span class="string">&quot;electrum&quot;</span>, url_str)
             }
+            <span class="prelude-val">Ok</span>(BitcoindRpcBackend::Esplora(url)) =&gt; {
+                <span class="kw">let </span>url_str = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, SanitizedUrl::new_borrowed(<span class="kw-2">&amp;</span>url));
+                (<span class="string">&quot;esplora&quot;</span>, url_str)
+            }
             <span class="prelude-val">Err</span>(e) =&gt; (<span class="string">&quot;error&quot;</span>, e.to_string()),
         };
     UrlConnection {
         ro_bitcoin_rpc_type,
         ro_bitcoin_rpc_url,
+        bind_p2p: env::var(<span class="string">&quot;FM_BIND_P2P&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
+        p2p_url: env::var(<span class="string">&quot;FM_P2P_URL&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
+        bind_api: env::var(<span class="string">&quot;FM_BIND_API&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
+        api_url: env::var(<span class="string">&quot;FM_API_URL&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
     }
 }
 
@@ -765,7 +812,7 @@
     password: String,
     task_group: TaskGroup,
     dkg_task_group: <span class="prelude-ty">Option</span>&lt;TaskGroup&gt;,
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
     dkg_state: <span class="prelude-ty">Option</span>&lt;DkgState&gt;,
 }
 <span class="kw">type </span>MutableState = Arc&lt;Mutex&lt;State&gt;&gt;;
@@ -780,7 +827,8 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub enum </span>UiMessage {
     DkgSuccess,
-    DkgFailure(String),
+    <span class="attr">#[allow(unused)]
+    </span>DkgFailure(String),
 }
 
 <span class="kw">pub async fn </span>run_ui(
@@ -789,7 +837,7 @@
     bind_addr: SocketAddr,
     password: String,
     task_group: TaskGroup,
-    module_gens: ModuleGenRegistry,
+    module_gens: ServerModuleGenRegistry,
 ) {
     <span class="kw">let </span>state = Arc::new(Mutex::new(State {
         params: <span class="prelude-val">None</span>,
@@ -827,4 +875,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

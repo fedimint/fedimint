@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/backup.rs`."><title>backup.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/mint/backup.rs`."><title>backup.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../mint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -869,6 +869,24 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -889,7 +907,8 @@
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
-<span class="kw">use </span>fedimint_mint::{BackupRequest, SignedBackupRequest};
+<span class="kw">use </span>fedimint_logging::LOG_ECASH_RECOVERY;
+<span class="kw">use </span>fedimint_mint_client::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>tbs::{combine_valid_shares, verify_blind_share, BlindedMessage, PublicKeyShare};
 <span class="kw">use </span>tracing::{error, info};
 
@@ -916,7 +935,11 @@
         <span class="kw">let </span>backup = <span class="kw">if let </span><span class="prelude-val">Some</span>(backup) = <span class="self">self</span>.download_ecash_backup_from_federation().<span class="kw">await</span><span class="question-mark">? </span>{
             backup
         } <span class="kw">else </span>{
-            <span class="macro">warn!</span>(<span class="string">&quot;Could not find any valid existing backup. Will attempt to restore from scratch. This might take a long time.&quot;</span>);
+            <span class="macro">warn!</span>(
+                target: LOG_ECASH_RECOVERY,
+                id=%<span class="self">self</span>.get_backup_id(),
+                <span class="string">&quot;Could not find any valid existing backup. Will attempt to restore from scratch. This might take a long time.&quot;
+            </span>);
             PlaintextEcashBackup::new_empty()
         };
 
@@ -947,21 +970,19 @@
                 amount,
                 nonce: note.note.<span class="number">0</span>,
             };
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>;
         }
 
         <span class="kw">for </span>(txid, issuance_requests) <span class="kw">in </span>snapshot.unconfirmed_notes {
             dbtx.insert_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(txid), <span class="kw-2">&amp;</span>issuance_requests)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                .<span class="kw">await</span>;
         }
 
         <span class="kw">for </span>(amount, note_idx) <span class="kw">in </span>snapshot.next_note_idx.iter() {
             dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>note_idx.as_u64())
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+                .<span class="kw">await</span>;
         }
-        dbtx.commit_tx().<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()))
     }
@@ -969,7 +990,7 @@
     <span class="kw">pub async fn </span>wipe_notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
         <span class="self">Self</span>::wipe_notes_static(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
-        dbtx.commit_tx().<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -978,9 +999,9 @@
     /// Useful for cleaning previous data before restoring data recovered from
     /// backup.
     </span><span class="kw">async fn </span>wipe_notes_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
-        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
-        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>NextECashNoteIndexKeyPrefix).<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix).<span class="kw">await</span>;
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix).<span class="kw">await</span>;
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>NextECashNoteIndexKeyPrefix).<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -990,7 +1011,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>responses: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self
             </span>.context
             .api
-            .download_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>.get_derived_backup_signing_key().x_only_public_key().<span class="number">0</span>)
+            .download_ecash_backup(<span class="kw-2">&amp;</span><span class="self">self</span>.get_backup_id())
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
             .filter_map(|backup| {
@@ -999,18 +1020,30 @@
                 {
                     <span class="prelude-val">Ok</span>(valid) =&gt; <span class="prelude-val">Some</span>(valid),
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">warn!</span>(<span class="string">&quot;Invalid backup returned by one of the peers: {e}&quot;</span>);
+                        <span class="macro">warn!</span>(
+                            target: LOG_ECASH_RECOVERY,
+                            <span class="string">&quot;Invalid backup returned by one of the peers: {e}&quot;
+                        </span>);
                         <span class="prelude-val">None
                     </span>}
                 }
             })
             .collect();
 
+        <span class="macro">debug!</span>(
+            target: LOG_ECASH_RECOVERY,
+            <span class="string">&quot;Received {} valid responses&quot;</span>,
+            responses.len()
+        );
         <span class="comment">// Use the newest (highest epoch)
         </span>responses.sort_by_key(|backup| Reverse(backup.epoch_count));
 
         <span class="prelude-val">Ok</span>(responses.into_iter().next())
     }
+
+    <span class="kw">fn </span>get_backup_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::XOnlyPublicKey {
+        <span class="self">self</span>.get_derived_backup_signing_key().x_only_public_key().<span class="number">0
+    </span>}
 
     <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`
@@ -1050,8 +1083,7 @@
         <span class="kw">let </span>pending_notes: Vec&lt;<span class="kw">_</span>&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>OutputFinalizationKeyPrefix)
             .<span class="kw">await
-            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
-            .collect()
+            </span>.collect()
             .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>idxes = <span class="macro">vec!</span>[];
@@ -1132,7 +1164,10 @@
         </span><span class="kw">let </span>start_epoch = backup.epoch_count.saturating_sub(<span class="number">1</span>);
         <span class="kw">let </span>epoch_range = start_epoch..current_epoch_count;
 
-        <span class="macro">info!</span>(start_epoch, current_epoch_count, <span class="string">&quot;Recovering from snapshot&quot;</span>);
+        <span class="macro">info!</span>(
+            target: LOG_ECASH_RECOVERY,
+            start_epoch, current_epoch_count, <span class="string">&quot;Recovering from snapshot&quot;
+        </span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>tracker = EcashRecoveryTracker::from_backup(
             backup,
@@ -1151,15 +1186,14 @@
             <span class="comment">// if `recv` returned `None` that means fetch_epoch finished prematurelly,
             // withouth sending an `Err` which is supposed to mean `is_shutting_down() ==
             // true`
-            </span><span class="macro">info!</span>(epoch, <span class="string">&quot;Awaiting epoch&quot;</span>);
+            </span><span class="macro">info!</span>(target: LOG_ECASH_RECOVERY, epoch, <span class="string">&quot;Awaiting epoch&quot;</span>);
             <span class="kw">let </span>epoch_history = epoch_res<span class="question-mark">?</span>;
             <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
 
-            <span class="macro">info!</span>(epoch, <span class="string">&quot;Processing epoch&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_ECASH_RECOVERY, epoch, <span class="string">&quot;Processing epoch&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>procesed_txs = Default::default();
             <span class="kw">for </span>(peer_id, items) <span class="kw">in </span><span class="kw-2">&amp;</span>epoch_history.outcome.items {
-                <span class="comment">// TODO: epoch history to contain rejected items, we should skip them here
-                </span><span class="kw">for </span>item <span class="kw">in </span>items {
+                <span class="kw">for </span>item <span class="kw">in </span>items {
                     tracker.handle_consensus_item(
                         <span class="kw-2">*</span>peer_id,
                         item,
@@ -1244,7 +1278,7 @@
     <span class="kw">pub fn </span>into_backup_request(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>KeyPair) -&gt; <span class="prelude-ty">Result</span>&lt;SignedBackupRequest&gt; {
         <span class="kw">let </span>request = BackupRequest {
             id: keypair.x_only_public_key().<span class="number">0</span>,
-            timestamp: std::time::SystemTime::now(),
+            timestamp: fedimint_core::time::now(),
             payload: <span class="self">self</span>.<span class="number">0</span>,
         };
 
@@ -1643,19 +1677,20 @@
         processed_txs: <span class="kw-2">&amp;mut </span>HashSet&lt;TransactionId&gt;,
         rejected_txs: <span class="kw-2">&amp;</span>BTreeSet&lt;TransactionId&gt;,
     ) {
+        <span class="macro">debug!</span>(target: LOG_ECASH_RECOVERY, <span class="question-mark">?</span>item, <span class="string">&quot;handling consensus item&quot;</span>);
         <span class="kw">match </span>item {
-            ConsensusItem::ClientConfigSignatureShare(<span class="kw">_</span>) =&gt; {}
-            ConsensusItem::EpochOutcomeSignatureShare(<span class="kw">_</span>) =&gt; {}
             ConsensusItem::Transaction(tx) =&gt; {
                 <span class="kw">let </span>txid = tx.tx_hash();
 
                 <span class="kw">if </span>!processed_txs.insert(txid) {
                     <span class="comment">// Just like server side consensus, do not attempt to process the same
                     // transaction twice.
-                    </span><span class="kw">return</span>;
+                    </span><span class="macro">debug!</span>(target: LOG_ECASH_RECOVERY, <span class="question-mark">?</span>item, <span class="string">&quot;was already processed&quot;</span>);
+                    <span class="kw">return</span>;
                 }
 
                 <span class="kw">if </span>rejected_txs.contains(<span class="kw-2">&amp;</span>txid) {
+                    <span class="macro">debug!</span>(target: LOG_ECASH_RECOVERY, <span class="question-mark">?</span>item, <span class="string">&quot;was rejected&quot;</span>);
                     <span class="comment">// Do not process invalid transactions.
                     // Consensus history contains all data proposed by each peer, even invalid (e.g.
                     // due to double spent) transactions. Precisely to save
@@ -1702,6 +1737,7 @@
                     <span class="self">self</span>.handle_output_confirmation(peer_id, mint_item);
                 }
             }
+            <span class="kw">_ </span>=&gt; {}
         }
     }
 
@@ -1741,4 +1777,4 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests;
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

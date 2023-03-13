@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/core.rs`."><title>core.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/core.rs`."><title>core.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -501,81 +501,6 @@
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
 <a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a>
-<a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a>
-<a href="#511" id="511">511</a>
-<a href="#512" id="512">512</a>
-<a href="#513" id="513">513</a>
-<a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
-<a href="#520" id="520">520</a>
-<a href="#521" id="521">521</a>
-<a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a>
-<a href="#524" id="524">524</a>
-<a href="#525" id="525">525</a>
-<a href="#526" id="526">526</a>
-<a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a>
-<a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
-<a href="#549" id="549">549</a>
-<a href="#550" id="550">550</a>
-<a href="#551" id="551">551</a>
-<a href="#552" id="552">552</a>
-<a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
-<a href="#563" id="563">563</a>
-<a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a>
-<a href="#569" id="569">569</a>
-<a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
-<a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -583,10 +508,10 @@
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
 </span><span class="kw">use </span>core::fmt;
-<span class="kw">use </span>std::any::Any;
+<span class="kw">use </span>std::any::{Any, TypeId};
 <span class="kw">use </span>std::borrow::Cow;
-<span class="kw">use </span>std::fmt::{Debug, Display};
-<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::fmt::{Debug, Display, Formatter};
 <span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -599,8 +524,6 @@
     dyn_newtype_define_with_instance_id, dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id,
     ModuleDecoderRegistry,
 };
-
-<span class="kw">pub mod </span>encode;
 
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>server;
@@ -670,9 +593,7 @@
 /// Fedimint code to abstract away details of mint modules.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>module_dyn_newtype_impl_encode_decode {
-    (
-        <span class="macro-nonterminal">$name</span>:ident, <span class="macro-nonterminal">$decode_fn</span>:ident
-    ) =&gt; {
+    (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
         <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(
                 <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -685,14 +606,11 @@
 
         <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-                r: <span class="kw-2">&amp;mut </span>R,
+                reader: <span class="kw-2">&amp;mut </span>R,
                 modules: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$crate::module::registry::ModuleDecoderRegistry</span>,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-                <span class="macro-nonterminal">$crate::core::encode::module_decode_key_prefixed_decodable</span>(
-                    r,
-                    modules,
-                    |r, m, id| m.<span class="macro-nonterminal">$decode_fn</span>(r, id),
-                )
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
+                <span class="kw">let </span>key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+                modules.get_expect(key).decode(reader, key)
             }
         }
     };
@@ -713,7 +631,7 @@
         <span class="macro-nonterminal">$newtype_ty</span>:ident, <span class="macro-nonterminal">$plugin_ty</span>:ident, <span class="macro-nonterminal">$module_ty</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)*  } { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }
     ) =&gt; {
         <span class="kw">pub trait </span><span class="macro-nonterminal">$plugin_ty</span>:
-            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + Send + Sync + <span class="lifetime">&#39;static
+            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance&lt;DynType = <span class="macro-nonterminal">$newtype_ty</span>&gt; + Send + Sync + <span class="lifetime">&#39;static
         </span>{
             $(<span class="macro-nonterminal">$extra_methods</span>)*
         }
@@ -754,17 +672,47 @@
 <span class="doccomment">/// Implements the necessary traits for all associated types of a
 /// `FederationServer` module.
 </span><span class="attr">#[macro_export]
-</span><span class="macro">macro_rules! </span>plugin_types_trait_impl {
-    (<span class="macro-nonterminal">$key</span>:expr, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty, <span class="macro-nonterminal">$cache</span>:ty) =&gt; {
+</span><span class="macro">macro_rules! </span>plugin_types_trait_impl_common {
+    (<span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty) =&gt; {
         <span class="kw">impl </span>fedimint_core::core::Input <span class="kw">for </span><span class="macro-nonterminal">$input </span>{}
+
+        <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$input </span>{
+            <span class="kw">type </span>DynType = fedimint_core::core::DynInput;
+
+            <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+                fedimint_core::core::DynInput::from_typed(instance_id, <span class="self">self</span>)
+            }
+        }
 
         <span class="kw">impl </span>fedimint_core::core::Output <span class="kw">for </span><span class="macro-nonterminal">$output </span>{}
 
+        <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$output </span>{
+            <span class="kw">type </span>DynType = fedimint_core::core::DynOutput;
+
+            <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+                fedimint_core::core::DynOutput::from_typed(instance_id, <span class="self">self</span>)
+            }
+        }
+
         <span class="kw">impl </span>fedimint_core::core::OutputOutcome <span class="kw">for </span><span class="macro-nonterminal">$outcome </span>{}
+
+        <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$outcome </span>{
+            <span class="kw">type </span>DynType = fedimint_core::core::DynOutputOutcome;
+
+            <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+                fedimint_core::core::DynOutputOutcome::from_typed(instance_id, <span class="self">self</span>)
+            }
+        }
 
         <span class="kw">impl </span>fedimint_core::core::ModuleConsensusItem <span class="kw">for </span><span class="macro-nonterminal">$ci </span>{}
 
-        <span class="kw">impl </span>fedimint_core::server::VerificationCache <span class="kw">for </span><span class="macro-nonterminal">$cache </span>{}
+        <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$ci </span>{
+            <span class="kw">type </span>DynType = fedimint_core::core::DynModuleConsensusItem;
+
+            <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+                fedimint_core::core::DynModuleConsensusItem::from_typed(instance_id, <span class="self">self</span>)
+            }
+        }
     };
 }
 
@@ -781,7 +729,8 @@
     };
 }
 
-<span class="macro">macro_rules! </span>newtype_impl_eq_passthrough_with_instance_id {
+<span class="attr">#[macro_export]
+</span><span class="macro">macro_rules! </span>newtype_impl_eq_passthrough_with_instance_id {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>PartialEq <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
@@ -818,192 +767,98 @@
     };
 }
 
-<span class="doccomment">/// Module Decoder trait
-///
-/// Static-polymorphism version of [`IDecoder`]
-///
-/// All methods are static, as the decoding code is supposed to be
-/// instance-independent, at least until we start to support modules with
-/// overriden [`ModuleInstanceId`]s
-</span><span class="kw">pub trait </span>Decoder: Debug + Send + Sync + <span class="lifetime">&#39;static </span>{
-    <span class="kw">type </span>Input: Input;
-    <span class="kw">type </span>Output: Output;
-    <span class="kw">type </span>OutputOutcome: OutputOutcome;
-    <span class="kw">type </span>ConsensusItem: ModuleConsensusItem;
+<span class="doccomment">/// A type that has a `Dyn*`, type erased version of itself
+</span><span class="kw">pub trait </span>IntoDynInstance {
+    <span class="doccomment">/// The type erased version of the type implementing this trait
+    </span><span class="kw">type </span>DynType: <span class="lifetime">&#39;static</span>;
 
-    <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix
-    /// was already decoded
-    </span><span class="kw">fn </span>decode_input(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Input, DecodeError&gt;;
-
-    <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix
-    /// was already decoded
-    </span><span class="kw">fn </span>decode_output(<span class="kw-2">&amp;</span><span class="self">self</span>, r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Output, DecodeError&gt;;
-
-    <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key
-    /// prefix was already decoded
-    </span><span class="kw">fn </span>decode_output_outcome(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::OutputOutcome, DecodeError&gt;;
-
-    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key
-    /// prefix was already decoded
-    </span><span class="kw">fn </span>decode_consensus_item(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::ConsensusItem, DecodeError&gt;;
+    <span class="doccomment">/// Convert `self` into its type-erased equivalent
+    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType;
 }
 
-<span class="kw">pub trait </span>IDecoder: Debug {
-    <span class="doccomment">/// Decode `Input` compatible with this module, after the module key prefix
-    /// was already decoded
-    </span><span class="kw">fn </span>decode_input(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynInput, DecodeError&gt;;
+<span class="kw">type </span>DecodeFn =
+    <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">fn</span>(Box&lt;<span class="kw">dyn </span>Read + <span class="lifetime">&#39;a</span>&gt;, ModuleInstanceId) -&gt; <span class="prelude-ty">Result</span>&lt;Box&lt;<span class="kw">dyn </span>Any&gt;, DecodeError&gt;;
 
-    <span class="doccomment">/// Decode `Output` compatible with this module, after the module key prefix
-    /// was already decoded
-    </span><span class="kw">fn </span>decode_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutput, DecodeError&gt;;
-
-    <span class="doccomment">/// Decode `OutputOutcome` compatible with this module, after the module key
-    /// prefix was already decoded
-    </span><span class="kw">fn </span>decode_output_outcome(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutputOutcome, DecodeError&gt;;
-
-    <span class="doccomment">/// Decode `ConsensusItem` compatible with this module, after the module key
-    /// prefix was already decoded
-    </span><span class="kw">fn </span>decode_consensus_item(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynModuleConsensusItem, DecodeError&gt;;
+<span class="attr">#[derive(Default)]
+</span><span class="kw">pub struct </span>DecoderBuilder {
+    decode_fns: BTreeMap&lt;TypeId, DecodeFn&gt;,
 }
 
-<span class="comment">// TODO: use macro again
-</span><span class="doccomment">/// Decoder for module associated types
-</span><span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>DynDecoder(Arc&lt;<span class="kw">dyn </span>IDecoder + Send + Sync&gt;);
+<span class="kw">impl </span>DecoderBuilder {
+    <span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; Decoder {
+        Decoder {
+            decode_fns: Arc::new(<span class="self">self</span>.decode_fns),
+        }
+    }
 
-<span class="kw">impl </span>std::ops::Deref <span class="kw">for </span>DynDecoder {
-    <span class="kw">type </span>Target = <span class="kw">dyn </span>IDecoder + Send + Sync + <span class="lifetime">&#39;static</span>;
-
-    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-        <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
-    </span>}
-}
-
-<span class="kw">impl</span>&lt;T&gt; From&lt;T&gt; <span class="kw">for </span>DynDecoder
-<span class="kw">where
-    </span>T: Decoder + Send + Sync + <span class="lifetime">&#39;static</span>,
-{
-    <span class="kw">fn </span>from(value: T) -&gt; <span class="self">Self </span>{
-        DynDecoder(Arc::new(value))
+    <span class="doccomment">/// Attach decoder for a specific `Type`/`DynType` pair where `DynType =
+    /// &lt;Type as IntoDynInstance&gt;::DynType`.
+    ///
+    /// This allows calling `decode::&lt;DynType&gt;` on this decoder, returning a
+    /// `DynType` object which contains a `Type` object internally.
+    ///
+    /// **Caution**: One `Decoder` object should only contain decoders that
+    /// belong to the same [*module kind*](fedimint_core::core::ModuleKind).
+    ///
+    /// # Panics
+    /// * If multiple `Types` with the same `DynType` are added
+    </span><span class="kw">pub fn </span>with_decodable_type&lt;Type&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>)
+    <span class="kw">where
+        </span>Type: IntoDynInstance + Decodable,
+    {
+        <span class="comment">// TODO: enforce that all decoders are for the same module kind (+fix docs
+        // after)
+        </span><span class="kw">let </span>decode_fn: DecodeFn = |<span class="kw-2">mut </span>reader, instance| {
+            <span class="kw">let </span>typed_val = Type::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+            <span class="kw">let </span>dyn_val = typed_val.into_dyn(instance);
+            <span class="kw">let </span>any_val: Box&lt;<span class="kw">dyn </span>Any&gt; = Box::new(dyn_val);
+            <span class="prelude-val">Ok</span>(any_val)
+        };
+        <span class="kw">if </span><span class="self">self
+            </span>.decode_fns
+            .insert(TypeId::of::&lt;Type::DynType&gt;(), decode_fn)
+            .is_some()
+        {
+            <span class="macro">panic!</span>(<span class="string">&quot;Tried to add multiple decoders for the same DynType&quot;</span>);
+        }
     }
 }
 
-<span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>DynDecoder {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+<span class="doccomment">/// Decoder for module associated types
+</span><span class="attr">#[derive(Clone, Default)]
+</span><span class="kw">pub struct </span>Decoder {
+    decode_fns: Arc&lt;BTreeMap&lt;TypeId, DecodeFn&gt;&gt;,
+}
+
+<span class="kw">impl </span>Decoder {
+    <span class="doccomment">/// Creates a `DecoderBuilder` to which decoders for single types can be
+    /// attached to build a `Decoder`.
+    </span><span class="kw">pub fn </span>builder() -&gt; DecoderBuilder {
+        DecoderBuilder::default()
+    }
+
+    <span class="doccomment">/// Decodes a specific `DynType` from the `reader` byte stream.
+    ///
+    /// # Panics
+    /// * If no decoder is registered for the `DynType`
+    </span><span class="kw">pub fn </span>decode&lt;DynType: Any&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        reader: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
+        instance_id: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynType, DecodeError&gt; {
+        <span class="kw">let </span>decode_fn = <span class="self">self
+            </span>.decode_fns
+            .get(<span class="kw-2">&amp;</span>TypeId::of::&lt;DynType&gt;())
+            .expect(<span class="string">&quot;Type unknown to decoder&quot;</span>);
+        <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>decode_fn(Box::new(reader), instance_id)<span class="question-mark">?
+            </span>.downcast::&lt;DynType&gt;()
+            .expect(<span class="string">&quot;Decode fn returned wrong type, can&#39;t happen due to with_decodable_type&quot;</span>))
     }
 }
 
-<span class="kw">impl</span>&lt;T&gt; IDecoder <span class="kw">for </span>T
-<span class="kw">where
-    </span>T: Decoder + <span class="lifetime">&#39;static</span>,
-{
-    <span class="kw">fn </span>decode_input(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynInput, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(DynInput::from_typed(
-            instance_id,
-            &lt;<span class="self">Self </span><span class="kw">as </span>Decoder&gt;::decode_input(<span class="self">self</span>, r)<span class="question-mark">?</span>,
-        ))
-    }
-
-    <span class="kw">fn </span>decode_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutput, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(DynOutput::from_typed(
-            instance_id,
-            &lt;<span class="self">Self </span><span class="kw">as </span>Decoder&gt;::decode_output(<span class="self">self</span>, r)<span class="question-mark">?</span>,
-        ))
-    }
-
-    <span class="kw">fn </span>decode_output_outcome(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutputOutcome, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(DynOutputOutcome::from_typed(
-            instance_id,
-            &lt;<span class="self">Self </span><span class="kw">as </span>Decoder&gt;::decode_output_outcome(<span class="self">self</span>, r)<span class="question-mark">?</span>,
-        ))
-    }
-
-    <span class="kw">fn </span>decode_consensus_item(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynModuleConsensusItem, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(DynModuleConsensusItem::from_typed(
-            instance_id,
-            &lt;<span class="self">Self </span><span class="kw">as </span>Decoder&gt;::decode_consensus_item(<span class="self">self</span>, r)<span class="question-mark">?</span>,
-        ))
-    }
-}
-
-<span class="kw">impl </span>IDecoder <span class="kw">for </span>DynDecoder {
-    <span class="kw">fn </span>decode_input(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynInput, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_input(r, instance_id)
-    }
-
-    <span class="kw">fn </span>decode_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutput, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_output(r, instance_id)
-    }
-
-    <span class="kw">fn </span>decode_output_outcome(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynOutputOutcome, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_output_outcome(r, instance_id)
-    }
-
-    <span class="kw">fn </span>decode_consensus_item(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        r: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Read,
-        instance_id: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;DynModuleConsensusItem, DecodeError&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.decode_consensus_item(r, instance_id)
-    }
-}
-
-<span class="kw">impl </span>DynDecoder {
-    <span class="doccomment">/// Create [`Self`] form a typed version defined by the plugin
-    </span><span class="kw">pub fn </span>from_typed(decoder: <span class="kw">impl </span>Decoder + Send + Sync + <span class="lifetime">&#39;static</span>) -&gt; DynDecoder {
-        DynDecoder(Arc::new(decoder))
+<span class="kw">impl </span>Debug <span class="kw">for </span>Decoder {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;Decoder(registered_types = {})&quot;</span>, <span class="self">self</span>.decode_fns.len())
     }
 }
 
@@ -1029,9 +884,8 @@
     <span class="doccomment">/// An owned, immutable input to a [`Transaction`]
     </span><span class="kw">pub </span>DynInput(Box&lt;IInput&gt;)
 }
-<span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
-    DynInput, decode_input
-}
+<span class="macro">module_dyn_newtype_impl_encode_decode!</span>(DynInput);
+
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(DynInput);
 
 <span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(DynInput);
@@ -1059,9 +913,8 @@
         <span class="macro">erased_eq_no_instance_id!</span>(DynOutput);
     }
 }
-<span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
-    DynOutput, decode_output
-}
+<span class="macro">module_dyn_newtype_impl_encode_decode!</span>(DynOutput);
+
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(DynOutput);
 
 <span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(DynOutput);
@@ -1090,9 +943,7 @@
         <span class="macro">erased_eq_no_instance_id!</span>(DynOutputOutcome);
     }
 }
-<span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
-    DynOutputOutcome, decode_output_outcome
-}
+<span class="macro">module_dyn_newtype_impl_encode_decode!</span>(DynOutputOutcome);
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(DynOutputOutcome);
 
 <span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(DynOutputOutcome);
@@ -1118,9 +969,8 @@
         <span class="macro">erased_eq_no_instance_id!</span>(DynModuleConsensusItem);
     }
 }
-<span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
-    DynModuleConsensusItem, decode_consensus_item
-}
+<span class="macro">module_dyn_newtype_impl_encode_decode!</span>(DynModuleConsensusItem);
+
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(DynModuleConsensusItem);
 
 <span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(DynModuleConsensusItem);
@@ -1155,4 +1005,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

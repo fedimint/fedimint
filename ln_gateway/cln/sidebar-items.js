@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FIELDS"],"enum":["__Field"],"fn":["as_fedimint_amount","build_cln_rpc","htlc_accepted_hook","htlc_processing_failure","scid_to_u64"],"opaque":[""],"static":["CALLSITE","META"],"struct":["ClnRpc","ClnRpcRef","Htlc","HtlcAccepted","Onion","__DeserializeWith","__FieldVisitor","__Visitor"]};

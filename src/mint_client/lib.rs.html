@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-1def573a4779b29b.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-d59023bfa12059d2.css"><link rel="stylesheet" disabled href="../../static.files/dark-1ca41bb1e10af075.css"><link rel="stylesheet" disabled href="../../static.files/ayu-18b4181a2f3fb862.css"><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-98a684e84ae5b08b.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1640,10 +1640,51 @@
 <a href="#1640" id="1640">1640</a>
 <a href="#1641" id="1641">1641</a>
 <a href="#1642" id="1642">1642</a>
+<a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
+<a href="#1659" id="1659">1659</a>
+<a href="#1660" id="1660">1660</a>
+<a href="#1661" id="1661">1661</a>
+<a href="#1662" id="1662">1662</a>
+<a href="#1663" id="1663">1663</a>
+<a href="#1664" id="1664">1664</a>
+<a href="#1665" id="1665">1665</a>
+<a href="#1666" id="1666">1666</a>
+<a href="#1667" id="1667">1667</a>
+<a href="#1668" id="1668">1668</a>
+<a href="#1669" id="1669">1669</a>
+<a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
-<span class="kw">pub mod </span>logging;
 <span class="kw">pub mod </span>mint;
 <span class="kw">pub mod </span>outcome;
 <span class="kw">pub mod </span>transaction;
@@ -1651,37 +1692,46 @@
 <span class="kw">pub mod </span>wallet;
 
 <span class="kw">pub mod </span>modules {
-    <span class="kw">pub use </span>{fedimint_ln <span class="kw">as </span>ln, fedimint_mint <span class="kw">as </span>mint, fedimint_wallet <span class="kw">as </span>wallet};
+    <span class="kw">pub use </span>{
+        fedimint_ln_client <span class="kw">as </span>ln, fedimint_mint_client <span class="kw">as </span>mint, fedimint_wallet_client <span class="kw">as </span>wallet,
+    };
 }
 
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::iter::once;
+<span class="kw">use </span>std::ops::Add;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::time::{Duration, Instant, SystemTime};
 
 <span class="kw">use </span>api::{LnFederationApi, WalletFederationApi};
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, ClientModuleGenRegistryExt};
 <span class="kw">use </span>fedimint_core::api::{
     DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
     WsFederationApi,
 };
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{
-    DynDecoder, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::ModuleCommon;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
-<span class="kw">use </span>fedimint_core::time::SystemTime;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
+<span class="kw">use </span>fedimint_ln_client::LightningModuleTypes;
+<span class="kw">use </span>fedimint_logging::LOG_WALLET;
+<span class="kw">use </span>fedimint_mint_client::MintModuleTypes;
+<span class="kw">use </span>fedimint_wallet_client::WalletModuleTypes;
+<span class="kw">use </span>fedimint_wallet_common::Rbf;
 <span class="kw">use </span>futures::stream::{<span class="self">self</span>, FuturesUnordered};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::{Either, Itertools};
@@ -1692,8 +1742,10 @@
 <span class="kw">use </span>ln::db::LightningGatewayKey;
 <span class="kw">use </span>ln::PayInvoicePayload;
 <span class="kw">use </span>mint::NoteIssuanceRequests;
+<span class="kw">use </span>modules::mint::MintOutputOutcome;
 <span class="kw">use </span>rand::distributions::Standard;
 <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{thread_rng, CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1710,20 +1762,16 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::incoming::ConfirmedInvoice;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::{LnClient, LnClientError};
-<span class="kw">use </span><span class="kw">crate</span>::logging::LOG_WALLET;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NoteKey, PendingNotesKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::mint::{MintClient, MintClientError, SpendableNote};
-<span class="kw">use </span><span class="kw">crate</span>::modules::ln::common::LightningDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::config::LightningClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::{
-    Contract, ContractId, DecryptedPreimage, IdentifyableContract, Preimage,
+    Contract, ContractId, DecryptedPreimage, IdentifiableContract, Preimage,
 };
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
-<span class="kw">use </span><span class="kw">crate</span>::modules::mint::common::MintDecoder;
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::config::MintClientConfig;
-<span class="kw">use </span><span class="kw">crate</span>::modules::mint::{BlindNonce, MintOutput, MintOutputOutcome};
-<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::common::WalletDecoder;
+<span class="kw">use </span><span class="kw">crate</span>::modules::mint::{BlindNonce, MintOutput};
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{PegOut, WalletInput, WalletOutput};
@@ -1782,7 +1830,7 @@
             node_pub_key: <span class="self">self</span>.node_pub_key,
             api: <span class="self">self</span>.api.clone(),
             route_hints,
-            valid_until: SystemTime::now() + time_to_live,
+            valid_until: fedimint_core::time::now() + time_to_live,
         }
     }
 }
@@ -1799,8 +1847,16 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders
     }
 
-    <span class="kw">pub fn </span>module_gens(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleGenRegistry {
+    <span class="kw">pub fn </span>module_gens(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientModuleGenRegistry {
         <span class="kw-2">&amp;</span><span class="self">self</span>.context.module_gens
+    }
+
+    <span class="kw">pub fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;ClientContext&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.context
+    }
+
+    <span class="kw">pub fn </span>root_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DerivableSecret {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.root_secret
     }
 }
 
@@ -1897,18 +1953,18 @@
         <span class="kw">let </span>config = <span class="self">self
             </span>.context
             .api
-            .download_client_config(id, <span class="self">self</span>.context.module_gens.clone())
+            .download_client_config(id, <span class="self">self</span>.context.module_gens.to_common())
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| ClientError::ConfigVerify(ConfigVerifyError::InvalidSignature))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>api_hash = config
-            .consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.context.module_gens)
+            .consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.context.module_gens.to_common())
             .map_err(|<span class="kw">_</span>| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>self_hash = <span class="self">self
             </span>.config
             .as_ref()
-            .consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.context.module_gens)
+            .consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.context.module_gens.to_common())
             .map_err(|<span class="kw">_</span>| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>api_hash != self_hash {
@@ -1923,7 +1979,7 @@
     <span class="kw">pub async fn </span>new(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ClientModuleGenRegistry,
         db: Database,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; <span class="self">Self </span>{
@@ -1934,7 +1990,7 @@
     <span class="kw">pub async fn </span>new_with_api(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ModuleGenRegistry,
+        module_gens: ClientModuleGenRegistry,
         db: Database,
         api: DynFederationApi,
         secp: Secp256k1&lt;All&gt;,
@@ -1957,23 +2013,19 @@
     /// none is present
     </span><span class="kw">async fn </span>get_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret {
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>ClientSecretKey).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>ClientSecretKey).<span class="kw">await</span>;
         <span class="kw">let </span>secret = <span class="kw">if let </span><span class="prelude-val">Some</span>(client_secret) = client_secret {
             client_secret
         } <span class="kw">else </span>{
             <span class="kw">let </span>secret: ClientSecret = thread_rng().gen();
-            <span class="kw">let </span>no_replacement = tx
-                .insert_entry(<span class="kw-2">&amp;</span>ClientSecretKey, <span class="kw-2">&amp;</span>secret)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;DB error&quot;</span>)
-                .is_none();
+            <span class="kw">let </span>no_replacement = tx.insert_entry(<span class="kw-2">&amp;</span>ClientSecretKey, <span class="kw-2">&amp;</span>secret).<span class="kw">await</span>.is_none();
             <span class="macro">assert!</span>(
                 no_replacement,
                 <span class="string">&quot;We would have overwritten our secret key, aborting!&quot;
             </span>);
             secret
         };
-        tx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;db failure&quot;</span>);
+        tx.commit_tx().<span class="kw">await</span>;
         secret.into_root_secret()
     }
 
@@ -2010,7 +2062,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>final_tx = tx.build(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>dbtx, rng).<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
         <span class="kw">let </span>result = <span class="self">self
             </span>.context
             .api
@@ -2043,9 +2095,9 @@
                 amount,
                 nonce: note.note.<span class="number">0</span>,
             };
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>.expect(<span class="string">&quot;DB error&quot;</span>);
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>;
         }
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
         <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = MintClient::ecash_input(notes)<span class="question-mark">?</span>;
@@ -2119,7 +2171,7 @@
         <span class="self">self</span>.mint_client()
             .receive_notes(amount, <span class="kw-2">&amp;mut </span>dbtx, create_tx)
             .<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
     }
 
     <span class="kw">pub async fn </span>new_peg_out_with_fees(
@@ -2140,6 +2192,22 @@
         .ok_or(ClientError::PegOutWaitingForUTXOs)
     }
 
+    <span class="kw">pub async fn </span>rbf_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, rbf: Rbf) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
+
+        <span class="kw">let </span>amount = rbf.fees.amount().into();
+        <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = <span class="self">self</span>.mint_client().select_input(amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        tx.input(<span class="kw-2">&amp;mut </span>keys, input);
+        <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(WalletOutput::Rbf(rbf)));
+
+        <span class="kw">let </span>fedimint_tx_id = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>OsRng).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(OutPoint {
+            txid: fedimint_tx_id,
+            out_idx: peg_out_idx,
+        })
+    }
+
     <span class="kw">pub async fn </span>peg_out&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peg_out: PegOut,
@@ -2158,7 +2226,7 @@
             + (peg_out.amount + peg_out.fees.amount()).into();
         <span class="kw">let </span>(<span class="kw-2">mut </span>keys, input) = <span class="self">self</span>.mint_client().select_input(funding_amount).<span class="kw">await</span><span class="question-mark">?</span>;
         tx.input(<span class="kw-2">&amp;mut </span>keys, input);
-        <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(WalletOutput(peg_out)));
+        <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(WalletOutput::PegOut(peg_out)));
 
         <span class="kw">let </span>fedimint_tx_id = <span class="self">self</span>.submit_tx_with_change(tx, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2184,7 +2252,7 @@
             </span>.wallet_client()
             .get_new_pegin_address(<span class="kw-2">&amp;mut </span>dbtx, rng)
             .<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
         address
     }
 
@@ -2224,10 +2292,9 @@
                 amount,
                 nonce: note.note.<span class="number">0</span>,
             })
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await</span>;
         }
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(final_notes)
     }
@@ -2265,10 +2332,9 @@
                 amount,
                 nonce: note.note.<span class="number">0</span>,
             })
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await</span>;
         }
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(notes)
     }
@@ -2280,7 +2346,7 @@
     </span><span class="kw">pub async fn </span>fetch_notes&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="self">self</span>.mint_client().fetch_notes(<span class="kw-2">&amp;mut </span>dbtx, outpoint).<span class="kw">await</span><span class="question-mark">?</span>;
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -2292,8 +2358,7 @@
         <span class="kw">let </span>pending: Vec&lt;<span class="kw">_</span>&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>PendingNotesKeyPrefix)
             .<span class="kw">await
-            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
-            .collect()
+            </span>.collect()
             .<span class="kw">await</span>;
 
         <span class="macro">debug!</span>(target: LOG_WALLET, <span class="question-mark">?</span>pending);
@@ -2316,9 +2381,9 @@
         <span class="kw">for </span>result <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
             <span class="kw">let </span>(key, notes) = result<span class="question-mark">?</span>;
             notes_to_reissue.extend(notes);
-            dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>;
         }
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="macro">debug!</span>(target: LOG_WALLET, notes_to_reissue = <span class="question-mark">?</span>notes_to_reissue.summary(), total = %notes_to_reissue.total_amount());
         <span class="macro">trace!</span>(target: LOG_WALLET, <span class="question-mark">?</span>notes_to_reissue, <span class="string">&quot;foo&quot;</span>);
@@ -2399,8 +2464,7 @@
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>LightningGatewayKey)
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
-            .filter(|gw| gw.valid_until &gt; SystemTime::now())
+            </span>.filter(|gw| gw.valid_until &gt; fedimint_core::time::now())
         {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(gateway);
         }
@@ -2437,10 +2501,8 @@
             }
         };
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>);
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway).<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(gateway)
     }
 
@@ -2467,7 +2529,7 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="kw">let </span>(contract_id, amount) = <span class="kw">match </span><span class="kw-2">&amp;</span>contract {
             LightningOutput::Contract(c) =&gt; {
@@ -2507,8 +2569,7 @@
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
-            .ok_or(ClientError::RefundUnknownOutgoingContract)<span class="question-mark">?</span>;
+            </span>.ok_or(ClientError::RefundUnknownOutgoingContract)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
         <span class="kw">let </span>(refund_key, refund_input) = <span class="self">self
@@ -2520,9 +2581,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
-            .ok_or(ClientError::DeleteUnknownOutgoingContract)<span class="question-mark">?</span>;
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            </span>.ok_or(ClientError::DeleteUnknownOutgoingContract)<span class="question-mark">?</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
@@ -2582,13 +2642,13 @@
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
         <span class="kw">let </span>(txid, invoice, payment_keypair) = <span class="self">self
-            </span>.generate_unsigned_invoice_and_submit(amount, description, <span class="kw-2">&amp;mut </span>rng, expiry_time)
+            </span>.generate_unconfirmed_invoice_and_submit(amount, description, <span class="kw-2">&amp;mut </span>rng, expiry_time)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="self">self</span>.await_invoice_confirmation(txid, invoice, payment_keypair)
             .<span class="kw">await
     </span>}
-    <span class="kw">pub async fn </span>generate_unsigned_invoice_and_submit&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub async fn </span>generate_unconfirmed_invoice_and_submit&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         description: String,
@@ -2597,7 +2657,13 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(TransactionId, Invoice, KeyPair)&gt; {
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>(invoice, ln_output) = <span class="self">self
-            </span>.generate_unsigned_invoice(amount, description, payment_keypair, <span class="kw-2">&amp;mut </span>rng, expiry_time)
+            </span>.generate_unconfirmed_invoice(
+                amount,
+                description,
+                payment_keypair,
+                <span class="kw-2">&amp;mut </span>rng,
+                expiry_time,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// There is no input here because this is just an announcement
@@ -2608,7 +2674,7 @@
         <span class="prelude-val">Ok</span>((txid, invoice, payment_keypair))
     }
 
-    <span class="kw">pub async fn </span>generate_unsigned_invoice&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub async fn </span>generate_unconfirmed_invoice&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         description: String,
@@ -2655,7 +2721,7 @@
                 .collect()
         };
 
-        <span class="kw">let </span>duration_since_epoch = SystemTime::now()
+        <span class="kw">let </span>duration_since_epoch = fedimint_core::time::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
 
@@ -2868,9 +2934,8 @@
             <span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract.contract.contract_id()),
             <span class="kw-2">&amp;</span>contract,
         )
-        .<span class="kw">await
-        </span>.expect(<span class="string">&quot;DB error&quot;</span>);
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+        .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
     }
 
     <span class="doccomment">/// Lists all previously saved transactions that have not been driven to
@@ -2882,7 +2947,7 @@
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutgoingContractAccountKeyPrefix)
             .<span class="kw">await
-            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            </span>.map(|(<span class="kw">_</span>, contract)| contract)
             .collect()
             .<span class="kw">await
     </span>}
@@ -2894,9 +2959,8 @@
         <span class="kw">let </span>contract_account = dbtx
             .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract_id))
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>)
-            .ok_or(ClientError::CancelUnknownOutgoingContract)<span class="question-mark">?</span>;
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            </span>.ok_or(ClientError::CancelUnknownOutgoingContract)<span class="question-mark">?</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="self">self</span>.cancel_outgoing_contract(contract_account).<span class="kw">await
     </span>}
@@ -2952,12 +3016,10 @@
         <span class="kw">let </span>input = Input::LN(contract.claim(preimage));
 
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract_id))
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKey(contract_id), <span class="kw-2">&amp;</span>())
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB Error&quot;</span>);
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="self">self</span>.config.redeem_key], input);
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, rng).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3050,7 +3112,7 @@
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKeyPrefix)
             .<span class="kw">await
-            </span>.map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0 </span>.<span class="number">0</span>)
+            </span>.map(|(key, <span class="kw">_</span>)| key.<span class="number">0</span>)
             .collect()
             .<span class="kw">await
     </span>}
@@ -3058,16 +3120,39 @@
     <span class="doccomment">/// Wait for a lightning preimage gateway has purchased to be decrypted by
     /// the federation
     </span><span class="kw">pub async fn </span>await_preimage_decryption(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.context
-            .api
-            .await_output_outcome::&lt;OutputOutcome&gt;(
-                outpoint,
-                Duration::from_secs(<span class="number">10</span>),
-                <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+        <span class="kw">let </span>deadline = Instant::now().add(Duration::from_secs(<span class="number">30</span>));
+
+        <span class="kw">let </span>poll = || <span class="kw">async </span>{
+            <span class="kw">loop </span>{
+                <span class="kw">match </span><span class="self">self
+                    </span>.context
+                    .api
+                    .await_output_outcome::&lt;OutputOutcome&gt;(
+                        outpoint,
+                        deadline.saturating_duration_since(Instant::now()),
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+                    )
+                    .<span class="kw">await
+                </span>{
+                    <span class="prelude-val">Ok</span>(OutputOutcome::LN(o)) <span class="kw">if </span>!o.is_permanent() =&gt; {
+                        <span class="macro">info!</span>(outcome = %o, <span class="string">&quot;Retrying on temporary outcome&quot;</span>);
+                        sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+                    }
+                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span>t.try_into_variant(),
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(e);
+                    }
+                }
+            }
+        };
+        <span class="prelude-val">Ok</span>(
+            fedimint_core::task::timeout(
+                deadline.saturating_duration_since(Instant::now()),
+                poll(),
             )
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.try_into_variant()<span class="question-mark">?</span>)
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| ClientError::Timeout)<span class="question-mark">??</span>,
+        )
     }
 
     <span class="comment">// TODO: improve error propagation on tx transmission
@@ -3093,9 +3178,8 @@
         // have to worry
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         dbtx.remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKey(contract_id))
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;DB error&quot;</span>);
-        dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;DB Error&quot;</span>);
+            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -3146,15 +3230,15 @@
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            DynDecoder::from_typed(LightningDecoder),
+            LightningModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            DynDecoder::from_typed(WalletDecoder),
+            WalletModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            DynDecoder::from_typed(MintDecoder),
+            MintModuleTypes::decoder(),
         ),
     ])
 }
@@ -3283,4 +3367,4 @@
     }
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (0416b1a6f 2023-02-14)" data-search-js="search-14421e1532aead08.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
