@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::interconnect::ModuleInterconect;
-use fedimint_core::module::ApiError;
+use fedimint_core::module::{ApiError, ApiRequestErased};
 use serde_json::Value;
 
 use crate::consensus::FedimintConsensus;
@@ -16,7 +16,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
         &self,
         id: ModuleInstanceId,
         path: String,
-        data: Value,
+        data: ApiRequestErased,
     ) -> Result<Value, ApiError> {
         for (module_id, module) in self.fedimint.modules.iter_modules() {
             if module_id == id {
@@ -29,7 +29,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
                 return (endpoint.handler)(
                     module,
                     self.fedimint.db.begin_transaction().await,
-                    data,
+                    data.to_json(),
                     Some(module_id),
                     self.fedimint.cfg.private.api_auth.clone(),
                 )

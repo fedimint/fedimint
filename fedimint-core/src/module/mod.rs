@@ -68,12 +68,28 @@ pub struct ApiRequest<T> {
     pub params: T,
 }
 
-impl Default for ApiRequest<JsonValue> {
+pub type ApiRequestErased = ApiRequest<JsonValue>;
+
+impl Default for ApiRequestErased {
     fn default() -> Self {
         Self {
             auth: None,
             params: JsonValue::Null,
         }
+    }
+}
+
+impl ApiRequestErased {
+    pub fn new<T: Serialize>(params: T) -> ApiRequestErased {
+        Self {
+            auth: None,
+            params: serde_json::to_value(params)
+                .expect("parameter serialization error - this should not happen"),
+        }
+    }
+
+    pub fn to_json(&self) -> JsonValue {
+        serde_json::to_value(self).expect("parameter serialization error - this should not happen")
     }
 }
 
@@ -224,7 +240,7 @@ impl ApiEndpoint<()> {
             E::Param: Debug,
             E::Response: Debug,
         {
-            tracing::trace!(target: "fedimint_server::request", ?request, "recieved request");
+            tracing::trace!(target: "fedimint_server::request", ?request, "received request");
             let has_auth = request.auth == Some(api_auth);
             let result = E::handle(state, dbtx, request.params, has_auth).await;
             if let Err(error) = &result {

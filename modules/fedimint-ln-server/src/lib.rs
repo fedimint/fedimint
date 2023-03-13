@@ -3,7 +3,6 @@ use std::ffi::OsString;
 use std::ops::Sub;
 
 use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_core::api::erased_no_param;
 use fedimint_core::config::{
     ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -14,9 +13,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, ConsensusProposal,
+    CoreConsensusVersion, ExtendsCommonModuleGen, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
@@ -874,7 +873,7 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
         .call(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             "/block_height".to_owned(),
-            erased_no_param().pop().expect("always exists"),
+            ApiRequestErased::default(),
         )
         .await
         .expect("Wallet module not present or malfunctioning!");

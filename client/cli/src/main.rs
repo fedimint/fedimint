@@ -18,6 +18,7 @@ use fedimint_core::api::{
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::db::Database;
+use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
@@ -462,7 +463,7 @@ async fn handle_command(
                 .request_with_strategy(
                     EventuallyConsistent::new(ws_api.peers().len()),
                     method,
-                    vec![arg],
+                    ApiRequestErased::new(arg),
                 )
                 .await
                 .unwrap();
