@@ -787,7 +787,7 @@ impl FedimintConsensus {
                     output.module_instance_id(),
                 )
                 .await
-                .expect("the transaction was processed, so should be known");
+                .expect("the transaction was processed, so must be known");
             outputs.push((&outcome).into())
         }
 
