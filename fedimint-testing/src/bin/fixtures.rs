@@ -33,7 +33,7 @@ enum Cmd {
     Lnd,
     Electrs,
     Esplora,
-    Daemons,
+    AllDaemons,
     Dkg { servers: usize },
     Fedimintd { id: usize },
     Gatewayd,
@@ -472,7 +472,8 @@ async fn run_dkg(servers: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn daemons() -> anyhow::Result<()> {
+/// Run bitcoind, lightningd, lnd, electrs, esplora
+async fn all_daemons() -> anyhow::Result<()> {
     let mut root_task_group = TaskGroup::new();
     root_task_group.install_kill_handler();
 
@@ -529,7 +530,7 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Federation { start_id, stop_id } => run_federation(start_id, stop_id)
             .await
             .expect("federation failed"),
-        Cmd::Daemons => daemons().await.expect("daemons failed"),
+        Cmd::AllDaemons => all_daemons().await.expect("daemons failed"),
         // commands
         Cmd::AwaitFedimintBlockSync => await_fedimint_block_sync().await.expect("daemons failed"),
     }

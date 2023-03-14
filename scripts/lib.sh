@@ -217,7 +217,7 @@ function start_federation() {
   $FM_BIN_DIR/fixtures federation $START_SERVER $END_SERVER &
 }
 
-function start_daemons() {
-  $FM_BIN_DIR/fixtures daemons &
+function start_all_daemons() {
+  $FM_BIN_DIR/fixtures all-daemons &
   echo $! >> $FM_PID_FILE
 }
