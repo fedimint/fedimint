@@ -12,6 +12,7 @@ use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::format_err;
+use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::{sha256, Hash};
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
@@ -69,6 +70,12 @@ pub trait Encodable {
         let mut bytes = vec![];
         self.consensus_encode(&mut bytes)?;
         Ok(bytes)
+    }
+
+    fn consensus_encode_to_hex(&self) -> Result<String, std::io::Error> {
+        let mut bytes = vec![];
+        self.consensus_encode(&mut bytes)?;
+        Ok(bytes.to_hex())
     }
 
     /// Generate a SHA256 hash of the consensus encoding
