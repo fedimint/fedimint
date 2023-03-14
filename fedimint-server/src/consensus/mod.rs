@@ -813,6 +813,52 @@ impl FedimintConsensus {
         Ok(())
     }
 
+    async fn accepted_transaction_status(
+        &self,
+        txid: TransactionId,
+        accepted: AcceptedTransaction,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> TransactionStatus {
+        let mut outputs = Vec::new();
+        for (out_idx, output) in accepted.transaction.outputs.iter().enumerate() {
+            let outpoint = OutPoint {
+                txid,
+                out_idx: out_idx as u64,
+            };
+            let outcome = self
+                .modules
+                .get_expect(output.module_instance_id())
+                .output_status(
+                    &mut dbtx.with_module_prefix(output.module_instance_id()),
+                    outpoint,
+                    output.module_instance_id(),
+                )
+                .await
+                .expect("the transaction was processed, so must be known");
+            outputs.push((&outcome).into())
+        }
+
+        TransactionStatus::Accepted {
+            epoch: accepted.epoch,
+            outputs,
+        }
+    }
+
+    pub async fn wait_transaction_status(
+        &self,
+        txid: TransactionId,
+    ) -> crate::outcome::TransactionStatus {
+        let accepted_key = AcceptedTransactionKey(txid);
+        let rejected_key = RejectedTransactionKey(txid);
+        tokio::select! {
+            (accepted, mut dbtx) = self.db.wait_key_check(&accepted_key, std::convert::identity) => {
+                self.accepted_transaction_status(txid, accepted, &mut dbtx).await
+            }
+            rejected = self.db.wait_key_exists(&rejected_key) => {
+                TransactionStatus::Rejected(rejected)
+            }
+        }
+    }
     pub async fn transaction_status(
         &self,
         txid: TransactionId,
@@ -822,30 +868,11 @@ impl FedimintConsensus {
         let accepted: Option<AcceptedTransaction> =
             dbtx.get_value(&AcceptedTransactionKey(txid)).await;
 
-        if let Some(accepted_tx) = accepted {
-            let mut outputs = Vec::new();
-            for (out_idx, output) in accepted_tx.transaction.outputs.iter().enumerate() {
-                let outpoint = OutPoint {
-                    txid,
-                    out_idx: out_idx as u64,
-                };
-                let outcome = self
-                    .modules
-                    .get_expect(output.module_instance_id())
-                    .output_status(
-                        &mut dbtx.with_module_prefix(output.module_instance_id()),
-                        outpoint,
-                        output.module_instance_id(),
-                    )
-                    .await
-                    .expect("the transaction was processed, so should be known");
-                outputs.push((&outcome).into())
-            }
-
-            return Some(crate::outcome::TransactionStatus::Accepted {
-                epoch: accepted_tx.epoch,
-                outputs,
-            });
+        if let Some(accepted) = accepted {
+            return Some(
+                self.accepted_transaction_status(txid, accepted, &mut dbtx)
+                    .await,
+            );
         }
 
         let rejected: Option<String> = self

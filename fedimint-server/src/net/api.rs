@@ -80,6 +80,8 @@ pub async fn run_server(
     server_handle.stopped().await
 }
 
+const API_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(60);
+
 // TODO: remove once modularized
 fn attach_endpoints(
     rpc_module: &mut RpcModule<RpcHandlerCtx>,
@@ -109,25 +111,31 @@ fn attach_endpoints(
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe((handler)(fedimint, dbtx, params, module_instance_id))
-                    .catch_unwind()
-                    .await
-                    .map_err(|_| {
-                        error!(
-                            target: LOG_NET_API,
-                            path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
-                        );
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            500,
-                            "API handler panicked",
-                            None::<()>,
-                        )))
-                    })?
-                    .map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, None::<()>,
-                        )))
-                    })
+                AssertUnwindSafe(tokio::time::timeout(
+                    API_ENDPOINT_TIMEOUT,
+                    (handler)(fedimint, dbtx, params, module_instance_id),
+                ))
+                .catch_unwind()
+                .await
+                .map_err(|_| {
+                    error!(
+                        target: LOG_NET_API,
+                        path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                    );
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        500,
+                        "API handler panicked",
+                        None::<()>,
+                    )))
+                })?
+                .map_err(|tokio::time::error::Elapsed { .. }| {
+                    jsonrpsee::core::Error::RequestTimeout
+                })?
+                .map_err(|e| {
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        e.code, e.message, None::<()>,
+                    )))
+                })
             })
             .expect("Failed to register async method");
     }
@@ -157,11 +165,14 @@ fn attach_endpoints_erased(
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe((handler)(
-                    fedimint.modules.get_expect(module_instance),
-                    dbtx,
-                    params,
-                    Some(module_instance),
+                AssertUnwindSafe(tokio::time::timeout(
+                    API_ENDPOINT_TIMEOUT,
+                    (handler)(
+                        fedimint.modules.get_expect(module_instance),
+                        dbtx,
+                        params,
+                        Some(module_instance),
+                    ),
                 ))
                 .catch_unwind()
                 .await
@@ -175,6 +186,9 @@ fn attach_endpoints_erased(
                         "API handler panicked",
                         None::<()>,
                     )))
+                })?
+                .map_err(|tokio::time::error::Elapsed { .. }| {
+                    jsonrpsee::core::Error::RequestTimeout
                 })?
                 .map_err(|e| {
                     jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
@@ -204,10 +218,23 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/fetch_transaction",
+            async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> Option<TransactionStatus> {
+                debug!(transaction = %tx_hash, "Recieved request");
+
+                let tx_status = fedimint.transaction_status(tx_hash)
+                    .await;
+
+                debug!(transaction = %tx_hash, "Sending outcome");
+                Ok(tx_status)
+            }
+        },
+        api_endpoint! {
+            "/wait_transaction",
             async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
-                let tx_status = fedimint.transaction_status(tx_hash).await.ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
+                let tx_status = fedimint.wait_transaction_status(tx_hash)
+                    .await;
 
                 debug!(transaction = %tx_hash, "Sending outcome");
                 Ok(tx_status)

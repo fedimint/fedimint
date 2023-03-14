@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use threshold_crypto::{PublicKey, PK_SIZE};
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace};
 use url::Url;
 
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -126,16 +126,6 @@ pub enum OutputOutcomeError {
     InvalidVout { out_idx: u64, outputs_num: usize },
     #[error("Timeout reached after waiting {}s", .0.as_secs())]
     Timeout(Duration),
-}
-
-impl OutputOutcomeError {
-    fn is_retryable(&self) -> bool {
-        match self {
-            Self::Federation(fed) => fed.is_retryable(),
-            Self::Core(CoreError::PendingPreimage) => true,
-            _ => false,
-        }
-    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -365,7 +355,11 @@ dyn_newtype_define! {
 #[apply(async_trait_maybe_send!)]
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
-    async fn fetch_tx_outcome(&self, txid: &TransactionId) -> FederationResult<TransactionStatus>;
+    async fn fetch_tx_outcome(
+        &self,
+        txid: &TransactionId,
+    ) -> FederationResult<Option<TransactionStatus>>;
+    async fn await_tx_outcome(&self, txid: &TransactionId) -> FederationResult<TransactionStatus>;
 
     async fn fetch_epoch_history(
         &self,
@@ -380,7 +374,7 @@ pub trait GlobalFederationApi {
         &self,
         out_point: OutPoint,
         decoders: &ModuleDecoderRegistry,
-    ) -> OutputOutcomeResult<R>
+    ) -> OutputOutcomeResult<Option<R>>
     where
         R: DynTryIntoOutcome + MaybeSend;
 
@@ -401,6 +395,36 @@ pub trait GlobalFederationApi {
     /// Fetches the server consensus hash if enough peers agree on it
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
 }
+fn map_tx_outcome_outpoint<R>(
+    tx_outcome: TransactionStatus,
+    out_point: OutPoint,
+    decoders: &ModuleDecoderRegistry,
+) -> OutputOutcomeResult<R>
+where
+    R: DynTryIntoOutcome + MaybeSend,
+{
+    match tx_outcome {
+        TransactionStatus::Rejected(e) => Err(OutputOutcomeError::Rejected(e)),
+        TransactionStatus::Accepted { outputs, .. } => {
+            let outputs_len = outputs.len();
+            outputs
+                .into_iter()
+                .nth(out_point.out_idx as usize) // avoid clone as would be necessary with .get(…)
+                .ok_or(OutputOutcomeError::InvalidVout {
+                    outputs_num: outputs_len,
+                    out_idx: out_point.out_idx,
+                })
+                .and_then(|output| {
+                    R::try_into_outcome(
+                        output
+                            .try_into_inner(decoders)
+                            .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?,
+                    )
+                    .map_err(OutputOutcomeError::Core)
+                })
+        }
+    }
+}
 
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> GlobalFederationApi for T
@@ -417,8 +441,17 @@ where
     }
 
     /// Fetch the outcome of an entire transaction
-    async fn fetch_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
+    async fn fetch_tx_outcome(
+        &self,
+        tx: &TransactionId,
+    ) -> FederationResult<Option<TransactionStatus>> {
         self.request_current_consensus("/fetch_transaction".to_owned(), erased_single_param(&tx))
+            .await
+    }
+
+    /// Await the outcome of an entire transaction
+    async fn await_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
+        self.request_current_consensus("/wait_transaction".to_owned(), erased_single_param(&tx))
             .await
     }
 
@@ -482,31 +515,15 @@ where
         &self,
         out_point: OutPoint,
         decoders: &ModuleDecoderRegistry,
-    ) -> OutputOutcomeResult<R>
+    ) -> OutputOutcomeResult<Option<R>>
     where
         R: DynTryIntoOutcome + MaybeSend,
     {
-        match self.fetch_tx_outcome(&out_point.txid).await? {
-            TransactionStatus::Rejected(e) => Err(OutputOutcomeError::Rejected(e)),
-            TransactionStatus::Accepted { outputs, .. } => {
-                let outputs_len = outputs.len();
-                outputs
-                    .into_iter()
-                    .nth(out_point.out_idx as usize) // avoid clone as would be necessary with .get(…)
-                    .ok_or(OutputOutcomeError::InvalidVout {
-                        outputs_num: outputs_len,
-                        out_idx: out_point.out_idx,
-                    })
-                    .and_then(|output| {
-                        R::try_into_outcome(
-                            output.try_into_inner(decoders).map_err(|e| {
-                                OutputOutcomeError::ResponseDeserialization(e.into())
-                            })?,
-                        )
-                        .map_err(OutputOutcomeError::Core)
-                    })
-            }
-        }
+        Ok(self
+            .fetch_tx_outcome(&out_point.txid)
+            .await?
+            .map(move |tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, decoders))
+            .transpose()?)
     }
 
     // TODO should become part of the API
@@ -516,28 +533,12 @@ where
         timeout: Duration,
         decoders: &ModuleDecoderRegistry,
     ) -> OutputOutcomeResult<R> {
-        let poll = || async {
-            let interval = Duration::from_secs(1);
-            loop {
-                match self.fetch_output_outcome(outpoint, decoders).await {
-                    Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable() => {
-                        trace!("Federation api returned retryable error: {:?}", e);
-                        fedimint_core::task::sleep(interval).await
-                    }
-                    Err(e) => {
-                        warn!(
-                            target: LOG_NET_API,
-                            "Federation api returned error: {:?}", e
-                        );
-                        return Err(e);
-                    }
-                }
-            }
-        };
-        fedimint_core::task::timeout(timeout, poll())
-            .await
-            .map_err(|_| OutputOutcomeError::Timeout(timeout))?
+        fedimint_core::task::timeout(timeout, async move {
+            let tx_outcome = self.await_tx_outcome(&outpoint.txid).await?;
+            map_tx_outcome_outpoint(tx_outcome, outpoint, decoders)
+        })
+        .await
+        .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 
     async fn download_client_config(
