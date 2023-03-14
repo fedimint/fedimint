@@ -17,8 +17,10 @@ anyhow = "1.0.65"
 async-trait = "*"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
+clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 mint-client = { path = "../client/client-lib" }
 fedimint-core  = { path = "../fedimint-core" }
+fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../fedimint-logging" }
@@ -31,7 +33,7 @@ lightning = "0.0.113"
 lightning-invoice = "0.21.0"
 tempfile = "3.3.0"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
-serde = "1.0.149"
+serde = { version = "1.0.149", features = [ "derive" ] }
 serde_json = "1.0.91"
 tracing ="0.1.37"
 rand = "0.8"

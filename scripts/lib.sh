@@ -21,27 +21,8 @@ function open_channel() {
     until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $FM_POLL_INTERVAL; done
 }
 
-function await_bitcoin_rpc() {
-    until $FM_BTC_CLIENT getblockchaininfo 1>/dev/null 2>/dev/null ; do
-        >&2 echo "Bitcoind rpc not ready yet. Waiting ..."
-        sleep "$FM_POLL_INTERVAL"
-    done
-}
-
 function await_fedimint_block_sync() {
-  local node_height
-  local finality_delay
-  local expected_block_height
-
-  node_height="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
-  finality_delay="$(get_finality_delay)"
-  expected_block_height="$((node_height - finality_delay))"
-
-  echo "Node at ${node_height}H"
-
-  if [ 0 -lt $expected_block_height ]; then
-      $FM_MINT_CLIENT wait-block-height $expected_block_height
-  fi
+  $FM_BIN_DIR/fixtures await-fedimint-block-sync
 }
 
 function await_all_peers() {
@@ -58,9 +39,9 @@ function await_server_on_port() {
 # Check that lightning block-proccessing is caught up
 # CLI integration tests should call this before attempting to pay invoices
 function await_lightning_node_block_processing() {
+  await_bitcoind_ready
   # CLN
-  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
+  until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')" == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
   do
     sleep $FM_POLL_INTERVAL
   done
@@ -163,32 +144,6 @@ function await_gateway_registered() {
     done
 }
 
-function run_dkg() {
-  # Generate federation configs
-  BASE_PORT=$((8173 + 10000))
-  CERTS=""
-  for ((ID=0; ID<FM_FED_SIZE; ID++));
-  do
-    setup_fedimintd_env $ID
-    echo "making creating cert for ports server $ID"
-    $FM_BIN_DIR/distributedgen create-cert --p2p-url $FM_P2P_URL --api-url $FM_API_URL --out-dir $FM_FEDIMINTD_DATA_DIR --name "Server-$ID"
-    CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
-  done
-  CERTS=${CERTS:1}
-  echo "Running DKG with certs: $CERTS"
-
-  DKG_PIDS=""
-  for ((ID=0; ID<FM_FED_SIZE; ID++));
-  do
-    setup_fedimintd_env $ID
-    $FM_BIN_DIR/distributedgen run  --bind-p2p $FM_BIND_P2P --bind-api $FM_BIND_API --out-dir $FM_FEDIMINTD_DATA_DIR --certs $CERTS &
-    DKG_PIDS="$DKG_PIDS $!"
-  done
-  wait $DKG_PIDS
-
-  # Move the client config
-  mv $FM_CFG_DIR/server-0/client* $FM_CFG_DIR/
-}
 
 function setup_fedimintd_env() {
   ID=$1
@@ -209,85 +164,57 @@ function setup_fedimintd_env() {
   mkdir $FM_FEDIMINTD_DATA_DIR || true
 }
 
+function await_bitcoind_ready() {
+  $FM_BIN_DIR/fixtures await-bitcoind-ready
+}
+
 ### Start Daemons ###
 
+function run_dkg() {
+  $FM_BIN_DIR/fixtures dkg $FM_FED_SIZE
+}
+
 function start_bitcoind() {
-  echo "starting bitcoind"
-  bitcoind -datadir=$FM_BTC_DIR &
+  $FM_BIN_DIR/fixtures bitcoind
   echo $! >> $FM_PID_FILE
-  await_bitcoin_rpc
-  # create a default RPC wallet
-  $FM_BTC_CLIENT createwallet ""
-  # mine some blocks
-  mine_blocks 101
-  echo "started bitcoind"
 }
 
 function start_lightningd() {
-  echo "starting lightningd"
-  await_bitcoin_rpc
-  # if we're running developer build, enable some flags to make it lightningd run faster
-  if [[ "$(lightningd --bitcoin-cli "$(which false)" --dev-no-plugin-checksum 2>&1 )" =~ .*"--dev-no-plugin-checksum: unrecognized option".* ]]; then
-    LIGHTNING_FLAGS=""
-  else
-    LIGHTNING_FLAGS="--dev-fast-gossip --dev-bitcoind-poll=1"
-  fi
-  lightningd $LIGHTNING_FLAGS --lightning-dir=$FM_CLN_DIR --plugin=$FM_BIN_DIR/gateway-cln-extension &
+  $FM_BIN_DIR/fixtures lightningd
   echo $! >> $FM_PID_FILE
-  echo "started lightningd"
 }
 
 function start_lnd() {
-  echo "starting lnd"
-  await_bitcoin_rpc
-  lnd --lnddir=$FM_LND_DIR &
+  $FM_BIN_DIR/fixtures lnd
   echo $! >> $FM_PID_FILE
-  echo "started lnd"
 }
 
 function start_gatewayd() {
   echo "starting gatewayd"
   await_gateway_cln_extension
   await_fedimint_block_sync
-  $FM_BIN_DIR/gatewayd &
-  echo $! >> $FM_PID_FILE
+  $FM_BIN_DIR/fixtures gatewayd &
   gw_connect_fed
   echo "started gatewayd"
 }
 
 function start_electrs() {
-  echo "starting electrs"
-  await_bitcoin_rpc
-  electrs --conf-dir "$FM_ELECTRS_DIR" --db-dir "$FM_ELECTRS_DIR" --daemon-dir "$FM_BTC_DIR" &
+  $FM_BIN_DIR/fixtures electrs
   echo $! >> $FM_PID_FILE
-  echo "started electrs"
 }
 
 function start_esplora() {
-  echo "starting esplora"
-  await_bitcoin_rpc
-  esplora --cookie "bitcoin:bitcoin" --network "regtest" --daemon-dir "$FM_BTC_DIR" --http-addr "127.0.0.1:50002" --daemon-rpc-addr "127.0.0.1:18443" --monitoring-addr "127.0.0.1:50003" --db-dir "$FM_TEST_DIR/esplora" &
+  $FM_BIN_DIR/fixtures esplora
   echo $! >> $FM_PID_FILE
-  echo "started esplora"
 }
 
 function start_federation() {
-  echo "starting federation"
-  await_bitcoin_rpc
-
   START_SERVER=${1:-0}
   END_SERVER=${2:-$FM_FED_SIZE}
-
-  # Start the federation members inside the temporary directory
-  for ((ID=START_SERVER; ID<END_SERVER; ID++)); do
-    echo "starting mint $ID"
-    setup_fedimintd_env $ID
-    ( ($FM_BIN_DIR/fedimintd $FM_FEDIMINTD_DATA_DIR 2>&1 & echo $! >&3 ) 3>>$FM_PID_FILE | sed -e "s/^/mint $ID: /" ) &
-  done
-  echo "started federation"
+  $FM_BIN_DIR/fixtures federation $START_SERVER $END_SERVER &
 }
 
-function start_fixtures() {
-  $FM_BIN_DIR/fixtures &
+function start_all_daemons() {
+  $FM_BIN_DIR/fixtures all-daemons &
   echo $! >> $FM_PID_FILE
 }

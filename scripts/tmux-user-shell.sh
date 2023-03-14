@@ -3,7 +3,7 @@
 source ./scripts/lib.sh
 
 # wait for bitcoin RPC, lightningd & fedimint block sync
-await_bitcoin_rpc
+await_bitcoind_ready
 await_lightning_node_block_processing | show_verbose_output
 await_fedimint_block_sync | show_verbose_output
 
