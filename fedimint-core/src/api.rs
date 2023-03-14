@@ -42,6 +42,7 @@ use tracing::{debug, error, instrument, trace};
 use url::Url;
 
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+use crate::module::ApiRequestErased;
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
@@ -49,8 +50,6 @@ use crate::query::{
 };
 use crate::transaction::{SerdeTransaction, Transaction};
 use crate::CoreError;
-
-type JsonValue = serde_json::Value;
 
 pub type MemberResult<T> = result::Result<T, MemberError>;
 
@@ -148,47 +147,6 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     ) -> result::Result<Value, jsonrpsee_core::Error>;
 }
 
-/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when
-/// no arguments are passed to the API call
-///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
-/// using this function you'll make it easier to change it in the future.
-pub fn erased_no_param() -> Vec<JsonValue> {
-    vec![JsonValue::Null]
-}
-
-/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when
-/// one argument are passed to the API call
-///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
-/// using this function you'll make it easier to change it in the future.
-pub fn erased_single_param<Params>(param: &Params) -> Vec<JsonValue>
-where
-    Params: Serialize,
-{
-    let params_raw = serde_json::to_value(param)
-        .expect("parameter serialization error - this should not happen");
-
-    vec![params_raw]
-}
-
-/// Build a `Vec<json::Value>` that [`IFederationApi::request_raw`] expects when
-/// multiple argument are passed to the API call
-///
-/// Use a tuple as `params`.
-///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
-/// using this function you'll make it easier to change it in the future.
-pub fn erased_multi_param<Params>(param: &Params) -> Vec<JsonValue>
-where
-    Params: Serialize,
-{
-    let params_raw = serde_json::to_value(param)
-        .expect("parameter serialization error - this should not happen");
-
-    vec![params_raw]
-}
-
 pub trait DynTryIntoOutcome: Sized {
     fn try_into_outcome(common_outcome: DynOutputOutcome) -> Result<Self, CoreError>;
 }
@@ -203,7 +161,7 @@ pub trait FederationApiExt: IFederationApi {
         &self,
         mut strategy: impl QueryStrategy<MemberRet, FedRet> + MaybeSend,
         method: String,
-        params: Vec<Value>,
+        params: ApiRequestErased,
     ) -> FederationResult<FedRet> {
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
@@ -217,7 +175,7 @@ pub trait FederationApiExt: IFederationApi {
                 PeerResponse {
                     peer: *peer_id,
                     result: self
-                        .request_raw(*peer_id, &method, &params)
+                        .request_raw(*peer_id, &method, &[params.to_json()])
                         .await
                         .map(AbbreviateDebug),
                 }
@@ -232,7 +190,7 @@ pub trait FederationApiExt: IFederationApi {
         let max_delay_ms = 1000;
         loop {
             let response = futures.next().await;
-            trace!(?response, method, params = ?AbbreviateDebug(params.as_slice()), "Received member response");
+            trace!(?response, method, params = ?AbbreviateDebug(params.to_json()), "Received member response");
             match response {
                 Some(PeerResponse { peer, result }) => {
                     let result: MemberResult<MemberRet> =
@@ -268,7 +226,11 @@ pub trait FederationApiExt: IFederationApi {
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: self
-                                                .request_raw(retry_peer, method, params)
+                                                .request_raw(
+                                                    retry_peer,
+                                                    method,
+                                                    &[params.to_json()],
+                                                )
                                                 .await
                                                 .map(AbbreviateDebug),
                                         }
@@ -299,7 +261,7 @@ pub trait FederationApiExt: IFederationApi {
     async fn request_union<Ret>(
         &self,
         method: String,
-        params: Vec<Value>,
+        params: ApiRequestErased,
     ) -> FederationResult<Vec<Ret>>
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
@@ -315,7 +277,7 @@ pub trait FederationApiExt: IFederationApi {
     async fn request_current_consensus<Ret>(
         &self,
         method: String,
-        params: Vec<Value>,
+        params: ApiRequestErased,
     ) -> FederationResult<Ret>
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
@@ -331,7 +293,7 @@ pub trait FederationApiExt: IFederationApi {
     async fn request_eventually_consistent<Ret>(
         &self,
         method: String,
-        params: Vec<Value>,
+        params: ApiRequestErased,
     ) -> FederationResult<Ret>
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
@@ -435,7 +397,7 @@ where
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
         self.request_current_consensus(
             "/transaction".to_owned(),
-            erased_single_param(&SerdeTransaction::from(&tx)),
+            ApiRequestErased::new(&SerdeTransaction::from(&tx)),
         )
         .await
     }
@@ -445,13 +407,13 @@ where
         &self,
         tx: &TransactionId,
     ) -> FederationResult<Option<TransactionStatus>> {
-        self.request_current_consensus("/fetch_transaction".to_owned(), erased_single_param(&tx))
+        self.request_current_consensus("/fetch_transaction".to_owned(), ApiRequestErased::new(tx))
             .await
     }
 
     /// Await the outcome of an entire transaction
     async fn await_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
-        self.request_current_consensus("/wait_transaction".to_owned(), erased_single_param(&tx))
+        self.request_current_consensus("/wait_transaction".to_owned(), ApiRequestErased::new(tx))
             .await
     }
 
@@ -501,14 +463,17 @@ where
         self.request_with_strategy::<SerdeEpochHistory, _>(
             qs,
             "/fetch_epoch_history".to_owned(),
-            erased_single_param(&epoch),
+            ApiRequestErased::new(epoch),
         )
         .await
     }
 
     async fn fetch_epoch_count(&self) -> FederationResult<u64> {
-        self.request_eventually_consistent("/fetch_epoch_count".to_owned(), erased_no_param())
-            .await
+        self.request_eventually_consistent(
+            "/fetch_epoch_count".to_owned(),
+            ApiRequestErased::default(),
+        )
+        .await
     }
 
     async fn fetch_output_outcome<R>(
@@ -561,13 +526,13 @@ where
             },
         );
 
-        self.request_with_strategy(qs, "/config".to_owned(), erased_no_param())
+        self.request_with_strategy(qs, "/config".to_owned(), ApiRequestErased::default())
             .await
             .map(|cfg| cfg.client)
     }
 
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
-        self.request_current_consensus("/config".to_owned(), erased_no_param())
+        self.request_current_consensus("/config".to_owned(), ApiRequestErased::default())
             .await
             .map(|cfg: ConfigResponse| cfg.consensus_hash)
     }

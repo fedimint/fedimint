@@ -14,8 +14,8 @@ use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiError, CommonModuleGen, ExtendsCommonModuleGen, InputMeta, ModuleCommon, ModuleError,
-    ServerModuleGen, TransactionItemAmount,
+    ApiError, ApiRequestErased, CommonModuleGen, ExtendsCommonModuleGen, InputMeta, ModuleCommon,
+    ModuleError, ServerModuleGen, TransactionItemAmount,
 };
 use fedimint_core::{OutPoint, PeerId, ServerModule};
 use fedimint_rocksdb::RocksDb;
@@ -458,8 +458,8 @@ impl ModuleInterconect for FakeInterconnect {
         &self,
         module_id: ModuleInstanceId,
         path: String,
-        data: serde_json::Value,
+        data: ApiRequestErased,
     ) -> Result<serde_json::Value, ApiError> {
-        (self.0)(module_id, path, data)
+        (self.0)(module_id, path, data.to_json())
     }
 }

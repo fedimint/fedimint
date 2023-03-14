@@ -30,17 +30,22 @@ pub struct ServerOpts {
     /// Path to folder containing federation config files
     pub data_dir: PathBuf,
     /// Password to encrypt sensitive config files
+    // TODO: should probably never send password to the server directly, rather send the hash via
+    // the API
     #[arg(env = "FM_PASSWORD")]
     pub password: String,
     /// Port to run admin UI on
     #[arg(long = "listen-ui", env = "FM_LISTEN_UI")]
     pub listen_ui: Option<SocketAddr>,
-    #[arg(long = "tokio-console-bind", env = "FM_TOKIO_CONSOLE_BIND")]
-    pub tokio_console_bind: Option<SocketAddr>,
-    #[arg(long, default_value = "false")]
-    pub with_telemetry: bool,
+    /// After an upgrade the epoch must be passed in
     #[arg(long = "upgrade-epoch")]
     pub upgrade_epoch: Option<u64>,
+    /// Enable tokio console logging
+    #[arg(long = "tokio-console-bind", env = "FM_TOKIO_CONSOLE_BIND")]
+    pub tokio_console_bind: Option<SocketAddr>,
+    /// Enable telemetry logging
+    #[arg(long, default_value = "false")]
+    pub with_telemetry: bool,
 }
 
 /// `fedimintd` builder
