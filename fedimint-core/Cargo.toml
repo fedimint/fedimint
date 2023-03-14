@@ -51,7 +51,7 @@ tokio = { version = "1.25.0", features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = "0.16.0"
-async-lock = "2.6"
+async-lock = "2.7"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
