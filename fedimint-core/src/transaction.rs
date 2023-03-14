@@ -1,5 +1,6 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
+use bitcoin_hashes::hex::ToHex;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SerdeModuleEncoding;
@@ -78,7 +79,12 @@ impl Transaction {
         {
             Ok(())
         } else {
-            Err(TransactionError::InvalidSignature)
+            Err(TransactionError::InvalidSignature {
+                tx: self.consensus_encode_to_hex().expect("Can't fail"),
+                hash: self.tx_hash().to_hex(),
+                sig: signature.consensus_encode_to_hex().expect("Can't fail"),
+                key: agg_pub_key.consensus_encode_to_hex().expect("Can't fail"),
+            })
         }
     }
 }
@@ -163,8 +169,13 @@ pub enum TransactionError {
         outputs: Amount,
         fee: Amount,
     },
-    #[error("The transaction's signature is invalid")]
-    InvalidSignature,
+    #[error("The transaction's signature is invalid: tx={tx}, hash={hash}, sig={sig}, key={key}")]
+    InvalidSignature {
+        tx: String,
+        hash: String,
+        sig: String,
+        key: String,
+    },
     #[error("The transaction did not have a signature although there were inputs to be signed")]
     MissingSignature,
 }
