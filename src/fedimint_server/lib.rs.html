@@ -599,6 +599,12 @@
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
 <a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -622,7 +628,7 @@
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
-<span class="kw">use </span>fedimint_logging::LOG_CONSENSUS;
+<span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 <span class="kw">use </span>futures::stream::Peekable;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
@@ -830,7 +836,10 @@
     <span class="doccomment">/// Loop `run_conensus_epoch` until shut down
     </span><span class="kw">async fn </span>run_consensus(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: TaskHandle) {
         <span class="kw">if </span><span class="self">self</span>.consensus.is_at_upgrade_threshold().<span class="kw">await </span>{
-            <span class="macro">error!</span>(<span class="string">&quot;Restarted fedimintd after upgrade without passing in flag, shutting down&quot;</span>);
+            <span class="macro">error!</span>(
+                target: LOG_CORE,
+                <span class="string">&quot;Restarted fedimintd after upgrade without passing in flag, shutting down&quot;
+            </span>);
             <span class="kw">return </span><span class="self">self</span>.task_group.shutdown().<span class="kw">await</span>;
         }
 
@@ -864,7 +873,10 @@
             }
 
             <span class="kw">if </span><span class="self">self</span>.consensus.is_at_upgrade_threshold().<span class="kw">await </span>{
-                <span class="macro">info!</span>(<span class="string">&quot;Received a threshold of upgrade signals, shutting down&quot;</span>);
+                <span class="macro">info!</span>(
+                    target: LOG_CONSENSUS,
+                    <span class="string">&quot;Received a threshold of upgrade signals, shutting down&quot;
+                </span>);
                 <span class="self">self</span>.task_group.shutdown().<span class="kw">await</span>;
                 <span class="kw">break</span>;
             }
