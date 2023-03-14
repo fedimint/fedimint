@@ -1160,9 +1160,9 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, ConsensusProposal,
+    CoreConsensusVersion, ExtendsCommonModuleGen, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -2020,7 +2020,7 @@
         .call(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             <span class="string">&quot;/block_height&quot;</span>.to_owned(),
-            Default::default(),
+            ApiRequestErased::default(),
         )
         .<span class="kw">await
         </span>.expect(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);

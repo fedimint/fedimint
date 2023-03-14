@@ -1097,41 +1097,6 @@
 <a href="#1097" id="1097">1097</a>
 <a href="#1098" id="1098">1098</a>
 <a href="#1099" id="1099">1099</a>
-<a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a>
-<a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a>
-<a href="#1111" id="1111">1111</a>
-<a href="#1112" id="1112">1112</a>
-<a href="#1113" id="1113">1113</a>
-<a href="#1114" id="1114">1114</a>
-<a href="#1115" id="1115">1115</a>
-<a href="#1116" id="1116">1116</a>
-<a href="#1117" id="1117">1117</a>
-<a href="#1118" id="1118">1118</a>
-<a href="#1119" id="1119">1119</a>
-<a href="#1120" id="1120">1120</a>
-<a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a>
-<a href="#1123" id="1123">1123</a>
-<a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a>
-<a href="#1126" id="1126">1126</a>
-<a href="#1127" id="1127">1127</a>
-<a href="#1128" id="1128">1128</a>
-<a href="#1129" id="1129">1129</a>
-<a href="#1130" id="1130">1130</a>
-<a href="#1131" id="1131">1131</a>
-<a href="#1132" id="1132">1132</a>
-<a href="#1133" id="1133">1133</a>
-<a href="#1134" id="1134">1134</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1176,6 +1141,7 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+<span class="kw">use </span><span class="kw">crate</span>::module::ApiRequestErased;
 <span class="kw">use </span><span class="kw">crate</span>::outcome::TransactionStatus;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
@@ -1183,8 +1149,6 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
 <span class="kw">use </span><span class="kw">crate</span>::CoreError;
-
-<span class="kw">type </span>JsonValue = serde_json::Value;
 
 <span class="kw">pub type </span>MemberResult&lt;T&gt; = result::Result&lt;T, MemberError&gt;;
 
@@ -1282,47 +1246,6 @@
     ) -&gt; result::Result&lt;Value, jsonrpsee_core::Error&gt;;
 }
 
-<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when
-/// no arguments are passed to the API call
-///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
-/// using this function you&#39;ll make it easier to change it in the future.
-</span><span class="kw">pub fn </span>erased_no_param() -&gt; Vec&lt;JsonValue&gt; {
-    <span class="macro">vec!</span>[JsonValue::Null]
-}
-
-<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when
-/// one argument are passed to the API call
-///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
-/// using this function you&#39;ll make it easier to change it in the future.
-</span><span class="kw">pub fn </span>erased_single_param&lt;Params&gt;(param: <span class="kw-2">&amp;</span>Params) -&gt; Vec&lt;JsonValue&gt;
-<span class="kw">where
-    </span>Params: Serialize,
-{
-    <span class="kw">let </span>params_raw = serde_json::to_value(param)
-        .expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>);
-
-    <span class="macro">vec!</span>[params_raw]
-}
-
-<span class="doccomment">/// Build a `Vec&lt;json::Value&gt;` that [`IFederationApi::request_raw`] expects when
-/// multiple argument are passed to the API call
-///
-/// Use a tuple as `params`.
-///
-/// Notably the caling convention of fedimintd api is a bit weird ATM, so by
-/// using this function you&#39;ll make it easier to change it in the future.
-</span><span class="kw">pub fn </span>erased_multi_param&lt;Params&gt;(param: <span class="kw-2">&amp;</span>Params) -&gt; Vec&lt;JsonValue&gt;
-<span class="kw">where
-    </span>Params: Serialize,
-{
-    <span class="kw">let </span>params_raw = serde_json::to_value(param)
-        .expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>);
-
-    <span class="macro">vec!</span>[params_raw]
-}
-
 <span class="kw">pub trait </span>DynTryIntoOutcome: Sized {
     <span class="kw">fn </span>try_into_outcome(common_outcome: DynOutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt;;
 }
@@ -1337,7 +1260,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;MemberRet, FedRet&gt; + MaybeSend,
         method: String,
-        params: Vec&lt;Value&gt;,
+        params: ApiRequestErased,
     ) -&gt; FederationResult&lt;FedRet&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
@@ -1351,7 +1274,7 @@
                 PeerResponse {
                     peer: <span class="kw-2">*</span>peer_id,
                     result: <span class="self">self
-                        </span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>params)
+                        </span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
                         .<span class="kw">await
                         </span>.map(AbbreviateDebug),
                 }
@@ -1366,7 +1289,7 @@
         </span><span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
         <span class="kw">loop </span>{
             <span class="kw">let </span>response = futures.next().<span class="kw">await</span>;
-            <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, params = <span class="question-mark">?</span>AbbreviateDebug(params.as_slice()), <span class="string">&quot;Received member response&quot;</span>);
+            <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, params = <span class="question-mark">?</span>AbbreviateDebug(params.to_json()), <span class="string">&quot;Received member response&quot;</span>);
             <span class="kw">match </span>response {
                 <span class="prelude-val">Some</span>(PeerResponse { peer, result }) =&gt; {
                     <span class="kw">let </span>result: MemberResult&lt;MemberRet&gt; =
@@ -1402,7 +1325,11 @@
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: <span class="self">self
-                                                </span>.request_raw(retry_peer, method, params)
+                                                </span>.request_raw(
+                                                    retry_peer,
+                                                    method,
+                                                    <span class="kw-2">&amp;</span>[params.to_json()],
+                                                )
                                                 .<span class="kw">await
                                                 </span>.map(AbbreviateDebug),
                                         }
@@ -1433,7 +1360,7 @@
     <span class="kw">async fn </span>request_union&lt;Ret&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: String,
-        params: Vec&lt;Value&gt;,
+        params: ApiRequestErased,
     ) -&gt; FederationResult&lt;Vec&lt;Ret&gt;&gt;
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
@@ -1449,7 +1376,7 @@
     <span class="kw">async fn </span>request_current_consensus&lt;Ret&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: String,
-        params: Vec&lt;Value&gt;,
+        params: ApiRequestErased,
     ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
@@ -1465,7 +1392,7 @@
     <span class="kw">async fn </span>request_eventually_consistent&lt;Ret&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: String,
-        params: Vec&lt;Value&gt;,
+        params: ApiRequestErased,
     ) -&gt; FederationResult&lt;Ret&gt;
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
@@ -1569,7 +1496,7 @@
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt; {
         <span class="self">self</span>.request_current_consensus(
             <span class="string">&quot;/transaction&quot;</span>.to_owned(),
-            erased_single_param(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
+            ApiRequestErased::new(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
         )
         .<span class="kw">await
     </span>}
@@ -1579,13 +1506,13 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: <span class="kw-2">&amp;</span>TransactionId,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;TransactionStatus&gt;&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/fetch_transaction&quot;</span>.to_owned(), erased_single_param(<span class="kw-2">&amp;</span>tx))
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/fetch_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
             .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Await the outcome of an entire transaction
     </span><span class="kw">async fn </span>await_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/wait_transaction&quot;</span>.to_owned(), erased_single_param(<span class="kw-2">&amp;</span>tx))
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/wait_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
             .<span class="kw">await
     </span>}
 
@@ -1635,14 +1562,17 @@
         <span class="self">self</span>.request_with_strategy::&lt;SerdeEpochHistory, <span class="kw">_</span>&gt;(
             qs,
             <span class="string">&quot;/fetch_epoch_history&quot;</span>.to_owned(),
-            erased_single_param(<span class="kw-2">&amp;</span>epoch),
+            ApiRequestErased::new(epoch),
         )
         .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
-        <span class="self">self</span>.request_eventually_consistent(<span class="string">&quot;/fetch_epoch_count&quot;</span>.to_owned(), erased_no_param())
-            .<span class="kw">await
+        <span class="self">self</span>.request_eventually_consistent(
+            <span class="string">&quot;/fetch_epoch_count&quot;</span>.to_owned(),
+            ApiRequestErased::default(),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
@@ -1695,13 +1625,13 @@
             },
         );
 
-        <span class="self">self</span>.request_with_strategy(qs, <span class="string">&quot;/config&quot;</span>.to_owned(), erased_no_param())
+        <span class="self">self</span>.request_with_strategy(qs, <span class="string">&quot;/config&quot;</span>.to_owned(), ApiRequestErased::default())
             .<span class="kw">await
             </span>.map(|cfg| cfg.client)
     }
 
     <span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/config&quot;</span>.to_owned(), erased_no_param())
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/config&quot;</span>.to_owned(), ApiRequestErased::default())
             .<span class="kw">await
             </span>.map(|cfg: ConfigResponse| cfg.consensus_hash)
     }

@@ -260,7 +260,7 @@
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
-<span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_encryption_key_with_path};
+<span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::{DkgError, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
@@ -476,9 +476,9 @@
                 salt_file,
                 password,
             } =&gt; {
-                <span class="kw">let </span>salt_file =
-                    salt_file.unwrap_or_else(|| salt_file_path_from_file_path(<span class="kw-2">&amp;</span>in_file));
-                <span class="kw">let </span>key = get_encryption_key_with_path(<span class="kw-2">&amp;</span>password, salt_file)<span class="question-mark">?</span>;
+                <span class="kw">let </span>salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(<span class="kw-2">&amp;</span>in_file));
+                <span class="kw">let </span>salt = fs::read_to_string(salt_file)<span class="question-mark">?</span>;
+                <span class="kw">let </span>key = get_encryption_key(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
                 <span class="kw">let </span>decrypted_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, in_file)<span class="question-mark">?</span>;
 
                 <span class="kw">let </span><span class="kw-2">mut </span>out_file_handle =
@@ -497,16 +497,16 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>plaintext_bytes = <span class="macro">vec!</span>[];
                 in_file_handle.read_to_end(<span class="kw-2">&amp;mut </span>plaintext_bytes).unwrap();
 
-                <span class="kw">let </span>salt_file =
-                    salt_file.unwrap_or_else(|| salt_file_path_from_file_path(<span class="kw-2">&amp;</span>out_file));
-                <span class="kw">let </span>key = get_encryption_key_with_path(<span class="kw-2">&amp;</span>password, salt_file)<span class="question-mark">?</span>;
+                <span class="kw">let </span>salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(<span class="kw-2">&amp;</span>out_file));
+                <span class="kw">let </span>salt = fs::read_to_string(salt_file)<span class="question-mark">?</span>;
+                <span class="kw">let </span>key = get_encryption_key(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
                 encrypted_write(plaintext_bytes, <span class="kw-2">&amp;</span>key, out_file)
             }
         }
     }
 }
 
-<span class="kw">fn </span>salt_file_path_from_file_path(file_path: <span class="kw-2">&amp;</span>Path) -&gt; PathBuf {
+<span class="kw">fn </span>salt_from_file_path(file_path: <span class="kw-2">&amp;</span>Path) -&gt; PathBuf {
     file_path
         .parent()
         .expect(<span class="string">&quot;File has no parent?!&quot;</span>)

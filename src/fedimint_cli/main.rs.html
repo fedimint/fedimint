@@ -739,6 +739,7 @@
 <a href="#739" id="739">739</a>
 <a href="#740" id="740">740</a>
 <a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -759,6 +760,7 @@
 };
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::EventuallyConsistent;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
@@ -1203,7 +1205,7 @@
                 .request_with_strategy(
                     EventuallyConsistent::new(ws_api.peers().len()),
                     method,
-                    <span class="macro">vec!</span>[arg],
+                    ApiRequestErased::new(arg),
                 )
                 .<span class="kw">await
                 </span>.unwrap();

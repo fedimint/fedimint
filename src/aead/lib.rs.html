@@ -154,13 +154,6 @@
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -248,22 +241,15 @@
 ///
 /// * `password` - Strong user-created password
 /// * `salt` - Nonce &gt;8 bytes to discourage rainbow attacks
-</span><span class="kw">fn </span>get_encryption_key(password: <span class="kw-2">&amp;</span>str, salt: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;LessSafeKey&gt; {
+</span><span class="kw">pub fn </span>get_encryption_key(password: <span class="kw-2">&amp;</span>str, salt: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;LessSafeKey&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>key = [<span class="number">0u8</span>; ring::digest::SHA256_OUTPUT_LEN];
 
     argon2()
-        .hash_password_into(password.as_bytes(), salt, <span class="kw-2">&amp;mut </span>key)
+        .hash_password_into(password.as_bytes(), salt.as_bytes(), <span class="kw-2">&amp;mut </span>key)
         .map_err(|e| <span class="macro">format_err!</span>(<span class="string">&quot;could not hash password&quot;</span>).context(e))<span class="question-mark">?</span>;
     <span class="kw">let </span>key = UnboundKey::new(<span class="kw-2">&amp;</span>ring::aead::CHACHA20_POLY1305, <span class="kw-2">&amp;</span>key)
         .map_err(|<span class="kw">_</span>| anyhow::Error::msg(<span class="string">&quot;Unable to create key&quot;</span>))<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(LessSafeKey::new(key))
-}
-
-<span class="doccomment">/// Helper for `get_encryption_key` reading the salt from a path
-</span><span class="kw">pub fn </span>get_encryption_key_with_path(password: <span class="kw-2">&amp;</span>str, salt_path: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;LessSafeKey&gt; {
-    <span class="kw">let </span>salt_str = fs::read_to_string(salt_path)<span class="question-mark">?</span>;
-    <span class="kw">let </span>salt = hex::decode(salt_str)<span class="question-mark">?</span>;
-    get_encryption_key(password, <span class="kw-2">&amp;</span>salt)
 }
 
 <span class="doccomment">/// Memory-hard Argon2 key stretching for password-based authentication
@@ -301,7 +287,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>encrypts_and_decrypts() {
         <span class="kw">let </span>password = <span class="string">&quot;test123&quot;</span>;
-        <span class="kw">let </span>salt = <span class="string">&quot;salt1235&quot;</span>.as_bytes();
+        <span class="kw">let </span>salt = <span class="string">&quot;salt1235&quot;</span>;
         <span class="kw">let </span>message = <span class="string">&quot;hello world&quot;</span>;
 
         <span class="kw">let </span>key = get_encryption_key(password, salt).unwrap();

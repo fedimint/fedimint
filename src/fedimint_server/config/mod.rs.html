@@ -848,13 +848,24 @@
 <a href="#848" id="848">848</a>
 <a href="#849" id="849">849</a>
 <a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>aead::{encrypted_read, get_encryption_key_with_path};
+<span class="kw">use </span>aead::{encrypted_read, get_encryption_key, get_password_hash};
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
@@ -866,7 +877,7 @@
     TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-<span class="kw">use </span>fedimint_core::module::PeerHandle;
+<span class="kw">use </span>fedimint_core::module::{ApiAuth, PeerHandle};
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_core::task::{timeout, Elapsed, TaskGroup};
 <span class="kw">use </span>fedimint_core::PeerId;
@@ -918,6 +929,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfigPrivate {
+    <span class="doccomment">/// Secret API auth string
+    </span><span class="kw">pub </span>api_auth: ApiAuth,
     <span class="doccomment">/// Secret key for TLS communication, required for peer authentication
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
     </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
@@ -994,6 +1007,8 @@
     </span><span class="kw">pub </span>our_id: PeerId,
     <span class="doccomment">/// Id of all servers
     </span><span class="kw">pub </span>peer_ids: Vec&lt;PeerId&gt;,
+    <span class="doccomment">/// Secret API auth string
+    </span><span class="kw">pub </span>api_auth: ApiAuth,
     <span class="doccomment">/// How we authenticate our communication with peers during DKG
     </span><span class="kw">pub </span>tls: TlsConfig,
     <span class="doccomment">/// Endpoints for P2P communication
@@ -1072,7 +1087,6 @@
 <span class="kw">impl </span>ServerConfig {
     <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key
     /// setup
-    </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>from(
         params: ServerConfigParams,
         identity: PeerId,
@@ -1082,6 +1096,7 @@
         modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>private = ServerConfigPrivate {
+            api_auth: params.api_auth.clone(),
             tls_key: params.tls.our_private_key.clone(),
             auth_sks: auth_keys.secret_key_share,
             hbbft_sks: hbbft_keys.secret_key_share,
@@ -1480,7 +1495,9 @@
             peers.insert(PeerId::from(idx <span class="kw">as </span>u16), parse_peer_params(cert)<span class="question-mark">?</span>);
         }
 
-        <span class="kw">let </span>key = get_encryption_key_with_path(password, dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
+        <span class="kw">let </span>salt = fs::read_to_string(dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
+        <span class="kw">let </span>api_auth = get_password_hash(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
+        <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
         <span class="kw">let </span>tls_pk = encrypted_read(<span class="kw-2">&amp;</span>key, dir_out_path.join(TLS_PK))<span class="question-mark">?</span>;
         <span class="kw">let </span>cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))<span class="question-mark">?</span>;
 
@@ -1492,6 +1509,7 @@
             .ok_or_else(|| anyhow::Error::msg(<span class="string">&quot;Our id not found&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(ServerConfigParams::gen_params(
+            ApiAuth(api_auth),
             bind_p2p,
             bind_api,
             rustls::PrivateKey(tls_pk),
@@ -1503,7 +1521,9 @@
     }
 
     <span class="doccomment">/// Generates the parameters necessary for running server config generation
+    </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>gen_params(
+        api_auth: ApiAuth,
         bind_p2p: SocketAddr,
         bind_api: SocketAddr,
         key: rustls::PrivateKey,
@@ -1532,6 +1552,7 @@
         ServerConfigParams {
             our_id,
             peer_ids: peers.keys().cloned().collect(),
+            api_auth,
             tls,
             fed_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, peers, |params| params.p2p_url),
             api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, peers, |params| params.api_url),
@@ -1598,6 +1619,7 @@
                 <span class="kw">let </span>bind_api = parse_host_port(peer_params[peer].clone().api_url)<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>params: ServerConfigParams = <span class="self">Self</span>::gen_params(
+                    ApiAuth(<span class="string">&quot;dummy_password&quot;</span>.to_string()),
                     bind_p2p.parse().context(<span class="string">&quot;when parsing bind_p2p&quot;</span>)<span class="question-mark">?</span>,
                     bind_api.parse().context(<span class="string">&quot;when parsing bind_api&quot;</span>)<span class="question-mark">?</span>,
                     keys[peer].<span class="number">1</span>.clone(),

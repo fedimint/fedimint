@@ -120,6 +120,7 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::pin::Pin;
@@ -127,6 +128,7 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::api::{IFederationApi, JsonRpcResult};
+<span class="kw">use </span>fedimint_core::module::ApiRequest;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>serde;
@@ -194,10 +196,10 @@
                         ));
                     }
 
-                    <span class="kw">let </span>params = serde_json::from_value(
+                    <span class="kw">let </span>request: ApiRequest&lt;Param&gt; = serde_json::from_value(
                         params.first().expect(<span class="string">&quot;just checked the len&quot;</span>).clone(),
                     )<span class="question-mark">?</span>;
-                    <span class="kw">let </span>ret = f(state, params).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>ret = f(state, request.params).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>ret = serde_json::to_value(ret)
                         .expect(<span class="string">&quot;Serialization of the return value must not fail&quot;</span>);
 

@@ -479,8 +479,8 @@
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiError, CommonModuleGen, ExtendsCommonModuleGen, InputMeta, ModuleCommon, ModuleError,
-    ServerModuleGen, TransactionItemAmount,
+    ApiError, ApiRequestErased, CommonModuleGen, ExtendsCommonModuleGen, InputMeta, ModuleCommon,
+    ModuleError, ServerModuleGen, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
@@ -923,9 +923,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_id: ModuleInstanceId,
         path: String,
-        data: serde_json::Value,
+        data: ApiRequestErased,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt; {
-        (<span class="self">self</span>.<span class="number">0</span>)(module_id, path, data)
+        (<span class="self">self</span>.<span class="number">0</span>)(module_id, path, data.to_json())
     }
 }
 </code></pre></div>

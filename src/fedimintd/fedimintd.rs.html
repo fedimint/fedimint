@@ -239,6 +239,11 @@
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
 <a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
@@ -271,17 +276,22 @@
     <span class="doccomment">/// Path to folder containing federation config files
     </span><span class="kw">pub </span>data_dir: PathBuf,
     <span class="doccomment">/// Password to encrypt sensitive config files
+    </span><span class="comment">// TODO: should probably never send password to the server directly, rather send the hash via
+    // the API
     </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
     </span><span class="kw">pub </span>password: String,
     <span class="doccomment">/// Port to run admin UI on
     </span><span class="attr">#[arg(long = <span class="string">&quot;listen-ui&quot;</span>, env = <span class="string">&quot;FM_LISTEN_UI&quot;</span>)]
     </span><span class="kw">pub </span>listen_ui: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
-    <span class="attr">#[arg(long = <span class="string">&quot;tokio-console-bind&quot;</span>, env = <span class="string">&quot;FM_TOKIO_CONSOLE_BIND&quot;</span>)]
-    </span><span class="kw">pub </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
-    <span class="attr">#[arg(long, default_value = <span class="string">&quot;false&quot;</span>)]
-    </span><span class="kw">pub </span>with_telemetry: bool,
-    <span class="attr">#[arg(long = <span class="string">&quot;upgrade-epoch&quot;</span>)]
+    <span class="doccomment">/// After an upgrade the epoch must be passed in
+    </span><span class="attr">#[arg(long = <span class="string">&quot;upgrade-epoch&quot;</span>)]
     </span><span class="kw">pub </span>upgrade_epoch: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="doccomment">/// Enable tokio console logging
+    </span><span class="attr">#[arg(long = <span class="string">&quot;tokio-console-bind&quot;</span>, env = <span class="string">&quot;FM_TOKIO_CONSOLE_BIND&quot;</span>)]
+    </span><span class="kw">pub </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+    <span class="doccomment">/// Enable telemetry logging
+    </span><span class="attr">#[arg(long, default_value = <span class="string">&quot;false&quot;</span>)]
+    </span><span class="kw">pub </span>with_telemetry: bool,
 }
 
 <span class="doccomment">/// `fedimintd` builder

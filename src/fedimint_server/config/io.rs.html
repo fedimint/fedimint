@@ -172,12 +172,13 @@
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
-<span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_encryption_key_with_path, LessSafeKey};
+<span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey};
 <span class="kw">use </span>anyhow::{ensure, format_err};
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
@@ -229,9 +230,9 @@
     guardian_name: String,
     password: <span class="kw-2">&amp;</span>str,
 ) -&gt; anyhow::Result&lt;String&gt; {
-    <span class="kw">let </span>salt: [u8; <span class="number">16</span>] = rand::random();
-    fs::write(dir_out_path.join(SALT_FILE), salt.to_hex())<span class="question-mark">?</span>;
-    <span class="kw">let </span>key = get_encryption_key_with_path(password, dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
+    fs::write(dir_out_path.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
+    <span class="kw">let </span>salt = fs::read_to_string(dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
+    <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
     gen_tls(<span class="kw-2">&amp;</span>dir_out_path, p2p_url, api_url, guardian_name, <span class="kw-2">&amp;</span>key)
 }
 
@@ -269,8 +270,8 @@
 
 <span class="doccomment">/// Reads the server from the local, private, and consensus cfg files
 </span><span class="kw">pub fn </span>read_server_config(password: <span class="kw-2">&amp;</span>str, path: PathBuf) -&gt; anyhow::Result&lt;ServerConfig&gt; {
-    <span class="kw">let </span>salt_path = path.join(SALT_FILE);
-    <span class="kw">let </span>key = get_encryption_key_with_path(password, salt_path)<span class="question-mark">?</span>;
+    <span class="kw">let </span>salt = fs::read_to_string(path.join(SALT_FILE))<span class="question-mark">?</span>;
+    <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(ServerConfig {
         consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>,
@@ -302,7 +303,8 @@
     password: <span class="kw-2">&amp;</span>str,
     module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>key = get_encryption_key_with_path(password, path.join(SALT_FILE))<span class="question-mark">?</span>;
+    <span class="kw">let </span>salt = fs::read_to_string(path.join(SALT_FILE))<span class="question-mark">?</span>;
+    <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>client_config = server
         .consensus
