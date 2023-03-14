@@ -1,7 +1,10 @@
+/// This tool assumes that `scripts/build.sh` has been sourced in the
+/// environment which calls it
 use std::collections::HashMap;
 use std::env;
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -515,6 +518,14 @@ async fn all_daemons() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
+
+    // This tool assumes that `scripts/build.sh` has been sourced in the shell that
+    // calls it. It uses environment variables set by `scripts/build.sh`. Exit
+    // if they don't exit.
+    if env::var("FM_TMP_DIR").is_err() {
+        eprintln!("You must `source scripts/build.s` before running the `fixtures` tool");
+        exit(1);
+    };
 
     let args = Args::parse();
     match args.command {
