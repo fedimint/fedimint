@@ -8,6 +8,7 @@ use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::anyhow;
 use bitcoincore_rpc::{Client as BitcoinClient, RpcApi};
 use clap::{Parser, Subcommand};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -55,22 +56,17 @@ struct Args {
 }
 
 fn bitcoin_rpc() -> anyhow::Result<Arc<BitcoinClient>> {
-    let url: Url = env::var("FM_TEST_BITCOIND_RPC")
-        .expect("Must have bitcoind RPC defined for real tests")
-        .parse()
-        .expect("Invalid bitcoind RPC URL");
-    let (host, auth) =
-        fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(&url).expect("corrent url");
-    let client =
-        Arc::new(BitcoinClient::new(&host, auth).expect("couldn't create Bitcoin RPC client"));
+    let url: Url = env::var("FM_TEST_BITCOIND_RPC")?.parse()?;
+    let (host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(&url)?;
+    let client = Arc::new(BitcoinClient::new(&host, auth)?);
     Ok(client)
 }
 
 async fn fedimint_client() -> anyhow::Result<UserClient> {
-    let workdir: PathBuf = env::var("FM_CFG_DIR").unwrap().parse()?;
+    let workdir: PathBuf = env::var("FM_CFG_DIR")?.parse()?;
     let cfg_path = workdir.join("client.json");
     let db_path = workdir.join("client.db");
-    let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
+    let cfg: UserClientConfig = load_from_file(&cfg_path)?;
     let db = fedimint_rocksdb::RocksDb::open(db_path)?;
     let decoders = module_decode_stubs();
     let db = Database::new(db, module_decode_stubs());
@@ -85,7 +81,7 @@ async fn fedimint_client() -> anyhow::Result<UserClient> {
 /// Save PID to a $FM_PID_FILE which `kill_fedimint_processes` shell script
 /// reads from and kills every PID it finds on EXIT
 async fn kill_on_exit(process: &Child) -> anyhow::Result<()> {
-    let pid_file = env::var("FM_PID_FILE").unwrap();
+    let pid_file = env::var("FM_PID_FILE")?;
     let mut file = OpenOptions::new()
         .write(true)
         .append(true)
@@ -93,7 +89,11 @@ async fn kill_on_exit(process: &Child) -> anyhow::Result<()> {
         .await?;
 
     let mut buf = Vec::<u8>::new();
-    writeln!(buf, "{}", process.id().expect("PID missing"))?;
+    writeln!(
+        buf,
+        "{}",
+        process.id().ok_or_else(|| anyhow!("PID missing"))?
+    )?;
     file.write_all(&buf).await?;
 
     Ok(())
@@ -121,8 +121,7 @@ async fn await_fedimint_block_sync() -> anyhow::Result<()> {
     let wallet_cfg: WalletClientConfig = fedimint_client
         .config()
         .0
-        .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-        .expect("Malformed wallet config");
+        .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)?;
     let finality_delay = wallet_cfg.finality_delay;
     let bitcoin_rpc = bitcoin_rpc()?;
     let bitcoin_block_height = bitcoin_rpc.get_blockchain_info()?.blocks;
@@ -135,13 +134,12 @@ async fn await_fedimint_block_sync() -> anyhow::Result<()> {
 }
 
 async fn run_bitcoind() -> anyhow::Result<()> {
-    let btc_dir = env::var("FM_BTC_DIR").unwrap();
+    let btc_dir = env::var("FM_BTC_DIR")?;
 
     // spawn bitcoind
     let mut bitcoind = Command::new("bitcoind")
         .arg(format!("-datadir={btc_dir}"))
-        .spawn()
-        .expect("failed to spawn bitcoind");
+        .spawn()?;
     kill_on_exit(&bitcoind).await?;
     info!("bitcoind started");
 
@@ -168,8 +166,8 @@ async fn run_lightningd() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoind_ready("lightningd").await?;
 
-    let cln_dir = env::var("FM_CLN_DIR").unwrap();
-    let bin_dir = env::var("FM_BIN_DIR").unwrap();
+    let cln_dir = env::var("FM_CLN_DIR")?;
+    let bin_dir = env::var("FM_BIN_DIR")?;
 
     // spawn lightningd
     let mut lightningd = Command::new("lightningd")
@@ -177,8 +175,7 @@ async fn run_lightningd() -> anyhow::Result<()> {
         .arg("--dev-bitcoind-poll=1")
         .arg(format!("--lightning-dir={cln_dir}"))
         .arg(format!("--plugin={bin_dir}/gateway-cln-extension"))
-        .spawn()
-        .expect("failed to spawn lightningd");
+        .spawn()?;
     kill_on_exit(&lightningd).await?;
     info!("lightningd started");
 
@@ -191,13 +188,12 @@ async fn run_lnd() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoind_ready("lnd").await?;
 
-    let lnd_dir = env::var("FM_LND_DIR").unwrap();
+    let lnd_dir = env::var("FM_LND_DIR")?;
 
     // spawn lnd
     let mut lnd = Command::new("lnd")
         .arg(format!("--lnddir={lnd_dir}"))
-        .spawn()
-        .expect("failed to spawn lnd");
+        .spawn()?;
     kill_on_exit(&lnd).await?;
     info!("lnd started");
 
@@ -210,14 +206,13 @@ async fn run_electrs() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoind_ready("electrs").await?;
 
-    let electrs_dir = env::var("FM_ELECTRS_DIR").unwrap();
+    let electrs_dir = env::var("FM_ELECTRS_DIR")?;
 
     // spawn electrs
     let mut electrs = Command::new("electrs")
         .arg(format!("--conf-dir={electrs_dir}"))
         .arg(format!("--db-dir={electrs_dir}"))
-        .spawn()
-        .expect("failed to spawn electrs");
+        .spawn()?;
     kill_on_exit(&electrs).await?;
     info!("electrs started");
 
@@ -230,8 +225,8 @@ async fn run_esplora() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoind_ready("esplora").await?;
 
-    let daemon_dir = env::var("FM_BTC_DIR").unwrap();
-    let test_dir = env::var("FM_TEST_DIR").unwrap();
+    let daemon_dir = env::var("FM_BTC_DIR")?;
+    let test_dir = env::var("FM_TEST_DIR")?;
 
     // spawn esplora
     let mut esplora = Command::new("esplora")
@@ -242,8 +237,7 @@ async fn run_esplora() -> anyhow::Result<()> {
         .arg("--daemon-rpc-addr=127.0.0.1:18443")
         .arg("--http-addr=127.0.0.1:50002")
         .arg("--monitoring-addr=127.0.0.1:50003")
-        .spawn()
-        .expect("failed to spawn esplora");
+        .spawn()?;
     kill_on_exit(&esplora).await?;
     info!("esplora started");
 
@@ -256,16 +250,15 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoind_ready(&format!("fedimint-{id}")).await?;
 
-    let bin_dir = env::var("FM_BIN_DIR").unwrap();
-    let cfg_dir = env::var("FM_CFG_DIR").unwrap();
+    let bin_dir = env::var("FM_BIN_DIR")?;
+    let cfg_dir = env::var("FM_CFG_DIR")?;
 
     // spawn fedimintd
     let mut fedimintd = Command::new(format!("{bin_dir}/fedimintd"))
         // TODO: $FM_FEDIMINTD_DATA_DIR
         .arg(format!("{cfg_dir}/server-{id}"))
-        .envs(fedimintd_env(id))
-        .spawn()
-        .expect("failed to spawn fedimintd");
+        .envs(fedimintd_env(id)?)
+        .spawn()?;
     kill_on_exit(&fedimintd).await?;
     info!("fedimintd started");
 
@@ -277,13 +270,11 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
 }
 
 async fn run_gatewayd() -> anyhow::Result<()> {
-    let bin_dir = env::var("FM_BIN_DIR").unwrap();
+    let bin_dir = env::var("FM_BIN_DIR")?;
 
     // TODO: await_fedimint_block_sync()
 
-    let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd"))
-        .spawn()
-        .expect("failed to spawn gatewayd");
+    let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd")).spawn()?;
     kill_on_exit(&gatewayd).await?;
     info!("gatewayd started");
 
@@ -313,13 +304,13 @@ async fn run_federation(start_id: usize, stop_id: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn fedimintd_env(id: usize) -> HashMap<String, String> {
+fn fedimintd_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
     let base_port = 8173 + 10000;
     let p2p_port = base_port + (id * 10);
     let api_port = base_port + (id * 10) + 1;
     let ui_port = base_port + (id * 10) + 2;
-    let cfg_dir = env::var("FM_CFG_DIR").unwrap();
-    HashMap::from_iter([
+    let cfg_dir = env::var("FM_CFG_DIR")?;
+    Ok(HashMap::from_iter([
         ("FM_BIND_P2P".into(), format!("127.0.0.1:{p2p_port}")),
         (
             "FM_P2P_URL".into(),
@@ -333,17 +324,23 @@ fn fedimintd_env(id: usize) -> HashMap<String, String> {
             format!("{cfg_dir}/server-{id}"),
         ),
         ("FM_PASSWORD".into(), format!("pass{id}")),
-    ])
+    ]))
 }
 
 async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
     // set env vars
-    let bin_dir = env::var("FM_BIN_DIR").unwrap();
+    let bin_dir = env::var("FM_BIN_DIR")?;
     let server_name = format!("Server-{id}");
-    let env_vars = fedimintd_env(id);
-    let p2p_url = env_vars.get("FM_P2P_URL").unwrap();
-    let api_url = env_vars.get("FM_API_URL").unwrap();
-    let out_dir = env_vars.get("FM_FEDIMINT_DATA_DIR").unwrap();
+    let env_vars = fedimintd_env(id)?;
+    let p2p_url = env_vars
+        .get("FM_P2P_URL")
+        .ok_or_else(|| anyhow!("FM_P2P_URL not found"))?;
+    let api_url = env_vars
+        .get("FM_API_URL")
+        .ok_or_else(|| anyhow!("FM_API_URL not found"))?;
+    let out_dir = env_vars
+        .get("FM_FEDIMINT_DATA_DIR")
+        .ok_or_else(|| anyhow!("FM_FEDIMINT_DATA_DIR not found"))?;
     let cert_path = format!("{out_dir}/tls-cert");
 
     // create out-dir
@@ -351,14 +348,13 @@ async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
 
     info!("creating TLS certs created for started {server_name} in {out_dir}");
     let mut task = Command::new(format!("{bin_dir}/distributedgen"))
-        .envs(fedimintd_env(id))
+        .envs(fedimintd_env(id)?)
         .arg("create-cert")
         .arg(format!("--p2p-url={p2p_url}"))
         .arg(format!("--api-url={api_url}"))
         .arg(format!("--out-dir={out_dir}"))
         .arg(format!("--name={server_name}"))
-        .spawn()
-        .unwrap_or_else(|e| panic!("failed to spawn create TLS certs for {server_name} {e:?}"));
+        .spawn()?;
     kill_on_exit(&task).await?;
 
     task.wait().await?;
@@ -367,29 +363,35 @@ async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
     // TODO: read TLS cert from disk and return if over channel
     let cert = fs::read_to_string(cert_path)
         .await
-        .expect("couldn't read cert from disk");
+        .map_err(|_| anyhow!("Could not read TLS cert from disk"))?;
     sender
         .send(cert)
         .await
-        .expect("failed to send cert over channel");
+        .map_err(|_| anyhow!("failed to send cert over channel"))?;
 
     Ok(())
 }
 
 async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()> {
     let certs = certs.join(",");
-    let bin_dir = env::var("FM_BIN_DIR").unwrap();
-    let cfg_dir = env::var("FM_CFG_DIR").unwrap();
+    let bin_dir = env::var("FM_BIN_DIR")?;
+    let cfg_dir = env::var("FM_CFG_DIR")?;
     let server_name = format!("Server-{id}");
 
-    let env_vars = fedimintd_env(id);
-    let bind_p2p = env_vars.get("FM_BIND_P2P").unwrap();
-    let bind_api = env_vars.get("FM_BIND_API").unwrap();
-    let out_dir = env_vars.get("FM_FEDIMINT_DATA_DIR").unwrap();
+    let env_vars = fedimintd_env(id)?;
+    let bind_p2p = env_vars
+        .get("FM_BIND_P2P")
+        .expect("fedimint_env sets this key");
+    let bind_api = env_vars
+        .get("FM_BIND_API")
+        .expect("fedimint_env sets this key");
+    let out_dir = env_vars
+        .get("FM_FEDIMINT_DATA_DIR")
+        .expect("fedimint_env sets this key");
 
     info!("creating TLS certs created for started {server_name} in {out_dir}");
     let mut task = Command::new(format!("{bin_dir}/distributedgen"))
-        .envs(fedimintd_env(id))
+        .envs(&env_vars)
         .arg("run")
         .arg(format!("--bind-p2p={bind_p2p}"))
         .arg(format!("--bind-api={bind_api}"))
