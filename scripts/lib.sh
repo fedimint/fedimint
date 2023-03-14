@@ -21,13 +21,6 @@ function open_channel() {
     until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $FM_POLL_INTERVAL; done
 }
 
-function await_bitcoin_rpc() {
-    until $FM_BTC_CLIENT getblockchaininfo 1>/dev/null 2>/dev/null ; do
-        >&2 echo "Bitcoind rpc not ready yet. Waiting ..."
-        sleep "$FM_POLL_INTERVAL"
-    done
-}
-
 function await_fedimint_block_sync() {
   $FM_BIN_DIR/fixtures await-fedimint-block-sync
 }
@@ -46,6 +39,7 @@ function await_server_on_port() {
 # Check that lightning block-proccessing is caught up
 # CLI integration tests should call this before attempting to pay invoices
 function await_lightning_node_block_processing() {
+  await_bitcoind_ready
   # CLN
   EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
   until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
@@ -169,6 +163,10 @@ function setup_fedimintd_env() {
   # ensure datadir exists ... pipe to `true` because run_dkg() and setup_federation()
   # both call this so the directory might already be here ...
   mkdir $FM_FEDIMINTD_DATA_DIR || true
+}
+
+function await_bitcoind_ready() {
+  $FM_BIN_DIR/fixtures await-bitcoind-ready
 }
 
 ### Start Daemons ###
