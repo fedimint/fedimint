@@ -152,20 +152,10 @@ jobs:
           nix build -L .#container.fedimintd
           echo "fedimintd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
-      - name: Build ln-gateway-clightning container
-        run: |
-          nix build -L .#container.ln-gateway-clightning
-          echo "ln_gateway_clightning_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
-
       - name: Build fedimint-cli container
         run: |
           nix build -L .#container.fedimint-cli
           echo "mint_client_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
-
-      - name: Build ln-gateway container
-        run: |
-          nix build -L .#container.ln-gateway
-          echo "ln_gateway_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/kody-setup-rebase'
@@ -178,14 +168,12 @@ jobs:
         if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/kody-setup-rebase'
         run: |
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.ln_gateway_clightning_container_tag }} && hub_tag="fedimint/ln-gateway-clightning:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish master tag
         if: github.ref == 'refs/heads/master'
         run: |
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.ln_gateway_clightning_container_tag }} && hub_tag="fedimint/ln-gateway-clightning:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
@@ -197,7 +185,7 @@ jobs:
         build:
           - client-pkgs
           - fedimint-pkgs
-          - ln-gateway-pkgs
+          - gateway-pkgs
 
     runs-on: buildjet-4vcpu-ubuntu-2004
     timeout-minutes: 30

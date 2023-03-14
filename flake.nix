@@ -612,8 +612,8 @@
             ];
           };
 
-          ln-gateway-pkgs = pkgsBuild {
-            name = "ln-gateway-pkgs";
+          gateway-pkgs = pkgsBuild {
+            name = "gateway-pkgs";
 
             pkgs = {
               ln-gateway = { };
@@ -729,7 +729,7 @@
           default = craneBuildNative.fedimint-pkgs;
 
           fedimint-pkgs = craneBuildNative.fedimint-pkgs;
-          ln-gateway-pkgs = craneBuildNative.ln-gateway-pkgs;
+          gateway-pkgs = craneBuildNative.gateway-pkgs;
           client-pkgs = craneBuildNative.client-pkgs { };
         };
 
@@ -966,71 +966,6 @@
                   };
                 };
               };
-
-              ln-gateway =
-                let
-                  entrypointScript =
-                    pkgs.writeShellScriptBin "entrypoint" ''
-                      exec bash "${./misc/ln-gateway-container-entrypoint.sh}" "$@"
-                    '';
-                in
-                pkgs.dockerTools.buildLayeredImage {
-                  name = "ln-gateway";
-                  contents = [ craneBuildNative.ln-gateway-pkgs pkgs.bash pkgs.coreutils ];
-                  config = {
-                    Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
-                    Entrypoint = [
-                      "${entrypointScript}/bin/entrypoint"
-                    ];
-                    ExposedPorts = {
-                      "${builtins.toString 8175}/tcp" = { };
-                    };
-                  };
-                  enableFakechroot = true;
-                };
-
-              ln-gateway-clightning =
-                let
-                  # Will be placed in `/config-example.cfg` by `fakeRootCommands` below
-                  config-example = pkgs.writeText "config-example.conf" ''
-                    network=signet
-                    # bitcoin-datadir=/var/lib/bitcoind
-
-                    always-use-proxy=false
-                    bind-addr=0.0.0.0:9735
-                    bitcoin-rpcconnect=127.0.0.1
-                    bitcoin-rpcport=8332
-                    bitcoin-rpcuser=public
-                    rpc-file-mode=0660
-                    log-timestamps=false
-
-                    plugin=${craneBuildNative.ln-gateway-pkgs}/bin/ln_gateway
-                    fedimint-cfg=/var/fedimint/fedimint-gw
-
-                    announce-addr=104.244.73.68:9735
-                    alias=fm-signet.sirion.io
-                    large-channels
-                    experimental-offers
-                    fee-base=0
-                    fee-per-satoshi=100
-                  '';
-                in
-                pkgs.dockerTools.buildLayeredImage {
-                  name = "ln-gateway-clightning";
-                  contents = [ craneBuildNative.ln-gateway-pkgs clightning-dev pkgs.bash pkgs.coreutils ];
-                  config = {
-                    Cmd = [
-                      "${craneBuildNative.ln-gateway-pkgs}/bin/ln_gateway"
-                    ];
-                    ExposedPorts = {
-                      "${builtins.toString 9735}/tcp" = { };
-                    };
-                  };
-                  enableFakechroot = true;
-                  fakeRootCommands = ''
-                    ln -s ${config-example} /config-example.cfg
-                  '';
-                };
 
               fedimint-cli = pkgs.dockerTools.buildLayeredImage {
                 name = "fedimint-cli";
