@@ -41,8 +41,7 @@ function await_server_on_port() {
 function await_lightning_node_block_processing() {
   await_bitcoind_ready
   # CLN
-  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
-  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
+  until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')" == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
   do
     sleep $FM_POLL_INTERVAL
   done
