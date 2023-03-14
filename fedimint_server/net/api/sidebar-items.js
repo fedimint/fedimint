@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["attach_endpoints",""],["attach_endpoints_erased",""],["run_server",""],["server_endpoints",""]],"struct":[["RpcHandlerCtx","A state of fedimint server passed to each rpc handler callback"]]};
+window.SIDEBAR_ITEMS = {"constant":[["API_ENDPOINT_TIMEOUT",""]],"fn":[["attach_endpoints",""],["attach_endpoints_erased",""],["run_server",""],["server_endpoints",""]],"struct":[["RpcHandlerCtx","A state of fedimint server passed to each rpc handler callback"]]};

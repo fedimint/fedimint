@@ -2365,7 +2365,7 @@
 
         <span class="kw">let </span>stream = stream::iter(pending)
             .map(|(key, notes)| <span class="kw">async move </span>{
-                <span class="kw">match </span><span class="self">self</span>.context.api.fetch_tx_outcome(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).<span class="kw">await </span>{
+                <span class="kw">match </span><span class="self">self</span>.context.api.await_tx_outcome(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>((key, notes)),
                     <span class="prelude-val">Ok</span>(TransactionStatus::Accepted { .. }) =&gt; {
                         <span class="prelude-val">Ok</span>((key, TieredMulti::&lt;SpendableNote&gt;::default()))

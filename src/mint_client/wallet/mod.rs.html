@@ -402,6 +402,19 @@
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::{Address, KeyPair};
@@ -640,18 +653,31 @@
             .iter()
             .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
             .collect();
-        FederationApiFaker::new(fed, members).with(
-            <span class="string">&quot;/fetch_transaction&quot;</span>,
-            <span class="kw">move </span>|_mint: Arc&lt;Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt;, _tx: TransactionId| <span class="kw">async move </span>{
-                <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
-                    epoch: <span class="number">0</span>,
-                    outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
-                        module_id,
-                        WalletOutputOutcome(Txid::from_slice([<span class="number">0</span>; <span class="number">32</span>].as_slice()).unwrap()),
-                    ))],
-                })
-            },
-        )
+        FederationApiFaker::new(fed, members)
+            .with(
+                <span class="string">&quot;/fetch_transaction&quot;</span>,
+                <span class="kw">move </span>|_mint: Arc&lt;Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt;, _tx: TransactionId| <span class="kw">async move </span>{
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(TransactionStatus::Accepted {
+                        epoch: <span class="number">0</span>,
+                        outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
+                            module_id,
+                            WalletOutputOutcome(Txid::from_slice([<span class="number">0</span>; <span class="number">32</span>].as_slice()).unwrap()),
+                        ))],
+                    }))
+                },
+            )
+            .with(
+                <span class="string">&quot;/wait_transaction&quot;</span>,
+                <span class="kw">move </span>|_mint: Arc&lt;Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt;, _tx: TransactionId| <span class="kw">async move </span>{
+                    <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
+                        epoch: <span class="number">0</span>,
+                        outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
+                            module_id,
+                            WalletOutputOutcome(Txid::from_slice([<span class="number">0</span>; <span class="number">32</span>].as_slice()).unwrap()),
+                        ))],
+                    })
+                },
+            )
     }
 
     <span class="kw">async fn </span>new_mint_and_client(

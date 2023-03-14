@@ -945,6 +945,33 @@
 <a href="#945" id="945">945</a>
 <a href="#946" id="946">946</a>
 <a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -1760,6 +1787,52 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="kw">async fn </span>accepted_transaction_status(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        txid: TransactionId,
+        accepted: AcceptedTransaction,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; TransactionStatus {
+        <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
+        <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>accepted.transaction.outputs.iter().enumerate() {
+            <span class="kw">let </span>outpoint = OutPoint {
+                txid,
+                out_idx: out_idx <span class="kw">as </span>u64,
+            };
+            <span class="kw">let </span>outcome = <span class="self">self
+                </span>.modules
+                .get_expect(output.module_instance_id())
+                .output_status(
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
+                    outpoint,
+                    output.module_instance_id(),
+                )
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;the transaction was processed, so must be known&quot;</span>);
+            outputs.push((<span class="kw-2">&amp;</span>outcome).into())
+        }
+
+        TransactionStatus::Accepted {
+            epoch: accepted.epoch,
+            outputs,
+        }
+    }
+
+    <span class="kw">pub async fn </span>wait_transaction_status(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        txid: TransactionId,
+    ) -&gt; <span class="kw">crate</span>::outcome::TransactionStatus {
+        <span class="kw">let </span>accepted_key = AcceptedTransactionKey(txid);
+        <span class="kw">let </span>rejected_key = RejectedTransactionKey(txid);
+        <span class="macro">tokio::select! </span>{
+            (accepted, <span class="kw-2">mut </span>dbtx) = <span class="self">self</span>.db.wait_key_check(<span class="kw-2">&amp;</span>accepted_key, std::convert::identity) =&gt; {
+                <span class="self">self</span>.accepted_transaction_status(txid, accepted, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await
+            </span>}
+            rejected = <span class="self">self</span>.db.wait_key_exists(<span class="kw-2">&amp;</span>rejected_key) =&gt; {
+                TransactionStatus::Rejected(rejected)
+            }
+        }
+    }
     <span class="kw">pub async fn </span>transaction_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
@@ -1769,30 +1842,11 @@
         <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; =
             dbtx.get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid)).<span class="kw">await</span>;
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(accepted_tx) = accepted {
-            <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
-            <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>accepted_tx.transaction.outputs.iter().enumerate() {
-                <span class="kw">let </span>outpoint = OutPoint {
-                    txid,
-                    out_idx: out_idx <span class="kw">as </span>u64,
-                };
-                <span class="kw">let </span>outcome = <span class="self">self
-                    </span>.modules
-                    .get_expect(output.module_instance_id())
-                    .output_status(
-                        <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
-                        outpoint,
-                        output.module_instance_id(),
-                    )
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
-                outputs.push((<span class="kw-2">&amp;</span>outcome).into())
-            }
-
-            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="kw">crate</span>::outcome::TransactionStatus::Accepted {
-                epoch: accepted_tx.epoch,
-                outputs,
-            });
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(accepted) = accepted {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(
+                <span class="self">self</span>.accepted_transaction_status(txid, accepted, <span class="kw-2">&amp;mut </span>dbtx)
+                    .<span class="kw">await</span>,
+            );
         }
 
         <span class="kw">let </span>rejected: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="self">self

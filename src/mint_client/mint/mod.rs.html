@@ -976,6 +976,26 @@
 <a href="#976" id="976">976</a>
 <a href="#977" id="977">977</a>
 <a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -1438,6 +1458,7 @@
             .api
             .fetch_output_outcome::&lt;OutputOutcome&gt;(outpoint, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
             .<span class="kw">await</span><span class="question-mark">?
+            </span>.ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?
             </span>.try_into_variant::&lt;MintOutputOutcome&gt;()<span class="question-mark">?
             </span>.as_ref()
             .cloned()
@@ -1671,24 +1692,43 @@
             .iter()
             .map(|(peer_id, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)| <span class="kw-2">*</span>peer_id)
             .collect();
-        FederationApiFaker::new(fed, members).with(
-            <span class="string">&quot;/fetch_transaction&quot;</span>,
-            <span class="kw">move </span>|mint: Arc&lt;Mutex&lt;FakeFed&lt;Mint&gt;&gt;&gt;, tx: TransactionId| <span class="kw">async move </span>{
-                <span class="kw">let </span>mint = mint.lock().<span class="kw">await</span>;
-                <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
-                    epoch: <span class="number">0</span>,
-                    outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
-                        module_id,
-                        mint.output_outcome(OutPoint {
-                            txid: tx,
-                            out_idx: <span class="number">0</span>,
-                        })
-                        .<span class="kw">await
-                        </span>.unwrap(),
-                    ))],
-                })
-            },
-        )
+        FederationApiFaker::new(fed, members)
+            .with(
+                <span class="string">&quot;/fetch_transaction&quot;</span>,
+                <span class="kw">move </span>|mint: Arc&lt;Mutex&lt;FakeFed&lt;Mint&gt;&gt;&gt;, tx: TransactionId| <span class="kw">async move </span>{
+                    <span class="kw">let </span>mint = mint.lock().<span class="kw">await</span>;
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(TransactionStatus::Accepted {
+                        epoch: <span class="number">0</span>,
+                        outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
+                            module_id,
+                            mint.output_outcome(OutPoint {
+                                txid: tx,
+                                out_idx: <span class="number">0</span>,
+                            })
+                            .<span class="kw">await
+                            </span>.unwrap(),
+                        ))],
+                    }))
+                },
+            )
+            .with(
+                <span class="string">&quot;/wait_transaction&quot;</span>,
+                <span class="kw">move </span>|mint: Arc&lt;Mutex&lt;FakeFed&lt;Mint&gt;&gt;&gt;, tx: TransactionId| <span class="kw">async move </span>{
+                    <span class="kw">let </span>mint = mint.lock().<span class="kw">await</span>;
+                    <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
+                        epoch: <span class="number">0</span>,
+                        outputs: <span class="macro">vec!</span>[SerdeOutputOutcome::from(<span class="kw-2">&amp;</span>DynOutputOutcome::from_typed(
+                            module_id,
+                            mint.output_outcome(OutPoint {
+                                txid: tx,
+                                out_idx: <span class="number">0</span>,
+                            })
+                            .<span class="kw">await
+                            </span>.unwrap(),
+                        ))],
+                    })
+                },
+            )
     }
 
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (

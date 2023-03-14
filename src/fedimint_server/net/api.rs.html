@@ -234,6 +234,33 @@
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::Formatter;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -316,6 +343,8 @@
     server_handle.stopped().<span class="kw">await
 </span>}
 
+<span class="kw">const </span>API_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(<span class="number">60</span>);
+
 <span class="comment">// TODO: remove once modularized
 </span><span class="kw">fn </span>attach_endpoints(
     rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&gt;,
@@ -345,25 +374,31 @@
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                </span>AssertUnwindSafe((handler)(fedimint, dbtx, params, module_instance_id))
-                    .catch_unwind()
-                    .<span class="kw">await
-                    </span>.map_err(|<span class="kw">_</span>| {
-                        <span class="macro">error!</span>(
-                            target: LOG_NET_API,
-                            path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;
-                        </span>);
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            <span class="number">500</span>,
-                            <span class="string">&quot;API handler panicked&quot;</span>,
-                            <span class="prelude-val">None</span>::&lt;()&gt;,
-                        )))
-                    })<span class="question-mark">?
-                    </span>.map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
-                        )))
-                    })
+                </span>AssertUnwindSafe(tokio::time::timeout(
+                    API_ENDPOINT_TIMEOUT,
+                    (handler)(fedimint, dbtx, params, module_instance_id),
+                ))
+                .catch_unwind()
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| {
+                    <span class="macro">error!</span>(
+                        target: LOG_NET_API,
+                        path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;
+                    </span>);
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        <span class="number">500</span>,
+                        <span class="string">&quot;API handler panicked&quot;</span>,
+                        <span class="prelude-val">None</span>::&lt;()&gt;,
+                    )))
+                })<span class="question-mark">?
+                </span>.map_err(|tokio::time::error::Elapsed { .. }| {
+                    jsonrpsee::core::Error::RequestTimeout
+                })<span class="question-mark">?
+                </span>.map_err(|e| {
+                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                        e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
+                    )))
+                })
             })
             .expect(<span class="string">&quot;Failed to register async method&quot;</span>);
     }
@@ -393,11 +428,14 @@
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                </span>AssertUnwindSafe((handler)(
-                    fedimint.modules.get_expect(module_instance),
-                    dbtx,
-                    params,
-                    <span class="prelude-val">Some</span>(module_instance),
+                </span>AssertUnwindSafe(tokio::time::timeout(
+                    API_ENDPOINT_TIMEOUT,
+                    (handler)(
+                        fedimint.modules.get_expect(module_instance),
+                        dbtx,
+                        params,
+                        <span class="prelude-val">Some</span>(module_instance),
+                    ),
                 ))
                 .catch_unwind()
                 .<span class="kw">await
@@ -411,6 +449,9 @@
                         <span class="string">&quot;API handler panicked&quot;</span>,
                         <span class="prelude-val">None</span>::&lt;()&gt;,
                     )))
+                })<span class="question-mark">?
+                </span>.map_err(|tokio::time::error::Elapsed { .. }| {
+                    jsonrpsee::core::Error::RequestTimeout
                 })<span class="question-mark">?
                 </span>.map_err(|e| {
                     jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
@@ -440,10 +481,23 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_transaction&quot;</span>,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, tx_hash: TransactionId| -&gt; <span class="prelude-ty">Option</span>&lt;TransactionStatus&gt; {
+                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Recieved request&quot;</span>);
+
+                <span class="kw">let </span>tx_status = fedimint.transaction_status(tx_hash)
+                    .<span class="kw">await</span>;
+
+                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Sending outcome&quot;</span>);
+                <span class="prelude-val">Ok</span>(tx_status)
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;/wait_transaction&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, tx_hash: TransactionId| -&gt; TransactionStatus {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Recieved request&quot;</span>);
 
-                <span class="kw">let </span>tx_status = fedimint.transaction_status(tx_hash).<span class="kw">await</span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;transaction not found&quot;</span>)))<span class="question-mark">?</span>;
+                <span class="kw">let </span>tx_status = fedimint.wait_transaction_status(tx_hash)
+                    .<span class="kw">await</span>;
 
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Sending outcome&quot;</span>);
                 <span class="prelude-val">Ok</span>(tx_status)

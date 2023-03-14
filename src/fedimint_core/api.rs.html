@@ -1131,6 +1131,7 @@
 <a href="#1131" id="1131">1131</a>
 <a href="#1132" id="1132">1132</a>
 <a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1171,7 +1172,7 @@
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::{PublicKey, PK_SIZE};
-<span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
+<span class="kw">use </span>tracing::{debug, error, instrument, trace};
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -1259,16 +1260,6 @@
     </span>InvalidVout { out_idx: u64, outputs_num: usize },
     <span class="attr">#[error(<span class="string">&quot;Timeout reached after waiting {}s&quot;</span>, .<span class="number">0</span>.as_secs())]
     </span>Timeout(Duration),
-}
-
-<span class="kw">impl </span>OutputOutcomeError {
-    <span class="kw">fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="kw">match </span><span class="self">self </span>{
-            <span class="self">Self</span>::Federation(fed) =&gt; fed.is_retryable(),
-            <span class="self">Self</span>::Core(CoreError::PendingPreimage) =&gt; <span class="bool-val">true</span>,
-            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-        }
-    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1498,7 +1489,11 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>GlobalFederationApi {
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt;;
-    <span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt;;
+    <span class="kw">async fn </span>fetch_tx_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        txid: <span class="kw-2">&amp;</span>TransactionId,
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;TransactionStatus&gt;&gt;;
+    <span class="kw">async fn </span>await_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt;;
 
     <span class="kw">async fn </span>fetch_epoch_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1513,7 +1508,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         out_point: OutPoint,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; OutputOutcomeResult&lt;R&gt;
+    ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
     <span class="kw">where
         </span>R: DynTryIntoOutcome + MaybeSend;
 
@@ -1534,6 +1529,36 @@
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
     </span><span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
 }
+<span class="kw">fn </span>map_tx_outcome_outpoint&lt;R&gt;(
+    tx_outcome: TransactionStatus,
+    out_point: OutPoint,
+    decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+) -&gt; OutputOutcomeResult&lt;R&gt;
+<span class="kw">where
+    </span>R: DynTryIntoOutcome + MaybeSend,
+{
+    <span class="kw">match </span>tx_outcome {
+        TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(OutputOutcomeError::Rejected(e)),
+        TransactionStatus::Accepted { outputs, .. } =&gt; {
+            <span class="kw">let </span>outputs_len = outputs.len();
+            outputs
+                .into_iter()
+                .nth(out_point.out_idx <span class="kw">as </span>usize) <span class="comment">// avoid clone as would be necessary with .get(…)
+                </span>.ok_or(OutputOutcomeError::InvalidVout {
+                    outputs_num: outputs_len,
+                    out_idx: out_point.out_idx,
+                })
+                .and_then(|output| {
+                    R::try_into_outcome(
+                        output
+                            .try_into_inner(decoders)
+                            .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))<span class="question-mark">?</span>,
+                    )
+                    .map_err(OutputOutcomeError::Core)
+                })
+        }
+    }
+}
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; GlobalFederationApi <span class="kw">for </span>T
@@ -1550,8 +1575,17 @@
     </span>}
 
     <span class="doccomment">/// Fetch the outcome of an entire transaction
-    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt; {
+    </span><span class="kw">async fn </span>fetch_tx_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tx: <span class="kw-2">&amp;</span>TransactionId,
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;TransactionStatus&gt;&gt; {
         <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/fetch_transaction&quot;</span>.to_owned(), erased_single_param(<span class="kw-2">&amp;</span>tx))
+            .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Await the outcome of an entire transaction
+    </span><span class="kw">async fn </span>await_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt; {
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/wait_transaction&quot;</span>.to_owned(), erased_single_param(<span class="kw-2">&amp;</span>tx))
             .<span class="kw">await
     </span>}
 
@@ -1615,31 +1649,15 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         out_point: OutPoint,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; OutputOutcomeResult&lt;R&gt;
+    ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
     <span class="kw">where
         </span>R: DynTryIntoOutcome + MaybeSend,
     {
-        <span class="kw">match </span><span class="self">self</span>.fetch_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid).<span class="kw">await</span><span class="question-mark">? </span>{
-            TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(OutputOutcomeError::Rejected(e)),
-            TransactionStatus::Accepted { outputs, .. } =&gt; {
-                <span class="kw">let </span>outputs_len = outputs.len();
-                outputs
-                    .into_iter()
-                    .nth(out_point.out_idx <span class="kw">as </span>usize) <span class="comment">// avoid clone as would be necessary with .get(…)
-                    </span>.ok_or(OutputOutcomeError::InvalidVout {
-                        outputs_num: outputs_len,
-                        out_idx: out_point.out_idx,
-                    })
-                    .and_then(|output| {
-                        R::try_into_outcome(
-                            output.try_into_inner(decoders).map_err(|e| {
-                                OutputOutcomeError::ResponseDeserialization(e.into())
-                            })<span class="question-mark">?</span>,
-                        )
-                        .map_err(OutputOutcomeError::Core)
-                    })
-            }
-        }
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.fetch_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.map(<span class="kw">move </span>|tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, decoders))
+            .transpose()<span class="question-mark">?</span>)
     }
 
     <span class="comment">// TODO should become part of the API
@@ -1649,28 +1667,12 @@
         timeout: Duration,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; OutputOutcomeResult&lt;R&gt; {
-        <span class="kw">let </span>poll = || <span class="kw">async </span>{
-            <span class="kw">let </span>interval = Duration::from_secs(<span class="number">1</span>);
-            <span class="kw">loop </span>{
-                <span class="kw">match </span><span class="self">self</span>.fetch_output_outcome(outpoint, decoders).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
-                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
-                        <span class="macro">trace!</span>(<span class="string">&quot;Federation api returned retryable error: {:?}&quot;</span>, e);
-                        fedimint_core::task::sleep(interval).<span class="kw">await
-                    </span>}
-                    <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">warn!</span>(
-                            target: LOG_NET_API,
-                            <span class="string">&quot;Federation api returned error: {:?}&quot;</span>, e
-                        );
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(e);
-                    }
-                }
-            }
-        };
-        fedimint_core::task::timeout(timeout, poll())
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
+        fedimint_core::task::timeout(timeout, <span class="kw">async move </span>{
+            <span class="kw">let </span>tx_outcome = <span class="self">self</span>.await_tx_outcome(<span class="kw-2">&amp;</span>outpoint.txid).<span class="kw">await</span><span class="question-mark">?</span>;
+            map_tx_outcome_outpoint(tx_outcome, outpoint, decoders)
+        })
+        .<span class="kw">await
+        </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
     </span>}
 
     <span class="kw">async fn </span>download_client_config(
