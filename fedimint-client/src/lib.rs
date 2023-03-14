@@ -6,7 +6,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 use fedimint_core::api::{DynFederationApi, IFederationApi};
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
@@ -15,7 +15,10 @@ use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 
 use crate::module::{DynClientModule, DynPrimaryClientModule, IClientModule};
-use crate::sm::{DynState, Executor, GlobalContext, OperationId, OperationState};
+use crate::sm::executor::{ActiveStateKey, InactiveStateKey};
+use crate::sm::{
+    ActiveState, DynState, Executor, GlobalContext, InactiveState, OperationId, OperationState,
+};
 use crate::transaction::{
     ClientInput, ClientOutput, TransactionBuilder, TransactionBuilderBalance, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -64,6 +67,49 @@ impl GlobalClientContext {
     ) -> anyhow::Result<TransactionId> {
         self.inner
             .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
+            .await
+    }
+
+    /// Wait for any active state to appear in the database
+    pub async fn await_active_state(&self, state: DynState<GlobalClientContext>) -> ActiveState {
+        self.inner.await_active_state(state).await
+    }
+
+    /// Wait for any inactive state to appear in the database
+    pub async fn await_inactive_state(
+        &self,
+        state: DynState<GlobalClientContext>,
+    ) -> InactiveState {
+        self.inner.await_inactive_state(state).await
+    }
+
+    /// Waits till consensus has been achieved on the transaction and it was
+    /// accepted by consensus.
+    pub async fn await_tx_accepted(
+        &self,
+        operation_id: OperationId,
+        txid: TransactionId,
+    ) -> InactiveState {
+        let state = OperationState {
+            operation_id,
+            state: TxSubmissionStates::Accepted { txid },
+        };
+        self.await_inactive_state(state.into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE))
+            .await
+    }
+
+    /// Waits till the transaction is either rejected on submission or after
+    /// consensus has been achieved on it.
+    pub async fn await_tx_rejected(
+        &self,
+        operation_id: OperationId,
+        txid: TransactionId,
+    ) -> InactiveState {
+        let state = OperationState {
+            operation_id,
+            state: TxSubmissionStates::Rejected { txid },
+        };
+        self.await_inactive_state(state.into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE))
             .await
     }
 }
@@ -221,5 +267,13 @@ impl ClientInner {
         self.executor.add_state_mchines_dbtx(dbtx, states).await?;
 
         Ok(txid)
+    }
+
+    async fn await_inactive_state(&self, state: DynState<GlobalClientContext>) -> InactiveState {
+        self.db.wait_key_exists(&InactiveStateKey(state)).await
+    }
+
+    async fn await_active_state(&self, state: DynState<GlobalClientContext>) -> ActiveState {
+        self.db.wait_key_exists(&ActiveStateKey(state)).await
     }
 }

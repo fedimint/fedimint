@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
@@ -363,7 +363,7 @@ impl ExecutorBuilder {
 
 /// A state that is able to make progress eventually
 #[derive(Debug)]
-struct ActiveStateKey<GC>(DynState<GC>);
+pub struct ActiveStateKey<GC>(pub DynState<GC>);
 
 impl<GC> Encodable for ActiveStateKey<GC> {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
@@ -399,7 +399,7 @@ impl<GC> Encodable for ActiveStateKeyPrefix<GC> {
 }
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
-struct ActiveState {
+pub struct ActiveState {
     created_at: SystemTime,
 }
 
@@ -408,9 +408,13 @@ where
     GC: GlobalContext,
 {
     const DB_PREFIX: u8 = ExecutorDbPrefixes::ActiveStates as u8;
+    const NOTIFY_ON_MODIFY: bool = true;
     type Key = Self;
     type Value = ActiveState;
 }
+
+impl<GC> DatabaseKeyWithNotify for ActiveStateKey<GC> where GC: GlobalContext {}
+
 impl<GC> ::fedimint_core::db::DatabaseLookup for ActiveStateKeyPrefix<GC>
 where
     GC: GlobalContext,
@@ -434,7 +438,7 @@ impl ActiveState {
 
 /// A past or final state of a state machine
 #[derive(Debug, Clone)]
-struct InactiveStateKey<GC>(DynState<GC>);
+pub struct InactiveStateKey<GC>(pub DynState<GC>);
 
 impl<GC> Encodable for InactiveStateKey<GC>
 where
@@ -475,7 +479,7 @@ impl<GC> Encodable for InactiveStateKeyPrefix<GC> {
 }
 
 #[derive(Debug, Copy, Clone, Decodable, Encodable)]
-struct InactiveState {
+pub struct InactiveState {
     created_at: SystemTime,
     exited_at: SystemTime,
 }
@@ -485,9 +489,12 @@ where
     GC: GlobalContext,
 {
     const DB_PREFIX: u8 = ExecutorDbPrefixes::InactiveStates as u8;
+    const NOTIFY_ON_MODIFY: bool = true;
     type Key = Self;
     type Value = InactiveState;
 }
+
+impl<GC> DatabaseKeyWithNotify for InactiveStateKey<GC> where GC: GlobalContext {}
 
 impl<GC> ::fedimint_core::db::DatabaseLookup for InactiveStateKeyPrefix<GC>
 where

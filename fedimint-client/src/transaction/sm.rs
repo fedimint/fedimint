@@ -59,12 +59,20 @@ pub enum TxSubmissionStates {
     /// The transaction has been accepted after consensus was reached on it
     ///
     /// **This state is final**
-    Accepted { txid: TransactionId, epoch: u64 },
+    Accepted {
+        txid: TransactionId,
+        // TODO: enable again after awaiting DB prefix writes becomes available
+        //epoch: u64
+    },
     /// The transaction has been rejected, either by a quorum on submission or
     /// after consensus was reached
     ///
     /// **This state is final**
-    Rejected { txid: TransactionId, error: String },
+    Rejected {
+        txid: TransactionId,
+        // TODO: enable again after awaiting DB prefix writes becomes available
+        //error: String
+    },
 }
 
 impl State for TxSubmissionStates {
@@ -106,7 +114,7 @@ impl State for TxSubmissionStates {
                                         tx,
                                         next_submission: next_submission + RESUBMISSION_INTERVAL,
                                     },
-                                    Err(e) => TxSubmissionStates::Rejected { txid, error: e },
+                                    Err(_e) => TxSubmissionStates::Rejected { txid },
                                 }
                             })
                         },
@@ -116,8 +124,8 @@ impl State for TxSubmissionStates {
                         move |_dbtx, res, _state| {
                             Box::pin(async move {
                                 match res {
-                                    Ok(epoch) => TxSubmissionStates::Accepted { txid, epoch },
-                                    Err(error) => TxSubmissionStates::Rejected { txid, error },
+                                    Ok(_epoch) => TxSubmissionStates::Accepted { txid },
+                                    Err(_error) => TxSubmissionStates::Rejected { txid },
                                 }
                             })
                         },

@@ -1,10 +1,10 @@
-mod executor;
+pub(crate) mod executor;
 /// State machine state interface
 mod state;
 
 use std::fmt::Debug;
 
-pub use executor::{Executor, ExecutorBuilder};
+pub use executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 pub use state::{Context, DynContext, DynState, OperationState, State, StateTransition};
 
