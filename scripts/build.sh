@@ -33,11 +33,13 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 export FM_TEST_DIR=$FM_TMP_DIR
 export FM_BIN_DIR="$SRC_DIR/target/${CARGO_PROFILE:-debug}"
 export FM_PID_FILE="$FM_TMP_DIR/.pid"
+export FM_LOGS_DIR="$FM_TEST_DIR/logs"
 export FM_CLN_DIR="$FM_TEST_DIR/cln"
 export FM_LND_DIR="$FM_TEST_DIR/lnd"
 export FM_BTC_DIR="$FM_TEST_DIR/bitcoin"
 export FM_CFG_DIR="$FM_TEST_DIR/cfg"
 export FM_ELECTRS_DIR="$FM_TEST_DIR/electrs"
+mkdir -p $FM_LOGS_DIR
 mkdir -p $FM_CLN_DIR
 mkdir -p $FM_LND_DIR
 mkdir -p $FM_BTC_DIR
