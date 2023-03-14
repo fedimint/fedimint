@@ -257,7 +257,7 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     let mut fedimintd = Command::new(format!("{bin_dir}/fedimintd"))
         // TODO: $FM_FEDIMINTD_DATA_DIR
         .arg(format!("{cfg_dir}/server-{id}"))
-        .envs(fedimintd_env(id)?)
+        .envs(fedimint_env(id)?)
         .spawn()?;
     kill_on_exit(&fedimintd).await?;
     info!("fedimintd started");
@@ -304,7 +304,15 @@ async fn run_federation(start_id: usize, stop_id: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn fedimintd_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
+/// Create a map of environment variables which fedimintd and DKG can use,
+/// but which can't be defined by `build.sh` because multiple of these daemons
+/// run concurrently with different values.
+///
+/// We allow ranges of 10 ports for each fedimintd / dkg instance starting from
+/// 18173. Each port needed is incremented by 1 within this range.
+///
+/// * `id` - ID of the server. Used to calculate port numbers.
+fn fedimint_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
     let base_port = 8173 + 10000;
     let p2p_port = base_port + (id * 10);
     let api_port = base_port + (id * 10) + 1;
@@ -331,7 +339,7 @@ async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
     // set env vars
     let bin_dir = env::var("FM_BIN_DIR")?;
     let server_name = format!("Server-{id}");
-    let env_vars = fedimintd_env(id)?;
+    let env_vars = fedimint_env(id)?;
     let p2p_url = env_vars
         .get("FM_P2P_URL")
         .ok_or_else(|| anyhow!("FM_P2P_URL not found"))?;
@@ -348,7 +356,7 @@ async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
 
     info!("creating TLS certs created for started {server_name} in {out_dir}");
     let mut task = Command::new(format!("{bin_dir}/distributedgen"))
-        .envs(fedimintd_env(id)?)
+        .envs(fedimint_env(id)?)
         .arg("create-cert")
         .arg(format!("--p2p-url={p2p_url}"))
         .arg(format!("--api-url={api_url}"))
@@ -378,7 +386,7 @@ async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()>
     let cfg_dir = env::var("FM_CFG_DIR")?;
     let server_name = format!("Server-{id}");
 
-    let env_vars = fedimintd_env(id)?;
+    let env_vars = fedimint_env(id)?;
     let bind_p2p = env_vars
         .get("FM_BIND_P2P")
         .expect("fedimint_env sets this key");
