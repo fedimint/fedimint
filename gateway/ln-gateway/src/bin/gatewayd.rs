@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::process::exit;
 
 use clap::Parser;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -13,7 +14,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
-use ln_gateway::lnrpc_client::NetworkLnRpcClient;
+use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
 use mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
 use mint_client::modules::mint::{MintClientGen, MintModuleTypes};
@@ -42,6 +43,10 @@ pub struct GatewayOpts {
     /// Public URL to a Gateway Lightning rpc service
     #[arg(long = "lnrpc-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
     pub lnrpc_addr: Option<Url>,
+
+    /// LND RPC address
+    #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
+    pub lnd_rpc_addr: Option<String>,
 
     /// LND TLS cert file path
     #[arg(long = "lnd-tls-cert", env = "FM_LND_TLS_CERT")]
@@ -77,6 +82,7 @@ async fn main() -> Result<(), anyhow::Error> {
         api_addr,
         password,
         lnrpc_addr,
+        lnd_rpc_addr,
         lnd_tls_cert,
         lnd_macaroon,
     } = GatewayOpts::parse();
@@ -93,33 +99,25 @@ async fn main() -> Result<(), anyhow::Error> {
     // Create task group for controlled shutdown of the gateway
     let task_group = TaskGroup::new();
 
-    let lnrpc = if let Some(lnrpc_addr) = lnrpc_addr {
-        if let (Some(lnd_tls_cert), Some(lnd_macaroon)) = (lnd_tls_cert, lnd_macaroon) {
-            // Detected LND rpc client configurations
-            info!(
-                "Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} ",
-                lnrpc_addr, lnd_tls_cert, lnd_macaroon
-            );
-
-            GatewayLndClient::new(
-                lnrpc_addr.into(),
-                lnd_tls_cert,
-                lnd_macaroon,
-                task_group.clone(),
-            )
+    let lnrpc: DynLnRpcClient = if let Some(lnrpc_addr) = lnrpc_addr {
+        info!(
+            "Gateway configured to connect to remote LnRpcClient at \n lnrpc address: {:?} ",
+            lnrpc_addr
+        );
+        NetworkLnRpcClient::new(lnrpc_addr).await?.into()
+    } else if let (Some(lnd_rpc_addr), Some(lnd_tls_cert), Some(lnd_macaroon)) =
+        (lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
+    {
+        info!(
+            "Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} ",
+            lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
+        );
+        GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, task_group.clone())
             .await?
             .into()
-        } else {
-            // Detected generic network rpc client configurations
-            info!(
-                "Gateway configured to connect to generic remote LnRpcClient at \n lnrpc address: {:?} ",
-                lnrpc_addr
-            );
-
-            NetworkLnRpcClient::new(lnrpc_addr).await?.into()
-        }
     } else {
-        panic!("No lightning node provided")
+        error!("No lightning node provided. For CLN set FM_GATEWAY_LIGHTNING_ADDR for CLN. For LND set FM_LND_RPC_ADDR, FM_LND_TLS_CERT, and FM_LND_MACAROON");
+        exit(1);
     };
 
     // Create module decoder registry
