@@ -44,6 +44,7 @@ enum Cmd {
 
     // commands
     AwaitFedimintBlockSync,
+    AwaitBitcoindReady,
 }
 
 #[derive(Parser)]
@@ -98,12 +99,17 @@ async fn kill_on_exit(process: &Child) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn await_bitcoin_rpc(waiter_name: &str) -> anyhow::Result<()> {
+async fn await_bitcoind_ready(waiter_name: &str) -> anyhow::Result<()> {
     let rpc = bitcoin_rpc()?;
 
-    while rpc.get_blockchain_info().is_err() {
+    loop {
+        if let Ok(info) = rpc.get_blockchain_info() {
+            if info.blocks > 100 {
+                break;
+            }
+        };
+        info!("{waiter_name} waiting for bitcoind ...");
         sleep(Duration::from_secs(1)).await;
-        info!("{waiter_name} waiting for bitcoin rpc ...");
     }
 
     Ok(())
@@ -161,7 +167,7 @@ async fn run_bitcoind() -> anyhow::Result<()> {
 
 async fn run_lightningd() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
-    await_bitcoin_rpc("lightningd").await?;
+    await_bitcoind_ready("lightningd").await?;
 
     let cln_dir = env::var("FM_CLN_DIR").unwrap();
     let bin_dir = env::var("FM_BIN_DIR").unwrap();
@@ -184,7 +190,7 @@ async fn run_lightningd() -> anyhow::Result<()> {
 
 async fn run_lnd() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
-    await_bitcoin_rpc("lnd").await?;
+    await_bitcoind_ready("lnd").await?;
 
     let lnd_dir = env::var("FM_LND_DIR").unwrap();
 
@@ -203,7 +209,7 @@ async fn run_lnd() -> anyhow::Result<()> {
 
 async fn run_electrs() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
-    await_bitcoin_rpc("electrs").await?;
+    await_bitcoind_ready("electrs").await?;
 
     let electrs_dir = env::var("FM_ELECTRS_DIR").unwrap();
 
@@ -223,7 +229,7 @@ async fn run_electrs() -> anyhow::Result<()> {
 
 async fn run_esplora() -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
-    await_bitcoin_rpc("esplora").await?;
+    await_bitcoind_ready("esplora").await?;
 
     let daemon_dir = env::var("FM_BTC_DIR").unwrap();
     let test_dir = env::var("FM_TEST_DIR").unwrap();
@@ -249,7 +255,7 @@ async fn run_esplora() -> anyhow::Result<()> {
 
 async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
-    await_bitcoin_rpc(&format!("fedimint-{id}")).await?;
+    await_bitcoind_ready(&format!("fedimint-{id}")).await?;
 
     let bin_dir = env::var("FM_BIN_DIR").unwrap();
     let cfg_dir = env::var("FM_CFG_DIR").unwrap();
@@ -544,6 +550,7 @@ async fn main() -> anyhow::Result<()> {
         Cmd::AllDaemons => all_daemons().await.expect("daemons failed"),
         // commands
         Cmd::AwaitFedimintBlockSync => await_fedimint_block_sync().await.expect("daemons failed"),
+        Cmd::AwaitBitcoindReady => await_bitcoind_ready("").await.expect("daemons failed"),
     }
 
     Ok(())
