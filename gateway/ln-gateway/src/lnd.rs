@@ -6,10 +6,12 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::task::TaskGroup;
+use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
+use tonic_lnd::lnrpc::GetInfoRequest;
 use tonic_lnd::routerrpc::ForwardHtlcInterceptResponse;
 use tonic_lnd::{connect, LndClient};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::gatewaylnrpc::{
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
@@ -57,7 +59,21 @@ impl fmt::Debug for GatewayLndClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLndClient {
     async fn pubkey(&self) -> crate::Result<GetPubKeyResponse> {
-        todo!("implement lnd get pubkey")
+        let mut client = self.client.clone();
+
+        let info = client
+            .lightning()
+            .get_info(GetInfoRequest {})
+            .await
+            .expect("failed to get info")
+            .into_inner();
+
+        let pub_key: PublicKey = info.identity_pubkey.parse().expect("invalid pubkey");
+        info!("fetched pubkey {:?}", pub_key);
+
+        Ok(GetPubKeyResponse {
+            pub_key: pub_key.serialize().to_vec(),
+        })
     }
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
