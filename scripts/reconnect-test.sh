@@ -2,7 +2,7 @@
 # Runs a test to see what happens if a server dies and rejoins
 
 set -euxo pipefail
-export RUST_LOG=info
+export RUST_LOG="${RUST_LOG:-info}"
 
 source ./scripts/setup-tests.sh
 

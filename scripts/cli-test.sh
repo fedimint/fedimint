@@ -2,7 +2,7 @@
 # Runs a CLI-based integration test
 
 set -euxo pipefail
-export RUST_LOG=info
+export RUST_LOG="${RUST_LOG:-info}"
 
 export PEG_IN_AMOUNT=10000
 source ./scripts/setup-tests.sh
