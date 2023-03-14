@@ -21,7 +21,7 @@ use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::transaction::Transaction;
 pub use fedimint_core::*;
 use fedimint_core::{NumPeers, PeerId};
-use fedimint_logging::LOG_CONSENSUS;
+use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use futures::stream::Peekable;
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
@@ -229,7 +229,10 @@ impl FedimintServer {
     /// Loop `run_conensus_epoch` until shut down
     async fn run_consensus(mut self, task_handle: TaskHandle) {
         if self.consensus.is_at_upgrade_threshold().await {
-            error!("Restarted fedimintd after upgrade without passing in flag, shutting down");
+            error!(
+                target: LOG_CORE,
+                "Restarted fedimintd after upgrade without passing in flag, shutting down"
+            );
             return self.task_group.shutdown().await;
         }
 
@@ -263,7 +266,10 @@ impl FedimintServer {
             }
 
             if self.consensus.is_at_upgrade_threshold().await {
-                info!("Received a threshold of upgrade signals, shutting down");
+                info!(
+                    target: LOG_CONSENSUS,
+                    "Received a threshold of upgrade signals, shutting down"
+                );
                 self.task_group.shutdown().await;
                 break;
             }

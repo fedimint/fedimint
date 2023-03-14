@@ -34,6 +34,8 @@ export git_ls_files
 git_ls_files="$(git ls-files)"
 
 function check_forbiden_dependencies() {
+  set -eo pipefail
+
   if grep -E "(fedimint-mint|fedimint-wallet|fedimint-ln)" fedimint-server/Cargo.toml >&2 ; then
     >&2 echo "fedimint-server/Cargo.toml must not depend on modules"
     return 1
@@ -54,6 +56,8 @@ function check_forbiden_dependencies() {
 export -f check_forbiden_dependencies
 
 function check_nix() {
+  set -eo pipefail
+
   # shellcheck disable=SC2046
   nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$') 2> >(grep -v "0 / 7 would have been reformatted")
 }
@@ -61,6 +65,8 @@ export -f check_nix
 
 
 function check_cargo_fmt() {
+  set -eo pipefail
+
   # Note: avoid `cargo fmt --all` so we don't need extra stuff in `ci` shell
   # so that CI is faster
   # shellcheck disable=SC2046
@@ -70,6 +76,8 @@ export -f check_cargo_fmt
 
 
 function check_dbg() {
+  set -eo pipefail
+
   errors=""
   for path in $(echo "$git_ls_files" | grep  '.*\.rs'); do
     if grep 'dbg!(' "$path"  > /dev/null; then
@@ -86,6 +94,7 @@ function check_dbg() {
 export -f check_dbg
 
 function check_semgrep() {
+  set -eo pipefail
 
   if ! command -v semgrep > /dev/null ; then
     >&2 echo "Skipping semgrep check"
@@ -99,6 +108,8 @@ export -f check_semgrep
 
 
 function check_shellcheck() {
+  set -eo pipefail
+
   for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
     shellcheck --severity=warning "$path"
   done
@@ -107,6 +118,8 @@ export -f check_shellcheck
 
 
 function check_eof() {
+  set -eo pipefail
+
   errors=""
   for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png)'); do
     # extra branches for clarity
