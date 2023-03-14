@@ -774,7 +774,7 @@
                   pkgs.rnix-lsp
                   pkgs-unstable.convco
                   pkgs.nodePackages.bash-language-server
-                ] ++ lib.optionals (!stdenv.isAarch64 || !stdenv.isDarwin) [
+                ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                   pkgs.semgrep
                 ];
                 RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
