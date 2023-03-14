@@ -159,9 +159,7 @@ function setup_fedimintd_env() {
   export FM_PASSWORD="pass$ID"
   export FM_FEDIMINTD_DATA_DIR="$FM_CFG_DIR/server-$ID"
 
-  # ensure datadir exists ... pipe to `true` because run_dkg() and setup_federation()
-  # both call this so the directory might already be here ...
-  mkdir $FM_FEDIMINTD_DATA_DIR || true
+  mkdir -p $FM_FEDIMINTD_DATA_DIR
 }
 
 function await_bitcoind_ready() {
