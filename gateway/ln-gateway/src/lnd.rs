@@ -4,26 +4,30 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::task::TaskGroup;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic_lnd::lnrpc::{GetInfoRequest, SendRequest};
-use tonic_lnd::routerrpc::ForwardHtlcInterceptResponse;
+use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse};
 use tonic_lnd::{connect, LndClient};
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
 use crate::gatewaylnrpc::{
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    SubscribeInterceptHtlcsResponse,
 };
 use crate::lnrpc_client::{HtlcStream, ILnRpcClient};
 use crate::GatewayError;
 
+type OutcomeMap = Arc<Mutex<HashMap<sha256::Hash, (LndSenderRef, Option<CircuitKey>)>>>;
+
 pub struct GatewayLndClient {
     client: LndClient,
-    outcomes: Arc<Mutex<HashMap<sha256::Hash, LndSenderRef>>>,
+    outcomes: OutcomeMap,
     task_group: TaskGroup,
 }
 
@@ -111,9 +115,118 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn subscribe_htlcs<'a>(
         &self,
-        _subscription: SubscribeInterceptHtlcsRequest,
+        subscription: SubscribeInterceptHtlcsRequest,
     ) -> crate::Result<HtlcStream<'a>> {
-        todo!("implement lnd subscribe htlcs")
+        let channel_size = 1024;
+
+        // Channel to send responses to LND after processing intercepted HTLC
+        let (lnd_tx, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(channel_size);
+
+        // Channel to send intercepted htlc to gatewayd for processing
+        let (gwd_tx, gwd_rx) =
+            mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, tonic::Status>>(channel_size);
+
+        let scid = subscription.short_channel_id;
+        let mut client = self.client.clone();
+
+        let mut tg = self.task_group.clone();
+        let outcomes = self.outcomes.clone();
+
+        // Spawn an LND interceptor task
+        tg.spawn("LND HTLC Subscription", move |_handle| async move {
+            let mut htlc_stream = match client
+                .router()
+                .htlc_interceptor(ReceiverStream::new(lnd_rx))
+                .await
+                .map_err(|e| {
+                    error!("Failed to connect to lnrpc server: {:?}", e);
+                    GatewayError::Other(anyhow!("Failed to subscribe to LND htlc stream"))
+                }) {
+                Ok(stream) => stream.into_inner(),
+                Err(e) => {
+                    let _ = gwd_tx
+                        .send(Err(tonic::Status::new(
+                            tonic::Code::Internal,
+                            e.to_string(),
+                        )))
+                        .await;
+                    return;
+                }
+            };
+
+            while let Some(htlc) = match htlc_stream.message().await {
+                Ok(htlc) => htlc,
+                Err(e) => {
+                    error!("Error received over HTLC subscriprion: {:?}", e);
+                    let _ = gwd_tx
+                        .send(Err(tonic::Status::new(
+                            tonic::Code::Internal,
+                            e.to_string(),
+                        )))
+                        .await;
+                    None
+                }
+            } {
+                trace!("handling htlc {:?}", htlc);
+                let response: Option<ForwardHtlcInterceptResponse> =
+                    if htlc.outgoing_requested_chan_id != scid {
+                        // Pass through: This HTLC doesn't belong to the current subscription
+                        // Forward it to the next interceptor or next node
+                        Some(ForwardHtlcInterceptResponse {
+                            incoming_circuit_key: htlc.incoming_circuit_key,
+                            action: 2,
+                            preimage: vec![],
+                            failure_message: vec![],
+                            failure_code: 0,
+                        })
+                    } else {
+                        // TODO: generate unique id for each intercepted HTLC
+                        let intercepted_htlc_id = sha256::Hash::hash(&htlc.onion_blob);
+
+                        // Intercept: This HTLC belongs to the current subscription
+                        let intercept = SubscribeInterceptHtlcsResponse {
+                            payment_hash: htlc.payment_hash,
+                            incoming_amount_msat: htlc.incoming_amount_msat,
+                            outgoing_amount_msat: htlc.outgoing_amount_msat,
+                            incoming_expiry: htlc.incoming_expiry,
+                            short_channel_id: scid,
+                            intercepted_htlc_id: intercepted_htlc_id.into_inner().to_vec(),
+                        };
+
+                        // Send it to gatewayd for processing
+                        match gwd_tx.send(Ok(intercept)).await {
+                            Ok(_) => {
+                                // Keep a reference to LND sender reference so we can later forward
+                                // outcomes on `complete_htlc` rpc
+                                outcomes.lock().await.insert(
+                                    intercepted_htlc_id,
+                                    (Arc::new(lnd_tx.clone()), htlc.incoming_circuit_key),
+                                );
+
+                                None
+                            }
+                            Err(e) => {
+                                error!("Failed to send HTLC to gatewayd for processing: {:?}", e);
+                                Some(cancel_intercepted_htlc(htlc.incoming_circuit_key))
+                            }
+                        }
+                    };
+
+                if response.is_some() {
+                    // TODO: Consider retrying this if the send fails
+                    let _ = lnd_tx.send(response.unwrap()).await.map_err(|e| {
+                        error!("Failed to send response to LND: {:?}", e);
+                        // The HTLC will timeout and LND will automatically cancel it.
+                        GatewayError::Other(anyhow!("Failed to send response to LND"))
+                    });
+                }
+            }
+
+            info!("HTLC subscription stream ended");
+        })
+        .await;
+
+        Ok(Box::pin(ReceiverStream::new(gwd_rx)))
     }
 
     async fn complete_htlc(
@@ -121,5 +234,16 @@ impl ILnRpcClient for GatewayLndClient {
         _outcome: CompleteHtlcsRequest,
     ) -> crate::Result<CompleteHtlcsResponse> {
         todo!("implement lnd complete htlc")
+    }
+}
+
+fn cancel_intercepted_htlc(key: Option<CircuitKey>) -> ForwardHtlcInterceptResponse {
+    // TODO: Specify a failure code and message
+    ForwardHtlcInterceptResponse {
+        incoming_circuit_key: key,
+        action: 1,
+        preimage: vec![],
+        failure_message: vec![],
+        failure_code: 0,
     }
 }
