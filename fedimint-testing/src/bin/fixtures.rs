@@ -84,6 +84,7 @@ async fn kill_on_exit(process: &Child) -> anyhow::Result<()> {
     let pid_file = env::var("FM_PID_FILE")?;
     let mut file = OpenOptions::new()
         .write(true)
+        .create(true)
         .append(true)
         .open(pid_file)
         .await?;
