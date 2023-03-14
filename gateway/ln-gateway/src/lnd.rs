@@ -8,7 +8,7 @@ use bitcoin_hashes::sha256;
 use fedimint_core::task::TaskGroup;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
-use tonic_lnd::lnrpc::GetInfoRequest;
+use tonic_lnd::lnrpc::{GetInfoRequest, SendRequest};
 use tonic_lnd::routerrpc::ForwardHtlcInterceptResponse;
 use tonic_lnd::{connect, LndClient};
 use tracing::{error, info};
@@ -83,8 +83,30 @@ impl ILnRpcClient for GatewayLndClient {
         })
     }
 
-    async fn pay(&self, _invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
-        todo!("implement lnd pay")
+    async fn pay(&self, invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
+        let mut client = self.client.clone();
+
+        let send_response = client
+            .lightning()
+            .send_payment_sync(SendRequest {
+                payment_request: invoice.invoice.to_string(),
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
+            .into_inner();
+        info!("send response {:?}", send_response);
+
+        if send_response.payment_preimage.is_empty() {
+            return Err(GatewayError::LnRpcError(tonic::Status::new(
+                tonic::Code::Internal,
+                "LND did not return a preimage",
+            )));
+        };
+
+        Ok(PayInvoiceResponse {
+            preimage: send_response.payment_preimage,
+        })
     }
 
     async fn subscribe_htlcs<'a>(
