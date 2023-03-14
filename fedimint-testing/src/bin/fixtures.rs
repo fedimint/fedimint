@@ -116,8 +116,7 @@ async fn await_bitcoind_ready(waiter_name: &str) -> anyhow::Result<()> {
 }
 
 async fn await_fedimint_block_sync() -> anyhow::Result<()> {
-    // FIXME: make sure we've had at least 101 blocks ... probably best to call
-    // await_bitcoin_rpc and do it there? but then the function has weird name ...
+    await_bitcoind_ready("await_fedimint_block_sync").await?;
     let fedimint_client = fedimint_client().await?;
     let wallet_cfg: WalletClientConfig = fedimint_client
         .config()
