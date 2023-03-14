@@ -347,9 +347,9 @@ where
 }
 
 /// Creates the database backup directory by appending the `snapshot_name`
-/// to the `FM_TEST_DB_BACKUP_DIR`. Then this function will execute the provided
+/// to the `DB_MIGRATION_DIR`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
-/// data for testing a migration. If `FM_TEST_DB_BACKUP_DIR` is not set, this
+/// data for testing a migration. If `DB_MIGRATION_DIR` is not set, this
 /// function doesn't do anything.
 pub async fn prepare_snapshot<F>(
     snapshot_name: &str,
@@ -358,8 +358,9 @@ pub async fn prepare_snapshot<F>(
 ) where
     F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
 {
-    if let Ok(parent_dir) = env::var("FM_TEST_DB_BACKUP_DIR") {
-        let snapshot_dir = Path::new(&parent_dir).join(snapshot_name);
+    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
+    let snapshot_dir = Path::new(&parent_dir).join(snapshot_name);
+    if !snapshot_dir.exists() {
         let db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
         let dbtx = db.begin_transaction().await;
         prepare_fn(dbtx).await;
@@ -374,7 +375,7 @@ pub const BYTE_32: [u8; 32] = [
 ];
 
 /// Iterates over all of the databases supplied in the database backup
-/// directory, which is specified by `FM_TEST_DB_BACKUP_DIR` environment
+/// directory, which is specified by `DB_MIGRATION_DIR` environment
 /// variable. First, a temporary database will be created and the contents will
 /// be populated from the database backup directory. Next, this function will
 /// execute the provided `validate` closure. The `validate` closure is expected
@@ -389,7 +390,7 @@ pub async fn validate_migrations<F, Fut>(
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = ()>,
 {
-    if let Ok(parent_dir) = env::var("FM_TEST_DB_BACKUP_DIR") {
+    if let Ok(parent_dir) = env::var("DB_MIGRATION_DIR") {
         let db_dir = Path::new(&parent_dir);
         let files = fs::read_dir(db_dir).unwrap();
         for file in files.flatten() {
