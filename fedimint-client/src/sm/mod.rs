@@ -9,7 +9,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 pub use state::{Context, DynContext, DynState, OperationState, State, StateTransition};
 
 /// Context given to all state machines
-pub trait GlobalContext: Debug + MaybeSync + MaybeSend + 'static {}
+pub trait GlobalContext: Debug + Clone + MaybeSync + MaybeSend + 'static {}
 
 impl GlobalContext for () {}
 

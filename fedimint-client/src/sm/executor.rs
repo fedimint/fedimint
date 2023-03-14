@@ -14,6 +14,7 @@ use fedimint_core::task::TaskGroup;
 use futures::future::select_all;
 use futures::stream::StreamExt;
 use tokio::select;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::sm::state::{DynContext, DynState};
@@ -47,7 +48,7 @@ pub struct Executor<GC> {
 
 struct ExecutorInner<GC> {
     db: Database,
-    context: GC,
+    context: Mutex<Option<GC>>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
 }
 
@@ -69,6 +70,9 @@ where
 
     /// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
+    ///
+    /// **Attention**: do not use before background task is started!
+    // TODO: remove warning once finality is an inherent state attribute
     pub async fn add_state_machines(&self, states: Vec<DynState<GC>>) -> anyhow::Result<()> {
         self.inner
             .db
@@ -91,6 +95,11 @@ where
     /// Adds a number of state machines to the executor atomically with other DB
     /// changes is `dbtx`. See [`Executor::add_state_machines`] for more
     /// details.
+    ///
+    /// ## Panics
+    /// If called before background task is started using
+    /// [`Executor::start_executor`]!
+    // TODO: remove warning once finality is an inherent state attribute
     pub async fn add_state_mchines_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -123,7 +132,7 @@ where
                     .module_contexts
                     .get(&state.module_instance_id())
                     .expect("No such module"),
-                &self.inner.context,
+                self.inner.context.lock().await.as_ref().expect(""),
             ) {
                 bail!("State is already terminal, adding it to the executor doesn't make sense.")
             }
@@ -171,16 +180,49 @@ where
             .into_iter()
             .any(|(s, _)| s == state)
     }
+
+    /// Starts the background thread that runs the state machines. This cannot
+    /// be done when building the executor since some global contexts in turn
+    /// may depend on the executor, forming a cyclic dependency.
+    ///
+    /// ## Panics
+    /// If called more than once.
+    pub async fn start_executor(&self, tg: &mut TaskGroup, context: GC) {
+        let replaced_old = self
+            .inner
+            .context
+            .lock()
+            .await
+            .replace(context.clone())
+            .is_some();
+        assert!(!replaced_old, "start_executor was called previously");
+
+        let task_runner_inner = self.inner.clone();
+        let _handle = tg
+            .spawn("state_machine_executor", move |handle| async move {
+                let shutdown_future = handle.make_shutdown_rx().await;
+                let executor_runner = task_runner_inner.run(&context);
+                select! {
+                    _ = shutdown_future => {
+                        info!("Shutting down state machine executor runner");
+                    },
+                    _ = executor_runner => {
+                        error!("State machine executor runner exited unexpectedly!");
+                    },
+                };
+            })
+            .await;
+    }
 }
 
 impl<GC> ExecutorInner<GC>
 where
     GC: GlobalContext,
 {
-    async fn run(&self) {
+    async fn run(&self, global_context: &GC) {
         info!("Starting state machine executor task");
         loop {
-            if let Err(err) = self.execute_next_state_transition().await {
+            if let Err(err) = self.execute_next_state_transition(global_context).await {
                 warn!(
                     %err,
                     "An unexpected error occurred during a state transition"
@@ -189,7 +231,7 @@ where
         }
     }
 
-    async fn execute_next_state_transition(&self) -> anyhow::Result<()> {
+    async fn execute_next_state_transition(&self, global_context: &GC) -> anyhow::Result<()> {
         let active_states = self.get_active_states().await;
 
         if active_states.is_empty() {
@@ -208,7 +250,7 @@ where
                     .get(&module_instance)
                     .expect("Unknown module");
                 state
-                    .transitions(context, &self.context)
+                    .transitions(context, global_context)
                     .into_iter()
                     .map(move |transition| {
                         Box::pin(async move {
@@ -253,7 +295,6 @@ where
                             .module_contexts
                             .get(&state.module_instance_id())
                             .expect("Unknown module");
-                        let global_context = &self.context;
 
                         if new_state.is_terminal(context, global_context) {
                             // TODO: log state machine id or something
@@ -327,31 +368,15 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build<GC>(self, tasks: &mut TaskGroup, db: Database, context: GC) -> Executor<GC>
+    pub async fn build<GC>(self, db: Database) -> Executor<GC>
     where
         GC: GlobalContext,
     {
         let inner = Arc::new(ExecutorInner {
             db,
-            context,
+            context: Mutex::new(None),
             module_contexts: self.module_contexts,
         });
-
-        let task_runner_inner = inner.clone();
-        let _handle = tasks
-            .spawn("state_machine_executor", move |handle| async move {
-                let shutdown_future = handle.make_shutdown_rx().await;
-                let executor_runner = task_runner_inner.run();
-                select! {
-                    _ = shutdown_future => {
-                        info!("Shutting down state machine executor runner");
-                    },
-                    _ = executor_runner => {
-                        error!("State machine executor runner exited unexpectedly!");
-                    },
-                };
-            })
-            .await;
 
         debug!(
             instances = ?inner.module_contexts.keys().copied().collect::<Vec<_>>(),
@@ -636,7 +661,8 @@ mod tests {
                 broadcast: broadcast.clone(),
             },
         );
-        let executor = executor_builder.build(tg, db.clone(), ()).await;
+        let executor = executor_builder.build(db.clone()).await;
+        executor.start_executor(tg, ()).await;
 
         info!("Initialized test executor");
         (executor, broadcast, db)
