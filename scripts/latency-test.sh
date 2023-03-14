@@ -62,6 +62,16 @@ LN_RECEIVE=$(echo "scale=3; ($time4 - $time3) / $ITERATIONS" | bc)
 echo "AVG LN RECEIVE TIME: $LN_RECEIVE seconds"
 
 # Assert that avg runtimes are under 5 sec
-[[ $(echo "$REISSUE < 5" | bc -l) = 1 ]]
-[[ $(echo "$LN_SEND < 5" | bc -l) = 1 ]]
-[[ $(echo "$LN_RECEIVE < 5" | bc -l) = 1 ]]
+if [[ $(echo "$REISSUE < 5" | bc -l) != 1 ]] ; then
+  echo "REISSUE TOO SLOW: $REISSUE"
+  exit 1
+fi
+if [[ $(echo "$LN_SEND < 5" | bc -l) != 1 ]] ; then
+  echo "SEND TOO SLOW: $LN_SEND"
+  exit 1
+fi
+  
+if [[ $(echo "$LN_RECEIVE < 5" | bc -l) != 1 ]] ; then
+  echo "RECEIVE TOO SLOW: $LN_RECEIVE"
+  exit 1
+fi
