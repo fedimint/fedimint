@@ -82,8 +82,8 @@ async fn main() -> Result<(), anyhow::Error> {
     } = GatewayOpts::parse();
 
     info!(
-        "Starting gateway with these configs \n data directory: {:?},\n listen: {},\n api address: {},\n lnrpc address: {:?} ",
-        data_dir, listen, api_addr, lnrpc_addr
+        "Starting gateway with these base configs \n data directory: {:?},\n listen: {},\n api address: {} ",
+        data_dir, listen, api_addr
     );
 
     // Create federation client builder
@@ -96,6 +96,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let lnrpc = if let Some(lnrpc_addr) = lnrpc_addr {
         if let (Some(lnd_tls_cert), Some(lnd_macaroon)) = (lnd_tls_cert, lnd_macaroon) {
             // Detected LND rpc client configurations
+            info!(
+                "Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} ",
+                lnrpc_addr, lnd_tls_cert, lnd_macaroon
+            );
+
             GatewayLndClient::new(
                 lnrpc_addr.into(),
                 lnd_tls_cert,
@@ -106,6 +111,11 @@ async fn main() -> Result<(), anyhow::Error> {
             .into()
         } else {
             // Detected generic network rpc client configurations
+            info!(
+                "Gateway configured to connect to generic remote LnRpcClient at \n lnrpc address: {:?} ",
+                lnrpc_addr
+            );
+
             NetworkLnRpcClient::new(lnrpc_addr).await?.into()
         }
     } else {
