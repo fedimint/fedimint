@@ -13,6 +13,7 @@ use tonic_lnd::routerrpc::ForwardHtlcInterceptResponse;
 use tonic_lnd::{connect, LndClient};
 use tracing::{error, info};
 
+use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
 use crate::gatewaylnrpc::{
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
@@ -77,7 +78,9 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
-        todo!("implement lnd get routehints")
+        Ok(GetRouteHintsResponse {
+            route_hints: vec![RouteHint { hops: vec![] }],
+        })
     }
 
     async fn pay(&self, _invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
