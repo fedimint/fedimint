@@ -18,23 +18,18 @@ jobs:
           - build: macos
             runs-on: macos-latest
             use-cross: false
-            # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             build-in-pr: false
-            extra-cmd: brew install protobuf
+            # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
+            timeout: 60
 
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.timeout }}
 
     steps:
       - uses: actions/checkout@v3
         # Note: making the whole job conditional w.r.t matrix, instead of every step
         # is not supported and workarounds are very gnarly
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-
-      - name: Extra command
-        if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.extra-cmd != ''
-        run: |
-          ${{ matrix.extra-cmd }}
 
       - uses: cachix/install-nix-action@v20
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
