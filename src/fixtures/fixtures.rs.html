@@ -562,9 +562,6 @@
 <a href="#562" id="562">562</a>
 <a href="#563" id="563">563</a>
 <a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
 </pre><pre class="rust"><code><span class="doccomment">/// This tool assumes that `scripts/build.sh` has been sourced in the
 /// environment which calls it
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -1001,10 +998,7 @@
     root_task_group.install_kill_handler();
     <span class="kw">let </span><span class="kw-2">mut </span>task_group = root_task_group.make_subgroup().<span class="kw">await</span>;
 
-    <span class="comment">// let base_port = 8173 + 10000;
-    // let mut certs = vec![];
-
-    // generate TLS certs
+    <span class="comment">// generate TLS certs
     </span><span class="kw">let </span>(sender, <span class="kw-2">mut </span>receiver): (Sender&lt;String&gt;, Receiver&lt;String&gt;) = mpsc::channel(<span class="number">1000</span>);
     <span class="kw">for </span>id <span class="kw">in </span><span class="number">0</span>..servers {
         <span class="kw">let </span>sender = sender.clone();
