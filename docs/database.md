@@ -104,3 +104,99 @@ The client is not currently modularized, so nothing is prepended to the below pr
 |---------------|---------------|---------|---------------------------------------------|
 | ActiveState   | `0xa1`        | `State` | Creation time                               |
 | InactiveState | `0xa2`        | `State` | Creation time and time of becoming inactive |
+
+## Database Transactions
+In Fedimint, all interactions with the database use a database transaction. Database transactions are a nice abstraction
+for accessing the database in an atomic, consistent, and isolated way. Underneath, Fedimint uses RocksDb's optimistic transactions
+which means database transactions are allowed to read and write to the database concurrently. If there are two concurrent transactions
+that modify the same key, RocksDb's optimistic transactions have a mechanism for detecting this, which will cause the transaction that
+commits second to fail. 
+
+Fedimint has defined a number of different structs for implementing the necessary functionality for database transactions. These structs
+follow the [adapter pattern](https://en.wikipedia.org/wiki/Adapter_pattern) to wrap and isolate the features. Below is an explanation of
+each interface/struct.
+
+### Interfaces
+ - **ISingleUseDatabaseTransaction** - The interface that each adapter struct implements. The main difference with this interface is that commit_tx
+does not take self by move.
+ - **IDatabaseTransaction** - The interface that each individual database must implement, such as `MemTransaction`, `RocksDbTransaction`, and `SqliteDbTransaction`.
+
+### Structs
+#### Public
+ - **DatabaseTransaction** - Public facing struct that can do atomic database transactions across modules.
+ - **ModuleDatabaseTransaction** - Public facing struct that can only access the namespace of the module inside the database. This database transaction cannot
+commit and the lifetime of the transaction is always managed by a higher layer. `ModuleDatabaseTransaction` can be created by calling `with_module_prefix` on
+`DatabaseTransaction`.
+
+#### Internal
+ - **IsolatedDatabaseTransaction** - Internal wrapper struct that implements the isolation mechanism for preventing modules from reading/writing outside their 
+database namespace.
+ - **CommitableIsolatedDatabaseTransaction** - Internal wrapper struct that wraps `IsolatedDatabaseTransaction`, but holds onto the transaction instead of holding
+onto a reference. This struct is always wrapped inside `DatabaseTransaction` and is used to expose the full interface to the developer (i.e `commit_tx`), but restrict the transaction
+from accessing keys/values outside of its database namespace.
+ - **NotifyingTransaction** - Internal wrapper struct that implements the notification mechanism when values of specified keys change.
+ - **SingleUseDatabaseTransaction** - Internal wrapper struct that holds an `Option<Tx>` which allows `commit_tx` to take `self` as a reference instead of by move.
+
+#### Base Implementations
+ - **MemTransaction** - Base implementation of a memory database transaction.
+ - **RocksDbTransaction** - Base implementation of a RocksDb database transaction. Uses optimistic transaction internally.
+ - **SqliteDbTransaction** - Base implementation of a Sqlite database transaction.
+
+```mermaid
+classDiagram
+    DatabaseTransaction --|> NotifyingTransaction
+    NotifyingTransaction --|> SingleUseDatabaseTransaction
+    DatabaseTransaction --|> CommitableIsolatedDatabaseTransaction : new_module_tx
+    CommitableIsolatedDatabaseTransaction --|> IsolatedDatabaseTransaction
+    DatabaseTransaction --|> ModuleDatabaseTransaction : with_module_prefix
+    ModuleDatabaseTransaction --|> IsolatedDatabaseTransaction
+    IsolatedDatabaseTransaction --|> NotifyingTransaction
+    SingleUseDatabaseTransaction --|> RocksDbTransaction
+    SingleUseDatabaseTransaction --|> MemTransaction
+    SingleUseDatabaseTransaction --|> SqliteDbTransaction
+    class DatabaseTransaction{
+      Box ISingleUseDatabaseTransaction tx
+      ModuleDecoderRegistry decoders
+      CommitTracker commit_tracker
+      with_module_prefix()
+      new_module_tx()
+      get_value()
+      insert_entry()
+      commit_tx()
+    }
+    class CommitableIsolatedDatabaseTransaction{
+        <<interface ISingleUseDatabaseTransaction>>
+        Box ISingleUseDatabaseTransaction tx
+        ModuleInstanceId prefix
+    }
+    class ModuleDatabaseTransaction{
+      &ISingleUseDatabaseTransaction tx_ref
+      &ModuleDecoderRegistry decoder_ref
+      &CommitTracker commit_tracker_ref
+      get_value()
+      insert_entry()
+    }
+    class NotifyingTransaction{
+        <<interface ISingleUseDatabaseTransaction>>
+        Box ISingleUseDatabaseTransaction
+    }
+    class SingleUseDatabaseTransaction{
+        <<interface ISingleUseDatabaseTransaction>>
+        Option tx
+    }
+    class IsolatedDatabaseTransaction{
+        <<interface ISingleUseDatabaseTransaction>>
+        &ISingleUseDatabaseTransaction
+    }
+    class RocksDbTransaction{
+        <<interface IDatabaseTransaction>>
+        Transaction optimistic_tx
+    }
+    class MemTransaction{
+        <<interface IDatabaseTransaction>>
+        BTreeMap tx_data
+    }
+    class SqliteDbTransaction{
+        <<interface IDatabaseTransaction>>
+        Transaction tx
+    }
