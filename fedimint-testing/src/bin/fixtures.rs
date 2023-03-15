@@ -26,7 +26,7 @@ use tokio::fs::{self, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tracing::{error, info, trace};
+use tracing::{error, info};
 use url::Url;
 
 #[derive(Subcommand)]
@@ -149,8 +149,10 @@ async fn run_bitcoind() -> anyhow::Result<()> {
 
     // create RPC wallet
     while let Err(e) = client.create_wallet("", None, None, None, None) {
-        error!("Failed to create wallet ... retrying");
-        trace!("{:?}", e);
+        if e.to_string().contains("Database already exists") {
+            break;
+        }
+        error!("Failed to create wallet ... retrying {}", e);
         sleep(Duration::from_secs(1)).await
     }
 
