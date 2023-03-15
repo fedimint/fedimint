@@ -39,6 +39,6 @@ fn item_message(item: &ConsensusItem) -> String {
             }
             tx_debug
         }
-        ConsensusItem::ConsensusUpgrade(reason) => format!("Shutdown signal for {reason:?}"),
+        ConsensusItem::ConsensusUpgrade(_) => "Consensus Upgrade".to_string(),
     }
 }

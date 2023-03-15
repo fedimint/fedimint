@@ -18,7 +18,6 @@ use fedimint_core::epoch::{
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
-use fedimint_core::transaction::Transaction;
 pub use fedimint_core::*;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
@@ -35,7 +34,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, warn};
 
 use crate::consensus::{
-    ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
+    ApiEvent, ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome,
+    HbbftSerdeConsensusOutcome,
 };
 use crate::db::LastEpochKey;
 use crate::fedimint_core::encoding::Encodable;
@@ -89,8 +89,8 @@ pub struct FedimintServer {
     pub task_group: TaskGroup,
     /// Delegate for processing consensus information
     pub consensus: Arc<FedimintConsensus>,
-    /// Receives tx notfications from the API (triggers epochs)
-    pub tx_receiver: Peekable<ReceiverStream<Transaction>>,
+    /// Receives event notifications from the API (triggers epochs)
+    pub api_receiver: Peekable<ReceiverStream<ApiEvent>>,
     /// P2P connections for running consensus
     pub connections: PeerConnections<EpochMessage>,
     /// Our configuration
@@ -116,12 +116,12 @@ impl FedimintServer {
     pub async fn run(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
-        tx_receiver: Receiver<Transaction>,
+        api_receiver: Receiver<ApiEvent>,
         decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<()> {
         let server =
-            FedimintServer::new(cfg.clone(), consensus, tx_receiver, decoders, task_group).await;
+            FedimintServer::new(cfg.clone(), consensus, api_receiver, decoders, task_group).await;
         let server_consensus = server.consensus.clone();
         let consensus = server
             .cfg
@@ -158,7 +158,7 @@ impl FedimintServer {
     pub async fn new(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
-        tx_receiver: Receiver<Transaction>,
+        api_receiver: Receiver<ApiEvent>,
         decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
     ) -> Self {
@@ -168,7 +168,7 @@ impl FedimintServer {
         Self::new_with(
             cfg.clone(),
             consensus,
-            tx_receiver,
+            api_receiver,
             connector,
             decoders,
             task_group,
@@ -179,7 +179,7 @@ impl FedimintServer {
     pub async fn new_with(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
-        tx_receiver: Receiver<Transaction>,
+        api_receiver: Receiver<ApiEvent>,
         connector: PeerConnector<EpochMessage>,
         decoders: ModuleDecoderRegistry,
         task_group: &mut TaskGroup,
@@ -215,7 +215,7 @@ impl FedimintServer {
             connections,
             hbbft,
             consensus: Arc::new(consensus),
-            tx_receiver: ReceiverStream::new(tx_receiver).peekable(),
+            api_receiver: ReceiverStream::new(api_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
             peers: cfg.local.p2p.keys().cloned().collect(),
@@ -399,10 +399,10 @@ impl FedimintServer {
         // for testing federations with one peer
         if self.cfg.local.p2p.len() == 1 {
             tokio::select! {
-              _ = Pin::new(&mut self.tx_receiver).peek() => (),
+              _ = Pin::new(&mut self.api_receiver).peek() => (),
               () = self.consensus.await_consensus_proposal() => (),
             }
-            self.save_txs_to_consensus_cache();
+            self.save_events_to_consensus_cache();
             let proposal = proposal.await;
             let epoch = self.hbbft.epoch();
             self.hbbft.skip_to_epoch(epoch + 1);
@@ -422,7 +422,7 @@ impl FedimintServer {
                 _ => break vec![],
             };
         };
-        self.save_txs_to_consensus_cache();
+        self.save_events_to_consensus_cache();
 
         let proposal = proposal.await;
         for peer in proposal.drop_peers.iter() {
@@ -438,11 +438,11 @@ impl FedimintServer {
         Ok(outcomes)
     }
 
-    // save any transactions we have in the channel
-    fn save_txs_to_consensus_cache(&mut self) {
-        let mut tx_cache = self.consensus.tx_cache.lock().unwrap();
-        while let Some(Some(tx)) = self.tx_receiver.next().now_or_never() {
-            tx_cache.insert(tx);
+    // save any API events we have in the channel
+    fn save_events_to_consensus_cache(&mut self) {
+        let mut event_cache = self.consensus.api_event_cache.lock().unwrap();
+        while let Some(Some(event)) = self.api_receiver.next().now_or_never() {
+            event_cache.insert(event);
         }
     }
 
@@ -496,7 +496,7 @@ impl FedimintServer {
         }
 
         tokio::select! {
-            _peek = Pin::new(&mut self.tx_receiver).peek() => Ok(EpochTriggerEvent::NewTransaction),
+            _peek = Pin::new(&mut self.api_receiver).peek() => Ok(EpochTriggerEvent::NewTransaction),
             () = self.consensus.await_consensus_proposal() => Ok(EpochTriggerEvent::ModuleProposalEvent),
             msg = self.connections.receive() => Ok(EpochTriggerEvent::NewMessage(msg?))
         }

@@ -266,5 +266,16 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
                 Ok(fedimint.get_config_with_sig(dbtx).await)
             }
         },
+        api_endpoint! {
+            "/upgrade",
+            async |fedimint: &FedimintConsensus, _dbtx, _v: (), has_auth| -> () {
+                if has_auth {
+                    fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
+                    Ok(())
+                } else {
+                    Err(ApiError::unauthorized())
+                }
+            }
+        },
     ]
 }

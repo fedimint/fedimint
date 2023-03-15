@@ -91,6 +91,13 @@ impl ApiRequestErased {
     pub fn to_json(&self) -> JsonValue {
         serde_json::to_value(self).expect("parameter serialization error - this should not happen")
     }
+
+    pub fn with_auth(self, auth: &ApiAuth) -> Self {
+        Self {
+            auth: Some(auth.clone()),
+            params: self.params,
+        }
+    }
 }
 
 /// Authentication uses the hashed user password in PHC format
@@ -114,6 +121,14 @@ impl ApiError {
 
     pub fn bad_request(message: String) -> Self {
         Self::new(400, message)
+    }
+
+    pub fn unauthorized() -> Self {
+        Self::new(401, "Request missing required authorization".to_string())
+    }
+
+    pub fn server_error(message: String) -> Self {
+        Self::new(500, message)
     }
 }
 
@@ -153,11 +168,12 @@ pub mod __reexports {
 ///     }
 /// };
 /// ```
+// TODO: Refactor auth and dbtx into a ApiEndpointContext
 #[macro_export]
 macro_rules! __api_endpoint {
     (
         $path:expr,
-        async |$state:ident: &$state_ty:ty, $dbtx:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
+        async |$state:ident: &$state_ty:ty, $dbtx:ident, $param:ident: $param_ty:ty $(, $auth:ident)?| -> $resp_ty:ty $body:block
     ) => {{
         struct Endpoint;
 
@@ -172,8 +188,9 @@ macro_rules! __api_endpoint {
                 $state: &'a Self::State,
                 $dbtx: &'a mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
                 $param: Self::Param,
-                has_auth: bool,
+                _has_auth: bool,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
+                $(let $auth = _has_auth;)?
                 $body
             }
         }
