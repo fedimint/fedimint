@@ -474,33 +474,6 @@
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -522,7 +495,6 @@
 
 <span class="kw">use crate</span>::{
     dyn_newtype_define_with_instance_id, dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id,
-    ModuleDecoderRegistry,
 };
 
 <span class="kw">pub mod </span>client;
@@ -862,7 +834,8 @@
     }
 }
 
-<span class="doccomment">/// Something that can be an [`DynInput`] in a [`Transaction`]
+<span class="doccomment">/// Something that can be an [`DynInput`] in a
+/// [`Transaction`](fedimint_core::transaction::Transaction)
 ///
 /// General purpose code should use [`DynInput`] instead
 </span><span class="kw">pub trait </span>IInput: Debug + Display + DynEncodable {
@@ -881,7 +854,7 @@
 }
 
 <span class="macro">dyn_newtype_define_with_instance_id! </span>{
-    <span class="doccomment">/// An owned, immutable input to a [`Transaction`]
+    <span class="doccomment">/// An owned, immutable input to a [`Transaction`](fedimint_core::transaction::Transaction)
     </span><span class="kw">pub </span>DynInput(Box&lt;IInput&gt;)
 }
 <span class="macro">module_dyn_newtype_impl_encode_decode!</span>(DynInput);
@@ -892,7 +865,8 @@
 
 <span class="macro">newtype_impl_display_passthrough_with_instance_id!</span>(DynInput);
 
-<span class="doccomment">/// Something that can be an [`DynOutput`] in a [`Transaction`]
+<span class="doccomment">/// Something that can be an [`DynOutput`] in a
+/// [`Transaction`](fedimint_core::transaction::Transaction)
 ///
 /// General purpose code should use [`DynOutput`] instead
 </span><span class="kw">pub trait </span>IOutput: Debug + Display + DynEncodable {
@@ -903,7 +877,7 @@
 }
 
 <span class="macro">dyn_newtype_define_with_instance_id! </span>{
-    <span class="doccomment">/// An owned, immutable output of a [`Transaction`]
+    <span class="doccomment">/// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction)
     </span><span class="kw">pub </span>DynOutput(Box&lt;IOutput&gt;)
 }
 <span class="macro">module_plugin_trait_define! </span>{
@@ -933,7 +907,7 @@
 }
 
 <span class="macro">dyn_newtype_define_with_instance_id! </span>{
-    <span class="doccomment">/// An owned, immutable output of a [`Transaction`] before it was finalized
+    <span class="doccomment">/// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction) before it was finalized
     </span><span class="kw">pub </span>DynOutputOutcome(Box&lt;IOutputOutcome&gt;)
 }
 <span class="macro">module_plugin_trait_define! </span>{
@@ -959,7 +933,7 @@
 }
 
 <span class="macro">dyn_newtype_define_with_instance_id! </span>{
-    <span class="doccomment">/// An owned, immutable output of a [`Transaction`] before it was finalized
+    <span class="doccomment">/// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction) before it was finalized
     </span><span class="kw">pub </span>DynModuleConsensusItem(Box&lt;IModuleConsensusItem&gt;)
 }
 <span class="macro">module_plugin_trait_define! </span>{
@@ -976,33 +950,5 @@
 <span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(DynModuleConsensusItem);
 
 <span class="macro">newtype_impl_display_passthrough!</span>(DynModuleConsensusItem);
-
-<span class="attr">#[derive(Encodable, Decodable)]
-</span><span class="kw">pub struct </span>Signature;
-
-<span class="doccomment">/// Transaction that was already signed
-</span><span class="attr">#[derive(Encodable)]
-</span><span class="kw">pub struct </span>Transaction {
-    <span class="kw">pub </span>inputs: Vec&lt;DynInput&gt;,
-    <span class="kw">pub </span>outputs: Vec&lt;DynOutput&gt;,
-    <span class="kw">pub </span>signature: Signature,
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>Transaction
-<span class="kw">where
-    </span>DynInput: Decodable,
-    DynOutput: Decodable,
-{
-    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-        r: <span class="kw-2">&amp;mut </span>R,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            inputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
-            outputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
-            signature: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
-        })
-    }
-}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
