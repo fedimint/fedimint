@@ -562,6 +562,8 @@
 <a href="#562" id="562">562</a>
 <a href="#563" id="563">563</a>
 <a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
 </pre><pre class="rust"><code><span class="doccomment">/// This tool assumes that `scripts/build.sh` has been sourced in the
 /// environment which calls it
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -590,7 +592,7 @@
 <span class="kw">use </span>tokio::io::AsyncWriteExt;
 <span class="kw">use </span>tokio::process::{Child, Command};
 <span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
-<span class="kw">use </span>tracing::{error, info, trace};
+<span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>url::Url;
 
 <span class="attr">#[derive(Subcommand)]
@@ -713,8 +715,10 @@
 
     <span class="comment">// create RPC wallet
     </span><span class="kw">while let </span><span class="prelude-val">Err</span>(e) = client.create_wallet(<span class="string">&quot;&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>) {
-        <span class="macro">error!</span>(<span class="string">&quot;Failed to create wallet ... retrying&quot;</span>);
-        <span class="macro">trace!</span>(<span class="string">&quot;{:?}&quot;</span>, e);
+        <span class="kw">if </span>e.to_string().contains(<span class="string">&quot;Database already exists&quot;</span>) {
+            <span class="kw">break</span>;
+        }
+        <span class="macro">error!</span>(<span class="string">&quot;Failed to create wallet ... retrying {}&quot;</span>, e);
         sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
     </span>}
 
