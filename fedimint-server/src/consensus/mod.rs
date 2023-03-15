@@ -449,8 +449,12 @@ impl FedimintConsensus {
                             .await
                             .expect("Error rolling back to transaction savepoint");
                         warn!(target: LOG_CONSENSUS, %error, "Transaction failed");
-                        dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{error:?}"))
-                            .await;
+                        // do not insert a RejectedTransactionKey because there must already be
+                        // AcceptedTransactionKey
+                        if !matches!(error, TransactionReplayError(_)) {
+                            dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{error:?}"))
+                                .await;
+                        }
                     }
                 }
             }
