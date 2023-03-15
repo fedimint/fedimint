@@ -1,20 +1,14 @@
-//! Integration test suite
+//! Gatewayd authentication test suite
 //!
-//! This crate contains integration tests that work be creating
-//! per-test federation, ln-gatewa and driving bitcoind and lightning
-//! nodes to exercise certain behaviors on it.
+//! This crate contains authentication tests for gatewayd API.
 //!
-//! We run them in two modes:
+//! The tests run instances of gatewayd with the following mocks:
 //!
-//! * With mocks - fake implementations of Lightning and Bitcoin node that only
-//!   simulate the real behavior. These are instantiated per test.
-//! * Without mocks - against real bitcoind and lightningd.
+//! * mock of `ILnRpcClient` - Use a fake implementation of `ILnRpcClient` that
+//!   simulates gateway lightning dependency.
 //!
-//! When running against real bitcoind, the other tests might create
-//! new blocks and transactions, so the tests can't expect to have
-//! exclusive control over it. When it is really necessary, `lock_exclusive`
-//! can be used to achieve it, but that makes the given test run serially
-//! is thus udesireable.
+//! * mock of `IFederationApi` - Use a fake implementation of `IFederationApi`
+//!   that simulates gateway federation client dependency.
 mod fixtures;
 
 use std::future::Future;

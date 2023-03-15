@@ -618,7 +618,6 @@
             pkgs = {
               ln-gateway = { };
               gateway-cli = { };
-              gateway-tests = { };
             };
 
             dirs = [

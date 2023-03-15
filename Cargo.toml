@@ -6,7 +6,6 @@ members = [
     "crypto/tbs",
     "gateway/ln-gateway",
     "gateway/cli",
-    "gateway/tests",
     "fedimintd",
     "fedimint-bitcoind",
     "fedimint-core",
