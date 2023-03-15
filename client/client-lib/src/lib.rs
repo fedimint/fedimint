@@ -1146,10 +1146,7 @@ impl Client<UserClientConfig> {
 
         // Only return error if no contracts were successfully claimed
         if !errors.is_empty() && contract_outpoints.is_empty() {
-            Err(ClientError::FailedToClaimIncomingContracts(
-                errors,
-                contract_outpoints,
-            ))
+            Err(ClientError::FailedToClaimIncomingContracts(errors))
         } else {
             Ok(contract_outpoints)
         }
@@ -1728,7 +1725,7 @@ pub enum ClientError {
     #[error("Failed to fetch notes we expected to be issued {0:?}")]
     UnableToFetchAllNotes(Vec<ClientError>, Vec<OutPoint>),
     #[error("Failed to claim incoming contracts {0:?}")]
-    FailedToClaimIncomingContracts(Vec<(ContractId, ClientError)>, Vec<(ContractId, OutPoint)>),
+    FailedToClaimIncomingContracts(Vec<(ContractId, ClientError)>),
 }
 
 #[derive(Debug, Error)]
