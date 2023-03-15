@@ -1,5 +1,7 @@
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
+use lightning_invoice::Invoice;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -17,6 +19,7 @@ pub enum DbKeyPrefix {
     OutgoingContractAccount = 0x25,
     ConfirmedInvoice = 0x26,
     LightningGateway = 0x28,
+    OutgoingContractPending = 0x2c,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -103,4 +106,20 @@ impl_db_record!(
 impl_db_lookup!(
     key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
+);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct OutgoingContractPendingKey(pub Sha256Hash);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct OutgoingContractPendingKeyPrefix;
+
+impl_db_record!(
+    key = OutgoingContractPendingKey,
+    value = Invoice,
+    db_prefix = DbKeyPrefix::OutgoingContractPending,
+);
+impl_db_lookup!(
+    key = OutgoingContractPendingKey,
+    query_prefix = OutgoingContractPendingKeyPrefix
 );

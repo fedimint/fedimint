@@ -73,8 +73,8 @@ use url::Url;
 
 use crate::db::ClientSecretKey;
 use crate::ln::db::{
-    OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
-    OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
+    OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingContractPendingKey,
+    OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
 use crate::ln::incoming::ConfirmedInvoice;
 use crate::ln::outgoing::OutgoingContractAccount;
@@ -814,6 +814,20 @@ impl Client<UserClientConfig> {
         invoice: Invoice,
         mut rng: R,
     ) -> Result<(ContractId, OutPoint)> {
+        // Check if invoice has already been paid
+        let payment_hash = *invoice.clone().payment_hash();
+        if self
+            .context
+            .db
+            .begin_transaction()
+            .await
+            .get_value(&OutgoingContractPendingKey(payment_hash))
+            .await
+            .is_some()
+        {
+            return Err(ClientError::OutgoingContractHasPendingPayment);
+        }
+
         let gateway = self.fetch_active_gateway().await?;
         let mut dbtx = self.context.db.begin_transaction().await;
         let mut tx = TransactionBuilder::default();
@@ -930,6 +944,16 @@ impl Client<UserClientConfig> {
         fedimint_core::task::timeout(Duration::from_secs(40), poll())
             .await
             .map_err(|_| ClientError::Timeout)?
+    }
+
+    pub async fn save_outgoing_contract_pending(&self, invoice: Invoice) {
+        let mut dbtx = self.context.db.begin_transaction().await;
+        dbtx.insert_new_entry(
+            &OutgoingContractPendingKey(*invoice.payment_hash()),
+            &invoice,
+        )
+        .await;
+        dbtx.commit_tx().await;
     }
 
     pub async fn generate_confirmed_invoice<R: RngCore + CryptoRng>(
@@ -1111,6 +1135,7 @@ impl Client<UserClientConfig> {
     /// payment and wait for them to do so
     pub async fn await_outgoing_contract_execution(
         &self,
+        invoice: Invoice,
         contract_id: ContractId,
         rng: impl RngCore + CryptoRng,
     ) -> Result<()> {
@@ -1147,6 +1172,10 @@ impl Client<UserClientConfig> {
                 .map_err(|_| ClientError::FailedPaymentNoRefund)??;
 
                 self.try_refund_outgoing_contract(contract_id, rng).await?;
+                let mut dbtx = self.context.db.begin_transaction().await;
+                dbtx.remove_entry(&OutgoingContractPendingKey(*invoice.payment_hash()))
+                    .await;
+                dbtx.commit_tx().await;
                 Err(ClientError::RefundedFailedPayment)
             }
             Err(e) => Err(e),
@@ -1634,6 +1663,8 @@ pub enum ClientError {
     HttpError(#[from] reqwest::Error),
     #[error("Outgoing payment timeout")]
     OutgoingPaymentTimeout,
+    #[error("Outgoing contract has pending payment")]
+    OutgoingContractHasPendingPayment,
     #[error("Invalid amount tier {0:?}")]
     InvalidAmountTier(Amount),
     #[error("Invalid signature")]

@@ -1296,6 +1296,7 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "hex",
+ "lightning-invoice",
  "serde",
  "serde_json",
  "strum",

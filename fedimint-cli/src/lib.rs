@@ -781,7 +781,7 @@ impl FedimintCli {
             Command::LnPay { bolt11 } => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let (contract_id, outpoint) = client
-                    .fund_outgoing_ln_contract(bolt11, &mut rng)
+                    .fund_outgoing_ln_contract(bolt11.clone(), &mut rng)
                     .await
                     .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
@@ -791,8 +791,9 @@ impl FedimintCli {
                     .await_outgoing_contract_acceptance(outpoint)
                     .await
                     .map_err_cli_msg(CliErrorKind::Timeout, "contract wasn't accepted in time")?;
+                client.save_outgoing_contract_pending(bolt11.clone()).await;
                 client
-                    .await_outgoing_contract_execution(contract_id, &mut rng)
+                    .await_outgoing_contract_execution(bolt11, contract_id, &mut rng)
                     .await
                     .map(|_| CliOutput::LnPay {
                         contract_id: (contract_id),

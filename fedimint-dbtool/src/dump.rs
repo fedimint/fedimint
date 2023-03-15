@@ -312,6 +312,16 @@ impl<'a> DatabaseDump<'a> {
                         "Outgoing Payment Claims"
                     );
                 }
+                ClientLightningRange::DbKeyPrefix::OutgoingContractPending => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ClientLightningRange::OutgoingContractPendingKeyPrefix,
+                        ClientLightningRange::OutgoingContractPendingKey,
+                        lightning_invoice::Invoice,
+                        ln_client,
+                        "Outgoing Contracts with Pending Payments"
+                    );
+                }
             }
         }
 
