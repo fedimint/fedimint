@@ -2,26 +2,30 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
+use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use anyhow::format_err;
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
+use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{
     ClientModuleGenRegistry, ClientModuleGenRegistryExt, DynClientModuleGen,
 };
 use fedimint_core::api::{
-    FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsAuthenticatedApi,
+    WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::db::Database;
-use fedimint_core::module::ApiRequestErased;
+use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintClientGen;
@@ -31,7 +35,7 @@ use mint_client::modules::wallet::txoproof::TxOutProof;
 use mint_client::modules::wallet::WalletClientGen;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
-    serialize_ecash,
+    parse_peer_id, serialize_ecash,
 };
 use mint_client::{module_decode_stubs, Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
@@ -127,6 +131,8 @@ enum CliOutput {
     },
 
     Backup,
+
+    SignalUpgrade,
 }
 
 impl fmt::Display for CliOutput {
@@ -156,6 +162,27 @@ struct CliError {
     message: String,
     #[serde(skip_serializing)]
     raw_error: Option<Box<dyn Error>>,
+}
+
+// TODO: Refactor federation API errors to just delegate to this
+impl From<FederationError> for CliError {
+    fn from(e: FederationError) -> Self {
+        CliError::from(
+            CliErrorKind::GeneralFederationError,
+            "Failed API call",
+            Some(e.into()),
+        )
+    }
+}
+
+impl From<anyhow::Error> for CliError {
+    fn from(e: anyhow::Error) -> Self {
+        CliError::from(
+            CliErrorKind::GeneralFederationError,
+            "Failed",
+            Some(e.into()),
+        )
+    }
 }
 
 impl Debug for CliError {
@@ -331,6 +358,18 @@ enum Command {
     /// Wipe the notes data from the DB. Useful for testing backup & restore
     #[clap(hide = true)]
     WipeNotes,
+
+    /// Signal a consensus upgrade
+    SignalUpgrade {
+        /// Location of the salt file
+        salt_path: PathBuf,
+        /// Peer id of the guardian
+        #[arg(value_parser = parse_peer_id)]
+        our_id: PeerId,
+        /// Guardian password for authentication
+        #[arg(env = "FM_PASSWORD")]
+        password: String,
+    },
 }
 
 trait ErrorHandler<T, E> {
@@ -738,5 +777,26 @@ async fn handle_command(
                 Some(e.into()),
             )),
         },
+        Command::SignalUpgrade {
+            password,
+            salt_path,
+            our_id,
+        } => {
+            let salt = fs::read_to_string(salt_path)
+                .map_err(|_| format_err!("Unable to open salt file"))?;
+            let auth = ApiAuth(get_password_hash(&password, &salt)?);
+            // TODO: store PeerId -> Url in client
+            let url = client
+                .config()
+                .as_ref()
+                .nodes
+                .get(u16::from(our_id) as usize)
+                .expect("Endpoint exists")
+                .url
+                .clone();
+            let auth_api = WsAuthenticatedApi::new(url, our_id, auth);
+            auth_api.signal_upgrade().await?;
+            Ok(CliOutput::SignalUpgrade)
+        }
     }
 }
