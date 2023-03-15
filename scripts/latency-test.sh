@@ -70,8 +70,10 @@ if [[ $(echo "$LN_SEND < 5" | bc -l) != 1 ]] ; then
   echo "SEND TOO SLOW: $LN_SEND"
   exit 1
 fi
-  
+
 if [[ $(echo "$LN_RECEIVE < 5" | bc -l) != 1 ]] ; then
   echo "RECEIVE TOO SLOW: $LN_RECEIVE"
   exit 1
 fi
+
+echo "fm success: latency-test"

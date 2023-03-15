@@ -89,3 +89,5 @@ PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
 $FM_LIGHTNING_CLI pay "$INVOICE"
 INVOICE_STATUS="$($FM_LNCLI lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
 [[ "$INVOICE_STATUS" = "SETTLED" ]]
+
+echo "fm success: cli-test"
