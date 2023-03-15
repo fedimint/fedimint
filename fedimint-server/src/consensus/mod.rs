@@ -8,7 +8,6 @@ use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::os::unix::prelude::OsStrExt;
 use std::sync::Mutex;
-use std::time::Duration;
 
 use anyhow::format_err;
 use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
@@ -25,7 +24,7 @@ use fedimint_core::module::registry::{
 use fedimint_core::module::{ModuleError, TransactionItemAmount};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::{DynServerModule, DynVerificationCache};
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use futures::future::select_all;
@@ -860,11 +859,6 @@ impl FedimintConsensus {
                 self.accepted_transaction_status(txid, accepted, &mut dbtx).await
             }
             rejected = self.db.wait_key_exists(&rejected_key) => {
-                // HACK: Just because a copy of it was rejected, doesn't mean one was not actually included
-                sleep(Duration::from_millis(1000)).await;
-                if let Some(status) = self.transaction_status(txid).await {
-                    return status;
-                }
                 TransactionStatus::Rejected(rejected)
             }
         }
