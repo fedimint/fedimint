@@ -463,6 +463,7 @@
 
           cli-test = {
             reconnect = craneBuildNative.cliTestReconnect;
+            upgrade = craneBuildNative.cliTestUpgrade;
             latency = craneBuildNative.cliTestLatency;
             cli = craneBuildNative.cliTestCli;
             rust-tests = craneBuildNative.cliRustTests;

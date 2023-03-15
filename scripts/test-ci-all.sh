@@ -24,6 +24,13 @@ function cli_test_reconnect() {
 }
 export -f cli_test_reconnect
 
+function cli_test_upgrade() {
+  set -eo pipefail # pipefail must be set manually again
+  echo "### Starting reconnect test..."
+  nix build -L .#debug.cli-test.upgrade 2>&1 | ts -s
+}
+export -f cli_test_upgrade
+
 function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
   echo "### Starting latency test..."
@@ -63,5 +70,6 @@ parallel --timeout 600 --load 150% --delay 5 --memfree 512M --nice 15 ::: \
   cli_test_rust_tests \
   cli_test_latency \
   cli_test_reconnect \
+  cli_test_upgrade \
   cli_test_cli \
   cli_test_always_fail
