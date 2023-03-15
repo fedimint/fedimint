@@ -390,9 +390,11 @@ pub async fn validate_migrations<F, Fut>(
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = ()>,
 {
-    if let Ok(parent_dir) = env::var("DB_MIGRATION_DIR") {
-        let db_dir = Path::new(&parent_dir);
-        let files = fs::read_dir(db_dir).unwrap();
+    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
+    let db_dir = Path::new(&parent_dir);
+    let files_res = fs::read_dir(db_dir);
+    // If the DB_MIGRATION_DIR does not exist, just skip the validation.
+    if let Ok(files) = files_res {
         for file in files.flatten() {
             let name = file.file_name().into_string().unwrap();
             if name.starts_with(db_prefix) {
