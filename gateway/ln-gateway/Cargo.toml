@@ -20,6 +20,10 @@ path = "src/bin/gatewayd.rs"
 name = "gateway-cln-extension"
 path = "src/bin/cln_extension.rs"
 
+[[test]]
+name = "gateway-tests"
+path = "tests/tests.rs"
+
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1.64"
@@ -50,6 +54,13 @@ tokio-stream = "0.1.11"
 tonic = { version = "0.8", features = ["transport", "tls"] }
 tower-http = { version = "0.3.5", features = ["cors", "auth"] }
 url = { version = "2.3.1", features = ["serde"] }
+
+[dev-dependencies]
+fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
+fedimint-testing = { path = "../../fedimint-testing" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
+portpicker = "0.1.1"
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 
 [build-dependencies]
 fedimint-build = { path = "../../fedimint-build" }

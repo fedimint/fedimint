@@ -1853,31 +1853,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gateway-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitcoin",
- "fedimint-client",
- "fedimint-core",
- "fedimint-ln-client",
- "fedimint-logging",
- "fedimint-mint-client",
- "fedimint-testing",
- "lightning-invoice",
- "ln-gateway",
- "mint-client",
- "portpicker",
- "rand",
- "serde_json",
- "threshold_crypto",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2646,11 +2621,15 @@ dependencies = [
  "fedimint-build",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-ln-client",
  "fedimint-logging",
+ "fedimint-mint-client",
  "fedimint-rocksdb",
+ "fedimint-testing",
  "futures",
  "lightning-invoice",
  "mint-client",
+ "portpicker",
  "prost 0.11.6",
  "rand",
  "reqwest",
@@ -2658,6 +2637,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "threshold_crypto",
  "tokio",
  "tokio-stream",
  "tonic 0.8.3",
