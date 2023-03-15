@@ -133,6 +133,10 @@ enum CliOutput {
     Backup,
 
     SignalUpgrade,
+
+    EpochCount {
+        count: u64,
+    },
 }
 
 impl fmt::Display for CliOutput {
@@ -370,6 +374,9 @@ enum Command {
         #[arg(env = "FM_PASSWORD")]
         password: String,
     },
+
+    /// Gets the current epoch count
+    EpochCount,
 }
 
 trait ErrorHandler<T, E> {
@@ -797,6 +804,10 @@ async fn handle_command(
             let auth_api = WsAuthenticatedApi::new(url, our_id, auth);
             auth_api.signal_upgrade().await?;
             Ok(CliOutput::SignalUpgrade)
+        }
+        Command::EpochCount => {
+            let count = client.context().api.fetch_epoch_count().await?;
+            Ok(CliOutput::EpochCount { count })
         }
     }
 }
