@@ -434,9 +434,6 @@ async fn run_dkg(servers: usize) -> anyhow::Result<()> {
     root_task_group.install_kill_handler();
     let mut task_group = root_task_group.make_subgroup().await;
 
-    // let base_port = 8173 + 10000;
-    // let mut certs = vec![];
-
     // generate TLS certs
     let (sender, mut receiver): (Sender<String>, Receiver<String>) = mpsc::channel(1000);
     for id in 0..servers {
