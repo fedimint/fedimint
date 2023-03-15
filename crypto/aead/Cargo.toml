@@ -7,7 +7,7 @@ description = "aead utilities on top of ring "
 license = "MIT"
 
 [lib]
-name = "aead"
+name = "fedimint_aead"
 path = "src/lib.rs"
 
 [dependencies]

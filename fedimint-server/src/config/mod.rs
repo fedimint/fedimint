@@ -4,10 +4,10 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use aead::{encrypted_read, get_encryption_key, get_password_hash};
 use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
+use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{

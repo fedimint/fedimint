@@ -3,8 +3,8 @@ use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use aead::{encrypted_read, encrypted_write, get_encryption_key};
 use clap::{Parser, Subcommand};
+use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_core::config::{DkgError, ServerModuleGenRegistry};
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{self, TaskGroup};

@@ -158,8 +158,10 @@ impl MintClient {
 
     /// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`
-    fn get_derived_backup_encryption_key_static(secret: &DerivableSecret) -> aead::LessSafeKey {
-        aead::LessSafeKey::new(
+    fn get_derived_backup_encryption_key_static(
+        secret: &DerivableSecret,
+    ) -> fedimint_aead::LessSafeKey {
+        fedimint_aead::LessSafeKey::new(
             secret
                 .child_key(MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID)
                 .to_chacha20_poly1305_key(),
@@ -176,7 +178,7 @@ impl MintClient {
             .to_secp_key(&Secp256k1::<secp256k1::SignOnly>::gen_new())
     }
 
-    fn get_derived_backup_encryption_key(&self) -> aead::LessSafeKey {
+    fn get_derived_backup_encryption_key(&self) -> fedimint_aead::LessSafeKey {
         Self::get_derived_backup_encryption_key_static(&self.secret)
     }
 
@@ -369,10 +371,10 @@ impl PlaintextEcashBackup {
     }
 
     /// Encrypt with a key and turn into [`EcashBackup`]
-    pub fn encrypt_to(&self, key: &aead::LessSafeKey) -> Result<EcashBackup> {
+    pub fn encrypt_to(&self, key: &fedimint_aead::LessSafeKey) -> Result<EcashBackup> {
         let encoded = self.encode()?;
 
-        let encrypted = aead::encrypt(encoded, key)?;
+        let encrypted = fedimint_aead::encrypt(encoded, key)?;
         Ok(EcashBackup(encrypted))
     }
 }
@@ -381,8 +383,11 @@ impl PlaintextEcashBackup {
 pub struct EcashBackup(Vec<u8>);
 
 impl EcashBackup {
-    pub fn decrypt_with(mut self, key: &aead::LessSafeKey) -> Result<PlaintextEcashBackup> {
-        let decrypted = aead::decrypt(&mut self.0, key)?;
+    pub fn decrypt_with(
+        mut self,
+        key: &fedimint_aead::LessSafeKey,
+    ) -> Result<PlaintextEcashBackup> {
+        let decrypted = fedimint_aead::decrypt(&mut self.0, key)?;
         PlaintextEcashBackup::decode(decrypted)
     }
 
