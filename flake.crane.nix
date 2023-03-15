@@ -2,8 +2,9 @@
 craneLib:
 let
   # filter source code at path `src` to include only the list of `modules`
-  filterModules = modules: src:
+  filterModules = modules: raw-src:
     let
+      src = builtins.path { path = raw-src; name = "src"; };
       basePath = toString src + "/";
       relPathAllCargoTomlFiles = builtins.filter
         (pathStr: lib.strings.hasSuffix "/Cargo.toml" pathStr)
@@ -23,6 +24,7 @@ let
         # uncomment to debug:
           # builtins.trace "${relPath}: ${lib.boolToString includePath}"
         includePath
+
       );
       inherit src;
     };
@@ -47,8 +49,9 @@ let
   # Like `filterWorkspaceFiles` but with `./scripts/` and `./misc/test/` included
   filterWorkspaceTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" "misc/test/.*" ] src;
 
-  filterSrcWithRegexes = regexes: src:
+  filterSrcWithRegexes = regexes: raw-src:
     let
+      src = builtins.path { path = raw-src; name = "src"; };
       basePath = toString src + "/";
     in
     lib.cleanSourceWith {
