@@ -42,7 +42,7 @@ use tracing::{debug, error, instrument, trace};
 use url::Url;
 
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use crate::module::ApiRequestErased;
+use crate::module::{ApiAuth, ApiRequestErased};
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
@@ -772,6 +772,30 @@ impl<C> WsFederationApi<C> {
                 })
                 .collect(),
         }
+    }
+}
+
+/// For a guardian to communicate with their server
+pub struct WsAuthenticatedApi {
+    inner: DynFederationApi,
+    auth: ApiAuth,
+}
+
+impl WsAuthenticatedApi {
+    pub fn new(url: Url, our_id: PeerId, auth: ApiAuth) -> Self {
+        Self {
+            inner: WsFederationApi::new(vec![(our_id, url)]).into(),
+            auth,
+        }
+    }
+
+    pub async fn signal_upgrade(&self) -> FederationResult<()> {
+        self.inner
+            .request_current_consensus(
+                "/upgrade".to_owned(),
+                ApiRequestErased::default().with_auth(&self.auth),
+            )
+            .await
     }
 }
 
