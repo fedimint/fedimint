@@ -59,7 +59,7 @@ export -f cli_test_always_fail
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
 # try to keep the slowest tests first
-parallel --load 150% --delay 5 --memfree 512M --nice 15 ::: \
+parallel --timeout 600 --load 150% --delay 5 --memfree 512M --nice 15 ::: \
   cli_test_rust_tests \
   cli_test_latency \
   cli_test_reconnect \
