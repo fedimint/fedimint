@@ -4,7 +4,7 @@ let
   # filter source code at path `src` to include only the list of `modules`
   filterModules = modules: raw-src:
     let
-      src = builtins.path { path = raw-src; name = "src"; };
+      src = builtins.path { path = raw-src; name = "fedimint"; };
       basePath = toString src + "/";
       relPathAllCargoTomlFiles = builtins.filter
         (pathStr: lib.strings.hasSuffix "/Cargo.toml" pathStr)
@@ -51,7 +51,7 @@ let
 
   filterSrcWithRegexes = regexes: raw-src:
     let
-      src = builtins.path { path = raw-src; name = "src"; };
+      src = builtins.path { path = raw-src; name = "fedimint"; };
       basePath = toString src + "/";
     in
     lib.cleanSourceWith {
