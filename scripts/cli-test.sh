@@ -91,3 +91,4 @@ INVOICE_STATUS="$($FM_LNCLI lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
 [[ "$INVOICE_STATUS" = "SETTLED" ]]
 
 echo "fm success: cli-test"
+df -h

@@ -77,3 +77,4 @@ if [[ $(echo "$LN_RECEIVE < 5" | bc -l) != 1 ]] ; then
 fi
 
 echo "fm success: latency-test"
+df -h

@@ -51,3 +51,4 @@ kill_server $server4
 start_federation
 await_all_peers
 echo "fm success: reconnect-test"
+df -h
