@@ -16,6 +16,7 @@ use crate::{module_decode_stubs, Client, DecryptedPreimage, MintClient, MintOutp
 
 /// Old transaction definition used by old client.
 pub mod legacy {
+    use bitcoin_hashes::hex::ToHex;
     use bitcoin_hashes::Hash;
     use fedimint_core::core::{
         DynInput, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -144,7 +145,12 @@ pub mod legacy {
             {
                 Ok(())
             } else {
-                Err(TransactionError::InvalidSignature)
+                Err(TransactionError::InvalidSignature {
+                    tx: self.consensus_encode_to_hex().expect("Can't fail"),
+                    hash: self.tx_hash().to_hex(),
+                    sig: signature.consensus_encode_to_hex().expect("Can't fail"),
+                    key: agg_pub_key.consensus_encode_to_hex().expect("Can't fail"),
+                })
             }
         }
 
