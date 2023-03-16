@@ -211,7 +211,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
     vec![
         api_endpoint! {
             "/transaction",
-            async |fedimint: &FedimintConsensus, _dbtx, serde_transaction: SerdeTransaction| -> TransactionId {
+            async |fedimint: &FedimintConsensus, _context, serde_transaction: SerdeTransaction| -> TransactionId {
                 let transaction = serde_transaction.try_into_inner(&fedimint.modules.decoder_registry()).map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 let tx_id = transaction.tx_hash();
@@ -225,7 +225,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/fetch_transaction",
-            async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> Option<TransactionStatus> {
+            async |fedimint: &FedimintConsensus, _context, tx_hash: TransactionId| -> Option<TransactionStatus> {
                 debug!(transaction = %tx_hash, "Recieved request");
 
                 let tx_status = fedimint.transaction_status(tx_hash)
@@ -237,7 +237,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/wait_transaction",
-            async |fedimint: &FedimintConsensus, _dbtx, tx_hash: TransactionId| -> TransactionStatus {
+            async |fedimint: &FedimintConsensus, _context, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
                 let tx_status = fedimint.wait_transaction_status(tx_hash)
@@ -249,27 +249,27 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/fetch_epoch_history",
-            async |fedimint: &FedimintConsensus, _dbtx, epoch: u64| -> SerdeEpochHistory {
+            async |fedimint: &FedimintConsensus, _context, epoch: u64| -> SerdeEpochHistory {
                 let epoch = fedimint.epoch_history(epoch).await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
                 Ok((&epoch).into())
             }
         },
         api_endpoint! {
             "/fetch_epoch_count",
-            async |fedimint: &FedimintConsensus, _dbtx, _v: ()| -> u64 {
+            async |fedimint: &FedimintConsensus, _context, _v: ()| -> u64 {
                 Ok(fedimint.get_epoch_count().await)
             }
         },
         api_endpoint! {
             "/config",
-            async |fedimint: &FedimintConsensus, dbtx, _v: ()| -> ConfigResponse {
-                Ok(fedimint.get_config_with_sig(dbtx).await)
+            async |fedimint: &FedimintConsensus, context, _v: ()| -> ConfigResponse {
+                Ok(fedimint.get_config_with_sig(&mut context.dbtx).await)
             }
         },
         api_endpoint! {
             "/upgrade",
-            async |fedimint: &FedimintConsensus, _dbtx, _v: (), has_auth| -> () {
-                if has_auth {
+            async |fedimint: &FedimintConsensus, context, _v: ()| -> () {
+                if context.has_auth {
                     fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
                     Ok(())
                 } else {
