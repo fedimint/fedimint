@@ -1006,7 +1006,7 @@ impl FederationTest {
             let fedimint_server = &mut server.fedimint;
 
             // Pending transactions will trigger an epoch
-            if let Some(Some(_)) = Pin::new(&mut fedimint_server.tx_receiver)
+            if let Some(Some(_)) = Pin::new(&mut fedimint_server.api_receiver)
                 .peek()
                 .now_or_never()
             {

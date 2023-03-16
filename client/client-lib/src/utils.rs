@@ -1,3 +1,4 @@
+use std::num::ParseIntError;
 use std::str::FromStr;
 
 use bitcoin::{secp256k1, Network};
@@ -7,7 +8,7 @@ use fedimint_core::api::DynFederationApi;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{ParseAmountError, TieredMulti};
+use fedimint_core::{ParseAmountError, PeerId, TieredMulti};
 use lightning_invoice::Currency;
 
 use crate::mint::SpendableNote;
@@ -58,6 +59,10 @@ pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmou
 
 pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
+}
+
+pub fn parse_peer_id(s: &str) -> Result<PeerId, ParseIntError> {
+    Ok(PeerId::from(s.parse::<u16>()?))
 }
 
 #[derive(Debug)]

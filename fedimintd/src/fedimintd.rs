@@ -38,7 +38,7 @@ pub struct ServerOpts {
     #[arg(long = "listen-ui", env = "FM_LISTEN_UI")]
     pub listen_ui: Option<SocketAddr>,
     /// After an upgrade the epoch must be passed in
-    #[arg(long = "upgrade-epoch")]
+    #[arg(env = "FM_UPGRADE_EPOCH")]
     pub upgrade_epoch: Option<u64>,
     /// Enable tokio console logging
     #[arg(long = "tokio-console-bind", env = "FM_TOKIO_CONSOLE_BIND")]
@@ -233,14 +233,14 @@ async fn run(
         decoders.clone(),
     );
 
-    let (consensus, tx_receiver) =
+    let (consensus, api_receiver) =
         FedimintConsensus::new(cfg.clone(), db, module_gens, &mut task_group).await?;
 
     if let Some(epoch) = opts.upgrade_epoch {
         consensus.remove_upgrade_items(epoch).await?;
     }
 
-    FedimintServer::run(cfg, consensus, tx_receiver, decoders, &mut task_group).await?;
+    FedimintServer::run(cfg, consensus, api_receiver, decoders, &mut task_group).await?;
 
     Ok(())
 }

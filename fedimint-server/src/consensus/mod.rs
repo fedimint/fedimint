@@ -34,6 +34,7 @@ use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use thiserror::Error;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
@@ -81,6 +82,13 @@ pub struct ConsensusProposal {
     pub force_new_epoch: bool,
 }
 
+/// Events that can be sent from the API to consensus thread
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub enum ApiEvent {
+    Transaction(Transaction),
+    UpgradeSignal,
+}
+
 // TODO: we should make other fields private and get rid of this
 #[non_exhaustive]
 pub struct FedimintConsensus {
@@ -98,12 +106,12 @@ pub struct FedimintConsensus {
     /// a crash
     pub db: Database,
 
-    /// For sending new transactions to consensus
-    pub tx_sender: Sender<Transaction>,
+    /// For sending API events to consensus
+    pub api_sender: Sender<ApiEvent>,
 
-    /// Cache of transactions to include in a proposal
+    /// Cache of `ApiEvent` to include in a proposal
     // TODO should be able to eventually remove this Mutex
-    pub tx_cache: Mutex<HashSet<Transaction>>,
+    pub api_event_cache: Mutex<HashSet<ApiEvent>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -140,7 +148,7 @@ impl FedimintConsensus {
         db: Database,
         module_inits: ServerModuleGenRegistry,
         task_group: &mut TaskGroup,
-    ) -> anyhow::Result<(Self, Receiver<Transaction>)> {
+    ) -> anyhow::Result<(Self, Receiver<ApiEvent>)> {
         let mut modules = BTreeMap::new();
 
         let env = Self::get_env_vars_map();
@@ -182,7 +190,7 @@ impl FedimintConsensus {
             modules.insert(*module_id, module);
         }
 
-        let (tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+        let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
         let client_cfg = cfg.consensus.to_config_response(&module_inits);
 
         Ok((
@@ -192,10 +200,10 @@ impl FedimintConsensus {
                 client_cfg,
                 module_inits,
                 db,
-                tx_sender,
-                tx_cache: Default::default(),
+                api_sender,
+                api_event_cache: Default::default(),
             },
-            tx_receiver,
+            api_receiver,
         ))
     }
 
@@ -205,8 +213,8 @@ impl FedimintConsensus {
         db: Database,
         module_inits: ServerModuleGenRegistry,
         modules: ModuleRegistry<DynServerModule>,
-    ) -> (Self, Receiver<Transaction>) {
-        let (tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+    ) -> (Self, Receiver<ApiEvent>) {
+        let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
         let client_cfg = cfg.consensus.to_config_response(&module_inits);
 
         (
@@ -216,10 +224,10 @@ impl FedimintConsensus {
                 client_cfg,
                 module_inits,
                 db,
-                tx_sender,
-                tx_cache: Default::default(),
+                api_sender,
+                api_event_cache: Default::default(),
             },
-            tx_receiver,
+            api_receiver,
         )
     }
 }
@@ -295,8 +303,8 @@ impl FedimintConsensus {
 
         funding_verifier.verify_funding()?;
 
-        self.tx_sender
-            .send(transaction)
+        self.api_sender
+            .send(ApiEvent::Transaction(transaction))
             .await
             .map_err(|_e| TransactionSubmissionError::TxChannelError)?;
         Ok(())
@@ -426,7 +434,8 @@ impl FedimintConsensus {
             let span = info_span!("Processing transaction");
             async {
                 trace!(?transaction);
-                self.tx_cache.lock().unwrap().remove(&transaction);
+                let event = ApiEvent::Transaction(transaction.clone());
+                self.api_event_cache.lock().unwrap().remove(&event);
 
                 dbtx.set_tx_savepoint()
                     .await
@@ -562,6 +571,12 @@ impl FedimintConsensus {
             let mut peers = maybe_exists.unwrap_or_default();
             peers.extend(upgrade_signals.iter().map(|(peer, _)| peer));
             dbtx.insert_entry(&ConsensusUpgradeKey, &peers).await;
+
+            // Remove our upgrade signal event if we signaled
+            if peers.contains(&self.cfg.local.identity) {
+                let mut cache = self.api_event_cache.lock().expect("locks");
+                cache.remove(&ApiEvent::UpgradeSignal);
+            }
         }
     }
 
@@ -576,15 +591,18 @@ impl FedimintConsensus {
             .is_some()
     }
 
+    /// Sends an upgrade signal to the fedimint server thread
+    pub async fn signal_upgrade(&self) -> Result<(), SendError<ApiEvent>> {
+        self.api_sender.send(ApiEvent::UpgradeSignal).await
+    }
+
     /// Called to remove the upgrade items after the upgrade is complete
     pub async fn remove_upgrade_items(&self, epoch: u64) -> anyhow::Result<()> {
         let last_epoch = self.get_epoch_count().await;
+        let mut tx = self.db.begin_transaction().await;
         if last_epoch == epoch {
-            self.db
-                .begin_transaction()
-                .await
-                .remove_entry(&ConsensusUpgradeKey)
-                .await;
+            tx.remove_entry(&ConsensusUpgradeKey).await;
+            tx.commit_tx().await;
             Ok(())
         } else {
             Err(format_err!(
@@ -705,12 +723,15 @@ impl FedimintConsensus {
             .await;
 
         let mut items: Vec<ConsensusItem> = self
-            .tx_cache
+            .api_event_cache
             .lock()
             .unwrap()
             .iter()
             .cloned()
-            .map(ConsensusItem::Transaction)
+            .map(|event| match event {
+                ApiEvent::Transaction(tx) => ConsensusItem::Transaction(tx),
+                ApiEvent::UpgradeSignal => ConsensusItem::ConsensusUpgrade(ConsensusUpgrade),
+            })
             .collect();
         let mut force_new_epoch = false;
 

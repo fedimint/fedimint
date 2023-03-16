@@ -25,3 +25,5 @@ env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(
 unset FM_ELECTRUM_RPC
 export FM_ESPLORA_RPC="http://127.0.0.1:50002"
 env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
+
+echo "fm success: rust-tests"

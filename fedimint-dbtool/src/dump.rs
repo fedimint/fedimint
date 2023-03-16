@@ -228,9 +228,9 @@ impl<'a> DatabaseDump<'a> {
                     );
                 }
                 ConsensusRange::DbKeyPrefix::ConsensusUpgrade => {
-                    let shutdown = dbtx.get_value(&ConsensusRange::ConsensusUpgradeKey).await;
-                    if let Some(shutdown) = shutdown {
-                        consensus.insert("ShutdownSignal".to_string(), Box::new(shutdown));
+                    let upgrade = dbtx.get_value(&ConsensusRange::ConsensusUpgradeKey).await;
+                    if let Some(upgrade) = upgrade {
+                        consensus.insert("ConsensusUpgrade".to_string(), Box::new(upgrade));
                     }
                 }
                 // Module is a global prefix for all module data

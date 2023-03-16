@@ -50,4 +50,4 @@ kill_server $server4
 
 start_federation
 await_all_peers
-echo "Successfully restarted consensus!"
+echo "fm success: reconnect-test"
