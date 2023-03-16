@@ -232,12 +232,12 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn complete_htlc(
         &self,
-        outcome: CompleteHtlcsRequest,
+        request: CompleteHtlcsRequest,
     ) -> crate::Result<CompleteHtlcsResponse> {
         let CompleteHtlcsRequest {
             action,
             intercepted_htlc_id,
-        } = outcome;
+        } = request;
 
         let hash = match sha256::Hash::from_slice(&intercepted_htlc_id) {
             Ok(hash) => hash,
