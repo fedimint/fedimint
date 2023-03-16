@@ -12,7 +12,7 @@ If you have trouble setting up a Nix environment directly on Mac, try one of the
 
 It's recommended to **start all the commands in "Nix dev shell"**, which can be started with `nix develop` command.
 
- - `%` indicates a command ran in your macOS enviroment
+ - `%` indicates a command ran in your macOS environment
  - `$` indicates a command ran inside the Ubuntu VM
  - `#` indicates a comment
  
@@ -31,7 +31,7 @@ $ git clone https://github.com/fedimint/fedimint
 $ cd fedimint
 $ nix develop
 $ ./scripts/tmuxinator.sh
-# you should now have a fully setup federation with all the backing bitcoin infrastrucure running locally
+# you should now have a fully setup federation with all the backing bitcoin infrastructure running locally
 ```
 
 ### Editor Support

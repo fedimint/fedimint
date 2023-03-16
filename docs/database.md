@@ -33,7 +33,7 @@ The client is not currently modularized, so nothing is prepended to the below pr
 | DropPeer            |     `0x03`    | Peer ID (u16)                    | None                          |
 | RejectedTransaction |     `0x04`    | Transaction ID (sha256, 32bytes) | Reason for rejection (string) |
 | EpochHistory        |     `0x05`    | Epoch ID (u16)                   | Epoch history record          |
-| LastEpoch           |     `0x06`    | none                             | Epoph ID (u16)                |
+| LastEpoch           |     `0x06`    | none                             | Epoch ID (u16)                |
 
 ### Mint
 
