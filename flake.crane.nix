@@ -1,4 +1,4 @@
-{ pkgs, lib, advisory-db, clightning-dev, pkgs-kitman }:
+{ pkgs, lib, advisory-db, clightning-dev, pkgs-kitman, moreutils-ts }:
 craneLib:
 let
   # filter source code at path `src` to include only the list of `modules`
@@ -108,7 +108,7 @@ rec {
 
     nativeBuildInputs = with pkgs; [
       pkg-config
-      ts
+      moreutils-ts
 
       # tests
       (hiPrio pkgs.bashInteractive)

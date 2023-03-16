@@ -46,7 +46,7 @@
 
         # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
         # the binary we need from `moreutils`
-        ts = pkgs.writeShellScriptBin "ts" "exec ${pkgs.moreutils}/bin/ts \"$@\"";
+        moreutils-ts = pkgs.writeShellScriptBin "ts" "exec ${pkgs.moreutils}/bin/ts \"$@\"";
 
         isArch64Darwin = stdenv.isAarch64 || stdenv.isDarwin;
 
@@ -212,7 +212,7 @@
 
         craneBuild = import ./flake.crane.nix
           {
-            inherit pkgs pkgs-kitman clightning-dev advisory-db lib;
+            inherit pkgs pkgs-kitman clightning-dev advisory-db lib moreutils-ts;
           };
 
         craneBuildNative = craneBuild craneLibNative;
@@ -310,7 +310,7 @@
                   tmuxinator
                   docker-compose
                   pkgs.tokio-console
-                  ts
+                  moreutils-ts
 
                   # Nix
                   pkgs.nixpkgs-fmt
@@ -409,7 +409,7 @@
                 git
                 parallel
                 semgrep
-                ts
+                moreutils-ts
                 nix
               ];
             };
