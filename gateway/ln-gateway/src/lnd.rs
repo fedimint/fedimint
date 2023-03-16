@@ -252,7 +252,7 @@ impl ILnRpcClient for GatewayLndClient {
         info!("Completing htlc with reference, {:?}", hash);
 
         if let Some((outcome, incoming_circuit_key)) = self.outcomes.lock().await.remove(&hash) {
-            let htlca_res = match action {
+            let htlc_action_res = match action {
                 Some(Action::Settle(Settle { preimage })) => ForwardHtlcInterceptResponse {
                     incoming_circuit_key,
                     action: 0,
@@ -270,7 +270,7 @@ impl ILnRpcClient for GatewayLndClient {
             };
 
             // TODO: Consider retrying this if the send fails
-            let _ = outcome.send(htlca_res).await.map_err(|_| {
+            let _ = outcome.send(htlc_action_res).await.map_err(|_| {
                 GatewayError::LnRpcError(tonic::Status::internal(
                     "Failed to send htlc processing outcome to LND node",
                 ))
