@@ -887,6 +887,11 @@
 <a href="#887" id="887">887</a>
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -1047,8 +1052,10 @@
 
     <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`
-    </span><span class="kw">fn </span>get_derived_backup_encryption_key_static(secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; aead::LessSafeKey {
-        aead::LessSafeKey::new(
+    </span><span class="kw">fn </span>get_derived_backup_encryption_key_static(
+        secret: <span class="kw-2">&amp;</span>DerivableSecret,
+    ) -&gt; fedimint_aead::LessSafeKey {
+        fedimint_aead::LessSafeKey::new(
             secret
                 .child_key(MINT_E_CASH_BACKUP_SNAPSHOT_TYPE_CHILD_ID)
                 .to_chacha20_poly1305_key(),
@@ -1065,7 +1072,7 @@
             .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::&lt;secp256k1::SignOnly&gt;::gen_new())
     }
 
-    <span class="kw">fn </span>get_derived_backup_encryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; aead::LessSafeKey {
+    <span class="kw">fn </span>get_derived_backup_encryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_aead::LessSafeKey {
         <span class="self">Self</span>::get_derived_backup_encryption_key_static(<span class="kw-2">&amp;</span><span class="self">self</span>.secret)
     }
 
@@ -1258,10 +1265,10 @@
     }
 
     <span class="doccomment">/// Encrypt with a key and turn into [`EcashBackup`]
-    </span><span class="kw">pub fn </span>encrypt_to(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>aead::LessSafeKey) -&gt; <span class="prelude-ty">Result</span>&lt;EcashBackup&gt; {
+    </span><span class="kw">pub fn </span>encrypt_to(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>fedimint_aead::LessSafeKey) -&gt; <span class="prelude-ty">Result</span>&lt;EcashBackup&gt; {
         <span class="kw">let </span>encoded = <span class="self">self</span>.encode()<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>encrypted = aead::encrypt(encoded, key)<span class="question-mark">?</span>;
+        <span class="kw">let </span>encrypted = fedimint_aead::encrypt(encoded, key)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(EcashBackup(encrypted))
     }
 }
@@ -1270,8 +1277,11 @@
 </span><span class="kw">pub struct </span>EcashBackup(Vec&lt;u8&gt;);
 
 <span class="kw">impl </span>EcashBackup {
-    <span class="kw">pub fn </span>decrypt_with(<span class="kw-2">mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>aead::LessSafeKey) -&gt; <span class="prelude-ty">Result</span>&lt;PlaintextEcashBackup&gt; {
-        <span class="kw">let </span>decrypted = aead::decrypt(<span class="kw-2">&amp;mut </span><span class="self">self</span>.<span class="number">0</span>, key)<span class="question-mark">?</span>;
+    <span class="kw">pub fn </span>decrypt_with(
+        <span class="kw-2">mut </span><span class="self">self</span>,
+        key: <span class="kw-2">&amp;</span>fedimint_aead::LessSafeKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PlaintextEcashBackup&gt; {
+        <span class="kw">let </span>decrypted = fedimint_aead::decrypt(<span class="kw-2">&amp;mut </span><span class="self">self</span>.<span class="number">0</span>, key)<span class="question-mark">?</span>;
         PlaintextEcashBackup::decode(decrypted)
     }
 

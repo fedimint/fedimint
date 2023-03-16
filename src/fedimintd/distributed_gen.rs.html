@@ -260,8 +260,8 @@
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
-<span class="kw">use </span>aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>fedimint_core::config::{DkgError, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, TaskGroup};

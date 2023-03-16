@@ -865,10 +865,10 @@
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>aead::{encrypted_read, get_encryption_key, get_password_hash};
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
+<span class="kw">use </span>fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
 <span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::config::{
