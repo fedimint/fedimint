@@ -97,6 +97,12 @@ rec {
       pkgs.llvmPackages.bintools
       rocksdb
       protobuf
+
+      moreutils-ts
+      parallel
+    ] ++ lib.optionals (!stdenv.isDarwin) [
+      util-linux
+      iproute2
     ] ++ lib.optionals stdenv.isDarwin [
       libiconv
       darwin.apple_sdk.frameworks.Security
@@ -291,6 +297,13 @@ rec {
     version = "0.0.1";
     cargoArtifacts = workspaceBuild;
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/rust-tests.sh";
+  });
+
+  cliTestsAll = craneLib.mkCargoDerivation (commonCliTestArgs // {
+    pname = "${commonCliTestArgs.pname}-all";
+    version = "0.0.1";
+    cargoArtifacts = workspaceBuild;
+    buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/test-ci-all.sh";
   });
 
   cliTestAlwaysFail = craneLib.mkCargoDerivation (commonCliTestArgs // {

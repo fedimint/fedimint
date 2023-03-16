@@ -69,7 +69,7 @@ jobs:
         run: nix build -L .#debug.workspaceTestDoc
 
       - name: Tests
-        run: nix develop --ignore-environment .#lint --command ./scripts/test-ci-all.sh
+        run: nix build -L .#debug.cli-test.all
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another

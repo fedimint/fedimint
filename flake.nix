@@ -462,6 +462,7 @@
           ;
 
           cli-test = {
+            all = craneBuildNative.cliTestsAll;
             reconnect = craneBuildNative.cliTestReconnect;
             latency = craneBuildNative.cliTestLatency;
             cli = craneBuildNative.cliTestCli;
