@@ -83,6 +83,7 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
+        // TODO: Issue #1953: Implement full route hint fetching for LND gateways
         Ok(GetRouteHintsResponse {
             route_hints: vec![RouteHint { hops: vec![] }],
         })
