@@ -307,14 +307,10 @@ impl ILnRpcClient for GatewayLndClient {
 
             Ok(CompleteHtlcsResponse {})
         } else {
-            error!(
-                "No interceptor reference found for this processed htlc with id: {:?}",
-                intercepted_htlc_id
+            // We should never attempt to complete an HTLC that we didn't intercept
+            panic!(
+                "No interceptor reference found for this processed htlc with id: {intercepted_htlc_id:?}",
             );
-            // FIXME: Use error codes to signal the gateway to take reactionary actions
-            return Err(GatewayError::LnRpcError(tonic::Status::internal(
-                "No interceptor reference found for this processed htlc. Potential loss of funds",
-            )));
         }
     }
 }
