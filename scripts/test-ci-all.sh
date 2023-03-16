@@ -25,8 +25,8 @@ export -f cli_test_reconnect
 
 function cli_test_upgrade() {
   set -eo pipefail # pipefail must be set manually again
-  echo "### Starting reconnect test..."
-  nix build -L .#debug.cli-test.upgrade 2>&1 | ts -s
+  echo "### Starting upgrade test..."
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/upgrade-test.sh" 2>&1 | ts -s
 }
 export -f cli_test_upgrade
 

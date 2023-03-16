@@ -42,4 +42,4 @@ start_federation
 mine_blocks 1
 await_fedimint_block_sync
 await_all_peers
-echo "Successfully upgraded consensus!"
+echo "fm success: upgrade-test"
