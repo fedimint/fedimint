@@ -33,8 +33,11 @@ use crate::GatewayError;
 type OutcomeMap = Arc<Mutex<HashMap<sha256::Hash, (LndSenderRef, Option<CircuitKey>)>>>;
 
 pub struct GatewayLndClient {
+    /// LND client
     client: LndClient,
+    /// Passes state between subscribe_htlcs() and complete_htlc()
     outcomes: OutcomeMap,
+    /// Used to spawn a task handling HTLC subscriptions
     task_group: TaskGroup,
 }
 

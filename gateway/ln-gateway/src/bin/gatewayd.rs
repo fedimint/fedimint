@@ -113,9 +113,14 @@ async fn main() -> Result<(), anyhow::Error> {
             "Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} ",
             lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
         );
-        GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, task_group.clone())
-            .await?
-            .into()
+        GatewayLndClient::new(
+            lnd_rpc_addr,
+            lnd_tls_cert,
+            lnd_macaroon,
+            task_group.make_subgroup().await,
+        )
+        .await?
+        .into()
     } else {
         error!("No lightning node provided. For CLN set FM_GATEWAY_LIGHTNING_ADDR for CLN. For LND set FM_LND_RPC_ADDR, FM_LND_TLS_CERT, and FM_LND_MACAROON");
         exit(1);
@@ -150,7 +155,7 @@ async fn main() -> Result<(), anyhow::Error> {
         client_builder,
         decoders,
         module_gens,
-        task_group.clone(),
+        task_group.make_subgroup().await,
     )
     .await;
 
