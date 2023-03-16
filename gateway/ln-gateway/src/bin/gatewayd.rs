@@ -44,6 +44,7 @@ pub struct GatewayOpts {
     #[arg(long = "lnrpc-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
     pub lnrpc_addr: Option<Url>,
 
+    // TODO: Issue #1955: Group clap args for configuring gatewayd with LND
     /// LND RPC address
     #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
     pub lnd_rpc_addr: Option<String>,
