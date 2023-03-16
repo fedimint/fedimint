@@ -643,17 +643,17 @@ impl ServerModule for Mint {
         vec![
             api_endpoint! {
                 "/backup",
-                async |module: &Mint, dbtx, request: SignedBackupRequest| -> () {
+                async |module: &Mint, context, request: SignedBackupRequest| -> () {
                     module
-                        .handle_backup_request(dbtx, request).await?;
+                        .handle_backup_request(context.dbtx(), request).await?;
                     Ok(())
                 }
             },
             api_endpoint! {
                 "/recover",
-                async |module: &Mint, dbtx, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
+                async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
-                        .handle_recover_request(dbtx, id).await)
+                        .handle_recover_request(context.dbtx(), id).await)
                 }
             },
         ]
