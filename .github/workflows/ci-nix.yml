@@ -58,6 +58,9 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
+      - name: Check nix develop
+        run: nix develop .#lint --command bash -c 'echo "TMPDIR $TMPDIR" ; mount ; df -h'
+
       - name: Build workspace
         run: nix build -L .#debug.workspaceBuild
 
