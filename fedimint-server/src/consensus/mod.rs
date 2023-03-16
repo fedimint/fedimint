@@ -599,12 +599,10 @@ impl FedimintConsensus {
     /// Called to remove the upgrade items after the upgrade is complete
     pub async fn remove_upgrade_items(&self, epoch: u64) -> anyhow::Result<()> {
         let last_epoch = self.get_epoch_count().await;
+        let mut tx = self.db.begin_transaction().await;
         if last_epoch == epoch {
-            self.db
-                .begin_transaction()
-                .await
-                .remove_entry(&ConsensusUpgradeKey)
-                .await;
+            tx.remove_entry(&ConsensusUpgradeKey).await;
+            tx.commit_tx().await;
             Ok(())
         } else {
             Err(format_err!(
