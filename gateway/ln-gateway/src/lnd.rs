@@ -119,14 +119,14 @@ impl ILnRpcClient for GatewayLndClient {
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> crate::Result<HtlcStream<'a>> {
-        let channel_size = 1024;
+        const CHANNEL_SIZE: usize = 100;
 
         // Channel to send responses to LND after processing intercepted HTLC
-        let (lnd_tx, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(channel_size);
+        let (lnd_tx, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(CHANNEL_SIZE);
 
         // Channel to send intercepted htlc to gatewayd for processing
         let (gwd_tx, gwd_rx) =
-            mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, tonic::Status>>(channel_size);
+            mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, tonic::Status>>(CHANNEL_SIZE);
 
         let scid = subscription.short_channel_id;
         let mut client = self.client.clone();
