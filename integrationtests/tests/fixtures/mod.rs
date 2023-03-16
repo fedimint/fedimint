@@ -121,8 +121,11 @@ pub struct Fixtures {
 
 /// Helper for generating fixtures, passing them into test code, then shutting
 /// down the task thread when the test is complete.
-pub async fn test<B>(
+///
+/// Used by `lightning_test` and `non_lightning_test`
+async fn test<B>(
     num_peers: u16,
+    gateway_nodes: Vec<GatewayNode>,
     f: impl FnOnce(
             FederationTest,
             UserTest<UserClientConfig>,
@@ -135,8 +138,7 @@ pub async fn test<B>(
 where
     B: Future<Output = ()>,
 {
-    let nodes = vec![GatewayNode::Cln, GatewayNode::Lnd];
-    for gateway_node in nodes {
+    for gateway_node in gateway_nodes {
         debug!("Running tests with {:?}", gateway_node);
         let fixtures = fixtures(num_peers, gateway_node).await?;
         f(
@@ -152,8 +154,50 @@ where
     Ok(())
 }
 
+/// Helper for running tests that don't involve lightning payments
+pub async fn non_lightning_test<B>(
+    num_peers: u16,
+    f: impl FnOnce(
+            FederationTest,
+            UserTest<UserClientConfig>,
+            Box<dyn BitcoinTest>,
+            GatewayTest,
+            Box<dyn LightningTest>,
+        ) -> B
+        + std::marker::Copy,
+) -> anyhow::Result<()>
+where
+    B: Future<Output = ()>,
+{
+    // default to using LND
+    let gateway_nodes = vec![GatewayNode::Lnd];
+    test(num_peers, gateway_nodes, f).await
+}
+
+/// Helper for running tests that involve lightning payments. Test callback will
+/// be run twice - once using LND as the gateway, once using CLN as the gateway.
+pub async fn lightning_test<B>(
+    num_peers: u16,
+    f: impl FnOnce(
+            FederationTest,
+            UserTest<UserClientConfig>,
+            Box<dyn BitcoinTest>,
+            GatewayTest,
+            Box<dyn LightningTest>,
+        ) -> B
+        + std::marker::Copy,
+) -> anyhow::Result<()>
+where
+    B: Future<Output = ()>,
+{
+    let gateway_nodes = vec![GatewayNode::Cln, GatewayNode::Lnd];
+    test(num_peers, gateway_nodes, f).await
+}
+
 /// Generates the fixtures for an integration test and spawns API and HBBFT
 /// consensus threads for federation nodes starting at port DEFAULT_P2P_PORT.
+///
+/// * `gateway_node` - whether to use CLN or LND as the gateway node
 pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);

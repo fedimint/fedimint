@@ -45,11 +45,11 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use tracing::log::warn;
 use tracing::{debug, info, instrument};
 
-use crate::fixtures::{peers, test, unwrap_item, FederationTest};
+use crate::fixtures::{lightning_test, non_lightning_test, peers, unwrap_item, FederationTest};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
         // TODO: this should not be needed, but I get errors on `peg_in` below sometimes
         let bitcoin = bitcoin.lock_exclusive().await;
         let peg_in_amount: u64 = 5000;
@@ -105,7 +105,7 @@ async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
         let peg_out_amount = Amount::from_sat(1000);
         let peg_out_address = bitcoin.get_new_address().await;
 
@@ -127,7 +127,7 @@ async fn wallet_peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 #[instrument(name = "peg_outs_are_only_allowed_once_per_epoch")]
 async fn wallet_peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
         let address1 = bitcoin.get_new_address().await;
         let address2 = bitcoin.get_new_address().await;
 
@@ -162,7 +162,7 @@ async fn wallet_peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_support_rbf() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
         // Need lock to keep tx in mempool from getting mined
         let bitcoin = bitcoin.lock_exclusive().await;
         let address = bitcoin.get_new_address().await;
@@ -218,7 +218,7 @@ async fn wallet_peg_outs_support_rbf() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
-    test(2, |_fed, user, bitcoin, _, _| async move {
+    non_lightning_test(2, |_fed, user, bitcoin, _, _| async move {
         let peg_in_address = user.client.get_new_pegin_address(rng()).await;
         let (proof, tx) = bitcoin
             .send_and_mine_block(&peg_in_address, Amount::from_sat(10000))
@@ -235,8 +235,8 @@ async fn wallet_peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
-        // at least one epoch needed to establish fees
+    non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
+        // at least one epoch needed to estabilish fees
         bitcoin.prepare_funding_wallet().await;
         fed.run_consensus_epochs(1).await;
 
@@ -278,7 +278,7 @@ async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_can_be_exchanged_directly_between_users() -> Result<()> {
-    test(4, |fed, user_send, bitcoin, _, _| async move {
+    non_lightning_test(4, |fed, user_send, bitcoin, _, _| async move {
         let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
 
         fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
@@ -298,7 +298,7 @@ async fn ecash_can_be_exchanged_directly_between_users() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_cannot_double_spent_with_different_nodes() -> Result<()> {
-    test(2, |fed, user1, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user1, bitcoin, _, _| async move {
         fed.mine_and_mint(&user1, &*bitcoin, sats(5000)).await;
         let ecash = fed.spend_ecash(&user1, sats(2000)).await;
 
@@ -323,7 +323,7 @@ async fn ecash_cannot_double_spent_with_different_nodes() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
-    test(2, |fed, user_send, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user_send, bitcoin, _, _| async move {
         let dummy_user = user_send.new_user_with_peers(peers(&[0])).await;
         let user_receive = user_send.new_user_with_peers(peers(&[0])).await;
 
@@ -395,7 +395,7 @@ async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
-    test(4, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(4, |fed, user, bitcoin, _, _| async move {
         // This test has many assumptions about bitcoin L1 blocks
         // and FM epochs, so we just lock the node
         let bitcoin = bitcoin.lock_exclusive().await;
@@ -427,7 +427,7 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
-    test(4, |fed, user, bitcoin, gateway, _| async move {
+    non_lightning_test(4, |fed, user, bitcoin, gateway, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
 
         let payment_amount = sats(2000);
@@ -490,7 +490,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
-    test(4, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(4, |fed, user, bitcoin, _, _| async move {
         fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
             .await;
         fed.database_add_notes_for_user(&user, sats(2000)).await;
@@ -506,7 +506,7 @@ async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
-    test(4, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(4, |fed, user, bitcoin, _, _| async move {
         fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000))
             .await;
         let out_point = fed.database_add_notes_for_user(&user, sats(2000)).await;
@@ -534,7 +534,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
-    test(2, |fed, user, bitcoin, gateway, lightning| async move {
+    lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
         // Fund the gateway so it can route internal payments
         fed.mine_and_mint(&gateway.user, &*bitcoin, sats(2000))
             .await;
@@ -647,7 +647,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
-    test(2, |fed, user, bitcoin, gateway, lightning| async move {
+    lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
         // TODO: in theory this test should work without this lock
         // but for some reason it's flaky
         let bitcoin = bitcoin.lock_exclusive().await;
@@ -696,7 +696,7 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
-    test(2, |fed, user, bitcoin, gateway, lightning| async move {
+    lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
         // Fund the gateway so it can route internal payments
         fed.mine_and_mint(&gateway.user, &*bitcoin, sats(2000))
             .await;
@@ -780,7 +780,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn set_lightning_invoice_expiry() -> Result<()> {
-    test(2, |_, _, _, _, lightning| async move {
+    lightning_test(2, |_, _, _, _, lightning| async move {
         let invoice = lightning.invoice(sats(1000), 600.into());
         assert_eq!(invoice.await.expiry_time(), Duration::from_secs(600));
     })
@@ -789,7 +789,7 @@ async fn set_lightning_invoice_expiry() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_valid_preimage() -> Result<()> {
-    test(2, |fed, user, bitcoin, gateway, _| async move {
+    lightning_test(2, |fed, user, bitcoin, gateway, _| async move {
         let starting_balance = sats(2000);
         let preimage_price = sats(100);
 
@@ -866,7 +866,7 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
-    test(2, |fed, user, bitcoin, gateway, _| async move {
+    lightning_test(2, |fed, user, bitcoin, gateway, _| async move {
         let starting_balance = sats(2000);
         let payment_amount = sats(100);
 
@@ -932,7 +932,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
-    test(2, |fed, user, bitcoin, gateway, lightning| async move {
+    lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
         let invoice = lightning.invoice(sats(1000), None);
 
         fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -961,7 +961,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()> {
-    test(2, |fed, user, bitcoin, gateway, lightning| async move {
+    lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
         let invoice = lightning.invoice(sats(1000), None);
 
         fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -1007,7 +1007,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()
 
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_tx_submitted() -> Result<()> {
-    test(2, |fed, user_send, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user_send, bitcoin, _, _| async move {
         fed.run_consensus_epochs(1).await;
 
         // to assert we have no pending epochs, we need to make sure
@@ -1035,7 +1035,7 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_new_block() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
         // to assert we have no pending epochs, we need to make sure
         // height change didn't couldn't introduce any
         let bitcoin = bitcoin.lock_exclusive().await;
@@ -1077,7 +1077,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 #[should_panic]
 async fn audit_negative_balance_sheet_panics() {
-    test(2, |fed, user, _, _, _| async move {
+    non_lightning_test(2, |fed, user, _, _, _| async move {
         fed.mint_notes_for_user(&user, sats(2000)).await;
         fed.run_consensus_epochs(1).await;
     })
@@ -1087,7 +1087,7 @@ async fn audit_negative_balance_sheet_panics() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unbalanced_transactions_get_rejected() -> Result<()> {
-    test(2, |fed, user, _, _, _| async move {
+    non_lightning_test(2, |fed, user, _, _, _| async move {
         // cannot make change for this invoice (results in unbalanced tx)
         let builder = TransactionBuilder::default();
         let tx = user.tx_with_change(builder, sats(1000)).await;
@@ -1103,7 +1103,7 @@ async fn unbalanced_transactions_get_rejected() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_have_federations_with_one_peer() -> Result<()> {
-    test(1, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(1, |fed, user, bitcoin, _, _| async move {
         bitcoin.mine_blocks(110).await;
         fed.run_consensus_epochs(1).await;
         fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
@@ -1114,7 +1114,7 @@ async fn can_have_federations_with_one_peer() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_get_signed_epoch_history() -> Result<()> {
-    test(2, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
         fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
         fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
 
@@ -1131,7 +1131,7 @@ async fn can_get_signed_epoch_history() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn rejoin_consensus_single_peer() -> Result<()> {
-    test(4, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(4, |fed, user, bitcoin, _, _| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
         bitcoin.mine_blocks(1).await;
         fed.run_consensus_epochs(1).await;
@@ -1172,7 +1172,7 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn rejoin_consensus_threshold_peers() -> Result<()> {
-    test(2, |fed, _user, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, _user, bitcoin, _, _| async move {
         bitcoin.mine_blocks(110).await;
         fed.run_consensus_epochs(1).await;
         fed.rejoin_consensus().await.unwrap();
@@ -1185,7 +1185,7 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_can_be_recovered() -> Result<()> {
-    test(2, |fed, user_send, bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user_send, bitcoin, _, _| async move {
         let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
 
         fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
@@ -1254,7 +1254,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn verifies_client_configs() -> Result<()> {
-    test(2, |fed, user, _bitcoin, _, _| async move {
+    non_lightning_test(2, |fed, user, _bitcoin, _, _| async move {
         // fed needs to run an epoch to combine shares
         let id = user.client.config().0.federation_id.clone();
         let res = user.client.verify_config(&id).await;
@@ -1274,7 +1274,7 @@ async fn verifies_client_configs() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn cannot_replay_transactions() -> Result<()> {
-    test(4, |fed, user, bitcoin, _, _| async move {
+    non_lightning_test(4, |fed, user, bitcoin, _, _| async move {
         fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
 
         let notes = user.client.notes().await;
