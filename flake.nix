@@ -316,6 +316,7 @@
                   pkgs.nixpkgs-fmt
                   pkgs.shellcheck
                   pkgs.rnix-lsp
+                  pkgs.nil
                   pkgs-unstable.convco
                   pkgs.nodePackages.bash-language-server
                 ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
