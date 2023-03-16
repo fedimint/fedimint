@@ -358,11 +358,15 @@
                     fi
                   fi
 
-                  >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
+                  if [ ''${#TMPDIR} -ge 40 ]; then
+                      >&2 echo "⚠️  TMPDIR too long. This might lead to problems running tests and regtest fed. Are you nesting 'nix develop' invocations?"
+                  fi
 
                   if [ "$(ulimit -Sn)" -lt "1024" ]; then
                       >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
                   fi
+
+                  >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
                 '';
               };
             shellCommonNative = shellCommon craneLibNative;
@@ -539,3 +543,4 @@
 
 
 }
+
