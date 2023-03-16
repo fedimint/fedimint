@@ -35,7 +35,6 @@ threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 tracing = "0.1.37"
 rand = "0.8"
 url = { version = "2.3.1", features = ["serde"] }
-hbbft = { git = "https://github.com/fedimint/hbbft" }
 
 [dev-dependencies]
 tokio = {version = "1.26.0", features = [ "full" ] }
