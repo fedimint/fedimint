@@ -24,6 +24,12 @@ use crate::gatewaylnrpc::{
 use crate::lnrpc_client::{HtlcStream, ILnRpcClient};
 use crate::GatewayError;
 
+// Outcome map is needed to keep state between when an interecpted HTLC is sent
+// to gatewayd for processing and when the result of the processing is received
+// from gatewayd to be sent back to LND.
+// The key is a unique hash identifying the intercepted HTLC, and the value is
+// a tuple containing a reference to the sender that forwards the response to
+// LND and the circuit key of the intercepted HTLC.
 type OutcomeMap = Arc<Mutex<HashMap<sha256::Hash, (LndSenderRef, Option<CircuitKey>)>>>;
 
 pub struct GatewayLndClient {
