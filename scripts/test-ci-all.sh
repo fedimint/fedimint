@@ -3,6 +3,14 @@
 set -e
 set -o pipefail
 
+# prevent locale settings messing with some setups
+export LANG=C
+
+if [ "$(ulimit -Sn)" -lt "10000" ]; then
+  >&2 echo "⚠️  ulimit too small. Running 'ulimit -Sn 10000' to avoid problems running tests"
+  ulimit -Sn 10000
+fi
+
 # https://stackoverflow.com/a/72183258/134409
 # this hangs in CI (no tty?)
 # yes 'will cite' | parallel --citation 2>/dev/null 1>/dev/null || true
@@ -14,7 +22,7 @@ fi
 
 # Avoid re-building workspace in parallel in all test derivations
 # Note: Respect 'CARGO_PROFILE' that crane uses
-cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
+cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --all --all-targets
 
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
