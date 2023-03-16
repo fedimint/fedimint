@@ -11,6 +11,8 @@ if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then
   touch "$HOME/.parallel/will-cite"
 fi
 
+echo "FMFILESYSTEM"
+lsblk
 
 # Avoid re-building workspace in parallel in all test derivations
 >&2 echo "### Making sure workspace is built..."

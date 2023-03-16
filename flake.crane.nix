@@ -118,6 +118,7 @@ rec {
       electrs
       jq
       lnd
+      lsblk
       netcat
       perl
       pkgs-kitman.esplora
