@@ -46,7 +46,7 @@ jobs:
       # Because of that we remount that tmpfs dir with much more space, and will use
       # `parallel --memfree` to prevent overflow.
       - name: Remount tmpfs
-        run: sudo mount -o remount,size=99% /run/user/0 ; sudo mount -o remount,size=99% /run/ ; df -h
+        run: echo "TMPDIR $TMPDIR" ; mount; sudo mount -o remount,size=99% /run/user/0 ; sudo mount -o remount,size=99% /run/ ; df -h
 
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v20
