@@ -17,7 +17,7 @@ Fedimint uses [opentelemetry] and [jaeger] for telemetry.
 docker run -d -p6831:6831/udp -p16686:16686 jaegertracing/all-in-one:latest
 ```
 
-port `6831` is for recieving telemetry data.
+port `6831` is for receiving telemetry data.
 port `16686` is for jaeger web ui.
 
 - Starting the server
