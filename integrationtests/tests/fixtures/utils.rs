@@ -11,7 +11,7 @@ use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
 use ln_gateway::GatewayError;
 use tokio::sync::Mutex;
 
-/// A proxy for the underlying LnRpc which can be used to add behavoir to it
+/// A proxy for the underlying LnRpc which can be used to add behavior to it
 /// using the "Decorator pattern"
 #[derive(Debug, Clone)]
 pub struct LnRpcAdapter {

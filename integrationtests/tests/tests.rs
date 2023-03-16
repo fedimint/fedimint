@@ -14,7 +14,7 @@
 //! new blocks and transactions, so the tests can't expect to have
 //! exclusive control over it. When it is really necessary, `lock_exclusive`
 //! can be used to achieve it, but that makes the given test run serially
-//! is thus undesireable.
+//! is thus undesirable.
 mod fixtures;
 
 use std::time::Duration;
@@ -236,7 +236,7 @@ async fn wallet_peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
     test(2, |fed, user, bitcoin, _, _| async move {
-        // at least one epoch needed to estabilish fees
+        // at least one epoch needed to establish fees
         bitcoin.prepare_funding_wallet().await;
         fed.run_consensus_epochs(1).await;
 
@@ -1040,7 +1040,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
         // height change didn't couldn't introduce any
         let bitcoin = bitcoin.lock_exclusive().await;
 
-        // make the mint estabilish at least one block height record
+        // make the mint establish at least one block height record
         bitcoin.mine_blocks(1).await;
         fed.run_consensus_epochs(1).await;
 
