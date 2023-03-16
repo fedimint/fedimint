@@ -143,8 +143,8 @@ impl ILnRpcClient for GatewayLndClient {
         // Channel to send responses to LND after processing intercepted HTLC
         let (lnd_tx, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(CHANNEL_SIZE);
 
-        // Channel to send intercepted htlc to gatewayd for processing
-        let (gwd_tx, gwd_rx) =
+        // Channel to send intercepted htlc to actor for processing
+        let (a_tx, a_rx) =
             mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, tonic::Status>>(CHANNEL_SIZE);
 
         let scid = subscription.short_channel_id;
@@ -173,12 +173,12 @@ impl ILnRpcClient for GatewayLndClient {
                     // do the following:
 
                     // 1. Send an error to gatewayd htlc subscriber,
-                    let _ = gwd_tx
-                        .send(Err(tonic::Status::new(
-                            tonic::Code::Internal,
-                            e.to_string(),
-                        )))
-                        .await;
+                    a_tx.send(Err(tonic::Status::new(
+                        tonic::Code::Internal,
+                        e.to_string(),
+                    )))
+                    .await
+                    .unwrap_or_else(|_| error!("Failed to send htlc interceptor initialization error over actor channel"));
 
                     // 2. Early return to exit the spawned task
                     return;
@@ -189,12 +189,14 @@ impl ILnRpcClient for GatewayLndClient {
                 Ok(htlc) => htlc,
                 Err(e) => {
                     error!("Error received over HTLC subscriprion: {:?}", e);
-                    let _ = gwd_tx
-                        .send(Err(tonic::Status::new(
-                            tonic::Code::Internal,
-                            e.to_string(),
-                        )))
-                        .await;
+                    a_tx.send(Err(tonic::Status::new(
+                        tonic::Code::Internal,
+                        e.to_string(),
+                    )))
+                    .await
+                    .unwrap_or_else(|_| {
+                        error!("Failed to send HTLC subscription error over actor channel")
+                    });
                     None
                 }
             } {
@@ -225,7 +227,7 @@ impl ILnRpcClient for GatewayLndClient {
                         };
 
                         // Send it to gatewayd for processing
-                        match gwd_tx.send(Ok(intercept)).await {
+                        match a_tx.send(Ok(intercept)).await {
                             Ok(_) => {
                                 // Keep a reference to LND sender reference so we can later forward
                                 // outcomes on `complete_htlc` rpc
@@ -245,11 +247,10 @@ impl ILnRpcClient for GatewayLndClient {
 
                 if response.is_some() {
                     // TODO: Consider retrying this if the send fails
-                    let _ = lnd_tx.send(response.unwrap()).await.map_err(|e| {
-                        error!("Failed to send response to LND: {:?}", e);
-                        // The HTLC will timeout and LND will automatically cancel it.
-                        GatewayError::Other(anyhow!("Failed to send response to LND"))
-                    });
+                    lnd_tx
+                        .send(response.unwrap())
+                        .await
+                        .unwrap_or_else(|_| error!("Failed to send ForwardHtlcInterceptResponse over LND channel"));
                 }
             }
 
@@ -257,7 +258,7 @@ impl ILnRpcClient for GatewayLndClient {
         })
         .await;
 
-        Ok(Box::pin(ReceiverStream::new(gwd_rx)))
+        Ok(Box::pin(ReceiverStream::new(a_rx)))
     }
 
     async fn complete_htlc(
@@ -300,10 +301,8 @@ impl ILnRpcClient for GatewayLndClient {
             };
 
             // TODO: Consider retrying this if the send fails
-            let _ = outcome.send(htlc_action_res).await.map_err(|_| {
-                GatewayError::LnRpcError(tonic::Status::internal(
-                    "Failed to send htlc processing outcome to LND node",
-                ))
+            outcome.send(htlc_action_res).await.unwrap_or_else(|_| {
+                error!("Failed to send htlc processing outcome over LND channel")
             });
 
             Ok(CompleteHtlcsResponse {})
