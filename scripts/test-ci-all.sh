@@ -48,7 +48,7 @@ function cli_test_always_fail() {
   set -eo pipefail # pipefail must be set manually again
   echo "### Starting always_fail test..."
   # this must fail, so we know nix build is actually running tests
-  ! unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-fail.sh" 2>&1 | ts -s
+  ! unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-fail-test.sh" 2>&1 | ts -s
 }
 export -f cli_test_always_fail
 
