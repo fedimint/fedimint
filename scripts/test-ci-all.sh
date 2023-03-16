@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
-set -o pipefail
+set -euo pipefail
 
 # https://stackoverflow.com/a/72183258/134409
 # this hangs in CI (no tty?)
