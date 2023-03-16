@@ -9,6 +9,7 @@ use fedimint_core::task::TaskGroup;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
+use tonic_lnd::lnrpc::failure::FailureCode;
 use tonic_lnd::lnrpc::{GetInfoRequest, SendRequest};
 use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction};
 use tonic_lnd::{connect, LndClient};
@@ -210,7 +211,7 @@ impl ILnRpcClient for GatewayLndClient {
                             action: ResolveHoldForwardAction::Resume.into(),
                             preimage: vec![],
                             failure_message: vec![],
-                            failure_code: 0,
+                            failure_code: FailureCode::TemporaryChannelFailure.into(),
                         })
                     } else {
                         // TODO: generate unique id for each intercepted HTLC
@@ -289,7 +290,7 @@ impl ILnRpcClient for GatewayLndClient {
                     action: ResolveHoldForwardAction::Settle.into(),
                     preimage,
                     failure_message: vec![],
-                    failure_code: 0,
+                    failure_code: FailureCode::TemporaryChannelFailure.into(),
                 },
                 Some(Action::Cancel(Cancel { reason: _ })) => cancel_intercepted_htlc(None),
                 None => {
@@ -322,6 +323,6 @@ fn cancel_intercepted_htlc(key: Option<CircuitKey>) -> ForwardHtlcInterceptRespo
         action: ResolveHoldForwardAction::Fail.into(),
         preimage: vec![],
         failure_message: vec![],
-        failure_code: 0,
+        failure_code: FailureCode::TemporaryChannelFailure.into(),
     }
 }
