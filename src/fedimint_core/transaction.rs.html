@@ -168,8 +168,20 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
+<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
@@ -248,7 +260,12 @@
         {
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(TransactionError::InvalidSignature)
+            <span class="prelude-val">Err</span>(TransactionError::InvalidSignature {
+                tx: <span class="self">self</span>.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                hash: <span class="self">self</span>.tx_hash().to_hex(),
+                sig: signature.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                key: agg_pub_key.consensus_encode_to_hex().expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+            })
         }
     }
 }
@@ -333,8 +350,13 @@
         outputs: Amount,
         fee: Amount,
     },
-    <span class="attr">#[error(<span class="string">&quot;The transaction&#39;s signature is invalid&quot;</span>)]
-    </span>InvalidSignature,
+    <span class="attr">#[error(<span class="string">&quot;The transaction&#39;s signature is invalid: tx={tx}, hash={hash}, sig={sig}, key={key}&quot;</span>)]
+    </span>InvalidSignature {
+        tx: String,
+        hash: String,
+        sig: String,
+        key: String,
+    },
     <span class="attr">#[error(<span class="string">&quot;The transaction did not have a signature although there were inputs to be signed&quot;</span>)]
     </span>MissingSignature,
 }
