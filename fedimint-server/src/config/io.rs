@@ -3,9 +3,11 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use aead::{encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey};
 use anyhow::{ensure, format_err};
 use bitcoin_hashes::hex::{FromHex, ToHex};
+use fedimint_aead::{
+    encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
+};
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::ServerModuleGenRegistry;
 use serde::de::DeserializeOwned;
