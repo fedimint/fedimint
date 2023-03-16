@@ -77,10 +77,20 @@ impl ILnRpcClient for GatewayLndClient {
             .lightning()
             .get_info(GetInfoRequest {})
             .await
-            .expect("failed to get info")
+            .map_err(|e| {
+                GatewayError::LnRpcError(tonic::Status::new(
+                    tonic::Code::Internal,
+                    format!("LND error: {e:?}"),
+                ))
+            })?
             .into_inner();
 
-        let pub_key: PublicKey = info.identity_pubkey.parse().expect("invalid pubkey");
+        let pub_key: PublicKey = info.identity_pubkey.parse().map_err(|e| {
+            GatewayError::LnRpcError(tonic::Status::new(
+                tonic::Code::Internal,
+                format!("LND error: {e:?}"),
+            ))
+        })?;
         info!("fetched pubkey {:?}", pub_key);
 
         Ok(GetPubKeyResponse {
