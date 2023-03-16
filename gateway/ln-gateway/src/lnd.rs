@@ -133,7 +133,10 @@ impl ILnRpcClient for GatewayLndClient {
         let mut tg = self.task_group.clone();
         let outcomes = self.outcomes.clone();
 
-        // Spawn an LND interceptor task
+        // Spawn an LND interceptor task.
+        // Within this task, we can run the thread blocking routerrpc
+        // `htlc_interceptor`, And we can start a long running watcher for htlcs
+        // streamed from LND.
         tg.spawn("LND HTLC Subscription", move |_handle| async move {
             let mut htlc_stream = match client
                 .router()
@@ -145,12 +148,19 @@ impl ILnRpcClient for GatewayLndClient {
                 }) {
                 Ok(stream) => stream.into_inner(),
                 Err(e) => {
+                    // Failed to establish a htlc stream.
+                    // Since we don't have a stream to watch for intercepted htlcs,
+                    // do the following:
+
+                    // 1. Send an error to gatewayd htlc subscriber,
                     let _ = gwd_tx
                         .send(Err(tonic::Status::new(
                             tonic::Code::Internal,
                             e.to_string(),
                         )))
                         .await;
+
+                    // 2. Early return to exit the spawned task
                     return;
                 }
             };
