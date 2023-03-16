@@ -84,7 +84,7 @@ pub trait DatabaseValue: Sized + Debug {
 pub type PrefixStream<'a> = Pin<Box<maybe_add_send!(dyn Stream<Item = (Vec<u8>, Vec<u8>)> + 'a)>>;
 
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabase: Debug + MaybeSend + MaybeSync {
+pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>>;
 }
 

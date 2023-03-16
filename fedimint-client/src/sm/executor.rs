@@ -356,9 +356,15 @@ impl ExecutorBuilder {
     where
         C: IntoDynInstance<DynType = DynContext>,
     {
+        self.with_module_dyn(context.into_dyn(instance_id));
+    }
+
+    /// Allow executor being built to run state machines associated with the
+    /// supplied module
+    pub fn with_module_dyn(&mut self, context: DynContext) {
         if self
             .module_contexts
-            .insert(instance_id, context.into_dyn(instance_id))
+            .insert(context.module_instance_id(), context)
             .is_some()
         {
             panic!("Tried to add two modules with the same instance id!");

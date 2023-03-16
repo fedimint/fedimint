@@ -1,27 +1,30 @@
 //! Client library for fedimintd
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-use fedimint_core::api::{DynFederationApi, IFederationApi};
+use anyhow::anyhow;
+use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
+use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{maybe_add_send_sync, Amount, TransactionId};
 use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 
-use crate::module::{DynClientModule, DynPrimaryClientModule, IClientModule};
+use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
+use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::executor::{ActiveStateKey, InactiveStateKey};
 use crate::sm::{
     ActiveState, DynState, Executor, GlobalContext, InactiveState, OperationId, OperationState,
 };
 use crate::transaction::{
-    ClientInput, ClientOutput, TransactionBuilder, TransactionBuilderBalance, TxSubmissionStates,
-    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    ClientInput, ClientOutput, TransactionBuilder, TransactionBuilderBalance, TxSubmissionContext,
+    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Module client interface definitions
@@ -143,7 +146,7 @@ struct ClientInner {
     db: Database,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
-    modules: BTreeMap<ModuleInstanceId, DynClientModule>,
+    modules: ClientModuleRegistry,
     executor: Executor<GlobalClientContext>,
     api: DynFederationApi,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
@@ -156,7 +159,7 @@ impl ClientInner {
             self.primary_module.as_ref()
         } else {
             self.modules
-                .get(&instance)
+                .get(instance)
                 .expect("Module not found")
                 .as_ref()
         }
@@ -275,5 +278,131 @@ impl ClientInner {
 
     async fn await_active_state(&self, state: DynState<GlobalClientContext>) -> ActiveState {
         self.db.wait_key_exists(&ActiveStateKey(state)).await
+    }
+}
+
+#[derive(Default)]
+pub struct ClientBuilder {
+    module_gens: ClientModuleGenRegistry,
+    primary_module_instance: Option<ModuleInstanceId>,
+    config: Option<ClientConfig>,
+}
+
+impl ClientBuilder {
+    /// Make module generator available when reading the config
+    pub fn with_module<M: ClientModuleGen>(&mut self, module_gen: M) {
+        self.module_gens.attach(module_gen);
+    }
+
+    /// Uses this config to initialize modules
+    ///
+    /// ## Panics
+    /// If there was a config added previously
+    pub fn with_config(&mut self, config: ClientConfig) {
+        let was_replaced = self.config.replace(config).is_some();
+        assert!(
+            !was_replaced,
+            "Only one config can be given to the builder."
+        )
+    }
+
+    /// Uses this module with the given instance id as the primary module. See
+    /// [`module::PrimaryClientModule`] for more information.
+    ///
+    /// ## Panics
+    /// If there was a primary module specified previously
+    pub fn with_primary_module(&mut self, primary_module_instance: ModuleInstanceId) {
+        let was_replaced = self
+            .primary_module_instance
+            .replace(primary_module_instance)
+            .is_some();
+        assert!(
+            !was_replaced,
+            "Only one primary module can be given to the builder."
+        )
+    }
+
+    // TODO: impl config from file
+    // TODO: impl config from federation
+
+    pub async fn build<D: IDatabase>(self, db: D, tg: &mut TaskGroup) -> anyhow::Result<Client> {
+        let config = self.config.ok_or(anyhow!("No config was provided"))?;
+        let primary_module_instance = self
+            .primary_module_instance
+            .ok_or(anyhow!("No primary module instance id was provided"))?;
+
+        let decoders =
+            self.module_gens.decoders(config.modules.iter().map(
+                |(module_instance, module_config)| (*module_instance, module_config.kind()),
+            ))?;
+
+        let db = Database::new(db, decoders);
+
+        let api = DynFederationApi::from(WsFederationApi::from_config(&config));
+
+        let (modules, primary_module) = {
+            let mut modules = ClientModuleRegistry::default();
+            let mut primary_module = None;
+            for (module_instance, module_config) in config.modules {
+                if module_instance == primary_module_instance {
+                    let module = self
+                        .module_gens
+                        .get(module_config.kind())
+                        .ok_or(anyhow!("Unknown module kind in config"))?
+                        .init_primary(module_config, db.clone())
+                        .await?;
+                    let replaced = primary_module.replace(module).is_some();
+                    assert!(replaced, "Each module instance can only occurr once in config, so no replacement can take place here.")
+                } else {
+                    let module = self
+                        .module_gens
+                        .get(module_config.kind())
+                        .ok_or(anyhow!("Unknown module kind in config"))?
+                        .init(module_config, db.clone())
+                        .await?;
+                    modules.register_module(module_instance, module);
+                }
+            }
+            (
+                modules,
+                primary_module.ok_or(anyhow!("Primary module not found in config"))?,
+            )
+        };
+
+        let executor = {
+            let mut executor_builder = Executor::<GlobalClientContext>::builder();
+            executor_builder
+                .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
+            executor_builder.with_module_dyn(primary_module.context(primary_module_instance));
+
+            for (module_instance_id, module) in modules.iter_modules() {
+                executor_builder.with_module_dyn(module.context(module_instance_id));
+            }
+
+            executor_builder.build(db.clone()).await
+        };
+
+        let client_inner = Arc::new(ClientInner {
+            db,
+            primary_module,
+            primary_module_instance,
+            modules,
+            executor,
+            api,
+            secp_ctx: Secp256k1::new(),
+        });
+
+        let global_client_context = GlobalClientContext {
+            inner: client_inner.clone(),
+        };
+
+        client_inner
+            .executor
+            .start_executor(tg, global_client_context)
+            .await;
+
+        Ok(Client {
+            inner: client_inner,
+        })
     }
 }

@@ -11,7 +11,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
 use tracing::warn;
 
-use crate::sm::{Context, OperationId, State, StateTransition};
+use crate::sm::{Context, DynContext, OperationId, State, StateTransition};
 use crate::{DynState, GlobalClientContext};
 
 // TODO: how to preven collisions? Generally reserve some range for custom IDs?
@@ -30,6 +30,14 @@ const FETCH_INTERVAL: Duration = Duration::from_secs(1);
 pub struct TxSubmissionContext;
 
 impl Context for TxSubmissionContext {}
+
+impl IntoDynInstance for TxSubmissionContext {
+    type DynType = DynContext;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        DynContext::from_typed(instance_id, self)
+    }
+}
 
 // TODO: refactor states into their own structs that impl `State`. The enum
 // merely dispatches fn calls to the right state impl in that scenario

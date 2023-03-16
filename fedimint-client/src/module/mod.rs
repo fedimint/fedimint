@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use fedimint_core::core::{Decoder, DynInput, DynOutput, KeyPair, ModuleInstanceId};
 use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{
@@ -13,6 +14,8 @@ use crate::sm::{Context, DynContext, DynState, State};
 use crate::GlobalClientContext;
 
 pub mod gen;
+
+pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
 /// Fedimint module client
 pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
