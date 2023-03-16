@@ -26,9 +26,10 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::DynServerModuleGen;
+use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
-use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti};
+use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::{LightningClientGen, LightningGateway};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
@@ -711,6 +712,23 @@ impl FederationTest {
                 .await?;
         }
         Ok(())
+    }
+
+    /// Get fedimint transaction status from all federation servers
+    #[allow(clippy::await_holding_refcell_ref)] // TODO: fix, it's just a test
+    pub async fn transaction_status(&self, txid: TransactionId) -> Vec<Option<TransactionStatus>> {
+        let mut result = Vec::new();
+        for server in &self.servers {
+            let status = server
+                .lock()
+                .await
+                .fedimint
+                .consensus
+                .transaction_status(txid)
+                .await;
+            result.push(status);
+        }
+        result
     }
 
     /// Returns a fixture that only calls on a subset of the peers.  Note that

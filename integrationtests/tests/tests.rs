@@ -22,6 +22,7 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
+use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
@@ -1283,6 +1284,7 @@ async fn cannot_replay_transactions() -> Result<()> {
         builder.input(&mut keys, input);
         let tx_typed = user.tx_with_change(builder, sats(5000)).await;
         let tx = tx_typed.into_type_erased();
+        let txid = tx.tx_hash();
 
         // submit the tx successfully
         let response = fed.submit_transaction(tx.clone()).await;
@@ -1304,6 +1306,13 @@ async fn cannot_replay_transactions() -> Result<()> {
             .await;
         fed.run_empty_epochs(2).await;
         assert!(fed.find_module_item(fed.mint_id).await.is_none());
+
+        // verify status transaction is accepted
+        assert!(fed
+            .transaction_status(txid)
+            .await
+            .into_iter()
+            .all(|s| matches!(s, Some(TransactionStatus::Accepted { .. }))));
     })
     .await
 }
