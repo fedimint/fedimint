@@ -39,6 +39,15 @@ jobs:
     runs-on: buildjet-8vcpu-ubuntu-2004
     timeout-minutes: 30
     steps:
+      # Nix is installed in multi-user mode, which means the builds
+      # are actually done by a nix builder daemon, which will use `/run/user/0`
+      # as a build dir. Each test in `./scripts/test-ci-all.sh` will run a nix build
+      # that will extra `./target`, so multiple of them will need quite a bit of space.
+      # Because of that we remount that tmpfs dir with much more space, and will use
+      # `parallel --memfree` to prevent overflow.
+      - name: Remount tmpfs
+        run: sudo mount -o remount,size=99% /run/user/0 ; sudo mount -o remount,size=99% /run/ ; df -h
+
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v20
         with:
