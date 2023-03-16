@@ -10,7 +10,7 @@ use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic_lnd::lnrpc::{GetInfoRequest, SendRequest};
-use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse};
+use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction};
 use tonic_lnd::{connect, LndClient};
 use tracing::{error, info, trace};
 
@@ -175,7 +175,7 @@ impl ILnRpcClient for GatewayLndClient {
                         // Forward it to the next interceptor or next node
                         Some(ForwardHtlcInterceptResponse {
                             incoming_circuit_key: htlc.incoming_circuit_key,
-                            action: 2,
+                            action: ResolveHoldForwardAction::Resume.into(),
                             preimage: vec![],
                             failure_message: vec![],
                             failure_code: 0,
@@ -255,7 +255,7 @@ impl ILnRpcClient for GatewayLndClient {
             let htlc_action_res = match action {
                 Some(Action::Settle(Settle { preimage })) => ForwardHtlcInterceptResponse {
                     incoming_circuit_key,
-                    action: 0,
+                    action: ResolveHoldForwardAction::Settle.into(),
                     preimage,
                     failure_message: vec![],
                     failure_code: 0,
@@ -294,7 +294,7 @@ fn cancel_intercepted_htlc(key: Option<CircuitKey>) -> ForwardHtlcInterceptRespo
     // TODO: Specify a failure code and message
     ForwardHtlcInterceptResponse {
         incoming_circuit_key: key,
-        action: 1,
+        action: ResolveHoldForwardAction::Fail.into(),
         preimage: vec![],
         failure_message: vec![],
         failure_code: 0,
