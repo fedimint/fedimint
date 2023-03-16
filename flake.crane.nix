@@ -118,7 +118,7 @@ rec {
       electrs
       jq
       lnd
-      lsblk
+      fdisk-util-linux
       netcat
       perl
       pkgs-kitman.esplora
