@@ -347,9 +347,9 @@ where
 }
 
 /// Creates the database backup directory by appending the `snapshot_name`
-/// to the `FM_TEST_DB_BACKUP_DIR`. Then this function will execute the provided
+/// to the `DB_MIGRATION_DIR`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
-/// data for testing a migration. If `FM_TEST_DB_BACKUP_DIR` is not set, this
+/// data for testing a migration. If `DB_MIGRATION_DIR` is not set, this
 /// function doesn't do anything.
 pub async fn prepare_snapshot<F>(
     snapshot_name: &str,
@@ -358,38 +358,53 @@ pub async fn prepare_snapshot<F>(
 ) where
     F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
 {
-    if let Ok(parent_dir) = env::var("FM_TEST_DB_BACKUP_DIR") {
-        let snapshot_dir = Path::new(&parent_dir).join(snapshot_name);
+    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
+    let snapshot_dir = Path::new(&parent_dir).join(snapshot_name);
+    if !snapshot_dir.exists() {
         let db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
         let dbtx = db.begin_transaction().await;
         prepare_fn(dbtx).await;
     }
 }
 
+pub const STRING_64: &str = "0123456789012345678901234567890101234567890123456789012345678901";
+pub const BYTE_8: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+pub const BYTE_20: [u8; 20] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+pub const BYTE_32: [u8; 32] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1,
+];
+
 /// Iterates over all of the databases supplied in the database backup
-/// directory, which is specified by `FM_TEST_DB_BACKUP_DIR` environment
+/// directory, which is specified by `DB_MIGRATION_DIR` environment
 /// variable. First, a temporary database will be created and the contents will
 /// be populated from the database backup directory. Next, this function will
 /// execute the provided `validate` closure. The `validate` closure is expected
 /// to do any validation necessary on the temporary database, such as applying
 /// the appropriate database migrations and then reading all of the data to
 /// verify the migrations were successful.
-pub async fn validate_migrations<F, Fut>(validate: F, decoders: ModuleDecoderRegistry)
-where
+pub async fn validate_migrations<F, Fut>(
+    db_prefix: &str,
+    validate: F,
+    decoders: ModuleDecoderRegistry,
+) where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = ()>,
 {
-    if let Ok(parent_dir) = env::var("FM_TEST_DB_BACKUP_DIR") {
-        let db_dir = Path::new(&parent_dir);
-        let files = fs::read_dir(db_dir).unwrap();
+    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
+    let db_dir = Path::new(&parent_dir);
+    let files_res = fs::read_dir(db_dir);
+    // If the DB_MIGRATION_DIR does not exist, just skip the validation.
+    if let Ok(files) = files_res {
         for file in files.flatten() {
             let name = file.file_name().into_string().unwrap();
-            let temp_db = open_temp_db_and_copy(
-                format!("{}-{}", name.as_str(), OsRng.next_u64()),
-                &file.path(),
-                decoders.clone(),
-            );
-            validate(temp_db).await;
+            if name.starts_with(db_prefix) {
+                let temp_db = open_temp_db_and_copy(
+                    format!("{}-{}", name.as_str(), OsRng.next_u64()),
+                    &file.path(),
+                    decoders.clone(),
+                );
+                validate(temp_db).await;
+            }
         }
     }
 }

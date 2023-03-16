@@ -37,6 +37,8 @@ impl-tools = "0.8.0"
 fedimint-server = { path = "../../fedimint-server" }
 
 [dev-dependencies]
+fedimint-testing = { path = "../../fedimint-testing" }
 rand = "0.8"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+tokio = {version = "1.26.0", features = [ "full" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

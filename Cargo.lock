@@ -1335,6 +1335,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-mint-common",
  "fedimint-server",
+ "fedimint-testing",
  "futures",
  "impl-tools",
  "itertools",
@@ -1349,6 +1350,7 @@ dependencies = [
  "test-log",
  "thiserror",
  "threshold_crypto",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1567,6 +1569,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-server",
+ "fedimint-testing",
  "fedimint-wallet-common",
  "futures",
  "impl-tools",

@@ -1173,3 +1173,229 @@ pub struct VerifiedNotes {
 }
 
 impl fedimint_core::server::VerificationCache for VerifiedNotes {}
+
+#[cfg(test)]
+mod fedimint_migration_tests {
+    use std::collections::BTreeMap;
+    use std::time::SystemTime;
+
+    use bitcoin_hashes::Hash;
+    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+    use fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::DynServerModuleGen;
+    use fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
+    use fedimint_mint_common::db::{
+        DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
+        MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, NonceKeyPrefix, OutputOutcomeKey,
+        OutputOutcomeKeyPrefix, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
+        ReceivedPartialSignatureKey, ReceivedPartialSignaturesKeyPrefix,
+    };
+    use fedimint_mint_common::{MintOutputBlindSignatures, MintOutputSignatureShare, Nonce};
+    use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
+    use futures::StreamExt;
+    use rand::rngs::OsRng;
+    use strum::IntoEnumIterator;
+    use tbs::{
+        blind_message, combine_valid_shares, sign_blinded_msg, BlindingKey, FromRandom, Message,
+        Scalar, SecretKeyShare,
+    };
+
+    use crate::{Mint, MintGen};
+
+    /// Create a database with version 0 data. The database produced is not
+    /// intended to be real data or semantically correct. It is only
+    /// intended to provide coverage when reading the database
+    /// in future code versions. This function should not be updated when
+    /// database keys/values change - instead a new function should be added
+    /// that creates a new database backup that can be tested.
+    async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
+        let nonce_key = NonceKey(Nonce(pk.x_only_public_key().0));
+        dbtx.insert_new_entry(&nonce_key, &()).await;
+
+        let out_point = OutPoint {
+            txid: TransactionId::from_slice(&BYTE_32).unwrap(),
+            out_idx: 0,
+        };
+        let proposed_partial_signature_key = ProposedPartialSignatureKey { out_point };
+        let blinding_key = BlindingKey::random();
+        let message = Message::from_bytes(&BYTE_8);
+        let blinded_message = blind_message(message, blinding_key);
+        let secret_key_share = SecretKeyShare(Scalar::from_random(&mut OsRng));
+        let blind_signature_share = sign_blinded_msg(blinded_message, secret_key_share);
+        let mut tiers = BTreeMap::new();
+        tiers.insert(
+            Amount::from_sats(1000),
+            vec![(blinded_message, blind_signature_share)],
+        );
+        let shares: TieredMulti<(tbs::BlindedMessage, tbs::BlindedSignatureShare)> =
+            TieredMulti::new(tiers);
+        let mint_output = MintOutputSignatureShare(shares);
+        dbtx.insert_new_entry(&proposed_partial_signature_key, &mint_output)
+            .await;
+
+        let received_partial_signature_key = ReceivedPartialSignatureKey {
+            request_id: out_point,
+            peer_id: 1.into(),
+        };
+        dbtx.insert_new_entry(&received_partial_signature_key, &mint_output)
+            .await;
+
+        let mut sig_tiers = BTreeMap::new();
+        let shares = vec![(0, blind_signature_share)].into_iter();
+        let blind_sig = combine_valid_shares(shares, 1);
+        sig_tiers.insert(Amount::from_sats(1000), vec![blind_sig]);
+        let sigs: TieredMulti<tbs::BlindedSignature> = TieredMulti::new(sig_tiers);
+        dbtx.insert_new_entry(
+            &OutputOutcomeKey(out_point),
+            &MintOutputBlindSignatures(sigs),
+        )
+        .await;
+
+        let mint_audit_issuance = MintAuditItemKey::Issuance(out_point);
+        let mint_audit_issuance_total = MintAuditItemKey::IssuanceTotal;
+        let mint_audit_redemption = MintAuditItemKey::Redemption(nonce_key);
+        let mint_audit_redemption_total = MintAuditItemKey::RedemptionTotal;
+
+        dbtx.insert_new_entry(&mint_audit_issuance, &Amount::from_sats(1000))
+            .await;
+        dbtx.insert_new_entry(&mint_audit_issuance_total, &Amount::from_sats(5000))
+            .await;
+        dbtx.insert_new_entry(&mint_audit_redemption, &Amount::from_sats(10000))
+            .await;
+        dbtx.insert_new_entry(&mint_audit_redemption_total, &Amount::from_sats(15000))
+            .await;
+
+        let backup_key = EcashBackupKey(pk.x_only_public_key().0);
+        let ecash_backup = ECashUserBackupSnapshot {
+            timestamp: SystemTime::now(),
+            data: BYTE_32.to_vec(),
+        };
+        dbtx.insert_new_entry(&backup_key, &ecash_backup).await;
+
+        dbtx.commit_tx().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn prepare_migration_snapshots() {
+        prepare_snapshot(
+            "mint-v0",
+            |dbtx| {
+                Box::pin(async move {
+                    create_db_with_v0_data(dbtx).await;
+                })
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                <Mint as ServerModule>::decoder(),
+            )]),
+        )
+        .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_migrations() {
+        validate_migrations(
+            "mint",
+            |db| async move {
+                let module = DynServerModuleGen::from(MintGen);
+                apply_migrations(
+                    &db,
+                    module.module_kind().to_string(),
+                    module.database_version(),
+                    module.get_database_migrations(),
+                )
+                .await
+                .expect("Error applying migrations to temp database");
+
+                // Verify that all of the data from the mint namespace can be read. If a
+                // database migration failed or was not properly supplied,
+                // the struct will fail to be read.
+                let mut dbtx = db.begin_transaction().await;
+
+                for prefix in DbKeyPrefix::iter() {
+                    match prefix {
+                        DbKeyPrefix::NoteNonce => {
+                            let nonces = dbtx
+                                .find_by_prefix(&NonceKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_nonces = nonces.len();
+                            assert!(
+                                num_nonces > 0,
+                                "validate_migrations was not able to read any NoteNonces"
+                            );
+                        }
+                        DbKeyPrefix::ProposedPartialSig => {
+                            let proposed_partial_sigs = dbtx
+                                .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_sigs = proposed_partial_sigs.len();
+                            assert!(
+                                num_sigs > 0,
+                                "validate_migrations was not able to read any ProposedPartialSignatures"
+                            );
+                        }
+                        DbKeyPrefix::ReceivedPartialSig => {
+                            let received_partial_sigs = dbtx
+                                .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_sigs = received_partial_sigs.len();
+                            assert!(
+                                num_sigs > 0,
+                                "validate_migrations was not able to read any ReceivedPartialSignatures"
+                            );
+                        }
+                        DbKeyPrefix::OutputOutcome => {
+                            let outcomes = dbtx
+                                .find_by_prefix(&OutputOutcomeKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_outcomes = outcomes.len();
+                            assert!(
+                                num_outcomes > 0,
+                                "validate_migrations was not able to read any OutputOutcomes"
+                            );
+                        }
+                        DbKeyPrefix::MintAuditItem => {
+                            let audit_items = dbtx
+                                .find_by_prefix(&MintAuditItemKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_items = audit_items.len();
+                            assert!(
+                                num_items > 0,
+                                "validate_migrations was not able to read any MintAuditItems"
+                            );
+                        }
+                        DbKeyPrefix::EcashBackup => {
+                            let backups = dbtx
+                                .find_by_prefix(&EcashBackupKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_backups = backups.len();
+                            assert!(
+                                num_backups > 0,
+                                "validate_migrations was not able to read any EcashBackups"
+                            );
+                        }
+                    }
+                }
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                <Mint as ServerModule>::decoder(),
+            )]),
+        )
+        .await;
+    }
+}

@@ -1694,3 +1694,313 @@ mod tests {
         })
     }
 }
+
+#[cfg(test)]
+mod fedimint_migration_tests {
+    use bitcoin::psbt::{Input, PartiallySignedTransaction};
+    use bitcoin::{
+        Amount, BlockHash, PackedLockTime, Script, Sequence, Transaction, TxIn, TxOut, Txid,
+        WPubkeyHash,
+    };
+    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+    use fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::DynServerModuleGen;
+    use fedimint_core::{BitcoinHash, Feerate, OutPoint, ServerModule, TransactionId};
+    use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
+    use fedimint_wallet_common::db::{
+        BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix, PegOutBitcoinTransaction,
+        PegOutBitcoinTransactionPrefix, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
+        PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey,
+        UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+    };
+    use fedimint_wallet_common::{
+        PegOutFees, PendingTransaction, Rbf, RoundConsensus, SpendableUTXO, UnsignedTransaction,
+        WalletOutputOutcome,
+    };
+    use futures::StreamExt;
+    use rand::rngs::OsRng;
+    use secp256k1::Message;
+    use strum::IntoEnumIterator;
+
+    use crate::{Wallet, WalletGen};
+
+    /// Create a database with version 0 data. The database produced is not
+    /// intended to be real data or semantically correct. It is only
+    /// intended to provide coverage when reading the database
+    /// in future code versions. This function should not be updated when
+    /// database keys/values change - instead a new function should be added
+    /// that creates a new database backup that can be tested.
+    async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+        dbtx.insert_new_entry(&BlockHashKey(BlockHash::from_slice(&BYTE_32).unwrap()), &())
+            .await;
+
+        let utxo = UTXOKey(bitcoin::OutPoint {
+            txid: Txid::from_slice(&BYTE_32).unwrap(),
+            vout: 0,
+        });
+        let spendable_utxo = SpendableUTXO {
+            tweak: BYTE_32,
+            amount: Amount::from_sat(10000),
+        };
+        dbtx.insert_new_entry(&utxo, &spendable_utxo).await;
+
+        let round_consensus = RoundConsensus {
+            block_height: 5000,
+            fee_rate: Feerate { sats_per_kvb: 1000 },
+            randomness_beacon: BYTE_32,
+        };
+        dbtx.insert_new_entry(&RoundConsensusKey, &round_consensus)
+            .await;
+
+        let unsigned_transaction_key = UnsignedTransactionKey(Txid::from_slice(&BYTE_32).unwrap());
+
+        let selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![(utxo.clone(), spendable_utxo)];
+
+        let destination = Script::new_v0_p2wpkh(&WPubkeyHash::from_slice(&BYTE_20).unwrap());
+        let output: Vec<TxOut> = vec![TxOut {
+            value: 10000,
+            script_pubkey: destination.clone(),
+        }];
+
+        let transaction = Transaction {
+            version: 2,
+            lock_time: PackedLockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: utxo.0,
+                script_sig: Default::default(),
+                sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+                witness: bitcoin::Witness::new(),
+            }],
+            output,
+        };
+
+        let inputs = vec![Input {
+            non_witness_utxo: None,
+            witness_utxo: Some(TxOut {
+                value: 10000,
+                script_pubkey: destination.clone(),
+            }),
+            partial_sigs: Default::default(),
+            sighash_type: None,
+            redeem_script: None,
+            witness_script: Some(destination.clone()),
+            bip32_derivation: Default::default(),
+            final_script_sig: None,
+            final_script_witness: None,
+            ripemd160_preimages: Default::default(),
+            sha256_preimages: Default::default(),
+            hash160_preimages: Default::default(),
+            hash256_preimages: Default::default(),
+            proprietary: Default::default(),
+            tap_key_sig: Default::default(),
+            tap_script_sigs: Default::default(),
+            tap_scripts: Default::default(),
+            tap_key_origins: Default::default(),
+            tap_internal_key: Default::default(),
+            tap_merkle_root: Default::default(),
+            unknown: Default::default(),
+        }];
+
+        let psbt = PartiallySignedTransaction {
+            unsigned_tx: transaction.clone(),
+            version: 0,
+            xpub: Default::default(),
+            proprietary: Default::default(),
+            unknown: Default::default(),
+            inputs,
+            outputs: vec![Default::default()],
+        };
+
+        let unsigned_transaction = UnsignedTransaction {
+            psbt,
+            signatures: vec![],
+            change: Amount::from_sat(0),
+            fees: PegOutFees {
+                fee_rate: Feerate { sats_per_kvb: 1000 },
+                total_weight: 40000,
+            },
+            destination: destination.clone(),
+            selected_utxos: selected_utxos.clone(),
+            peg_out_amount: Amount::from_sat(10000),
+            rbf: None,
+        };
+
+        dbtx.insert_new_entry(&unsigned_transaction_key, &unsigned_transaction)
+            .await;
+
+        let pending_transaction_key = PendingTransactionKey(Txid::from_slice(&BYTE_32).unwrap());
+
+        let pending_tx = PendingTransaction {
+            tx: transaction,
+            tweak: BYTE_32,
+            change: Amount::from_sat(0),
+            destination,
+            fees: PegOutFees {
+                fee_rate: Feerate { sats_per_kvb: 1000 },
+                total_weight: 40000,
+            },
+            selected_utxos: selected_utxos.clone(),
+            peg_out_amount: Amount::from_sat(10000),
+            rbf: Some(Rbf {
+                fees: PegOutFees {
+                    fee_rate: Feerate { sats_per_kvb: 1000 },
+                    total_weight: 40000,
+                },
+                txid: Txid::from_slice(&BYTE_32).unwrap(),
+            }),
+        };
+        dbtx.insert_new_entry(&pending_transaction_key, &pending_tx)
+            .await;
+
+        let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
+        let secp = secp256k1::Secp256k1::new();
+        let signature = secp.sign_ecdsa(&Message::from_slice(&BYTE_32).unwrap(), &sk);
+        dbtx.insert_new_entry(
+            &PegOutTxSignatureCI(Txid::from_slice(&BYTE_32).unwrap()),
+            &vec![signature],
+        )
+        .await;
+
+        let peg_out_bitcoin_tx = PegOutBitcoinTransaction(OutPoint {
+            txid: TransactionId::from_slice(&BYTE_32).unwrap(),
+            out_idx: 0,
+        });
+
+        dbtx.insert_new_entry(
+            &peg_out_bitcoin_tx,
+            &WalletOutputOutcome(Txid::from_slice(&BYTE_32).unwrap()),
+        )
+        .await;
+
+        dbtx.commit_tx().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn prepare_migration_snapshots() {
+        prepare_snapshot(
+            "wallet-v0",
+            |dbtx| {
+                Box::pin(async move {
+                    create_db_with_v0_data(dbtx).await;
+                })
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                <Wallet as ServerModule>::decoder(),
+            )]),
+        )
+        .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_migrations() {
+        validate_migrations(
+            "wallet",
+            |db| async move {
+                let module = DynServerModuleGen::from(WalletGen);
+                apply_migrations(
+                    &db,
+                    module.module_kind().to_string(),
+                    module.database_version(),
+                    module.get_database_migrations(),
+                )
+                .await
+                .expect("Error applying migrations to temp database");
+
+                // Verify that all of the data from the wallet namespace can be read. If a
+                // database migration failed or was not properly supplied,
+                // the struct will fail to be read.
+                let mut dbtx = db.begin_transaction().await;
+
+                for prefix in DbKeyPrefix::iter() {
+                    match prefix {
+                        DbKeyPrefix::BlockHash => {
+                            let blocks = dbtx
+                                .find_by_prefix(&BlockHashKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_blocks = blocks.len();
+                            assert!(
+                                num_blocks > 0,
+                                "validate_migrations was not able to read any BlockHashes"
+                            );
+                        }
+                        DbKeyPrefix::PegOutBitcoinOutPoint => {
+                            let outpoints = dbtx
+                                .find_by_prefix(&PegOutBitcoinTransactionPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_outpoints = outpoints.len();
+                            assert!(
+                                num_outpoints > 0,
+                                "validate_migrations was not able to read any PegOutBitcoinTransactions"
+                            );
+                        }
+                        DbKeyPrefix::PegOutTxSigCi => {
+                            let sigs = dbtx
+                                .find_by_prefix(&PegOutTxSignatureCIPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_sigs = sigs.len();
+                            assert!(
+                                num_sigs > 0,
+                                "validate_migrations was not able to read any PegOutTxSigCi"
+                            );
+                        }
+                        DbKeyPrefix::PendingTransaction => {
+                            let pending_txs = dbtx
+                                .find_by_prefix(&PendingTransactionPrefixKey)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_txs = pending_txs.len();
+                            assert!(
+                                num_txs > 0,
+                                "validate_migrations was not able to read any PendingTransactions"
+                            );
+                        }
+                        DbKeyPrefix::RoundConsensus => {
+                            assert!(dbtx
+                                .get_value(&RoundConsensusKey)
+                                .await
+                                .is_some());
+                        }
+                        DbKeyPrefix::UnsignedTransaction => {
+                            let unsigned_txs = dbtx
+                                .find_by_prefix(&UnsignedTransactionPrefixKey)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_txs = unsigned_txs.len();
+                            assert!(
+                                num_txs > 0,
+                                "validate_migrations was not able to read any UnsignedTransactions"
+                            );
+                        }
+                        DbKeyPrefix::Utxo => {
+                            let utxos = dbtx
+                                .find_by_prefix(&UTXOPrefixKey)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_utxos = utxos.len();
+                            assert!(
+                                num_utxos > 0,
+                                "validate_migrations was not able to read any UTXOs"
+                            );
+                        }
+                    }
+                }
+            },
+            ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                <Wallet as ServerModule>::decoder(),
+            )]),
+        )
+        .await;
+    }
+}
