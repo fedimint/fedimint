@@ -83,7 +83,7 @@
             }
             tx_debug
         }
-        ConsensusItem::ConsensusUpgrade(reason) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Shutdown signal for {reason:?}&quot;</span>),
+        ConsensusItem::ConsensusUpgrade(<span class="kw">_</span>) =&gt; <span class="string">&quot;Consensus Upgrade&quot;</span>.to_string(),
     }
 }
 </code></pre></div>

@@ -952,6 +952,23 @@
 <a href="#952" id="952">952</a>
 <a href="#953" id="953">953</a>
 <a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1045,6 +1062,13 @@
     <span class="kw">pub fn </span>to_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JsonValue {
         serde_json::to_value(<span class="self">self</span>).expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>)
     }
+
+    <span class="kw">pub fn </span>with_auth(<span class="self">self</span>, auth: <span class="kw-2">&amp;</span>ApiAuth) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            auth: <span class="prelude-val">Some</span>(auth.clone()),
+            params: <span class="self">self</span>.params,
+        }
+    }
 }
 
 <span class="doccomment">/// Authentication uses the hashed user password in PHC format
@@ -1068,6 +1092,14 @@
 
     <span class="kw">pub fn </span>bad_request(message: String) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(<span class="number">400</span>, message)
+    }
+
+    <span class="kw">pub fn </span>unauthorized() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(<span class="number">401</span>, <span class="string">&quot;Request missing required authorization&quot;</span>.to_string())
+    }
+
+    <span class="kw">pub fn </span>server_error(message: String) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(<span class="number">500</span>, message)
     }
 }
 
@@ -1107,11 +1139,12 @@
 ///     }
 /// };
 /// ```
+</span><span class="comment">// TODO: Refactor auth and dbtx into a ApiEndpointContext
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>__api_endpoint {
     (
         <span class="macro-nonterminal">$path</span>:expr,
-        <span class="kw">async </span>|<span class="macro-nonterminal">$state</span>:ident: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$state_ty</span>:ty, <span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$param</span>:ident: <span class="macro-nonterminal">$param_ty</span>:ty| -&gt; <span class="macro-nonterminal">$resp_ty</span>:ty <span class="macro-nonterminal">$body</span>:block
+        <span class="kw">async </span>|<span class="macro-nonterminal">$state</span>:ident: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$state_ty</span>:ty, <span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$param</span>:ident: <span class="macro-nonterminal">$param_ty</span>:ty $(, <span class="macro-nonterminal">$auth</span>:ident)<span class="question-mark">?</span>| -&gt; <span class="macro-nonterminal">$resp_ty</span>:ty <span class="macro-nonterminal">$body</span>:block
     ) =&gt; {{
         <span class="kw">struct </span>Endpoint;
 
@@ -1126,9 +1159,10 @@
                 <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
                 <span class="macro-nonterminal">$dbtx</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_core::db::ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
-                has_auth: bool,
+                _has_auth: bool,
             ) -&gt; ::std::result::Result&lt;<span class="self">Self</span>::Response, <span class="macro-nonterminal">$crate::module::ApiError</span>&gt; {
-                <span class="macro-nonterminal">$body
+                $(<span class="kw">let </span><span class="macro-nonterminal">$auth </span>= _has_auth;)<span class="question-mark">?
+                </span><span class="macro-nonterminal">$body
             </span>}
         }
 

@@ -625,7 +625,6 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
@@ -642,7 +641,8 @@
 <span class="kw">use </span>tracing::{error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::{
-    ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
+    ApiEvent, ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome,
+    HbbftSerdeConsensusOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::LastEpochKey;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
@@ -696,8 +696,8 @@
     </span><span class="kw">pub </span>task_group: TaskGroup,
     <span class="doccomment">/// Delegate for processing consensus information
     </span><span class="kw">pub </span>consensus: Arc&lt;FedimintConsensus&gt;,
-    <span class="doccomment">/// Receives tx notfications from the API (triggers epochs)
-    </span><span class="kw">pub </span>tx_receiver: Peekable&lt;ReceiverStream&lt;Transaction&gt;&gt;,
+    <span class="doccomment">/// Receives event notifications from the API (triggers epochs)
+    </span><span class="kw">pub </span>api_receiver: Peekable&lt;ReceiverStream&lt;ApiEvent&gt;&gt;,
     <span class="doccomment">/// P2P connections for running consensus
     </span><span class="kw">pub </span>connections: PeerConnections&lt;EpochMessage&gt;,
     <span class="doccomment">/// Our configuration
@@ -723,12 +723,12 @@
     </span><span class="kw">pub async fn </span>run(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
-        tx_receiver: Receiver&lt;Transaction&gt;,
+        api_receiver: Receiver&lt;ApiEvent&gt;,
         decoders: ModuleDecoderRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>server =
-            FedimintServer::new(cfg.clone(), consensus, tx_receiver, decoders, task_group).<span class="kw">await</span>;
+            FedimintServer::new(cfg.clone(), consensus, api_receiver, decoders, task_group).<span class="kw">await</span>;
         <span class="kw">let </span>server_consensus = server.consensus.clone();
         <span class="kw">let </span>consensus = server
             .cfg
@@ -765,7 +765,7 @@
     <span class="kw">pub async fn </span>new(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
-        tx_receiver: Receiver&lt;Transaction&gt;,
+        api_receiver: Receiver&lt;ApiEvent&gt;,
         decoders: ModuleDecoderRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="self">Self </span>{
@@ -775,7 +775,7 @@
         <span class="self">Self</span>::new_with(
             cfg.clone(),
             consensus,
-            tx_receiver,
+            api_receiver,
             connector,
             decoders,
             task_group,
@@ -786,7 +786,7 @@
     <span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
         consensus: FedimintConsensus,
-        tx_receiver: Receiver&lt;Transaction&gt;,
+        api_receiver: Receiver&lt;ApiEvent&gt;,
         connector: PeerConnector&lt;EpochMessage&gt;,
         decoders: ModuleDecoderRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
@@ -822,7 +822,7 @@
             connections,
             hbbft,
             consensus: Arc::new(consensus),
-            tx_receiver: ReceiverStream::new(tx_receiver).peekable(),
+            api_receiver: ReceiverStream::new(api_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
             peers: cfg.local.p2p.keys().cloned().collect(),
@@ -1006,10 +1006,10 @@
         <span class="comment">// for testing federations with one peer
         </span><span class="kw">if </span><span class="self">self</span>.cfg.local.p2p.len() == <span class="number">1 </span>{
             <span class="macro">tokio::select! </span>{
-              <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.tx_receiver).peek() =&gt; (),
+              <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; (),
               () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
             }
-            <span class="self">self</span>.save_txs_to_consensus_cache();
+            <span class="self">self</span>.save_events_to_consensus_cache();
             <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
             <span class="kw">let </span>epoch = <span class="self">self</span>.hbbft.epoch();
             <span class="self">self</span>.hbbft.skip_to_epoch(epoch + <span class="number">1</span>);
@@ -1029,7 +1029,7 @@
                 <span class="kw">_ </span>=&gt; <span class="kw">break </span><span class="macro">vec!</span>[],
             };
         };
-        <span class="self">self</span>.save_txs_to_consensus_cache();
+        <span class="self">self</span>.save_events_to_consensus_cache();
 
         <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
         <span class="kw">for </span>peer <span class="kw">in </span>proposal.drop_peers.iter() {
@@ -1045,11 +1045,11 @@
         <span class="prelude-val">Ok</span>(outcomes)
     }
 
-    <span class="comment">// save any transactions we have in the channel
-    </span><span class="kw">fn </span>save_txs_to_consensus_cache(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">let </span><span class="kw-2">mut </span>tx_cache = <span class="self">self</span>.consensus.tx_cache.lock().unwrap();
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(tx)) = <span class="self">self</span>.tx_receiver.next().now_or_never() {
-            tx_cache.insert(tx);
+    <span class="comment">// save any API events we have in the channel
+    </span><span class="kw">fn </span>save_events_to_consensus_cache(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span><span class="kw-2">mut </span>event_cache = <span class="self">self</span>.consensus.api_event_cache.lock().unwrap();
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(event)) = <span class="self">self</span>.api_receiver.next().now_or_never() {
+            event_cache.insert(event);
         }
     }
 
@@ -1103,7 +1103,7 @@
         }
 
         <span class="macro">tokio::select! </span>{
-            _peek = Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.tx_receiver).peek() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewTransaction),
+            _peek = Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewTransaction),
             () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::ModuleProposalEvent),
             msg = <span class="self">self</span>.connections.receive() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewMessage(msg<span class="question-mark">?</span>))
         }

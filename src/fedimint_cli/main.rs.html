@@ -740,30 +740,105 @@
 <a href="#740" id="740">740</a>
 <a href="#741" id="741">741</a>
 <a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Network, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>fedimint_aead::get_password_hash;
 <span class="kw">use </span>fedimint_client::module::gen::{
     ClientModuleGenRegistry, ClientModuleGenRegistryExt, DynClientModuleGen,
 };
 <span class="kw">use </span>fedimint_core::api::{
-    FederationApiExt, GlobalFederationApi, IFederationApi, WsClientConnectInfo, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsAuthenticatedApi,
+    WsClientConnectInfo, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+<span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::query::EventuallyConsistent;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_client::MintClientGen;
@@ -773,7 +848,7 @@
 <span class="kw">use </span>mint_client::modules::wallet::WalletClientGen;
 <span class="kw">use </span>mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
-    serialize_ecash,
+    parse_peer_id, serialize_ecash,
 };
 <span class="kw">use </span>mint_client::{module_decode_stubs, Client, UserClientConfig};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -869,6 +944,12 @@
     },
 
     Backup,
+
+    SignalUpgrade,
+
+    EpochCount {
+        count: u64,
+    },
 }
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>CliOutput {
@@ -898,6 +979,27 @@
     message: String,
     <span class="attr">#[serde(skip_serializing)]
     </span>raw_error: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Error&gt;&gt;,
+}
+
+<span class="comment">// TODO: Refactor federation API errors to just delegate to this
+</span><span class="kw">impl </span>From&lt;FederationError&gt; <span class="kw">for </span>CliError {
+    <span class="kw">fn </span>from(e: FederationError) -&gt; <span class="self">Self </span>{
+        CliError::from(
+            CliErrorKind::GeneralFederationError,
+            <span class="string">&quot;Failed API call&quot;</span>,
+            <span class="prelude-val">Some</span>(e.into()),
+        )
+    }
+}
+
+<span class="kw">impl </span>From&lt;anyhow::Error&gt; <span class="kw">for </span>CliError {
+    <span class="kw">fn </span>from(e: anyhow::Error) -&gt; <span class="self">Self </span>{
+        CliError::from(
+            CliErrorKind::GeneralFederationError,
+            <span class="string">&quot;Failed&quot;</span>,
+            <span class="prelude-val">Some</span>(e.into()),
+        )
+    }
 }
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>CliError {
@@ -1073,6 +1175,21 @@
     <span class="doccomment">/// Wipe the notes data from the DB. Useful for testing backup &amp; restore
     </span><span class="attr">#[clap(hide = <span class="bool-val">true</span>)]
     </span>WipeNotes,
+
+    <span class="doccomment">/// Signal a consensus upgrade
+    </span>SignalUpgrade {
+        <span class="doccomment">/// Location of the salt file
+        </span>salt_path: PathBuf,
+        <span class="doccomment">/// Peer id of the guardian
+        </span><span class="attr">#[arg(value_parser = parse_peer_id)]
+        </span>our_id: PeerId,
+        <span class="doccomment">/// Guardian password for authentication
+        </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+        </span>password: String,
+    },
+
+    <span class="doccomment">/// Gets the current epoch count
+    </span>EpochCount,
 }
 
 <span class="kw">trait </span>ErrorHandler&lt;T, E&gt; {
@@ -1480,6 +1597,31 @@
                 <span class="prelude-val">Some</span>(e.into()),
             )),
         },
+        Command::SignalUpgrade {
+            password,
+            salt_path,
+            our_id,
+        } =&gt; {
+            <span class="kw">let </span>salt = fs::read_to_string(salt_path)
+                .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to open salt file&quot;</span>))<span class="question-mark">?</span>;
+            <span class="kw">let </span>auth = ApiAuth(get_password_hash(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>);
+            <span class="comment">// TODO: store PeerId -&gt; Url in client
+            </span><span class="kw">let </span>url = client
+                .config()
+                .as_ref()
+                .nodes
+                .get(u16::from(our_id) <span class="kw">as </span>usize)
+                .expect(<span class="string">&quot;Endpoint exists&quot;</span>)
+                .url
+                .clone();
+            <span class="kw">let </span>auth_api = WsAuthenticatedApi::new(url, our_id, auth);
+            auth_api.signal_upgrade().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(CliOutput::SignalUpgrade)
+        }
+        Command::EpochCount =&gt; {
+            <span class="kw">let </span>count = client.context().api.fetch_epoch_count().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(CliOutput::EpochCount { count })
+        }
     }
 }
 </code></pre></div>

@@ -978,6 +978,27 @@
 <a href="#978" id="978">978</a>
 <a href="#979" id="979">979</a>
 <a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -1014,6 +1035,7 @@
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::mpsc;
+<span class="kw">use </span>tokio::sync::mpsc::error::SendError;
 <span class="kw">use </span>tokio::sync::mpsc::{Receiver, Sender};
 <span class="kw">use </span>tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
@@ -1061,6 +1083,13 @@
     <span class="kw">pub </span>force_new_epoch: bool,
 }
 
+<span class="doccomment">/// Events that can be sent from the API to consensus thread
+</span><span class="attr">#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+</span><span class="kw">pub enum </span>ApiEvent {
+    Transaction(Transaction),
+    UpgradeSignal,
+}
+
 <span class="comment">// TODO: we should make other fields private and get rid of this
 </span><span class="attr">#[non_exhaustive]
 </span><span class="kw">pub struct </span>FedimintConsensus {
@@ -1078,12 +1107,12 @@
     /// a crash
     </span><span class="kw">pub </span>db: Database,
 
-    <span class="doccomment">/// For sending new transactions to consensus
-    </span><span class="kw">pub </span>tx_sender: Sender&lt;Transaction&gt;,
+    <span class="doccomment">/// For sending API events to consensus
+    </span><span class="kw">pub </span>api_sender: Sender&lt;ApiEvent&gt;,
 
-    <span class="doccomment">/// Cache of transactions to include in a proposal
+    <span class="doccomment">/// Cache of `ApiEvent` to include in a proposal
     </span><span class="comment">// TODO should be able to eventually remove this Mutex
-    </span><span class="kw">pub </span>tx_cache: Mutex&lt;HashSet&lt;Transaction&gt;&gt;,
+    </span><span class="kw">pub </span>api_event_cache: Mutex&lt;HashSet&lt;ApiEvent&gt;&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -1120,7 +1149,7 @@
         db: Database,
         module_inits: ServerModuleGenRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, Receiver&lt;Transaction&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, Receiver&lt;ApiEvent&gt;)&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
 
         <span class="kw">let </span>env = <span class="self">Self</span>::get_env_vars_map();
@@ -1162,7 +1191,7 @@
             modules.insert(<span class="kw-2">*</span>module_id, module);
         }
 
-        <span class="kw">let </span>(tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+        <span class="kw">let </span>(api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
         <span class="kw">let </span>client_cfg = cfg.consensus.to_config_response(<span class="kw-2">&amp;</span>module_inits);
 
         <span class="prelude-val">Ok</span>((
@@ -1172,10 +1201,10 @@
                 client_cfg,
                 module_inits,
                 db,
-                tx_sender,
-                tx_cache: Default::default(),
+                api_sender,
+                api_event_cache: Default::default(),
             },
-            tx_receiver,
+            api_receiver,
         ))
     }
 
@@ -1185,8 +1214,8 @@
         db: Database,
         module_inits: ServerModuleGenRegistry,
         modules: ModuleRegistry&lt;DynServerModule&gt;,
-    ) -&gt; (<span class="self">Self</span>, Receiver&lt;Transaction&gt;) {
-        <span class="kw">let </span>(tx_sender, tx_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+    ) -&gt; (<span class="self">Self</span>, Receiver&lt;ApiEvent&gt;) {
+        <span class="kw">let </span>(api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
         <span class="kw">let </span>client_cfg = cfg.consensus.to_config_response(<span class="kw-2">&amp;</span>module_inits);
 
         (
@@ -1196,10 +1225,10 @@
                 client_cfg,
                 module_inits,
                 db,
-                tx_sender,
-                tx_cache: Default::default(),
+                api_sender,
+                api_event_cache: Default::default(),
             },
-            tx_receiver,
+            api_receiver,
         )
     }
 }
@@ -1275,8 +1304,8 @@
 
         funding_verifier.verify_funding()<span class="question-mark">?</span>;
 
-        <span class="self">self</span>.tx_sender
-            .send(transaction)
+        <span class="self">self</span>.api_sender
+            .send(ApiEvent::Transaction(transaction))
             .<span class="kw">await
             </span>.map_err(|_e| TransactionSubmissionError::TxChannelError)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -1406,7 +1435,8 @@
             <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;Processing transaction&quot;</span>);
             <span class="kw">async </span>{
                 <span class="macro">trace!</span>(<span class="question-mark">?</span>transaction);
-                <span class="self">self</span>.tx_cache.lock().unwrap().remove(<span class="kw-2">&amp;</span>transaction);
+                <span class="kw">let </span>event = ApiEvent::Transaction(transaction.clone());
+                <span class="self">self</span>.api_event_cache.lock().unwrap().remove(<span class="kw-2">&amp;</span>event);
 
                 dbtx.set_tx_savepoint()
                     .<span class="kw">await
@@ -1542,6 +1572,12 @@
             <span class="kw">let </span><span class="kw-2">mut </span>peers = maybe_exists.unwrap_or_default();
             peers.extend(upgrade_signals.iter().map(|(peer, <span class="kw">_</span>)| peer));
             dbtx.insert_entry(<span class="kw-2">&amp;</span>ConsensusUpgradeKey, <span class="kw-2">&amp;</span>peers).<span class="kw">await</span>;
+
+            <span class="comment">// Remove our upgrade signal event if we signaled
+            </span><span class="kw">if </span>peers.contains(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.local.identity) {
+                <span class="kw">let </span><span class="kw-2">mut </span>cache = <span class="self">self</span>.api_event_cache.lock().expect(<span class="string">&quot;locks&quot;</span>);
+                cache.remove(<span class="kw-2">&amp;</span>ApiEvent::UpgradeSignal);
+            }
         }
     }
 
@@ -1556,15 +1592,18 @@
             .is_some()
     }
 
+    <span class="doccomment">/// Sends an upgrade signal to the fedimint server thread
+    </span><span class="kw">pub async fn </span>signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), SendError&lt;ApiEvent&gt;&gt; {
+        <span class="self">self</span>.api_sender.send(ApiEvent::UpgradeSignal).<span class="kw">await
+    </span>}
+
     <span class="doccomment">/// Called to remove the upgrade items after the upgrade is complete
     </span><span class="kw">pub async fn </span>remove_upgrade_items(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>last_epoch = <span class="self">self</span>.get_epoch_count().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if </span>last_epoch == epoch {
-            <span class="self">self</span>.db
-                .begin_transaction()
-                .<span class="kw">await
-                </span>.remove_entry(<span class="kw-2">&amp;</span>ConsensusUpgradeKey)
-                .<span class="kw">await</span>;
+            tx.remove_entry(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>;
+            tx.commit_tx().<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(
@@ -1685,12 +1724,15 @@
             .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;ConsensusItem&gt; = <span class="self">self
-            </span>.tx_cache
+            </span>.api_event_cache
             .lock()
             .unwrap()
             .iter()
             .cloned()
-            .map(ConsensusItem::Transaction)
+            .map(|event| <span class="kw">match </span>event {
+                ApiEvent::Transaction(tx) =&gt; ConsensusItem::Transaction(tx),
+                ApiEvent::UpgradeSignal =&gt; ConsensusItem::ConsensusUpgrade(ConsensusUpgrade),
+            })
             .collect();
         <span class="kw">let </span><span class="kw-2">mut </span>force_new_epoch = <span class="bool-val">false</span>;
 

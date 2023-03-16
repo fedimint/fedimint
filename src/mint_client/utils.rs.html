@@ -97,7 +97,13 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::num::ParseIntError;
+<span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
 <span class="kw">use </span>bitcoin_hashes::hex::FromHex;
@@ -106,7 +112,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::{ParseAmountError, TieredMulti};
+<span class="kw">use </span>fedimint_core::{ParseAmountError, PeerId, TieredMulti};
 <span class="kw">use </span>lightning_invoice::Currency;
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::SpendableNote;
@@ -157,6 +163,10 @@
 
 <span class="kw">pub fn </span>parse_node_pub_key(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
     secp256k1::PublicKey::from_str(s)
+}
+
+<span class="kw">pub fn </span>parse_peer_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;PeerId, ParseIntError&gt; {
+    <span class="prelude-val">Ok</span>(PeerId::from(s.parse::&lt;u16&gt;()<span class="question-mark">?</span>))
 }
 
 <span class="attr">#[derive(Debug)]

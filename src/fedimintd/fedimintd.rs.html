@@ -284,7 +284,7 @@
     </span><span class="attr">#[arg(long = <span class="string">&quot;listen-ui&quot;</span>, env = <span class="string">&quot;FM_LISTEN_UI&quot;</span>)]
     </span><span class="kw">pub </span>listen_ui: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
     <span class="doccomment">/// After an upgrade the epoch must be passed in
-    </span><span class="attr">#[arg(long = <span class="string">&quot;upgrade-epoch&quot;</span>)]
+    </span><span class="attr">#[arg(env = <span class="string">&quot;FM_UPGRADE_EPOCH&quot;</span>)]
     </span><span class="kw">pub </span>upgrade_epoch: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="doccomment">/// Enable tokio console logging
     </span><span class="attr">#[arg(long = <span class="string">&quot;tokio-console-bind&quot;</span>, env = <span class="string">&quot;FM_TOKIO_CONSOLE_BIND&quot;</span>)]
@@ -479,14 +479,14 @@
         decoders.clone(),
     );
 
-    <span class="kw">let </span>(consensus, tx_receiver) =
+    <span class="kw">let </span>(consensus, api_receiver) =
         FedimintConsensus::new(cfg.clone(), db, module_gens, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = opts.upgrade_epoch {
         consensus.remove_upgrade_items(epoch).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
-    FedimintServer::run(cfg, consensus, tx_receiver, decoders, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
+    FedimintServer::run(cfg, consensus, api_receiver, decoders, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
