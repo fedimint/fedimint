@@ -94,6 +94,7 @@ rec {
       openssl
       pkg-config
       perl
+      util-linux
       pkgs.llvmPackages.bintools
       rocksdb
       protobuf
@@ -118,7 +119,7 @@ rec {
       electrs
       jq
       lnd
-      fdisk-util-linux
+      util-linux
       netcat
       perl
       pkgs-kitman.esplora
