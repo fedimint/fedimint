@@ -229,7 +229,10 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 };
             let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
 
-            // lightning
+            // lightning - we create one LND RPC client, and one CLN RPC client. one will be
+            // used as the gateway's lightning node, and the other is an external node
+            // outside the federation that can be used to test lightnining
+            // payments through the gateway
             let socket_cln = PathBuf::from(dir.clone()).join("cln/regtest/lightning-rpc");
             let rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).await.unwrap()));
             let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR").unwrap();
