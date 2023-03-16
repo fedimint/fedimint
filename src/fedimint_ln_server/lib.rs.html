@@ -1139,12 +1139,6 @@
 <a href="#1139" id="1139">1139</a>
 <a href="#1140" id="1140">1140</a>
 <a href="#1141" id="1141">1141</a>
-<a href="#1142" id="1142">1142</a>
-<a href="#1143" id="1143">1143</a>
-<a href="#1144" id="1144">1144</a>
-<a href="#1145" id="1145">1145</a>
-<a href="#1146" id="1146">1146</a>
-<a href="#1147" id="1147">1147</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::ops::Sub;
@@ -2052,7 +2046,7 @@
         LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
         ProposeDecryptionShareKeyPrefix,
     };
-    <span class="kw">use </span>fedimint_testing::{prepare_snapshot, validate_migrations};
+    <span class="kw">use </span>fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>lightning_invoice::Invoice;
     <span class="kw">use </span>rand::distributions::Standard;
@@ -2065,13 +2059,6 @@
     <span class="kw">use crate</span>::{
         ContractAccount, Lightning, LightningGateway, LightningGen, LightningOutputOutcome,
     };
-
-    <span class="kw">const </span>STRING_64: <span class="kw-2">&amp;</span>str = <span class="string">&quot;0123456789012345678901234567890101234567890123456789012345678901&quot;</span>;
-    <span class="kw">const </span>BYTE_8: [u8; <span class="number">8</span>] = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>];
-    <span class="kw">const </span>BYTE_32: [u8; <span class="number">32</span>] = [
-        <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>,
-        <span class="number">0</span>, <span class="number">1</span>,
-    ];
 
     <span class="doccomment">/// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -2191,6 +2178,7 @@
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_migrations() {
         validate_migrations(
+            <span class="string">&quot;lightning&quot;</span>,
             |db| <span class="kw">async move </span>{
                 <span class="kw">let </span>module = DynServerModuleGen::from(LightningGen);
                 apply_migrations(

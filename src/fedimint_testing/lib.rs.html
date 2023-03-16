@@ -463,6 +463,21 @@
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -812,9 +827,9 @@
 }
 
 <span class="doccomment">/// Creates the database backup directory by appending the `snapshot_name`
-/// to the `FM_TEST_DB_BACKUP_DIR`. Then this function will execute the provided
+/// to the `DB_MIGRATION_DIR`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
-/// data for testing a migration. If `FM_TEST_DB_BACKUP_DIR` is not set, this
+/// data for testing a migration. If `DB_MIGRATION_DIR` is not set, this
 /// function doesn&#39;t do anything.
 </span><span class="kw">pub async fn </span>prepare_snapshot&lt;F&gt;(
     snapshot_name: <span class="kw-2">&amp;</span>str,
@@ -823,38 +838,53 @@
 ) <span class="kw">where
     </span>F: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, ()&gt;,
 {
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(parent_dir) = env::var(<span class="string">&quot;FM_TEST_DB_BACKUP_DIR&quot;</span>) {
-        <span class="kw">let </span>snapshot_dir = Path::new(<span class="kw-2">&amp;</span>parent_dir).join(snapshot_name);
+    <span class="kw">let </span>parent_dir = env::var(<span class="string">&quot;DB_MIGRATION_DIR&quot;</span>).unwrap_or(<span class="string">&quot;../../db/migrations&quot;</span>.to_string());
+    <span class="kw">let </span>snapshot_dir = Path::new(<span class="kw-2">&amp;</span>parent_dir).join(snapshot_name);
+    <span class="kw">if </span>!snapshot_dir.exists() {
         <span class="kw">let </span>db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
         <span class="kw">let </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         prepare_fn(dbtx).<span class="kw">await</span>;
     }
 }
 
+<span class="kw">pub const </span>STRING_64: <span class="kw-2">&amp;</span>str = <span class="string">&quot;0123456789012345678901234567890101234567890123456789012345678901&quot;</span>;
+<span class="kw">pub const </span>BYTE_8: [u8; <span class="number">8</span>] = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>];
+<span class="kw">pub const </span>BYTE_20: [u8; <span class="number">20</span>] = [<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>];
+<span class="kw">pub const </span>BYTE_32: [u8; <span class="number">32</span>] = [
+    <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>, <span class="number">9</span>, <span class="number">0</span>, <span class="number">1</span>,
+];
+
 <span class="doccomment">/// Iterates over all of the databases supplied in the database backup
-/// directory, which is specified by `FM_TEST_DB_BACKUP_DIR` environment
+/// directory, which is specified by `DB_MIGRATION_DIR` environment
 /// variable. First, a temporary database will be created and the contents will
 /// be populated from the database backup directory. Next, this function will
 /// execute the provided `validate` closure. The `validate` closure is expected
 /// to do any validation necessary on the temporary database, such as applying
 /// the appropriate database migrations and then reading all of the data to
 /// verify the migrations were successful.
-</span><span class="kw">pub async fn </span>validate_migrations&lt;F, Fut&gt;(validate: F, decoders: ModuleDecoderRegistry)
-<span class="kw">where
+</span><span class="kw">pub async fn </span>validate_migrations&lt;F, Fut&gt;(
+    db_prefix: <span class="kw-2">&amp;</span>str,
+    validate: F,
+    decoders: ModuleDecoderRegistry,
+) <span class="kw">where
     </span>F: Fn(Database) -&gt; Fut,
     Fut: futures::Future&lt;Output = ()&gt;,
 {
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(parent_dir) = env::var(<span class="string">&quot;FM_TEST_DB_BACKUP_DIR&quot;</span>) {
-        <span class="kw">let </span>db_dir = Path::new(<span class="kw-2">&amp;</span>parent_dir);
-        <span class="kw">let </span>files = fs::read_dir(db_dir).unwrap();
+    <span class="kw">let </span>parent_dir = env::var(<span class="string">&quot;DB_MIGRATION_DIR&quot;</span>).unwrap_or(<span class="string">&quot;../../db/migrations&quot;</span>.to_string());
+    <span class="kw">let </span>db_dir = Path::new(<span class="kw-2">&amp;</span>parent_dir);
+    <span class="kw">let </span>files_res = fs::read_dir(db_dir);
+    <span class="comment">// If the DB_MIGRATION_DIR does not exist, just skip the validation.
+    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(files) = files_res {
         <span class="kw">for </span>file <span class="kw">in </span>files.flatten() {
             <span class="kw">let </span>name = file.file_name().into_string().unwrap();
-            <span class="kw">let </span>temp_db = open_temp_db_and_copy(
-                <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, name.as_str(), OsRng.next_u64()),
-                <span class="kw-2">&amp;</span>file.path(),
-                decoders.clone(),
-            );
-            validate(temp_db).<span class="kw">await</span>;
+            <span class="kw">if </span>name.starts_with(db_prefix) {
+                <span class="kw">let </span>temp_db = open_temp_db_and_copy(
+                    <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, name.as_str(), OsRng.next_u64()),
+                    <span class="kw-2">&amp;</span>file.path(),
+                    decoders.clone(),
+                );
+                validate(temp_db).<span class="kw">await</span>;
+            }
         }
     }
 }
