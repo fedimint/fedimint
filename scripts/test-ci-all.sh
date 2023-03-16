@@ -13,35 +13,34 @@ fi
 
 
 # Avoid re-building workspace in parallel in all test derivations
->&2 echo "### Making sure workspace is built..."
-nix build -L .#debug.workspaceBuild 2>&1 | ts -s
-
+# Note: Respect 'CARGO_PROFILE' that crane uses
+cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
   echo "### Starting reconnect test..."
-  nix build -L .#debug.cli-test.reconnect 2>&1 | ts -s
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/reconnect-test.sh" 2>&1 | ts -s
 }
 export -f cli_test_reconnect
 
 function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
   echo "### Starting latency test..."
-  nix build -L .#debug.cli-test.latency 2>&1 | ts -s
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/latency-test.sh" 2>&1 | ts -s
 }
 export -f cli_test_latency
 
 function cli_test_cli() {
   set -eo pipefail # pipefail must be set manually again
   echo "### Starting cli test..."
-  nix build -L .#debug.cli-test.cli 2>&1 | ts -s
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/cli-test.sh" 2>&1 | ts -s
 }
 export -f cli_test_cli
 
 function cli_test_rust_tests() {
   set -eo pipefail # pipefail must be set manually again
   echo "### Starting integration test..."
-  nix build -L .#debug.cli-test.rust-tests 2>&1 | ts -s
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/rust-tests.sh" 2>&1 | ts -s
 }
 export -f cli_test_rust_tests
 
@@ -49,7 +48,7 @@ function cli_test_always_fail() {
   set -eo pipefail # pipefail must be set manually again
   echo "### Starting always_fail test..."
   # this must fail, so we know nix build is actually running tests
-  ! nix build -L .#debug.cli-test.always-fail 2>&1 | ts -s
+  ! unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-fail.sh" 2>&1 | ts -s
 }
 export -f cli_test_always_fail
 
