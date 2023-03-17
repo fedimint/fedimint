@@ -161,7 +161,7 @@ impl GatewayActor {
                         Ok((outpoint, contract_id)) => (outpoint, contract_id),
                         Err(e) => {
                             error!("Failed to buy preimage: {:?}", e);
-                            // Note: this specific complete htlc requires no futher action.
+                            // Note: this specific complete htlc requires no further action.
                             // If we fail to send the complete htlc message, or get an error
                             // result, lightning node will still
                             // cancel HTCL after expiry period lapses.
@@ -206,7 +206,7 @@ impl GatewayActor {
                         }
                         Err(e) => {
                             error!("Failed to process intercepted HTLC: {:?}", e);
-                            // Note: this specific complete htlc requires no futher action.
+                            // Note: this specific complete htlc requires no further action.
                             // If we fail to send the complete htlc message, or get an error result,
                             // lightning node will still cancel HTCL after expiry period lapses.
                             // Result can be safely ignored.
