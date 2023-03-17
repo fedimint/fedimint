@@ -163,7 +163,7 @@ impl FedimintServer {
         task_group: &mut TaskGroup,
     ) -> Self {
         let connector: PeerConnector<EpochMessage> =
-            TlsTcpConnector::new(cfg.tls_config()).into_dyn();
+            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
 
         Self::new_with(
             cfg.clone(),
@@ -196,7 +196,7 @@ impl FedimintServer {
             cfg.local.identity,
             cfg.private.hbbft_sks.inner().clone(),
             cfg.consensus.hbbft_pk_set.clone(),
-            cfg.local.p2p.keys().copied(),
+            cfg.local.p2p_endpoints.keys().copied(),
         );
 
         let hbbft: HoneyBadger<Vec<SerdeConsensusItem>, _> =
@@ -218,7 +218,7 @@ impl FedimintServer {
             api_receiver: ReceiverStream::new(api_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
-            peers: cfg.local.p2p.keys().cloned().collect(),
+            peers: cfg.local.p2p_endpoints.keys().cloned().collect(),
             rejoin_at_epoch: None,
             run_empty_epochs: 0,
             last_processed_epoch: None,
@@ -397,7 +397,7 @@ impl FedimintServer {
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
     ) -> anyhow::Result<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
-        if self.cfg.local.p2p.len() == 1 {
+        if self.cfg.local.p2p_endpoints.len() == 1 {
             tokio::select! {
               _ = Pin::new(&mut self.api_receiver).peek() => (),
               () = self.consensus.await_consensus_proposal() => (),

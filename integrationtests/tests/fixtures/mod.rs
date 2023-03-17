@@ -294,8 +294,9 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             let lightning = RealLightningTest::new(rpc_cln, rpc_lnd, gateway_node.clone()).await;
 
             // federation
-            let connect_gen =
-                |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
+            let connect_gen = |cfg: &ServerConfig| {
+                TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn()
+            };
             let fed_db = |decoders| Database::new(rocks(dir.clone()), decoders);
             let fed = FederationTest::new(
                 server_config,
@@ -495,8 +496,8 @@ pub async fn create_user_client(
             .0
             .api_endpoints
             .iter()
-            .filter(|(id, _)| peers.contains(&id))
-            .map(|(id, endpoint)| (id.clone(), endpoint.url.clone()))
+            .filter(|(id, _)| peers.contains(id))
+            .map(|(id, endpoint)| (*id, endpoint.url.clone()))
             .collect(),
     )
     .into();

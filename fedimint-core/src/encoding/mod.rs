@@ -5,6 +5,7 @@
 mod btc;
 mod secp256k1;
 mod tbs;
+mod tls;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
