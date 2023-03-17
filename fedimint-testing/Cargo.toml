@@ -24,7 +24,6 @@ fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../fedimint-logging" }
-fedimint-server = { path = "../fedimint-server" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 ln-gateway = { path = "../gateway/ln-gateway" }

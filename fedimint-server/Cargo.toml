@@ -22,12 +22,10 @@ bitcoin_hashes = "0.11.0"
 bytes = "1.4.0"
 hbbft = { git = "https://github.com/fedimint/hbbft" }
 futures = "0.3.24"
-impl-tools = "0.8.0"
 itertools = "0.10.5"
 fedimint-core = { path = "../fedimint-core" }
 fedimint-logging = { path = "../fedimint-logging" }
 rand = "0.8"
-rayon = "1.6.1"
 rcgen = "=0.10.0"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
 serde = { version = "1.0.149", features = [ "derive" ] }
