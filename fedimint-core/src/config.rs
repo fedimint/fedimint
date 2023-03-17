@@ -4,6 +4,7 @@ use std::hash::Hash;
 use std::ops::Mul;
 use std::path::Path;
 use std::str::FromStr;
+use std::env;
 
 use anyhow::{bail, format_err};
 use bitcoin::secp256k1;
@@ -321,7 +322,35 @@ impl<M> ModuleGenRegistry<M> {
     where
         M: Clone,
     {
-        for hardcoded_module in ["mint", "ln", "wallet"] {
+        let args: Vec<String> = env::args().collect();
+
+        let mut extra_module_instances = Vec::new();
+
+        // Iterate over the command-line arguments and look for instances of --extra-module-instance.
+        let mut i = 0;
+        while i < args.len() {
+            if args[i] == "--extra-module-instance" {
+                // Extract the <kind> value from the next argument.
+                if let Some(kind) = args.get(i+1) {
+                    // Add the <kind> instance to the vector.
+                    extra_module_instances.push(ModuleKind::new(kind));
+                }
+                i += 2; // Skip both --extra-module-instance and the <kind> argument.
+            } else {
+                i += 1; // Move to the next argument.
+            }
+        }
+
+        // Chain the modules instances to the legacy_init_order_iter.
+        let mut legacy_init_order_iter = Vec::new();
+        // fixed 3 module instances
+        let mut initial_module: Vec<String> = ["mint", "ln", "wallet"];
+        //adding all module instances to legacy_init_order_iter.
+        legacy_init_order_iter.append(&mut initial_module);
+        legacy_init_order_iter.append(&mut extra_module_instances);
+        
+        // ... continue with the rest of the initialization code
+        for hardcoded_module in  legacy_init_order_iter{
             if !self
                 .0
                 .contains_key(&ModuleKind::from_static_str(hardcoded_module))
