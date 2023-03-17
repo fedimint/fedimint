@@ -1,7 +1,7 @@
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
-use fedimint_client::GlobalClientContext;
+use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -58,7 +58,7 @@ impl ClientModule for WalletClientModule {
 pub enum WalletClientStates {}
 
 impl IntoDynInstance for WalletClientStates {
-    type DynType = DynState<GlobalClientContext>;
+    type DynType = DynState<DynGlobalClientContext>;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
@@ -67,12 +67,12 @@ impl IntoDynInstance for WalletClientStates {
 
 impl State for WalletClientStates {
     type ModuleContext = ();
-    type GlobalContext = GlobalClientContext;
+    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         _context: &Self::ModuleContext,
-        _global_context: &GlobalClientContext,
+        _global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         unimplemented!()
     }

@@ -9,10 +9,12 @@ use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::{maybe_add_send_sync, Amount, TransactionId};
+use fedimint_core::{
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+};
 use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 
@@ -34,58 +36,39 @@ pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
 
-/// Global state and functionality provided to all state machines running in the
-/// client
-#[derive(Clone)]
-pub struct GlobalClientContext {
-    inner: Arc<ClientInner>,
-}
-
-impl GlobalContext for GlobalClientContext {}
-
-// TODO: impl `Debug` for `Client` and derive here
-impl Debug for GlobalClientContext {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GlobalClientContext")
-    }
-}
-
-impl GlobalClientContext {
+#[apply(async_trait_maybe_send!)]
+pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IFederationApi`] typically does not provide the necessary
     /// functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
-    pub fn api(&self) -> &(dyn IFederationApi + 'static) {
-        self.inner.api.as_ref()
-    }
+    fn api(&self) -> &(dyn IFederationApi + 'static);
 
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation once `dbtx` is
     /// committed.
-    pub async fn finalize_and_submit_transaction(
+    async fn finalize_and_submit_transaction(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<TransactionId> {
-        self.inner
-            .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
-            .await
-    }
+    ) -> anyhow::Result<TransactionId>;
 
     /// Wait for any active state to appear in the database
-    pub async fn await_active_state(&self, state: DynState<GlobalClientContext>) -> ActiveState {
-        self.inner.await_active_state(state).await
-    }
+    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState;
 
     /// Wait for any inactive state to appear in the database
-    pub async fn await_inactive_state(
-        &self,
-        state: DynState<GlobalClientContext>,
-    ) -> InactiveState {
-        self.inner.await_inactive_state(state).await
-    }
+    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState;
+}
 
+dyn_newtype_define! {
+    /// Global state and functionality provided to all state machines running in the
+    /// client
+    #[derive(Clone)]
+    pub DynGlobalClientContext(Arc<IGlobalClientContext>)
+}
+
+impl DynGlobalClientContext {
     /// Waits till consensus has been achieved on the transaction and it was
     /// accepted by consensus.
     pub async fn await_tx_accepted(
@@ -117,15 +100,55 @@ impl GlobalClientContext {
     }
 }
 
+impl<T> From<Arc<T>> for DynGlobalClientContext
+where
+    T: IGlobalClientContext,
+{
+    fn from(inner: Arc<T>) -> Self {
+        DynGlobalClientContext(inner)
+    }
+}
+
+impl GlobalContext for DynGlobalClientContext {}
+
+// TODO: impl `Debug` for `Client` and derive here
+impl Debug for ClientInner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ClientInner")
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IGlobalClientContext for ClientInner {
+    fn api(&self) -> &(dyn IFederationApi + 'static) {
+        self.api.as_ref()
+    }
+
+    async fn finalize_and_submit_transaction(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<TransactionId> {
+        ClientInner::finalize_and_submit_transaction(self, dbtx, operation_id, tx_builder).await
+    }
+
+    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState {
+        ClientInner::await_active_state(self, state).await
+    }
+
+    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState {
+        ClientInner::await_inactive_state(self, state).await
+    }
+}
+
 pub struct Client {
     inner: Arc<ClientInner>,
 }
 
 impl Client {
-    pub fn context(&self) -> GlobalClientContext {
-        GlobalClientContext {
-            inner: self.inner.clone(),
-        }
+    pub fn context(&self) -> DynGlobalClientContext {
+        DynGlobalClientContext::from(self.inner.clone())
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
@@ -147,7 +170,7 @@ struct ClientInner {
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
-    executor: Executor<GlobalClientContext>,
+    executor: Executor<DynGlobalClientContext>,
     api: DynFederationApi,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 }
@@ -205,7 +228,7 @@ impl ClientInner {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(Transaction, Vec<DynState<GlobalClientContext>>)> {
+    ) -> anyhow::Result<(Transaction, Vec<DynState<DynGlobalClientContext>>)> {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
@@ -272,11 +295,11 @@ impl ClientInner {
         Ok(txid)
     }
 
-    async fn await_inactive_state(&self, state: DynState<GlobalClientContext>) -> InactiveState {
+    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState {
         self.db.wait_key_exists(&InactiveStateKey(state)).await
     }
 
-    async fn await_active_state(&self, state: DynState<GlobalClientContext>) -> ActiveState {
+    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState {
         self.db.wait_key_exists(&ActiveStateKey(state)).await
     }
 }
@@ -370,7 +393,7 @@ impl ClientBuilder {
         };
 
         let executor = {
-            let mut executor_builder = Executor::<GlobalClientContext>::builder();
+            let mut executor_builder = Executor::<DynGlobalClientContext>::builder();
             executor_builder
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
             executor_builder.with_module_dyn(primary_module.context(primary_module_instance));
@@ -392,9 +415,7 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
         });
 
-        let global_client_context = GlobalClientContext {
-            inner: client_inner.clone(),
-        };
+        let global_client_context = DynGlobalClientContext::from(client_inner.clone());
 
         client_inner
             .executor

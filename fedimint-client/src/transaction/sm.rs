@@ -12,7 +12,7 @@ use fedimint_core::TransactionId;
 use tracing::warn;
 
 use crate::sm::{Context, DynContext, OperationId, State, StateTransition};
-use crate::{DynState, GlobalClientContext};
+use crate::{DynGlobalClientContext, DynState};
 
 // TODO: how to preven collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
@@ -85,12 +85,12 @@ pub enum TxSubmissionStates {
 
 impl State for TxSubmissionStates {
     type ModuleContext = TxSubmissionContext;
-    type GlobalContext = GlobalClientContext;
+    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         _context: &Self::ModuleContext,
-        global_context: &GlobalClientContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self {
             TxSubmissionStates::Created {
@@ -155,7 +155,7 @@ impl State for TxSubmissionStates {
 }
 
 impl IntoDynInstance for TxSubmissionStates {
-    type DynType = DynState<GlobalClientContext>;
+    type DynType = DynState<DynGlobalClientContext>;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
@@ -165,7 +165,7 @@ impl IntoDynInstance for TxSubmissionStates {
 async fn trigger_created_submit(
     tx: Transaction,
     next_submission: SystemTime,
-    context: GlobalClientContext,
+    context: DynGlobalClientContext,
 ) -> Result<(), String> {
     tokio::time::sleep(
         next_submission
@@ -184,7 +184,7 @@ async fn trigger_created_submit(
 
 async fn trigger_created_accepted(
     txid: TransactionId,
-    context: GlobalClientContext,
+    context: DynGlobalClientContext,
 ) -> Result<u64, String> {
     // FIXME: use ws subscriptions once they land
     loop {

@@ -7,17 +7,17 @@ use secp256k1_zkp::Secp256k1;
 
 use crate::module::StateGenerator;
 use crate::sm::DynState;
-use crate::GlobalClientContext;
+use crate::DynGlobalClientContext;
 
 pub struct ClientInput {
     pub input: DynInput,
     pub keys: Vec<KeyPair>,
-    pub state_machines: StateGenerator<DynState<GlobalClientContext>>,
+    pub state_machines: StateGenerator<DynState<DynGlobalClientContext>>,
 }
 
 pub struct ClientOutput {
     pub output: DynOutput,
-    pub state_machines: StateGenerator<DynState<GlobalClientContext>>,
+    pub state_machines: StateGenerator<DynState<DynGlobalClientContext>>,
 }
 
 #[derive(Default)]
@@ -43,7 +43,7 @@ impl TransactionBuilder {
         self,
         secp_ctx: &Secp256k1<C>,
         mut rng: R,
-    ) -> (Transaction, Vec<DynState<GlobalClientContext>>)
+    ) -> (Transaction, Vec<DynState<DynGlobalClientContext>>)
     where
         C: secp256k1_zkp::Signing + secp256k1_zkp::Verification,
     {

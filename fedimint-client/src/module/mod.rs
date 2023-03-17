@@ -11,7 +11,7 @@ use fedimint_core::{
 };
 
 use crate::sm::{Context, DynContext, DynState, State};
-use crate::GlobalClientContext;
+use crate::DynGlobalClientContext;
 
 pub mod gen;
 
@@ -28,7 +28,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// All possible states this client can submit to the executor
     type States: State<
-        GlobalContext = GlobalClientContext,
+        GlobalContext = DynGlobalClientContext,
         ModuleContext = Self::ModuleStateMachineContext,
     >;
 
@@ -107,7 +107,7 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
     }
 }
 
-pub type StateGenerator<S> = Box<dyn Fn(TransactionId, u64) -> Vec<S>>;
+pub type StateGenerator<S> = Box<dyn Fn(TransactionId, u64) -> Vec<S> + Send + Sync + 'static>;
 
 /// A client module that can be used as funding source and to generate arbitrary
 /// change outputs for unbalanced transactions.
@@ -170,7 +170,7 @@ pub trait IPrimaryClientModule: IClientModule {
     ) -> anyhow::Result<(
         Vec<KeyPair>,
         DynInput,
-        StateGenerator<DynState<GlobalClientContext>>,
+        StateGenerator<DynState<DynGlobalClientContext>>,
     )>;
 
     async fn create_exact_output(
@@ -178,7 +178,7 @@ pub trait IPrimaryClientModule: IClientModule {
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         amount: Amount,
-    ) -> (DynOutput, StateGenerator<DynState<GlobalClientContext>>);
+    ) -> (DynOutput, StateGenerator<DynState<DynGlobalClientContext>>);
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -196,7 +196,7 @@ where
     ) -> anyhow::Result<(
         Vec<KeyPair>,
         DynInput,
-        StateGenerator<DynState<GlobalClientContext>>,
+        StateGenerator<DynState<DynGlobalClientContext>>,
     )> {
         let (keys, input, state_gen) = T::create_sufficient_input(self, dbtx, min_amount).await?;
         let dyn_input = DynInput::from_typed(module_instance, input);
@@ -210,7 +210,7 @@ where
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         amount: Amount,
-    ) -> (DynOutput, StateGenerator<DynState<GlobalClientContext>>) {
+    ) -> (DynOutput, StateGenerator<DynState<DynGlobalClientContext>>) {
         let (output, state_gen) = T::create_exact_output(self, dbtx, amount).await;
         let dyn_output = DynOutput::from_typed(module_instance, output);
         let dyn_states = state_gen_to_dyn(state_gen, module_instance);
@@ -226,9 +226,9 @@ where
 fn state_gen_to_dyn<S>(
     state_gen: StateGenerator<S>,
     module_instance: ModuleInstanceId,
-) -> StateGenerator<DynState<GlobalClientContext>>
+) -> StateGenerator<DynState<DynGlobalClientContext>>
 where
-    S: State<GlobalContext = GlobalClientContext>,
+    S: State<GlobalContext = DynGlobalClientContext>,
 {
     Box::new(move |txid, index| {
         let states = state_gen(txid, index);
