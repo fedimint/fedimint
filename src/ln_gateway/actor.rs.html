@@ -669,7 +669,7 @@
                         <span class="prelude-val">Ok</span>((outpoint, contract_id)) =&gt; (outpoint, contract_id),
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">error!</span>(<span class="string">&quot;Failed to buy preimage: {:?}&quot;</span>, e);
-                            <span class="comment">// Note: this specific complete htlc requires no futher action.
+                            <span class="comment">// Note: this specific complete htlc requires no further action.
                             // If we fail to send the complete htlc message, or get an error
                             // result, lightning node will still
                             // cancel HTCL after expiry period lapses.
@@ -714,7 +714,7 @@
                         }
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">error!</span>(<span class="string">&quot;Failed to process intercepted HTLC: {:?}&quot;</span>, e);
-                            <span class="comment">// Note: this specific complete htlc requires no futher action.
+                            <span class="comment">// Note: this specific complete htlc requires no further action.
                             // If we fail to send the complete htlc message, or get an error result,
                             // lightning node will still cancel HTCL after expiry period lapses.
                             // Result can be safely ignored.
