@@ -851,7 +851,7 @@
     <span class="comment">// Stable and unique id and threshold pubkey of the federation for authenticating configs
     </span><span class="kw">pub </span>federation_id: FederationId,
     <span class="doccomment">/// API endpoints for each federation member
-    </span><span class="kw">pub </span>nodes: Vec&lt;ApiEndpoint&gt;,
+    </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
     <span class="doccomment">/// Threshold pubkey for authenticating epoch history
     </span><span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
     <span class="doccomment">/// Configs from other client modules

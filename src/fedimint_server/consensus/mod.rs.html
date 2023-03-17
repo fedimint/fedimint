@@ -1589,7 +1589,7 @@
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>ConsensusUpgradeKey)
             .<span class="kw">await
-            </span>.filter(|peers| peers.len() &gt;= <span class="self">self</span>.cfg.consensus.api.threshold())
+            </span>.filter(|peers| peers.len() &gt;= <span class="self">self</span>.cfg.consensus.api_endpoints.threshold())
             .is_some()
     }
 

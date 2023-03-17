@@ -626,7 +626,7 @@
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
-</span><span class="kw">use </span>std::collections::HashMap;
+</span><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::convert::TryFrom;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -690,15 +690,14 @@
     <span class="doccomment">/// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls`
     /// understands
     </span>cert_store: RootCertStore,
-    peer_names: HashMap&lt;PeerId, String&gt;,
+    peer_names: BTreeMap&lt;PeerId, String&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>TlsConfig {
-    <span class="kw">pub </span>our_certificate: rustls::Certificate,
     <span class="kw">pub </span>our_private_key: rustls::PrivateKey,
-    <span class="kw">pub </span>peer_certs: HashMap&lt;PeerId, rustls::Certificate&gt;,
-    <span class="kw">pub </span>peer_names: HashMap&lt;PeerId, String&gt;,
+    <span class="kw">pub </span>peer_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt;,
+    <span class="kw">pub </span>peer_names: BTreeMap&lt;PeerId, String&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -707,7 +706,7 @@
 }
 
 <span class="kw">impl </span>TlsTcpConnector {
-    <span class="kw">pub fn </span>new(cfg: TlsConfig) -&gt; TlsTcpConnector {
+    <span class="kw">pub fn </span>new(cfg: TlsConfig, our_id: PeerId) -&gt; TlsTcpConnector {
         <span class="kw">let </span><span class="kw-2">mut </span>cert_store = RootCertStore::empty();
         <span class="kw">for </span>(<span class="kw">_</span>, cert) <span class="kw">in </span>cfg.peer_certs.iter() {
             cert_store
@@ -716,7 +715,7 @@
         }
 
         TlsTcpConnector {
-            our_certificate: cfg.our_certificate,
+            our_certificate: cfg.peer_certs.get(<span class="kw-2">&amp;</span>our_id).expect(<span class="string">&quot;exists&quot;</span>).clone(),
             our_private_key: cfg.our_private_key,
             peer_certs: Arc::new(PeerCertStore::new(cfg.peer_certs)),
             cert_store,
@@ -1082,8 +1081,7 @@
 
         peer_keys
             .iter()
-            .map(|(cert, key)| TlsConfig {
-                our_certificate: cert.clone(),
+            .map(|(_cert, key)| TlsConfig {
                 our_private_key: key.clone(),
                 peer_certs: peer_keys
                     .iter()
@@ -1107,7 +1105,8 @@
         <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>connectors = gen_connector_config(<span class="number">5</span>)
             .into_iter()
-            .map(TlsTcpConnector::new)
+            .enumerate()
+            .map(|(id, cfg)| TlsTcpConnector::new(cfg, PeerId::from(id <span class="kw">as </span>u16)))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = connectors[<span class="number">0</span>].listen(bind_addr).<span class="kw">await</span>.unwrap();
@@ -1140,11 +1139,11 @@
         <span class="kw">let </span>url: Url = <span class="string">&quot;wss://127.0.0.1:7001&quot;</span>.parse().unwrap();
         <span class="kw">let </span>cfg = gen_connector_config(<span class="number">5</span>);
 
-        <span class="kw">let </span>honest = TlsTcpConnector::new(cfg[<span class="number">0</span>].clone());
+        <span class="kw">let </span>honest = TlsTcpConnector::new(cfg[<span class="number">0</span>].clone(), PeerId::from(<span class="number">0</span>));
 
         <span class="kw">let </span><span class="kw-2">mut </span>malicious_wrong_key_cfg = cfg[<span class="number">1</span>].clone();
         malicious_wrong_key_cfg.our_private_key = cfg[<span class="number">2</span>].our_private_key.clone();
-        <span class="kw">let </span>malicious_wrong_key = TlsTcpConnector::new(malicious_wrong_key_cfg);
+        <span class="kw">let </span>malicious_wrong_key = TlsTcpConnector::new(malicious_wrong_key_cfg, PeerId::from(<span class="number">1</span>));
 
         <span class="comment">// Honest server, malicious client with wrong private key
         </span>{
@@ -1214,10 +1213,11 @@
 
         <span class="comment">// Server with wrong certificate, honest client
         </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = TlsTcpConnector::new(cfg[<span class="number">2</span>].clone())
-                .listen(bind_addr)
-                .<span class="kw">await
-                </span>.unwrap();
+            <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
+                TlsTcpConnector::new(cfg[<span class="number">2</span>].clone(), PeerId::from(<span class="number">2</span>))
+                    .listen(bind_addr)
+                    .<span class="kw">await
+                    </span>.unwrap();
 
             <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();

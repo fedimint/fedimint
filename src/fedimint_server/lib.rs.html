@@ -770,7 +770,7 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>connector: PeerConnector&lt;EpochMessage&gt; =
-            TlsTcpConnector::new(cfg.tls_config()).into_dyn();
+            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
 
         <span class="self">Self</span>::new_with(
             cfg.clone(),
@@ -803,7 +803,7 @@
             cfg.local.identity,
             cfg.private.hbbft_sks.inner().clone(),
             cfg.consensus.hbbft_pk_set.clone(),
-            cfg.local.p2p.keys().copied(),
+            cfg.local.p2p_endpoints.keys().copied(),
         );
 
         <span class="kw">let </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, <span class="kw">_</span>&gt; =
@@ -811,7 +811,7 @@
 
         <span class="kw">let </span>api_endpoints = cfg
             .consensus
-            .api
+            .api_endpoints
             .clone()
             .into_iter()
             .map(|(id, node)| (id, node.url));
@@ -825,7 +825,7 @@
             api_receiver: ReceiverStream::new(api_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
-            peers: cfg.local.p2p.keys().cloned().collect(),
+            peers: cfg.local.p2p_endpoints.keys().cloned().collect(),
             rejoin_at_epoch: <span class="prelude-val">None</span>,
             run_empty_epochs: <span class="number">0</span>,
             last_processed_epoch: <span class="prelude-val">None</span>,
@@ -1004,7 +1004,7 @@
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
     ) -&gt; anyhow::Result&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
         <span class="comment">// for testing federations with one peer
-        </span><span class="kw">if </span><span class="self">self</span>.cfg.local.p2p.len() == <span class="number">1 </span>{
+        </span><span class="kw">if </span><span class="self">self</span>.cfg.local.p2p_endpoints.len() == <span class="number">1 </span>{
             <span class="macro">tokio::select! </span>{
               <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; (),
               () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),

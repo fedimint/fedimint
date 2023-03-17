@@ -859,6 +859,8 @@
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -961,7 +963,10 @@
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
     <span class="doccomment">/// Network addresses and names for all peer APIs
-    </span><span class="kw">pub </span>api: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
+    </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
+    <span class="doccomment">/// Certs for TLS communication, required for peer authentication
+    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    </span><span class="kw">pub </span>tls_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt;,
     <span class="doccomment">/// All configuration that needs to be the same for modules
     </span><span class="attr">#[encodable_ignore]
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
@@ -971,30 +976,18 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfigLocal {
-    <span class="doccomment">/// Network addresses and certs for all p2p connections
-    </span><span class="kw">pub </span>p2p: BTreeMap&lt;PeerId, PeerEndpoint&gt;,
+    <span class="doccomment">/// Network addresses and names for all p2p connections
+    </span><span class="kw">pub </span>p2p_endpoints: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
     <span class="doccomment">/// Our peer id (generally should not change)
     </span><span class="kw">pub </span>identity: PeerId,
     <span class="doccomment">/// Our bind address for communicating with peers
     </span><span class="kw">pub </span>fed_bind: SocketAddr,
     <span class="doccomment">/// Our bind address for our API endpoints
     </span><span class="kw">pub </span>api_bind: SocketAddr,
-    <span class="doccomment">/// Our publicly known TLS cert
-    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
-    </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
     <span class="doccomment">/// How many API connections we will accept
     </span><span class="kw">pub </span>max_connections: u32,
     <span class="doccomment">/// Non-consensus, non-private configuration from modules
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
-}
-
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>PeerEndpoint {
-    <span class="doccomment">/// Certs for TLS communication, required for peer authentication
-    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
-    </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
-    <span class="doccomment">/// The TLS network address and port, used for HBBFT consensus
-    </span><span class="kw">pub </span>hbbft: Url,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -1012,7 +1005,7 @@
     <span class="doccomment">/// How we authenticate our communication with peers during DKG
     </span><span class="kw">pub </span>tls: TlsConfig,
     <span class="doccomment">/// Endpoints for P2P communication
-    </span><span class="kw">pub </span>fed_network: NetworkConfig,
+    </span><span class="kw">pub </span>p2p_network: NetworkConfig,
     <span class="doccomment">/// Endpoints for client API communication
     </span><span class="kw">pub </span>api_network: NetworkConfig,
     <span class="doccomment">/// Guardian-defined key-value pairs that will be passed to the client.
@@ -1063,7 +1056,7 @@
         <span class="kw">let </span>client = ClientConfig {
             federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
-            nodes: <span class="self">self</span>.api.values().cloned().collect(),
+            api_endpoints: <span class="self">self</span>.api_endpoints.clone(),
             modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
             meta: <span class="self">self</span>.meta.clone(),
         };
@@ -1104,11 +1097,10 @@
             modules: Default::default(),
         };
         <span class="kw">let </span>local = ServerConfigLocal {
-            p2p: params.peers(),
+            p2p_endpoints: params.peers(),
             identity,
-            fed_bind: params.fed_network.bind_addr,
+            fed_bind: params.p2p_network.bind_addr,
             api_bind: params.api_network.bind_addr,
-            tls_cert: params.tls.our_certificate.clone(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
         };
@@ -1117,7 +1109,8 @@
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
-            api: params.api_nodes(),
+            api_endpoints: params.api_nodes(),
+            tls_certs: params.tls.peer_certs.clone(),
             modules: Default::default(),
             meta: params.meta,
         };
@@ -1194,7 +1187,7 @@
         identity: <span class="kw-2">&amp;</span>PeerId,
         module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>peers = <span class="self">self</span>.local.p2p.clone();
+        <span class="kw">let </span>peers = <span class="self">self</span>.local.p2p_endpoints.clone();
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
         <span class="kw">let </span>private = <span class="self">self</span>.private.clone();
         <span class="kw">let </span>id = identity.to_usize();
@@ -1290,7 +1283,7 @@
         registry: ServerModuleGenRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>server_conn = connect(params.fed_network.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
+        <span class="kw">let </span>server_conn = connect(params.p2p_network.clone(), params.tls.clone(), task_group).<span class="kw">await</span>;
         <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
         <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
 
@@ -1408,28 +1401,22 @@
             bind_addr: <span class="self">self</span>.local.fed_bind,
             peers: <span class="self">self
                 </span>.local
-                .p2p
+                .p2p_endpoints
                 .iter()
-                .map(|(<span class="kw-2">&amp;</span>id, peer)| (id, peer.hbbft.clone()))
+                .map(|(<span class="kw-2">&amp;</span>id, endpoint)| (id, endpoint.url.clone()))
                 .collect(),
         }
     }
 
     <span class="kw">pub fn </span>tls_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TlsConfig {
         TlsConfig {
-            our_certificate: <span class="self">self</span>.local.tls_cert.clone(),
             our_private_key: <span class="self">self</span>.private.tls_key.clone(),
-            peer_certs: <span class="self">self
-                </span>.local
-                .p2p
-                .iter()
-                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.tls_cert.clone()))
-                .collect(),
+            peer_certs: <span class="self">self</span>.consensus.tls_certs.clone(),
             peer_names: <span class="self">self
-                </span>.consensus
-                .api
+                </span>.local
+                .p2p_endpoints
                 .iter()
-                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.name.to_string()))
+                .map(|(id, endpoint)| (<span class="kw-2">*</span>id, endpoint.name.to_string()))
                 .collect(),
         }
     }
@@ -1448,16 +1435,16 @@
 }
 
 <span class="kw">impl </span>ServerConfigParams {
-    <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, PeerEndpoint&gt; {
-        <span class="self">self</span>.fed_network
+    <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, ApiEndpoint&gt; {
+        <span class="self">self</span>.p2p_network
             .peers
             .iter()
-            .map(|(peer, hbbft)| {
+            .map(|(id, url)| {
                 (
-                    <span class="kw-2">*</span>peer,
-                    PeerEndpoint {
-                        tls_cert: <span class="self">self</span>.tls.peer_certs[peer].clone(),
-                        hbbft: hbbft.clone(),
+                    <span class="kw-2">*</span>id,
+                    ApiEndpoint {
+                        url: url.clone(),
+                        name: <span class="self">self</span>.tls.peer_names.get(id).expect(<span class="string">&quot;exists&quot;</span>).clone(),
                     },
                 )
             })
@@ -1465,7 +1452,7 @@
     }
 
     <span class="kw">pub fn </span>api_nodes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, ApiEndpoint&gt; {
-        <span class="self">self</span>.fed_network
+        <span class="self">self</span>.p2p_network
             .peers
             .keys()
             .map(|peer| {
@@ -1532,18 +1519,17 @@
         federation_name: String,
         modules: ConfigGenParams,
     ) -&gt; ServerConfigParams {
-        <span class="kw">let </span>peer_certs: HashMap&lt;PeerId, rustls::Certificate&gt; = peers
+        <span class="kw">let </span>peer_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt; = peers
             .iter()
             .map(|(peer, params)| (<span class="kw-2">*</span>peer, params.cert.clone()))
-            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>peer_names: HashMap&lt;PeerId, String&gt; = peers
+        <span class="kw">let </span>peer_names: BTreeMap&lt;PeerId, String&gt; = peers
             .iter()
             .map(|(peer, params)| (<span class="kw-2">*</span>peer, params.name.to_string()))
-            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span>tls = TlsConfig {
-            our_certificate: peers[<span class="kw-2">&amp;</span>our_id].cert.clone(),
             our_private_key: key,
             peer_certs,
             peer_names,
@@ -1554,7 +1540,7 @@
             peer_ids: peers.keys().cloned().collect(),
             api_auth,
             tls,
-            fed_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, peers, |params| params.p2p_url),
+            p2p_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_p2p, <span class="kw-2">&amp;</span>our_id, peers, |params| params.p2p_url),
             api_network: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>bind_api, <span class="kw-2">&amp;</span>our_id, peers, |params| params.api_url),
             meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
             modules,
@@ -1642,7 +1628,7 @@
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">let </span>connector = TlsTcpConnector::new(certs).into_dyn();
+    <span class="kw">let </span>connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
     ReconnectPeerConnections::new(network, connector, task_group)
         .<span class="kw">await
         </span>.into_dyn()
@@ -1672,27 +1658,45 @@
 
 <span class="kw">mod </span>serde_tls_cert {
     <span class="kw">use </span>std::borrow::Cow;
+    <span class="kw">use </span>std::collections::BTreeMap;
 
     <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>serde::de::Error;
-    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
+    <span class="kw">use </span>serde::ser::SerializeMap;
+    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
     <span class="kw">use </span>tokio_rustls::rustls;
 
-    <span class="kw">pub fn </span>serialize&lt;S&gt;(cert: <span class="kw-2">&amp;</span>rustls::Certificate, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">pub fn </span>serialize&lt;S&gt;(
+        certs: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, rustls::Certificate&gt;,
+        serializer: S,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
     <span class="kw">where
         </span>S: Serializer,
     {
-        <span class="kw">let </span>hex_str = cert.<span class="number">0</span>.to_hex();
-        Serialize::serialize(<span class="kw-2">&amp;</span>hex_str, serializer)
+        <span class="kw">let </span><span class="kw-2">mut </span>serializer = serializer.serialize_map(<span class="prelude-val">Some</span>(certs.len()))<span class="question-mark">?</span>;
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>certs.iter() {
+            serializer.serialize_key(key)<span class="question-mark">?</span>;
+            <span class="kw">let </span>hex_str = value.<span class="number">0</span>.to_hex();
+            serializer.serialize_value(<span class="kw-2">&amp;</span>hex_str)<span class="question-mark">?</span>;
+        }
+        serializer.end()
     }
 
-    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;rustls::Certificate, D::Error&gt;
+    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(
+        deserializer: D,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;PeerId, rustls::Certificate&gt;, D::Error&gt;
     <span class="kw">where
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
-        <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bytes = Vec::from_hex(<span class="kw-2">&amp;</span>hex_str).map_err(D::Error::custom)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(rustls::Certificate(bytes))
+        <span class="kw">let </span>map: BTreeMap&lt;PeerId, Cow&lt;str&gt;&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>certs = BTreeMap::new();
+
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>map {
+            <span class="kw">let </span>cert = rustls::Certificate(Vec::from_hex(<span class="kw-2">&amp;</span>value).map_err(D::Error::custom)<span class="question-mark">?</span>);
+            certs.insert(key, cert);
+        }
+        <span class="prelude-val">Ok</span>(certs)
     }
 }
 

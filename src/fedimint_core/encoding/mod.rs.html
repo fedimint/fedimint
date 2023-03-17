@@ -716,6 +716,7 @@
 <a href="#716" id="716">716</a>
 <a href="#717" id="717">717</a>
 <a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding thant e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -723,6 +724,7 @@
 </span><span class="kw">mod </span>btc;
 <span class="kw">mod </span>secp256k1;
 <span class="kw">mod </span>tbs;
+<span class="kw">mod </span>tls;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};

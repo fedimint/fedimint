@@ -986,7 +986,6 @@
 <a href="#986" id="986">986</a>
 <a href="#987" id="987">987</a>
 <a href="#988" id="988">988</a>
-<a href="#989" id="989">989</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1124,7 +1123,6 @@
 <span class="doccomment">/// State made available to all API endpoints for handling a request
 </span><span class="kw">pub struct </span>ApiEndpointContext&lt;<span class="lifetime">&#39;a</span>&gt; {
     dbtx: ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, ModuleInstanceId&gt;,
-
     has_auth: bool,
 }
 
@@ -1194,7 +1192,7 @@
 
             <span class="kw">async fn </span>handle&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
                 <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::State,
-                <span class="macro-nonterminal">$context</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>fedimint_core::module::ApiEndpointContext&lt;<span class="lifetime">&#39;b</span>&gt;,
+                <span class="macro-nonterminal">$context</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span><span class="macro-nonterminal">$crate::module::ApiEndpointContext</span>&lt;<span class="lifetime">&#39;b</span>&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
                 _has_auth: bool,
             ) -&gt; ::std::result::Result&lt;<span class="self">Self</span>::Response, <span class="macro-nonterminal">$crate::module::ApiError</span>&gt; {

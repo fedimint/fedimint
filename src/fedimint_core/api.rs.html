@@ -1121,6 +1121,9 @@
 <a href="#1121" id="1121">1121</a>
 <a href="#1122" id="1122">1122</a>
 <a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1689,9 +1692,12 @@
 }
 
 <span class="kw">impl </span>WsClientConnectInfo {
-    <span class="kw">pub fn </span>new(id: <span class="kw-2">&amp;</span>FederationId, endpoints: <span class="kw-2">&amp;</span>[ApiEndpoint]) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(id: <span class="kw-2">&amp;</span>FederationId, api: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, ApiEndpoint&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            urls: endpoints.iter().map(|node| node.url.clone()).collect(),
+            urls: api
+                .iter()
+                .map(|(<span class="kw">_</span>, endpoint)| endpoint.url.clone())
+                .collect(),
             id: id.clone(),
         }
     }
@@ -1701,9 +1707,9 @@
     ///
     /// Minimizes the serialized size of the connect info
     </span><span class="kw">pub fn </span>from_honest_peers(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>all = config.nodes.clone();
+        <span class="kw">let </span>all = config.api_endpoints.clone();
         <span class="kw">let </span>num_honest = all.one_honest();
-        <span class="kw">let </span>honest: Vec&lt;<span class="kw">_</span>&gt; = all.into_iter().take(num_honest).collect();
+        <span class="kw">let </span>honest: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = all.into_iter().take(num_honest).collect();
 
         WsClientConnectInfo::new(<span class="kw-2">&amp;</span>config.federation_id, <span class="kw-2">&amp;</span>honest)
     }
@@ -1788,7 +1794,7 @@
 
 <span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>ClientConfig&gt; <span class="kw">for </span>WsClientConnectInfo {
     <span class="kw">fn </span>from(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
-        WsClientConnectInfo::new(<span class="kw-2">&amp;</span>config.federation_id, <span class="kw-2">&amp;</span>config.nodes)
+        WsClientConnectInfo::new(<span class="kw-2">&amp;</span>config.federation_id, <span class="kw-2">&amp;</span>config.api_endpoints)
     }
 }
 
