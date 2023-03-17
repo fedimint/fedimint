@@ -100,7 +100,7 @@ pub struct ServerConfigConsensus {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
     /// Network addresses and names for all peer APIs
-    pub api: BTreeMap<PeerId, ApiEndpoint>,
+    pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
     /// All configuration that needs to be the same for modules
     #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
@@ -202,7 +202,7 @@ impl ServerConfigConsensus {
         let client = ClientConfig {
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
-            nodes: self.api.values().cloned().collect(),
+            api_endpoints: self.api_endpoints.clone(),
             modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
             meta: self.meta.clone(),
         };
@@ -256,7 +256,7 @@ impl ServerConfig {
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
-            api: params.api_nodes(),
+            api_endpoints: params.api_nodes(),
             modules: Default::default(),
             meta: params.meta,
         };
@@ -566,7 +566,7 @@ impl ServerConfig {
                 .collect(),
             peer_names: self
                 .consensus
-                .api
+                .api_endpoints
                 .iter()
                 .map(|(peer, cfg)| (*peer, cfg.name.to_string()))
                 .collect(),

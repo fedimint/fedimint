@@ -566,9 +566,12 @@ pub struct WsClientConnectInfo {
 }
 
 impl WsClientConnectInfo {
-    pub fn new(id: &FederationId, endpoints: &[ApiEndpoint]) -> Self {
+    pub fn new(id: &FederationId, api: &BTreeMap<PeerId, ApiEndpoint>) -> Self {
         Self {
-            urls: endpoints.iter().map(|node| node.url.clone()).collect(),
+            urls: api
+                .iter()
+                .map(|(_, endpoint)| endpoint.url.clone())
+                .collect(),
             id: id.clone(),
         }
     }
@@ -578,9 +581,9 @@ impl WsClientConnectInfo {
     ///
     /// Minimizes the serialized size of the connect info
     pub fn from_honest_peers(config: &ClientConfig) -> Self {
-        let all = config.nodes.clone();
+        let all = config.api_endpoints.clone();
         let num_honest = all.one_honest();
-        let honest: Vec<_> = all.into_iter().take(num_honest).collect();
+        let honest: BTreeMap<_, _> = all.into_iter().take(num_honest).collect();
 
         WsClientConnectInfo::new(&config.federation_id, &honest)
     }
@@ -665,7 +668,7 @@ impl<'de> Deserialize<'de> for WsClientConnectInfo {
 
 impl From<&ClientConfig> for WsClientConnectInfo {
     fn from(config: &ClientConfig) -> Self {
-        WsClientConnectInfo::new(&config.federation_id, &config.nodes)
+        WsClientConnectInfo::new(&config.federation_id, &config.api_endpoints)
     }
 }
 

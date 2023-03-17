@@ -493,11 +493,10 @@ pub async fn create_user_client(
     let api = WsFederationApi::new(
         config
             .0
-            .nodes
+            .api_endpoints
             .iter()
-            .enumerate()
-            .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
-            .map(|(id, node)| (PeerId::from(id as u16), node.url.clone()))
+            .filter(|(id, _)| peers.contains(&id))
+            .map(|(id, endpoint)| (id.clone(), endpoint.url.clone()))
             .collect(),
     )
     .into();

@@ -204,7 +204,7 @@ impl FedimintServer {
 
         let api_endpoints = cfg
             .consensus
-            .api
+            .api_endpoints
             .clone()
             .into_iter()
             .map(|(id, node)| (id, node.url));

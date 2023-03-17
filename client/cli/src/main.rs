@@ -792,12 +792,11 @@ async fn handle_command(
             let salt = fs::read_to_string(salt_path)
                 .map_err(|_| format_err!("Unable to open salt file"))?;
             let auth = ApiAuth(get_password_hash(&password, &salt)?);
-            // TODO: store PeerId -> Url in client
             let url = client
                 .config()
                 .as_ref()
-                .nodes
-                .get(u16::from(our_id) as usize)
+                .api_endpoints
+                .get(&our_id)
                 .expect("Endpoint exists")
                 .url
                 .clone();

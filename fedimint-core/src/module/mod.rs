@@ -135,7 +135,6 @@ impl ApiError {
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'a> {
     dbtx: ModuleDatabaseTransaction<'a, ModuleInstanceId>,
-
     has_auth: bool,
 }
 
