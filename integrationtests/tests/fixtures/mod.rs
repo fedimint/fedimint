@@ -120,6 +120,30 @@ pub struct Fixtures {
     pub task_group: TaskGroup,
 }
 
+pub trait TestFn<B>:
+    FnOnce(
+        FederationTest,
+        UserTest<UserClientConfig>,
+        Box<dyn BitcoinTest>,
+        GatewayTest,
+        Box<dyn LightningTest>,
+    ) -> B
+    + std::marker::Copy
+{
+}
+
+impl<F, B> TestFn<B> for F where
+    F: FnOnce(
+            FederationTest,
+            UserTest<UserClientConfig>,
+            Box<dyn BitcoinTest>,
+            GatewayTest,
+            Box<dyn LightningTest>,
+        ) -> B
+        + std::marker::Copy
+{
+}
+
 /// Helper for generating fixtures, passing them into test code, then shutting
 /// down the task thread when the test is complete.
 ///
@@ -127,14 +151,7 @@ pub struct Fixtures {
 async fn test<B>(
     num_peers: u16,
     gateway_nodes: Vec<GatewayNode>,
-    f: impl FnOnce(
-            FederationTest,
-            UserTest<UserClientConfig>,
-            Box<dyn BitcoinTest>,
-            GatewayTest,
-            Box<dyn LightningTest>,
-        ) -> B
-        + std::marker::Copy,
+    f: impl TestFn<B>,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
@@ -156,17 +173,7 @@ where
 }
 
 /// Helper for running tests that don't involve lightning payments
-pub async fn non_lightning_test<B>(
-    num_peers: u16,
-    f: impl FnOnce(
-            FederationTest,
-            UserTest<UserClientConfig>,
-            Box<dyn BitcoinTest>,
-            GatewayTest,
-            Box<dyn LightningTest>,
-        ) -> B
-        + std::marker::Copy,
-) -> anyhow::Result<()>
+pub async fn non_lightning_test<B>(num_peers: u16, f: impl TestFn<B>) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
 {
@@ -177,17 +184,7 @@ where
 
 /// Helper for running tests that involve lightning payments. Test callback will
 /// be run twice - once using LND as the gateway, once using CLN as the gateway.
-pub async fn lightning_test<B>(
-    num_peers: u16,
-    f: impl FnOnce(
-            FederationTest,
-            UserTest<UserClientConfig>,
-            Box<dyn BitcoinTest>,
-            GatewayTest,
-            Box<dyn LightningTest>,
-        ) -> B
-        + std::marker::Copy,
-) -> anyhow::Result<()>
+pub async fn lightning_test<B>(num_peers: u16, f: impl TestFn<B>) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
 {
