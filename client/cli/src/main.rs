@@ -21,7 +21,7 @@ use fedimint_core::api::{
     WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
@@ -131,6 +131,10 @@ enum CliOutput {
     },
 
     Backup,
+
+    DecodeTransaction {
+        transaction: String,
+    },
 
     SignalUpgrade,
 
@@ -362,6 +366,9 @@ enum Command {
     /// Wipe the notes data from the DB. Useful for testing backup & restore
     #[clap(hide = true)]
     WipeNotes,
+
+    /// Decode a transaction hex string and print it to stdout
+    DecodeTransaction { hex_string: String },
 
     /// Signal a consensus upgrade
     SignalUpgrade {
@@ -784,6 +791,31 @@ async fn handle_command(
                 Some(e.into()),
             )),
         },
+        Command::DecodeTransaction { hex_string } => {
+            let decoders = module_decode_stubs();
+
+            let bytes: Vec<u8> =
+                bitcoin_hashes::hex::FromHex::from_hex(&hex_string).map_err(|e| {
+                    CliError::from(
+                        CliErrorKind::SerializationError,
+                        "failed to decode transaction",
+                        Some(Box::new(e)),
+                    )
+                })?;
+
+            let tx = fedimint_core::transaction::Transaction::from_bytes(&bytes, &decoders)
+                .map_err(|e| {
+                    CliError::from(
+                        CliErrorKind::SerializationError,
+                        "failed to decode transaction",
+                        Some(Box::new(e)),
+                    )
+                })?;
+
+            Ok(CliOutput::DecodeTransaction {
+                transaction: (format!("{tx:?}")),
+            })
+        }
         Command::SignalUpgrade {
             password,
             salt_path,
