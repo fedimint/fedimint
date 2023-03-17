@@ -680,8 +680,8 @@
 <span class="kw">type </span>EpochStep = Step&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;;
 
 <span class="kw">enum </span>EpochTriggerEvent {
-    <span class="doccomment">/// A user has sent us a new transaction
-    </span>NewTransaction,
+    <span class="doccomment">/// A new event has been sent to us from the API
+    </span>ApiEvent,
     <span class="doccomment">/// A peer has sent us a consensus message
     </span>NewMessage(PeerMessage),
     <span class="doccomment">/// One of our modules triggered an event (e.g. new bitcoin block)
@@ -1103,7 +1103,7 @@
         }
 
         <span class="macro">tokio::select! </span>{
-            _peek = Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewTransaction),
+            _peek = Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::ApiEvent),
             () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::ModuleProposalEvent),
             msg = <span class="self">self</span>.connections.receive() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewMessage(msg<span class="question-mark">?</span>))
         }

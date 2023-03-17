@@ -492,7 +492,7 @@
     <span class="macro">vec!</span>[
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, serde_transaction: SerdeTransaction| -&gt; TransactionId {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _context, serde_transaction: SerdeTransaction| -&gt; TransactionId {
                 <span class="kw">let </span>transaction = serde_transaction.try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry()).map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>tx_id = transaction.tx_hash();
@@ -506,7 +506,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, tx_hash: TransactionId| -&gt; <span class="prelude-ty">Option</span>&lt;TransactionStatus&gt; {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _context, tx_hash: TransactionId| -&gt; <span class="prelude-ty">Option</span>&lt;TransactionStatus&gt; {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Recieved request&quot;</span>);
 
                 <span class="kw">let </span>tx_status = fedimint.transaction_status(tx_hash)
@@ -518,7 +518,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/wait_transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, tx_hash: TransactionId| -&gt; TransactionStatus {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _context, tx_hash: TransactionId| -&gt; TransactionStatus {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Recieved request&quot;</span>);
 
                 <span class="kw">let </span>tx_status = fedimint.wait_transaction_status(tx_hash)
@@ -530,27 +530,27 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_epoch_history&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, epoch: u64| -&gt; SerdeEpochHistory {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _context, epoch: u64| -&gt; SerdeEpochHistory {
                 <span class="kw">let </span>epoch = fedimint.epoch_history(epoch).<span class="kw">await</span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>epoch).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_epoch_count&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, _v: ()| -&gt; u64 {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _context, _v: ()| -&gt; u64 {
                 <span class="prelude-val">Ok</span>(fedimint.get_epoch_count().<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/config&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, dbtx, _v: ()| -&gt; ConfigResponse {
-                <span class="prelude-val">Ok</span>(fedimint.get_config_with_sig(dbtx).<span class="kw">await</span>)
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, context, _v: ()| -&gt; ConfigResponse {
+                <span class="prelude-val">Ok</span>(fedimint.get_config_with_sig(context.dbtx()).<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/upgrade&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _dbtx, _v: (), has_auth| -&gt; () {
-                <span class="kw">if </span>has_auth {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, context, _v: ()| -&gt; () {
+                <span class="kw">if </span>context.has_auth() {
                     fedimint.signal_upgrade().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to send signal to server&quot;</span>.to_string()))<span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(())
                 } <span class="kw">else </span>{
