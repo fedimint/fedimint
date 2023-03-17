@@ -32,7 +32,7 @@ FED_ID="$(get_federation_id)"
 [[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.id')" = "${FED_ID}" ]]
 # Number required for one honest is ceil(($FM_FED_SIZE-1)/3+1)
 ONE_HONEST=2
-ONE_HONEST_URLS=$(cat $FM_CFG_DIR/client.json | jq --argjson one_honest $ONE_HONEST -e -r '.nodes[:$one_honest] | map(.url) | join(",")')
+ONE_HONEST_URLS=$(cat $FM_CFG_DIR/client.json | jq --argjson one_honest $ONE_HONEST -e -r '.api_endpoints | to_entries[:$one_honest] | map(.value.url) | join(",")')
 [[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.urls | join(",")')" = "$ONE_HONEST_URLS" ]]
 [[ "$($FM_MINT_CLIENT encode-connect-info --urls $ONE_HONEST_URLS --id $FED_ID | jq -e -r '.connect_info')" = "$CONNECT_STRING" ]]
 

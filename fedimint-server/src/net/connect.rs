@@ -1,7 +1,7 @@
 //! Provides an abstract network connection interface and multiple
 //! implementations
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::net::SocketAddr;
@@ -65,15 +65,14 @@ pub struct TlsTcpConnector {
     /// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls`
     /// understands
     cert_store: RootCertStore,
-    peer_names: HashMap<PeerId, String>,
+    peer_names: BTreeMap<PeerId, String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TlsConfig {
-    pub our_certificate: rustls::Certificate,
     pub our_private_key: rustls::PrivateKey,
-    pub peer_certs: HashMap<PeerId, rustls::Certificate>,
-    pub peer_names: HashMap<PeerId, String>,
+    pub peer_certs: BTreeMap<PeerId, rustls::Certificate>,
+    pub peer_names: BTreeMap<PeerId, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +81,7 @@ pub struct PeerCertStore {
 }
 
 impl TlsTcpConnector {
-    pub fn new(cfg: TlsConfig) -> TlsTcpConnector {
+    pub fn new(cfg: TlsConfig, our_id: PeerId) -> TlsTcpConnector {
         let mut cert_store = RootCertStore::empty();
         for (_, cert) in cfg.peer_certs.iter() {
             cert_store
@@ -91,7 +90,7 @@ impl TlsTcpConnector {
         }
 
         TlsTcpConnector {
-            our_certificate: cfg.our_certificate,
+            our_certificate: cfg.peer_certs.get(&our_id).expect("exists").clone(),
             our_private_key: cfg.our_private_key,
             peer_certs: Arc::new(PeerCertStore::new(cfg.peer_certs)),
             cert_store,
@@ -457,8 +456,7 @@ mod tests {
 
         peer_keys
             .iter()
-            .map(|(cert, key)| TlsConfig {
-                our_certificate: cert.clone(),
+            .map(|(_cert, key)| TlsConfig {
                 our_private_key: key.clone(),
                 peer_certs: peer_keys
                     .iter()
@@ -482,7 +480,8 @@ mod tests {
         let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
         let connectors = gen_connector_config(5)
             .into_iter()
-            .map(TlsTcpConnector::new)
+            .enumerate()
+            .map(|(id, cfg)| TlsTcpConnector::new(cfg, PeerId::from(id as u16)))
             .collect::<Vec<_>>();
 
         let mut server: ConnectionListener<u64> = connectors[0].listen(bind_addr).await.unwrap();
@@ -515,11 +514,11 @@ mod tests {
         let url: Url = "wss://127.0.0.1:7001".parse().unwrap();
         let cfg = gen_connector_config(5);
 
-        let honest = TlsTcpConnector::new(cfg[0].clone());
+        let honest = TlsTcpConnector::new(cfg[0].clone(), PeerId::from(0));
 
         let mut malicious_wrong_key_cfg = cfg[1].clone();
         malicious_wrong_key_cfg.our_private_key = cfg[2].our_private_key.clone();
-        let malicious_wrong_key = TlsTcpConnector::new(malicious_wrong_key_cfg);
+        let malicious_wrong_key = TlsTcpConnector::new(malicious_wrong_key_cfg, PeerId::from(1));
 
         // Honest server, malicious client with wrong private key
         {
@@ -589,10 +588,11 @@ mod tests {
 
         // Server with wrong certificate, honest client
         {
-            let mut server: ConnectionListener<u64> = TlsTcpConnector::new(cfg[2].clone())
-                .listen(bind_addr)
-                .await
-                .unwrap();
+            let mut server: ConnectionListener<u64> =
+                TlsTcpConnector::new(cfg[2].clone(), PeerId::from(2))
+                    .listen(bind_addr)
+                    .await
+                    .unwrap();
 
             let server_task = tokio::spawn(async move {
                 let conn_res = server.next().await.unwrap();

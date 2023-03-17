@@ -100,7 +100,10 @@ pub struct ServerConfigConsensus {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
     /// Network addresses and names for all peer APIs
-    pub api: BTreeMap<PeerId, ApiEndpoint>,
+    pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
+    /// Certs for TLS communication, required for peer authentication
+    #[serde(with = "serde_tls_cert")]
+    pub tls_certs: BTreeMap<PeerId, rustls::Certificate>,
     /// All configuration that needs to be the same for modules
     #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
@@ -110,30 +113,18 @@ pub struct ServerConfigConsensus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
-    /// Network addresses and certs for all p2p connections
-    pub p2p: BTreeMap<PeerId, PeerEndpoint>,
+    /// Network addresses and names for all p2p connections
+    pub p2p_endpoints: BTreeMap<PeerId, ApiEndpoint>,
     /// Our peer id (generally should not change)
     pub identity: PeerId,
     /// Our bind address for communicating with peers
     pub fed_bind: SocketAddr,
     /// Our bind address for our API endpoints
     pub api_bind: SocketAddr,
-    /// Our publicly known TLS cert
-    #[serde(with = "serde_tls_cert")]
-    pub tls_cert: rustls::Certificate,
     /// How many API connections we will accept
     pub max_connections: u32,
     /// Non-consensus, non-private configuration from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PeerEndpoint {
-    /// Certs for TLS communication, required for peer authentication
-    #[serde(with = "serde_tls_cert")]
-    pub tls_cert: rustls::Certificate,
-    /// The TLS network address and port, used for HBBFT consensus
-    pub hbbft: Url,
 }
 
 #[derive(Debug, Clone)]
@@ -151,7 +142,7 @@ pub struct ServerConfigParams {
     /// How we authenticate our communication with peers during DKG
     pub tls: TlsConfig,
     /// Endpoints for P2P communication
-    pub fed_network: NetworkConfig,
+    pub p2p_network: NetworkConfig,
     /// Endpoints for client API communication
     pub api_network: NetworkConfig,
     /// Guardian-defined key-value pairs that will be passed to the client.
@@ -202,7 +193,7 @@ impl ServerConfigConsensus {
         let client = ClientConfig {
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
-            nodes: self.api.values().cloned().collect(),
+            api_endpoints: self.api_endpoints.clone(),
             modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
             meta: self.meta.clone(),
         };
@@ -243,11 +234,10 @@ impl ServerConfig {
             modules: Default::default(),
         };
         let local = ServerConfigLocal {
-            p2p: params.peers(),
+            p2p_endpoints: params.peers(),
             identity,
-            fed_bind: params.fed_network.bind_addr,
+            fed_bind: params.p2p_network.bind_addr,
             api_bind: params.api_network.bind_addr,
-            tls_cert: params.tls.our_certificate.clone(),
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
         };
@@ -256,7 +246,8 @@ impl ServerConfig {
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
-            api: params.api_nodes(),
+            api_endpoints: params.api_nodes(),
+            tls_certs: params.tls.peer_certs.clone(),
             modules: Default::default(),
             meta: params.meta,
         };
@@ -333,7 +324,7 @@ impl ServerConfig {
         identity: &PeerId,
         module_config_gens: &ServerModuleGenRegistry,
     ) -> anyhow::Result<()> {
-        let peers = self.local.p2p.clone();
+        let peers = self.local.p2p_endpoints.clone();
         let consensus = self.consensus.clone();
         let private = self.private.clone();
         let id = identity.to_usize();
@@ -429,7 +420,7 @@ impl ServerConfig {
         registry: ServerModuleGenRegistry,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
-        let server_conn = connect(params.fed_network.clone(), params.tls.clone(), task_group).await;
+        let server_conn = connect(params.p2p_network.clone(), params.tls.clone(), task_group).await;
         let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
         let mut rng = OsRng;
 
@@ -547,28 +538,22 @@ impl ServerConfig {
             bind_addr: self.local.fed_bind,
             peers: self
                 .local
-                .p2p
+                .p2p_endpoints
                 .iter()
-                .map(|(&id, peer)| (id, peer.hbbft.clone()))
+                .map(|(&id, endpoint)| (id, endpoint.url.clone()))
                 .collect(),
         }
     }
 
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            our_certificate: self.local.tls_cert.clone(),
             our_private_key: self.private.tls_key.clone(),
-            peer_certs: self
-                .local
-                .p2p
-                .iter()
-                .map(|(peer, cfg)| (*peer, cfg.tls_cert.clone()))
-                .collect(),
+            peer_certs: self.consensus.tls_certs.clone(),
             peer_names: self
-                .consensus
-                .api
+                .local
+                .p2p_endpoints
                 .iter()
-                .map(|(peer, cfg)| (*peer, cfg.name.to_string()))
+                .map(|(id, endpoint)| (*id, endpoint.name.to_string()))
                 .collect(),
         }
     }
@@ -587,16 +572,16 @@ pub struct PeerServerParams {
 }
 
 impl ServerConfigParams {
-    pub fn peers(&self) -> BTreeMap<PeerId, PeerEndpoint> {
-        self.fed_network
+    pub fn peers(&self) -> BTreeMap<PeerId, ApiEndpoint> {
+        self.p2p_network
             .peers
             .iter()
-            .map(|(peer, hbbft)| {
+            .map(|(id, url)| {
                 (
-                    *peer,
-                    PeerEndpoint {
-                        tls_cert: self.tls.peer_certs[peer].clone(),
-                        hbbft: hbbft.clone(),
+                    *id,
+                    ApiEndpoint {
+                        url: url.clone(),
+                        name: self.tls.peer_names.get(id).expect("exists").clone(),
                     },
                 )
             })
@@ -604,7 +589,7 @@ impl ServerConfigParams {
     }
 
     pub fn api_nodes(&self) -> BTreeMap<PeerId, ApiEndpoint> {
-        self.fed_network
+        self.p2p_network
             .peers
             .keys()
             .map(|peer| {
@@ -671,18 +656,17 @@ impl ServerConfigParams {
         federation_name: String,
         modules: ConfigGenParams,
     ) -> ServerConfigParams {
-        let peer_certs: HashMap<PeerId, rustls::Certificate> = peers
+        let peer_certs: BTreeMap<PeerId, rustls::Certificate> = peers
             .iter()
             .map(|(peer, params)| (*peer, params.cert.clone()))
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
 
-        let peer_names: HashMap<PeerId, String> = peers
+        let peer_names: BTreeMap<PeerId, String> = peers
             .iter()
             .map(|(peer, params)| (*peer, params.name.to_string()))
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
 
         let tls = TlsConfig {
-            our_certificate: peers[&our_id].cert.clone(),
             our_private_key: key,
             peer_certs,
             peer_names,
@@ -693,7 +677,7 @@ impl ServerConfigParams {
             peer_ids: peers.keys().cloned().collect(),
             api_auth,
             tls,
-            fed_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
+            p2p_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
             api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
             meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
             modules,
@@ -781,7 +765,7 @@ pub async fn connect<T>(
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
-    let connector = TlsTcpConnector::new(certs).into_dyn();
+    let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
     ReconnectPeerConnections::new(network, connector, task_group)
         .await
         .into_dyn()
@@ -811,27 +795,45 @@ pub fn gen_cert_and_key(
 
 mod serde_tls_cert {
     use std::borrow::Cow;
+    use std::collections::BTreeMap;
 
     use bitcoin_hashes::hex::{FromHex, ToHex};
+    use fedimint_core::PeerId;
     use serde::de::Error;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::ser::SerializeMap;
+    use serde::{Deserialize, Deserializer, Serializer};
     use tokio_rustls::rustls;
 
-    pub fn serialize<S>(cert: &rustls::Certificate, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(
+        certs: &BTreeMap<PeerId, rustls::Certificate>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let hex_str = cert.0.to_hex();
-        Serialize::serialize(&hex_str, serializer)
+        let mut serializer = serializer.serialize_map(Some(certs.len()))?;
+        for (key, value) in certs.iter() {
+            serializer.serialize_key(key)?;
+            let hex_str = value.0.to_hex();
+            serializer.serialize_value(&hex_str)?;
+        }
+        serializer.end()
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<rustls::Certificate, D::Error>
+    pub fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<BTreeMap<PeerId, rustls::Certificate>, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-        let bytes = Vec::from_hex(&hex_str).map_err(D::Error::custom)?;
-        Ok(rustls::Certificate(bytes))
+        let map: BTreeMap<PeerId, Cow<str>> = Deserialize::deserialize(deserializer)?;
+        let mut certs = BTreeMap::new();
+
+        for (key, value) in map {
+            let cert = rustls::Certificate(Vec::from_hex(&value).map_err(D::Error::custom)?);
+            certs.insert(key, cert);
+        }
+        Ok(certs)
     }
 }
 

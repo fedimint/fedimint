@@ -135,7 +135,6 @@ impl ApiError {
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'a> {
     dbtx: ModuleDatabaseTransaction<'a, ModuleInstanceId>,
-
     has_auth: bool,
 }
 
@@ -205,7 +204,7 @@ macro_rules! __api_endpoint {
 
             async fn handle<'a, 'b>(
                 $state: &'a Self::State,
-                $context: &'a mut fedimint_core::module::ApiEndpointContext<'b>,
+                $context: &'a mut $crate::module::ApiEndpointContext<'b>,
                 $param: Self::Param,
                 _has_auth: bool,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {

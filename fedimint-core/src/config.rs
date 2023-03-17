@@ -109,7 +109,7 @@ pub struct ClientConfig {
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
-    pub nodes: Vec<ApiEndpoint>,
+    pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules

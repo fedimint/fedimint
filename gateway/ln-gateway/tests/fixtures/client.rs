@@ -81,7 +81,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         let client_config = ClientConfig {
             federation_id: FederationId(auth_pk),
             epoch_pk: threshold_crypto::SecretKey::random().public_key(),
-            nodes: [].into(),
+            api_endpoints: [].into(),
             modules: [].into(),
             meta: Default::default(),
         };

@@ -590,7 +590,7 @@ impl FedimintConsensus {
             .await
             .get_value(&ConsensusUpgradeKey)
             .await
-            .filter(|peers| peers.len() >= self.cfg.consensus.api.threshold())
+            .filter(|peers| peers.len() >= self.cfg.consensus.api_endpoints.threshold())
             .is_some()
     }
 
