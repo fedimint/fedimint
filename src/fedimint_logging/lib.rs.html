@@ -197,12 +197,12 @@
         <span class="kw">let </span>chrome_layer_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;&gt; {
             <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
             </span><span class="kw">if </span><span class="self">self</span>.with_chrome {
-                <span class="kw">let </span>(cr_layer, gaurd) = tracing_chrome::ChromeLayerBuilder::new()
+                <span class="kw">let </span>(cr_layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
                     .include_args(<span class="bool-val">true</span>)
                     .build();
-                <span class="comment">// drop gaurd cause file to written and closed
+                <span class="comment">// drop guard cause file to written and closed
                 // in this case file will closed after exit of program
-                </span>std::mem::forget(gaurd);
+                </span>std::mem::forget(guard);
 
                 <span class="kw">return </span><span class="prelude-val">Some</span>(cr_layer.boxed());
             }
