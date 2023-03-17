@@ -367,7 +367,7 @@ enum Command {
     #[clap(hide = true)]
     WipeNotes,
 
-    /// Decode a transaction hex string into its JSON representation
+    /// Decode a transaction hex string and print it to stdout
     DecodeTransaction { hex_string: String },
 
     /// Signal a consensus upgrade
