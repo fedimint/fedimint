@@ -237,7 +237,7 @@ async fn wallet_peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
     non_lightning_test(2, |fed, user, bitcoin, _, _| async move {
-        // at least one epoch needed to estabilish fees
+        // at least one epoch needed to establish fees
         bitcoin.prepare_funding_wallet().await;
         fed.run_consensus_epochs(1).await;
 
