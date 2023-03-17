@@ -87,12 +87,12 @@ impl TracingSetup {
         let chrome_layer_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
             #[cfg(feature = "telemetry")]
             if self.with_chrome {
-                let (cr_layer, gaurd) = tracing_chrome::ChromeLayerBuilder::new()
+                let (cr_layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
                     .include_args(true)
                     .build();
-                // drop gaurd cause file to written and closed
+                // drop guard cause file to written and closed
                 // in this case file will closed after exit of program
-                std::mem::forget(gaurd);
+                std::mem::forget(guard);
 
                 return Some(cr_layer.boxed());
             }
