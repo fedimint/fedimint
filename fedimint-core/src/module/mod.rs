@@ -132,6 +132,26 @@ impl ApiError {
     }
 }
 
+/// State made available to all API endpoints for handling a request
+pub struct ApiEndpointContext<'a> {
+    dbtx: ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+
+    has_auth: bool,
+}
+
+impl<'a> ApiEndpointContext<'a> {
+    /// Database tx handle, will be committed
+    pub fn dbtx(&mut self) -> &mut ModuleDatabaseTransaction<'a, ModuleInstanceId> {
+        &mut self.dbtx
+    }
+
+    /// Whether the request was authenticated as the guardian who controls this
+    /// fedimint server
+    pub fn has_auth(&self) -> bool {
+        self.has_auth
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 pub trait TypedApiEndpoint {
     type State: Sync;
@@ -144,7 +164,7 @@ pub trait TypedApiEndpoint {
 
     async fn handle<'a, 'b>(
         state: &'a Self::State,
-        dbtx: &'a mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+        context: &'a mut ApiEndpointContext<'b>,
         request: Self::Param,
         has_auth: bool,
     ) -> Result<Self::Response, ApiError>;
@@ -168,12 +188,11 @@ pub mod __reexports {
 ///     }
 /// };
 /// ```
-// TODO: Refactor auth and dbtx into a ApiEndpointContext
 #[macro_export]
 macro_rules! __api_endpoint {
     (
         $path:expr,
-        async |$state:ident: &$state_ty:ty, $dbtx:ident, $param:ident: $param_ty:ty $(, $auth:ident)?| -> $resp_ty:ty $body:block
+        async |$state:ident: &$state_ty:ty, $context:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
     ) => {{
         struct Endpoint;
 
@@ -186,11 +205,10 @@ macro_rules! __api_endpoint {
 
             async fn handle<'a, 'b>(
                 $state: &'a Self::State,
-                $dbtx: &'a mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+                $context: &'a mut fedimint_core::module::ApiEndpointContext<'b>,
                 $param: Self::Param,
                 _has_auth: bool,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
-                $(let $auth = _has_auth;)?
                 $body
             }
         }
@@ -248,7 +266,7 @@ impl ApiEndpoint<()> {
         )]
         async fn handle_request<'a, 'b, E>(
             state: &'a E::State,
-            dbtx: &mut fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+            dbtx: fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
             request: ApiRequest<E::Param>,
             api_auth: ApiAuth,
         ) -> Result<E::Response, ApiError>
@@ -259,7 +277,8 @@ impl ApiEndpoint<()> {
         {
             tracing::trace!(target: "fedimint_server::request", ?request, "received request");
             let has_auth = request.auth == Some(api_auth);
-            let result = E::handle(state, dbtx, request.params, has_auth).await;
+            let mut context = ApiEndpointContext { dbtx, has_auth };
+            let result = E::handle(state, &mut context, request.params, has_auth).await;
             if let Err(error) = &result {
                 tracing::trace!(target: "fedimint_server::request", ?error, "error");
             }
@@ -275,12 +294,11 @@ impl ApiEndpoint<()> {
 
                     let ret = match module_instance_id {
                         Some(module_instance_id) => {
-                            let mut module_dbtx = dbtx.with_module_prefix(module_instance_id);
-                            handle_request::<E>(m, &mut module_dbtx, params, api_auth).await?
+                            let module_dbtx = dbtx.with_module_prefix(module_instance_id);
+                            handle_request::<E>(m, module_dbtx, params, api_auth).await?
                         }
                         None => {
-                            handle_request::<E>(m, &mut dbtx.get_isolated(), params, api_auth)
-                                .await?
+                            handle_request::<E>(m, dbtx.get_isolated(), params, api_auth).await?
                         }
                     };
 

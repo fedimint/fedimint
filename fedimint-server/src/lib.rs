@@ -73,8 +73,8 @@ pub enum EpochMessage {
 type EpochStep = Step<Vec<SerdeConsensusItem>, PeerId>;
 
 enum EpochTriggerEvent {
-    /// A user has sent us a new transaction
-    NewTransaction,
+    /// A new event has been sent to us from the API
+    ApiEvent,
     /// A peer has sent us a consensus message
     NewMessage(PeerMessage),
     /// One of our modules triggered an event (e.g. new bitcoin block)
@@ -496,7 +496,7 @@ impl FedimintServer {
         }
 
         tokio::select! {
-            _peek = Pin::new(&mut self.api_receiver).peek() => Ok(EpochTriggerEvent::NewTransaction),
+            _peek = Pin::new(&mut self.api_receiver).peek() => Ok(EpochTriggerEvent::ApiEvent),
             () = self.consensus.await_consensus_proposal() => Ok(EpochTriggerEvent::ModuleProposalEvent),
             msg = self.connections.receive() => Ok(EpochTriggerEvent::NewMessage(msg?))
         }
