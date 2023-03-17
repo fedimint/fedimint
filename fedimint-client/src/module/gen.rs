@@ -36,7 +36,8 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     /// Initialize a [`ClientModule`] instance from its config
     async fn init(&self, cfg: Self::Config, db: Database) -> anyhow::Result<Self::Module>;
 
-    /// Initialize a [`PrimaryClientModule`] instance from its config
+    /// Initialize a [`crate::module::PrimaryClientModule`] instance from its
+    /// config
     ///
     /// The default implementation returns an error, assuming that the module is
     /// not a primary one. If it is the default impl has to be overridden as

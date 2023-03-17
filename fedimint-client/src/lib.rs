@@ -20,13 +20,13 @@ use secp256k1_zkp::Secp256k1;
 
 use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
 use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
-use crate::sm::executor::{ActiveStateKey, InactiveStateKey};
 use crate::sm::{
     ActiveState, DynState, Executor, GlobalContext, InactiveState, OperationId, OperationState,
 };
 use crate::transaction::{
-    ClientInput, ClientOutput, TransactionBuilder, TransactionBuilderBalance, TxSubmissionContext,
-    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
+    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
+    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Module client interface definitions
@@ -290,17 +290,9 @@ impl ClientInner {
         );
         states.push(tx_submission_sm);
 
-        self.executor.add_state_mchines_dbtx(dbtx, states).await?;
+        self.executor.add_state_machines_dbtx(dbtx, states).await?;
 
         Ok(txid)
-    }
-
-    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState {
-        self.db.wait_key_exists(&InactiveStateKey(state)).await
-    }
-
-    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState {
-        self.db.wait_key_exists(&ActiveStateKey(state)).await
     }
 }
 
@@ -354,10 +346,14 @@ impl ClientBuilder {
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
 
-        let decoders =
+        let mut decoders =
             self.module_gens.decoders(config.modules.iter().map(
                 |(module_instance, module_config)| (*module_instance, module_config.kind()),
             ))?;
+        decoders.register_module(
+            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            tx_submission_sm_decoder(),
+        );
 
         let db = Database::new(db, decoders);
 

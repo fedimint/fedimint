@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -42,7 +42,8 @@ enum ExecutorDbPrefixes {
 /// The executor is aware of the concept of Fedimint modules and can give state
 /// machines a different [execution context](super::state::Context) depending on
 /// the owning module, making it very flexible.
-pub struct Executor<GC> {
+#[derive(Clone, Debug)]
+pub struct Executor<GC: GlobalContext> {
     inner: Arc<ExecutorInner<GC>>,
 }
 
@@ -77,7 +78,7 @@ where
         self.inner
             .db
             .autocommit(
-                |dbtx| Box::pin(self.add_state_mchines_dbtx(dbtx, states.clone())),
+                |dbtx| Box::pin(self.add_state_machines_dbtx(dbtx, states.clone())),
                 MAX_DB_RETRIES,
             )
             .await
@@ -100,7 +101,7 @@ where
     /// If called before background task is started using
     /// [`Executor::start_executor`]!
     // TODO: remove warning once finality is an inherent state attribute
-    pub async fn add_state_mchines_dbtx(
+    pub async fn add_state_machines_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         states: Vec<DynState<GC>>,
@@ -179,6 +180,17 @@ where
             .await
             .into_iter()
             .any(|(s, _)| s == state)
+    }
+
+    pub async fn await_inactive_state(&self, state: DynState<GC>) -> InactiveState {
+        self.inner
+            .db
+            .wait_key_exists(&InactiveStateKey(state))
+            .await
+    }
+
+    pub async fn await_active_state(&self, state: DynState<GC>) -> ActiveState {
+        self.inner.db.wait_key_exists(&ActiveStateKey(state)).await
     }
 
     /// Starts the background thread that runs the state machines. This cannot
@@ -346,6 +358,22 @@ where
             .map(|(state, meta)| (state.0, meta))
             .collect::<Vec<_>>()
             .await
+    }
+}
+
+impl<GC: GlobalContext> Debug for ExecutorInner<GC> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (active, inactive) = futures::executor::block_on(async {
+            let active_states = self.get_active_states().await;
+            let inactive_states = self.get_inactive_states().await;
+            (active_states, inactive_states)
+        });
+        writeln!(f, "ExecutorInner {{")?;
+        writeln!(f, "    active_states: {active:?}")?;
+        writeln!(f, "    inactive_states: {inactive:?}")?;
+        writeln!(f, "}}")?;
+
+        Ok(())
     }
 }
 
