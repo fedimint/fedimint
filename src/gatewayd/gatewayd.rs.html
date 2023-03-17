@@ -127,8 +127,50 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::process::exit;
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -141,6 +183,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
+<span class="kw">use </span>ln_gateway::lnd::GatewayLndClient;
 <span class="kw">use </span>ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
@@ -169,7 +212,20 @@
 
     <span class="doccomment">/// Public URL to a Gateway Lightning rpc service
     </span><span class="attr">#[arg(long = <span class="string">&quot;lnrpc-addr&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_LIGHTNING_ADDR&quot;</span>)]
-    </span><span class="kw">pub </span>lnrpc_addr: Url,
+    </span><span class="kw">pub </span>lnrpc_addr: <span class="prelude-ty">Option</span>&lt;Url&gt;,
+
+    <span class="comment">// TODO: Issue #1955: Group clap args for configuring gatewayd with LND
+    </span><span class="doccomment">/// LND RPC address
+    </span><span class="attr">#[arg(long = <span class="string">&quot;lnd-rpc-host&quot;</span>, env = <span class="string">&quot;FM_LND_RPC_ADDR&quot;</span>)]
+    </span><span class="kw">pub </span>lnd_rpc_addr: <span class="prelude-ty">Option</span>&lt;String&gt;,
+
+    <span class="doccomment">/// LND TLS cert file path
+    </span><span class="attr">#[arg(long = <span class="string">&quot;lnd-tls-cert&quot;</span>, env = <span class="string">&quot;FM_LND_TLS_CERT&quot;</span>)]
+    </span><span class="kw">pub </span>lnd_tls_cert: <span class="prelude-ty">Option</span>&lt;String&gt;,
+
+    <span class="doccomment">/// LND macaroon file path
+    </span><span class="attr">#[arg(long = <span class="string">&quot;lnd-macaroon&quot;</span>, env = <span class="string">&quot;FM_LND_MACAROON&quot;</span>)]
+    </span><span class="kw">pub </span>lnd_macaroon: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="comment">// Fedimint Gateway Binary
@@ -195,13 +251,16 @@
         data_dir,
         listen,
         api_addr,
-        lnrpc_addr,
         password,
+        lnrpc_addr,
+        lnd_rpc_addr,
+        lnd_tls_cert,
+        lnd_macaroon,
     } = GatewayOpts::parse();
 
     <span class="macro">info!</span>(
-        <span class="string">&quot;Starting gateway with these configs \n data directory: {:?},\n listen: {},\n api address: {},\n lnrpc address: {} &quot;</span>,
-        data_dir, listen, api_addr, lnrpc_addr
+        <span class="string">&quot;Starting gateway with these base configs \n data directory: {:?},\n listen: {},\n api address: {} &quot;</span>,
+        data_dir, listen, api_addr
     );
 
     <span class="comment">// Create federation client builder
@@ -211,8 +270,31 @@
     <span class="comment">// Create task group for controlled shutdown of the gateway
     </span><span class="kw">let </span>task_group = TaskGroup::new();
 
-    <span class="comment">// Create a lightning rpc client
-    </span><span class="kw">let </span>lnrpc: DynLnRpcClient = NetworkLnRpcClient::new(lnrpc_addr).<span class="kw">await</span><span class="question-mark">?</span>.into();
+    <span class="kw">let </span>lnrpc: DynLnRpcClient = <span class="kw">if let </span><span class="prelude-val">Some</span>(lnrpc_addr) = lnrpc_addr {
+        <span class="macro">info!</span>(
+            <span class="string">&quot;Gateway configured to connect to remote LnRpcClient at \n lnrpc address: {:?} &quot;</span>,
+            lnrpc_addr
+        );
+        NetworkLnRpcClient::new(lnrpc_addr).<span class="kw">await</span><span class="question-mark">?</span>.into()
+    } <span class="kw">else if let </span>(<span class="prelude-val">Some</span>(lnd_rpc_addr), <span class="prelude-val">Some</span>(lnd_tls_cert), <span class="prelude-val">Some</span>(lnd_macaroon)) =
+        (lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
+    {
+        <span class="macro">info!</span>(
+            <span class="string">&quot;Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} &quot;</span>,
+            lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
+        );
+        GatewayLndClient::new(
+            lnd_rpc_addr,
+            lnd_tls_cert,
+            lnd_macaroon,
+            task_group.make_subgroup().<span class="kw">await</span>,
+        )
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into()
+    } <span class="kw">else </span>{
+        <span class="macro">error!</span>(<span class="string">&quot;No lightning node provided. For CLN set FM_GATEWAY_LIGHTNING_ADDR for CLN. For LND set FM_LND_RPC_ADDR, FM_LND_TLS_CERT, and FM_LND_MACAROON&quot;</span>);
+        exit(<span class="number">1</span>);
+    };
 
     <span class="comment">// Create module decoder registry
     </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
@@ -243,7 +325,7 @@
         client_builder,
         decoders,
         module_gens,
-        task_group.clone(),
+        task_group.make_subgroup().<span class="kw">await</span>,
     )
     .<span class="kw">await</span>;
 

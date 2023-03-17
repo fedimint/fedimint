@@ -32,7 +32,7 @@ var sourcesIndex = JSON.parse('{\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
 "gatewayd":["",[],["gatewayd.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
-"ln_gateway":["",[["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","lib.rs","lnrpc_client.rs","types.rs","utils.rs"]],\
+"ln_gateway":["",[["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","lib.rs","lnd.rs","lnrpc_client.rs","types.rs","utils.rs"]],\
 "mint_client":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","outcome.rs","transaction.rs","utils.rs"]],\
 "recoverytool":["",[],["main.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
