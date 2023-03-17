@@ -173,13 +173,14 @@ rec {
 
   workspaceDeps = craneLib.buildDepsOnly (commonArgsDepsOnly // {
     version = "0.0.1";
-    buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE ; cargo check --profile $CARGO_PROFILE --all-targets ; cargo build --profile $CARGO_PROFILE --all-targets";
+    buildPhaseCargoCommand = "cargo doc --locked --profile $CARGO_PROFILE ; cargo check --locked --profile $CARGO_PROFILE --all-targets ; cargo build --locked --profile $CARGO_PROFILE --all-targets";
     doCheck = false;
   });
 
   workspaceBuild = craneLib.cargoBuild (commonArgs // {
     version = "0.0.1";
     cargoArtifacts = workspaceDeps;
+    cargoExtraArgs = "--locked";
     doCheck = false;
   });
 
@@ -254,7 +255,7 @@ rec {
   workspaceDepsCov = craneLib.buildDepsOnly (commonArgsDepsOnly // {
     pnameSuffix = "-lcov-deps";
     version = "0.0.1";
-    buildPhaseCargoCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE --no-report";
+    buildPhaseCargoCommand = "cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --no-report";
     cargoBuildCommand = "dontuse";
     cargoCheckCommand = "dontuse";
     nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
@@ -265,7 +266,7 @@ rec {
     pnameSuffix = "-lcov";
     version = "0.0.1";
     cargoArtifacts = workspaceDepsCov;
-    buildPhaseCargoCommand = "mkdir -p $out ; cargo llvm-cov --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
+    buildPhaseCargoCommand = "mkdir -p $out ; cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
     installPhaseCommand = "true";
     nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
     doCheck = false;
