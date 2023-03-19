@@ -56,7 +56,7 @@ struct RunTemplate {
 enum RunTemplateState {
     DkgNotStarted,
     DkgInProgress,
-    DkgDone(String),   // connnection string
+    DkgDone(String),   // connection string
     DkgFailed(String), // error
     LocalIoError(String),
 }
