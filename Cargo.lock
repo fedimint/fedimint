@@ -1004,6 +1004,7 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "bitvec",
+ "clap",
  "erased-serde",
  "fedimint-derive",
  "fedimint-logging",
