@@ -43,7 +43,7 @@ use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
 use fedimint_server::db::GLOBAL_DATABASE_VERSION;
-use fedimint_server::net::connect::mock::MockNetwork;
+use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
@@ -387,8 +387,11 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen =
-                move |cfg: &ServerConfig| net_ref.connector(cfg.local.identity).into_dyn();
+            let connect_gen = move |cfg: &ServerConfig| {
+                net_ref
+                    .connector(cfg.local.identity, StreamReliability::FullyReliable)
+                    .into_dyn()
+            };
 
             let fed_db = |decoders| Database::new(MemDatabase::new(), decoders);
             let fed = FederationTest::new(
