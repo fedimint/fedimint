@@ -1,0 +1,16 @@
+spec:
+  name: fedimintd
+  services:
+  - name: fedimintd
+    image: fedimint/fedimintd:f8717727bebabfcca4ebf4963d07f98e1d580742
+    cmd: ["fedimintd", "/var/fedimint", "pass0", "--listen-ui", "0.0.0.0:8176"]
+    envs:
+    - key: FEDIMINT_HOME
+      value: /var/fedimint
+    ports:
+    - port: 8176
+      targetPort: 8176
+    volumes:
+    - name: fedimint-volume
+      size: 10Gi
+      path: /var/fedimint
