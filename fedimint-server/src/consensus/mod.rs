@@ -2,7 +2,6 @@
 
 pub mod debug;
 mod interconnect;
-
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::iter::FromIterator;
@@ -21,7 +20,9 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
 };
-use fedimint_core::module::{ModuleError, TransactionItemAmount};
+use fedimint_core::module::{
+    ModuleError, TransactionItemAmount,
+};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::{DynServerModule, DynVerificationCache};
 use fedimint_core::task::TaskGroup;

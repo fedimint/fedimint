@@ -639,19 +639,19 @@ impl ServerModule for Wallet {
             api_endpoint! {
                 "/block_height",
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    Ok(module.consensus_height(context.dbtx()).await.unwrap_or(0))
+                    Ok(module.consensus_height(&mut context.dbtx()).await.unwrap_or(0))
                 }
             },
             api_endpoint! {
                 "/peg_out_fees",
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let consensus = module.current_round_consensus(context.dbtx()).await.unwrap();
+                    let consensus = module.current_round_consensus(&mut context.dbtx()).await.unwrap();
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
                         vec![],
-                        module.available_utxos(context.dbtx()).await,
+                        module.available_utxos(&mut context.dbtx()).await,
                         consensus.fee_rate,
                         &consensus.randomness_beacon,
                         None

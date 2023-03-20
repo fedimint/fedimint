@@ -3,7 +3,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{ApiError, ApiRequestErased};
 use serde_json::Value;
-
+use crate::net::api::HasApiContext;
 use crate::consensus::FedimintConsensus;
 
 pub struct FedimintInterconnect<'a> {
@@ -28,10 +28,8 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
 
                 return (endpoint.handler)(
                     module,
-                    self.fedimint.db.begin_transaction().await,
-                    data.to_json(),
-                    Some(module_id),
-                    self.fedimint.cfg.private.api_auth.clone(),
+                    self.fedimint.context(&data, Some(id)).await,
+                    data,
                 )
                 .await;
             }

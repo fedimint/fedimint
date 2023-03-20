@@ -3,12 +3,13 @@ use std::fmt::Formatter;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
+use async_trait::async_trait;
 
 use anyhow::Context;
 use fedimint_core::config::ConfigResponse;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::epoch::SerdeEpochHistory;
-use fedimint_core::module::{api_endpoint, ApiEndpoint, ApiError};
+use fedimint_core::module::{api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskHandle;
@@ -25,7 +26,7 @@ use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
 use crate::transaction::SerdeTransaction;
 
-/// A state of fedimint server passed to each rpc handler callback
+/// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
 pub struct RpcHandlerCtx {
     fedimint: Arc<FedimintConsensus>,
@@ -34,6 +35,31 @@ pub struct RpcHandlerCtx {
 impl std::fmt::Debug for RpcHandlerCtx {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("State { ... }")
+    }
+}
+
+/// Has the context necessary for serving API endpoints
+#[async_trait]
+pub trait HasApiContext {
+    async fn context(
+        &self,
+        request: &ApiRequestErased,
+        id: Option<ModuleInstanceId>,
+    ) -> ApiEndpointContext<'_>;
+}
+
+#[async_trait]
+impl HasApiContext for FedimintConsensus {
+    async fn context(
+        &self,
+        request: &ApiRequestErased,
+        id: Option<ModuleInstanceId>,
+    ) -> ApiEndpointContext<'_> {
+        ApiEndpointContext::new(
+            request.auth == Some(self.cfg.private.api_auth.clone()),
+            self.db.begin_transaction().await,
+            id,
+        )
     }
 }
 
@@ -106,21 +132,19 @@ fn attach_endpoints(
                 let params = params.one::<serde_json::Value>()?;
                 let fedimint = &state.fedimint;
 
-                let dbtx = fedimint.db.begin_transaction().await;
                 // Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe(tokio::time::timeout(
-                    API_ENDPOINT_TIMEOUT,
-                    (handler)(
-                        fedimint,
-                        dbtx,
-                        params,
-                        module_instance_id,
-                        fedimint.cfg.private.api_auth.clone(),
-                    ),
-                ))
+                AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
+                    let request = serde_json::from_value(params)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                    let context = fedimint.context(&request, module_instance_id).await;
+
+                    let res = (handler)(fedimint, context, request).await;
+
+                    res
+                }))
                 .catch_unwind()
                 .await
                 .map_err(|_| {
@@ -166,21 +190,24 @@ fn attach_endpoints_erased(
                 // Hack to avoid Sync/Send issues
                 let params = params.one::<serde_json::Value>()?;
                 let fedimint = &state.fedimint;
-                let dbtx = fedimint.db.begin_transaction().await;
                 // Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe(tokio::time::timeout(
-                    API_ENDPOINT_TIMEOUT,
-                    (handler)(
+                AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
+                    let request = serde_json::from_value(params)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                    let context = fedimint.context(&request, Some(module_instance)).await;
+
+                    let res = (handler)(
                         fedimint.modules.get_expect(module_instance),
-                        dbtx,
-                        params,
-                        Some(module_instance),
-                        fedimint.cfg.private.api_auth.clone(),
-                    ),
-                ))
+                        context,
+                        request,
+                    )
+                    .await;
+
+                    res
+                }))
                 .catch_unwind()
                 .await
                 .map_err(|_| {
@@ -263,7 +290,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         api_endpoint! {
             "/config",
             async |fedimint: &FedimintConsensus, context, _v: ()| -> ConfigResponse {
-                Ok(fedimint.get_config_with_sig(context.dbtx()).await)
+                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await)
             }
         },
         api_endpoint! {
