@@ -142,6 +142,14 @@ function check_eof() {
 }
 export -f check_eof
 
+function check_cargo_lock() {
+  set -eo pipefail
+
+  # https://users.rust-lang.org/t/check-if-the-cargo-lock-is-up-to-date-without-building-anything/91048/5
+  cargo update --workspace --locked
+}
+export -f check_cargo_lock
+
 
 parallel ::: \
   check_nix \
@@ -150,4 +158,5 @@ parallel ::: \
   check_semgrep \
   check_shellcheck \
   check_eof \
-  check_forbiden_dependencies
+  check_forbiden_dependencies \
+  check_cargo_lock
