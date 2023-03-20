@@ -448,7 +448,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + Send> ISingleUseDatabaseTransaction<'a>
         Ok(self
             .0
             .as_mut()
-            .context("Cannot retreive from already consumed transaction")?
+            .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_prefix(key_prefix)
             .await)
     }
@@ -1501,7 +1501,7 @@ mod test_utils {
         let removed = dbtx.remove_entry(&TestKey(1)).await;
         assert!(removed.is_none());
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1516,7 +1516,7 @@ mod test_utils {
         assert_eq!(removed, Some(TestVal(2)));
         assert_eq!(dbtx.get_value(&TestKey(1)).await, None);
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1527,7 +1527,7 @@ mod test_utils {
 
         assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(2)));
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1540,7 +1540,7 @@ mod test_utils {
         let mut dbtx2 = db.begin_transaction().await;
         assert_eq!(dbtx2.get_value(&TestKey(1)).await, None);
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1646,7 +1646,7 @@ mod test_utils {
 
         assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await, None);
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx_rollback.commit_tx().await;
     }
 

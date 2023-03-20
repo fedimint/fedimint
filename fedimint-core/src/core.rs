@@ -43,7 +43,7 @@ pub type ModuleInstanceId = u16;
 pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
 
 // Note: needs to be in alphabetical order of ModuleKind of each module,
-// as this is the ordering we currently harcoded.
+// as this is the ordering we currently hardcoded.
 // Should be used only for pre-modularization code we still have  left
 pub const LEGACY_HARDCODED_INSTANCE_ID_LN: ModuleInstanceId = 0;
 pub const LEGACY_HARDCODED_INSTANCE_ID_MINT: ModuleInstanceId = 1;
@@ -241,7 +241,7 @@ macro_rules! newtype_impl_eq_passthrough_with_instance_id {
     };
 }
 
-/// Implementes the `Display` trait for dyn newtypes whose traits implement
+/// Implements the `Display` trait for dyn newtypes whose traits implement
 /// `Display`
 macro_rules! newtype_impl_display_passthrough {
     ($newtype:ty) => {

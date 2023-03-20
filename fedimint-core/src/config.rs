@@ -53,7 +53,7 @@ impl JsonWithKind {
     /// When `kind` gets removed and `value` is parsed, it will
     /// parse as `Value::Object` that is empty.
     ///
-    /// Howerver empty module structs, like `struct FooConfigLocal;` (unit
+    /// However empty module structs, like `struct FooConfigLocal;` (unit
     /// struct), will fail to deserialize with this value, as they expect
     /// `Value::Null`.
     ///

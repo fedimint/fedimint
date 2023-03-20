@@ -410,7 +410,7 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
 
-    /// Retreives the `MigrationMap` from the module to be applied to the
+    /// Retrieves the `MigrationMap` from the module to be applied to the
     /// database before the module is initialized. The `MigrationMap` is
     /// indexed on the from version.
     fn get_database_migrations(&self) -> MigrationMap;
@@ -483,7 +483,7 @@ pub struct CoreConsensusVersion(pub u32);
 /// Any breaking change to the module's consensus rules require incrementing it.
 ///
 /// A module instance can run only in one consensus version, which must be the
-/// same accross all corresponding instances on other nodes of the federation.
+/// same across all corresponding instances on other nodes of the federation.
 ///
 /// When [`CoreConsensusVersion`] changes, this can but is not requires to be
 /// a breaking change for each module's [`ModuleConsensusVersion`].
@@ -491,13 +491,13 @@ pub struct CoreConsensusVersion(pub u32);
 /// Incrementing the module's consensus version can be considered an in-place
 /// upgrade path, similar to a blockchain hard-fork consensus upgrade.
 ///
-/// As of time of writting this comment there are no plans to support any kind
+/// As of time of writing this comment there are no plans to support any kind
 /// of "soft-forks" which mean a consensus minor version. As the set of
 /// federation member's is closed and limited, it is always preferable to
 /// synchronize upgrade and avoid cross-version incompatibilities.
 ///
 /// For many modules it might be preferable to implement a new [`ModuleKind`]
-/// "versions" (to be implemented at the time of writting this comment), and
+/// "versions" (to be implemented at the time of writing this comment), and
 /// by running two instances of the module at the same time (each of different
 /// `ModuleKind` version), allow users to slowly migrate to a new one.
 /// This avoids complex and error-prone server-side consensus-migration logic.
@@ -513,14 +513,14 @@ pub struct ModuleConsensusVersion(pub u32);
 ///
 /// * The client needs API version support for the [`ModuleConsensusVersion`]
 ///   that the server is currently running with.
-/// * Within that [`ModuleConsensusVersion`] during handshake negotation process
-///   client and server must find at least one `Api::major` version where
-///   client's `minor` is lower or equal server's `major` version.
+/// * Within that [`ModuleConsensusVersion`] during handshake negotiation
+///   process client and server must find at least one `Api::major` version
+///   where client's `minor` is lower or equal server's `major` version.
 ///
 /// A practical module implementation needs to implement large range of version
-/// backward compatibility on both client and server side to accomodate end user
-/// client devices receiving updates at a pace hard to control, and technical
-/// and coordination challanges of upgrading servers.
+/// backward compatibility on both client and server side to accommodate end
+/// user client devices receiving updates at a pace hard to control, and
+/// technical and coordination challenges of upgrading servers.
 #[derive(Debug, Copy, Clone)]
 pub struct ApiVersion {
     /// Major API version
@@ -587,7 +587,7 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
 
-    /// Retreives the `MigrationMap` from the module to be applied to the
+    /// Retrieves the `MigrationMap` from the module to be applied to the
     /// database before the module is initialized. The `MigrationMap` is
     /// indexed on the from version.
     fn get_database_migrations(&self) -> MigrationMap {
@@ -955,7 +955,7 @@ impl<T: Encodable + Decodable> SerdeModuleEncoding<T> {
 /// module to complete its distributed initialization inside the federation.
 #[non_exhaustive]
 pub struct PeerHandle<'a> {
-    // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccesible
+    // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     #[doc(hidden)]
     pub connections: &'a MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
