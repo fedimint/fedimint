@@ -22,6 +22,7 @@ use fedimint_core::api::{
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::db::{Database, DatabaseValue};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
@@ -37,7 +38,7 @@ use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     parse_peer_id, serialize_ecash,
 };
-use mint_client::{module_decode_stubs, Client, UserClientConfig};
+use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use url::Url;
@@ -479,11 +480,19 @@ async fn main() {
         let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
         let db = fedimint_rocksdb::RocksDb::open(db_path)
             .or_terminate(CliErrorKind::IOError, "could not open transaction db");
-        let db = Database::new(db, module_decode_stubs());
+
+        let decoders = ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().map(
+            |(id, module_cfg)| {
+                let module_gen = module_gens
+                    .get(module_cfg.kind())
+                    .expect("module kind not found in registry");
+                (id, module_gen.as_ref().decoder())
+            },
+        ));
+
+        let db = Database::new(db, decoders.clone());
 
         let rng = rand::rngs::OsRng;
-
-        let decoders = module_decode_stubs();
 
         let client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await;
 
@@ -792,8 +801,6 @@ async fn handle_command(
             )),
         },
         Command::DecodeTransaction { hex_string } => {
-            let decoders = module_decode_stubs();
-
             let bytes: Vec<u8> =
                 bitcoin_hashes::hex::FromHex::from_hex(&hex_string).map_err(|e| {
                     CliError::from(
@@ -803,7 +810,7 @@ async fn handle_command(
                     )
                 })?;
 
-            let tx = fedimint_core::transaction::Transaction::from_bytes(&bytes, &decoders)
+            let tx = fedimint_core::transaction::Transaction::from_bytes(&bytes, client.decoders())
                 .map_err(|e| {
                     CliError::from(
                         CliErrorKind::SerializationError,
