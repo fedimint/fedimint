@@ -9,7 +9,7 @@ other functions non-falliable</p>
 <p>We serialize config with no fields as: eg. <code>{ kind: &quot;ln&quot; }</code>.</p>
 <p>When <code>kind</code> gets removed and <code>value</code> is parsed, it will
 parse as <code>Value::Object</code> that is empty.</p>
-<p>Howerver empty module structs, like <code>struct FooConfigLocal;</code> (unit
+<p>However empty module structs, like <code>struct FooConfigLocal;</code> (unit
 struct), will fail to deserialize with this value, as they expect
 <code>Value::Null</code>.</p>
 <p>We can turn manually empty object into null, and that’s what

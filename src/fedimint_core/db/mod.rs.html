@@ -2704,7 +2704,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.<span class="number">0
             </span>.as_mut()
-            .context(<span class="string">&quot;Cannot retreive from already consumed transaction&quot;</span>)<span class="question-mark">?
+            .context(<span class="string">&quot;Cannot retrieve from already consumed transaction&quot;</span>)<span class="question-mark">?
             </span>.raw_find_by_prefix(key_prefix)
             .<span class="kw">await</span>)
     }
@@ -3757,7 +3757,7 @@
         <span class="kw">let </span>removed = dbtx.remove_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(removed.is_none());
 
-        <span class="comment">// Commit to surpress the warning message
+        <span class="comment">// Commit to suppress the warning message
         </span>dbtx.commit_tx().<span class="kw">await</span>;
     }
 
@@ -3772,7 +3772,7 @@
         <span class="macro">assert_eq!</span>(removed, <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>, <span class="prelude-val">None</span>);
 
-        <span class="comment">// Commit to surpress the warning message
+        <span class="comment">// Commit to suppress the warning message
         </span>dbtx.commit_tx().<span class="kw">await</span>;
     }
 
@@ -3783,7 +3783,7 @@
 
         <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>, <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)));
 
-        <span class="comment">// Commit to surpress the warning message
+        <span class="comment">// Commit to suppress the warning message
         </span>dbtx.commit_tx().<span class="kw">await</span>;
     }
 
@@ -3796,7 +3796,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx2 = db.begin_transaction().<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(dbtx2.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">1</span>)).<span class="kw">await</span>, <span class="prelude-val">None</span>);
 
-        <span class="comment">// Commit to surpress the warning message
+        <span class="comment">// Commit to suppress the warning message
         </span>dbtx.commit_tx().<span class="kw">await</span>;
     }
 
@@ -3902,7 +3902,7 @@
 
         <span class="macro">assert_eq!</span>(dbtx_rollback.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">21</span>)).<span class="kw">await</span>, <span class="prelude-val">None</span>);
 
-        <span class="comment">// Commit to surpress the warning message
+        <span class="comment">// Commit to suppress the warning message
         </span>dbtx_rollback.commit_tx().<span class="kw">await</span>;
     }
 

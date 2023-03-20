@@ -8,14 +8,14 @@
 <ul>
 <li>The client needs API version support for the <a href="struct.ModuleConsensusVersion.html" title="ModuleConsensusVersion"><code>ModuleConsensusVersion</code></a>
 that the server is currently running with.</li>
-<li>Within that <a href="struct.ModuleConsensusVersion.html" title="ModuleConsensusVersion"><code>ModuleConsensusVersion</code></a> during handshake negotation process
-client and server must find at least one <code>Api::major</code> version where
-client’s <code>minor</code> is lower or equal server’s <code>major</code> version.</li>
+<li>Within that <a href="struct.ModuleConsensusVersion.html" title="ModuleConsensusVersion"><code>ModuleConsensusVersion</code></a> during handshake negotiation
+process client and server must find at least one <code>Api::major</code> version
+where client’s <code>minor</code> is lower or equal server’s <code>major</code> version.</li>
 </ul>
 <p>A practical module implementation needs to implement large range of version
-backward compatibility on both client and server side to accomodate end user
-client devices receiving updates at a pace hard to control, and technical
-and coordination challanges of upgrading servers.</p>
+backward compatibility on both client and server side to accommodate end
+user client devices receiving updates at a pace hard to control, and
+technical and coordination challenges of upgrading servers.</p>
 </div></details><h2 id="fields" class="fields small-section-header">Fields<a href="#fields" class="anchor">§</a></h2><span id="structfield.major" class="structfield small-section-header"><a href="#structfield.major" class="anchor field">§</a><code>major: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a></code></span><div class="docblock"><p>Major API version</p>
 <p>Each time <a href="struct.ModuleConsensusVersion.html" title="ModuleConsensusVersion"><code>ModuleConsensusVersion</code></a> is incremented, this number (and
 <code>minor</code> number as well) should be reset to <code>0</code>.</p>

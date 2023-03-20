@@ -1260,7 +1260,7 @@
     ///
     /// The underlying implementation is resonsible for knowing how many
     /// and `PeerId`s of each. The caller of this interface most probably
-    /// have some idea as well, but passing this set accross every
+    /// have some idea as well, but passing this set across every
     /// API call to the federation would be inconvenient.
     </span><span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;;
 
@@ -1347,7 +1347,7 @@
                                     <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
                                     <span class="kw">async move </span>{
                                         <span class="comment">// Note: we need to sleep inside the retrying future,
-                                        // so that `futures` is being polled continously
+                                        // so that `futures` is being polled continuously
                                         </span>sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
                                         PeerResponse {
                                             peer: retry_peer,

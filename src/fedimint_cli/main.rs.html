@@ -842,6 +842,13 @@
 <a href="#842" id="842">842</a>
 <a href="#843" id="843">843</a>
 <a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -866,6 +873,7 @@
 };
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::query::EventuallyConsistent;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -881,7 +889,7 @@
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
     parse_peer_id, serialize_ecash,
 };
-<span class="kw">use </span>mint_client::{module_decode_stubs, Client, UserClientConfig};
+<span class="kw">use </span>mint_client::{Client, UserClientConfig};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>url::Url;
@@ -1323,11 +1331,19 @@
         <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to parse config&quot;</span>);
         <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
             .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>);
-        <span class="kw">let </span>db = Database::new(db, module_decode_stubs());
+
+        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(cfg.clone().<span class="number">0</span>.modules.into_iter().map(
+            |(id, module_cfg)| {
+                <span class="kw">let </span>module_gen = module_gens
+                    .get(module_cfg.kind())
+                    .expect(<span class="string">&quot;module kind not found in registry&quot;</span>);
+                (id, module_gen.as_ref().decoder())
+            },
+        ));
+
+        <span class="kw">let </span>db = Database::new(db, decoders.clone());
 
         <span class="kw">let </span>rng = rand::rngs::OsRng;
-
-        <span class="kw">let </span>decoders = module_decode_stubs();
 
         <span class="kw">let </span>client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).<span class="kw">await</span>;
 
@@ -1636,8 +1652,6 @@
             )),
         },
         Command::DecodeTransaction { hex_string } =&gt; {
-            <span class="kw">let </span>decoders = module_decode_stubs();
-
             <span class="kw">let </span>bytes: Vec&lt;u8&gt; =
                 bitcoin_hashes::hex::FromHex::from_hex(<span class="kw-2">&amp;</span>hex_string).map_err(|e| {
                     CliError::from(
@@ -1647,7 +1661,7 @@
                     )
                 })<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>tx = fedimint_core::transaction::Transaction::from_bytes(<span class="kw-2">&amp;</span>bytes, <span class="kw-2">&amp;</span>decoders)
+            <span class="kw">let </span>tx = fedimint_core::transaction::Transaction::from_bytes(<span class="kw-2">&amp;</span>bytes, client.decoders())
                 .map_err(|e| {
                     CliError::from(
                         CliErrorKind::SerializationError,

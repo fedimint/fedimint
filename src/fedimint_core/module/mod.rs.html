@@ -1398,7 +1398,7 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt;;
 
-    <span class="doccomment">/// Retreives the `MigrationMap` from the module to be applied to the
+    <span class="doccomment">/// Retrieves the `MigrationMap` from the module to be applied to the
     /// database before the module is initialized. The `MigrationMap` is
     /// indexed on the from version.
     </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap;
@@ -1471,7 +1471,7 @@
 /// Any breaking change to the module&#39;s consensus rules require incrementing it.
 ///
 /// A module instance can run only in one consensus version, which must be the
-/// same accross all corresponding instances on other nodes of the federation.
+/// same across all corresponding instances on other nodes of the federation.
 ///
 /// When [`CoreConsensusVersion`] changes, this can but is not requires to be
 /// a breaking change for each module&#39;s [`ModuleConsensusVersion`].
@@ -1479,13 +1479,13 @@
 /// Incrementing the module&#39;s consensus version can be considered an in-place
 /// upgrade path, similar to a blockchain hard-fork consensus upgrade.
 ///
-/// As of time of writting this comment there are no plans to support any kind
+/// As of time of writing this comment there are no plans to support any kind
 /// of &quot;soft-forks&quot; which mean a consensus minor version. As the set of
 /// federation member&#39;s is closed and limited, it is always preferable to
 /// synchronize upgrade and avoid cross-version incompatibilities.
 ///
 /// For many modules it might be preferable to implement a new [`ModuleKind`]
-/// &quot;versions&quot; (to be implemented at the time of writting this comment), and
+/// &quot;versions&quot; (to be implemented at the time of writing this comment), and
 /// by running two instances of the module at the same time (each of different
 /// `ModuleKind` version), allow users to slowly migrate to a new one.
 /// This avoids complex and error-prone server-side consensus-migration logic.
@@ -1501,14 +1501,14 @@
 ///
 /// * The client needs API version support for the [`ModuleConsensusVersion`]
 ///   that the server is currently running with.
-/// * Within that [`ModuleConsensusVersion`] during handshake negotation process
-///   client and server must find at least one `Api::major` version where
-///   client&#39;s `minor` is lower or equal server&#39;s `major` version.
+/// * Within that [`ModuleConsensusVersion`] during handshake negotiation
+///   process client and server must find at least one `Api::major` version
+///   where client&#39;s `minor` is lower or equal server&#39;s `major` version.
 ///
 /// A practical module implementation needs to implement large range of version
-/// backward compatibility on both client and server side to accomodate end user
-/// client devices receiving updates at a pace hard to control, and technical
-/// and coordination challanges of upgrading servers.
+/// backward compatibility on both client and server side to accommodate end
+/// user client devices receiving updates at a pace hard to control, and
+/// technical and coordination challenges of upgrading servers.
 </span><span class="attr">#[derive(Debug, Copy, Clone)]
 </span><span class="kw">pub struct </span>ApiVersion {
     <span class="doccomment">/// Major API version
@@ -1575,7 +1575,7 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt;;
 
-    <span class="doccomment">/// Retreives the `MigrationMap` from the module to be applied to the
+    <span class="doccomment">/// Retrieves the `MigrationMap` from the module to be applied to the
     /// database before the module is initialized. The `MigrationMap` is
     /// indexed on the from version.
     </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
@@ -1943,7 +1943,7 @@
 /// module to complete its distributed initialization inside the federation.
 </span><span class="attr">#[non_exhaustive]
 </span><span class="kw">pub struct </span>PeerHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="comment">// TODO: this whole type should be a part of a `fedimint-server` and fields here inaccesible
+    <span class="comment">// TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     </span><span class="attr">#[doc(hidden)]
     </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,

@@ -519,7 +519,7 @@
 </span><span class="kw">pub const </span>MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
 
 <span class="comment">// Note: needs to be in alphabetical order of ModuleKind of each module,
-// as this is the ordering we currently harcoded.
+// as this is the ordering we currently hardcoded.
 // Should be used only for pre-modularization code we still have  left
 </span><span class="kw">pub const </span>LEGACY_HARDCODED_INSTANCE_ID_LN: ModuleInstanceId = <span class="number">0</span>;
 <span class="kw">pub const </span>LEGACY_HARDCODED_INSTANCE_ID_MINT: ModuleInstanceId = <span class="number">1</span>;
@@ -717,7 +717,7 @@
     };
 }
 
-<span class="doccomment">/// Implementes the `Display` trait for dyn newtypes whose traits implement
+<span class="doccomment">/// Implements the `Display` trait for dyn newtypes whose traits implement
 /// `Display`
 </span><span class="macro">macro_rules! </span>newtype_impl_display_passthrough {
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
