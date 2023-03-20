@@ -134,7 +134,7 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     ///
     /// The underlying implementation is resonsible for knowing how many
     /// and `PeerId`s of each. The caller of this interface most probably
-    /// have some idea as well, but passing this set accross every
+    /// have some idea as well, but passing this set across every
     /// API call to the federation would be inconvenient.
     fn all_members(&self) -> &BTreeSet<PeerId>;
 
@@ -221,7 +221,7 @@ pub trait FederationApiExt: IFederationApi {
                                     let params = &params;
                                     async move {
                                         // Note: we need to sleep inside the retrying future,
-                                        // so that `futures` is being polled continously
+                                        // so that `futures` is being polled continuously
                                         sleep(Duration::from_millis(delay_ms)).await;
                                         PeerResponse {
                                             peer: retry_peer,
