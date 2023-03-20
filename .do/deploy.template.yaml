@@ -5,6 +5,10 @@ spec:
   name: fedimintd
   region: nyc
   services:
+  - name: web
+    git:
+      branch: master
+      repo_clone_url: https://github.com/fedimint/fedimint.git
   - envs:
     - key: FM_PASSWORD
       scope: RUN_AND_BUILD_TIME
