@@ -150,7 +150,7 @@ pub struct ServerConfigParams {
     pub meta: BTreeMap<String, String>,
     /// Params for the modules we wish to configure, can contain custom
     /// parameters
-    pub modules: ConfigGenParamsRegistry,
+    pub modules: ServerModuleGenParamsRegistry,
 }
 
 impl ServerConfigConsensus {
@@ -624,7 +624,7 @@ impl ServerConfigParams {
         federation_name: String,
         certs: Vec<String>,
         password: &str,
-        module_params: ConfigGenParamsRegistry,
+        module_params: ServerModuleGenParamsRegistry,
     ) -> anyhow::Result<Self> {
         let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
         for (idx, cert) in certs.into_iter().sorted().enumerate() {
@@ -666,7 +666,7 @@ impl ServerConfigParams {
         our_id: PeerId,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        modules: ConfigGenParamsRegistry,
+        modules: ServerModuleGenParamsRegistry,
     ) -> ServerConfigParams {
         let peer_certs: BTreeMap<PeerId, rustls::Certificate> = peers
             .iter()
@@ -720,7 +720,7 @@ impl ServerConfigParams {
         peers: &[PeerId],
         base_port: u16,
         federation_name: &str,
-        modules: ConfigGenParamsRegistry,
+        modules: ServerModuleGenParamsRegistry,
     ) -> anyhow::Result<HashMap<PeerId, ServerConfigParams>> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()

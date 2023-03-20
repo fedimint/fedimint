@@ -1,5 +1,5 @@
 use bitcoin::Network;
-use fedimint_core::config::ConfigGenParamsRegistry;
+use fedimint_core::config::ServerModuleGenParamsRegistry;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::{Amount, Tiered};
 use fedimint_mint_server::{MintGen, MintGenParams};
@@ -13,12 +13,13 @@ pub mod distributed_gen;
 pub mod fedimintd;
 
 /// Generates the configuration for the modules configured in the server binary
-pub fn configure_modules(
+pub fn attach_default_module_gen_params(
+    module_gen_params: &mut ServerModuleGenParamsRegistry,
     max_denomination: Amount,
     network: Network,
     finality_delay: u32,
-) -> ConfigGenParamsRegistry {
-    ConfigGenParamsRegistry::new()
+) {
+    module_gen_params
         .attach_config_gen_params(
             WalletGen::kind(),
             WalletGenParams {
@@ -36,5 +37,5 @@ pub fn configure_modules(
                     .cloned()
                     .collect(),
             },
-        )
+        );
 }

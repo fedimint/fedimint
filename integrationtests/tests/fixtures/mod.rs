@@ -18,7 +18,7 @@ use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -207,12 +207,15 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let modules = fedimintd::configure_modules(
+    let mut module_gens_params = ServerModuleGenParamsRegistry::default();
+    fedimintd::attach_default_module_gen_params(
+        &mut module_gens_params,
         sats(100000),
         bitcoin::network::constants::Network::Regtest,
         10,
     );
-    let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
+    let params =
+        ServerConfigParams::gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
     let server_module_inits = ServerModuleGenRegistry::from(vec![
         DynServerModuleGen::from(WalletGen),

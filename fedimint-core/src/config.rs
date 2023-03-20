@@ -263,7 +263,7 @@ pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
 /// Note: in the future, we should make this one a
 /// `ModuleRegistry<ConfigGenParams>`, as each module **instance** will need a
 /// distinct config for dkg.
-pub type ConfigGenParamsRegistry = ModuleGenRegistry<ConfigGenParams>;
+pub type ServerModuleGenParamsRegistry = ModuleGenRegistry<ConfigGenParams>;
 
 impl<M> From<Vec<M>> for ModuleGenRegistry<M>
 where
@@ -330,7 +330,24 @@ impl<M> ModuleGenRegistry<M> {
 }
 
 impl ModuleGenRegistry<ConfigGenParams> {
-    pub fn attach_config_gen_params<T>(mut self, kind: ModuleKind, gen: T) -> Self
+    pub fn attach_config_gen_params<T>(&mut self, kind: ModuleKind, gen: T) -> &mut Self
+    where
+        T: ModuleGenParams,
+    {
+        if self
+            .0
+            .insert(
+                kind.clone(),
+                ConfigGenParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+            )
+            .is_some()
+        {
+            panic!("Can't insert module of same kind twice: {kind}");
+        }
+        self
+    }
+
+    pub fn with_config_gen_params<T>(mut self, kind: ModuleKind, gen: T) -> Self
     where
         T: ModuleGenParams,
     {
