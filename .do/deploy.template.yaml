@@ -1,21 +1,7 @@
-alerts:
-- rule: DEPLOYMENT_FAILED
-- rule: DOMAIN_FAILED
-name: fedimintd
-region: nyc
-services:
-- envs:
-  - key: FM_PASSWORD
-    scope: RUN_AND_BUILD_TIME
-    value: pass0
-  http_port: 8176
-  image:
-    registry: fedimint
-    registry_type: DOCKER_HUB
-    repository: fedimintd
-    tag: master
-  instance_count: 1
-  instance_size_slug: basic-xs
-  name: fedimint-fedimintd
-  routes:
-  - path: /
+spec:
+  name: fedimint
+  services:
+    - name: fedimintd
+      git:
+        branch: digital_ocean_deploy
+        repo_clone_url: https://github.com/m1sterc001guy/fedimint.git
