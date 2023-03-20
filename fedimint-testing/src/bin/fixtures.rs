@@ -278,7 +278,7 @@ async fn run_gatewayd() -> anyhow::Result<()> {
     // TODO: await_fedimint_block_sync()
 
     let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd"))
-        .arg("CLN")
+        .arg("cln")
         .spawn()?;
     kill_on_exit(&gatewayd).await?;
     info!("gatewayd started");

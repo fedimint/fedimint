@@ -45,7 +45,7 @@ pub struct GatewayOpts {
 
 #[derive(Debug, Clone, Subcommand)]
 enum Mode {
-    #[clap(name = "LND")]
+    #[clap(name = "lnd")]
     Lnd {
         /// LND RPC address
         #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
@@ -59,10 +59,10 @@ enum Mode {
         #[arg(long = "lnd-macaroon", env = "FM_LND_MACAROON")]
         lnd_macaroon: String,
     },
-    #[clap(name = "CLN")]
+    #[clap(name = "cln")]
     Cln {
-        #[arg(long = "lnrpc-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
-        lnrpc_addr: Url,
+        #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
+        cln_extension_addr: Url,
     },
 }
 
@@ -106,12 +106,12 @@ async fn main() -> Result<(), anyhow::Error> {
     let task_group = TaskGroup::new();
 
     let lnrpc: DynLnRpcClient = match mode {
-        Mode::Cln { lnrpc_addr } => {
+        Mode::Cln { cln_extension_addr } => {
             info!(
-                "Gateway configured to connect to remote LnRpcClient at \n lnrpc address: {:?} ",
-                lnrpc_addr
+                "Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} ",
+                cln_extension_addr
             );
-            NetworkLnRpcClient::new(lnrpc_addr).await?.into()
+            NetworkLnRpcClient::new(cln_extension_addr).await?.into()
         }
         Mode::Lnd {
             lnd_rpc_addr,
