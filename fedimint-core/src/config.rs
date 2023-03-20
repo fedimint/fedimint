@@ -24,6 +24,7 @@ use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
+use clap::{Command,Arg};
 
 use crate::module::{DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen};
 use crate::task::{MaybeSend, MaybeSync};
@@ -321,7 +322,24 @@ impl<M> ModuleGenRegistry<M> {
     where
         M: Clone,
     {
-        for hardcoded_module in ["mint", "ln", "wallet"] {
+        ///create a new Command instance with the name "ExtraModuleInstances".
+        let matches = Command::new("ExtraModuleInstances")
+        .arg(
+            ///sets up a new argument for the program called extra-module-instance.
+            Arg::new("extra-module-instance")
+                .long("extra-module-instance")
+                .action(clap::ArgAction::Append)
+        ).get_matches();
+
+        ///forms a vec<module_kind> of the extra module instances entered by the user.
+        let extra_modules=matches.get_many::<String>("extra-module-instance").unwrap_or_default().map(|v| v.as_str()).collect::<Vec<_>>();
+        ///default module instances.
+        let default_modules = vec!["mint", "ln", "wallet"];
+        ///values of both extra_modules and default_modules gets chained to the legacy_init_order_iter.
+        let iter1 = extra_modules.into_iter();
+        let iter2 = default_modules.into_iter();
+        let legacy_init_order_iter = iter2.chain(iter1);
+        for hardcoded_module in legacy_init_order_iter {
             if !self
                 .0
                 .contains_key(&ModuleKind::from_static_str(hardcoded_module))

@@ -44,6 +44,7 @@ miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-mi
 secp256k1-zkp = { version = "0.7.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
 macro_rules_attribute = "0.1.3"
 bitvec = "1.0.1"
+clap = { version = "4.1.6"}
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = "0.16.2"
