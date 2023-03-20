@@ -5,3 +5,4 @@ spec:
       git:
         branch: digital_ocean_deploy
         repo_clone_url: https://github.com/m1sterc001guy/fedimint.git
+      dockerfile_path: misc/DigitalOcean/Dockerfile
