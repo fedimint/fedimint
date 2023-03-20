@@ -1,16 +1,22 @@
 spec:
+  alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
   name: fedimintd
+  region: nyc
   services:
-  - name: fedimintd
-    image: fedimint/fedimintd:f8717727bebabfcca4ebf4963d07f98e1d580742
-    cmd: ["fedimintd", "/var/fedimint", "pass0", "--listen-ui", "0.0.0.0:8176"]
-    envs:
-    - key: FEDIMINT_HOME
-      value: /var/fedimint
-    ports:
-    - port: 8176
-      targetPort: 8176
-    volumes:
-    - name: fedimint-volume
-      size: 10Gi
-      path: /var/fedimint
+  - envs:
+    - key: FM_PASSWORD
+      scope: RUN_AND_BUILD_TIME
+      value: pass0
+    http_port: 8176
+    image:
+      registry: fedimint
+      registry_type: DOCKER_HUB
+      repository: fedimintd
+      tag: master
+    instance_count: 1
+    instance_size_slug: basic-xs
+    name: fedimint-fedimintd
+    routes:
+    - path: /
