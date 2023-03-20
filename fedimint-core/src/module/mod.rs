@@ -578,6 +578,10 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     /// checking purposes.
     fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
 
+    fn kind() -> ModuleKind {
+        <Self as ExtendsCommonModuleGen>::Common::KIND
+    }
+
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
         &self,
