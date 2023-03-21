@@ -15,7 +15,7 @@ let
         let
           relPath = lib.removePrefix basePath (toString path);
           includePath =
-            # traverse only into directories that somewhere in there contain `Cargo.toml` file, or were explicitily whitelisted
+            # traverse only into directories that somewhere in there contain `Cargo.toml` file, or were explicitly whitelisted
             (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
             lib.any
               (re: builtins.match re relPath != null)
@@ -217,7 +217,7 @@ rec {
     doCheck = false;
   });
 
-  # version of `workspaceDocs` with some nighlty-only flags to publish
+  # version of `workspaceDocs` with some nightly-only flags to publish
   workspaceDocExport = craneLib.mkCargoDerivation (commonArgs // {
     version = "0.0.1";
     # no need for inheriting any artifacts, as we are using it as a one-off, and only care
@@ -324,7 +324,7 @@ rec {
 
   # Compile a group of packages together
   #
-  # This unifies their cargo features and avoids building common dependencies mulitple
+  # This unifies their cargo features and avoids building common dependencies multiple
   # times, but will produce a derivation with all listed packages.
   pkgsBuild = { name, pkgs, dirs, defaultBin ? null }:
     let
@@ -355,7 +355,7 @@ rec {
 
   # Cross-compile a group of packages together.
   #
-  # This unifies their cargo features and avoids building common dependencies mulitple
+  # This unifies their cargo features and avoids building common dependencies multiple
   # times, but will produce a derivation with all listed packages.
   pkgsCrossBuild = { name, pkgs, dirs, target }:
     if target == null then
