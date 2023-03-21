@@ -4,5 +4,6 @@
 "fedimintd":[["impl Subcommand for <a class=\"enum\" href=\"fedimintd/distributed_gen/enum.Command.html\" title=\"enum fedimintd::distributed_gen::Command\">Command</a>"]],
 "fixtures":[["impl Subcommand for <a class=\"enum\" href=\"fixtures/enum.Cmd.html\" title=\"enum fixtures::Cmd\">Cmd</a>"]],
 "gateway_cli":[["impl Subcommand for <a class=\"enum\" href=\"gateway_cli/enum.Commands.html\" title=\"enum gateway_cli::Commands\">Commands</a>"]],
+"gatewayd":[["impl Subcommand for <a class=\"enum\" href=\"gatewayd/enum.Mode.html\" title=\"enum gatewayd::Mode\">Mode</a>"]],
 "recoverytool":[["impl Subcommand for <a class=\"enum\" href=\"recoverytool/enum.TweakSource.html\" title=\"enum recoverytool::TweakSource\">TweakSource</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

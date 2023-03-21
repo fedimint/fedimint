@@ -564,6 +564,8 @@
 <a href="#564" id="564">564</a>
 <a href="#565" id="565">565</a>
 <a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
 </pre><pre class="rust"><code><span class="doccomment">/// This tool assumes that `scripts/build.sh` has been sourced in the
 /// environment which calls it
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -843,7 +845,9 @@
 
     <span class="comment">// TODO: await_fedimint_block_sync()
 
-    </span><span class="kw">let </span><span class="kw-2">mut </span>gatewayd = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/gatewayd&quot;</span>)).spawn()<span class="question-mark">?</span>;
+    </span><span class="kw">let </span><span class="kw-2">mut </span>gatewayd = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/gatewayd&quot;</span>))
+        .arg(<span class="string">&quot;cln&quot;</span>)
+        .spawn()<span class="question-mark">?</span>;
     kill_on_exit(<span class="kw-2">&amp;</span>gatewayd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;gatewayd started&quot;</span>);
 
