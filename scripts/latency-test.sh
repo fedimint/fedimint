@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs a test to determine the latency of certain user actions
 
-set -euxo pipefail
+set -euo pipefail
 FM_FED_SIZE=${1:-4}
 ITERATIONS=${2:-10}
 export RUST_LOG="${RUST_LOG:-info}"
