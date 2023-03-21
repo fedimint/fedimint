@@ -251,6 +251,7 @@ pub mod mock {
     use anyhow::Error;
     use fedimint_core::PeerId;
     use futures::{FutureExt, SinkExt, Stream, StreamExt};
+    use rand::Rng;
     use tokio::io::{
         AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
     };
@@ -261,13 +262,167 @@ pub mod mock {
     use crate::net::connect::{parse_host_port, ConnectResult, Connector};
     use crate::net::framed::{BidiFramed, FramedTransport};
 
+    struct UnreliableDuplexStream {
+        inner: DuplexStream,
+        read_generator: Option<UnreliabilityGenerator>,
+        write_generator: Option<UnreliabilityGenerator>,
+        flush_generator: Option<UnreliabilityGenerator>,
+        shutdown_generator: Option<UnreliabilityGenerator>,
+    }
+
+    impl UnreliableDuplexStream {
+        fn new(inner: DuplexStream, reliability: StreamReliability) -> UnreliableDuplexStream {
+            match reliability {
+                StreamReliability::FullyReliable => Self {
+                    inner,
+                    read_generator: None,
+                    write_generator: None,
+                    flush_generator: None,
+                    shutdown_generator: None,
+                },
+                StreamReliability::RandomlyUnreliable {
+                    read_failure_rate,
+                    write_failure_rate,
+                    flush_failure_rate,
+                    shutdown_failure_rate,
+                    read_latency,
+                    write_latency,
+                    flush_latency,
+                    shutdown_latency,
+                } => Self {
+                    inner,
+                    read_generator: Some(UnreliabilityGenerator::new(
+                        read_latency,
+                        read_failure_rate,
+                    )),
+                    write_generator: Some(UnreliabilityGenerator::new(
+                        write_latency,
+                        write_failure_rate,
+                    )),
+                    flush_generator: Some(UnreliabilityGenerator::new(
+                        flush_latency,
+                        flush_failure_rate,
+                    )),
+                    shutdown_generator: Some(UnreliabilityGenerator::new(
+                        shutdown_latency,
+                        shutdown_failure_rate,
+                    )),
+                },
+            }
+        }
+    }
+
+    impl Debug for UnreliableDuplexStream {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("UnreliableDuplexStream").finish()
+        }
+    }
+
+    struct UnreliabilityGenerator {
+        latency: LatencyInterval,
+        failure_rate: FailureRate,
+        sleep_future: Option<Pin<Box<tokio::time::Sleep>>>,
+    }
+
+    impl UnreliabilityGenerator {
+        fn new(latency: LatencyInterval, failure_rate: FailureRate) -> UnreliabilityGenerator {
+            Self {
+                latency,
+                failure_rate,
+                sleep_future: None,
+            }
+        }
+
+        pub fn generate(
+            &mut self,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            let sleep = self
+                .sleep_future
+                .get_or_insert_with(|| Box::pin(tokio::time::sleep(self.latency.random())));
+            match sleep.poll_unpin(cx) {
+                std::task::Poll::Ready(()) => {
+                    self.sleep_future = None;
+                }
+                std::task::Poll::Pending => return std::task::Poll::Pending,
+            }
+            if self.failure_rate.random_fail() {
+                tracing::debug!("Returning random error on unreliable stream");
+                return std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Randomly failed",
+                )));
+            }
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    impl AsyncRead for UnreliableDuplexStream {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            match self.read_generator.as_mut().map(|g| g.generate(cx)) {
+                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Pending) => std::task::Poll::Pending,
+                Some(std::task::Poll::Ready(Ok(()))) | None => {
+                    Pin::new(&mut self.inner).poll_read(cx, buf)
+                }
+            }
+        }
+    }
+
+    impl AsyncWrite for UnreliableDuplexStream {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<Result<usize, std::io::Error>> {
+            match self.write_generator.as_mut().map(|g| g.generate(cx)) {
+                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Pending) => std::task::Poll::Pending,
+                Some(std::task::Poll::Ready(Ok(()))) | None => {
+                    Pin::new(&mut self.inner).poll_write(cx, buf)
+                }
+            }
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            match self.flush_generator.as_mut().map(|g| g.generate(cx)) {
+                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Pending) => std::task::Poll::Pending,
+                Some(std::task::Poll::Ready(Ok(()))) | None => {
+                    Pin::new(&mut self.inner).poll_flush(cx)
+                }
+            }
+        }
+
+        fn poll_shutdown(
+            mut self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            match self.shutdown_generator.as_mut().map(|g| g.generate(cx)) {
+                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Pending) => std::task::Poll::Pending,
+                Some(std::task::Poll::Ready(Ok(()))) | None => {
+                    Pin::new(&mut self.inner).poll_shutdown(cx)
+                }
+            }
+        }
+    }
+
     pub struct MockNetwork {
-        clients: Arc<Mutex<HashMap<String, Sender<DuplexStream>>>>,
+        clients: Arc<Mutex<HashMap<String, Sender<UnreliableDuplexStream>>>>,
     }
 
     pub struct MockConnector {
         id: PeerId,
-        clients: Arc<Mutex<HashMap<String, Sender<DuplexStream>>>>,
+        clients: Arc<Mutex<HashMap<String, Sender<UnreliableDuplexStream>>>>,
+        reliability: StreamReliability,
     }
 
     impl MockNetwork {
@@ -278,12 +433,108 @@ pub mod mock {
             }
         }
 
-        pub fn connector(&self, id: PeerId) -> MockConnector {
+        pub fn connector(&self, id: PeerId, reliability: StreamReliability) -> MockConnector {
             MockConnector {
                 id,
                 clients: self.clients.clone(),
+                reliability,
             }
         }
+    }
+
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub struct LatencyInterval {
+        min_millis: u64,
+        max_millis: u64,
+    }
+
+    impl LatencyInterval {
+        const ZERO: LatencyInterval = LatencyInterval {
+            min_millis: 0,
+            max_millis: 0,
+        };
+
+        pub fn new(min: Duration, max: Duration) -> LatencyInterval {
+            assert!(min <= max);
+            LatencyInterval {
+                min_millis: min
+                    .as_millis()
+                    .try_into()
+                    .expect("min duration as millis to fit in a u64"),
+                max_millis: max
+                    .as_millis()
+                    .try_into()
+                    .expect("max duration as millis to fit in a u64"),
+            }
+        }
+
+        pub fn random(&self) -> Duration {
+            let mut rng = rand::thread_rng();
+            Duration::from_millis(rng.gen_range(self.min_millis..=self.max_millis))
+        }
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    pub struct FailureRate(f64);
+    impl FailureRate {
+        const MAX: FailureRate = FailureRate(1.0);
+        pub fn new(failure_rate: f64) -> Self {
+            assert!((0.0..=1.0).contains(&failure_rate));
+            Self(failure_rate)
+        }
+
+        pub fn random_fail(&self) -> bool {
+            let mut rng = rand::thread_rng();
+            rng.gen_range(0.0..1.0) < self.0
+        }
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    pub enum StreamReliability {
+        FullyReliable,
+        RandomlyUnreliable {
+            read_failure_rate: FailureRate,
+            write_failure_rate: FailureRate,
+            flush_failure_rate: FailureRate,
+            shutdown_failure_rate: FailureRate,
+            read_latency: LatencyInterval,
+            write_latency: LatencyInterval,
+            flush_latency: LatencyInterval,
+            shutdown_latency: LatencyInterval,
+        },
+    }
+
+    impl StreamReliability {
+        pub const MILDLY_UNRELIABLE: StreamReliability = {
+            let failure_rate = FailureRate(0.1);
+            let latency = LatencyInterval {
+                min_millis: 1,
+                max_millis: 10,
+            };
+            Self::RandomlyUnreliable {
+                read_failure_rate: failure_rate,
+                write_failure_rate: failure_rate,
+                flush_failure_rate: failure_rate,
+                shutdown_failure_rate: failure_rate,
+                read_latency: latency,
+                write_latency: latency,
+                flush_latency: latency,
+                shutdown_latency: latency,
+            }
+        };
+
+        pub const BROKEN: StreamReliability = {
+            Self::RandomlyUnreliable {
+                read_failure_rate: FailureRate::MAX,
+                write_failure_rate: FailureRate::MAX,
+                flush_failure_rate: FailureRate::MAX,
+                shutdown_failure_rate: FailureRate::MAX,
+                read_latency: LatencyInterval::ZERO,
+                write_latency: LatencyInterval::ZERO,
+                flush_latency: LatencyInterval::ZERO,
+                shutdown_latency: LatencyInterval::ZERO,
+            }
+        };
     }
 
     #[async_trait::async_trait]
@@ -294,12 +545,16 @@ pub mod mock {
         async fn connect_framed(&self, destination: Url, _peer: PeerId) -> ConnectResult<M> {
             let mut clients_lock = self.clients.lock().await;
             if let Some(client) = clients_lock.get_mut(&parse_host_port(destination)?) {
-                let (mut stream_our, stream_theirs) = tokio::io::duplex(43_689);
+                let (stream_our, stream_theirs) = tokio::io::duplex(43_689);
+                let mut stream_our = UnreliableDuplexStream::new(stream_our, self.reliability);
+                let stream_theirs = UnreliableDuplexStream::new(stream_theirs, self.reliability);
                 client.send(stream_theirs).await.unwrap();
-                let peer = do_handshake(self.id, &mut stream_our).await.unwrap();
-                let framed = BidiFramed::<M, WriteHalf<DuplexStream>, ReadHalf<DuplexStream>>::new(
-                    stream_our,
-                )
+                let peer = do_handshake(self.id, &mut stream_our).await?;
+                let framed = BidiFramed::<
+                    M,
+                    WriteHalf<UnreliableDuplexStream>,
+                    ReadHalf<UnreliableDuplexStream>,
+                >::new(stream_our)
                 .into_dyn();
                 Ok((peer, framed))
             } else {
@@ -328,7 +583,13 @@ pub mod mock {
             let stream = futures::stream::unfold(receive, move |mut receive| {
                 Box::pin(async move {
                     let mut connection = receive.recv().await.unwrap();
-                    let peer = do_handshake(our_id, &mut connection).await.unwrap();
+                    let peer = match do_handshake(our_id, &mut connection).await {
+                        Ok(peer) => peer,
+                        Err(e) => {
+                            tracing::debug!("Error during handshake: {e:?}");
+                            return Some((Err(e), receive));
+                        }
+                    };
                     let framed =
                         BidiFramed::<M, WriteHalf<DuplexStream>, ReadHalf<DuplexStream>>::new(
                             connection,
@@ -364,8 +625,8 @@ pub mod mock {
         let peer_b = PeerId::from(2);
 
         let net = MockNetwork::new();
-        let conn_a = net.connector(peer_a);
-        let conn_b = net.connector(peer_b);
+        let conn_a = net.connector(peer_a, StreamReliability::FullyReliable);
+        let conn_b = net.connector(peer_b, StreamReliability::FullyReliable);
 
         let mut listener = Connector::<u64>::listen(&conn_a, bind_addr).await.unwrap();
         let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
@@ -385,6 +646,41 @@ pub mod mock {
         assert_eq!(conn_b.next().await.unwrap().unwrap(), 42);
     }
 
+    #[tokio::test]
+    async fn test_unreliable_components() {
+        assert!(!FailureRate::new(0f64).random_fail());
+        assert!(FailureRate::new(1f64).random_fail());
+
+        let good_interval = (0..=3).contains(
+            &LatencyInterval::new(Duration::from_millis(0), Duration::from_millis(3))
+                .random()
+                .as_millis(),
+        );
+        assert!(good_interval);
+
+        let (a, b) = tokio::io::duplex(43_689);
+        let mut a_stream = UnreliableDuplexStream::new(a, StreamReliability::FullyReliable);
+        let mut b_stream = UnreliableDuplexStream::new(b, StreamReliability::FullyReliable);
+        assert!(a_stream.write(&[1, 2, 3]).await.is_ok());
+        assert!(a_stream.flush().await.is_ok());
+        assert_eq!(b_stream.read_u8().await.unwrap(), 1);
+        assert_eq!(b_stream.read_u8().await.unwrap(), 2);
+        assert_eq!(b_stream.read_u8().await.unwrap(), 3);
+
+        let (a, b) = tokio::io::duplex(43_689);
+        let mut a_stream = UnreliableDuplexStream::new(a, StreamReliability::FullyReliable);
+        let mut b_stream = UnreliableDuplexStream::new(b, StreamReliability::BROKEN);
+        assert!(a_stream.write(&[1, 2, 3]).await.is_ok());
+        assert!(a_stream.flush().await.is_ok());
+        assert!(b_stream.read_u8().await.is_err());
+
+        let (a, b) = tokio::io::duplex(43_689);
+        let mut a_stream = UnreliableDuplexStream::new(a, StreamReliability::BROKEN);
+        let mut _b_stream = UnreliableDuplexStream::new(b, StreamReliability::FullyReliable);
+        assert!(a_stream.write(&[1, 2, 3]).await.is_err());
+        // a read on _b_stream would block...
+    }
+
     #[allow(dead_code)]
     async fn timeout<F, T>(f: F) -> Option<T>
     where
@@ -401,8 +697,8 @@ pub mod mock {
         let peer_b = PeerId::from(2);
 
         let net = MockNetwork::new();
-        let conn_a = net.connector(peer_a);
-        let conn_b = net.connector(peer_b);
+        let conn_a = net.connector(peer_a, StreamReliability::FullyReliable);
+        let conn_b = net.connector(peer_b, StreamReliability::FullyReliable);
 
         let mut listener = Connector::<Vec<u8>>::listen(&conn_a, bind_addr)
             .await
