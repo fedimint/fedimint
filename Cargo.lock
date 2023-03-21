@@ -35,6 +35,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224afbd727c3d6e4b90103ece64b8d1b67fbb1973b1046c2281eed3f3803f800"
 
 [[package]]
+name = "aquamarine"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "759d98a5db12e9c9d98ef2b92f794ae5c7ded6ec18d21c3fa485c9c65bec237d"
+dependencies = [
+ "itertools",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "argon2"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -978,13 +991,16 @@ name = "fedimint-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aquamarine",
  "async-trait",
  "bitcoin_hashes",
  "fedimint-core",
  "fedimint-logging",
  "futures",
  "impl-tools",
+ "itertools",
  "rand",
+ "secp256k1-zkp",
  "serde",
  "serde_json",
  "tokio",
