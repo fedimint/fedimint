@@ -708,6 +708,8 @@
 <a href="#708" id="708">708</a>
 <a href="#709" id="709">709</a>
 <a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1355,7 +1357,7 @@
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::Future;
 
-    <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::MockNetwork;
+    <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::{MockNetwork, StreamReliability};
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
     <span class="kw">use </span><span class="kw">crate</span>::net::peers::{IPeerConnections, NetworkConfig, ReconnectPeerConnections};
 
@@ -1394,7 +1396,9 @@
                     bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
-                <span class="kw">let </span>connect = net_ref.connector(cfg.identity).into_dyn();
+                <span class="kw">let </span>connect = net_ref
+                    .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
+                    .into_dyn();
                 ReconnectPeerConnections::&lt;u64&gt;::new(cfg, connect, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await
             </span>};
 
