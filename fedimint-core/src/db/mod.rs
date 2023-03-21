@@ -108,20 +108,20 @@ struct DatabaseInner<Db: IDatabase + ?Sized> {
 pub enum AutocommitError<E> {
     /// Committing the transaction failed too many times, giving up
     CommitFailed {
-        /// Number of retries
-        retries: usize,
+        /// Number of attempts
+        attempts: usize,
         /// Last error on commit
         last_error: anyhow::Error,
     },
     /// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
     ClosureError {
-        /// Retry on which the closure returned an error
+        /// The attempt on which the closure returned an error
         ///
         /// Values other than 0 typically indicate a logic error since the
         /// closure given to `autocommit` should not have side effects
         /// and thus keep succeeding if it succeeded once.
-        retries: usize,
+        attempts: usize,
         /// Error returned by the closure
         error: E,
     },
@@ -168,8 +168,8 @@ impl Database {
 
     /// Runs a closure with a reference to a database transaction and tries to
     /// commit the transaction if the closure returns `Ok` and rolls it back
-    /// otherwise. If committing fails the closure is run again for up to
-    /// `max_retries` times. If `max_retries` is `None` it will run
+    /// otherwise. If committing fails the closure is run for up to
+    /// `max_attempts` times. If `max_attempts` is `None` it will run
     /// `usize::MAX` times which is close enough to infinite times.
     ///
     /// The closure `tx_fn` provided should not have side effects outside of the
@@ -188,47 +188,57 @@ impl Database {
     /// `DatabaseTransaction` must live as least as long as `self` and that is
     /// true as the `DatabaseTransaction` is only dropped at the end of the
     /// `loop{}`.
+    ///
+    /// # Panics
+    ///
+    /// This function panics when the given number of maximum attempts is zero.
+    /// `max_attempts` must be greater or equal to one.
     pub async fn autocommit<'s: 'dt, 'dt, F, T, E>(
         &'s self,
         tx_fn: F,
-        max_retries: Option<usize>,
+        max_attempts: Option<usize>,
     ) -> Result<T, AutocommitError<E>>
     where
         for<'a> F: Fn(&'a mut DatabaseTransaction<'dt>) -> BoxFuture<'a, Result<T, E>>,
     {
-        let mut retries: usize = 0;
+        assert_ne!(max_attempts, Some(0));
+        let mut curr_attempts: usize = 0;
+
         loop {
-            let mut dbtx = self.begin_transaction().await;
-
-            match tx_fn(&mut dbtx).await {
-                Ok(val) => {
-                    match dbtx.commit_tx_result().await {
-                        Ok(()) => {
-                            return Ok(val);
-                        }
-                        Err(e) if max_retries.map(|mr| mr <= retries).unwrap_or(false) => {
-                            return Err(AutocommitError::CommitFailed {
-                                retries,
-                                last_error: e,
-                            });
-                        }
-                        Err(_) => {
-                            // try again
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(AutocommitError::ClosureError { retries, error: e });
-                }
-            };
-
             // The `checked_add()` function is used to catch the `usize` overflow.
             // With `usize=32bit` and an assumed time of 1ms per iteration, this would crash
             // after ~50 days. But if that's the case, something else must be wrong.
             // With `usize=64bit` it would take much longer, obviously.
-            retries = retries
+            curr_attempts = curr_attempts
                 .checked_add(1)
-                .expect("db autocommit retry counter overflowed");
+                .expect("db autocommit attempt counter overflowed");
+
+            let mut dbtx = self.begin_transaction().await;
+
+            match tx_fn(&mut dbtx).await {
+                Ok(val) => match dbtx.commit_tx_result().await {
+                    Ok(()) => {
+                        return Ok(val);
+                    }
+                    Err(err) => {
+                        if max_attempts
+                            .map(|max_att| max_att <= curr_attempts)
+                            .unwrap_or(false)
+                        {
+                            return Err(AutocommitError::CommitFailed {
+                                attempts: curr_attempts,
+                                last_error: err,
+                            });
+                        }
+                    }
+                },
+                Err(err) => {
+                    return Err(AutocommitError::ClosureError {
+                        attempts: curr_attempts,
+                        error: err,
+                    });
+                }
+            };
         } // end of loop
     }
 
@@ -2099,8 +2109,11 @@ mod test_utils {
             .unwrap_err();
 
         match err {
-            AutocommitError::CommitFailed { retries, .. } => {
-                assert_eq!(retries, 5)
+            AutocommitError::CommitFailed {
+                attempts: failed_attempts,
+                ..
+            } => {
+                assert_eq!(failed_attempts, 5)
             }
             AutocommitError::ClosureError { .. } => panic!("Closure did not return error"),
         }

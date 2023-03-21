@@ -85,8 +85,8 @@ where
             .map_err(|e| match e {
                 AutocommitError::CommitFailed {
                     last_error,
-                    retries,
-                } => last_error.context(format!("Failed to commit after {retries} retries")),
+                    attempts,
+                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 
@@ -330,8 +330,8 @@ where
             .map_err(|e| match e {
                 AutocommitError::CommitFailed {
                     last_error,
-                    retries,
-                } => last_error.context(format!("Failed to commit after {retries} retries")),
+                    attempts,
+                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 
