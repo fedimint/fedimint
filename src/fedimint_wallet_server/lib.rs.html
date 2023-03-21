@@ -2645,19 +2645,19 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/block_height&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; u32 {
-                    <span class="prelude-val">Ok</span>(module.consensus_height(context.dbtx()).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>))
+                    <span class="prelude-val">Ok</span>(module.consensus_height(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/peg_out_fees&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (Address, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
                     <span class="kw">let </span>(address, sats) = params;
-                    <span class="kw">let </span>consensus = module.current_round_consensus(context.dbtx()).<span class="kw">await</span>.unwrap();
+                    <span class="kw">let </span>consensus = module.current_round_consensus(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>.unwrap();
                     <span class="kw">let </span>tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
                         <span class="macro">vec!</span>[],
-                        module.available_utxos(context.dbtx()).<span class="kw">await</span>,
+                        module.available_utxos(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>,
                         consensus.fee_rate,
                         <span class="kw-2">&amp;</span>consensus.randomness_beacon,
                         <span class="prelude-val">None

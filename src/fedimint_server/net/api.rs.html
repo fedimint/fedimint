@@ -269,27 +269,20 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
-</span><span class="kw">use </span>std::fmt::Formatter;
+</span><span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::ConfigResponse;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::epoch::SerdeEpochHistory;
-<span class="kw">use </span>fedimint_core::module::{api_endpoint, ApiEndpoint, ApiError};
+<span class="kw">use </span>fedimint_core::module::{
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
+};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
@@ -306,15 +299,61 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::SerdeTransaction;
 
-<span class="doccomment">/// A state of fedimint server passed to each rpc handler callback
+<span class="doccomment">/// A state that has context for the API, passed to each rpc handler callback
 </span><span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>RpcHandlerCtx {
-    fedimint: Arc&lt;FedimintConsensus&gt;,
+</span><span class="kw">pub struct </span>RpcHandlerCtx&lt;M&gt; {
+    rpc_context: Arc&lt;M&gt;,
 }
 
-<span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>RpcHandlerCtx {
+<span class="kw">impl</span>&lt;M: Debug&gt; Debug <span class="kw">for </span>RpcHandlerCtx&lt;M&gt; {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         f.write_str(<span class="string">&quot;State { ... }&quot;</span>)
+    }
+}
+
+<span class="doccomment">/// Has the context necessary for serving API endpoints
+///
+/// Returns the specific `State` the endpoint requires and the
+/// `ApiEndpointContext` which all endpoints can access.
+</span><span class="attr">#[async_trait]
+</span><span class="kw">pub trait </span>HasApiContext&lt;State&gt; {
+    <span class="kw">async fn </span>context(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: <span class="kw-2">&amp;</span>ApiRequestErased,
+        id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+    ) -&gt; (<span class="kw-2">&amp;</span>State, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;);
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>HasApiContext&lt;FedimintConsensus&gt; <span class="kw">for </span>FedimintConsensus {
+    <span class="kw">async fn </span>context(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: <span class="kw-2">&amp;</span>ApiRequestErased,
+        id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+    ) -&gt; (<span class="kw-2">&amp;</span>FedimintConsensus, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        (
+            <span class="self">self</span>,
+            ApiEndpointContext::new(
+                request.auth == <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.private.api_auth.clone()),
+                <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>,
+                id,
+            ),
+        )
+    }
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>HasApiContext&lt;DynServerModule&gt; <span class="kw">for </span>FedimintConsensus {
+    <span class="kw">async fn </span>context(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: <span class="kw-2">&amp;</span>ApiRequestErased,
+        id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+    ) -&gt; (<span class="kw-2">&amp;</span>DynServerModule, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        <span class="kw">let </span>(<span class="kw">_</span>, context): (<span class="kw-2">&amp;</span>FedimintConsensus, <span class="kw">_</span>) = <span class="self">self</span>.context(request, id).<span class="kw">await</span>;
+        (
+            <span class="self">self</span>.modules.get_expect(id.expect(<span class="string">&quot;required module id&quot;</span>)),
+            context,
+        )
     }
 }
 
@@ -324,14 +363,14 @@
     task_handle: TaskHandle,
 ) {
     <span class="kw">let </span>state = RpcHandlerCtx {
-        fedimint: fedimint.clone(),
+        rpc_context: fedimint.clone(),
     };
     <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcModule::new(state);
 
     attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, server_endpoints(), <span class="prelude-val">None</span>);
 
     <span class="kw">for </span>(id, module) <span class="kw">in </span>fedimint.modules.iter_modules() {
-        attach_endpoints_erased(<span class="kw-2">&amp;mut </span>rpc_module, id, module);
+        attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
     }
 
     <span class="macro">debug!</span>(addr = cfg.local.api_bind.to_string(), <span class="string">&quot;Starting WSServer&quot;</span>);
@@ -363,12 +402,15 @@
 
 <span class="kw">const </span>API_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(<span class="number">60</span>);
 
-<span class="comment">// TODO: remove once modularized
-</span><span class="kw">fn </span>attach_endpoints(
-    rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&gt;,
-    endpoints: Vec&lt;ApiEndpoint&lt;FedimintConsensus&gt;&gt;,
+<span class="doccomment">/// Attaches `endpoints` to the `RpcModule`
+</span><span class="kw">pub fn </span>attach_endpoints&lt;State, T&gt;(
+    rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
+    endpoints: Vec&lt;ApiEndpoint&lt;State&gt;&gt;,
     module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-) {
+) <span class="kw">where
+    </span>T: HasApiContext&lt;State&gt; + Sync + Send + <span class="lifetime">&#39;static</span>,
+    State: Sync + Send + <span class="lifetime">&#39;static</span>,
+{
     <span class="kw">for </span>endpoint <span class="kw">in </span>endpoints {
         <span class="kw">let </span>path = <span class="kw">if let </span><span class="prelude-val">Some</span>(module_instance_id) = module_instance_id {
             <span class="comment">// This memory leak is fine because it only happens on server startup
@@ -383,85 +425,23 @@
         </span><span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, <span class="kw">move </span>|params, state| <span class="kw">async move </span>{
+            .register_async_method(path, <span class="kw">move </span>|params, rpc_state| <span class="kw">async move </span>{
                 <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
-                <span class="kw">let </span>fedimint = <span class="kw-2">&amp;</span>state.fedimint;
+                <span class="kw">let </span>rpc_context = <span class="kw-2">&amp;</span>rpc_state.rpc_context;
 
-                <span class="kw">let </span>dbtx = fedimint.db.begin_transaction().<span class="kw">await</span>;
                 <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                </span>AssertUnwindSafe(tokio::time::timeout(
-                    API_ENDPOINT_TIMEOUT,
-                    (handler)(
-                        fedimint,
-                        dbtx,
-                        params,
-                        module_instance_id,
-                        fedimint.cfg.private.api_auth.clone(),
-                    ),
-                ))
-                .catch_unwind()
-                .<span class="kw">await
-                </span>.map_err(|<span class="kw">_</span>| {
-                    <span class="macro">error!</span>(
-                        target: LOG_NET_API,
-                        path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;
-                    </span>);
-                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                        <span class="number">500</span>,
-                        <span class="string">&quot;API handler panicked&quot;</span>,
-                        <span class="prelude-val">None</span>::&lt;()&gt;,
-                    )))
-                })<span class="question-mark">?
-                </span>.map_err(|tokio::time::error::Elapsed { .. }| {
-                    jsonrpsee::core::Error::RequestTimeout
-                })<span class="question-mark">?
-                </span>.map_err(|e| {
-                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                        e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
-                    )))
-                })
-            })
-            .expect(<span class="string">&quot;Failed to register async method&quot;</span>);
-    }
-}
+                </span>AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, <span class="kw">async </span>{
+                    <span class="kw">let </span>request = serde_json::from_value(params)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
+                    <span class="kw">let </span>(state, context) = rpc_context.context(<span class="kw-2">&amp;</span>request, module_instance_id).<span class="kw">await</span>;
 
-<span class="kw">fn </span>attach_endpoints_erased(
-    rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&gt;,
-    module_instance: ModuleInstanceId,
-    server_module: <span class="kw-2">&amp;</span>DynServerModule,
-) {
-    <span class="kw">let </span>endpoints = server_module.api_endpoints();
+                    <span class="kw">let </span>res = (handler)(state, context, request).<span class="kw">await</span>;
 
-    <span class="kw">for </span>endpoint <span class="kw">in </span>endpoints {
-        <span class="comment">// This memory leak is fine because it only happens on server startup
-        // and path has to live till the end of program anyways.
-        </span><span class="kw">let </span>path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="kw">_ </span>=
-            Box::leak(<span class="macro">format!</span>(<span class="string">&quot;/module/{}{}&quot;</span>, module_instance, endpoint.path).into_boxed_str());
-        <span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
-
-        rpc_module
-            .register_async_method(path, <span class="kw">move </span>|params, state| <span class="kw">async move </span>{
-                <span class="comment">// Hack to avoid Sync/Send issues
-                </span><span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
-                <span class="kw">let </span>fedimint = <span class="kw-2">&amp;</span>state.fedimint;
-                <span class="kw">let </span>dbtx = fedimint.db.begin_transaction().<span class="kw">await</span>;
-                <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                // end up with an inconsistent state in theory. In practice most API functions
-                // are only reading and the few that do write anything are atomic. Lastly, this
-                // is only the last line of defense
-                </span>AssertUnwindSafe(tokio::time::timeout(
-                    API_ENDPOINT_TIMEOUT,
-                    (handler)(
-                        fedimint.modules.get_expect(module_instance),
-                        dbtx,
-                        params,
-                        <span class="prelude-val">Some</span>(module_instance),
-                        fedimint.cfg.private.api_auth.clone(),
-                    ),
-                ))
+                    res
+                }))
                 .catch_unwind()
                 .<span class="kw">await
                 </span>.map_err(|<span class="kw">_</span>| {
@@ -544,7 +524,7 @@
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/config&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, context, _v: ()| -&gt; ConfigResponse {
-                <span class="prelude-val">Ok</span>(fedimint.get_config_with_sig(context.dbtx()).<span class="kw">await</span>)
+                <span class="prelude-val">Ok</span>(fedimint.get_config_with_sig(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{

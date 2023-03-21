@@ -1896,7 +1896,7 @@
                 <span class="string">&quot;/account&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
                     module
-                        .get_contract_account(context.dbtx(), contract_id)
+                        .get_contract_account(<span class="kw-2">&amp;mut </span>context.dbtx(), contract_id)
                         .<span class="kw">await
                         </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
                 }
@@ -1905,7 +1905,7 @@
                 <span class="string">&quot;/offer&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
                     <span class="kw">let </span>offer = module
-                        .get_offer(context.dbtx(), payment_hash)
+                        .get_offer(<span class="kw-2">&amp;mut </span>context.dbtx(), payment_hash)
                         .<span class="kw">await
                         </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
 
@@ -1916,13 +1916,13 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/list_gateways&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
-                    <span class="prelude-val">Ok</span>(module.list_gateways(context.dbtx()).<span class="kw">await</span>)
+                    <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/register_gateway&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, gateway: LightningGateway| -&gt; () {
-                    module.register_gateway(context.dbtx(), gateway).<span class="kw">await</span>;
+                    module.register_gateway(<span class="kw-2">&amp;mut </span>context.dbtx(), gateway).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())
                 }
             },

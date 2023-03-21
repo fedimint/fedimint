@@ -34,11 +34,6 @@
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
-<a href="#37" id="37">37</a>
-<a href="#38" id="38">38</a>
-<a href="#39" id="39">39</a>
-<a href="#40" id="40">40</a>
-<a href="#41" id="41">41</a>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
@@ -46,6 +41,7 @@
 <span class="kw">use </span>serde_json::Value;
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
+<span class="kw">use </span><span class="kw">crate</span>::net::api::HasApiContext;
 
 <span class="kw">pub struct </span>FedimintInterconnect&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub </span>fedimint: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FedimintConsensus,
@@ -66,15 +62,9 @@
                     .into_iter()
                     .find(|endpoint| endpoint.path == path)
                     .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Method not found&quot;</span>)))<span class="question-mark">?</span>;
+                <span class="kw">let </span>(state, context) = <span class="self">self</span>.fedimint.context(<span class="kw-2">&amp;</span>data, <span class="prelude-val">Some</span>(id)).<span class="kw">await</span>;
 
-                <span class="kw">return </span>(endpoint.handler)(
-                    module,
-                    <span class="self">self</span>.fedimint.db.begin_transaction().<span class="kw">await</span>,
-                    data.to_json(),
-                    <span class="prelude-val">Some</span>(module_id),
-                    <span class="self">self</span>.fedimint.cfg.private.api_auth.clone(),
-                )
-                .<span class="kw">await</span>;
+                <span class="kw">return </span>(endpoint.handler)(state, context, data).<span class="kw">await</span>;
             }
         }
         <span class="macro">panic!</span>(<span class="string">&quot;Module not registered: {id}&quot;</span>);
