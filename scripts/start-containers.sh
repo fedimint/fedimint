@@ -31,7 +31,7 @@ function run_dkg() {
         api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
         echo "  server-$ID:" >> $3
         echo "    image: $2" >> $3
-        echo "    command: distributedgen run --bind-p2p 0.0.0.0:$fed_port --bind-api 0.0.0.0:$api_port --out-dir /var/fedimint --certs $CERTS --bitcoind-rpc http://bitcoind:18443" >> $3
+        echo "    command: distributedgen run --bind-p2p 0.0.0.0:$fed_port --bind-api 0.0.0.0:$api_port --out-dir /var/fedimint --certs $CERTS" >> $3
         echo "    ports:" >> $3
         echo "      - $fed_port:$fed_port" >> $3
         echo "      - $api_port:$api_port" >> $3
