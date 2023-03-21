@@ -645,7 +645,7 @@ impl ServerModule for Mint {
                 "/backup",
                 async |module: &Mint, context, request: SignedBackupRequest| -> () {
                     module
-                        .handle_backup_request(context.dbtx(), request).await?;
+                        .handle_backup_request(&mut context.dbtx(), request).await?;
                     Ok(())
                 }
             },
@@ -653,7 +653,7 @@ impl ServerModule for Mint {
                 "/recover",
                 async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
-                        .handle_recover_request(context.dbtx(), id).await)
+                        .handle_recover_request(&mut context.dbtx(), id).await)
                 }
             },
         ]

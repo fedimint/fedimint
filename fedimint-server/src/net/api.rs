@@ -1,14 +1,17 @@
 //! Implements the client API through which users interact with the federation
-use std::fmt::Formatter;
+use std::fmt::{Debug, Formatter};
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use async_trait::async_trait;
 use fedimint_core::config::ConfigResponse;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::epoch::SerdeEpochHistory;
-use fedimint_core::module::{api_endpoint, ApiEndpoint, ApiError};
+use fedimint_core::module::{
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
+};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskHandle;
@@ -25,15 +28,61 @@ use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
 use crate::transaction::SerdeTransaction;
 
-/// A state of fedimint server passed to each rpc handler callback
+/// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
-pub struct RpcHandlerCtx {
-    fedimint: Arc<FedimintConsensus>,
+pub struct RpcHandlerCtx<M> {
+    rpc_context: Arc<M>,
 }
 
-impl std::fmt::Debug for RpcHandlerCtx {
+impl<M: Debug> Debug for RpcHandlerCtx<M> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("State { ... }")
+    }
+}
+
+/// Has the context necessary for serving API endpoints
+///
+/// Returns the specific `State` the endpoint requires and the
+/// `ApiEndpointContext` which all endpoints can access.
+#[async_trait]
+pub trait HasApiContext<State> {
+    async fn context(
+        &self,
+        request: &ApiRequestErased,
+        id: Option<ModuleInstanceId>,
+    ) -> (&State, ApiEndpointContext<'_>);
+}
+
+#[async_trait]
+impl HasApiContext<FedimintConsensus> for FedimintConsensus {
+    async fn context(
+        &self,
+        request: &ApiRequestErased,
+        id: Option<ModuleInstanceId>,
+    ) -> (&FedimintConsensus, ApiEndpointContext<'_>) {
+        (
+            self,
+            ApiEndpointContext::new(
+                request.auth == Some(self.cfg.private.api_auth.clone()),
+                self.db.begin_transaction().await,
+                id,
+            ),
+        )
+    }
+}
+
+#[async_trait]
+impl HasApiContext<DynServerModule> for FedimintConsensus {
+    async fn context(
+        &self,
+        request: &ApiRequestErased,
+        id: Option<ModuleInstanceId>,
+    ) -> (&DynServerModule, ApiEndpointContext<'_>) {
+        let (_, context): (&FedimintConsensus, _) = self.context(request, id).await;
+        (
+            self.modules.get_expect(id.expect("required module id")),
+            context,
+        )
     }
 }
 
@@ -43,14 +92,14 @@ pub async fn run_server(
     task_handle: TaskHandle,
 ) {
     let state = RpcHandlerCtx {
-        fedimint: fedimint.clone(),
+        rpc_context: fedimint.clone(),
     };
     let mut rpc_module = RpcModule::new(state);
 
     attach_endpoints(&mut rpc_module, server_endpoints(), None);
 
     for (id, module) in fedimint.modules.iter_modules() {
-        attach_endpoints_erased(&mut rpc_module, id, module);
+        attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
     }
 
     debug!(addr = cfg.local.api_bind.to_string(), "Starting WSServer");
@@ -82,12 +131,15 @@ pub async fn run_server(
 
 const API_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(60);
 
-// TODO: remove once modularized
-fn attach_endpoints(
-    rpc_module: &mut RpcModule<RpcHandlerCtx>,
-    endpoints: Vec<ApiEndpoint<FedimintConsensus>>,
+/// Attaches `endpoints` to the `RpcModule`
+pub fn attach_endpoints<State, T>(
+    rpc_module: &mut RpcModule<RpcHandlerCtx<T>>,
+    endpoints: Vec<ApiEndpoint<State>>,
     module_instance_id: Option<ModuleInstanceId>,
-) {
+) where
+    T: HasApiContext<State> + Sync + Send + 'static,
+    State: Sync + Send + 'static,
+{
     for endpoint in endpoints {
         let path = if let Some(module_instance_id) = module_instance_id {
             // This memory leak is fine because it only happens on server startup
@@ -102,85 +154,23 @@ fn attach_endpoints(
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, move |params, state| async move {
+            .register_async_method(path, move |params, rpc_state| async move {
                 let params = params.one::<serde_json::Value>()?;
-                let fedimint = &state.fedimint;
+                let rpc_context = &rpc_state.rpc_context;
 
-                let dbtx = fedimint.db.begin_transaction().await;
                 // Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe(tokio::time::timeout(
-                    API_ENDPOINT_TIMEOUT,
-                    (handler)(
-                        fedimint,
-                        dbtx,
-                        params,
-                        module_instance_id,
-                        fedimint.cfg.private.api_auth.clone(),
-                    ),
-                ))
-                .catch_unwind()
-                .await
-                .map_err(|_| {
-                    error!(
-                        target: LOG_NET_API,
-                        path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
-                    );
-                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                        500,
-                        "API handler panicked",
-                        None::<()>,
-                    )))
-                })?
-                .map_err(|tokio::time::error::Elapsed { .. }| {
-                    jsonrpsee::core::Error::RequestTimeout
-                })?
-                .map_err(|e| {
-                    jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                        e.code, e.message, None::<()>,
-                    )))
-                })
-            })
-            .expect("Failed to register async method");
-    }
-}
+                AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
+                    let request = serde_json::from_value(params)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                    let (state, context) = rpc_context.context(&request, module_instance_id).await;
 
-fn attach_endpoints_erased(
-    rpc_module: &mut RpcModule<RpcHandlerCtx>,
-    module_instance: ModuleInstanceId,
-    server_module: &DynServerModule,
-) {
-    let endpoints = server_module.api_endpoints();
+                    let res = (handler)(state, context, request).await;
 
-    for endpoint in endpoints {
-        // This memory leak is fine because it only happens on server startup
-        // and path has to live till the end of program anyways.
-        let path: &'static _ =
-            Box::leak(format!("/module/{}{}", module_instance, endpoint.path).into_boxed_str());
-        let handler: &'static _ = Box::leak(endpoint.handler);
-
-        rpc_module
-            .register_async_method(path, move |params, state| async move {
-                // Hack to avoid Sync/Send issues
-                let params = params.one::<serde_json::Value>()?;
-                let fedimint = &state.fedimint;
-                let dbtx = fedimint.db.begin_transaction().await;
-                // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                // end up with an inconsistent state in theory. In practice most API functions
-                // are only reading and the few that do write anything are atomic. Lastly, this
-                // is only the last line of defense
-                AssertUnwindSafe(tokio::time::timeout(
-                    API_ENDPOINT_TIMEOUT,
-                    (handler)(
-                        fedimint.modules.get_expect(module_instance),
-                        dbtx,
-                        params,
-                        Some(module_instance),
-                        fedimint.cfg.private.api_auth.clone(),
-                    ),
-                ))
+                    res
+                }))
                 .catch_unwind()
                 .await
                 .map_err(|_| {
@@ -263,7 +253,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         api_endpoint! {
             "/config",
             async |fedimint: &FedimintConsensus, context, _v: ()| -> ConfigResponse {
-                Ok(fedimint.get_config_with_sig(context.dbtx()).await)
+                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await)
             }
         },
         api_endpoint! {
