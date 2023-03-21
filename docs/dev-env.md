@@ -89,6 +89,9 @@ in your home directory with the following line:
 set -g default-command "${SHELL}"
 ```
 
+Tmuxinator tests run 2 lightning nodes. [Core Lightning](https://github.com/ElementsProject/lightning) which runs as a gateway to the federation, and [LND](https://github.com/lightningnetwork/lnd) which represents the rest of the Lightning network. These tests are conducted to simulate the process of sending and receiving transactions via Lightning network to and from Fedimint.
+
+
 ## Setting up `direnv` or `lorri`
 
 One of the biggest QoL improvements you can do when working with flake-enabled projects
