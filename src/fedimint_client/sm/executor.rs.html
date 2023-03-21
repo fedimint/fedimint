@@ -740,8 +740,23 @@
 <a href="#740" id="740">740</a>
 <a href="#741" id="741">741</a>
 <a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::sync::Arc;
@@ -749,13 +764,14 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>tokio::select;
+<span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::state::{DynContext, DynState};
@@ -783,13 +799,14 @@
 /// The executor is aware of the concept of Fedimint modules and can give state
 /// machines a different [execution context](super::state::Context) depending on
 /// the owning module, making it very flexible.
-</span><span class="kw">pub struct </span>Executor&lt;GC&gt; {
+</span><span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>Executor&lt;GC: GlobalContext&gt; {
     inner: Arc&lt;ExecutorInner&lt;GC&gt;&gt;,
 }
 
 <span class="kw">struct </span>ExecutorInner&lt;GC&gt; {
     db: Database,
-    context: GC,
+    context: Mutex&lt;<span class="prelude-ty">Option</span>&lt;GC&gt;&gt;,
     module_contexts: BTreeMap&lt;ModuleInstanceId, DynContext&gt;,
 }
 
@@ -811,49 +828,76 @@
 
     <span class="doccomment">/// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
+    ///
+    /// **Attention**: do not use before background task is started!
+    </span><span class="comment">// TODO: remove warning once finality is an inherent state attribute
     </span><span class="kw">pub async fn </span>add_state_machines(<span class="kw-2">&amp;</span><span class="self">self</span>, states: Vec&lt;DynState&lt;GC&gt;&gt;) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.inner.db
+        <span class="self">self</span>.inner
+            .db
             .autocommit(
-                |dbtx| {
-                    <span class="kw">let </span>states = states.clone();
-                    Box::pin(<span class="kw">async move </span>{
-                        <span class="kw">for </span>state <span class="kw">in </span>states {
-                            <span class="kw">if </span>!<span class="self">self</span>.inner.module_contexts.contains_key(<span class="kw-2">&amp;</span>state.module_instance_id()) {
-                                <span class="macro">bail!</span>(<span class="string">&quot;Unknown module&quot;</span>);
-                            }
-
-                            <span class="kw">let </span>is_active_state = dbtx
-                                .get_value(<span class="kw-2">&amp;</span>ActiveStateKey::&lt;GC&gt;(state.clone()))
-                                .<span class="kw">await
-                                </span>.is_some();
-                            <span class="kw">let </span>is_inactive_state = dbtx
-                                .get_value(<span class="kw-2">&amp;</span>InactiveStateKey::&lt;GC&gt;(state.clone()))
-                                .<span class="kw">await
-                                </span>.is_some();
-
-                            <span class="kw">if </span>is_active_state || is_inactive_state {
-                                <span class="macro">bail!</span>(<span class="string">&quot;State already exists in database!&quot;</span>)
-                            }
-
-                            <span class="kw">if </span>state.is_terminal(<span class="self">self</span>.inner.module_contexts.get(<span class="kw-2">&amp;</span>state.module_instance_id()).expect(<span class="string">&quot;No such module&quot;</span>), <span class="kw-2">&amp;</span><span class="self">self</span>.inner.context) {
-                                <span class="macro">bail!</span>(<span class="string">&quot;State is already terminal, adding it to the executor doesn&#39;t make sense.&quot;</span>)
-                            }
-
-                            dbtx.insert_entry(<span class="kw-2">&amp;</span>ActiveStateKey(state), <span class="kw-2">&amp;</span>ActiveState::new()).<span class="kw">await</span>;
-                        }
-
-                        <span class="prelude-val">Ok</span>(())
-                    })
-                },
+                |dbtx| Box::pin(<span class="self">self</span>.add_state_machines_dbtx(dbtx, states.clone())),
                 MAX_DB_RETRIES,
             )
             .<span class="kw">await
             </span>.map_err(|e| <span class="kw">match </span>e {
-                AutocommitError::CommitFailed { last_error , retries } =&gt; {
-                    last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {retries} retries&quot;</span>))
-                }
-                AutocommitError::ClosureError { error, .. } =&gt; {error}
+                AutocommitError::CommitFailed {
+                    last_error,
+                    retries,
+                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {retries} retries&quot;</span>)),
+                AutocommitError::ClosureError { error, .. } =&gt; error,
             })<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Adds a number of state machines to the executor atomically with other DB
+    /// changes is `dbtx`. See [`Executor::add_state_machines`] for more
+    /// details.
+    ///
+    /// ## Panics
+    /// If called before background task is started using
+    /// [`Executor::start_executor`]!
+    </span><span class="comment">// TODO: remove warning once finality is an inherent state attribute
+    </span><span class="kw">pub async fn </span>add_state_machines_dbtx(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        states: Vec&lt;DynState&lt;GC&gt;&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">for </span>state <span class="kw">in </span>states {
+            <span class="kw">if </span>!<span class="self">self
+                </span>.inner
+                .module_contexts
+                .contains_key(<span class="kw-2">&amp;</span>state.module_instance_id())
+            {
+                <span class="macro">bail!</span>(<span class="string">&quot;Unknown module&quot;</span>);
+            }
+
+            <span class="kw">let </span>is_active_state = dbtx
+                .get_value(<span class="kw-2">&amp;</span>ActiveStateKey::&lt;GC&gt;(state.clone()))
+                .<span class="kw">await
+                </span>.is_some();
+            <span class="kw">let </span>is_inactive_state = dbtx
+                .get_value(<span class="kw-2">&amp;</span>InactiveStateKey::&lt;GC&gt;(state.clone()))
+                .<span class="kw">await
+                </span>.is_some();
+
+            <span class="kw">if </span>is_active_state || is_inactive_state {
+                <span class="macro">bail!</span>(<span class="string">&quot;State already exists in database!&quot;</span>)
+            }
+
+            <span class="kw">if </span>state.is_terminal(
+                <span class="self">self</span>.inner
+                    .module_contexts
+                    .get(<span class="kw-2">&amp;</span>state.module_instance_id())
+                    .expect(<span class="string">&quot;No such module&quot;</span>),
+                <span class="self">self</span>.inner.context.lock().<span class="kw">await</span>.as_ref().expect(<span class="string">&quot;&quot;</span>),
+            ) {
+                <span class="macro">bail!</span>(<span class="string">&quot;State is already terminal, adding it to the executor doesn&#39;t make sense.&quot;</span>)
+            }
+
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>ActiveStateKey(state), <span class="kw-2">&amp;</span>ActiveState::new())
+                .<span class="kw">await</span>;
+        }
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -862,7 +906,7 @@
     ///
     /// Check if state exists in the database as part of an actively running
     /// state machine.
-    </span><span class="kw">pub async fn </span>contains_active_state&lt;S: State&lt;GC&gt;&gt;(
+    </span><span class="kw">pub async fn </span>contains_active_state&lt;S: State&lt;GlobalContext = GC&gt;&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         instance: ModuleInstanceId,
         state: S,
@@ -882,7 +926,7 @@
     /// terminal it means the corresponding state machine finished its
     /// execution. If the state is non-terminal it means the state machine was
     /// in that state at some point but moved on since then.
-    </span><span class="kw">pub async fn </span>contains_inactive_state&lt;S: State&lt;GC&gt;&gt;(
+    </span><span class="kw">pub async fn </span>contains_inactive_state&lt;S: State&lt;GlobalContext = GC&gt;&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         instance: ModuleInstanceId,
         state: S,
@@ -894,16 +938,60 @@
             </span>.into_iter()
             .any(|(s, <span class="kw">_</span>)| s == state)
     }
+
+    <span class="kw">pub async fn </span>await_inactive_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) -&gt; InactiveState {
+        <span class="self">self</span>.inner
+            .db
+            .wait_key_exists(<span class="kw-2">&amp;</span>InactiveStateKey(state))
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>await_active_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) -&gt; ActiveState {
+        <span class="self">self</span>.inner.db.wait_key_exists(<span class="kw-2">&amp;</span>ActiveStateKey(state)).<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Starts the background thread that runs the state machines. This cannot
+    /// be done when building the executor since some global contexts in turn
+    /// may depend on the executor, forming a cyclic dependency.
+    ///
+    /// ## Panics
+    /// If called more than once.
+    </span><span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup, context: GC) {
+        <span class="kw">let </span>replaced_old = <span class="self">self
+            </span>.inner
+            .context
+            .lock()
+            .<span class="kw">await
+            </span>.replace(context.clone())
+            .is_some();
+        <span class="macro">assert!</span>(!replaced_old, <span class="string">&quot;start_executor was called previously&quot;</span>);
+
+        <span class="kw">let </span>task_runner_inner = <span class="self">self</span>.inner.clone();
+        <span class="kw">let </span>_handle = tg
+            .spawn(<span class="string">&quot;state_machine_executor&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+                <span class="kw">let </span>shutdown_future = handle.make_shutdown_rx().<span class="kw">await</span>;
+                <span class="kw">let </span>executor_runner = task_runner_inner.run(<span class="kw-2">&amp;</span>context);
+                <span class="macro">select! </span>{
+                    <span class="kw">_ </span>= shutdown_future =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;Shutting down state machine executor runner&quot;</span>);
+                    },
+                    <span class="kw">_ </span>= executor_runner =&gt; {
+                        <span class="macro">error!</span>(<span class="string">&quot;State machine executor runner exited unexpectedly!&quot;</span>);
+                    },
+                };
+            })
+            .<span class="kw">await</span>;
+    }
 }
 
 <span class="kw">impl</span>&lt;GC&gt; ExecutorInner&lt;GC&gt;
 <span class="kw">where
     </span>GC: GlobalContext,
 {
-    <span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+    <span class="kw">async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>, global_context: <span class="kw-2">&amp;</span>GC) {
         <span class="macro">info!</span>(<span class="string">&quot;Starting state machine executor task&quot;</span>);
         <span class="kw">loop </span>{
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.execute_next_state_transition().<span class="kw">await </span>{
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.execute_next_state_transition(global_context).<span class="kw">await </span>{
                 <span class="macro">warn!</span>(
                     %err,
                     <span class="string">&quot;An unexpected error occurred during a state transition&quot;
@@ -912,7 +1000,7 @@
         }
     }
 
-    <span class="kw">async fn </span>execute_next_state_transition(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>execute_next_state_transition(<span class="kw-2">&amp;</span><span class="self">self</span>, global_context: <span class="kw-2">&amp;</span>GC) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
 
         <span class="kw">if </span>active_states.is_empty() {
@@ -931,7 +1019,7 @@
                     .get(<span class="kw-2">&amp;</span>module_instance)
                     .expect(<span class="string">&quot;Unknown module&quot;</span>);
                 state
-                    .transitions(context, <span class="kw-2">&amp;</span><span class="self">self</span>.context)
+                    .transitions(context, global_context)
                     .into_iter()
                     .map(<span class="kw">move </span>|transition| {
                         Box::pin(<span class="kw">async move </span>{
@@ -976,7 +1064,6 @@
                             </span>.module_contexts
                             .get(<span class="kw-2">&amp;</span>state.module_instance_id())
                             .expect(<span class="string">&quot;Unknown module&quot;</span>);
-                        <span class="kw">let </span>global_context = <span class="kw-2">&amp;</span><span class="self">self</span>.context;
 
                         <span class="kw">if </span>new_state.is_terminal(context, global_context) {
                             <span class="comment">// TODO: log state machine id or something
@@ -1031,6 +1118,22 @@
     </span>}
 }
 
+<span class="kw">impl</span>&lt;GC: GlobalContext&gt; Debug <span class="kw">for </span>ExecutorInner&lt;GC&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="kw">let </span>(active, inactive) = futures::executor::block_on(<span class="kw">async </span>{
+            <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
+            <span class="kw">let </span>inactive_states = <span class="self">self</span>.get_inactive_states().<span class="kw">await</span>;
+            (active_states, inactive_states)
+        });
+        <span class="macro">writeln!</span>(f, <span class="string">&quot;ExecutorInner {{&quot;</span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(f, <span class="string">&quot;    active_states: {active:?}&quot;</span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(f, <span class="string">&quot;    inactive_states: {inactive:?}&quot;</span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(f, <span class="string">&quot;}}&quot;</span>)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
 <span class="kw">impl </span>ExecutorBuilder {
     <span class="doccomment">/// Allow executor being built to run state machines associated with the
     /// supplied module
@@ -1038,9 +1141,15 @@
     <span class="kw">where
         </span>C: IntoDynInstance&lt;DynType = DynContext&gt;,
     {
+        <span class="self">self</span>.with_module_dyn(context.into_dyn(instance_id));
+    }
+
+    <span class="doccomment">/// Allow executor being built to run state machines associated with the
+    /// supplied module
+    </span><span class="kw">pub fn </span>with_module_dyn(<span class="kw-2">&amp;mut </span><span class="self">self</span>, context: DynContext) {
         <span class="kw">if </span><span class="self">self
             </span>.module_contexts
-            .insert(instance_id, context.into_dyn(instance_id))
+            .insert(context.module_instance_id(), context)
             .is_some()
         {
             <span class="macro">panic!</span>(<span class="string">&quot;Tried to add two modules with the same instance id!&quot;</span>);
@@ -1050,31 +1159,15 @@
     <span class="doccomment">/// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    </span><span class="kw">pub async fn </span>build&lt;GC&gt;(<span class="self">self</span>, tasks: <span class="kw-2">&amp;mut </span>TaskGroup, db: Database, context: GC) -&gt; Executor&lt;GC&gt;
+    </span><span class="kw">pub async fn </span>build&lt;GC&gt;(<span class="self">self</span>, db: Database) -&gt; Executor&lt;GC&gt;
     <span class="kw">where
         </span>GC: GlobalContext,
     {
         <span class="kw">let </span>inner = Arc::new(ExecutorInner {
             db,
-            context,
+            context: Mutex::new(<span class="prelude-val">None</span>),
             module_contexts: <span class="self">self</span>.module_contexts,
         });
-
-        <span class="kw">let </span>task_runner_inner = inner.clone();
-        <span class="kw">let </span>_handle = tasks
-            .spawn(<span class="string">&quot;state_machine_executor&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-                <span class="kw">let </span>shutdown_future = handle.make_shutdown_rx().<span class="kw">await</span>;
-                <span class="kw">let </span>executor_runner = task_runner_inner.run();
-                <span class="macro">select! </span>{
-                    <span class="kw">_ </span>= shutdown_future =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;Shutting down state machine executor runner&quot;</span>);
-                    },
-                    <span class="kw">_ </span>= executor_runner =&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;State machine executor runner exited unexpectedly!&quot;</span>);
-                    },
-                };
-            })
-            .<span class="kw">await</span>;
 
         <span class="macro">debug!</span>(
             instances = <span class="question-mark">?</span>inner.module_contexts.keys().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
@@ -1086,7 +1179,7 @@
 
 <span class="doccomment">/// A state that is able to make progress eventually
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">struct </span>ActiveStateKey&lt;GC&gt;(DynState&lt;GC&gt;);
+</span><span class="kw">pub struct </span>ActiveStateKey&lt;GC&gt;(<span class="kw">pub </span>DynState&lt;GC&gt;);
 
 <span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>ActiveStateKey&lt;GC&gt; {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
@@ -1122,7 +1215,7 @@
 }
 
 <span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable)]
-</span><span class="kw">struct </span>ActiveState {
+</span><span class="kw">pub struct </span>ActiveState {
     created_at: SystemTime,
 }
 
@@ -1131,9 +1224,13 @@
     </span>GC: GlobalContext,
 {
     <span class="kw">const </span>DB_PREFIX: u8 = ExecutorDbPrefixes::ActiveStates <span class="kw">as </span>u8;
+    <span class="kw">const </span>NOTIFY_ON_MODIFY: bool = <span class="bool-val">true</span>;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = ActiveState;
 }
+
+<span class="kw">impl</span>&lt;GC&gt; DatabaseKeyWithNotify <span class="kw">for </span>ActiveStateKey&lt;GC&gt; <span class="kw">where </span>GC: GlobalContext {}
+
 <span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveStateKeyPrefix&lt;GC&gt;
 <span class="kw">where
     </span>GC: GlobalContext,
@@ -1157,7 +1254,7 @@
 
 <span class="doccomment">/// A past or final state of a state machine
 </span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">struct </span>InactiveStateKey&lt;GC&gt;(DynState&lt;GC&gt;);
+</span><span class="kw">pub struct </span>InactiveStateKey&lt;GC&gt;(<span class="kw">pub </span>DynState&lt;GC&gt;);
 
 <span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>InactiveStateKey&lt;GC&gt;
 <span class="kw">where
@@ -1198,7 +1295,7 @@
 }
 
 <span class="attr">#[derive(Debug, Copy, Clone, Decodable, Encodable)]
-</span><span class="kw">struct </span>InactiveState {
+</span><span class="kw">pub struct </span>InactiveState {
     created_at: SystemTime,
     exited_at: SystemTime,
 }
@@ -1208,9 +1305,12 @@
     </span>GC: GlobalContext,
 {
     <span class="kw">const </span>DB_PREFIX: u8 = ExecutorDbPrefixes::InactiveStates <span class="kw">as </span>u8;
+    <span class="kw">const </span>NOTIFY_ON_MODIFY: bool = <span class="bool-val">true</span>;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = InactiveState;
 }
+
+<span class="kw">impl</span>&lt;GC&gt; DatabaseKeyWithNotify <span class="kw">for </span>InactiveStateKey&lt;GC&gt; <span class="kw">where </span>GC: GlobalContext {}
 
 <span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveStateKeyPrefix&lt;GC&gt;
 <span class="kw">where
@@ -1221,87 +1321,20 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::fmt::{Debug, Display, Formatter};
+    <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::time::Duration;
 
-    <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+    <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_core::module::ModuleCommon;
-    <span class="kw">use </span>fedimint_core::plugin_types_trait_impl_common;
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
-    <span class="kw">use </span>impl_tools::autoimpl;
-    <span class="kw">use </span>serde::{Deserialize, Serialize};
     <span class="kw">use </span>tokio::sync::broadcast::Sender;
     <span class="kw">use </span>tracing::{info, trace};
 
-    <span class="kw">use </span><span class="kw">crate</span>::module::ClientModule;
     <span class="kw">use </span><span class="kw">crate</span>::sm::state::{Context, DynContext, DynState};
     <span class="kw">use </span><span class="kw">crate</span>::sm::{Executor, OperationId, State, StateTransition};
-
-    <span class="attr">#[derive(Debug)]
-    </span><span class="kw">struct </span>MockClientModule(tokio::sync::broadcast::Sender&lt;u64&gt;);
-
-    <span class="kw">struct </span>MockCommon;
-
-    <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    </span><span class="kw">struct </span>MockInput(());
-
-    <span class="kw">impl </span>Display <span class="kw">for </span>MockInput {
-        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-            std::fmt::Debug::fmt(<span class="self">self</span>, f)
-        }
-    }
-
-    <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    </span><span class="kw">struct </span>MockOutput(());
-
-    <span class="kw">impl </span>Display <span class="kw">for </span>MockOutput {
-        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-            std::fmt::Debug::fmt(<span class="self">self</span>, f)
-        }
-    }
-
-    <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    </span><span class="kw">struct </span>MockOutputOutcome(());
-
-    <span class="kw">impl </span>Display <span class="kw">for </span>MockOutputOutcome {
-        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-            std::fmt::Debug::fmt(<span class="self">self</span>, f)
-        }
-    }
-
-    <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    </span><span class="kw">struct </span>MockConsensusItem(());
-
-    <span class="kw">impl </span>Display <span class="kw">for </span>MockConsensusItem {
-        <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-            std::fmt::Debug::fmt(<span class="self">self</span>, f)
-        }
-    }
-
-    <span class="macro">plugin_types_trait_impl_common!</span>(MockInput, MockOutput, MockOutputOutcome, MockConsensusItem);
-
-    <span class="kw">impl </span>ModuleCommon <span class="kw">for </span>MockCommon {
-        <span class="kw">type </span>Input = MockInput;
-        <span class="kw">type </span>Output = MockOutput;
-        <span class="kw">type </span>OutputOutcome = MockOutputOutcome;
-        <span class="kw">type </span>ConsensusItem = MockConsensusItem;
-    }
 
     <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     </span><span class="kw">enum </span>MockStateMachine {
@@ -1310,8 +1343,9 @@
         Final,
     }
 
-    <span class="kw">impl </span>State&lt;()&gt; <span class="kw">for </span>MockStateMachine {
+    <span class="kw">impl </span>State <span class="kw">for </span>MockStateMachine {
         <span class="kw">type </span>ModuleContext = MockContext;
+        <span class="kw">type </span>GlobalContext = ();
 
         <span class="kw">fn </span>transitions(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1401,29 +1435,25 @@
 
     <span class="kw">impl </span>Context <span class="kw">for </span>MockContext {}
 
-    <span class="kw">impl </span>ClientModule <span class="kw">for </span>MockClientModule {
-        <span class="kw">type </span>Common = MockCommon;
-        <span class="kw">type </span>ModuleStateMachineContext = MockContext;
-        <span class="kw">type </span>GlobalStateMachineContext = ();
-        <span class="kw">type </span>States = MockStateMachine;
-
-        <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
-            MockContext {
-                broadcast: <span class="self">self</span>.<span class="number">0</span>.clone(),
-            }
-        }
-    }
-
     <span class="kw">async fn </span>get_executor(tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; (Executor&lt;()&gt;, Sender&lt;u64&gt;, Database) {
         <span class="kw">let </span>(broadcast, <span class="kw">_</span>) = tokio::sync::broadcast::channel(<span class="number">10</span>);
-        <span class="kw">let </span>module = MockClientModule(broadcast.clone());
 
-        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(<span class="number">42</span>, MockClientModule::decoder())]);
+        <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::&lt;MockStateMachine&gt;();
+        <span class="kw">let </span>decoder = decoder_builder.build();
+
+        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(<span class="number">42</span>, decoder)]);
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
         <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::&lt;()&gt;::builder();
-        executor_builder.with_module(<span class="number">42</span>, module.context());
-        <span class="kw">let </span>executor = executor_builder.build(tg, db.clone(), ()).<span class="kw">await</span>;
+        executor_builder.with_module(
+            <span class="number">42</span>,
+            MockContext {
+                broadcast: broadcast.clone(),
+            },
+        );
+        <span class="kw">let </span>executor = executor_builder.build(db.clone()).<span class="kw">await</span>;
+        executor.start_executor(tg, ()).<span class="kw">await</span>;
 
         <span class="macro">info!</span>(<span class="string">&quot;Initialized test executor&quot;</span>);
         (executor, broadcast, db)

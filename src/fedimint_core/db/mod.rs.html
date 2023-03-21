@@ -2340,7 +2340,7 @@
 <span class="kw">pub type </span>PrefixStream&lt;<span class="lifetime">&#39;a</span>&gt; = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt; + <span class="lifetime">&#39;a</span>)&gt;&gt;;
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>IDatabase: Debug + MaybeSend + MaybeSync {
+</span><span class="kw">pub trait </span>IDatabase: Debug + MaybeSend + MaybeSync + <span class="lifetime">&#39;static </span>{
     <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt;;
 }
 

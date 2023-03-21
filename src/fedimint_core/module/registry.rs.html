@@ -74,6 +74,7 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
@@ -126,6 +127,15 @@
     </span><span class="kw">pub fn </span>get_expect(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>M {
         <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;Instance ID not found&quot;</span>)
     }
+
+    <span class="doccomment">/// Add a module to the registry
+    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, module: M) {
+        <span class="comment">// FIXME: return result
+        </span><span class="macro">assert!</span>(
+            <span class="self">self</span>.<span class="number">0</span>.insert(id, module).is_none(),
+            <span class="string">&quot;Module was already registered!&quot;
+        </span>)
+    }
 }
 
 <span class="doccomment">/// Collection of server modules
@@ -136,14 +146,6 @@
     </span><span class="kw">pub fn </span>decoder_registry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="comment">// TODO: cache decoders
         </span>ModuleDecoderRegistry::from_iter(<span class="self">self</span>.<span class="number">0</span>.iter().map(|(<span class="kw-2">&amp;</span>id, module)| (id, module.decoder())))
-    }
-
-    <span class="doccomment">/// Add a module to the registry
-    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, module: DynServerModule) {
-        <span class="macro">assert!</span>(
-            <span class="self">self</span>.<span class="number">0</span>.insert(id, module).is_none(),
-            <span class="string">&quot;Module was already registered!&quot;
-        </span>)
     }
 }
 

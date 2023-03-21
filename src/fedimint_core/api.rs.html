@@ -1124,6 +1124,12 @@
 <a href="#1124" id="1124">1124</a>
 <a href="#1125" id="1125">1125</a>
 <a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1438,6 +1444,12 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="kw">pub </span>DynFederationApi(Arc&lt;IFederationApi&gt;)
+}
+
+<span class="kw">impl </span>AsRef&lt;<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>&gt; <span class="kw">for </span>DynFederationApi {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>) {
+        <span class="self">self</span>.<span class="number">0</span>.as_ref()
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]

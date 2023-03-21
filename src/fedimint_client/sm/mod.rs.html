@@ -36,17 +36,19 @@
 <a href="#36" id="36">36</a>
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
-</pre><pre class="rust"><code><span class="kw">mod </span>executor;
+<a href="#39" id="39">39</a>
+</pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>executor;
 <span class="doccomment">/// State machine state interface
 </span><span class="kw">mod </span>state;
 
 <span class="kw">use </span>std::fmt::Debug;
 
-<span class="kw">pub use </span>executor::{Executor, ExecutorBuilder};
-<span class="kw">pub use </span>state::{Context, DynContext, DynState, State, StateTransition};
+<span class="kw">pub use </span>executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
+<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
+<span class="kw">pub use </span>state::{Context, DynContext, DynState, OperationState, State, StateTransition};
 
 <span class="doccomment">/// Context given to all state machines
-</span><span class="kw">pub trait </span>GlobalContext: Debug + Sync + Send + <span class="lifetime">&#39;static </span>{}
+</span><span class="kw">pub trait </span>GlobalContext: Debug + Clone + MaybeSync + MaybeSend + <span class="lifetime">&#39;static </span>{}
 
 <span class="kw">impl </span>GlobalContext <span class="kw">for </span>() {}
 
