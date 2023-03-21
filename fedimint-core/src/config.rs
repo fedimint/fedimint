@@ -246,6 +246,12 @@ pub struct ConfigGenParams(serde_json::Value);
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
 impl ConfigGenParams {
+    /// Null value, used as a config gen parameters for module gens that don't
+    /// need any parameters
+    pub fn null() -> Self {
+        Self(jsonrpsee_core::JsonValue::Null)
+    }
+
     pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
         serde_json::from_value(self.0.clone())
             .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))

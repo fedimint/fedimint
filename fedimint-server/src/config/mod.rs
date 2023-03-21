@@ -373,6 +373,8 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
+        let null_config_gen = ConfigGenParams::null();
+
         // We assume user wants one module instance for every module kind
         let module_configs: BTreeMap<_, _> = registry
             .legacy_init_order_iter()
@@ -382,10 +384,7 @@ impl ServerConfig {
                     u16::try_from(module_id).expect("Can't fail"),
                     gen.trusted_dealer_gen(
                         peers,
-                        peer0
-                            .modules
-                            .get(&kind)
-                            .expect("Missing config gen params for {kind}"),
+                        peer0.modules.get(&kind).unwrap_or(&null_config_gen),
                     ),
                 )
             })
@@ -462,20 +461,15 @@ impl ServerConfig {
         // of each module that was compiled in. This is how things were
         // initially, where we consider "module as a code" as "module as an instance at
         // runtime"
+        let null_config_gen = ConfigGenParams::null();
         for (module_instance_id, (kind, gen)) in registry.legacy_init_order_iter().enumerate() {
             let module_instance_id = u16::try_from(module_instance_id)
                 .expect("64k module instances should be enough for everyone");
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(
-                    &dkg,
-                    params
-                        .modules
-                        .get(&kind)
-                        .expect("Missing module config gen for {kind}"),
-                )
-                .await?,
+                gen.distributed_gen(&dkg, params.modules.get(&kind).unwrap_or(&null_config_gen))
+                    .await?,
             );
         }
 
