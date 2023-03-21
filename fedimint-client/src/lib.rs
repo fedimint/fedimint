@@ -377,7 +377,7 @@ impl ClientBuilder {
                         .module_gens
                         .get(module_config.kind())
                         .ok_or(anyhow!("Unknown module kind in config"))?
-                        .init(module_config, db.clone())
+                        .init(module_config, db.clone(), module_instance)
                         .await?;
                     modules.register_module(module_instance, module);
                 }

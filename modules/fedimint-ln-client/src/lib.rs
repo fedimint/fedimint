@@ -22,7 +22,12 @@ impl ClientModuleGen for LightningClientGen {
     type Module = LightningClientModule;
     type Config = LightningClientConfig;
 
-    async fn init(&self, _cfg: Self::Config, _db: Database) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        _cfg: Self::Config,
+        _db: Database,
+        _instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Self::Module> {
         unimplemented!()
     }
 }
