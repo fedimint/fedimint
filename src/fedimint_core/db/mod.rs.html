@@ -2254,6 +2254,19 @@
 <a href="#2254" id="2254">2254</a>
 <a href="#2255" id="2255">2255</a>
 <a href="#2256" id="2256">2256</a>
+<a href="#2257" id="2257">2257</a>
+<a href="#2258" id="2258">2258</a>
+<a href="#2259" id="2259">2259</a>
+<a href="#2260" id="2260">2260</a>
+<a href="#2261" id="2261">2261</a>
+<a href="#2262" id="2262">2262</a>
+<a href="#2263" id="2263">2263</a>
+<a href="#2264" id="2264">2264</a>
+<a href="#2265" id="2265">2265</a>
+<a href="#2266" id="2266">2266</a>
+<a href="#2267" id="2267">2267</a>
+<a href="#2268" id="2268">2268</a>
+<a href="#2269" id="2269">2269</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2364,20 +2377,20 @@
 </span><span class="kw">pub enum </span>AutocommitError&lt;E&gt; {
     <span class="doccomment">/// Committing the transaction failed too many times, giving up
     </span>CommitFailed {
-        <span class="doccomment">/// Number of retries
-        </span>retries: usize,
+        <span class="doccomment">/// Number of attempts
+        </span>attempts: usize,
         <span class="doccomment">/// Last error on commit
         </span>last_error: anyhow::Error,
     },
     <span class="doccomment">/// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
     </span>ClosureError {
-        <span class="doccomment">/// Retry on which the closure returned an error
+        <span class="doccomment">/// The attempt on which the closure returned an error
         ///
         /// Values other than 0 typically indicate a logic error since the
         /// closure given to `autocommit` should not have side effects
         /// and thus keep succeeding if it succeeded once.
-        </span>retries: usize,
+        </span>attempts: usize,
         <span class="doccomment">/// Error returned by the closure
         </span>error: E,
     },
@@ -2424,8 +2437,8 @@
 
     <span class="doccomment">/// Runs a closure with a reference to a database transaction and tries to
     /// commit the transaction if the closure returns `Ok` and rolls it back
-    /// otherwise. If committing fails the closure is run again for up to
-    /// `max_retries` times. If `max_retries` is `None` it will run
+    /// otherwise. If committing fails the closure is run for up to
+    /// `max_attempts` times. If `max_attempts` is `None` it will run
     /// `usize::MAX` times which is close enough to infinite times.
     ///
     /// The closure `tx_fn` provided should not have side effects outside of the
@@ -2444,47 +2457,57 @@
     /// `DatabaseTransaction` must live as least as long as `self` and that is
     /// true as the `DatabaseTransaction` is only dropped at the end of the
     /// `loop{}`.
+    ///
+    /// # Panics
+    ///
+    /// This function panics when the given number of maximum attempts is zero.
+    /// `max_attempts` must be greater or equal to one.
     </span><span class="kw">pub async fn </span>autocommit&lt;<span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;dt</span>, <span class="lifetime">&#39;dt</span>, F, T, E&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span><span class="self">self</span>,
         tx_fn: F,
-        max_retries: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+        max_attempts: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;T, AutocommitError&lt;E&gt;&gt;
     <span class="kw">where
         for</span>&lt;<span class="lifetime">&#39;a</span>&gt; F: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;dt</span>&gt;) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;T, E&gt;&gt;,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>retries: usize = <span class="number">0</span>;
+        <span class="macro">assert_ne!</span>(max_attempts, <span class="prelude-val">Some</span>(<span class="number">0</span>));
+        <span class="kw">let </span><span class="kw-2">mut </span>curr_attempts: usize = <span class="number">0</span>;
+
         <span class="kw">loop </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.begin_transaction().<span class="kw">await</span>;
-
-            <span class="kw">match </span>tx_fn(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(val) =&gt; {
-                    <span class="kw">match </span>dbtx.commit_tx_result().<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(()) =&gt; {
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
-                        }
-                        <span class="prelude-val">Err</span>(e) <span class="kw">if </span>max_retries.map(|mr| mr &lt;= retries).unwrap_or(<span class="bool-val">false</span>) =&gt; {
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
-                                retries,
-                                last_error: e,
-                            });
-                        }
-                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="comment">// try again
-                        </span>}
-                    }
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::ClosureError { retries, error: e });
-                }
-            };
-
             <span class="comment">// The `checked_add()` function is used to catch the `usize` overflow.
             // With `usize=32bit` and an assumed time of 1ms per iteration, this would crash
             // after ~50 days. But if that&#39;s the case, something else must be wrong.
             // With `usize=64bit` it would take much longer, obviously.
-            </span>retries = retries
+            </span>curr_attempts = curr_attempts
                 .checked_add(<span class="number">1</span>)
-                .expect(<span class="string">&quot;db autocommit retry counter overflowed&quot;</span>);
+                .expect(<span class="string">&quot;db autocommit attempt counter overflowed&quot;</span>);
+
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.begin_transaction().<span class="kw">await</span>;
+
+            <span class="kw">match </span>tx_fn(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(val) =&gt; <span class="kw">match </span>dbtx.commit_tx_result().<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(()) =&gt; {
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
+                    }
+                    <span class="prelude-val">Err</span>(err) =&gt; {
+                        <span class="kw">if </span>max_attempts
+                            .map(|max_att| max_att &lt;= curr_attempts)
+                            .unwrap_or(<span class="bool-val">false</span>)
+                        {
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
+                                attempts: curr_attempts,
+                                last_error: err,
+                            });
+                        }
+                    }
+                },
+                <span class="prelude-val">Err</span>(err) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::ClosureError {
+                        attempts: curr_attempts,
+                        error: err,
+                    });
+                }
+            };
         } <span class="comment">// end of loop
     </span>}
 
@@ -4355,8 +4378,11 @@
             </span>.unwrap_err();
 
         <span class="kw">match </span>err {
-            AutocommitError::CommitFailed { retries, .. } =&gt; {
-                <span class="macro">assert_eq!</span>(retries, <span class="number">5</span>)
+            AutocommitError::CommitFailed {
+                attempts: failed_attempts,
+                ..
+            } =&gt; {
+                <span class="macro">assert_eq!</span>(failed_attempts, <span class="number">5</span>)
             }
             AutocommitError::ClosureError { .. } =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Closure did not return error&quot;</span>),
         }
