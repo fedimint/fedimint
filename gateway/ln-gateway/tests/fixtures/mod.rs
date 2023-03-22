@@ -54,10 +54,10 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
         module_gens,
         task_group.clone(),
     )
-    .await;
+    .await
+    .unwrap();
 
     let rpc = RpcClient::new(api_addr);
-
     let bitcoin = Box::new(FakeBitcoinTest::new());
     let lightning = Box::new(FakeLightningTest::new());
 

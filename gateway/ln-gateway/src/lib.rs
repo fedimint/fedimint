@@ -61,6 +61,8 @@ pub enum GatewayError {
     FederationError(#[from] FederationError),
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
+    #[error("Failed to fetch route hints")]
+    FailedToFetchRouteHints,
 }
 
 impl IntoResponse for GatewayError {
@@ -90,14 +92,37 @@ impl Gateway {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
-    ) -> Self {
+    ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
 
-        // Source route hints form the LN node
+        let gw = Self {
+            lnrpc,
+            actors: Mutex::new(HashMap::new()),
+            sender,
+            receiver,
+            client_builder,
+            task_group,
+            channel_id_generator: AtomicU64::new(0),
+            decoders: decoders.clone(),
+            module_gens: module_gens.clone(),
+        };
+
+        gw.load_actors(decoders, module_gens).await?;
+
+        Ok(gw)
+    }
+
+    async fn load_actors(
+        &self,
+        decoders: ModuleDecoderRegistry,
+        module_gens: ClientModuleGenRegistry,
+    ) -> Result<()> {
+        // Fetch route hints form the LN node
         let mut num_retries = 0;
         let route_hints = loop {
-            let route_hints: Vec<RouteHint> = lnrpc
+            let route_hints: Vec<RouteHint> = self
+                .lnrpc
                 .routehints()
                 .await
                 .expect("Could not fetch route hints")
@@ -116,31 +141,6 @@ impl Gateway {
             num_retries += 1;
             tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
-
-        let gw = Self {
-            lnrpc,
-            actors: Mutex::new(HashMap::new()),
-            sender,
-            receiver,
-            client_builder,
-            task_group,
-            channel_id_generator: AtomicU64::new(0),
-            decoders: decoders.clone(),
-            module_gens: module_gens.clone(),
-        };
-
-        gw.load_federation_actors(decoders, module_gens, route_hints)
-            .await;
-
-        gw
-    }
-
-    async fn load_federation_actors(
-        &self,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-        route_hints: Vec<RouteHint>,
-    ) {
         if let Ok(configs) = self.client_builder.load_configs() {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
 
@@ -151,10 +151,7 @@ impl Gateway {
                     .await
                     .expect("Could not build federation client");
 
-                if let Err(e) = self
-                    .connect_federation(Arc::new(client), route_hints.clone())
-                    .await
-                {
+                if let Err(e) = self.load_actor(Arc::new(client), route_hints.clone()).await {
                     error!("Failed to connect federation: {}", e);
                 }
 
@@ -167,21 +164,10 @@ impl Gateway {
         } else {
             warn!("Could not load any previous federation configs");
         }
+        Ok(())
     }
 
-    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
-        self.actors
-            .lock()
-            .await
-            .get(&federation_id.to_string())
-            .cloned()
-            .ok_or(GatewayError::Other(anyhow::anyhow!(
-                "No federation with id {}",
-                federation_id.to_string()
-            )))
-    }
-
-    pub async fn connect_federation(
+    pub async fn load_actor(
         &self,
         client: Arc<GatewayClient>,
         route_hints: Vec<RouteHint>,
@@ -201,6 +187,18 @@ impl Gateway {
             actor.clone(),
         );
         Ok(actor)
+    }
+
+    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+        self.actors
+            .lock()
+            .await
+            .get(&federation_id.to_string())
+            .cloned()
+            .ok_or(GatewayError::Other(anyhow::anyhow!(
+                "No federation with id {}",
+                federation_id.to_string()
+            )))
     }
 
     async fn handle_connect_federation(
@@ -237,7 +235,7 @@ impl Gateway {
                 .expect("Failed to build gateway client"),
         );
 
-        if let Err(e) = self.connect_federation(client.clone(), route_hints).await {
+        if let Err(e) = self.load_actor(client.clone(), route_hints).await {
             error!("Failed to connect federation: {}", e);
         }
 

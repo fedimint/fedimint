@@ -612,7 +612,8 @@ impl GatewayTest {
             module_gens.clone(),
             TaskGroup::new(),
         )
-        .await;
+        .await
+        .unwrap();
 
         let client = Arc::new(
             client_builder
@@ -622,7 +623,7 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .connect_federation(client.clone(), vec![])
+            .load_actor(client.clone(), vec![])
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios
