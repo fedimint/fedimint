@@ -230,37 +230,6 @@ impl ClientConfig {
     }
 }
 
-/// Parameters for generating all module configs
-///
-/// The same `ModuleKind` may have multiple instances with different settings
-#[derive(Debug, Clone, Default)]
-pub struct ConfigGenParams(BTreeMap<String, serde_json::Value>);
-
-impl ConfigGenParams {
-    pub fn new() -> ConfigGenParams {
-        ConfigGenParams::default()
-    }
-
-    /// Add params for a module
-    pub fn attach<P: ModuleGenParams>(mut self, module_params: P) -> Self {
-        self.0.insert(
-            P::MODULE_NAME.to_string(),
-            serde_json::to_value(&module_params).expect("Encoding to value doesn't fail"),
-        );
-        self
-    }
-
-    /// Retrieve a typed config generation parameters for a module
-    pub fn get<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
-        let value = self
-            .0
-            .get(P::MODULE_NAME)
-            .ok_or_else(|| anyhow::anyhow!("No params found for module {}", P::MODULE_NAME))?;
-        serde_json::from_value(value.clone())
-            .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct ModuleGenRegistry<M>(BTreeMap<ModuleKind, M>);
 
@@ -270,9 +239,38 @@ impl<M> Default for ModuleGenRegistry<M> {
     }
 }
 
+/// Module **generation** (so passed to dkg, not to the module itself) config
+/// parameters
+#[derive(Debug, Clone, Default)]
+pub struct ConfigGenParams(serde_json::Value);
+
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
+impl ConfigGenParams {
+    /// Null value, used as a config gen parameters for module gens that don't
+    /// need any parameters
+    pub fn null() -> Self {
+        Self(jsonrpsee_core::JsonValue::Null)
+    }
+
+    pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
+        serde_json::from_value(self.0.clone())
+            .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
+    }
+
+    pub fn from_typed<P: ModuleGenParams>(p: P) -> anyhow::Result<Self> {
+        Ok(Self(serde_json::to_value(p)?))
+    }
+}
+
 pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
+
+/// Configs for each module's DKG
+///
+/// Note: in the future, we should make this one a
+/// `ModuleRegistry<ConfigGenParams>`, as each module **instance** will need a
+/// distinct config for dkg.
+pub type ServerModuleGenParamsRegistry = ModuleGenRegistry<ConfigGenParams>;
 
 impl<M> From<Vec<M>> for ModuleGenRegistry<M>
 where
@@ -335,6 +333,42 @@ impl<M> ModuleGenRegistry<M> {
             next_id: 0,
             rest: self.0.clone(),
         }
+    }
+}
+
+impl ModuleGenRegistry<ConfigGenParams> {
+    pub fn attach_config_gen_params<T>(&mut self, kind: ModuleKind, gen: T) -> &mut Self
+    where
+        T: ModuleGenParams,
+    {
+        if self
+            .0
+            .insert(
+                kind.clone(),
+                ConfigGenParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+            )
+            .is_some()
+        {
+            panic!("Can't insert module of same kind twice: {kind}");
+        }
+        self
+    }
+
+    pub fn with_config_gen_params<T>(mut self, kind: ModuleKind, gen: T) -> Self
+    where
+        T: ModuleGenParams,
+    {
+        if self
+            .0
+            .insert(
+                kind.clone(),
+                ConfigGenParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+            )
+            .is_some()
+        {
+            panic!("Can't insert module of same kind twice: {kind}");
+        }
+        self
     }
 }
 
@@ -419,7 +453,14 @@ impl<M> Iterator for LegacyInitOrderIter<M> {
 }
 
 pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
-    const MODULE_NAME: &'static str;
+    fn from_json<P: ModuleGenParams>(value: serde_json::Value) -> anyhow::Result<Self> {
+        serde_json::from_value(value)
+            .map_err(|e| anyhow::Error::new(e).context("Invalid module gen params"))
+    }
+
+    fn to_json(p: Self) -> anyhow::Result<serde_json::Value> {
+        Ok(serde_json::to_value(p)?)
+    }
 }
 
 /// Response from the API for this particular module

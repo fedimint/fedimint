@@ -42,9 +42,7 @@ pub struct DummyConfigGenParams {
     pub important_param: u64,
 }
 
-impl ModuleGenParams for DummyConfigGenParams {
-    const MODULE_NAME: &'static str = "dummy";
-}
+impl ModuleGenParams for DummyConfigGenParams {}
 
 #[derive(
     Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,

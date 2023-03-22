@@ -81,9 +81,7 @@ pub struct WalletGenParams {
     pub finality_delay: u32,
 }
 
-impl ModuleGenParams for WalletGenParams {
-    const MODULE_NAME: &'static str = "wallet";
-}
+impl ModuleGenParams for WalletGenParams {}
 
 #[derive(Debug, Clone)]
 pub struct WalletGen;
@@ -118,8 +116,8 @@ impl ServerModuleGen for WalletGen {
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
-            .get::<WalletGenParams>()
-            .expect("Invalid wallet params");
+            .to_typed::<WalletGenParams>()
+            .expect("Invalid wallet gen params");
 
         let secp = secp256k1::Secp256k1::new();
 
@@ -157,7 +155,7 @@ impl ServerModuleGen for WalletGen {
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = params
-            .get::<WalletGenParams>()
+            .to_typed::<WalletGenParams>()
             .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
