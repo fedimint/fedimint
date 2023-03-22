@@ -423,8 +423,6 @@
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>lnd;
@@ -488,6 +486,8 @@
     </span>FederationError(<span class="attr">#[from] </span>FederationError),
     <span class="attr">#[error(<span class="string">&quot;Other: {0:?}&quot;</span>)]
     </span>Other(<span class="attr">#[from] </span>anyhow::Error),
+    <span class="attr">#[error(<span class="string">&quot;Failed to fetch route hints&quot;</span>)]
+    </span>FailedToFetchRouteHints,
 }
 
 <span class="kw">impl </span>IntoResponse <span class="kw">for </span>GatewayError {
@@ -517,14 +517,37 @@
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
-    ) -&gt; <span class="self">Self </span>{
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="comment">// Create message channels for the webserver
         </span><span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;GatewayRequest&gt;(<span class="number">100</span>);
 
-        <span class="comment">// Source route hints form the LN node
+        <span class="kw">let </span>gw = <span class="self">Self </span>{
+            lnrpc,
+            actors: Mutex::new(HashMap::new()),
+            sender,
+            receiver,
+            client_builder,
+            task_group,
+            channel_id_generator: AtomicU64::new(<span class="number">0</span>),
+            decoders: decoders.clone(),
+            module_gens: module_gens.clone(),
+        };
+
+        gw.load_actors(decoders, module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(gw)
+    }
+
+    <span class="kw">async fn </span>load_actors(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        decoders: ModuleDecoderRegistry,
+        module_gens: ClientModuleGenRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="comment">// Fetch route hints form the LN node
         </span><span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
         <span class="kw">let </span>route_hints = <span class="kw">loop </span>{
-            <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = lnrpc
+            <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = <span class="self">self
+                </span>.lnrpc
                 .routehints()
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Could not fetch route hints&quot;</span>)
@@ -543,31 +566,6 @@
             num_retries += <span class="number">1</span>;
             tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).<span class="kw">await</span>;
         };
-
-        <span class="kw">let </span>gw = <span class="self">Self </span>{
-            lnrpc,
-            actors: Mutex::new(HashMap::new()),
-            sender,
-            receiver,
-            client_builder,
-            task_group,
-            channel_id_generator: AtomicU64::new(<span class="number">0</span>),
-            decoders: decoders.clone(),
-            module_gens: module_gens.clone(),
-        };
-
-        gw.load_federation_actors(decoders, module_gens, route_hints)
-            .<span class="kw">await</span>;
-
-        gw
-    }
-
-    <span class="kw">async fn </span>load_federation_actors(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-        route_hints: Vec&lt;RouteHint&gt;,
-    ) {
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(configs) = <span class="self">self</span>.client_builder.load_configs() {
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = <span class="self">self</span>.channel_id_generator.load(Ordering::SeqCst);
 
@@ -578,10 +576,7 @@
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;Could not build federation client&quot;</span>);
 
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self
-                    </span>.connect_federation(Arc::new(client), route_hints.clone())
-                    .<span class="kw">await
-                </span>{
+                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.load_actor(Arc::new(client), route_hints.clone()).<span class="kw">await </span>{
                     <span class="macro">error!</span>(<span class="string">&quot;Failed to connect federation: {}&quot;</span>, e);
                 }
 
@@ -594,21 +589,10 @@
         } <span class="kw">else </span>{
             <span class="macro">warn!</span>(<span class="string">&quot;Could not load any previous federation configs&quot;</span>);
         }
+        <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>select_actor(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;GatewayActor&gt;&gt; {
-        <span class="self">self</span>.actors
-            .lock()
-            .<span class="kw">await
-            </span>.get(<span class="kw-2">&amp;</span>federation_id.to_string())
-            .cloned()
-            .ok_or(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;No federation with id {}&quot;</span>,
-                federation_id.to_string()
-            )))
-    }
-
-    <span class="kw">pub async fn </span>connect_federation(
+    <span class="kw">pub async fn </span>load_actor(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client: Arc&lt;GatewayClient&gt;,
         route_hints: Vec&lt;RouteHint&gt;,
@@ -628,6 +612,18 @@
             actor.clone(),
         );
         <span class="prelude-val">Ok</span>(actor)
+    }
+
+    <span class="kw">async fn </span>select_actor(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;GatewayActor&gt;&gt; {
+        <span class="self">self</span>.actors
+            .lock()
+            .<span class="kw">await
+            </span>.get(<span class="kw-2">&amp;</span>federation_id.to_string())
+            .cloned()
+            .ok_or(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;No federation with id {}&quot;</span>,
+                federation_id.to_string()
+            )))
     }
 
     <span class="kw">async fn </span>handle_connect_federation(
@@ -664,7 +660,7 @@
                 </span>.expect(<span class="string">&quot;Failed to build gateway client&quot;</span>),
         );
 
-        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.connect_federation(client.clone(), route_hints).<span class="kw">await </span>{
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.load_actor(client.clone(), route_hints).<span class="kw">await </span>{
             <span class="macro">error!</span>(<span class="string">&quot;Failed to connect federation: {}&quot;</span>, e);
         }
 
