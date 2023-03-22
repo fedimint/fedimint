@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -42,6 +42,15 @@ use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use url::Url;
+
+/// List of modules supported by this cli
+fn get_module_gen_registry() -> ClientModuleGenRegistry {
+    ClientModuleGenRegistry::from(vec![
+        DynClientModuleGen::from(WalletClientGen),
+        DynClientModuleGen::from(MintClientGen),
+        DynClientModuleGen::from(LightningClientGen),
+    ])
+}
 
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
@@ -228,27 +237,46 @@ impl Error for CliError {}
 
 #[derive(Parser)]
 #[command(version)]
-struct Cli {
+struct Opts {
     /// The working directory of the client containing the config and db
     #[arg(long = "workdir")]
-    workdir: PathBuf,
+    workdir: Option<PathBuf>,
+
     #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(Parser)]
-#[command(version)]
-struct CliNoWorkdir {
-    #[clap(subcommand)]
-    command: CommandNoWorkdir,
+impl Opts {
+    fn workdir(&self) -> &Path {
+        self.workdir
+            .as_ref()
+            .or_terminate(CliErrorKind::IOError, "`--workdir=` argument not set.")
+    }
+
+    async fn build_client(&self) -> Client<UserClientConfig> {
+        let module_gens = get_module_gen_registry();
+        let cfg_path = self.workdir().join("client.json");
+        let db_path = self.workdir().join("client.db");
+        let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
+        let db = fedimint_rocksdb::RocksDb::open(db_path)
+            .or_terminate(CliErrorKind::IOError, "could not open transaction db");
+
+        let decoders = ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().map(
+            |(id, module_cfg)| {
+                let module_gen = module_gens
+                    .get(module_cfg.kind())
+                    .expect("module kind not found in registry");
+                (id, module_gen.as_ref().decoder())
+            },
+        ));
+
+        let db = Database::new(db, decoders.clone());
+
+        Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await
+    }
 }
 
-#[derive(Subcommand)]
-enum CommandNoWorkdir {
-    /// Print the latest git commit hash this bin. was build with
-    VersionHash,
-}
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum Command {
     /// Print the latest git commit hash this bin. was build with
     VersionHash,
@@ -311,7 +339,6 @@ enum Command {
     LnInvoice {
         #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
-        #[clap(default_value = "")]
         description: String,
         expiry_time: Option<u64>,
     },
@@ -388,14 +415,19 @@ enum Command {
     EpochCount,
 }
 
-trait ErrorHandler<T, E> {
+/// Extension trait for values that either return `T` or terminate the program
+/// with CLI error
+trait OrTerminate<T> {
     fn or_terminate(self, err: CliErrorKind, msg: &str) -> T;
+}
+
+trait ErrorHandler<T, E>: OrTerminate<T> {
     fn transform<F>(self, success: F, err: CliErrorKind, msg: &str) -> CliResult
     where
         F: Fn(T) -> CliOutput;
 }
 
-impl<T, E: Into<Box<dyn Error>>> ErrorHandler<T, E> for Result<T, E> {
+impl<T, E: Into<Box<dyn Error>>> OrTerminate<T> for Result<T, E> {
     fn or_terminate(self, err: CliErrorKind, msg: &str) -> T {
         match self {
             Ok(v) => v,
@@ -406,6 +438,9 @@ impl<T, E: Into<Box<dyn Error>>> ErrorHandler<T, E> for Result<T, E> {
             }
         }
     }
+}
+
+impl<T, E: Into<Box<dyn Error>>> ErrorHandler<T, E> for Result<T, E> {
     fn transform<F>(self, success: F, err: CliErrorKind, msg: &str) -> CliResult
     where
         F: Fn(T) -> CliOutput,
@@ -413,6 +448,19 @@ impl<T, E: Into<Box<dyn Error>>> ErrorHandler<T, E> for Result<T, E> {
         match self {
             Ok(v) => Ok(success(v)),
             Err(e) => Err(CliError::from(err, msg, Some(e.into()))),
+        }
+    }
+}
+
+impl<T> OrTerminate<T> for Option<T> {
+    fn or_terminate(self, err: CliErrorKind, msg: &str) -> T {
+        match self {
+            Some(v) => v,
+            None => {
+                let cli_error = CliError::from(err, msg, None);
+                eprintln!("{cli_error}");
+                exit(1);
+            }
         }
     }
 }
@@ -429,99 +477,51 @@ struct PayRequest {
 async fn main() {
     TracingSetup::default().init().expect("tracing initializes");
 
-    if let Ok(cli) = CliNoWorkdir::try_parse() {
-        // Only commands that don't need the workdir can be used here
-        //TODO: remove allow when there are more commands
-        #[allow(irrefutable_let_patterns)]
-        if let CommandNoWorkdir::VersionHash = cli.command {
-            println!(
-                "{}",
-                CliOutput::VersionHash {
-                    hash: env!("CODE_VERSION").to_string()
-                }
-            );
-        };
-    } else {
-        let module_gens = ClientModuleGenRegistry::from(vec![
-            DynClientModuleGen::from(WalletClientGen),
-            DynClientModuleGen::from(MintClientGen),
-            DynClientModuleGen::from(LightningClientGen),
-        ]);
+    let cli = Opts::parse();
 
-        let cli = Cli::parse();
-        if let Command::JoinFederation { connect } = cli.command {
+    match handle_command(cli).await {
+        Ok(output) => {
+            // ignore if there's anyone reading the stuff we're writing out
+            let _ = writeln!(std::io::stdout(), "{output}");
+        }
+        Err(err) => {
+            let _ = writeln!(std::io::stderr(), "{err}");
+            exit(1);
+        }
+    }
+}
+
+async fn handle_command(cli: Opts) -> CliResult {
+    let mut task_group = TaskGroup::new();
+    let mut rng = rand::rngs::OsRng;
+
+    match cli.command.clone() {
+        Command::JoinFederation { connect } => {
             let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
                 .map_err(Box::<dyn Error>::from)
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
             let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
                 as Arc<dyn IFederationApi + Send + Sync + 'static>;
             let cfg: ClientConfig = api
-                .download_client_config(&connect_obj.id, module_gens.to_common())
+                .download_client_config(&connect_obj.id, get_module_gen_registry().to_common())
                 .await
                 .or_terminate(
                     CliErrorKind::NetworkError,
                     "couldn't download config from peer",
                 );
-            let cfg_path = cli.workdir.join("client.json");
-            std::fs::create_dir_all(&cli.workdir)
+            let cfg_path = cli.workdir().join("client.json");
+            std::fs::create_dir_all(cli.workdir())
                 .or_terminate(CliErrorKind::IOError, "failed to create config directory");
             let writer = std::fs::File::create(cfg_path)
                 .or_terminate(CliErrorKind::IOError, "couldn't create config.json");
             serde_json::to_writer_pretty(writer, &cfg)
                 .or_terminate(CliErrorKind::IOError, "couldn't write config");
-            println!(
-                "{}",
-                &CliOutput::JoinFederation { joined: (connect) }.to_string()
-            );
-            return;
-        };
-
-        let cfg_path = cli.workdir.join("client.json");
-        let db_path = cli.workdir.join("client.db");
-        let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
-        let db = fedimint_rocksdb::RocksDb::open(db_path)
-            .or_terminate(CliErrorKind::IOError, "could not open transaction db");
-
-        let decoders = ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().map(
-            |(id, module_cfg)| {
-                let module_gen = module_gens
-                    .get(module_cfg.kind())
-                    .expect("module kind not found in registry");
-                (id, module_gen.as_ref().decoder())
-            },
-        ));
-
-        let db = Database::new(db, decoders.clone());
-
-        let rng = rand::rngs::OsRng;
-
-        let client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await;
-
-        let cli_result = handle_command(cli, client, rng).await;
-
-        match cli_result {
-            Ok(output) => {
-                // ignore if there's anyone reading the stuff we're writing out
-                let _ = writeln!(std::io::stdout(), "{output}");
-            }
-            Err(err) => {
-                let _ = writeln!(std::io::stderr(), "{err}");
-                exit(1);
-            }
+            Ok(CliOutput::JoinFederation { joined: (connect) })
         }
-    }
-}
-
-async fn handle_command(
-    cli: Cli,
-    client: Client<UserClientConfig>,
-    mut rng: rand::rngs::OsRng,
-) -> CliResult {
-    let mut task_group = TaskGroup::new();
-    match cli.command {
         Command::Api { method, arg } => {
             let arg: Value = serde_json::from_str(&arg).unwrap();
-            let ws_api: Arc<_> = WsFederationApi::from_config(client.config().as_ref()).into();
+            let ws_api: Arc<_> =
+                WsFederationApi::from_config(cli.build_client().await.config().as_ref()).into();
             let response: Value = ws_api
                 .request_with_strategy(
                     EventuallyConsistent::new(ws_api.peers().len()),
@@ -537,7 +537,7 @@ async fn handle_command(
             hash: env!("CODE_VERSION").to_string(),
         }),
         Command::PegInAddress => {
-            let peg_in_address = client.get_new_pegin_address(rng).await;
+            let peg_in_address = cli.build_client().await.get_new_pegin_address(rng).await;
             Ok(CliOutput::PegInAddress {
                 address: (peg_in_address),
             })
@@ -545,7 +545,9 @@ async fn handle_command(
         Command::PegIn {
             txout_proof,
             transaction,
-        } => client
+        } => cli
+            .build_client()
+            .await
             .peg_in(txout_proof, transaction, &mut rng)
             .await
             .transform(
@@ -555,7 +557,7 @@ async fn handle_command(
             ),
 
         Command::Reissue { notes } => {
-            let id = client.reissue(notes, &mut rng).await;
+            let id = cli.build_client().await.reissue(notes, &mut rng).await;
             id.transform(
                 |v| CliOutput::Reissue { id: (v) },
                 CliErrorKind::GeneralFederationError,
@@ -563,7 +565,11 @@ async fn handle_command(
             )
         }
         Command::Validate { notes } => {
-            let validate_result = client.validate_note_signatures(&notes).await;
+            let validate_result = cli
+                .build_client()
+                .await
+                .validate_note_signatures(&notes)
+                .await;
             let details_vec = notes
                 .iter()
                 .map(|(amount, notes)| (amount.to_owned(), notes.len()))
@@ -580,14 +586,19 @@ async fn handle_command(
                 }),
             }
         }
-        Command::Spend { amount } => client.spend_ecash(amount, rng).await.transform(
-            |v| CliOutput::Spend {
-                note: (serialize_ecash(&v)),
-            },
-            CliErrorKind::GeneralFederationError,
-            "failed to execute spend (no further information)",
-        ),
-        Command::Fetch => match client.fetch_all_notes().await {
+        Command::Spend { amount } => cli
+            .build_client()
+            .await
+            .spend_ecash(amount, rng)
+            .await
+            .transform(
+                |v| CliOutput::Spend {
+                    note: (serialize_ecash(&v)),
+                },
+                CliErrorKind::GeneralFederationError,
+                "failed to execute spend (no further information)",
+            ),
+        Command::Fetch => match cli.build_client().await.fetch_all_notes().await {
             Ok(result) => Ok(CliOutput::Fetch { issuance: (result) }),
             Err(error) => Err(CliError::from(
                 CliErrorKind::GeneralFederationError,
@@ -596,6 +607,7 @@ async fn handle_command(
             )),
         },
         Command::Info => {
+            let client = cli.build_client().await;
             let notes = client.notes().await;
             let details_vec = notes
                 .iter()
@@ -612,6 +624,7 @@ async fn handle_command(
             })
         }
         Command::PegOut { address, satoshis } => {
+            let client = cli.build_client().await;
             match client.new_peg_out_with_fees(satoshis, address).await {
                 Ok(peg_out) => match client.peg_out(peg_out, &mut rng).await {
                     Ok(out_point) => client
@@ -637,6 +650,7 @@ async fn handle_command(
             }
         }
         Command::LnPay { bolt11 } => {
+            let client = cli.build_client().await;
             match client.fund_outgoing_ln_contract(bolt11, &mut rng).await {
                 Ok((contract_id, outpoint)) => {
                     match client.await_outgoing_contract_acceptance(outpoint).await {
@@ -668,7 +682,9 @@ async fn handle_command(
             amount,
             description,
             expiry_time,
-        } => client
+        } => cli
+            .build_client()
+            .await
             .generate_confirmed_invoice(amount, description, &mut rng, expiry_time)
             .await
             .transform(
@@ -680,7 +696,8 @@ async fn handle_command(
             ),
         Command::WaitInvoice { invoice } => {
             let contract_id = (*invoice.payment_hash()).into();
-            client
+            cli.build_client()
+                .await
                 .claim_incoming_contract(contract_id, &mut rng)
                 .await
                 .transform(
@@ -691,15 +708,19 @@ async fn handle_command(
                     "invoice did not get paid in time",
                 )
         }
-        Command::WaitBlockHeight { height } => {
-            client.await_consensus_block_height(height).await.transform(
+        Command::WaitBlockHeight { height } => cli
+            .build_client()
+            .await
+            .await_consensus_block_height(height)
+            .await
+            .transform(
                 |_| CliOutput::WaitBlockHeight { reached: (height) },
                 CliErrorKind::Timeout,
                 "timeout reached",
-            )
-        }
+            ),
         Command::ConnectInfo => {
-            let info = WsClientConnectInfo::from_honest_peers(client.config().as_ref());
+            let info =
+                WsClientConnectInfo::from_honest_peers(cli.build_client().await.config().as_ref());
             Ok(CliOutput::ConnectInfo {
                 connect_info: (info),
             })
@@ -711,54 +732,60 @@ async fn handle_command(
         Command::EncodeConnectInfo { urls, id } => Ok(CliOutput::ConnectInfo {
             connect_info: WsClientConnectInfo { urls, id },
         }),
-        Command::JoinFederation { .. } => {
-            unreachable!()
-        }
-        Command::ListGateways {} => match client.fetch_registered_gateways().await {
-            Ok(gateways) => {
-                if !gateways.is_empty() {
-                    let mut gateways_json = json!(&gateways);
-                    match client.fetch_active_gateway().await {
-                        Ok(active_gateway) => {
-                            gateways_json
-                                .as_array_mut()
-                                .expect("gateways_json is not an array")
-                                .iter_mut()
-                                .for_each(|gateway| {
-                                    if gateway["node_pub_key"] == json!(active_gateway.node_pub_key)
-                                    {
-                                        gateway["active"] = json!(true);
-                                    } else {
-                                        gateway["active"] = json!(false);
-                                    }
-                                });
-                            Ok(CliOutput::ListGateways {
-                                num_gateways: (gateways.len()),
-                                gateways: (gateways_json),
-                            })
+        Command::ListGateways {} => {
+            let client = cli.build_client().await;
+            match client.fetch_registered_gateways().await {
+                Ok(gateways) => {
+                    if !gateways.is_empty() {
+                        let mut gateways_json = json!(&gateways);
+                        match client.fetch_active_gateway().await {
+                            Ok(active_gateway) => {
+                                gateways_json
+                                    .as_array_mut()
+                                    .expect("gateways_json is not an array")
+                                    .iter_mut()
+                                    .for_each(|gateway| {
+                                        if gateway["node_pub_key"]
+                                            == json!(active_gateway.node_pub_key)
+                                        {
+                                            gateway["active"] = json!(true);
+                                        } else {
+                                            gateway["active"] = json!(false);
+                                        }
+                                    });
+                                Ok(CliOutput::ListGateways {
+                                    num_gateways: (gateways.len()),
+                                    gateways: (gateways_json),
+                                })
+                            }
+                            Err(e) => Err(CliError::from(
+                                CliErrorKind::GeneralFederationError,
+                                "could not determine active gateway",
+                                Some(Box::new(e)),
+                            )),
                         }
-                        Err(e) => Err(CliError::from(
+                    } else {
+                        Err(CliError::from(
                             CliErrorKind::GeneralFederationError,
-                            "could not determine active gateway",
-                            Some(Box::new(e)),
-                        )),
+                            "no gateways found",
+                            None,
+                        ))
                     }
-                } else {
-                    Err(CliError::from(
-                        CliErrorKind::GeneralFederationError,
-                        "no gateways found",
-                        None,
-                    ))
                 }
+                Err(e) => Err(CliError::from(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to fetch gateways",
+                    Some(Box::new(e)),
+                )),
             }
-            Err(e) => Err(CliError::from(
-                CliErrorKind::GeneralFederationError,
-                "failed to fetch gateways",
-                Some(Box::new(e)),
-            )),
-        },
+        }
         Command::SwitchGateway { pubkey } => {
-            match client.switch_active_gateway(Some(pubkey)).await {
+            match cli
+                .build_client()
+                .await
+                .switch_active_gateway(Some(pubkey))
+                .await
+            {
                 Ok(gateway) => {
                     let mut gateway_json = json!(&gateway);
                     gateway_json["active"] = json!(true);
@@ -773,7 +800,13 @@ async fn handle_command(
                 )),
             }
         }
-        Command::Backup => match client.mint_client().back_up_ecash_to_federation().await {
+        Command::Backup => match cli
+            .build_client()
+            .await
+            .mint_client()
+            .back_up_ecash_to_federation()
+            .await
+        {
             Ok(_) => Ok(CliOutput::Backup),
             Err(e) => Err(CliError::from(
                 CliErrorKind::GeneralFederationError,
@@ -781,7 +814,9 @@ async fn handle_command(
                 Some(e.into()),
             )),
         },
-        Command::Restore { gap_limit } => match client
+        Command::Restore { gap_limit } => match cli
+            .build_client()
+            .await
             .mint_client()
             .restore_ecash_from_federation(gap_limit, &mut task_group)
             .await
@@ -793,7 +828,7 @@ async fn handle_command(
                 Some(e.into()),
             )),
         },
-        Command::WipeNotes => match client.mint_client().wipe_notes().await {
+        Command::WipeNotes => match cli.build_client().await.mint_client().wipe_notes().await {
             Ok(_) => Ok(CliOutput::Backup),
             Err(e) => Err(CliError::from(
                 CliErrorKind::GeneralFederationError,
@@ -811,14 +846,17 @@ async fn handle_command(
                     )
                 })?;
 
-            let tx = fedimint_core::transaction::Transaction::from_bytes(&bytes, client.decoders())
-                .map_err(|e| {
-                    CliError::from(
-                        CliErrorKind::SerializationError,
-                        "failed to decode transaction",
-                        Some(Box::new(e)),
-                    )
-                })?;
+            let tx = fedimint_core::transaction::Transaction::from_bytes(
+                &bytes,
+                cli.build_client().await.decoders(),
+            )
+            .map_err(|e| {
+                CliError::from(
+                    CliErrorKind::SerializationError,
+                    "failed to decode transaction",
+                    Some(Box::new(e)),
+                )
+            })?;
 
             Ok(CliOutput::DecodeTransaction {
                 transaction: (format!("{tx:?}")),
@@ -832,7 +870,9 @@ async fn handle_command(
             let salt = fs::read_to_string(salt_path)
                 .map_err(|_| format_err!("Unable to open salt file"))?;
             let auth = ApiAuth(get_password_hash(&password, &salt)?);
-            let url = client
+            let url = cli
+                .build_client()
+                .await
                 .config()
                 .as_ref()
                 .api_endpoints
@@ -845,7 +885,13 @@ async fn handle_command(
             Ok(CliOutput::SignalUpgrade)
         }
         Command::EpochCount => {
-            let count = client.context().api.fetch_epoch_count().await?;
+            let count = cli
+                .build_client()
+                .await
+                .context()
+                .api
+                .fetch_epoch_count()
+                .await?;
             Ok(CliOutput::EpochCount { count })
         }
     }
