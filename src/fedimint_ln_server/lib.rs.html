@@ -1733,7 +1733,7 @@
         <span class="kw">for </span>(contract_id, shares) <span class="kw">in </span>preimage_decryption_shares {
             <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = shares.iter().map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer).collect();
             <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;decrypt_preimage&quot;</span>, %contract_id);
-            <span class="kw">let </span>_gaurd = span.enter();
+            <span class="kw">let </span>_guard = span.enter();
 
             <span class="kw">let </span>incoming_contract = <span class="kw">match </span><span class="self">self</span>.get_contract_account(dbtx, contract_id).<span class="kw">await </span>{
                 <span class="prelude-val">Some</span>(ContractAccount {
