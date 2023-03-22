@@ -45,7 +45,7 @@ use fedimint_server::consensus::{
 use fedimint_server::db::GLOBAL_DATABASE_VERSION;
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
-use fedimint_server::net::peers::PeerConnector;
+use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
@@ -392,7 +392,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             let net_ref = &net;
             let connect_gen = move |cfg: &ServerConfig| {
                 net_ref
-                    .connector(cfg.local.identity, StreamReliability::FullyReliable)
+                    .connector(cfg.local.identity, StreamReliability::INTEGRATION_TEST)
                     .into_dyn()
             };
 
@@ -523,7 +523,12 @@ async fn distributed_config(
         async move {
             let our_params = params[peer].clone();
 
-            let cfg = ServerConfig::distributed_gen(&our_params, registry, &mut task_group);
+            let cfg = ServerConfig::distributed_gen(
+                &our_params,
+                registry,
+                DelayCalculator::TEST_DEFAULT,
+                &mut task_group,
+            );
             (*peer, cfg.await.expect("generation failed"))
         }
     }))
@@ -1359,6 +1364,7 @@ impl FederationTest {
                 tx_receiver,
                 connect_gen(cfg),
                 decoders,
+                DelayCalculator::TEST_DEFAULT,
                 &mut task_group,
             )
             .await;
