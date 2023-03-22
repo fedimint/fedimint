@@ -4,7 +4,7 @@ use std::future::Future;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::{env, fs, io};
+use std::{fs, io};
 
 use async_trait::async_trait;
 use fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
@@ -354,11 +354,11 @@ where
 pub async fn prepare_snapshot<F>(
     snapshot_name: &str,
     prepare_fn: F,
+    parent_dir: String,
     decoders: ModuleDecoderRegistry,
 ) where
     F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
 {
-    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
     let snapshot_dir = Path::new(&parent_dir).join(snapshot_name);
     if !snapshot_dir.exists() {
         let db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
@@ -385,12 +385,12 @@ pub const BYTE_32: [u8; 32] = [
 pub async fn validate_migrations<F, Fut>(
     db_prefix: &str,
     validate: F,
+    parent_dir: String,
     decoders: ModuleDecoderRegistry,
 ) where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = ()>,
 {
-    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
     let db_dir = Path::new(&parent_dir);
     let files_res = fs::read_dir(db_dir);
     // If the DB_MIGRATION_DIR does not exist, just skip the validation.

@@ -121,7 +121,12 @@ function check_eof() {
   set -eo pipefail
 
   errors=""
-  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png)'); do
+  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png|log)'); do
+    # Skip checking files named IDENTITY since DB contains files without newline at the end
+    if [[ "$path" == *"IDENTITY"* ]]; then
+      continue
+    fi
+
     # extra branches for clarity
     if [ ! -s "$path" ]; then
        # echo "$path is empty"
