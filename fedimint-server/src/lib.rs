@@ -249,7 +249,7 @@ impl FedimintServer {
             {
                 v
             } else {
-                // `None` is supposed to mean the proccess is shutting down
+                // `None` is supposed to mean the process is shutting down
                 debug_assert!(task_handle.is_shutting_down());
                 break;
             };

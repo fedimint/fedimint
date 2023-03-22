@@ -216,7 +216,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         api_endpoint! {
             "/fetch_transaction",
             async |fedimint: &FedimintConsensus, _context, tx_hash: TransactionId| -> Option<TransactionStatus> {
-                debug!(transaction = %tx_hash, "Recieved request");
+                debug!(transaction = %tx_hash, "Received request");
 
                 let tx_status = fedimint.transaction_status(tx_hash)
                     .await;
@@ -228,7 +228,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         api_endpoint! {
             "/wait_transaction",
             async |fedimint: &FedimintConsensus, _context, tx_hash: TransactionId| -> TransactionStatus {
-                debug!(transaction = %tx_hash, "Recieved request");
+                debug!(transaction = %tx_hash, "Received request");
 
                 let tx_status = fedimint.wait_transaction_status(tx_hash)
                     .await;

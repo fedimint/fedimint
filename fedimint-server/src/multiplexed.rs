@@ -155,11 +155,11 @@ where
                         .or_default()
                         .push_back((peer, new_msg.msg));
                 } else {
-                    warn!(target: LOG_NET_PEER, "Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Droping new message.");
+                    warn!(target: LOG_NET_PEER, "Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Dropping new message.");
                 }
             } else {
                 drop(out_of_order);
-                // Sleep just enough to not hog the CPU continously.
+                // Sleep just enough to not hog the CPU continuously.
                 // TODO: 99% this can be done better with `CondVar`, but
                 // it's not essential RN
                 sleep(Duration::from_millis(10)).await;
