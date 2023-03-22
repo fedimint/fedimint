@@ -1,7 +1,7 @@
 //! Integration test suite
 //!
-//! This crate contains integration tests that work be creating
-//! per-test federation, ln-gatewa and driving bitcoind and lightning
+//! This crate contains integration tests that work by creating
+//! per-test federation, ln-gateway and driving bitcoind and lightning
 //! nodes to exercise certain behaviors on it.
 //!
 //! We run them in two modes:
