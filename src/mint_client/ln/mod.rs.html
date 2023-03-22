@@ -1003,7 +1003,7 @@
             FakeFed::&lt;Lightning&gt;::new(
                 <span class="number">4</span>,
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>)) },
-                <span class="kw-2">&amp;</span>ConfigGenParams::new(),
+                <span class="kw-2">&amp;</span>ConfigGenParams::null(),
                 <span class="kw-2">&amp;</span>LightningGen,
                 module_id,
             )

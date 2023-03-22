@@ -31,11 +31,20 @@
 <a href="#31" id="31">31</a>
 <a href="#32" id="32">32</a>
 <a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_core::config::ConfigGenParams;
+<span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
+<span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::{Amount, Tiered};
-<span class="kw">use </span>fedimint_mint_server::MintGenParams;
-<span class="kw">use </span>fedimint_wallet_server::WalletGenParams;
+<span class="kw">use </span>fedimint_mint_server::{MintGen, MintGenParams};
+<span class="kw">use </span>fedimint_wallet_server::{WalletGen, WalletGenParams};
 
 <span class="kw">mod </span>ui;
 
@@ -45,24 +54,31 @@
 </span><span class="kw">pub mod </span>fedimintd;
 
 <span class="doccomment">/// Generates the configuration for the modules configured in the server binary
-</span><span class="kw">pub fn </span>configure_modules(
+</span><span class="kw">pub fn </span>attach_default_module_gen_params(
+    module_gen_params: <span class="kw-2">&amp;mut </span>ServerModuleGenParamsRegistry,
     max_denomination: Amount,
     network: Network,
     finality_delay: u32,
-) -&gt; ConfigGenParams {
-    ConfigGenParams::new()
-        .attach(WalletGenParams {
-            network,
-            <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit
-            // anyway
-            </span>finality_delay,
-        })
-        .attach(MintGenParams {
-            mint_amounts: Tiered::gen_denominations(max_denomination)
-                .tiers()
-                .cloned()
-                .collect(),
-        })
+) {
+    module_gen_params
+        .attach_config_gen_params(
+            WalletGen::kind(),
+            WalletGenParams {
+                network,
+                <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit
+                // anyway
+                </span>finality_delay,
+            },
+        )
+        .attach_config_gen_params(
+            MintGen::kind(),
+            MintGenParams {
+                mint_amounts: Tiered::gen_denominations(max_denomination)
+                    .tiers()
+                    .cloned()
+                    .collect(),
+            },
+        );
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

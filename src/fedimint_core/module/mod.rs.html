@@ -998,6 +998,10 @@
 <a href="#998" id="998">998</a>
 <a href="#999" id="999">999</a>
 <a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1589,6 +1593,10 @@
     /// available versions, purely for information, setup UI and sanity
     /// checking purposes.
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion];
+
+    <span class="kw">fn </span>kind() -&gt; ModuleKind {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleGen&gt;::Common::KIND
+    }
 
     <span class="doccomment">/// Initialize the [`DynServerModule`] instance from its config
     </span><span class="kw">async fn </span>init(

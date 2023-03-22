@@ -861,6 +861,12 @@
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -874,9 +880,8 @@
 <span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::config::{
-    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
-    JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry,
-    TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind,
+    ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, PeerHandle};
@@ -1014,7 +1019,7 @@
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
     <span class="doccomment">/// Params for the modules we wish to configure, can contain custom
     /// parameters
-    </span><span class="kw">pub </span>modules: ConfigGenParams,
+    </span><span class="kw">pub </span>modules: ServerModuleGenParamsRegistry,
 }
 
 <span class="kw">impl </span>ServerConfigConsensus {
@@ -1237,14 +1242,19 @@
         <span class="kw">let </span>authinfo = NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
+        <span class="kw">let </span>null_config_gen = ConfigGenParams::null();
+
         <span class="comment">// We assume user wants one module instance for every module kind
         </span><span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = registry
             .legacy_init_order_iter()
             .enumerate()
-            .map(|(module_id, (_kind, gen))| {
+            .map(|(module_id, (kind, gen))| {
                 (
                     u16::try_from(module_id).expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
-                    gen.trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>peer0.modules),
+                    gen.trusted_dealer_gen(
+                        peers,
+                        peer0.modules.get(<span class="kw-2">&amp;</span>kind).unwrap_or(<span class="kw-2">&amp;</span>null_config_gen),
+                    ),
                 )
             })
             .collect();
@@ -1320,13 +1330,15 @@
         // of each module that was compiled in. This is how things were
         // initially, where we consider &quot;module as a code&quot; as &quot;module as an instance at
         // runtime&quot;
-        </span><span class="kw">for </span>(module_instance_id, (_kind, gen)) <span class="kw">in </span>registry.legacy_init_order_iter().enumerate() {
+        </span><span class="kw">let </span>null_config_gen = ConfigGenParams::null();
+        <span class="kw">for </span>(module_instance_id, (kind, gen)) <span class="kw">in </span>registry.legacy_init_order_iter().enumerate() {
             <span class="kw">let </span>module_instance_id = u16::try_from(module_instance_id)
                 .expect(<span class="string">&quot;64k module instances should be enough for everyone&quot;</span>);
             <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(<span class="kw-2">&amp;</span>dkg, <span class="kw-2">&amp;</span>params.modules).<span class="kw">await</span><span class="question-mark">?</span>,
+                gen.distributed_gen(<span class="kw-2">&amp;</span>dkg, params.modules.get(<span class="kw-2">&amp;</span>kind).unwrap_or(<span class="kw-2">&amp;</span>null_config_gen))
+                    .<span class="kw">await</span><span class="question-mark">?</span>,
             );
         }
 
@@ -1475,7 +1487,7 @@
         federation_name: String,
         certs: Vec&lt;String&gt;,
         password: <span class="kw-2">&amp;</span>str,
-        module_params: ConfigGenParams,
+        module_params: ServerModuleGenParamsRegistry,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>peers = BTreeMap::&lt;PeerId, PeerServerParams&gt;::new();
         <span class="kw">for </span>(idx, cert) <span class="kw">in </span>certs.into_iter().sorted().enumerate() {
@@ -1517,7 +1529,7 @@
         our_id: PeerId,
         peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
         federation_name: String,
-        modules: ConfigGenParams,
+        modules: ServerModuleGenParamsRegistry,
     ) -&gt; ServerConfigParams {
         <span class="kw">let </span>peer_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt; = peers
             .iter()
@@ -1571,7 +1583,7 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         base_port: u16,
         federation_name: <span class="kw-2">&amp;</span>str,
-        modules: ConfigGenParams,
+        modules: ServerModuleGenParamsRegistry,
     ) -&gt; anyhow::Result&lt;HashMap&lt;PeerId, ServerConfigParams&gt;&gt; {
         <span class="kw">let </span>keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers
             .iter()

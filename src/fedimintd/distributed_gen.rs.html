@@ -255,6 +255,13 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -262,7 +269,7 @@
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-<span class="kw">use </span>fedimint_core::config::{DkgError, ServerModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::config::{DkgError, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, TaskGroup};
 <span class="kw">use </span>fedimint_core::Amount;
@@ -275,7 +282,7 @@
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::configure_modules;
+<span class="kw">use </span><span class="kw">crate</span>::attach_default_module_gen_params;
 
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">struct </span>Cli {
@@ -446,6 +453,13 @@
                 finality_delay,
                 password,
             } =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>module_gens_params = ServerModuleGenParamsRegistry::default();
+                attach_default_module_gen_params(
+                    <span class="kw-2">&amp;mut </span>module_gens_params,
+                    max_denomination,
+                    network,
+                    finality_delay,
+                );
                 <span class="kw">let </span>params = ServerConfigParams::parse_from_connect_strings(
                     bind_p2p,
                     bind_api,
@@ -453,7 +467,7 @@
                     federation_name,
                     certs,
                     <span class="kw-2">&amp;</span>password,
-                    configure_modules(max_denomination, network, finality_delay),
+                    module_gens_params,
                 )<span class="question-mark">?</span>;
                 <span class="kw">let </span>server = <span class="kw">match </span>ServerConfig::distributed_gen(
                     <span class="kw-2">&amp;</span>params,

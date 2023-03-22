@@ -436,6 +436,17 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -451,7 +462,7 @@
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
 <span class="kw">use </span>fedimint_core::Amount;
@@ -468,7 +479,7 @@
 <span class="kw">use </span>tracing::{debug, error};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::configure_modules;
+<span class="kw">use </span><span class="kw">crate</span>::attach_default_module_gen_params;
 
 <span class="attr">#[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -605,6 +616,14 @@
     <span class="kw">let </span><span class="kw-2">mut </span>dkg_task_group = state.task_group.make_subgroup().<span class="kw">await</span>;
     state.dkg_task_group = <span class="prelude-val">Some</span>(dkg_task_group.clone());
     <span class="kw">let </span>module_gens = state.module_gens.clone();
+    <span class="kw">let </span><span class="kw-2">mut </span>module_gens_params = state.module_gens_params.clone();
+    attach_default_module_gen_params(
+        <span class="kw-2">&amp;mut </span>module_gens_params,
+        max_denomination,
+        params.network,
+        params.finality_delay,
+    );
+
     <span class="kw">let </span>password = state.password.clone();
     state
         .task_group
@@ -619,7 +638,7 @@
                 params.federation_name,
                 connection_strings,
                 <span class="kw-2">&amp;</span>password,
-                configure_modules(max_denomination, params.network, params.finality_delay),
+                module_gens_params,
             ) {
                 <span class="prelude-val">Ok</span>(params) =&gt; {
                     ServerConfig::distributed_gen(<span class="kw-2">&amp;</span>params, module_gens.clone(), <span class="kw-2">&amp;mut </span>dkg_task_group)
@@ -813,6 +832,7 @@
     task_group: TaskGroup,
     dkg_task_group: <span class="prelude-ty">Option</span>&lt;TaskGroup&gt;,
     module_gens: ServerModuleGenRegistry,
+    module_gens_params: ServerModuleGenParamsRegistry,
     dkg_state: <span class="prelude-ty">Option</span>&lt;DkgState&gt;,
 }
 <span class="kw">type </span>MutableState = Arc&lt;Mutex&lt;State&gt;&gt;;
@@ -838,6 +858,7 @@
     password: String,
     task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
+    module_gens_params: ServerModuleGenParamsRegistry,
 ) {
     <span class="kw">let </span>state = Arc::new(Mutex::new(State {
         params: <span class="prelude-val">None</span>,
@@ -847,6 +868,7 @@
         task_group: task_group.clone(),
         dkg_task_group: <span class="prelude-val">None</span>,
         module_gens,
+        module_gens_params,
         dkg_state: <span class="prelude-val">None</span>,
     }));
 
