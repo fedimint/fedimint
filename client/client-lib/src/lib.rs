@@ -41,7 +41,7 @@ use fedimint_core::module::ModuleCommon;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_core::{Amount, CoreError, OutPoint, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::LightningModuleTypes;
 use fedimint_logging::LOG_WALLET;
@@ -1454,7 +1454,15 @@ impl Client<GatewayClientConfig> {
                         info!(outcome = %o, "Retrying on temporary outcome");
                         sleep(Duration::from_secs(1)).await;
                     }
-                    Ok(t) => return t.try_into_variant(),
+                    Ok(t) => {
+                        return t.try_into_variant::<DecryptedPreimage>().and_then(|maybe_preimage| {
+                            return match maybe_preimage {
+                                DecryptedPreimage::Some(preimage) => Ok(preimage),
+                                DecryptedPreimage::Pending => panic!("Pending outcomes are temporary and covered by the previous match arm"),
+                                _ => Err(CoreError::MismatchingVariant("ln::incoming", "other").into()),
+                            }
+                        });
+                    }
                     Err(e) => {
                         return Err(e);
                     }

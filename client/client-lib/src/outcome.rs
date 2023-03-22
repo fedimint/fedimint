@@ -9,7 +9,7 @@ pub mod legacy {
     use fedimint_core::CoreError;
     use fedimint_ln_client::contracts::incoming::OfferId;
     use fedimint_ln_client::contracts::{
-        ContractOutcome, DecryptedPreimage, OutgoingContractOutcome, Preimage,
+        ContractOutcome, DecryptedPreimage, OutgoingContractOutcome,
     };
     use fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
     use fedimint_mint_client::{MintModuleTypes, MintOutputOutcome};
@@ -94,18 +94,14 @@ pub mod legacy {
         }
     }
 
-    impl TryIntoOutcome for Preimage {
+    impl TryIntoOutcome for DecryptedPreimage {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
             if let OutputOutcome::LN(fedimint_ln_client::LightningOutputOutcome::Contract {
                 outcome: ContractOutcome::Incoming(decrypted_preimage),
                 ..
             }) = common_outcome
             {
-                match decrypted_preimage {
-                    DecryptedPreimage::Some(preimage) => Ok(preimage),
-                    DecryptedPreimage::Pending => Err(CoreError::PendingPreimage),
-                    _ => Err(CoreError::MismatchingVariant("ln::incoming", "other")),
-                }
+                Ok(decrypted_preimage)
             } else {
                 Err(CoreError::MismatchingVariant("ln::incoming", "other"))
             }
