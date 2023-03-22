@@ -73,7 +73,7 @@
         # > linking to `libunwind` instead - and that has proven to work fine so
         # > far.
         # >
-        # > Intead of shipping this file with the crate or writing it to an existing
+        # > Instead of shipping this file with the crate or writing it to an existing
         # > link-search directory on the system, we write it to a new directory that
         # > can be easily passed or removed to `rustc`, say in the event that a user
         # > switches to an older NDK and builds without cleaning.  For this we need
@@ -132,7 +132,7 @@
         };
 
         # Definitions of all the cross-compilation targets we support.
-        # Later mapped over to conveniently loop over all posibilities.
+        # Later mapped over to conveniently loop over all possibilities.
         crossTargets =
           builtins.mapAttrs
             (attr: target: { name = attr; extraEnvs = ""; } // target)
@@ -350,7 +350,7 @@
                     fi
                   fi
 
-                  # if runing in direnv
+                  # if running in direnv
                   if [ -n "''${DIRENV_IN_ENVRC:-}" ]; then
                     # and not set DIRENV_LOG_FORMAT
                     if [ -n "''${DIRENV_LOG_FORMAT:-}" ]; then
@@ -366,7 +366,7 @@
                       >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
                   fi
 
-                  >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipies"
+                  >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipes"
                 '';
               };
             shellCommonNative = shellCommon craneLibNative;
@@ -376,7 +376,7 @@
           {
             # The default shell - meant to developers working on the project,
             # so notably not building any project binaries, but including all
-            # the settings and tools neccessary to build and work with the codebase.
+            # the settings and tools necessary to build and work with the codebase.
             default = pkgs.mkShell (shellCommonNative
               // {
               nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ fenixToolchain ];

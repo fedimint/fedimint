@@ -1,10 +1,11 @@
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
+use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::ExtendsCommonModuleGen;
+use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_ln_common::config::LightningClientConfig;
 pub use fedimint_ln_common::*;
@@ -32,10 +33,23 @@ pub struct LightningClientModule {}
 impl ClientModule for LightningClientModule {
     type Common = LightningModuleTypes;
     type ModuleStateMachineContext = ();
-    type GlobalStateMachineContext = ();
     type States = LightningClientStates;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
+        unimplemented!()
+    }
+
+    fn input_amount(
+        &self,
+        _input: &<Self::Common as ModuleCommon>::Input,
+    ) -> TransactionItemAmount {
+        unimplemented!()
+    }
+
+    fn output_amount(
+        &self,
+        _output: &<Self::Common as ModuleCommon>::Output,
+    ) -> TransactionItemAmount {
         unimplemented!()
     }
 }
@@ -44,20 +58,21 @@ impl ClientModule for LightningClientModule {
 pub enum LightningClientStates {}
 
 impl IntoDynInstance for LightningClientStates {
-    type DynType = DynState<()>;
+    type DynType = DynState<DynGlobalClientContext>;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
     }
 }
 
-impl State<()> for LightningClientStates {
+impl State for LightningClientStates {
     type ModuleContext = ();
+    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         _context: &Self::ModuleContext,
-        _global_context: &(),
+        _global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         unimplemented!()
     }

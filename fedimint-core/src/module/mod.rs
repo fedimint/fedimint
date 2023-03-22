@@ -1,7 +1,6 @@
 pub mod audit;
 pub mod interconnect;
 pub mod registry;
-
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::fmt::Debug;
@@ -24,7 +23,9 @@ use crate::core::{
     Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
     OutputOutcome,
 };
-use crate::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
+use crate::db::{
+    Database, DatabaseTransaction, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
+};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
@@ -98,6 +99,15 @@ impl ApiRequestErased {
             params: self.params,
         }
     }
+
+    pub fn to_typed<T: serde::de::DeserializeOwned>(
+        self,
+    ) -> Result<ApiRequest<T>, serde_json::Error> {
+        Ok(ApiRequest {
+            auth: self.auth,
+            params: serde_json::from_value::<T>(self.params)?,
+        })
+    }
 }
 
 /// Authentication uses the hashed user password in PHC format
@@ -134,20 +144,44 @@ impl ApiError {
 
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'a> {
-    dbtx: ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+    dbtx: DatabaseTransaction<'a>,
     has_auth: bool,
+    module_id: Option<ModuleInstanceId>,
 }
 
 impl<'a> ApiEndpointContext<'a> {
+    pub fn new(
+        has_auth: bool,
+        dbtx: DatabaseTransaction<'a>,
+        module_id: Option<ModuleInstanceId>,
+    ) -> Self {
+        Self {
+            has_auth,
+            dbtx,
+            module_id,
+        }
+    }
+
     /// Database tx handle, will be committed
-    pub fn dbtx(&mut self) -> &mut ModuleDatabaseTransaction<'a, ModuleInstanceId> {
-        &mut self.dbtx
+    pub fn dbtx(&mut self) -> ModuleDatabaseTransaction<'_, ModuleInstanceId> {
+        match self.module_id {
+            None => self.dbtx.get_isolated(),
+            Some(id) => self.dbtx.with_module_prefix(id),
+        }
     }
 
     /// Whether the request was authenticated as the guardian who controls this
     /// fedimint server
     pub fn has_auth(&self) -> bool {
         self.has_auth
+    }
+
+    /// Attempts to commit the dbtx or returns an ApiError
+    pub async fn commit_tx_result(self) -> Result<(), ApiError> {
+        self.dbtx.commit_tx_result().await.map_err(|_err| ApiError {
+            code: 500,
+            message: "API server error when writing to database".to_string(),
+        })
     }
 }
 
@@ -165,7 +199,6 @@ pub trait TypedApiEndpoint {
         state: &'a Self::State,
         context: &'a mut ApiEndpointContext<'b>,
         request: Self::Param,
-        has_auth: bool,
     ) -> Result<Self::Response, ApiError>;
 }
 
@@ -206,7 +239,6 @@ macro_rules! __api_endpoint {
                 $state: &'a Self::State,
                 $context: &'a mut $crate::module::ApiEndpointContext<'b>,
                 $param: Self::Param,
-                _has_auth: bool,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
             }
@@ -225,13 +257,7 @@ type HandlerFnReturn<'a> =
     Pin<Box<maybe_add_send!(dyn Future<Output = Result<serde_json::Value, ApiError>> + 'a)>>;
 type HandlerFn<M> = Box<
     maybe_add_send_sync!(
-        dyn for<'a> Fn(
-            &'a M,
-            fedimint_core::db::DatabaseTransaction<'a>,
-            serde_json::Value,
-            Option<ModuleInstanceId>,
-            ApiAuth,
-        ) -> HandlerFnReturn<'a>
+        dyn for<'a> Fn(&'a M, ApiEndpointContext<'a>, ApiRequestErased) -> HandlerFnReturn<'a>
     ),
 >;
 
@@ -265,9 +291,8 @@ impl ApiEndpoint<()> {
         )]
         async fn handle_request<'a, 'b, E>(
             state: &'a E::State,
-            dbtx: fedimint_core::db::ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+            context: &'a mut ApiEndpointContext<'b>,
             request: ApiRequest<E::Param>,
-            api_auth: ApiAuth,
         ) -> Result<E::Response, ApiError>
         where
             E: TypedApiEndpoint,
@@ -275,9 +300,7 @@ impl ApiEndpoint<()> {
             E::Response: Debug,
         {
             tracing::trace!(target: "fedimint_server::request", ?request, "received request");
-            let has_auth = request.auth == Some(api_auth);
-            let mut context = ApiEndpointContext { dbtx, has_auth };
-            let result = E::handle(state, &mut context, request.params, has_auth).await;
+            let result = E::handle(state, context, request.params).await;
             if let Err(error) = &result {
                 tracing::trace!(target: "fedimint_server::request", ?error, "error");
             }
@@ -286,27 +309,16 @@ impl ApiEndpoint<()> {
 
         ApiEndpoint {
             path: E::PATH,
-            handler: Box::new(|m, mut dbtx, param, module_instance_id, api_auth| {
+            handler: Box::new(|m, mut context, request| {
                 Box::pin(async move {
-                    let params = serde_json::from_value(param)
+                    let request = request
+                        .to_typed()
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
-                    let ret = match module_instance_id {
-                        Some(module_instance_id) => {
-                            let module_dbtx = dbtx.with_module_prefix(module_instance_id);
-                            handle_request::<E>(m, module_dbtx, params, api_auth).await?
-                        }
-                        None => {
-                            handle_request::<E>(m, dbtx.get_isolated(), params, api_auth).await?
-                        }
-                    };
+                    let ret = handle_request::<E>(m, &mut context, request).await?;
 
-                    dbtx.commit_tx_result().await.map_err(|_err| {
-                        fedimint_core::module::ApiError {
-                            code: 500,
-                            message: "Internal Server Error".to_string(),
-                        }
-                    })?;
+                    context.commit_tx_result().await?;
+
                     Ok(serde_json::to_value(ret).expect("encoding error"))
                 })
             }),
@@ -577,6 +589,10 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     /// available versions, purely for information, setup UI and sanity
     /// checking purposes.
     fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
+
+    fn kind() -> ModuleKind {
+        <Self as ExtendsCommonModuleGen>::Common::KIND
+    }
 
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
