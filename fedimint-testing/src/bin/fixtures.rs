@@ -140,6 +140,7 @@ async fn run_bitcoind() -> anyhow::Result<()> {
     // spawn bitcoind
     let mut bitcoind = Command::new("bitcoind")
         .arg(format!("-datadir={btc_dir}"))
+        .arg("-conf=path/to/bitcoind.conf")
         .spawn()?;
     kill_on_exit(&bitcoind).await?;
     info!("bitcoind started");
