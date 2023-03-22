@@ -1,7 +1,7 @@
 pub mod legacy {
-    use fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
+    use fedimint_core::api::OutputOutcomeError;
     use fedimint_core::core::{
-        DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
@@ -52,15 +52,9 @@ pub mod legacy {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError>;
     }
 
-    impl DynTryIntoOutcome for OutputOutcome {
-        fn try_into_outcome(outcome: DynOutputOutcome) -> Result<Self, CoreError> {
-            Ok(OutputOutcome::from(outcome))
-        }
-    }
-
     impl OutputOutcome {
         pub fn try_into_variant<T: TryIntoOutcome>(self) -> Result<T, OutputOutcomeError> {
-            T::try_into_outcome(self).map_err(OutputOutcomeError::from)
+            T::try_into_outcome(self).map_err(|e| OutputOutcomeError::Core(anyhow::Error::from(e)))
         }
     }
 

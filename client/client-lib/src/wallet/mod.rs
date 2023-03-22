@@ -16,7 +16,6 @@ use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::tweakable::Tweakable;
 use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 use crate::modules::wallet::{WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome};
-use crate::outcome::legacy::OutputOutcome;
 use crate::utils::ClientContext;
 use crate::MemberError;
 
@@ -160,12 +159,11 @@ impl WalletClient {
     ) -> Result<bitcoin::Txid> {
         // TODO: define timeout centrally
         let timeout = std::time::Duration::from_secs(15);
-        let outcome: WalletOutputOutcome = self
+        let outcome = self
             .context
             .api
-            .await_output_outcome::<OutputOutcome>(out_point, timeout, &self.context.decoders)
-            .await?
-            .try_into_variant()?;
+            .await_output_outcome::<WalletOutputOutcome>(out_point, timeout, &self.context.decoders)
+            .await?;
         Ok(outcome.0)
     }
 }

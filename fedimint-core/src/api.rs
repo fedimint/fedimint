@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, result};
 
-use anyhow::ensure;
+use anyhow::{anyhow, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin::consensus::ReadExt;
@@ -16,7 +16,6 @@ use bitcoin_hashes::sha256;
 use fedimint_core::config::{
     ApiEndpoint, ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId,
 };
-use fedimint_core::core::DynOutputOutcome;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
@@ -41,6 +40,7 @@ use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
+use crate::core::OutputOutcome;
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::outcome::TransactionStatus;
@@ -49,7 +49,6 @@ use crate::query::{
     VerifiableResponse,
 };
 use crate::transaction::{SerdeTransaction, Transaction};
-use crate::CoreError;
 
 pub type MemberResult<T> = result::Result<T, MemberError>;
 
@@ -118,7 +117,7 @@ pub enum OutputOutcomeError {
     #[error("Federation error: {0}")]
     Federation(#[from] FederationError),
     #[error("Core error: {0}")]
-    Core(#[from] CoreError),
+    Core(#[from] anyhow::Error),
     #[error("Transaction rejected: {0}")]
     Rejected(String),
     #[error("Invalid output index {out_idx}, larger than {outputs_num} in the transaction")]
@@ -145,10 +144,6 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
         method: &str,
         params: &[Value],
     ) -> result::Result<Value, jsonrpsee_core::Error>;
-}
-
-pub trait DynTryIntoOutcome: Sized {
-    fn try_into_outcome(common_outcome: DynOutputOutcome) -> Result<Self, CoreError>;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -344,14 +339,16 @@ pub trait GlobalFederationApi {
         decoders: &ModuleDecoderRegistry,
     ) -> OutputOutcomeResult<Option<R>>
     where
-        R: DynTryIntoOutcome + MaybeSend;
+        R: OutputOutcome;
 
-    async fn await_output_outcome<R: DynTryIntoOutcome + MaybeSend>(
+    async fn await_output_outcome<R>(
         &self,
         outpoint: OutPoint,
         timeout: Duration,
         decoders: &ModuleDecoderRegistry,
-    ) -> OutputOutcomeResult<R>;
+    ) -> OutputOutcomeResult<R>
+    where
+        R: OutputOutcome;
 
     /// Fetch client configuration info only if verified against a federation id
     async fn download_client_config(
@@ -369,7 +366,7 @@ fn map_tx_outcome_outpoint<R>(
     decoders: &ModuleDecoderRegistry,
 ) -> OutputOutcomeResult<R>
 where
-    R: DynTryIntoOutcome + MaybeSend,
+    R: OutputOutcome + MaybeSend,
 {
     match tx_outcome {
         TransactionStatus::Rejected(e) => Err(OutputOutcomeError::Rejected(e)),
@@ -383,12 +380,15 @@ where
                     out_idx: out_point.out_idx,
                 })
                 .and_then(|output| {
-                    R::try_into_outcome(
-                        output
-                            .try_into_inner(decoders)
-                            .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?,
-                    )
-                    .map_err(OutputOutcomeError::Core)
+                    let dyn_outcome = output
+                        .try_into_inner(decoders)
+                        .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?;
+
+                    let source_instance = dyn_outcome.module_instance_id();
+                    dyn_outcome.as_any().downcast_ref().cloned().ok_or_else(|| {
+                        let target_type = std::any::type_name::<R>();
+                        OutputOutcomeError::ResponseDeserialization(anyhow!("Could not downcast output outcome with instance id {source_instance} to {target_type}"))
+                    })
                 })
         }
     }
@@ -488,7 +488,7 @@ where
         decoders: &ModuleDecoderRegistry,
     ) -> OutputOutcomeResult<Option<R>>
     where
-        R: DynTryIntoOutcome + MaybeSend,
+        R: OutputOutcome,
     {
         Ok(self
             .fetch_tx_outcome(&out_point.txid)
@@ -498,12 +498,15 @@ where
     }
 
     // TODO should become part of the API
-    async fn await_output_outcome<R: DynTryIntoOutcome + MaybeSend>(
+    async fn await_output_outcome<R>(
         &self,
         outpoint: OutPoint,
         timeout: Duration,
         decoders: &ModuleDecoderRegistry,
-    ) -> OutputOutcomeResult<R> {
+    ) -> OutputOutcomeResult<R>
+    where
+        R: OutputOutcome,
+    {
         fedimint_core::task::timeout(timeout, async move {
             let tx_outcome = self.await_tx_outcome(&outpoint.txid).await?;
             map_tx_outcome_outpoint(tx_outcome, outpoint, decoders)
