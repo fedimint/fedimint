@@ -592,7 +592,7 @@ impl ServerModule for Lightning {
         for (contract_id, shares) in preimage_decryption_shares {
             let peers: Vec<PeerId> = shares.iter().map(|(peer, _)| *peer).collect();
             let span = info_span!("decrypt_preimage", %contract_id);
-            let _gaurd = span.enter();
+            let _guard = span.enter();
 
             let incoming_contract = match self.get_contract_account(dbtx, contract_id).await {
                 Some(ContractAccount {

@@ -18,7 +18,7 @@ use validator::{Validate, ValidationError};
 use crate::keys::CompressedPublicKey;
 use crate::tweakable::{Contract, Tweakable};
 
-/// A proof about a script owning a certain output. Verifyable using headers
+/// A proof about a script owning a certain output. Verifiable using headers
 /// only.
 #[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
 #[validate(schema(function = "validate_peg_in_proof"))]
