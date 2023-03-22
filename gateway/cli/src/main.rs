@@ -77,10 +77,7 @@ async fn main() -> anyhow::Result<()> {
             println!("version: {}", env!("CODE_VERSION"));
         }
         Commands::Info => {
-            let response = client
-                .get_info(source_password(cli.rpcpassword))
-                .await
-                .expect("Failed to get info");
+            let response = client.get_info(source_password(cli.rpcpassword)).await?;
 
             print_response(response).await;
         }
@@ -90,8 +87,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     BalancePayload { federation_id },
                 )
-                .await
-                .expect("Failed to get balance");
+                .await?;
 
             print_response(response).await;
         }
@@ -101,8 +97,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     DepositAddressPayload { federation_id },
                 )
-                .await
-                .expect("Failed to get deposit address");
+                .await?;
 
             print_response(response).await;
         }
@@ -120,8 +115,7 @@ async fn main() -> anyhow::Result<()> {
                         transaction,
                     },
                 )
-                .await
-                .expect("Failed to deposit");
+                .await?;
 
             print_response(response).await;
         }
@@ -139,8 +133,7 @@ async fn main() -> anyhow::Result<()> {
                         address,
                     },
                 )
-                .await
-                .expect("Failed to withdraw");
+                .await?;
 
             print_response(response).await;
         }
@@ -150,8 +143,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     ConnectFedPayload { connect },
                 )
-                .await
-                .expect("Failed to connect federation");
+                .await?;
 
             print_response(response).await;
         }
@@ -161,8 +153,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     BackupPayload { federation_id },
                 )
-                .await
-                .expect("Failed to withdraw");
+                .await?;
 
             print_response(response).await;
         }
@@ -172,8 +163,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     RestorePayload { federation_id },
                 )
-                .await
-                .expect("Failed to withdraw");
+                .await?;
 
             print_response(response).await;
         }
