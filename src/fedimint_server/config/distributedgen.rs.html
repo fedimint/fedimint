@@ -1027,7 +1027,7 @@
 }
 
 <span class="comment">// TODO: this trait is only needed to break the `DkgHandle` impl
-// from it&#39;s defintion that is still in `fedimint-core`
+// from it&#39;s definition that is still in `fedimint-core`
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>PeerHandleOps {
     <span class="kw">async fn </span>run_dkg_g1&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, v: T) -&gt; DkgResult&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt;

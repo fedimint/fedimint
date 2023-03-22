@@ -408,11 +408,11 @@
                         .or_default()
                         .push_back((peer, new_msg.msg));
                 } <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">&quot;Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Droping new message.&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">&quot;Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Dropping new message.&quot;</span>);
                 }
             } <span class="kw">else </span>{
                 drop(out_of_order);
-                <span class="comment">// Sleep just enough to not hog the CPU continously.
+                <span class="comment">// Sleep just enough to not hog the CPU continuously.
                 // TODO: 99% this can be done better with `CondVar`, but
                 // it&#39;s not essential RN
                 </span>sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
