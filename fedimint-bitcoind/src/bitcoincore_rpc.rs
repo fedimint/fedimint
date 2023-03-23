@@ -3,6 +3,7 @@ use std::fmt;
 
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
+use ::bitcoincore_rpc::jsonrpc::serde_json;
 use ::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
 use anyhow::{bail, format_err, Context};
 use bitcoin::consensus::Encodable;
@@ -12,7 +13,7 @@ use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_core::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
-use tracing::{instrument, warn};
+use tracing::{debug, instrument, warn};
 use url::Url;
 
 use super::*;
@@ -319,7 +320,24 @@ impl IBitcoindRpc for ElectrumClient {
             transaction
                 .consensus_encode(&mut bytes)
                 .expect("can't fail");
-            let _txid = self.0.transaction_broadcast_raw(&bytes)?;
+            match self.0.transaction_broadcast_raw(&bytes) {
+                Ok(_txid) => {}
+                Err(error) => {
+                    // debug
+                    debug!(?error, "electrs error when broadcasting transaction");
+                    if let electrum_client::Error::Protocol(serde_json::Value::Object(ref map)) =
+                        &error
+                    {
+                        if let Some(serde_json::Value::Number(ref n)) = map.get("code") {
+                            if n == &serde_json::Number::from(2) {
+                                debug!(?error, "Broadcasted transaction already in the blochchain. Ignoring error." );
+                                return Ok(());
+                            }
+                        }
+                    }
+                    Err(error)?;
+                }
+            };
             Ok(())
         })
     }
