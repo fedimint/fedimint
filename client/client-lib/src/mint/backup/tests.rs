@@ -18,7 +18,7 @@ use crate::modules::mint::{
 };
 use crate::Client;
 
-/// Simplest in-memory mint client for the purpose of writting tests
+/// Simplest in-memory mint client for the purpose of writing tests
 /// (at least e-cash recovery ones).
 ///
 /// It only tracks state of deterministic e-cash notes creation,
@@ -305,7 +305,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
 // sense to validate things this way.
 //
 // In addition, opportunistically multiple checks are being done
-// here in sequnce. Ideally a test would exercise just one thing,
+// here in sequence. Ideally a test would exercise just one thing,
 // but given the amount of boilerplate and sequential nature of
 // the process, it really does pay off to check multiple things.
 #[test]
