@@ -579,7 +579,7 @@ pub mod mock {
                 let (stream_our, stream_theirs) = tokio::io::duplex(43_689);
                 let mut stream_our = UnreliableDuplexStream::new(stream_our, self.reliability);
                 let stream_theirs = UnreliableDuplexStream::new(stream_theirs, self.reliability);
-                client.send(stream_theirs).await.unwrap();
+                client.send(stream_theirs).await?;
                 let peer = do_handshake(self.id, &mut stream_our).await?;
                 let framed = BidiFramed::<
                     M,
