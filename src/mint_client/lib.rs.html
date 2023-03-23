@@ -1682,6 +1682,15 @@
 <a href="#1682" id="1682">1682</a>
 <a href="#1683" id="1683">1683</a>
 <a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
+<a href="#1693" id="1693">1693</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1703,6 +1712,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, Instant, SystemTime};
 
+<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>api::{LnFederationApi, WalletFederationApi};
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
@@ -1727,7 +1737,7 @@
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_ln_client::LightningModuleTypes;
+<span class="kw">use </span>fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
 <span class="kw">use </span>fedimint_logging::LOG_WALLET;
 <span class="kw">use </span>fedimint_mint_client::MintModuleTypes;
 <span class="kw">use </span>fedimint_wallet_client::WalletModuleTypes;
@@ -2590,7 +2600,7 @@
     <span class="kw">pub async fn </span>await_outgoing_contract_acceptance(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.context
             .api
-            .await_output_outcome::&lt;OutputOutcome&gt;(
+            .await_output_outcome::&lt;LightningOutputOutcome&gt;(
                 outpoint,
                 Duration::from_secs(<span class="number">30</span>),
                 <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
@@ -2610,18 +2620,13 @@
                 <span class="kw">let </span>res = <span class="self">self
                     </span>.context
                     .api
-                    .await_output_outcome::&lt;OutputOutcome&gt;(
+                    .await_output_outcome::&lt;MintOutputOutcome&gt;(
                         outpoint,
                         Duration::from_secs(<span class="number">30</span>),
                         <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
                     )
                     .<span class="kw">await</span>;
-                <span class="kw">if </span>res.is_ok()
-                    &amp;&amp; res
-                        .unwrap()
-                        .try_into_variant::&lt;MintOutputOutcome&gt;()<span class="question-mark">?
-                        </span>.is_some()
-                {
+                <span class="kw">if </span><span class="macro">matches!</span>(res, <span class="prelude-val">Ok</span>(MintOutputOutcome(<span class="prelude-val">Some</span>(<span class="kw">_</span>)))) {
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
                 <span class="macro">tracing::info!</span>(<span class="string">&quot;Signature response not returned yet&quot;</span>);
@@ -2776,7 +2781,11 @@
         <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="self">self</span>.context
             .api
-            .await_output_outcome::&lt;OutputOutcome&gt;(outpoint, timeout, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
+            .await_output_outcome::&lt;LightningOutputOutcome&gt;(
+                outpoint,
+                timeout,
+                <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>confirmed = ConfirmedInvoice {
             invoice,
@@ -3127,18 +3136,27 @@
                 <span class="kw">match </span><span class="self">self
                     </span>.context
                     .api
-                    .await_output_outcome::&lt;OutputOutcome&gt;(
+                    .await_output_outcome::&lt;LightningOutputOutcome&gt;(
                         outpoint,
                         deadline.saturating_duration_since(Instant::now()),
                         <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
                     )
                     .<span class="kw">await
-                </span>{
+                    </span>.map(OutputOutcome::LN)
+                {
                     <span class="prelude-val">Ok</span>(OutputOutcome::LN(o)) <span class="kw">if </span>!o.is_permanent() =&gt; {
                         <span class="macro">info!</span>(outcome = %o, <span class="string">&quot;Retrying on temporary outcome&quot;</span>);
                         sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
                     }
-                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span>t.try_into_variant(),
+                    <span class="prelude-val">Ok</span>(t) =&gt; {
+                        <span class="kw">return </span>t.try_into_variant::&lt;DecryptedPreimage&gt;().and_then(|maybe_preimage| {
+                            <span class="kw">return match </span>maybe_preimage {
+                                DecryptedPreimage::Some(preimage) =&gt; <span class="prelude-val">Ok</span>(preimage),
+                                DecryptedPreimage::Pending =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Pending outcomes are temporary and covered by the previous match arm&quot;</span>),
+                                DecryptedPreimage::Invalid =&gt; <span class="prelude-val">Err</span>(OutputOutcomeError::ResponseDeserialization(<span class="macro">anyhow!</span>(<span class="string">&quot;Federation says we submitted an invalid encrypted preimage, we disagree&quot;</span>))),
+                            }
+                        });
+                    }
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
@@ -3165,7 +3183,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.context
             .api
-            .await_output_outcome::&lt;OutputOutcome&gt;(
+            .await_output_outcome::&lt;MintOutputOutcome&gt;(
                 outpoint,
                 Duration::from_secs(<span class="number">10</span>),
                 <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,

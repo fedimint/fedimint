@@ -995,8 +995,6 @@
 <a href="#995" id="995">995</a>
 <a href="#996" id="996">996</a>
 <a href="#997" id="997">997</a>
-<a href="#998" id="998">998</a>
-<a href="#999" id="999">999</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -1027,7 +1025,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::{
     BlindNonce, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note,
 };
-<span class="kw">use </span><span class="kw">crate</span>::outcome::legacy::OutputOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::{Input, Output, Transaction};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use crate</span>::{ChildId, DerivableSecret, FuturesUnordered};
@@ -1457,10 +1454,9 @@
         <span class="kw">let </span>bsig = <span class="self">self
             </span>.context
             .api
-            .fetch_output_outcome::&lt;OutputOutcome&gt;(outpoint, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
+            .fetch_output_outcome::&lt;MintOutputOutcome&gt;(outpoint, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?
-            </span>.try_into_variant::&lt;MintOutputOutcome&gt;()<span class="question-mark">?
             </span>.as_ref()
             .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?</span>;

@@ -1130,6 +1130,9 @@
 <a href="#1130" id="1130">1130</a>
 <a href="#1131" id="1131">1131</a>
 <a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1140,7 +1143,7 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, result};
 
-<span class="kw">use </span>anyhow::ensure;
+<span class="kw">use </span>anyhow::{anyhow, ensure};
 <span class="kw">use </span>bech32::Variant::Bech32m;
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
 <span class="kw">use </span>bitcoin::consensus::ReadExt;
@@ -1148,7 +1151,6 @@
 <span class="kw">use </span>fedimint_core::config::{
     ApiEndpoint, ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId,
 };
-<span class="kw">use </span>fedimint_core::core::DynOutputOutcome;
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
@@ -1173,6 +1175,7 @@
 <span class="kw">use </span>tracing::{debug, error, instrument, trace};
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::core::OutputOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span><span class="kw">crate</span>::outcome::TransactionStatus;
@@ -1181,7 +1184,6 @@
     VerifiableResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
-<span class="kw">use </span><span class="kw">crate</span>::CoreError;
 
 <span class="kw">pub type </span>MemberResult&lt;T&gt; = result::Result&lt;T, MemberError&gt;;
 
@@ -1250,7 +1252,7 @@
     <span class="attr">#[error(<span class="string">&quot;Federation error: {0}&quot;</span>)]
     </span>Federation(<span class="attr">#[from] </span>FederationError),
     <span class="attr">#[error(<span class="string">&quot;Core error: {0}&quot;</span>)]
-    </span>Core(<span class="attr">#[from] </span>CoreError),
+    </span>Core(<span class="attr">#[from] </span>anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Transaction rejected: {0}&quot;</span>)]
     </span>Rejected(String),
     <span class="attr">#[error(<span class="string">&quot;Invalid output index {out_idx}, larger than {outputs_num} in the transaction&quot;</span>)]
@@ -1277,10 +1279,6 @@
         method: <span class="kw-2">&amp;</span>str,
         params: <span class="kw-2">&amp;</span>[Value],
     ) -&gt; result::Result&lt;Value, jsonrpsee_core::Error&gt;;
-}
-
-<span class="kw">pub trait </span>DynTryIntoOutcome: Sized {
-    <span class="kw">fn </span>try_into_outcome(common_outcome: DynOutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt;;
 }
 
 <span class="doccomment">/// An extension trait allowing to making federation-wide API call on top
@@ -1476,14 +1474,16 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
     <span class="kw">where
-        </span>R: DynTryIntoOutcome + MaybeSend;
+        </span>R: OutputOutcome;
 
-    <span class="kw">async fn </span>await_output_outcome&lt;R: DynTryIntoOutcome + MaybeSend&gt;(
+    <span class="kw">async fn </span>await_output_outcome&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; OutputOutcomeResult&lt;R&gt;;
+    ) -&gt; OutputOutcomeResult&lt;R&gt;
+    <span class="kw">where
+        </span>R: OutputOutcome;
 
     <span class="doccomment">/// Fetch client configuration info only if verified against a federation id
     </span><span class="kw">async fn </span>download_client_config(
@@ -1501,7 +1501,7 @@
     decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
 ) -&gt; OutputOutcomeResult&lt;R&gt;
 <span class="kw">where
-    </span>R: DynTryIntoOutcome + MaybeSend,
+    </span>R: OutputOutcome + MaybeSend,
 {
     <span class="kw">match </span>tx_outcome {
         TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(OutputOutcomeError::Rejected(e)),
@@ -1515,12 +1515,15 @@
                     out_idx: out_point.out_idx,
                 })
                 .and_then(|output| {
-                    R::try_into_outcome(
-                        output
-                            .try_into_inner(decoders)
-                            .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))<span class="question-mark">?</span>,
-                    )
-                    .map_err(OutputOutcomeError::Core)
+                    <span class="kw">let </span>dyn_outcome = output
+                        .try_into_inner(decoders)
+                        .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))<span class="question-mark">?</span>;
+
+                    <span class="kw">let </span>source_instance = dyn_outcome.module_instance_id();
+                    dyn_outcome.as_any().downcast_ref().cloned().ok_or_else(|| {
+                        <span class="kw">let </span>target_type = std::any::type_name::&lt;R&gt;();
+                        OutputOutcomeError::ResponseDeserialization(<span class="macro">anyhow!</span>(<span class="string">&quot;Could not downcast output outcome with instance id {source_instance} to {target_type}&quot;</span>))
+                    })
                 })
         }
     }
@@ -1620,7 +1623,7 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
     <span class="kw">where
-        </span>R: DynTryIntoOutcome + MaybeSend,
+        </span>R: OutputOutcome,
     {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.fetch_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid)
@@ -1630,12 +1633,15 @@
     }
 
     <span class="comment">// TODO should become part of the API
-    </span><span class="kw">async fn </span>await_output_outcome&lt;R: DynTryIntoOutcome + MaybeSend&gt;(
+    </span><span class="kw">async fn </span>await_output_outcome&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; OutputOutcomeResult&lt;R&gt; {
+    ) -&gt; OutputOutcomeResult&lt;R&gt;
+    <span class="kw">where
+        </span>R: OutputOutcome,
+    {
         fedimint_core::task::timeout(timeout, <span class="kw">async move </span>{
             <span class="kw">let </span>tx_outcome = <span class="self">self</span>.await_tx_outcome(<span class="kw-2">&amp;</span>outpoint.txid).<span class="kw">await</span><span class="question-mark">?</span>;
             map_tx_outcome_outpoint(tx_outcome, outpoint, decoders)

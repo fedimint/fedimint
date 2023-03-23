@@ -414,8 +414,6 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::{Address, KeyPair};
@@ -434,7 +432,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::tweakable::Tweakable;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome};
-<span class="kw">use </span><span class="kw">crate</span>::outcome::legacy::OutputOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span><span class="kw">crate</span>::MemberError;
 
@@ -578,12 +575,11 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
         <span class="comment">// TODO: define timeout centrally
         </span><span class="kw">let </span>timeout = std::time::Duration::from_secs(<span class="number">15</span>);
-        <span class="kw">let </span>outcome: WalletOutputOutcome = <span class="self">self
+        <span class="kw">let </span>outcome = <span class="self">self
             </span>.context
             .api
-            .await_output_outcome::&lt;OutputOutcome&gt;(out_point, timeout, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.try_into_variant()<span class="question-mark">?</span>;
+            .await_output_outcome::&lt;WalletOutputOutcome&gt;(out_point, timeout, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(outcome.<span class="number">0</span>)
     }
 }

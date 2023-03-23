@@ -128,20 +128,10 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>legacy {
-    <span class="kw">use </span>fedimint_core::api::{DynTryIntoOutcome, OutputOutcomeError};
+    <span class="kw">use </span>fedimint_core::api::OutputOutcomeError;
     <span class="kw">use </span>fedimint_core::core::{
-        DynOutputOutcome, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
         LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -149,7 +139,7 @@
     <span class="kw">use </span>fedimint_core::CoreError;
     <span class="kw">use </span>fedimint_ln_client::contracts::incoming::OfferId;
     <span class="kw">use </span>fedimint_ln_client::contracts::{
-        ContractOutcome, DecryptedPreimage, OutgoingContractOutcome, Preimage,
+        ContractOutcome, DecryptedPreimage, OutgoingContractOutcome,
     };
     <span class="kw">use </span>fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
     <span class="kw">use </span>fedimint_mint_client::{MintModuleTypes, MintOutputOutcome};
@@ -192,15 +182,9 @@
         <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt;;
     }
 
-    <span class="kw">impl </span>DynTryIntoOutcome <span class="kw">for </span>OutputOutcome {
-        <span class="kw">fn </span>try_into_outcome(outcome: DynOutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
-            <span class="prelude-val">Ok</span>(OutputOutcome::from(outcome))
-        }
-    }
-
     <span class="kw">impl </span>OutputOutcome {
         <span class="kw">pub fn </span>try_into_variant&lt;T: TryIntoOutcome&gt;(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;T, OutputOutcomeError&gt; {
-            T::try_into_outcome(<span class="self">self</span>).map_err(OutputOutcomeError::from)
+            T::try_into_outcome(<span class="self">self</span>).map_err(|e| OutputOutcomeError::Core(anyhow::Error::from(e)))
         }
     }
 
@@ -234,18 +218,14 @@
         }
     }
 
-    <span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>Preimage {
+    <span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>DecryptedPreimage {
         <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
             <span class="kw">if let </span>OutputOutcome::LN(fedimint_ln_client::LightningOutputOutcome::Contract {
                 outcome: ContractOutcome::Incoming(decrypted_preimage),
                 ..
             }) = common_outcome
             {
-                <span class="kw">match </span>decrypted_preimage {
-                    DecryptedPreimage::Some(preimage) =&gt; <span class="prelude-val">Ok</span>(preimage),
-                    DecryptedPreimage::Pending =&gt; <span class="prelude-val">Err</span>(CoreError::PendingPreimage),
-                    <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(CoreError::MismatchingVariant(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>)),
-                }
+                <span class="prelude-val">Ok</span>(decrypted_preimage)
             } <span class="kw">else </span>{
                 <span class="prelude-val">Err</span>(CoreError::MismatchingVariant(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
             }
