@@ -57,7 +57,7 @@ pub mod legacy {
     /// incoming LN contract offers.
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
-        // TODO: maybe treat every note as a seperate input?
+        // TODO: maybe treat every note as a separate input?
         Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Input),
         Wallet(<fedimint_wallet_client::WalletModuleTypes as ModuleCommon>::Input),
         LN(<fedimint_ln_client::LightningModuleTypes as ModuleCommon>::Input),

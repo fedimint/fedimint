@@ -618,7 +618,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     /// For tests only: Select notes of a given amount, and then remint them,
     /// remove the amount of notes from the database and return it to the user.
     ///
-    /// This is a respin of `spent_ecash` for tests, where it is neccessary
+    /// This is a respin of `spent_ecash` for tests, where it is necessary
     /// to process epochs after `self.submit_tx_with_change`. Then
     /// `remint_ecash_await` can be called to do the rest.
     ///
@@ -1301,7 +1301,7 @@ impl Client<GatewayClientConfig> {
             signature: None,
         };
 
-        // TODO: protect against crashes, but the timout being hit eventually anyway
+        // TODO: protect against crashes, but the timeout being hit eventually anyway
         // makes this less of an issue
         self.context
             .api

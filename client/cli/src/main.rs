@@ -500,7 +500,7 @@ async fn main() {
 
         match cli_result {
             Ok(output) => {
-                // ignore if there's anyone reading the stuff we're writting out
+                // ignore if there's anyone reading the stuff we're writing out
                 let _ = writeln!(std::io::stdout(), "{output}");
             }
             Err(err) => {
