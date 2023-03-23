@@ -14,7 +14,7 @@ use tracing::warn;
 use crate::sm::{Context, DynContext, OperationId, OperationState, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState};
 
-// TODO: how to preven collisions? Generally reserve some range for custom IDs?
+// TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
 pub const TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = 0xffff;
 
