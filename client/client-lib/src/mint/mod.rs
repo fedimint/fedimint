@@ -28,7 +28,6 @@ use crate::modules::mint::config::MintClientConfig;
 use crate::modules::mint::{
     BlindNonce, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note,
 };
-use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::{Input, Output, Transaction};
 use crate::utils::ClientContext;
 use crate::{ChildId, DerivableSecret, FuturesUnordered};
@@ -458,10 +457,9 @@ impl MintClient {
         let bsig = self
             .context
             .api
-            .fetch_output_outcome::<OutputOutcome>(outpoint, &self.context.decoders)
+            .fetch_output_outcome::<MintOutputOutcome>(outpoint, &self.context.decoders)
             .await?
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?
-            .try_into_variant::<MintOutputOutcome>()?
             .as_ref()
             .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
