@@ -850,13 +850,59 @@
 <a href="#850" id="850">850</a>
 <a href="#851" id="851">851</a>
 <a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
-<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::process::exit;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -894,6 +940,15 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>url::Url;
+
+<span class="doccomment">/// List of modules supported by this cli
+</span><span class="kw">fn </span>get_module_gen_registry() -&gt; ClientModuleGenRegistry {
+    ClientModuleGenRegistry::from(<span class="macro">vec!</span>[
+        DynClientModuleGen::from(WalletClientGen),
+        DynClientModuleGen::from(MintClientGen),
+        DynClientModuleGen::from(LightningClientGen),
+    ])
+}
 
 <span class="attr">#[derive(Serialize)]
 #[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
@@ -1080,27 +1135,46 @@
 
 <span class="attr">#[derive(Parser)]
 #[command(version)]
-</span><span class="kw">struct </span>Cli {
+</span><span class="kw">struct </span>Opts {
     <span class="doccomment">/// The working directory of the client containing the config and db
     </span><span class="attr">#[arg(long = <span class="string">&quot;workdir&quot;</span>)]
-    </span>workdir: PathBuf,
+    </span>workdir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
+
     <span class="attr">#[clap(subcommand)]
     </span>command: Command,
 }
 
-<span class="attr">#[derive(Parser)]
-#[command(version)]
-</span><span class="kw">struct </span>CliNoWorkdir {
-    <span class="attr">#[clap(subcommand)]
-    </span>command: CommandNoWorkdir,
+<span class="kw">impl </span>Opts {
+    <span class="kw">fn </span>workdir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path {
+        <span class="self">self</span>.workdir
+            .as_ref()
+            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;`--workdir=` argument not set.&quot;</span>)
+    }
+
+    <span class="kw">async fn </span>build_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Client&lt;UserClientConfig&gt; {
+        <span class="kw">let </span>module_gens = get_module_gen_registry();
+        <span class="kw">let </span>cfg_path = <span class="self">self</span>.workdir().join(<span class="string">&quot;client.json&quot;</span>);
+        <span class="kw">let </span>db_path = <span class="self">self</span>.workdir().join(<span class="string">&quot;client.db&quot;</span>);
+        <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to parse config&quot;</span>);
+        <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
+            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>);
+
+        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(cfg.clone().<span class="number">0</span>.modules.into_iter().map(
+            |(id, module_cfg)| {
+                <span class="kw">let </span>module_gen = module_gens
+                    .get(module_cfg.kind())
+                    .expect(<span class="string">&quot;module kind not found in registry&quot;</span>);
+                (id, module_gen.as_ref().decoder())
+            },
+        ));
+
+        <span class="kw">let </span>db = Database::new(db, decoders.clone());
+
+        Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).<span class="kw">await
+    </span>}
 }
 
-<span class="attr">#[derive(Subcommand)]
-</span><span class="kw">enum </span>CommandNoWorkdir {
-    <span class="doccomment">/// Print the latest git commit hash this bin. was build with
-    </span>VersionHash,
-}
-<span class="attr">#[derive(Subcommand)]
+<span class="attr">#[derive(Subcommand, Clone)]
 </span><span class="kw">enum </span>Command {
     <span class="doccomment">/// Print the latest git commit hash this bin. was build with
     </span>VersionHash,
@@ -1163,8 +1237,7 @@
     </span>LnInvoice {
         <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
-        <span class="attr">#[clap(default_value = <span class="string">&quot;&quot;</span>)]
-        </span>description: String,
+        description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
 
@@ -1240,14 +1313,19 @@
     </span>EpochCount,
 }
 
-<span class="kw">trait </span>ErrorHandler&lt;T, E&gt; {
+<span class="doccomment">/// Extension trait for values that either return `T` or terminate the program
+/// with CLI error
+</span><span class="kw">trait </span>OrTerminate&lt;T&gt; {
     <span class="kw">fn </span>or_terminate(<span class="self">self</span>, err: CliErrorKind, msg: <span class="kw-2">&amp;</span>str) -&gt; T;
+}
+
+<span class="kw">trait </span>ErrorHandler&lt;T, E&gt;: OrTerminate&lt;T&gt; {
     <span class="kw">fn </span>transform&lt;F&gt;(<span class="self">self</span>, success: F, err: CliErrorKind, msg: <span class="kw-2">&amp;</span>str) -&gt; CliResult
     <span class="kw">where
         </span>F: Fn(T) -&gt; CliOutput;
 }
 
-<span class="kw">impl</span>&lt;T, E: Into&lt;Box&lt;<span class="kw">dyn </span>Error&gt;&gt;&gt; ErrorHandler&lt;T, E&gt; <span class="kw">for </span><span class="prelude-ty">Result</span>&lt;T, E&gt; {
+<span class="kw">impl</span>&lt;T, E: Into&lt;Box&lt;<span class="kw">dyn </span>Error&gt;&gt;&gt; OrTerminate&lt;T&gt; <span class="kw">for </span><span class="prelude-ty">Result</span>&lt;T, E&gt; {
     <span class="kw">fn </span>or_terminate(<span class="self">self</span>, err: CliErrorKind, msg: <span class="kw-2">&amp;</span>str) -&gt; T {
         <span class="kw">match </span><span class="self">self </span>{
             <span class="prelude-val">Ok</span>(v) =&gt; v,
@@ -1258,6 +1336,9 @@
             }
         }
     }
+}
+
+<span class="kw">impl</span>&lt;T, E: Into&lt;Box&lt;<span class="kw">dyn </span>Error&gt;&gt;&gt; ErrorHandler&lt;T, E&gt; <span class="kw">for </span><span class="prelude-ty">Result</span>&lt;T, E&gt; {
     <span class="kw">fn </span>transform&lt;F&gt;(<span class="self">self</span>, success: F, err: CliErrorKind, msg: <span class="kw-2">&amp;</span>str) -&gt; CliResult
     <span class="kw">where
         </span>F: Fn(T) -&gt; CliOutput,
@@ -1265,6 +1346,19 @@
         <span class="kw">match </span><span class="self">self </span>{
             <span class="prelude-val">Ok</span>(v) =&gt; <span class="prelude-val">Ok</span>(success(v)),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(CliError::from(err, msg, <span class="prelude-val">Some</span>(e.into()))),
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; OrTerminate&lt;T&gt; <span class="kw">for </span><span class="prelude-ty">Option</span>&lt;T&gt; {
+    <span class="kw">fn </span>or_terminate(<span class="self">self</span>, err: CliErrorKind, msg: <span class="kw-2">&amp;</span>str) -&gt; T {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="prelude-val">Some</span>(v) =&gt; v,
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="kw">let </span>cli_error = CliError::from(err, msg, <span class="prelude-val">None</span>);
+                <span class="macro">eprintln!</span>(<span class="string">&quot;{cli_error}&quot;</span>);
+                exit(<span class="number">1</span>);
+            }
         }
     }
 }
@@ -1281,99 +1375,51 @@
 </span><span class="kw">async fn </span>main() {
     TracingSetup::default().init().expect(<span class="string">&quot;tracing initializes&quot;</span>);
 
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(cli) = CliNoWorkdir::try_parse() {
-        <span class="comment">// Only commands that don&#39;t need the workdir can be used here
-        //TODO: remove allow when there are more commands
-        </span><span class="attr">#[allow(irrefutable_let_patterns)]
-        </span><span class="kw">if let </span>CommandNoWorkdir::VersionHash = cli.command {
-            <span class="macro">println!</span>(
-                <span class="string">&quot;{}&quot;</span>,
-                CliOutput::VersionHash {
-                    hash: <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>).to_string()
-                }
-            );
-        };
-    } <span class="kw">else </span>{
-        <span class="kw">let </span>module_gens = ClientModuleGenRegistry::from(<span class="macro">vec!</span>[
-            DynClientModuleGen::from(WalletClientGen),
-            DynClientModuleGen::from(MintClientGen),
-            DynClientModuleGen::from(LightningClientGen),
-        ]);
+    <span class="kw">let </span>cli = Opts::parse();
 
-        <span class="kw">let </span>cli = Cli::parse();
-        <span class="kw">if let </span>Command::JoinFederation { connect } = cli.command {
+    <span class="kw">match </span>handle_command(cli).<span class="kw">await </span>{
+        <span class="prelude-val">Ok</span>(output) =&gt; {
+            <span class="comment">// ignore if there&#39;s anyone reading the stuff we&#39;re writing out
+            </span><span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">&quot;{output}&quot;</span>);
+        }
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stderr(), <span class="string">&quot;{err}&quot;</span>);
+            exit(<span class="number">1</span>);
+        }
+    }
+}
+
+<span class="kw">async fn </span>handle_command(cli: Opts) -&gt; CliResult {
+    <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
+
+    <span class="kw">match </span>cli.command.clone() {
+        Command::JoinFederation { connect } =&gt; {
             <span class="kw">let </span>connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>connect)
                 .map_err(Box::&lt;<span class="kw">dyn </span>Error&gt;::from)
                 .or_terminate(CliErrorKind::InvalidValue, <span class="string">&quot;invalid connect info&quot;</span>);
             <span class="kw">let </span>api = Arc::new(WsFederationApi::from_urls(<span class="kw-2">&amp;</span>connect_obj))
                 <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
             <span class="kw">let </span>cfg: ClientConfig = api
-                .download_client_config(<span class="kw-2">&amp;</span>connect_obj.id, module_gens.to_common())
+                .download_client_config(<span class="kw-2">&amp;</span>connect_obj.id, get_module_gen_registry().to_common())
                 .<span class="kw">await
                 </span>.or_terminate(
                     CliErrorKind::NetworkError,
                     <span class="string">&quot;couldn&#39;t download config from peer&quot;</span>,
                 );
-            <span class="kw">let </span>cfg_path = cli.workdir.join(<span class="string">&quot;client.json&quot;</span>);
-            std::fs::create_dir_all(<span class="kw-2">&amp;</span>cli.workdir)
+            <span class="kw">let </span>cfg_path = cli.workdir().join(<span class="string">&quot;client.json&quot;</span>);
+            std::fs::create_dir_all(cli.workdir())
                 .or_terminate(CliErrorKind::IOError, <span class="string">&quot;failed to create config directory&quot;</span>);
             <span class="kw">let </span>writer = std::fs::File::create(cfg_path)
                 .or_terminate(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t create config.json&quot;</span>);
             serde_json::to_writer_pretty(writer, <span class="kw-2">&amp;</span>cfg)
                 .or_terminate(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t write config&quot;</span>);
-            <span class="macro">println!</span>(
-                <span class="string">&quot;{}&quot;</span>,
-                <span class="kw-2">&amp;</span>CliOutput::JoinFederation { joined: (connect) }.to_string()
-            );
-            <span class="kw">return</span>;
-        };
-
-        <span class="kw">let </span>cfg_path = cli.workdir.join(<span class="string">&quot;client.json&quot;</span>);
-        <span class="kw">let </span>db_path = cli.workdir.join(<span class="string">&quot;client.db&quot;</span>);
-        <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to parse config&quot;</span>);
-        <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
-            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>);
-
-        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(cfg.clone().<span class="number">0</span>.modules.into_iter().map(
-            |(id, module_cfg)| {
-                <span class="kw">let </span>module_gen = module_gens
-                    .get(module_cfg.kind())
-                    .expect(<span class="string">&quot;module kind not found in registry&quot;</span>);
-                (id, module_gen.as_ref().decoder())
-            },
-        ));
-
-        <span class="kw">let </span>db = Database::new(db, decoders.clone());
-
-        <span class="kw">let </span>rng = rand::rngs::OsRng;
-
-        <span class="kw">let </span>client = Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).<span class="kw">await</span>;
-
-        <span class="kw">let </span>cli_result = handle_command(cli, client, rng).<span class="kw">await</span>;
-
-        <span class="kw">match </span>cli_result {
-            <span class="prelude-val">Ok</span>(output) =&gt; {
-                <span class="comment">// ignore if there&#39;s anyone reading the stuff we&#39;re writing out
-                </span><span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">&quot;{output}&quot;</span>);
-            }
-            <span class="prelude-val">Err</span>(err) =&gt; {
-                <span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stderr(), <span class="string">&quot;{err}&quot;</span>);
-                exit(<span class="number">1</span>);
-            }
+            <span class="prelude-val">Ok</span>(CliOutput::JoinFederation { joined: (connect) })
         }
-    }
-}
-
-<span class="kw">async fn </span>handle_command(
-    cli: Cli,
-    client: Client&lt;UserClientConfig&gt;,
-    <span class="kw-2">mut </span>rng: rand::rngs::OsRng,
-) -&gt; CliResult {
-    <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
-    <span class="kw">match </span>cli.command {
         Command::Api { method, arg } =&gt; {
             <span class="kw">let </span>arg: Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
-            <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(client.config().as_ref()).into();
+            <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; =
+                WsFederationApi::from_config(cli.build_client().<span class="kw">await</span>.config().as_ref()).into();
             <span class="kw">let </span>response: Value = ws_api
                 .request_with_strategy(
                     EventuallyConsistent::new(ws_api.peers().len()),
@@ -1389,7 +1435,7 @@
             hash: <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>).to_string(),
         }),
         Command::PegInAddress =&gt; {
-            <span class="kw">let </span>peg_in_address = client.get_new_pegin_address(rng).<span class="kw">await</span>;
+            <span class="kw">let </span>peg_in_address = cli.build_client().<span class="kw">await</span>.get_new_pegin_address(rng).<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(CliOutput::PegInAddress {
                 address: (peg_in_address),
             })
@@ -1397,8 +1443,10 @@
         Command::PegIn {
             txout_proof,
             transaction,
-        } =&gt; client
-            .peg_in(txout_proof, transaction, <span class="kw-2">&amp;mut </span>rng)
+        } =&gt; cli
+            .build_client()
+            .<span class="kw">await
+            </span>.peg_in(txout_proof, transaction, <span class="kw-2">&amp;mut </span>rng)
             .<span class="kw">await
             </span>.transform(
                 |v| CliOutput::PegIn { id: (v) },
@@ -1407,7 +1455,7 @@
             ),
 
         Command::Reissue { notes } =&gt; {
-            <span class="kw">let </span>id = client.reissue(notes, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>;
+            <span class="kw">let </span>id = cli.build_client().<span class="kw">await</span>.reissue(notes, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>;
             id.transform(
                 |v| CliOutput::Reissue { id: (v) },
                 CliErrorKind::GeneralFederationError,
@@ -1415,7 +1463,11 @@
             )
         }
         Command::Validate { notes } =&gt; {
-            <span class="kw">let </span>validate_result = client.validate_note_signatures(<span class="kw-2">&amp;</span>notes).<span class="kw">await</span>;
+            <span class="kw">let </span>validate_result = cli
+                .build_client()
+                .<span class="kw">await
+                </span>.validate_note_signatures(<span class="kw-2">&amp;</span>notes)
+                .<span class="kw">await</span>;
             <span class="kw">let </span>details_vec = notes
                 .iter()
                 .map(|(amount, notes)| (amount.to_owned(), notes.len()))
@@ -1432,14 +1484,19 @@
                 }),
             }
         }
-        Command::Spend { amount } =&gt; client.spend_ecash(amount, rng).<span class="kw">await</span>.transform(
-            |v| CliOutput::Spend {
-                note: (serialize_ecash(<span class="kw-2">&amp;</span>v)),
-            },
-            CliErrorKind::GeneralFederationError,
-            <span class="string">&quot;failed to execute spend (no further information)&quot;</span>,
-        ),
-        Command::Fetch =&gt; <span class="kw">match </span>client.fetch_all_notes().<span class="kw">await </span>{
+        Command::Spend { amount } =&gt; cli
+            .build_client()
+            .<span class="kw">await
+            </span>.spend_ecash(amount, rng)
+            .<span class="kw">await
+            </span>.transform(
+                |v| CliOutput::Spend {
+                    note: (serialize_ecash(<span class="kw-2">&amp;</span>v)),
+                },
+                CliErrorKind::GeneralFederationError,
+                <span class="string">&quot;failed to execute spend (no further information)&quot;</span>,
+            ),
+        Command::Fetch =&gt; <span class="kw">match </span>cli.build_client().<span class="kw">await</span>.fetch_all_notes().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(result) =&gt; <span class="prelude-val">Ok</span>(CliOutput::Fetch { issuance: (result) }),
             <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(CliError::from(
                 CliErrorKind::GeneralFederationError,
@@ -1448,6 +1505,7 @@
             )),
         },
         Command::Info =&gt; {
+            <span class="kw">let </span>client = cli.build_client().<span class="kw">await</span>;
             <span class="kw">let </span>notes = client.notes().<span class="kw">await</span>;
             <span class="kw">let </span>details_vec = notes
                 .iter()
@@ -1464,6 +1522,7 @@
             })
         }
         Command::PegOut { address, satoshis } =&gt; {
+            <span class="kw">let </span>client = cli.build_client().<span class="kw">await</span>;
             <span class="kw">match </span>client.new_peg_out_with_fees(satoshis, address).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(peg_out) =&gt; <span class="kw">match </span>client.peg_out(peg_out, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(out_point) =&gt; client
@@ -1489,6 +1548,7 @@
             }
         }
         Command::LnPay { bolt11 } =&gt; {
+            <span class="kw">let </span>client = cli.build_client().<span class="kw">await</span>;
             <span class="kw">match </span>client.fund_outgoing_ln_contract(bolt11, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>((contract_id, outpoint)) =&gt; {
                     <span class="kw">match </span>client.await_outgoing_contract_acceptance(outpoint).<span class="kw">await </span>{
@@ -1520,8 +1580,10 @@
             amount,
             description,
             expiry_time,
-        } =&gt; client
-            .generate_confirmed_invoice(amount, description, <span class="kw-2">&amp;mut </span>rng, expiry_time)
+        } =&gt; cli
+            .build_client()
+            .<span class="kw">await
+            </span>.generate_confirmed_invoice(amount, description, <span class="kw-2">&amp;mut </span>rng, expiry_time)
             .<span class="kw">await
             </span>.transform(
                 |confirmed_invoice| CliOutput::LnInvoice {
@@ -1532,8 +1594,9 @@
             ),
         Command::WaitInvoice { invoice } =&gt; {
             <span class="kw">let </span>contract_id = (<span class="kw-2">*</span>invoice.payment_hash()).into();
-            client
-                .claim_incoming_contract(contract_id, <span class="kw-2">&amp;mut </span>rng)
+            cli.build_client()
+                .<span class="kw">await
+                </span>.claim_incoming_contract(contract_id, <span class="kw-2">&amp;mut </span>rng)
                 .<span class="kw">await
                 </span>.transform(
                     |outpoint| CliOutput::WaitInvoice {
@@ -1543,15 +1606,19 @@
                     <span class="string">&quot;invoice did not get paid in time&quot;</span>,
                 )
         }
-        Command::WaitBlockHeight { height } =&gt; {
-            client.await_consensus_block_height(height).<span class="kw">await</span>.transform(
+        Command::WaitBlockHeight { height } =&gt; cli
+            .build_client()
+            .<span class="kw">await
+            </span>.await_consensus_block_height(height)
+            .<span class="kw">await
+            </span>.transform(
                 |<span class="kw">_</span>| CliOutput::WaitBlockHeight { reached: (height) },
                 CliErrorKind::Timeout,
                 <span class="string">&quot;timeout reached&quot;</span>,
-            )
-        }
+            ),
         Command::ConnectInfo =&gt; {
-            <span class="kw">let </span>info = WsClientConnectInfo::from_honest_peers(client.config().as_ref());
+            <span class="kw">let </span>info =
+                WsClientConnectInfo::from_honest_peers(cli.build_client().<span class="kw">await</span>.config().as_ref());
             <span class="prelude-val">Ok</span>(CliOutput::ConnectInfo {
                 connect_info: (info),
             })
@@ -1563,54 +1630,60 @@
         Command::EncodeConnectInfo { urls, id } =&gt; <span class="prelude-val">Ok</span>(CliOutput::ConnectInfo {
             connect_info: WsClientConnectInfo { urls, id },
         }),
-        Command::JoinFederation { .. } =&gt; {
-            <span class="macro">unreachable!</span>()
-        }
-        Command::ListGateways {} =&gt; <span class="kw">match </span>client.fetch_registered_gateways().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(gateways) =&gt; {
-                <span class="kw">if </span>!gateways.is_empty() {
-                    <span class="kw">let </span><span class="kw-2">mut </span>gateways_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways);
-                    <span class="kw">match </span>client.fetch_active_gateway().<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(active_gateway) =&gt; {
-                            gateways_json
-                                .as_array_mut()
-                                .expect(<span class="string">&quot;gateways_json is not an array&quot;</span>)
-                                .iter_mut()
-                                .for_each(|gateway| {
-                                    <span class="kw">if </span>gateway[<span class="string">&quot;node_pub_key&quot;</span>] == <span class="macro">json!</span>(active_gateway.node_pub_key)
-                                    {
-                                        gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
-                                    } <span class="kw">else </span>{
-                                        gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">false</span>);
-                                    }
-                                });
-                            <span class="prelude-val">Ok</span>(CliOutput::ListGateways {
-                                num_gateways: (gateways.len()),
-                                gateways: (gateways_json),
-                            })
+        Command::ListGateways {} =&gt; {
+            <span class="kw">let </span>client = cli.build_client().<span class="kw">await</span>;
+            <span class="kw">match </span>client.fetch_registered_gateways().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(gateways) =&gt; {
+                    <span class="kw">if </span>!gateways.is_empty() {
+                        <span class="kw">let </span><span class="kw-2">mut </span>gateways_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways);
+                        <span class="kw">match </span>client.fetch_active_gateway().<span class="kw">await </span>{
+                            <span class="prelude-val">Ok</span>(active_gateway) =&gt; {
+                                gateways_json
+                                    .as_array_mut()
+                                    .expect(<span class="string">&quot;gateways_json is not an array&quot;</span>)
+                                    .iter_mut()
+                                    .for_each(|gateway| {
+                                        <span class="kw">if </span>gateway[<span class="string">&quot;node_pub_key&quot;</span>]
+                                            == <span class="macro">json!</span>(active_gateway.node_pub_key)
+                                        {
+                                            gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
+                                        } <span class="kw">else </span>{
+                                            gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">false</span>);
+                                        }
+                                    });
+                                <span class="prelude-val">Ok</span>(CliOutput::ListGateways {
+                                    num_gateways: (gateways.len()),
+                                    gateways: (gateways_json),
+                                })
+                            }
+                            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(CliError::from(
+                                CliErrorKind::GeneralFederationError,
+                                <span class="string">&quot;could not determine active gateway&quot;</span>,
+                                <span class="prelude-val">Some</span>(Box::new(e)),
+                            )),
                         }
-                        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(CliError::from(
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">Err</span>(CliError::from(
                             CliErrorKind::GeneralFederationError,
-                            <span class="string">&quot;could not determine active gateway&quot;</span>,
-                            <span class="prelude-val">Some</span>(Box::new(e)),
-                        )),
+                            <span class="string">&quot;no gateways found&quot;</span>,
+                            <span class="prelude-val">None</span>,
+                        ))
                     }
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(CliError::from(
-                        CliErrorKind::GeneralFederationError,
-                        <span class="string">&quot;no gateways found&quot;</span>,
-                        <span class="prelude-val">None</span>,
-                    ))
                 }
+                <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(CliError::from(
+                    CliErrorKind::GeneralFederationError,
+                    <span class="string">&quot;failed to fetch gateways&quot;</span>,
+                    <span class="prelude-val">Some</span>(Box::new(e)),
+                )),
             }
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(CliError::from(
-                CliErrorKind::GeneralFederationError,
-                <span class="string">&quot;failed to fetch gateways&quot;</span>,
-                <span class="prelude-val">Some</span>(Box::new(e)),
-            )),
-        },
+        }
         Command::SwitchGateway { pubkey } =&gt; {
-            <span class="kw">match </span>client.switch_active_gateway(<span class="prelude-val">Some</span>(pubkey)).<span class="kw">await </span>{
+            <span class="kw">match </span>cli
+                .build_client()
+                .<span class="kw">await
+                </span>.switch_active_gateway(<span class="prelude-val">Some</span>(pubkey))
+                .<span class="kw">await
+            </span>{
                 <span class="prelude-val">Ok</span>(gateway) =&gt; {
                     <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
                     gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
@@ -1625,7 +1698,13 @@
                 )),
             }
         }
-        Command::Backup =&gt; <span class="kw">match </span>client.mint_client().back_up_ecash_to_federation().<span class="kw">await </span>{
+        Command::Backup =&gt; <span class="kw">match </span>cli
+            .build_client()
+            .<span class="kw">await
+            </span>.mint_client()
+            .back_up_ecash_to_federation()
+            .<span class="kw">await
+        </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(CliOutput::Backup),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(CliError::from(
                 CliErrorKind::GeneralFederationError,
@@ -1633,8 +1712,10 @@
                 <span class="prelude-val">Some</span>(e.into()),
             )),
         },
-        Command::Restore { gap_limit } =&gt; <span class="kw">match </span>client
-            .mint_client()
+        Command::Restore { gap_limit } =&gt; <span class="kw">match </span>cli
+            .build_client()
+            .<span class="kw">await
+            </span>.mint_client()
             .restore_ecash_from_federation(gap_limit, <span class="kw-2">&amp;mut </span>task_group)
             .<span class="kw">await
         </span>{
@@ -1645,7 +1726,7 @@
                 <span class="prelude-val">Some</span>(e.into()),
             )),
         },
-        Command::WipeNotes =&gt; <span class="kw">match </span>client.mint_client().wipe_notes().<span class="kw">await </span>{
+        Command::WipeNotes =&gt; <span class="kw">match </span>cli.build_client().<span class="kw">await</span>.mint_client().wipe_notes().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(CliOutput::Backup),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(CliError::from(
                 CliErrorKind::GeneralFederationError,
@@ -1663,14 +1744,17 @@
                     )
                 })<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>tx = fedimint_core::transaction::Transaction::from_bytes(<span class="kw-2">&amp;</span>bytes, client.decoders())
-                .map_err(|e| {
-                    CliError::from(
-                        CliErrorKind::SerializationError,
-                        <span class="string">&quot;failed to decode transaction&quot;</span>,
-                        <span class="prelude-val">Some</span>(Box::new(e)),
-                    )
-                })<span class="question-mark">?</span>;
+            <span class="kw">let </span>tx = fedimint_core::transaction::Transaction::from_bytes(
+                <span class="kw-2">&amp;</span>bytes,
+                cli.build_client().<span class="kw">await</span>.decoders(),
+            )
+            .map_err(|e| {
+                CliError::from(
+                    CliErrorKind::SerializationError,
+                    <span class="string">&quot;failed to decode transaction&quot;</span>,
+                    <span class="prelude-val">Some</span>(Box::new(e)),
+                )
+            })<span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(CliOutput::DecodeTransaction {
                 transaction: (<span class="macro">format!</span>(<span class="string">&quot;{tx:?}&quot;</span>)),
@@ -1684,8 +1768,10 @@
             <span class="kw">let </span>salt = fs::read_to_string(salt_path)
                 .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to open salt file&quot;</span>))<span class="question-mark">?</span>;
             <span class="kw">let </span>auth = ApiAuth(get_password_hash(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>);
-            <span class="kw">let </span>url = client
-                .config()
+            <span class="kw">let </span>url = cli
+                .build_client()
+                .<span class="kw">await
+                </span>.config()
                 .as_ref()
                 .api_endpoints
                 .get(<span class="kw-2">&amp;</span>our_id)
@@ -1697,7 +1783,13 @@
             <span class="prelude-val">Ok</span>(CliOutput::SignalUpgrade)
         }
         Command::EpochCount =&gt; {
-            <span class="kw">let </span>count = client.context().api.fetch_epoch_count().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>count = cli
+                .build_client()
+                .<span class="kw">await
+                </span>.context()
+                .api
+                .fetch_epoch_count()
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(CliOutput::EpochCount { count })
         }
     }
