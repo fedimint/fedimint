@@ -371,7 +371,7 @@ impl ClientBuilder {
                         .init_primary(module_config, db.clone())
                         .await?;
                     let replaced = primary_module.replace(module).is_some();
-                    assert!(replaced, "Each module instance can only occurr once in config, so no replacement can take place here.")
+                    assert!(replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
                 } else {
                     let module = self
                         .module_gens
