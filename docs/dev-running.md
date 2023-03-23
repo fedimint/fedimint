@@ -215,6 +215,9 @@ Commands:
   switch-gateway       Switch active gateway
   backup               Upload the (encrypted) snapshot of mint notes to federation
   restore              Restore the previously created backup of mint notes (with `backup` command)
+  decode-transaction   Decode a transaction hex string and print it to stdout
+  signal-upgrade       Signal a consensus upgrade
+  epoch-count          Gets the current epoch count
   help                 Print this message or the help of the given subcommand(s)
 
 Options:
