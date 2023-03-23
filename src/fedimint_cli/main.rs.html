@@ -849,6 +849,7 @@
 <a href="#849" id="849">849</a>
 <a href="#850" id="850">850</a>
 <a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -1162,7 +1163,8 @@
     </span>LnInvoice {
         <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
-        description: String,
+        <span class="attr">#[clap(default_value = <span class="string">&quot;&quot;</span>)]
+        </span>description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
 
