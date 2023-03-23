@@ -52,7 +52,7 @@ public descriptor by tweaking it.</p>
 ecash must be <code>reissued</code> or it will be lost</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.remint_ecash" class="method"><a class="srclink rightside" href="../src/mint_client/lib.rs.html#628-638">source</a><h4 class="code-header">pub async fn <a href="#method.remint_ecash" class="fn">remint_ecash</a>&lt;R:&nbsp;<a class="trait" href="https://rust-random.github.io/rand/rand_core/trait.RngCore.html" title="trait rand_core::RngCore">RngCore</a> + <a class="trait" href="https://rust-random.github.io/rand/rand_core/trait.CryptoRng.html" title="trait rand_core::CryptoRng">CryptoRng</a>&gt;(<br>&nbsp;&nbsp;&nbsp;&nbsp;&amp;self,<br>&nbsp;&nbsp;&nbsp;&nbsp;amount: Amount,<br>&nbsp;&nbsp;&nbsp;&nbsp;rng: R<br>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="enum" href="enum.ClientError.html" title="enum mint_client::ClientError">ClientError</a>&gt;</h4></section></summary><div class="docblock"><p>For tests only: Select notes of a given amount, and then remint them,
 remove the amount of notes from the database and return it to the user.</p>
-<p>This is a respin of <code>spent_ecash</code> for tests, where it is neccessary
+<p>This is a respin of <code>spent_ecash</code> for tests, where it is necessary
 to process epochs after <code>self.submit_tx_with_change</code>. Then
 <code>remint_ecash_await</code> can be called to do the rest.</p>
 <p>TODO: Like <code>spend_ecash</code>, I think this function works in tests mostly

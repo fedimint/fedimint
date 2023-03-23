@@ -425,7 +425,7 @@
     /// incoming LN contract offers.
     </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     </span><span class="kw">pub enum </span>Input {
-        <span class="comment">// TODO: maybe treat every note as a seperate input?
+        <span class="comment">// TODO: maybe treat every note as a separate input?
         </span>Mint(&lt;fedimint_mint_client::MintModuleTypes <span class="kw">as </span>ModuleCommon&gt;::Input),
         Wallet(&lt;fedimint_wallet_client::WalletModuleTypes <span class="kw">as </span>ModuleCommon&gt;::Input),
         LN(&lt;fedimint_ln_client::LightningModuleTypes <span class="kw">as </span>ModuleCommon&gt;::Input),

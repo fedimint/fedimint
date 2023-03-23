@@ -1353,7 +1353,7 @@
 
         <span class="kw">match </span>cli_result {
             <span class="prelude-val">Ok</span>(output) =&gt; {
-                <span class="comment">// ignore if there&#39;s anyone reading the stuff we&#39;re writting out
+                <span class="comment">// ignore if there&#39;s anyone reading the stuff we&#39;re writing out
                 </span><span class="kw">let _ </span>= <span class="macro">writeln!</span>(std::io::stdout(), <span class="string">&quot;{output}&quot;</span>);
             }
             <span class="prelude-val">Err</span>(err) =&gt; {

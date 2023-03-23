@@ -892,6 +892,7 @@
 <a href="#892" id="892">892</a>
 <a href="#893" id="893">893</a>
 <a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Backup and recovery of ecash notes
 //!
 //! Ecash backup is implemented by periodically taking a snapshot,
@@ -964,7 +965,7 @@
 
         task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">info!</span>(<span class="string">&quot;Writting out the recovered state to the database&quot;</span>);
+        <span class="macro">info!</span>(<span class="string">&quot;Writing out the recovered state to the database&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.start_dbtx().<span class="kw">await</span>;
 
@@ -1190,21 +1191,21 @@
             <span class="kw">if </span>task_handle.is_shutting_down() {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Cancelled));
             }
-            <span class="comment">// if `recv` returned `None` that means fetch_epoch finished prematurelly,
-            // withouth sending an `Err` which is supposed to mean `is_shutting_down() ==
+            <span class="comment">// if `recv` returned `None` that means fetch_epoch finished prematurely,
+            // without sending an `Err` which is supposed to mean `is_shutting_down() ==
             // true`
             </span><span class="macro">info!</span>(target: LOG_ECASH_RECOVERY, epoch, <span class="string">&quot;Awaiting epoch&quot;</span>);
             <span class="kw">let </span>epoch_history = epoch_res<span class="question-mark">?</span>;
             <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
 
             <span class="macro">info!</span>(target: LOG_ECASH_RECOVERY, epoch, <span class="string">&quot;Processing epoch&quot;</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>procesed_txs = Default::default();
+            <span class="kw">let </span><span class="kw-2">mut </span>processed_txs = Default::default();
             <span class="kw">for </span>(peer_id, items) <span class="kw">in </span><span class="kw-2">&amp;</span>epoch_history.outcome.items {
                 <span class="kw">for </span>item <span class="kw">in </span>items {
                     tracker.handle_consensus_item(
                         <span class="kw-2">*</span>peer_id,
                         item,
-                        <span class="kw-2">&amp;mut </span>procesed_txs,
+                        <span class="kw-2">&amp;mut </span>processed_txs,
                         <span class="kw-2">&amp;</span>epoch_history.outcome.rejected_txs,
                     );
                 }
@@ -1308,7 +1309,7 @@
     </span>next_note_idx: Tiered&lt;NoteIndex&gt;,
 }
 
-<span class="doccomment">/// The state machine used for fast-fowarding backup from point when it was
+<span class="doccomment">/// The state machine used for fast-forwarding backup from point when it was
 /// taken to the present time by following epoch history items from the time the
 /// snapshot was taken.
 ///
@@ -1328,8 +1329,9 @@
     ///
     /// Note that `NoteIssuanceRequest` is optional, as sometimes we might need
     /// to handle a tx where only some of the blind nonces were in the pool.
-    /// A `None` means tha this blind nonce/message is there only for validation
-    /// purposes, and will actually not create a `spendable_note_by_nonce`
+    /// A `None` means that this blind nonce/message is there only for
+    /// validation purposes, and will actually not create a
+    /// `spendable_note_by_nonce`
     </span><span class="attr">#[allow(clippy::type_complexity)]
     </span>pending_outputs: HashMap&lt;
         OutPoint,
@@ -1562,7 +1564,7 @@
     ///
     /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the
     /// pending pool to always maintain at least `gap_limit` of pending
-    /// onces in each amount tier.
+    /// nonces in each amount tier.
     </span><span class="kw">fn </span>observe_nonce_idx_being_used(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: Amount, note_idx: NoteIndex) {
         <span class="kw-2">*</span><span class="self">self</span>.last_mined_nonce_idx.entry(amount).or_default() = max(
             <span class="self">self</span>.last_mined_nonce_idx
