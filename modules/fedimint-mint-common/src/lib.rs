@@ -47,7 +47,7 @@ pub struct MintOutputSignatureShare(
 /// Result of Federation members confirming [`MintOutput`] by contributing
 /// partial signatures via [`MintConsensusItem`]
 ///
-/// A set of full blinded signatures.
+/// A set of full blinded singatures.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct MintOutputBlindSignatures(pub TieredMulti<tbs::BlindedSignature>);
 

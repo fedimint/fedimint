@@ -158,7 +158,7 @@ pub fn sign_blinded_msg(msg: BlindedMessage, sks: SecretKeyShare) -> BlindedSign
     BlindedSignatureShare(sig.to_affine())
 }
 
-/// Combines a sufficient amount of valid blinded signature shares to a blinded
+/// Combines a sufficent amount of valid blinded signature shares to a blinded
 /// signature. The responsibility of verifying the supplied shares lies with the
 /// caller.
 ///

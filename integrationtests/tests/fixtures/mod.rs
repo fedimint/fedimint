@@ -18,7 +18,7 @@ use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -43,7 +43,7 @@ use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
 use fedimint_server::db::GLOBAL_DATABASE_VERSION;
-use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
+use fedimint_server::net::connect::mock::MockNetwork;
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
@@ -207,15 +207,12 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let mut module_gens_params = ServerModuleGenParamsRegistry::default();
-    fedimintd::attach_default_module_gen_params(
-        &mut module_gens_params,
+    let modules = fedimintd::configure_modules(
         sats(100000),
         bitcoin::network::constants::Network::Regtest,
         10,
     );
-    let params =
-        ServerConfigParams::gen_local(&peers, base_port, "test", module_gens_params).unwrap();
+    let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
 
     let server_module_inits = ServerModuleGenRegistry::from(vec![
         DynServerModuleGen::from(WalletGen),
@@ -390,11 +387,8 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen = move |cfg: &ServerConfig| {
-                net_ref
-                    .connector(cfg.local.identity, StreamReliability::FullyReliable)
-                    .into_dyn()
-            };
+            let connect_gen =
+                move |cfg: &ServerConfig| net_ref.connector(cfg.local.identity).into_dyn();
 
             let fed_db = |decoders| Database::new(MemDatabase::new(), decoders);
             let fed = FederationTest::new(
@@ -612,8 +606,7 @@ impl GatewayTest {
             module_gens.clone(),
             TaskGroup::new(),
         )
-        .await
-        .unwrap();
+        .await;
 
         let client = Arc::new(
             client_builder
@@ -623,7 +616,7 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .load_actor(client.clone(), vec![])
+            .connect_federation(client.clone(), vec![])
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios

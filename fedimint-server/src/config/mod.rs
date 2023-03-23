@@ -11,8 +11,9 @@ use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
-    ApiEndpoint, ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind,
-    ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
+    JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry,
+    TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::module::{ApiAuth, PeerHandle};
@@ -150,7 +151,7 @@ pub struct ServerConfigParams {
     pub meta: BTreeMap<String, String>,
     /// Params for the modules we wish to configure, can contain custom
     /// parameters
-    pub modules: ServerModuleGenParamsRegistry,
+    pub modules: ConfigGenParams,
 }
 
 impl ServerConfigConsensus {
@@ -373,19 +374,14 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
-        let null_config_gen = ConfigGenParams::null();
-
         // We assume user wants one module instance for every module kind
         let module_configs: BTreeMap<_, _> = registry
             .legacy_init_order_iter()
             .enumerate()
-            .map(|(module_id, (kind, gen))| {
+            .map(|(module_id, (_kind, gen))| {
                 (
                     u16::try_from(module_id).expect("Can't fail"),
-                    gen.trusted_dealer_gen(
-                        peers,
-                        peer0.modules.get(&kind).unwrap_or(&null_config_gen),
-                    ),
+                    gen.trusted_dealer_gen(peers, &peer0.modules),
                 )
             })
             .collect();
@@ -461,15 +457,13 @@ impl ServerConfig {
         // of each module that was compiled in. This is how things were
         // initially, where we consider "module as a code" as "module as an instance at
         // runtime"
-        let null_config_gen = ConfigGenParams::null();
-        for (module_instance_id, (kind, gen)) in registry.legacy_init_order_iter().enumerate() {
+        for (module_instance_id, (_kind, gen)) in registry.legacy_init_order_iter().enumerate() {
             let module_instance_id = u16::try_from(module_instance_id)
                 .expect("64k module instances should be enough for everyone");
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(&dkg, params.modules.get(&kind).unwrap_or(&null_config_gen))
-                    .await?,
+                gen.distributed_gen(&dkg, &params.modules).await?,
             );
         }
 
@@ -618,7 +612,7 @@ impl ServerConfigParams {
         federation_name: String,
         certs: Vec<String>,
         password: &str,
-        module_params: ServerModuleGenParamsRegistry,
+        module_params: ConfigGenParams,
     ) -> anyhow::Result<Self> {
         let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
         for (idx, cert) in certs.into_iter().sorted().enumerate() {
@@ -660,7 +654,7 @@ impl ServerConfigParams {
         our_id: PeerId,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        modules: ServerModuleGenParamsRegistry,
+        modules: ConfigGenParams,
     ) -> ServerConfigParams {
         let peer_certs: BTreeMap<PeerId, rustls::Certificate> = peers
             .iter()
@@ -714,7 +708,7 @@ impl ServerConfigParams {
         peers: &[PeerId],
         base_port: u16,
         federation_name: &str,
-        modules: ServerModuleGenParamsRegistry,
+        modules: ConfigGenParams,
     ) -> anyhow::Result<HashMap<PeerId, ServerConfigParams>> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()

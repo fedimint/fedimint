@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-use fedimint_core::config::{DkgError, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{DkgError, ServerModuleGenRegistry};
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{self, TaskGroup};
 use fedimint_core::Amount;
@@ -18,7 +18,7 @@ use fedimint_wallet_server::WalletGen;
 use tracing::info;
 use url::Url;
 
-use crate::attach_default_module_gen_params;
+use crate::configure_modules;
 
 #[derive(Parser)]
 struct Cli {
@@ -189,13 +189,6 @@ impl DistributedGen {
                 finality_delay,
                 password,
             } => {
-                let mut module_gens_params = ServerModuleGenParamsRegistry::default();
-                attach_default_module_gen_params(
-                    &mut module_gens_params,
-                    max_denomination,
-                    network,
-                    finality_delay,
-                );
                 let params = ServerConfigParams::parse_from_connect_strings(
                     bind_p2p,
                     bind_api,
@@ -203,7 +196,7 @@ impl DistributedGen {
                     federation_name,
                     certs,
                     &password,
-                    module_gens_params,
+                    configure_modules(max_denomination, network, finality_delay),
                 )?;
                 let server = match ServerConfig::distributed_gen(
                     &params,

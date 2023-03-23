@@ -291,11 +291,10 @@ mod tests {
                         .await?)
                     }
                 },
-                &ConfigGenParams::from_typed(WalletGenParams {
+                &ConfigGenParams::new().attach(WalletGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
                     finality_delay: 10,
-                })
-                .expect("Invalid wallet gen config"),
+                }),
                 &WalletGen,
                 module_id,
             )

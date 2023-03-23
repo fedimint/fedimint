@@ -15,8 +15,8 @@ use super::*;
 use crate::db::ModuleDatabaseTransaction;
 use crate::maybe_add_send_sync;
 use crate::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ApiVersion, ConsensusProposal, InputMeta,
-    ModuleCommon, ModuleConsensusVersion, ModuleError, ServerModule, TransactionItemAmount,
+    ApiAuth, ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, ModuleCommon,
+    ModuleConsensusVersion, ModuleError, ServerModule, TransactionItemAmount,
 };
 use crate::task::{MaybeSend, MaybeSync};
 
@@ -438,13 +438,21 @@ where
                 path,
                 handler: Box::new(
                     move |module: &DynServerModule,
-                          context: ApiEndpointContext<'_>,
-                          value: ApiRequestErased| {
+                          dbtx: fedimint_core::db::DatabaseTransaction<'_>,
+                          value: serde_json::Value,
+                          module_instance_id: Option<ModuleInstanceId>,
+                          api_auth: ApiAuth| {
                         let typed_module = module
                             .as_any()
                             .downcast_ref::<T>()
                             .expect("the dispatcher should always call with the right module");
-                        Box::pin(handler(typed_module, context, value))
+                        Box::pin(handler(
+                            typed_module,
+                            dbtx,
+                            value,
+                            module_instance_id,
+                            api_auth,
+                        ))
                     },
                 ),
             })

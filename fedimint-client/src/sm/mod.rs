@@ -1,15 +1,14 @@
-pub(crate) mod executor;
+mod executor;
 /// State machine state interface
 mod state;
 
 use std::fmt::Debug;
 
-pub use executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
-use fedimint_core::task::{MaybeSend, MaybeSync};
-pub use state::{Context, DynContext, DynState, OperationState, State, StateTransition};
+pub use executor::{Executor, ExecutorBuilder};
+pub use state::{Context, DynContext, DynState, State, StateTransition};
 
 /// Context given to all state machines
-pub trait GlobalContext: Debug + Clone + MaybeSync + MaybeSend + 'static {}
+pub trait GlobalContext: Debug + Sync + Send + 'static {}
 
 impl GlobalContext for () {}
 

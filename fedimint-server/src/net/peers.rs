@@ -645,7 +645,7 @@ mod tests {
     use fedimint_core::PeerId;
     use futures::Future;
 
-    use crate::net::connect::mock::{MockNetwork, StreamReliability};
+    use crate::net::connect::mock::MockNetwork;
     use crate::net::connect::Connector;
     use crate::net::peers::{IPeerConnections, NetworkConfig, ReconnectPeerConnections};
 
@@ -684,9 +684,7 @@ mod tests {
                     bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
-                let connect = net_ref
-                    .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
-                    .into_dyn();
+                let connect = net_ref.connector(cfg.identity).into_dyn();
                 ReconnectPeerConnections::<u64>::new(cfg, connect, &mut task_group).await
             };
 

@@ -23,7 +23,7 @@ async fn test_outgoing() {
     let mut fed = FakeFed::<Lightning>::new(
         4,
         |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
-        &ConfigGenParams::null(),
+        &ConfigGenParams::new(),
         &LightningGen,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
@@ -123,7 +123,7 @@ async fn test_incoming() {
     let mut fed = FakeFed::<Lightning>::new(
         4,
         |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
-        &ConfigGenParams::null(),
+        &ConfigGenParams::new(),
         &LightningGen,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )

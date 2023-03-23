@@ -743,14 +743,13 @@ mod tests {
             FakeFed::<Mint>::new(
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
-                &ConfigGenParams::from_typed(MintGenParams {
+                &ConfigGenParams::new().attach(MintGenParams {
                     mint_amounts: vec![
                         Amount::from_sats(1),
                         Amount::from_sats(10),
                         Amount::from_sats(20),
                     ],
-                })
-                .expect("Invalid mint config"),
+                }),
                 &MintGen,
                 module_id,
             )

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs a CLI-based integration test
 
-set -euo pipefail
+set -euxo pipefail
 export RUST_LOG="${RUST_LOG:-info}"
 
 export PEG_IN_AMOUNT=10000

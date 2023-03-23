@@ -81,7 +81,9 @@ pub struct WalletGenParams {
     pub finality_delay: u32,
 }
 
-impl ModuleGenParams for WalletGenParams {}
+impl ModuleGenParams for WalletGenParams {
+    const MODULE_NAME: &'static str = "wallet";
+}
 
 #[derive(Debug, Clone)]
 pub struct WalletGen;
@@ -116,8 +118,8 @@ impl ServerModuleGen for WalletGen {
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
-            .to_typed::<WalletGenParams>()
-            .expect("Invalid wallet gen params");
+            .get::<WalletGenParams>()
+            .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
 
@@ -155,7 +157,7 @@ impl ServerModuleGen for WalletGen {
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = params
-            .to_typed::<WalletGenParams>()
+            .get::<WalletGenParams>()
             .expect("Invalid wallet params");
 
         let secp = secp256k1::Secp256k1::new();
@@ -637,19 +639,19 @@ impl ServerModule for Wallet {
             api_endpoint! {
                 "/block_height",
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    Ok(module.consensus_height(&mut context.dbtx()).await.unwrap_or(0))
+                    Ok(module.consensus_height(context.dbtx()).await.unwrap_or(0))
                 }
             },
             api_endpoint! {
                 "/peg_out_fees",
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let consensus = module.current_round_consensus(&mut context.dbtx()).await.unwrap();
+                    let consensus = module.current_round_consensus(context.dbtx()).await.unwrap();
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
                         vec![],
-                        module.available_utxos(&mut context.dbtx()).await,
+                        module.available_utxos(context.dbtx()).await,
                         consensus.fee_rate,
                         &consensus.randomness_beacon,
                         None

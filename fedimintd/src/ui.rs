@@ -13,7 +13,7 @@ use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
@@ -30,7 +30,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::attach_default_module_gen_params;
+use crate::configure_modules;
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -167,14 +167,6 @@ async fn post_guardians(
     let mut dkg_task_group = state.task_group.make_subgroup().await;
     state.dkg_task_group = Some(dkg_task_group.clone());
     let module_gens = state.module_gens.clone();
-    let mut module_gens_params = state.module_gens_params.clone();
-    attach_default_module_gen_params(
-        &mut module_gens_params,
-        max_denomination,
-        params.network,
-        params.finality_delay,
-    );
-
     let password = state.password.clone();
     state
         .task_group
@@ -189,7 +181,7 @@ async fn post_guardians(
                 params.federation_name,
                 connection_strings,
                 &password,
-                module_gens_params,
+                configure_modules(max_denomination, params.network, params.finality_delay),
             ) {
                 Ok(params) => {
                     ServerConfig::distributed_gen(&params, module_gens.clone(), &mut dkg_task_group)
@@ -383,7 +375,6 @@ struct State {
     task_group: TaskGroup,
     dkg_task_group: Option<TaskGroup>,
     module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
     dkg_state: Option<DkgState>,
 }
 type MutableState = Arc<Mutex<State>>;
@@ -409,7 +400,6 @@ pub async fn run_ui(
     password: String,
     task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,
@@ -419,7 +409,6 @@ pub async fn run_ui(
         task_group: task_group.clone(),
         dkg_task_group: None,
         module_gens,
-        module_gens_params,
         dkg_state: None,
     }));
 

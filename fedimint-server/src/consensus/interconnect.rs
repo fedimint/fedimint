@@ -5,7 +5,6 @@ use fedimint_core::module::{ApiError, ApiRequestErased};
 use serde_json::Value;
 
 use crate::consensus::FedimintConsensus;
-use crate::net::api::HasApiContext;
 
 pub struct FedimintInterconnect<'a> {
     pub fedimint: &'a FedimintConsensus,
@@ -26,9 +25,15 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
                     .into_iter()
                     .find(|endpoint| endpoint.path == path)
                     .ok_or_else(|| ApiError::not_found(String::from("Method not found")))?;
-                let (state, context) = self.fedimint.context(&data, Some(id)).await;
 
-                return (endpoint.handler)(state, context, data).await;
+                return (endpoint.handler)(
+                    module,
+                    self.fedimint.db.begin_transaction().await,
+                    data.to_json(),
+                    Some(module_id),
+                    self.fedimint.cfg.private.api_auth.clone(),
+                )
+                .await;
             }
         }
         panic!("Module not registered: {id}");

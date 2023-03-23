@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -e
+set -o pipefail
 
 # prevent locale settings messing with some setups
 export LANG=C

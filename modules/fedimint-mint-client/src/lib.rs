@@ -1,11 +1,10 @@
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
+use fedimint_core::module::ExtendsCommonModuleGen;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
@@ -33,23 +32,10 @@ pub struct MintClientModule {}
 impl ClientModule for MintClientModule {
     type Common = MintModuleTypes;
     type ModuleStateMachineContext = ();
+    type GlobalStateMachineContext = ();
     type States = MintClientStates;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
-        unimplemented!()
-    }
-
-    fn input_amount(
-        &self,
-        _input: &<Self::Common as ModuleCommon>::Input,
-    ) -> TransactionItemAmount {
-        unimplemented!()
-    }
-
-    fn output_amount(
-        &self,
-        _output: &<Self::Common as ModuleCommon>::Output,
-    ) -> TransactionItemAmount {
         unimplemented!()
     }
 }
@@ -58,21 +44,20 @@ impl ClientModule for MintClientModule {
 pub enum MintClientStates {}
 
 impl IntoDynInstance for MintClientStates {
-    type DynType = DynState<DynGlobalClientContext>;
+    type DynType = DynState<()>;
 
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
         DynState::from_typed(instance_id, self)
     }
 }
 
-impl State for MintClientStates {
+impl State<()> for MintClientStates {
     type ModuleContext = ();
-    type GlobalContext = DynGlobalClientContext;
 
     fn transitions(
         &self,
         _context: &Self::ModuleContext,
-        _global_context: &DynGlobalClientContext,
+        _global_context: &(),
     ) -> Vec<StateTransition<Self>> {
         unimplemented!()
     }

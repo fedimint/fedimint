@@ -24,10 +24,6 @@ path = "src/bin/cln_extension.rs"
 name = "gateway-authentication-tests"
 path = "tests/authentication_tests.rs"
 
-[[test]]
-name = "gatewayd-integration-tests"
-path = "tests/integration_tests.rs"
-
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "0.1.64"

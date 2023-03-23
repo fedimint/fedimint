@@ -3,10 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
-use fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
-};
-use fedimint_core::core::ModuleKind;
+use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -83,7 +80,6 @@ pub struct ServerOpts {
 /// ```
 pub struct Fedimintd {
     module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
     opts: ServerOpts,
 }
 
@@ -107,7 +103,6 @@ impl Fedimintd {
 
         Ok(Self {
             module_gens: ServerModuleGenRegistry::new(),
-            module_gens_params: ServerModuleGenParamsRegistry::new(),
             opts,
         })
     }
@@ -117,15 +112,6 @@ impl Fedimintd {
         T: ServerModuleGen + 'static + Send + Sync,
     {
         self.module_gens.attach(gen);
-        self
-    }
-
-    pub fn with_extra_module_gens_params<P>(mut self, kind: ModuleKind, params: P) -> Self
-    where
-        P: ModuleGenParams,
-    {
-        self.module_gens_params
-            .attach_config_gen_params(kind, params);
         self
     }
 
@@ -146,14 +132,7 @@ impl Fedimintd {
         let task_group = root_task_group.clone();
         root_task_group
             .spawn_local("main", move |_task_handle| async move {
-                match run(
-                    self.opts,
-                    task_group.clone(),
-                    self.module_gens,
-                    self.module_gens_params,
-                )
-                .await
-                {
+                match run(self.opts, task_group.clone(), self.module_gens).await {
                     Ok(()) => {}
                     Err(e) => {
                         error!(?e, "Main task returned error, shutting down");
@@ -201,7 +180,6 @@ async fn run(
     opts: ServerOpts,
     mut task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
 ) -> anyhow::Result<()> {
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
@@ -223,7 +201,6 @@ async fn run(
                     password,
                     ui_task_group,
                     module_gens,
-                    module_gens_params,
                 )
                 .await;
             })

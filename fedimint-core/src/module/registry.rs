@@ -50,15 +50,6 @@ impl<M> ModuleRegistry<M> {
     pub fn get_expect(&self, id: ModuleInstanceId) -> &M {
         self.0.get(&id).expect("Instance ID not found")
     }
-
-    /// Add a module to the registry
-    pub fn register_module(&mut self, id: ModuleInstanceId, module: M) {
-        // FIXME: return result
-        assert!(
-            self.0.insert(id, module).is_none(),
-            "Module was already registered!"
-        )
-    }
 }
 
 /// Collection of server modules
@@ -69,6 +60,14 @@ impl ServerModuleRegistry {
     pub fn decoder_registry(&self) -> ModuleDecoderRegistry {
         // TODO: cache decoders
         ModuleDecoderRegistry::from_iter(self.0.iter().map(|(&id, module)| (id, module.decoder())))
+    }
+
+    /// Add a module to the registry
+    pub fn register_module(&mut self, id: ModuleInstanceId, module: DynServerModule) {
+        assert!(
+            self.0.insert(id, module).is_none(),
+            "Module was already registered!"
+        )
     }
 }
 

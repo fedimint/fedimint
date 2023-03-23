@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use anyhow::bail;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{
     ClientModuleConfig, CommonModuleGenRegistry, ModuleGenRegistry, TypedClientModuleConfig,
@@ -12,7 +11,7 @@ use fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonM
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 
-use crate::module::{ClientModule, DynClientModule, DynPrimaryClientModule};
+use crate::module::{ClientModule, DynClientModule};
 
 pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
 
@@ -35,30 +34,6 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
 
     /// Initialize a [`ClientModule`] instance from its config
     async fn init(&self, cfg: Self::Config, db: Database) -> anyhow::Result<Self::Module>;
-
-    /// Initialize a [`crate::module::PrimaryClientModule`] instance from its
-    /// config
-    ///
-    /// The default implementation returns an error, assuming that the module is
-    /// not a primary one. If it is the default impl has to be overridden as
-    /// follows:
-    ///
-    /// ```compile_fail
-    /// async fn init_primary(
-    ///     &self,
-    ///     cfg: Self::Config,
-    ///     db: Database,
-    /// ) -> anyhow::Result<DynPrimaryClientModule> {
-    ///     Ok(self.init(cfg, db)?.into())
-    /// }
-    /// ```
-    async fn init_primary(
-        &self,
-        _cfg: Self::Config,
-        _db: Database,
-    ) -> anyhow::Result<DynPrimaryClientModule> {
-        bail!("Not a primary module")
-    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -72,12 +47,6 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static);
 
     async fn init(&self, cfg: ClientModuleConfig, db: Database) -> anyhow::Result<DynClientModule>;
-
-    async fn init_primary(
-        &self,
-        cfg: ClientModuleConfig,
-        db: Database,
-    ) -> anyhow::Result<DynPrimaryClientModule>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -104,15 +73,6 @@ where
     async fn init(&self, cfg: ClientModuleConfig, db: Database) -> anyhow::Result<DynClientModule> {
         let typed_cfg = cfg.cast::<T::Config>()?;
         Ok(self.init(typed_cfg, db).await?.into())
-    }
-
-    async fn init_primary(
-        &self,
-        cfg: ClientModuleConfig,
-        db: Database,
-    ) -> anyhow::Result<DynPrimaryClientModule> {
-        let typed_cfg = cfg.cast::<T::Config>()?;
-        Ok(self.init_primary(typed_cfg, db).await?)
     }
 }
 

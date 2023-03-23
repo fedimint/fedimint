@@ -254,18 +254,13 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     await_bitcoind_ready(&format!("fedimint-{id}")).await?;
 
     let bin_dir = env::var("FM_BIN_DIR")?;
-    let env_vars = fedimint_env(id)?;
-    let data_dir = env_vars
-        .get("FM_FEDIMINT_DATA_DIR")
-        .ok_or_else(|| anyhow!("FM_P2P_URL not found"))?;
-
-    // create datadir if it doesn't already exist
-    fs::create_dir_all(&data_dir).await?;
+    let cfg_dir = env::var("FM_CFG_DIR")?;
 
     // spawn fedimintd
     let mut fedimintd = Command::new(format!("{bin_dir}/fedimintd"))
-        .arg(data_dir)
-        .envs(env_vars)
+        // TODO: $FM_FEDIMINTD_DATA_DIR
+        .arg(format!("{cfg_dir}/server-{id}"))
+        .envs(fedimint_env(id)?)
         .spawn()?;
     kill_on_exit(&fedimintd).await?;
     info!("fedimintd started");
@@ -282,9 +277,7 @@ async fn run_gatewayd() -> anyhow::Result<()> {
 
     // TODO: await_fedimint_block_sync()
 
-    let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd"))
-        .arg("cln")
-        .spawn()?;
+    let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd")).spawn()?;
     kill_on_exit(&gatewayd).await?;
     info!("gatewayd started");
 
