@@ -31,7 +31,7 @@ use crate::transaction::SerdeTransaction;
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
 pub struct RpcHandlerCtx<M> {
-    rpc_context: Arc<M>,
+    pub rpc_context: Arc<M>,
 }
 
 impl<M: Debug> Debug for RpcHandlerCtx<M> {

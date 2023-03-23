@@ -801,12 +801,21 @@ impl WsAuthenticatedApi {
         }
     }
 
+    pub async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request("/set_password", ApiRequestErased::new(auth))
+            .await
+    }
+
     pub async fn signal_upgrade(&self) -> FederationResult<()> {
+        self.request("/upgrade", ApiRequestErased::default()).await
+    }
+
+    async fn request<Ret>(&self, method: &str, params: ApiRequestErased) -> FederationResult<Ret>
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
         self.inner
-            .request_current_consensus(
-                "/upgrade".to_owned(),
-                ApiRequestErased::default().with_auth(&self.auth),
-            )
+            .request_current_consensus(method.to_owned(), params.with_auth(&self.auth))
             .await
     }
 }
