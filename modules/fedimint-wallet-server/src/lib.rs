@@ -1226,7 +1226,7 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
                 "Broadcasting peg-out",
             );
             trace!(transaction = ?tx);
-            let _ = rpc.submit_transaction(tx).await;
+            rpc.submit_transaction(tx).await;
         }
     }
 }

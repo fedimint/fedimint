@@ -215,7 +215,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(None)
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) -> BitcoinRpcResult<()> {
+    async fn submit_transaction(&self, transaction: Transaction) {
         let mut pending = self.pending.lock().unwrap();
         pending.push(transaction);
 
@@ -232,8 +232,6 @@ impl IBitcoindRpc for FakeBitcoinTest {
         }
 
         *pending = filtered.into_values().collect();
-
-        Ok(())
     }
 }
 
