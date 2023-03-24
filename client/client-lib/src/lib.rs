@@ -1102,34 +1102,28 @@ impl Client<UserClientConfig> {
         Ok(confirmed)
     }
 
-    /// Lists all confirmed invoices that have not expired
-    pub async fn list_unexpired_confirmed_invoices(&self) -> Vec<(ContractId, ConfirmedInvoice)> {
+    /// Lists all confirmed invoices
+    pub async fn list_confirmed_invoices(&self) -> Vec<(ContractId, ConfirmedInvoice)> {
         self.context
             .db
             .begin_transaction()
             .await
             .find_by_prefix(&ConfirmedInvoiceKeyPrefix)
             .await
-            .filter_map(
-                |(ConfirmedInvoiceKey(contract_id), confirmed_invoice)| async move {
-                    if !confirmed_invoice.invoice.is_expired() {
-                        Some((contract_id, confirmed_invoice))
-                    } else {
-                        None
-                    }
-                },
-            )
+            .map(|(ConfirmedInvoiceKey(contract_id), confirmed_invoice)| {
+                (contract_id, confirmed_invoice)
+            })
             .collect()
             .await
     }
 
-    /// Claims all incoming contracts for unexpired confirmed invoices
+    /// Claims all incoming contracts
     pub async fn claim_incoming_contracts(
         &self,
         mut rng: impl RngCore + CryptoRng,
     ) -> Result<Vec<(ContractId, OutPoint)>> {
         let mut claimed_contracts: Vec<(ContractId, Result<OutPoint>)> = vec![];
-        for (contract_id, _) in self.list_unexpired_confirmed_invoices().await {
+        for (contract_id, _) in self.list_confirmed_invoices().await {
             claimed_contracts.push((
                 contract_id,
                 self.claim_incoming_contract(contract_id, &mut rng).await,
