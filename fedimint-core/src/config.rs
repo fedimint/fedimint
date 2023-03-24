@@ -206,7 +206,16 @@ impl ClientConfig {
         if let Some(client_cfg) = self.modules.get(&id) {
             Ok(serde_json::from_value(client_cfg.value().clone())?)
         } else {
-            Err(format_err!("Client config for module id: {id} not found"))
+            Err(format_err!("Client config for module id {id} not found"))
+        }
+    }
+
+    // TODO: rename this and one above
+    pub fn get_module_cfg(&self, id: ModuleInstanceId) -> anyhow::Result<ClientModuleConfig> {
+        if let Some(client_cfg) = self.modules.get(&id) {
+            Ok(client_cfg.clone())
+        } else {
+            Err(format_err!("Client config for module id {id} not found"))
         }
     }
 
@@ -227,6 +236,19 @@ impl ClientConfig {
         };
 
         Ok((*id, serde_json::from_value(module_cfg.value().clone())?))
+    }
+
+    // TODO: rename this and above
+    pub fn get_first_module_by_kind_cfg(
+        &self,
+        kind: impl Into<ModuleKind>,
+    ) -> anyhow::Result<(ModuleInstanceId, ClientModuleConfig)> {
+        let kind: ModuleKind = kind.into();
+        self.modules
+            .iter()
+            .find(|(_, v)| v.is_kind(&kind))
+            .map(|(id, v)| (*id, v.clone()))
+            .ok_or_else(|| anyhow::format_err!("Module kind {kind} not found"))
     }
 }
 

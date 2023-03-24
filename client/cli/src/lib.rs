@@ -2,12 +2,12 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
-use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{ffi, fs};
 
 use anyhow::format_err;
 use bitcoin::{secp256k1, Address, Network, Transaction};
@@ -21,6 +21,7 @@ use fedimint_core::api::{
     WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -143,6 +144,8 @@ enum CliOutput {
     EpochCount {
         count: u64,
     },
+
+    Raw(serde_json::Value),
 }
 
 impl fmt::Display for CliOutput {
@@ -242,29 +245,51 @@ impl Opts {
     fn workdir(&self) -> &Path {
         self.workdir
             .as_ref()
-            .or_terminate(CliErrorKind::IOError, "`--workdir=` argument not set.")
+            .or_terminate_msg(CliErrorKind::IOError, "`--workdir=` argument not set.")
+    }
+
+    fn load_config(&self) -> anyhow::Result<UserClientConfig> {
+        let cfg_path = self.workdir().join("client.json");
+        load_from_file(&cfg_path)
+    }
+
+    fn load_config_or_terminate(&self) -> UserClientConfig {
+        self.load_config()
+            .or_terminate_msg(CliErrorKind::IOError, "could not load config")
+    }
+
+    fn load_rocks_db_or_terminate(&self) -> fedimint_rocksdb::RocksDb {
+        let db_path = self.workdir().join("client.db");
+        fedimint_rocksdb::RocksDb::open(db_path)
+            .or_terminate_msg(CliErrorKind::IOError, "could not open transaction db")
+    }
+
+    fn load_decoders(
+        &self,
+        cfg: &UserClientConfig,
+        module_gens: &ClientModuleGenRegistry,
+    ) -> ModuleDecoderRegistry {
+        ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().filter_map(
+            |(id, module_cfg)| {
+                module_gens
+                    .get(module_cfg.kind())
+                    .map(|module_gen| (id, module_gen.as_ref().decoder()))
+            },
+        ))
+    }
+
+    fn load_db_or_terminate(&self, decoders: &ModuleDecoderRegistry) -> Database {
+        let db = self.load_rocks_db_or_terminate();
+        Database::new(db, decoders.clone())
     }
 
     async fn build_client(
         &self,
         module_gens: &ClientModuleGenRegistry,
     ) -> Client<UserClientConfig> {
-        let cfg_path = self.workdir().join("client.json");
-        let db_path = self.workdir().join("client.db");
-        let cfg: UserClientConfig = load_from_file(&cfg_path).expect("Failed to parse config");
-        let db = fedimint_rocksdb::RocksDb::open(db_path)
-            .or_terminate(CliErrorKind::IOError, "could not open transaction db");
-
-        let decoders = ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().map(
-            |(id, module_cfg)| {
-                let module_gen = module_gens
-                    .get(module_cfg.kind())
-                    .expect("module kind not found in registry");
-                (id, module_gen.as_ref().decoder())
-            },
-        ));
-
-        let db = Database::new(db, decoders.clone());
+        let cfg = self.load_config_or_terminate();
+        let decoders = self.load_decoders(&cfg, module_gens);
+        let db = self.load_db_or_terminate(&decoders);
 
         Client::new(
             cfg.clone(),
@@ -415,12 +440,38 @@ enum Command {
 
     /// Gets the current epoch count
     EpochCount,
+
+    /// Call module-specific commands
+    Module {
+        id: ModuleSelector,
+
+        /// Command with arguments to call the module with
+        arg: Vec<ffi::OsString>,
+    },
 }
 
+#[derive(Clone)]
+pub enum ModuleSelector {
+    Id(ModuleInstanceId),
+    Kind(ModuleKind),
+}
+
+impl FromStr for ModuleSelector {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(if s.chars().all(|ch| ch.is_ascii_digit()) {
+            Self::Id(s.parse()?)
+        } else {
+            Self::Kind(ModuleKind::clone_from_str(s))
+        })
+    }
+}
 /// Extension trait for values that either return `T` or terminate the program
 /// with CLI error
 trait OrTerminate<T> {
-    fn or_terminate(self, err: CliErrorKind, msg: &str) -> T;
+    fn or_terminate(self, err_kind: CliErrorKind) -> T;
+    fn or_terminate_msg(self, err_kind: CliErrorKind, msg: &str) -> T;
 }
 
 trait ErrorHandler<T, E>: OrTerminate<T> {
@@ -430,11 +481,22 @@ trait ErrorHandler<T, E>: OrTerminate<T> {
 }
 
 impl<T, E: Into<Box<dyn Error>>> OrTerminate<T> for Result<T, E> {
-    fn or_terminate(self, err: CliErrorKind, msg: &str) -> T {
+    fn or_terminate_msg(self, err_kind: CliErrorKind, msg: &str) -> T {
         match self {
             Ok(v) => v,
             Err(e) => {
-                let cli_error = CliError::from(err, msg, Some(e.into()));
+                let cli_error = CliError::from(err_kind, msg, Some(e.into()));
+                eprintln!("{cli_error}");
+                exit(1);
+            }
+        }
+    }
+    fn or_terminate(self, err_kind: CliErrorKind) -> T {
+        match self {
+            Ok(v) => v,
+            Err(e) => {
+                let e = e.into();
+                let cli_error = CliError::from(err_kind, &e.to_string(), Some(e));
                 eprintln!("{cli_error}");
                 exit(1);
             }
@@ -455,11 +517,21 @@ impl<T, E: Into<Box<dyn Error>>> ErrorHandler<T, E> for Result<T, E> {
 }
 
 impl<T> OrTerminate<T> for Option<T> {
-    fn or_terminate(self, err: CliErrorKind, msg: &str) -> T {
+    fn or_terminate_msg(self, err_kind: CliErrorKind, msg: &str) -> T {
         match self {
             Some(v) => v,
             None => {
-                let cli_error = CliError::from(err, msg, None);
+                let cli_error = CliError::from(err_kind, msg, None);
+                eprintln!("{cli_error}");
+                exit(1);
+            }
+        }
+    }
+    fn or_terminate(self, err_kind: CliErrorKind) -> T {
+        match self {
+            Some(v) => v,
+            None => {
+                let cli_error = CliError::from(err_kind, "Missing value", None);
                 eprintln!("{cli_error}");
                 exit(1);
             }
@@ -536,23 +608,23 @@ impl FedimintCli {
             Command::JoinFederation { connect } => {
                 let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
                     .map_err(Box::<dyn Error>::from)
-                    .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
+                    .or_terminate_msg(CliErrorKind::InvalidValue, "invalid connect info");
                 let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
                     as Arc<dyn IFederationApi + Send + Sync + 'static>;
                 let cfg: ClientConfig = api
                     .download_client_config(&connect_obj.id, self.module_gens.to_common())
                     .await
-                    .or_terminate(
+                    .or_terminate_msg(
                         CliErrorKind::NetworkError,
                         "couldn't download config from peer",
                     );
                 let cfg_path = cli.workdir().join("client.json");
                 std::fs::create_dir_all(cli.workdir())
-                    .or_terminate(CliErrorKind::IOError, "failed to create config directory");
+                    .or_terminate_msg(CliErrorKind::IOError, "failed to create config directory");
                 let writer = std::fs::File::create(cfg_path)
-                    .or_terminate(CliErrorKind::IOError, "couldn't create config.json");
+                    .or_terminate_msg(CliErrorKind::IOError, "couldn't create config.json");
                 serde_json::to_writer_pretty(writer, &cfg)
-                    .or_terminate(CliErrorKind::IOError, "couldn't write config");
+                    .or_terminate_msg(CliErrorKind::IOError, "couldn't write config");
                 Ok(CliOutput::JoinFederation { joined: (connect) })
             }
             Command::Api { method, arg } => {
@@ -952,6 +1024,37 @@ impl FedimintCli {
                     .fetch_epoch_count()
                     .await?;
                 Ok(CliOutput::EpochCount { count })
+            }
+            Command::Module { id, arg } => {
+                let cfg = cli.load_config_or_terminate();
+                let decoders = cli.load_decoders(&cfg, &self.module_gens);
+                let db = cli.load_db_or_terminate(&decoders);
+                let (_id, module_cfg) = match id {
+                    ModuleSelector::Id(id) => (
+                        id,
+                        cfg.as_ref()
+                            .get_module_cfg(id)
+                            .or_terminate_msg(CliErrorKind::IOError, "Can't load module"),
+                    ),
+                    ModuleSelector::Kind(kind) => cfg
+                        .as_ref()
+                        .get_first_module_by_kind_cfg(kind)
+                        .or_terminate(CliErrorKind::InvalidValue),
+                };
+                let module_gen =
+                    self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
+
+                let module = module_gen
+                    .init(module_cfg, db)
+                    .await
+                    .or_terminate_msg(CliErrorKind::GeneralFailure, "Loading module failed");
+
+                Ok(CliOutput::Raw(
+                    module
+                        .handle_cli_command(&arg)
+                        .await
+                        .or_terminate(CliErrorKind::GeneralFailure),
+                ))
             }
         }
     }
