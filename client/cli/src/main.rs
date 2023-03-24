@@ -339,6 +339,7 @@ enum Command {
     LnInvoice {
         #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
+        #[clap(default_value = "")]
         description: String,
         expiry_time: Option<u64>,
     },
