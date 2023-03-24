@@ -41,11 +41,21 @@ export FM_ELECTRS_DIR="$FM_TEST_DIR/electrs"
 mkdir -p $FM_CLN_DIR
 mkdir -p $FM_LND_DIR
 mkdir -p $FM_BTC_DIR
+cat <<EOF > $FM_BTC_DIR/bitcoin.conf
+regtest=1
+fallbackfee=0.0004
+txindex=1
+server=1
+rpcuser=bitcoin
+rpcpassword=bitcoin
+zmqpubrawblock=tcp://127.0.0.1:38332
+# commonly used port 28333 collides with dkg ports
+zmqpubrawtx=tcp://127.0.0.1:38333
+EOF
 mkdir -p $FM_CFG_DIR
 mkdir -p $FM_ELECTRS_DIR
 
 # Copy configs to data directories
-cp misc/test/bitcoin.conf $FM_BTC_DIR
 cp misc/test/lnd.conf $FM_LND_DIR
 cp misc/test/lightningd.conf $FM_CLN_DIR/config
 cp misc/test/electrs.toml $FM_ELECTRS_DIR
