@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["ConfigApiState","State machine for config generation, required in a top-to-bottom order"]],"fn":[["config_endpoints","Returns the endpoints that are necessary prior to the config being generated"],["run_server","Starts the configuration server"]],"struct":[["ConfigApi","Serves the config API endpoints"]]};

@@ -302,7 +302,7 @@
 <span class="doccomment">/// A state that has context for the API, passed to each rpc handler callback
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>RpcHandlerCtx&lt;M&gt; {
-    rpc_context: Arc&lt;M&gt;,
+    <span class="kw">pub </span>rpc_context: Arc&lt;M&gt;,
 }
 
 <span class="kw">impl</span>&lt;M: Debug&gt; Debug <span class="kw">for </span>RpcHandlerCtx&lt;M&gt; {
