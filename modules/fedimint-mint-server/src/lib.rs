@@ -1180,7 +1180,6 @@ impl fedimint_core::server::VerificationCache for VerifiedNotes {}
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::collections::BTreeMap;
-    use std::env;
     use std::time::SystemTime;
 
     use bitcoin_hashes::Hash;
@@ -1290,7 +1289,6 @@ mod fedimint_migration_tests {
                     create_db_with_v0_data(dbtx).await;
                 })
             },
-            env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string()),
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 <Mint as ServerModule>::decoder(),
@@ -1396,7 +1394,6 @@ mod fedimint_migration_tests {
                     }
                 }
             },
-            env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string()),
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
                 <Mint as ServerModule>::decoder(),

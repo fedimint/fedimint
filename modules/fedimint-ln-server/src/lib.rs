@@ -883,7 +883,6 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
 
 #[cfg(test)]
 mod fedimint_migration_tests {
-    use std::env;
     use std::str::FromStr;
     use std::time::SystemTime;
 
@@ -1027,7 +1026,6 @@ mod fedimint_migration_tests {
                     create_db_with_v0_data(dbtx).await;
                 })
             },
-            env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string()),
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
                 <Lightning as ServerModule>::decoder(),
@@ -1133,7 +1131,6 @@ mod fedimint_migration_tests {
                     }
                 }
             },
-            env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string()),
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
                 <Lightning as ServerModule>::decoder(),

@@ -132,7 +132,6 @@ pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::collections::BTreeSet;
-    use std::env;
 
     use bitcoin::{secp256k1, KeyPair};
     use bitcoin_hashes::Hash;
@@ -248,7 +247,6 @@ mod fedimint_migration_tests {
                     create_db_with_v0_data(dbtx).await;
                 })
             },
-            env::var("DB_MIGRATION_DIR").unwrap_or("../db/migrations".to_string()),
             ModuleDecoderRegistry::from_iter([(0, <Dummy as ServerModule>::decoder())]),
         )
         .await;
@@ -346,7 +344,6 @@ mod fedimint_migration_tests {
                     }
                 }
             },
-            env::var("DB_MIGRATION_DIR").unwrap_or("../db/migrations".to_string()),
             ModuleDecoderRegistry::from_iter([(
                 0,
                 <Dummy as ServerModule>::decoder(),
