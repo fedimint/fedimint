@@ -12,7 +12,7 @@ fi
 
 # Revert `git stash` on exit
 function revert_git_stash {
-  >&2 echo "Unstashing uncommited changes..."
+  >&2 echo "Unstashing uncommitted changes..."
   git stash pop -q
 }
 
@@ -24,7 +24,7 @@ set -e
 
 # Stash pending changes and revert them when script ends
 if [ -z "${NO_STASH:-}" ] && [ $is_unclean -ne 0 ]; then
-  >&2 echo "Stashing uncommited changes..."
+  >&2 echo "Stashing uncommitted changes..."
   git stash -q --keep-index
   trap revert_git_stash EXIT
 fi
@@ -33,7 +33,7 @@ fi
 export git_ls_files
 git_ls_files="$(git ls-files)"
 
-function check_forbiden_dependencies() {
+function check_forbidden_dependencies() {
   set -eo pipefail
 
   if grep -E "(fedimint-mint|fedimint-wallet|fedimint-ln)" fedimint-server/Cargo.toml >&2 ; then
@@ -53,7 +53,7 @@ function check_forbiden_dependencies() {
     fi
   done
 }
-export -f check_forbiden_dependencies
+export -f check_forbidden_dependencies
 
 function check_nix() {
   set -eo pipefail
@@ -158,5 +158,5 @@ parallel ::: \
   check_semgrep \
   check_shellcheck \
   check_eof \
-  check_forbiden_dependencies \
+  check_forbidden_dependencies \
   check_cargo_lock
