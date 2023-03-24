@@ -2793,35 +2793,35 @@
     }
 }
 
-<span class="doccomment">/// `CommitableIsolatedDatabaseTransaction` is a private, isolated database
+<span class="doccomment">/// `CommittableIsolatedDatabaseTransaction` is a private, isolated database
 /// transaction that consumes an existing `ISingleUseDatabaseTransaction`.
 /// Unlike `IsolatedDatabaseTransaction`,
-/// `CommitableIsolatedDatabaseTransaction` can be owned by the module as long
+/// `CommittableIsolatedDatabaseTransaction` can be owned by the module as long
 /// as it has a handle to the isolated `Database`. This allows the module to
 /// make changes only affecting it&#39;s own portion of the database and also being
 /// able to commit those changes. From the module&#39;s perspective, the `Database`
 /// is isolated and calling `begin_transaction` will always produce a
-/// `CommitableIsolatedDatabaseTransaction`, which is isolated from other
+/// `CommittableIsolatedDatabaseTransaction`, which is isolated from other
 /// modules by prepending a prefix to each key.
 ///
-/// `CommitableIsolatedDatabaseTransaction` cannot be used as an atomic database
-/// transaction across modules.
-</span><span class="kw">struct </span>CommitableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+/// `CommittableIsolatedDatabaseTransaction` cannot be used as an atomic
+/// database transaction across modules.
+</span><span class="kw">struct </span>CommittableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     dbtx: Box&lt;<span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
     prefix: ModuleInstanceId,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; CommitableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; CommittableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub fn </span>new(
         dbtx: Box&lt;<span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
         prefix: ModuleInstanceId,
-    ) -&gt; CommitableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
-        CommitableIsolatedDatabaseTransaction { dbtx, prefix }
+    ) -&gt; CommittableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+        CommittableIsolatedDatabaseTransaction { dbtx, prefix }
     }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>CommitableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>CommittableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
         isolated.raw_insert_bytes(key, value).<span class="kw">await
@@ -3197,7 +3197,7 @@
     ) -&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt; {
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
         <span class="kw">let </span>commit_tracker = <span class="self">self</span>.commit_tracker.clone();
-        <span class="kw">let </span>single_use = CommitableIsolatedDatabaseTransaction::new(<span class="self">self</span>.tx, module_instance_id);
+        <span class="kw">let </span>single_use = CommittableIsolatedDatabaseTransaction::new(<span class="self">self</span>.tx, module_instance_id);
         DatabaseTransaction {
             tx: Box::new(single_use),
             decoders,

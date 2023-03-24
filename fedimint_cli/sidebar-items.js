@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["CliErrorKind",""],["CliOutput",""],["Command",""]],"fn":[["get_module_gen_registry","List of modules supported by this cli"],["handle_command",""],["main",""]],"struct":[["CliError",""],["Opts",""],["PayRequest",""]],"trait":[["ErrorHandler",""],["OrTerminate","Extension trait for values that either return `T` or terminate the program with CLI error"]],"type":[["CliResult",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["main",""]]};
