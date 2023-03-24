@@ -1387,6 +1387,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tbs",
+ "tempfile",
  "test-log",
  "thiserror",
  "threshold_crypto",

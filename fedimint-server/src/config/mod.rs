@@ -39,6 +39,7 @@ use crate::net::connect::{parse_host_port, Connector, TlsConfig};
 use crate::net::peers::NetworkConfig;
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
+pub mod api;
 pub mod distributedgen;
 pub mod io;
 
