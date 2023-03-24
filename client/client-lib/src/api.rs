@@ -13,7 +13,7 @@ use fedimint_core::query::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
-use fedimint_mint_client::db::ECashUserBackupSnapshot;
+use fedimint_mint_client::common::db::ECashUserBackupSnapshot;
 
 use crate::modules::ln::contracts::incoming::IncomingContractOffer;
 use crate::modules::ln::contracts::ContractId;

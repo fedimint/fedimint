@@ -17,16 +17,7 @@ use crate::sm::{GlobalContext, OperationId};
 
 /// Implementors act as state machines that can be executed
 pub trait State:
-    Debug
-    + Clone
-    + Eq
-    + PartialEq
-    + Encodable
-    + Decodable
-    + IntoDynInstance<DynType = DynState<Self::GlobalContext>>
-    + MaybeSend
-    + MaybeSync
-    + 'static
+    Debug + Clone + Eq + PartialEq + Encodable + Decodable + MaybeSend + MaybeSync + 'static
 {
     /// Additional resources made available in this module's state transitions
     type ModuleContext: Context;
@@ -158,7 +149,7 @@ impl<S> StateTransition<S> {
             ) -> BoxFuture<'a, S>
             + MaybeSend
             + MaybeSync
-            + Copy
+            + Clone
             + 'static,
     {
         StateTransition {
@@ -167,6 +158,7 @@ impl<S> StateTransition<S> {
                 serde_json::to_value(val).expect("Value could not be serialized")
             }),
             transition: Arc::new(move |dbtx, val, state| {
+                let transition = transition.clone();
                 Box::pin(async move {
                     let typed_val: V = serde_json::from_value(val)
                         .expect("Deserialize trigger return value failed");

@@ -609,7 +609,8 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransa
 /// modules are allowed to interact with are a subset of `DatabaseTransaction`,
 /// since modules do not manage the lifetime of database transactions.
 /// Committing to the database or rolling back a transaction is not exposed.
-pub struct ModuleDatabaseTransaction<'isolated, T: Send + Encodable + 'isolated> {
+pub struct ModuleDatabaseTransaction<'isolated, T: Send + Encodable + 'isolated = ModuleInstanceId>
+{
     isolated_tx: Box<dyn ISingleUseDatabaseTransaction<'isolated>>,
     decoders: &'isolated ModuleDecoderRegistry,
     commit_tracker: &'isolated mut CommitTracker,
