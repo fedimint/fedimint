@@ -163,7 +163,18 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn test_config_api() {
-        let parent = env::var("FM_TEST_DIR").unwrap_or("/tmp".to_string());
+        let (parent, _maybe_tmp_dir_guard) = match env::var("FM_TEST_DIR") {
+            Ok(directory) => (directory, None),
+            Err(_) => {
+                let guard = tempfile::Builder::new()
+                    .prefix("fm-cfg-api")
+                    .tempdir()
+                    .unwrap();
+                let directory = guard.path().to_str().unwrap().to_owned();
+                (directory, Some(guard))
+            }
+        };
+
         let data_dir = PathBuf::from(parent).join("test-config-api");
         fs::create_dir(data_dir.clone()).expect("Unable to create test dir");
 
