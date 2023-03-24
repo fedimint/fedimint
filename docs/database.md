@@ -131,7 +131,7 @@ commit and the lifetime of the transaction is always managed by a higher layer. 
 #### Internal
  - **IsolatedDatabaseTransaction** - Internal wrapper struct that implements the isolation mechanism for preventing modules from reading/writing outside their 
 database namespace.
- - **CommitableIsolatedDatabaseTransaction** - Internal wrapper struct that wraps `IsolatedDatabaseTransaction`, but holds onto the transaction instead of holding
+ - **CommittableIsolatedDatabaseTransaction** - Internal wrapper struct that wraps `IsolatedDatabaseTransaction`, but holds onto the transaction instead of holding
 onto a reference. This struct is always wrapped inside `DatabaseTransaction` and is used to expose the full interface to the developer (i.e `commit_tx`), but restrict the transaction
 from accessing keys/values outside of its database namespace.
  - **NotifyingTransaction** - Internal wrapper struct that implements the notification mechanism when values of specified keys change.
@@ -146,8 +146,8 @@ from accessing keys/values outside of its database namespace.
 classDiagram
     DatabaseTransaction --|> NotifyingTransaction
     NotifyingTransaction --|> SingleUseDatabaseTransaction
-    DatabaseTransaction --|> CommitableIsolatedDatabaseTransaction : new_module_tx
-    CommitableIsolatedDatabaseTransaction --|> IsolatedDatabaseTransaction
+    DatabaseTransaction --|> CommittableIsolatedDatabaseTransaction : new_module_tx
+    CommittableIsolatedDatabaseTransaction --|> IsolatedDatabaseTransaction
     DatabaseTransaction --|> ModuleDatabaseTransaction : with_module_prefix
     ModuleDatabaseTransaction --|> IsolatedDatabaseTransaction
     IsolatedDatabaseTransaction --|> NotifyingTransaction
@@ -164,7 +164,7 @@ classDiagram
       insert_entry()
       commit_tx()
     }
-    class CommitableIsolatedDatabaseTransaction{
+    class CommittableIsolatedDatabaseTransaction{
         <<interface ISingleUseDatabaseTransaction>>
         Box ISingleUseDatabaseTransaction tx
         ModuleInstanceId prefix

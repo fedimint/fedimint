@@ -524,35 +524,35 @@ impl Drop for CommitTracker {
     }
 }
 
-/// `CommitableIsolatedDatabaseTransaction` is a private, isolated database
+/// `CommittableIsolatedDatabaseTransaction` is a private, isolated database
 /// transaction that consumes an existing `ISingleUseDatabaseTransaction`.
 /// Unlike `IsolatedDatabaseTransaction`,
-/// `CommitableIsolatedDatabaseTransaction` can be owned by the module as long
+/// `CommittableIsolatedDatabaseTransaction` can be owned by the module as long
 /// as it has a handle to the isolated `Database`. This allows the module to
 /// make changes only affecting it's own portion of the database and also being
 /// able to commit those changes. From the module's perspective, the `Database`
 /// is isolated and calling `begin_transaction` will always produce a
-/// `CommitableIsolatedDatabaseTransaction`, which is isolated from other
+/// `CommittableIsolatedDatabaseTransaction`, which is isolated from other
 /// modules by prepending a prefix to each key.
 ///
-/// `CommitableIsolatedDatabaseTransaction` cannot be used as an atomic database
-/// transaction across modules.
-struct CommitableIsolatedDatabaseTransaction<'a> {
+/// `CommittableIsolatedDatabaseTransaction` cannot be used as an atomic
+/// database transaction across modules.
+struct CommittableIsolatedDatabaseTransaction<'a> {
     dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     prefix: ModuleInstanceId,
 }
 
-impl<'a> CommitableIsolatedDatabaseTransaction<'a> {
+impl<'a> CommittableIsolatedDatabaseTransaction<'a> {
     pub fn new(
         dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
         prefix: ModuleInstanceId,
-    ) -> CommitableIsolatedDatabaseTransaction<'a> {
-        CommitableIsolatedDatabaseTransaction { dbtx, prefix }
+    ) -> CommittableIsolatedDatabaseTransaction<'a> {
+        CommittableIsolatedDatabaseTransaction { dbtx, prefix }
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> ISingleUseDatabaseTransaction<'a> for CommitableIsolatedDatabaseTransaction<'a> {
+impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.raw_insert_bytes(key, value).await
@@ -928,7 +928,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     ) -> DatabaseTransaction<'parent> {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
-        let single_use = CommitableIsolatedDatabaseTransaction::new(self.tx, module_instance_id);
+        let single_use = CommittableIsolatedDatabaseTransaction::new(self.tx, module_instance_id);
         DatabaseTransaction {
             tx: Box::new(single_use),
             decoders,
