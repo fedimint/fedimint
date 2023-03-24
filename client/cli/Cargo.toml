@@ -11,6 +11,10 @@ license = "MIT"
 name = "fedimint-cli"
 path = "src/main.rs"
 
+[lib]
+name = "fedimint_cli"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = "1.0.66"
 bitcoin = "0.29.2"
