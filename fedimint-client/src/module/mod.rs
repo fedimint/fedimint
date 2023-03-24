@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use fedimint_core::core::{Decoder, DynInput, DynOutput, KeyPair, ModuleInstanceId};
+use fedimint_core::core::{
+    Decoder, DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId,
+};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
@@ -28,9 +30,9 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// All possible states this client can submit to the executor
     type States: State<
-        GlobalContext = DynGlobalClientContext,
-        ModuleContext = Self::ModuleStateMachineContext,
-    >;
+            GlobalContext = DynGlobalClientContext,
+            ModuleContext = Self::ModuleStateMachineContext,
+        > + IntoDynInstance<DynType = DynState<DynGlobalClientContext>>;
 
     fn decoder() -> Decoder {
         let mut decoder_builder = Self::Common::decoder_builder();

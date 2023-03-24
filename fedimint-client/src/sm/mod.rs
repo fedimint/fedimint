@@ -1,6 +1,7 @@
 pub(crate) mod executor;
 /// State machine state interface
 mod state;
+pub mod util;
 
 use std::fmt::Debug;
 

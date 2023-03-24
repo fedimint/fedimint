@@ -58,16 +58,6 @@ pub mod legacy {
         }
     }
 
-    impl TryIntoOutcome for MintOutputOutcome {
-        fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
-            match common_outcome {
-                OutputOutcome::Mint(outcome) => Ok(outcome),
-                OutputOutcome::Wallet(_) => Err(CoreError::MismatchingVariant("mint", "wallet")),
-                OutputOutcome::LN(_) => Err(CoreError::MismatchingVariant("mint", "ln")),
-            }
-        }
-    }
-
     impl TryIntoOutcome for WalletOutputOutcome {
         fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
             match common_outcome {

@@ -1268,6 +1268,7 @@ dependencies = [
  "erased-serde",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-derive-secret",
  "fedimint-mint-common",
  "futures",
  "itertools",
