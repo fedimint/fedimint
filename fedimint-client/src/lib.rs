@@ -159,9 +159,12 @@ impl Client {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId> {
         let mut dbtx = self.inner.db.begin_transaction().await;
-        self.inner
+        let txid = self
+            .inner
             .finalize_and_submit_transaction(&mut dbtx, operation_id, tx_builder)
-            .await
+            .await?;
+        dbtx.commit_tx().await;
+        Ok(txid)
     }
 }
 
