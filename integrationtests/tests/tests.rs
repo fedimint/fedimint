@@ -92,7 +92,11 @@ async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
                 ..
             }) if *txid == outcome_txid));
 
-        fed.broadcast_transactions().await;
+        // confirm we can broadcast at different times
+        fed.subset_peers(&[0]).await.broadcast_transactions().await;
+        bitcoin.mine_blocks(1).await;
+        fed.subset_peers(&[1]).await.broadcast_transactions().await;
+
         assert_eq!(
             bitcoin.mine_block_and_get_received(&peg_out_address).await,
             sats(peg_out_amount)
