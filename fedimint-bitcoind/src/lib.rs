@@ -61,7 +61,20 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>>;
 
     /// Submits a transaction to the Bitcoin network
-    async fn submit_transaction(&self, transaction: Transaction) -> Result<()>;
+    ///
+    /// This operation does not return anything as it never OK to consider its
+    /// success as final anyway. The caller should be retrying
+    /// broadcast periodically until it confirms the transaction was actually
+    /// via other means or decides that is no longer relevant.
+    ///
+    /// Also - most backends considers brodcasting a tx that is already included
+    /// in the blockchain as an error, which breaks idempotency and requires
+    /// brittle workarounds just to reliably ignore... just to retry on the
+    /// higher level anyway.
+    ///
+    /// Implementations of this error should log errors for debugging purposes
+    /// when it makes sense.
+    async fn submit_transaction(&self, transaction: Transaction);
 
     /// Check if a transaction was included in a given (only electrum)
     async fn was_transaction_confirmed_in(
@@ -155,9 +168,8 @@ where
             .await
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
-        self.retry_call(|| async { self.inner.submit_transaction(transaction.clone()).await })
-            .await
+    async fn submit_transaction(&self, transaction: Transaction) {
+        self.inner.submit_transaction(transaction.clone()).await;
     }
 
     async fn was_transaction_confirmed_in(
