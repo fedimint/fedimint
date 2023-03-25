@@ -20,8 +20,8 @@ use tracing::{debug, error, info, warn};
 use crate::sm::state::{DynContext, DynState};
 use crate::sm::{GlobalContext, State, StateTransition};
 
-/// After how many retries a DB transaction is aborted with an error
-const MAX_DB_RETRIES: Option<usize> = Some(100);
+/// After how many attempts a DB transaction is aborted with an error
+const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
 
 /// Wait time till checking the DB for new state machines when there are no
 /// active ones
@@ -79,7 +79,7 @@ where
             .db
             .autocommit(
                 |dbtx| Box::pin(self.add_state_machines_dbtx(dbtx, states.clone())),
-                MAX_DB_RETRIES,
+                MAX_DB_ATTEMPTS,
             )
             .await
             .map_err(|e| match e {
