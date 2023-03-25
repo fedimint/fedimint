@@ -441,12 +441,6 @@
 <a href="#441" id="441">441</a>
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::fmt;
 
@@ -672,22 +666,17 @@
         }))
     }
 
-    <span class="attr">#[instrument(
-        skip(<span class="self">self</span>),
-        name = <span class="string">&quot;bitcoincore_rpc::submit_transaction&quot;</span>,
-        level = <span class="string">&quot;DEBUG&quot;</span>,
-        ret,
-        err
-    )]
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
         fedimint_core::task::block_in_place(|| <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.send_raw_transaction(<span class="kw-2">&amp;</span>transaction) {
             <span class="comment">// for our purposes, this is not an error
             </span><span class="prelude-val">Err</span>(::bitcoincore_rpc::Error::JsonRpc(JsonError::Rpc(RpcError {
                 code: RPC_VERIFY_ALREADY_IN_CHAIN,
                 ..
-            }))) =&gt; <span class="prelude-val">Ok</span>(()),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(anyhow::Error::from(e)),
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+            }))) =&gt; {}
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Error broadcasting transaction&quot;</span>);
+            }
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
         })
     }
 }
@@ -762,15 +751,16 @@
         })
     }
 
-    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
         fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
             transaction
                 .consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
                 .expect(<span class="string">&quot;can&#39;t fail&quot;</span>);
-            <span class="kw">let </span>_txid = <span class="self">self</span>.<span class="number">0</span>.transaction_broadcast_raw(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(())
-        })
+            <span class="kw">let _ </span>= <span class="self">self</span>.<span class="number">0</span>.transaction_broadcast_raw(<span class="kw-2">&amp;</span>bytes).map_err(|error| {
+                <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Error broadcasting transaction&quot;</span>);
+            });
+        });
     }
 
     <span class="kw">async fn </span>was_transaction_confirmed_in(
@@ -888,12 +878,10 @@
         }))
     }
 
-    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.<span class="number">0
-            </span>.broadcast(<span class="kw-2">&amp;</span>transaction)
-            .<span class="kw">await
-            </span>.map_err(anyhow::Error::from)
-            .map_err(Into::into)
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
+        <span class="kw">let _ </span>= <span class="self">self</span>.<span class="number">0</span>.broadcast(<span class="kw-2">&amp;</span>transaction).<span class="kw">await</span>.map_err(|error| {
+            <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Error broadcasting transaction&quot;</span>);
+        });
     }
 }
 </code></pre></div>

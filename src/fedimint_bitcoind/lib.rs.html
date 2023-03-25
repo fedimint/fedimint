@@ -173,6 +173,18 @@
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -236,7 +248,20 @@
     </span><span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt;;
 
     <span class="doccomment">/// Submits a transaction to the Bitcoin network
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+    ///
+    /// This operation does not return anything as it never OK to consider its
+    /// success as final anyway. The caller should be retrying
+    /// broadcast periodically until it confirms the transaction was actually
+    /// via other means or decides that is no longer relevant.
+    ///
+    /// Also - most backends considers brodcasting a tx that is already included
+    /// in the blockchain as an error, which breaks idempotency and requires
+    /// brittle workarounds just to reliably ignore... just to retry on the
+    /// higher level anyway.
+    ///
+    /// Implementations of this error should log errors for debugging purposes
+    /// when it makes sense.
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction);
 
     <span class="doccomment">/// Check if a transaction was included in a given (only electrum)
     </span><span class="kw">async fn </span>was_transaction_confirmed_in(
@@ -330,10 +355,9 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.submit_transaction(transaction.clone()).<span class="kw">await </span>})
-            .<span class="kw">await
-    </span>}
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
+        <span class="self">self</span>.inner.submit_transaction(transaction.clone()).<span class="kw">await</span>;
+    }
 
     <span class="kw">async fn </span>was_transaction_confirmed_in(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

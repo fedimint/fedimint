@@ -3230,7 +3230,7 @@
                 <span class="string">&quot;Broadcasting peg-out&quot;</span>,
             );
             <span class="macro">trace!</span>(transaction = <span class="question-mark">?</span>tx);
-            <span class="kw">let _ </span>= rpc.submit_transaction(tx).<span class="kw">await</span>;
+            rpc.submit_transaction(tx).<span class="kw">await</span>;
         }
     }
 }
