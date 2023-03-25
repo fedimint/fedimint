@@ -919,6 +919,37 @@
 <a href="#919" id="919">919</a>
 <a href="#920" id="920">920</a>
 <a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
@@ -1243,6 +1274,7 @@
         latency: LatencyInterval,
         failure_rate: FailureRate,
         sleep_future: <span class="prelude-ty">Option</span>&lt;Pin&lt;Box&lt;tokio::time::Sleep&gt;&gt;&gt;,
+        successes: u64,
     }
 
     <span class="kw">impl </span>UnreliabilityGenerator {
@@ -1251,6 +1283,7 @@
                 latency,
                 failure_rate,
                 sleep_future: <span class="prelude-val">None</span>,
+                successes: <span class="number">0</span>,
             }
         }
 
@@ -1268,13 +1301,18 @@
                 std::task::Poll::Pending =&gt; <span class="kw">return </span>std::task::Poll::Pending,
             }
             <span class="kw">if </span><span class="self">self</span>.failure_rate.random_fail() {
-                <span class="macro">tracing::debug!</span>(<span class="string">&quot;Returning random error on unreliable stream&quot;</span>);
-                <span class="kw">return </span>std::task::Poll::Ready(<span class="prelude-val">Err</span>(std::io::Error::new(
+                <span class="macro">tracing::debug!</span>(
+                    <span class="string">&quot;Returning random error on unreliable stream after {} successes&quot;</span>,
+                    <span class="self">self</span>.successes
+                );
+                std::task::Poll::Ready(<span class="prelude-val">Err</span>(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     <span class="string">&quot;Randomly failed&quot;</span>,
-                )));
+                )))
+            } <span class="kw">else </span>{
+                <span class="self">self</span>.successes += <span class="number">1</span>;
+                std::task::Poll::Ready(<span class="prelude-val">Ok</span>(()))
             }
-            std::task::Poll::Ready(<span class="prelude-val">Ok</span>(()))
         }
     }
 
@@ -1444,6 +1482,30 @@
             }
         };
 
+        <span class="kw">pub const </span>INTEGRATION_TEST: StreamReliability = {
+            <span class="comment">// Based on empirical testing: creates errors without causing tests to take
+            // additional time compared to StreamReliability::FullyReliable
+            // If an order of magnitude higher, tests may take unreasonable amounts of time.
+            // If an order of magnitude lower, a test may run without any error actually
+            // happening
+            </span><span class="kw">let </span>failure_rate_base = <span class="number">1e-3</span>;
+            <span class="kw">let </span>latency = LatencyInterval {
+                min_millis: <span class="number">1</span>,
+                max_millis: <span class="number">10</span>,
+            };
+            <span class="self">Self</span>::RandomlyUnreliable {
+                <span class="comment">// Try to make read_failure_rate = write_failure_rate + flush_failure_rate
+                </span>read_failure_rate: FailureRate(failure_rate_base * <span class="number">2.0</span>),
+                write_failure_rate: FailureRate(failure_rate_base),
+                flush_failure_rate: FailureRate(failure_rate_base),
+                shutdown_failure_rate: FailureRate(failure_rate_base),
+                read_latency: latency,
+                write_latency: latency,
+                flush_latency: latency,
+                shutdown_latency: latency,
+            }
+        };
+
         <span class="kw">pub const </span>BROKEN: StreamReliability = {
             <span class="self">Self</span>::RandomlyUnreliable {
                 read_failure_rate: FailureRate::MAX,
@@ -1469,7 +1531,7 @@
                 <span class="kw">let </span>(stream_our, stream_theirs) = tokio::io::duplex(<span class="number">43_689</span>);
                 <span class="kw">let </span><span class="kw-2">mut </span>stream_our = UnreliableDuplexStream::new(stream_our, <span class="self">self</span>.reliability);
                 <span class="kw">let </span>stream_theirs = UnreliableDuplexStream::new(stream_theirs, <span class="self">self</span>.reliability);
-                client.send(stream_theirs).<span class="kw">await</span>.unwrap();
+                client.send(stream_theirs).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>peer = do_handshake(<span class="self">self</span>.id, <span class="kw-2">&amp;mut </span>stream_our).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>framed = BidiFramed::&lt;
                     M,

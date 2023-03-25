@@ -605,6 +605,13 @@
 <a href="#605" id="605">605</a>
 <a href="#606" id="606">606</a>
 <a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -633,6 +640,7 @@
 <span class="kw">use </span>hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 <span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
 <span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>net::peers::DelayCalculator;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -778,6 +786,7 @@
             api_receiver,
             connector,
             decoders,
+            DelayCalculator::default(),
             task_group,
         )
         .<span class="kw">await
@@ -789,15 +798,20 @@
         api_receiver: Receiver&lt;ApiEvent&gt;,
         connector: PeerConnector&lt;EpochMessage&gt;,
         decoders: ModuleDecoderRegistry,
+        delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="self">Self </span>{
         cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>consensus.module_inits)
             .expect(<span class="string">&quot;invalid config&quot;</span>);
 
-        <span class="kw">let </span>connections =
-            ReconnectPeerConnections::new(cfg.network_config(), connector, task_group)
-                .<span class="kw">await
-                </span>.into_dyn();
+        <span class="kw">let </span>connections = ReconnectPeerConnections::new(
+            cfg.network_config(),
+            delay_calculator,
+            connector,
+            task_group,
+        )
+        .<span class="kw">await
+        </span>.into_dyn();
 
         <span class="kw">let </span>net_info = NetworkInfo::new(
             cfg.local.identity,

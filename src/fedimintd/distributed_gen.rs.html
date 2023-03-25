@@ -262,6 +262,8 @@
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -278,6 +280,7 @@
 <span class="kw">use </span>fedimint_mint_server::MintGen;
 <span class="kw">use </span>fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
 <span class="kw">use </span>fedimint_server::config::{ServerConfig, ServerConfigParams};
+<span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
@@ -472,6 +475,7 @@
                 <span class="kw">let </span>server = <span class="kw">match </span>ServerConfig::distributed_gen(
                     <span class="kw-2">&amp;</span>params,
                     <span class="self">self</span>.module_gens.clone(),
+                    DelayCalculator::default(),
                     <span class="kw-2">&amp;mut </span>task_group,
                 )
                 .<span class="kw">await

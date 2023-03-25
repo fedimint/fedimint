@@ -447,6 +447,10 @@
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
 <a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -470,6 +474,7 @@
     create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
 <span class="kw">use </span>fedimint_server::config::{ServerConfig, ServerConfigConsensus, ServerConfigParams};
+<span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
 <span class="kw">use </span>serde::Deserialize;
@@ -640,11 +645,14 @@
                 <span class="kw-2">&amp;</span>password,
                 module_gens_params,
             ) {
-                <span class="prelude-val">Ok</span>(params) =&gt; {
-                    ServerConfig::distributed_gen(<span class="kw-2">&amp;</span>params, module_gens.clone(), <span class="kw-2">&amp;mut </span>dkg_task_group)
-                        .<span class="kw">await
-                        </span>.map_err(|e| <span class="macro">format_err!</span>(<span class="string">&quot;Failed {}&quot;</span>, e))
-                }
+                <span class="prelude-val">Ok</span>(params) =&gt; ServerConfig::distributed_gen(
+                    <span class="kw-2">&amp;</span>params,
+                    module_gens.clone(),
+                    DelayCalculator::default(),
+                    <span class="kw-2">&amp;mut </span>dkg_task_group,
+                )
+                .<span class="kw">await
+                </span>.map_err(|e| <span class="macro">format_err!</span>(<span class="string">&quot;Failed {}&quot;</span>, e)),
                 <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>(err),
             };
 
