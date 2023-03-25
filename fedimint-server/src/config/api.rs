@@ -122,7 +122,8 @@ mod tests {
     use std::path::PathBuf;
     use std::{env, fs};
 
-    use fedimint_core::api::{FederationResult, WsAuthenticatedApi};
+    use fedimint_core::admin_client::WsAdminClient;
+    use fedimint_core::api::FederationResult;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -134,7 +135,7 @@ mod tests {
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
-        client: WsAuthenticatedApi,
+        client: WsAdminClient,
         server: ServerHandle,
         auth: ApiAuth,
     }
@@ -153,7 +154,7 @@ mod tests {
         let server = run_server(data_dir.clone(), socket, db).await;
         // our id doesn't really exist at this point
         let auth = ApiAuth(format!("password-{port}"));
-        let client = WsAuthenticatedApi::new(url, PeerId::from(0), auth.clone());
+        let client = WsAdminClient::new(url, PeerId::from(0), auth.clone());
         TestConfigApi {
             client,
             server,
