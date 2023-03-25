@@ -135,9 +135,7 @@ async fn await_fedimint_block_sync() -> anyhow::Result<()> {
 }
 
 async fn run_bitcoind() -> anyhow::Result<()> {
-    let btc_dir = env::var("FM_BTC_DIR")?;
-
-    // spawn bitcoind
+   // spawn bitcoind
     let mut bitcoind = Command::new("bitcoind")
         .arg("-datadir=fedimint-testing/src/bin")
         .arg("-conf=fedimint-testing/src/bin/bitcoin.conf")
