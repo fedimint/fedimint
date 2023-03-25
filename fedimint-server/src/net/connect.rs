@@ -322,6 +322,7 @@ pub mod mock {
         latency: LatencyInterval,
         failure_rate: FailureRate,
         sleep_future: Option<Pin<Box<tokio::time::Sleep>>>,
+        successes: u64,
     }
 
     impl UnreliabilityGenerator {
@@ -330,6 +331,7 @@ pub mod mock {
                 latency,
                 failure_rate,
                 sleep_future: None,
+                successes: 0,
             }
         }
 
@@ -347,13 +349,18 @@ pub mod mock {
                 std::task::Poll::Pending => return std::task::Poll::Pending,
             }
             if self.failure_rate.random_fail() {
-                tracing::debug!("Returning random error on unreliable stream");
-                return std::task::Poll::Ready(Err(std::io::Error::new(
+                tracing::debug!(
+                    "Returning random error on unreliable stream after {} successes",
+                    self.successes
+                );
+                std::task::Poll::Ready(Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     "Randomly failed",
-                )));
+                )))
+            } else {
+                self.successes += 1;
+                std::task::Poll::Ready(Ok(()))
             }
-            std::task::Poll::Ready(Ok(()))
         }
     }
 
@@ -523,6 +530,30 @@ pub mod mock {
             }
         };
 
+        pub const INTEGRATION_TEST: StreamReliability = {
+            // Based on empirical testing: creates errors without causing tests to take
+            // additional time compared to StreamReliability::FullyReliable
+            // If an order of magnitude higher, tests may take unreasonable amounts of time.
+            // If an order of magnitude lower, a test may run without any error actually
+            // happening
+            let failure_rate_base = 1e-3;
+            let latency = LatencyInterval {
+                min_millis: 1,
+                max_millis: 10,
+            };
+            Self::RandomlyUnreliable {
+                // Try to make read_failure_rate = write_failure_rate + flush_failure_rate
+                read_failure_rate: FailureRate(failure_rate_base * 2.0),
+                write_failure_rate: FailureRate(failure_rate_base),
+                flush_failure_rate: FailureRate(failure_rate_base),
+                shutdown_failure_rate: FailureRate(failure_rate_base),
+                read_latency: latency,
+                write_latency: latency,
+                flush_latency: latency,
+                shutdown_latency: latency,
+            }
+        };
+
         pub const BROKEN: StreamReliability = {
             Self::RandomlyUnreliable {
                 read_failure_rate: FailureRate::MAX,
@@ -548,7 +579,7 @@ pub mod mock {
                 let (stream_our, stream_theirs) = tokio::io::duplex(43_689);
                 let mut stream_our = UnreliableDuplexStream::new(stream_our, self.reliability);
                 let stream_theirs = UnreliableDuplexStream::new(stream_theirs, self.reliability);
-                client.send(stream_theirs).await.unwrap();
+                client.send(stream_theirs).await?;
                 let peer = do_handshake(self.id, &mut stream_our).await?;
                 let framed = BidiFramed::<
                     M,

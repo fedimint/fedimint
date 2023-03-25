@@ -21,6 +21,7 @@ use fedimint_server::config::io::{
     create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
 use fedimint_server::config::{ServerConfig, ServerConfigConsensus, ServerConfigParams};
+use fedimint_server::net::peers::DelayCalculator;
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
@@ -191,11 +192,14 @@ async fn post_guardians(
                 &password,
                 module_gens_params,
             ) {
-                Ok(params) => {
-                    ServerConfig::distributed_gen(&params, module_gens.clone(), &mut dkg_task_group)
-                        .await
-                        .map_err(|e| format_err!("Failed {}", e))
-                }
+                Ok(params) => ServerConfig::distributed_gen(
+                    &params,
+                    module_gens.clone(),
+                    DelayCalculator::default(),
+                    &mut dkg_task_group,
+                )
+                .await
+                .map_err(|e| format_err!("Failed {}", e)),
                 Err(err) => Err(err),
             };
 

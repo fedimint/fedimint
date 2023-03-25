@@ -14,6 +14,7 @@ use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
+use fedimint_server::net::peers::DelayCalculator;
 use fedimint_wallet_server::WalletGen;
 use tracing::info;
 use url::Url;
@@ -208,6 +209,7 @@ impl DistributedGen {
                 let server = match ServerConfig::distributed_gen(
                     &params,
                     self.module_gens.clone(),
+                    DelayCalculator::default(),
                     &mut task_group,
                 )
                 .await

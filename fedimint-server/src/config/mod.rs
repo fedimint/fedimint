@@ -36,7 +36,7 @@ use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::{BitcoinHash, NumPeers};
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{parse_host_port, Connector, TlsConfig};
-use crate::net::peers::NetworkConfig;
+use crate::net::peers::{DelayCalculator, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
 pub mod api;
@@ -423,9 +423,16 @@ impl ServerConfig {
     pub async fn distributed_gen(
         params: &ServerConfigParams,
         registry: ServerModuleGenRegistry,
+        delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
-        let server_conn = connect(params.p2p_network.clone(), params.tls.clone(), task_group).await;
+        let server_conn = connect(
+            params.p2p_network.clone(),
+            params.tls.clone(),
+            delay_calculator,
+            task_group,
+        )
+        .await;
         let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
         let mut rng = OsRng;
 
@@ -767,13 +774,14 @@ impl ServerConfigParams {
 pub async fn connect<T>(
     network: NetworkConfig,
     certs: TlsConfig,
+    delay_calculator: DelayCalculator,
     task_group: &mut TaskGroup,
 ) -> PeerConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    ReconnectPeerConnections::new(network, connector, task_group)
+    ReconnectPeerConnections::new(network, delay_calculator, connector, task_group)
         .await
         .into_dyn()
 }
