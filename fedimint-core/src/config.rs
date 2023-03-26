@@ -18,6 +18,7 @@ use fedimint_core::core::{
 use fedimint_core::encoding::Encodable;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tbs::{serde_impl, Scalar};
 use thiserror::Error;
@@ -241,7 +242,7 @@ impl<M> Default for ModuleGenRegistry<M> {
 
 /// Module **generation** (so passed to dkg, not to the module itself) config
 /// parameters
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct ConfigGenParams(serde_json::Value);
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
@@ -271,6 +272,40 @@ pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
 /// `ModuleRegistry<ConfigGenParams>`, as each module **instance** will need a
 /// distinct config for dkg.
 pub type ServerModuleGenParamsRegistry = ModuleGenRegistry<ConfigGenParams>;
+
+impl Eq for ServerModuleGenParamsRegistry {}
+
+impl PartialEq for ServerModuleGenParamsRegistry {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl Serialize for ServerModuleGenParamsRegistry {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut serializer = serializer.serialize_map(Some(self.0.len()))?;
+        for (key, value) in self.0.iter() {
+            serializer.serialize_key(key)?;
+            serializer.serialize_value(&value.0)?;
+        }
+        serializer.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let json: BTreeMap<ModuleKind, serde_json::Value> = Deserialize::deserialize(deserializer)?;
+        let mut params = BTreeMap::new();
+
+        for (key, value) in json {
+            params.insert(key, ConfigGenParams(value));
+        }
+        Ok(ModuleGenRegistry(params))
+    }
+}
 
 impl<M> From<Vec<M>> for ModuleGenRegistry<M>
 where

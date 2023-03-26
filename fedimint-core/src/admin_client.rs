@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::task::MaybeSend;
@@ -6,6 +7,7 @@ use tokio_rustls::rustls;
 use url::Url;
 
 use crate::api::{DynFederationApi, FederationApiExt, FederationResult, WsFederationApi};
+use crate::config::ServerModuleGenParamsRegistry;
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
 
@@ -82,6 +84,39 @@ impl WsAdminClient {
             .await
     }
 
+    /// Gets the default config gen params which can be configured by the
+    /// leader, gives them a template to modify
+    pub async fn get_default_config_gen_params(&self) -> FederationResult<ConfigGenParamsRequest> {
+        self.request_auth(
+            "/get_default_config_gen_params",
+            ApiRequestErased::default(),
+        )
+        .await
+    }
+
+    /// Used by the leader to set the config gen params, after which
+    /// `ConfigGenParams` can be created
+    pub async fn set_config_gen_params(
+        &self,
+        requested: ConfigGenParamsRequest,
+    ) -> FederationResult<()> {
+        self.request_auth("/set_config_gen_params", ApiRequestErased::new(requested))
+            .await
+    }
+
+    /// Returns the consensus config gen params, followers will delegate this
+    /// call to the leader.  Once this endpoint returns successfully we can run
+    /// DKG.
+    pub async fn get_consensus_config_gen_params(
+        &self,
+    ) -> FederationResult<ConfigGenParamsConsensus> {
+        self.request(
+            "/get_consensus_config_gen_params",
+            ApiRequestErased::default(),
+        )
+        .await
+    }
+
     async fn request_auth<Ret>(
         &self,
         method: &str,
@@ -122,6 +157,28 @@ pub struct PeerServerParams {
     pub p2p_url: Url,
     pub api_url: Url,
     pub name: String,
+}
+
+/// The config gen params that need to be in consensus, sent by the config gen
+/// leader to all the other guardians
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ConfigGenParamsConsensus {
+    /// Endpoints of all servers
+    pub peers: BTreeMap<PeerId, PeerServerParams>,
+    /// Params that were configured by the leader
+    pub requested: ConfigGenParamsRequest,
+}
+
+/// Config gen values that can be configured by the config gen leader
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ConfigGenParamsRequest {
+    /// Guardian-defined key-value pairs that will be passed to the client.
+    /// These should be the same for all guardians since they become part of
+    /// the consensus config.
+    pub meta: BTreeMap<String, String>,
+    /// Params for the modules we wish to configure, can contain custom
+    /// parameters
+    pub modules: ServerModuleGenParamsRegistry,
 }
 
 mod serde_tls_cert {
