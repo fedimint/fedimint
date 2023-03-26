@@ -299,24 +299,37 @@ fn config_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         },
         api_endpoint! {
             "/add_config_gen_peer",
-            async |config: &ConfigGenApi, _context, peer: PeerServerParams| -> () {
+            async |config: &ConfigGenApi, context, peer: PeerServerParams| -> () {
                 // No auth required since this is an API-to-API call and the peer connections will be manually accepted or not in the UI
+                check_no_auth(context)?;
                 config.add_config_gen_peer(peer)
             }
         },
         api_endpoint! {
             "/get_config_gen_peers",
-            async |config: &ConfigGenApi, _context, _v: ()| -> Vec<PeerServerParams> {
+            async |config: &ConfigGenApi, context, _v: ()| -> Vec<PeerServerParams> {
+                check_no_auth(context)?;
                 config.get_config_gen_peers()
             }
         },
         api_endpoint! {
             "/await_config_gen_peers",
-            async |config: &ConfigGenApi, _context, peers: usize| -> Vec<PeerServerParams> {
+            async |config: &ConfigGenApi, context, peers: usize| -> Vec<PeerServerParams> {
+                check_no_auth(context)?;
                 config.await_config_gen_peers(peers).await
             }
         },
     ]
+}
+
+fn check_no_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
+    if context.has_auth() {
+        Err(ApiError::bad_request(
+            "Should not pass auth to this endpoint".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {

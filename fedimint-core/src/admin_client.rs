@@ -52,11 +52,7 @@ impl WsAdminClient {
     ///
     /// This call is not authenticated because it's guardian-to-guardian
     pub async fn add_config_gen_peer(&self, peer: PeerServerParams) -> FederationResult<()> {
-        self.inner
-            .request_current_consensus(
-                "/add_config_gen_peer".to_owned(),
-                ApiRequestErased::new(peer),
-            )
+        self.request("/add_config_gen_peer", ApiRequestErased::new(peer))
             .await
     }
 
@@ -65,11 +61,7 @@ impl WsAdminClient {
     ///
     /// Could be called on the leader, so it's not authenticated
     pub async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>> {
-        self.inner
-            .request_current_consensus(
-                "/get_config_gen_peers".to_owned(),
-                ApiRequestErased::default(),
-            )
+        self.request("/get_config_gen_peers", ApiRequestErased::default())
             .await
     }
 
@@ -79,11 +71,7 @@ impl WsAdminClient {
         &self,
         peers: usize,
     ) -> FederationResult<Vec<PeerServerParams>> {
-        self.inner
-            .request_current_consensus(
-                "/await_config_gen_peers".to_owned(),
-                ApiRequestErased::new(peers),
-            )
+        self.request("/await_config_gen_peers", ApiRequestErased::new(peers))
             .await
     }
 
@@ -104,6 +92,15 @@ impl WsAdminClient {
     {
         self.inner
             .request_current_consensus(method.to_owned(), params.with_auth(&self.auth))
+            .await
+    }
+
+    async fn request<Ret>(&self, method: &str, params: ApiRequestErased) -> FederationResult<Ret>
+    where
+        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
+        self.inner
+            .request_current_consensus(method.to_owned(), params)
             .await
     }
 }
