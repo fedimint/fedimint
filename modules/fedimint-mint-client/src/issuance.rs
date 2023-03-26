@@ -1,10 +1,8 @@
 use std::time::Duration;
 
-use fedimint_client::sm::{OperationId, State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
@@ -168,7 +166,7 @@ impl MintIssuanceStatesCreated {
     }
 
     async fn transition_outcome_ready(
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         bsig_res: Result<MintOutputBlindSignatures, String>,
         old_state: MintIssuanceStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,
@@ -187,6 +185,7 @@ impl MintIssuanceStatesCreated {
             Ok(notes) => {
                 for (amount, note) in notes.iter_items() {
                     let replaced = dbtx
+                        .module_tx()
                         .insert_entry(
                             &NoteKey {
                                 amount,
