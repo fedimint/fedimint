@@ -30,6 +30,7 @@ use crate::issuance::{
     MintIssuanceCommon, MintIssuanceStateMachine, MintIssuanceStates, MintIssuanceStatesCreated,
     NoteIssuanceRequest, NoteIssuanceRequests,
 };
+use crate::redemption::MintRedemptionStateMachine;
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
@@ -78,6 +79,7 @@ pub struct MintClientContext {
     /// Decoders for this module's types
     pub decoders: ModuleDecoderRegistry,
     pub mint_keys: Tiered<AggregatePublicKey>,
+    pub instance_id: ModuleInstanceId,
 }
 
 impl Context for MintClientContext {}
@@ -92,6 +94,7 @@ impl ClientModule for MintClientModule {
         MintClientContext {
             decoders,
             mint_keys: self.cfg.tbs_pks.clone(),
+            instance_id: self.instance_id,
         }
     }
 
@@ -230,6 +233,7 @@ impl MintClientModule {
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum MintClientStateMachines {
     Issuance(MintIssuanceStateMachine),
+    Redemption(MintRedemptionStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -256,12 +260,21 @@ impl State for MintClientStateMachines {
                     MintClientStateMachines::Issuance
                 )
             }
+            MintClientStateMachines::Redemption(redemption_state) => {
+                sm_enum_variant_translation!(
+                    redemption_state.transitions(context, global_context),
+                    MintClientStateMachines::Redemption
+                )
+            }
         }
     }
 
     fn operation_id(&self) -> OperationId {
         match self {
             MintClientStateMachines::Issuance(issuance_state) => issuance_state.operation_id(),
+            MintClientStateMachines::Redemption(redemption_state) => {
+                redemption_state.operation_id()
+            }
         }
     }
 }

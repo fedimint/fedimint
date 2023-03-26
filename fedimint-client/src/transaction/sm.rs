@@ -219,7 +219,7 @@ mod tests {
     use fedimint_core::api::{IFederationApi, JsonRpcResult};
     use fedimint_core::core::IntoDynInstance;
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::{Database, DatabaseTransaction};
+    use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiRequestErased;
     use fedimint_core::task::TaskGroup;
@@ -230,7 +230,10 @@ mod tests {
     use tokio::sync::Mutex;
     use tokio::time::{sleep, timeout};
 
-    use crate::sm::{ActiveState, DynState, Executor, InactiveState, OperationId, OperationState};
+    use crate::sm::{
+        ActiveState, ClientSMDatabaseTransaction, DynState, Executor, InactiveState, OperationId,
+        OperationState,
+    };
     use crate::transaction::{
         tx_submission_sm_decoder, TransactionBuilder, TxSubmissionContext, TxSubmissionStates,
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -321,7 +324,7 @@ mod tests {
 
         async fn finalize_and_submit_transaction(
             &self,
-            dbtx: &mut DatabaseTransaction<'_>,
+            dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             operation_id: OperationId,
             tx_builder: TransactionBuilder,
         ) -> anyhow::Result<TransactionId> {
@@ -340,7 +343,7 @@ mod tests {
             }
             .into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE);
             self.executor
-                .add_state_machines_dbtx(dbtx, vec![tx_submission_sm])
+                .add_state_machines_dbtx(dbtx.global_tx(), vec![tx_submission_sm])
                 .await?;
 
             Ok(txid)
@@ -388,8 +391,9 @@ mod tests {
         let tx_builder = TransactionBuilder::new();
 
         let mut dbtx = db.begin_transaction().await;
+        let mut client_tx = ClientSMDatabaseTransaction::new(&mut dbtx, 0);
         let txid = context
-            .finalize_and_submit_transaction(&mut dbtx, operation_id, tx_builder)
+            .finalize_and_submit_transaction(&mut client_tx, operation_id, tx_builder)
             .await
             .unwrap();
         dbtx.commit_tx().await;
