@@ -871,17 +871,26 @@ impl Wallet {
         }
 
         // FIXME: also warn on less than 1/3, that should never happen
-        // FIXME: ban peers instead of warning
+        // FIXME: ban peers instead of panicking
         // Make sure we have enough contributions to continue
         if items.is_empty() {
             panic!("No proposals were submitted this round");
         }
 
-        let mut fees: Vec<_> = items.iter().map(|(_, item)| item.fee_rate).collect();
-        fees.sort_unstable();
-        let fee_rate = *fees.get(fees.len() / 2).expect("is non-empty");
+        let mut dedup = BTreeMap::new();
+        for (peer, item) in items.into_iter() {
+            if dedup.insert(peer, item).is_some() {
+                // FIXME: ban peers instead of warning
+                warn!("Peer {} submitted multiple RoundConsensusItem", peer);
+            }
+        }
+        let items: Vec<_> = dedup.values().into_iter().collect();
 
-        let mut heights: Vec<_> = items.iter().map(|(_, item)| item.block_height).collect();
+        let mut fees: Vec<_> = items.iter().map(|item| item.fee_rate).collect();
+        fees.sort_unstable();
+        let fee_rate = *fees.get(fees.len() / 2).expect("items is non-empty");
+
+        let mut heights: Vec<_> = items.iter().map(|item| item.block_height).collect();
         heights.sort_unstable();
         let block_height = heights[heights.len() / 2];
         if block_height < last_height {
@@ -890,7 +899,7 @@ impl Wallet {
             );
         }
 
-        let randoms: Vec<_> = items.iter().map(|(_, item)| item.randomness).collect();
+        let randoms: Vec<_> = items.iter().map(|item| item.randomness).collect();
         let randomness_beacon = randoms.into_iter().fold([0; 32], xor);
 
         RoundConsensus {
@@ -1549,12 +1558,61 @@ mod tests {
 
     use bitcoin::Network::{Bitcoin, Testnet};
     use bitcoin::{Address, Amount, Network, OutPoint, Txid};
-    use fedimint_core::{BitcoinHash, Feerate};
-    use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutput};
+    use fedimint_core::{BitcoinHash, Feerate, PeerId};
+    use fedimint_wallet_common::{
+        PegOut, PegOutFees, Rbf, RoundConsensus, RoundConsensusItem, WalletOutput,
+    };
     use miniscript::descriptor::Wsh;
 
     use crate::common::PegInDescriptor;
-    use crate::{CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletError};
+    use crate::{
+        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, Wallet, WalletError,
+    };
+
+    fn round_item(block_height: u32, fee_rate: u64, random: u8) -> RoundConsensusItem {
+        RoundConsensusItem {
+            block_height,
+            fee_rate: Feerate {
+                sats_per_kvb: fee_rate,
+            },
+            randomness: [random; 32],
+        }
+    }
+
+    fn round_consensus(block_height: u32, fee_rate: u64, random: u8) -> RoundConsensus {
+        RoundConsensus {
+            block_height,
+            fee_rate: Feerate {
+                sats_per_kvb: fee_rate,
+            },
+            randomness_beacon: [random; 32],
+        }
+    }
+
+    #[test]
+    fn processes_round_consensus_items() {
+        // properly selects median fees / height and xor randomness
+        let consensus = Wallet::process_round_consensus(
+            0,
+            vec![
+                (PeerId::from(0), round_item(1, 4, 7)),
+                (PeerId::from(1), round_item(2, 5, 8)),
+                (PeerId::from(2), round_item(3, 6, 9)),
+            ],
+        );
+        assert_eq!(consensus, round_consensus(2, 5, 7 ^ 8 ^ 9));
+
+        // removes duplicate entries for a given peer, keeping last entry
+        let consensus = Wallet::process_round_consensus(
+            0,
+            vec![
+                (PeerId::from(0), round_item(1, 4, 7)),
+                (PeerId::from(1), round_item(2, 5, 8)),
+                (PeerId::from(1), round_item(3, 6, 9)),
+            ],
+        );
+        assert_eq!(consensus, round_consensus(3, 6, 7 ^ 9));
+    }
 
     #[test]
     fn create_tx_should_validate_amounts() {
