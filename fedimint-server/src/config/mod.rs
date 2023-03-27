@@ -8,6 +8,7 @@ use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
+use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
@@ -102,7 +103,7 @@ pub struct ServerConfigConsensus {
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
     /// Certs for TLS communication, required for peer authentication
-    #[serde(with = "serde_tls_cert")]
+    #[serde(with = "serde_tls_cert_map")]
     pub tls_certs: BTreeMap<PeerId, rustls::Certificate>,
     /// All configuration that needs to be the same for modules
     #[encodable_ignore]
@@ -577,14 +578,6 @@ impl ServerConfig {
     }
 }
 
-#[derive(Clone)]
-pub struct PeerServerParams {
-    pub cert: rustls::Certificate,
-    pub p2p_url: Url,
-    pub api_url: Url,
-    pub name: String,
-}
-
 impl ServerConfigParams {
     pub fn peers(&self) -> BTreeMap<PeerId, ApiEndpoint> {
         self.p2p_network
@@ -808,7 +801,7 @@ pub fn gen_cert_and_key(
     ))
 }
 
-mod serde_tls_cert {
+mod serde_tls_cert_map {
     use std::borrow::Cow;
     use std::collections::BTreeMap;
 

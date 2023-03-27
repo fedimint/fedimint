@@ -42,7 +42,7 @@ use url::Url;
 
 use crate::core::OutputOutcome;
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use crate::module::{ApiAuth, ApiRequestErased};
+use crate::module::ApiRequestErased;
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
@@ -784,39 +784,6 @@ impl<C> WsFederationApi<C> {
                 })
                 .collect(),
         }
-    }
-}
-
-/// For a guardian to communicate with their server
-pub struct WsAuthenticatedApi {
-    inner: DynFederationApi,
-    auth: ApiAuth,
-}
-
-impl WsAuthenticatedApi {
-    pub fn new(url: Url, our_id: PeerId, auth: ApiAuth) -> Self {
-        Self {
-            inner: WsFederationApi::new(vec![(our_id, url)]).into(),
-            auth,
-        }
-    }
-
-    pub async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request("/set_password", ApiRequestErased::new(auth))
-            .await
-    }
-
-    pub async fn signal_upgrade(&self) -> FederationResult<()> {
-        self.request("/upgrade", ApiRequestErased::default()).await
-    }
-
-    async fn request<Ret>(&self, method: &str, params: ApiRequestErased) -> FederationResult<Ret>
-    where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
-    {
-        self.inner
-            .request_current_consensus(method.to_owned(), params.with_auth(&self.auth))
-            .await
     }
 }
 

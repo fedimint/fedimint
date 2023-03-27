@@ -8,6 +8,7 @@ use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_aead::{
     encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
 };
+use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::ServerModuleGenRegistry;
 use serde::de::DeserializeOwned;
@@ -15,7 +16,7 @@ use serde::Serialize;
 use tokio_rustls::rustls;
 use url::Url;
 
-use crate::config::{gen_cert_and_key, PeerServerParams, ServerConfig};
+use crate::config::{gen_cert_and_key, ServerConfig};
 
 /// Version of the server code (should be the same among peers)
 pub const CODE_VERSION: &str = env!("CODE_VERSION");

@@ -16,9 +16,10 @@ use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
+use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
-    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsAuthenticatedApi,
-    WsClientConnectInfo, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsClientConnectInfo,
+    WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::db::{Database, DatabaseValue};
@@ -939,7 +940,7 @@ impl FedimintCli {
                     .expect("Endpoint exists")
                     .url
                     .clone();
-                let auth_api = WsAuthenticatedApi::new(url, our_id, auth);
+                let auth_api = WsAdminClient::new(url, our_id, auth);
                 auth_api.signal_upgrade().await?;
                 Ok(CliOutput::SignalUpgrade)
             }
