@@ -777,8 +777,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::sm::state::{DynContext, DynState};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{GlobalContext, State, StateTransition};
 
-<span class="doccomment">/// After how many retries a DB transaction is aborted with an error
-</span><span class="kw">const </span>MAX_DB_RETRIES: <span class="prelude-ty">Option</span>&lt;usize&gt; = <span class="prelude-val">Some</span>(<span class="number">100</span>);
+<span class="doccomment">/// After how many attempts a DB transaction is aborted with an error
+</span><span class="kw">const </span>MAX_DB_ATTEMPTS: <span class="prelude-ty">Option</span>&lt;usize&gt; = <span class="prelude-val">Some</span>(<span class="number">100</span>);
 
 <span class="doccomment">/// Wait time till checking the DB for new state machines when there are no
 /// active ones
@@ -836,7 +836,7 @@
             .db
             .autocommit(
                 |dbtx| Box::pin(<span class="self">self</span>.add_state_machines_dbtx(dbtx, states.clone())),
-                MAX_DB_RETRIES,
+                MAX_DB_ATTEMPTS,
             )
             .<span class="kw">await
             </span>.map_err(|e| <span class="kw">match </span>e {
