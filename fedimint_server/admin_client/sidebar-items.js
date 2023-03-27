@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["ConfigGenConnectionsRequest","Sent by admin user to the API"],["PeerServerParams",""],["WsAdminClient","For a guardian to communicate with their server"]]};

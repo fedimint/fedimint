@@ -869,13 +869,6 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -886,6 +879,7 @@
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
+<span class="kw">use </span>fedimint_core::admin_client::PeerServerParams;
 <span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::config::{
@@ -980,7 +974,7 @@
     <span class="doccomment">/// Network addresses and names for all peer APIs
     </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
     <span class="doccomment">/// Certs for TLS communication, required for peer authentication
-    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert_map&quot;</span>)]
     </span><span class="kw">pub </span>tls_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt;,
     <span class="doccomment">/// All configuration that needs to be the same for modules
     </span><span class="attr">#[encodable_ignore]
@@ -1455,14 +1449,6 @@
     }
 }
 
-<span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>PeerServerParams {
-    <span class="kw">pub </span>cert: rustls::Certificate,
-    <span class="kw">pub </span>p2p_url: Url,
-    <span class="kw">pub </span>api_url: Url,
-    <span class="kw">pub </span>name: String,
-}
-
 <span class="kw">impl </span>ServerConfigParams {
     <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, ApiEndpoint&gt; {
         <span class="self">self</span>.p2p_network
@@ -1686,7 +1672,7 @@
     ))
 }
 
-<span class="kw">mod </span>serde_tls_cert {
+<span class="kw">mod </span>serde_tls_cert_map {
     <span class="kw">use </span>std::borrow::Cow;
     <span class="kw">use </span>std::collections::BTreeMap;
 

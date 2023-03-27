@@ -956,6 +956,7 @@
 <a href="#956" id="956">956</a>
 <a href="#957" id="957">957</a>
 <a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -974,9 +975,10 @@
 <span class="kw">use </span>fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
+<span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
-    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsAuthenticatedApi,
-    WsClientConnectInfo, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsClientConnectInfo,
+    WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
@@ -1897,7 +1899,7 @@
                     .expect(<span class="string">&quot;Endpoint exists&quot;</span>)
                     .url
                     .clone();
-                <span class="kw">let </span>auth_api = WsAuthenticatedApi::new(url, our_id, auth);
+                <span class="kw">let </span>auth_api = WsAdminClient::new(url, our_id, auth);
                 auth_api.signal_upgrade().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::SignalUpgrade)
             }

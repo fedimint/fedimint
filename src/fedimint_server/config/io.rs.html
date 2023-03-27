@@ -175,6 +175,7 @@
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
@@ -185,6 +186,7 @@
 <span class="kw">use </span>fedimint_aead::{
     encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
 };
+<span class="kw">use </span>fedimint_core::admin_client::PeerServerParams;
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -192,7 +194,7 @@
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, PeerServerParams, ServerConfig};
+<span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ServerConfig};
 
 <span class="doccomment">/// Version of the server code (should be the same among peers)
 </span><span class="kw">pub const </span>CODE_VERSION: <span class="kw-2">&amp;</span>str = <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>);

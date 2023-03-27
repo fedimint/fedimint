@@ -6,7 +6,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
 "fedimint_client":["",[["module",[],["gen.rs","mod.rs"]],["sm",[],["executor.rs","mod.rs","state.rs"]],["transaction",[],["builder.rs","mod.rs","sm.rs"]]],["lib.rs"]],\
-"fedimint_core":["",[["core",[],["client.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","registry.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]]],["api.rs","bitcoin_rpc.rs","cancellable.rs","config.rs","core.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","outcome.rs","query.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","transaction.rs","util.rs"]],\
+"fedimint_core":["",[["core",[],["client.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","registry.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]]],["admin_client.rs","api.rs","bitcoin_rpc.rs","cancellable.rs","config.rs","core.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","outcome.rs","query.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","transaction.rs","util.rs"]],\
 "fedimint_derive":["",[],["lib.rs"]],\
 "fedimint_derive_secret":["",[],["lib.rs"]],\
 "fedimint_dummy_client":["",[],["lib.rs"]],\
