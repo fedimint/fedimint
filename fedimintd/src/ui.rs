@@ -28,7 +28,7 @@ use serde::Deserialize;
 use tokio::select;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use url::Url;
 
 use crate::attach_default_module_gen_params;
@@ -440,7 +440,7 @@ pub async fn run_ui(
     let shutdown_future = task_group.make_handle().make_shutdown_rx().await;
     let server_future = axum::Server::bind(&bind_addr).serve(app.into_make_service());
 
-    debug!("Starting setup UI server");
+    info!("Setup UI is listening on {}", bind_addr);
     select! {
         _ = shutdown_future => {
             debug!("Setup UI server shutting down");
