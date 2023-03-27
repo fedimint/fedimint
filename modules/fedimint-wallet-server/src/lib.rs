@@ -370,34 +370,10 @@ impl ServerModule for Wallet {
         // Save signatures to the database
         self.save_peg_out_signatures(dbtx, peg_out_signatures).await;
 
-        // FIXME: also warn on less than 1/3, that should never happen
-        // Make sure we have enough contributions to continue
-        if round_consensus.is_empty() {
-            panic!("No proposals were submitted this round");
-        }
-
-        let fee_proposals = round_consensus.iter().map(|(_, rc)| rc.fee_rate).collect();
-        let fee_rate = self.process_fee_proposals(fee_proposals).await;
-
-        let height_proposals = round_consensus
-            .iter()
-            .map(|(_, rc)| rc.block_height)
-            .collect();
-        let block_height = self
-            .process_block_height_proposals(dbtx, height_proposals)
+        let last_height = self.consensus_height(dbtx).await.unwrap_or(0);
+        let round_consensus = Self::process_round_consensus(last_height, round_consensus);
+        self.sync_up_to_consensus_height(dbtx, round_consensus.block_height)
             .await;
-
-        let randomness_contributions = round_consensus
-            .iter()
-            .map(|(_, rc)| rc.randomness)
-            .collect();
-        let randomness_beacon = self.process_randomness_contributions(randomness_contributions);
-
-        let round_consensus = RoundConsensus {
-            block_height,
-            fee_rate,
-            randomness_beacon,
-        };
 
         dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
             .await;
@@ -755,15 +731,6 @@ impl Wallet {
         Ok(wallet)
     }
 
-    pub fn process_randomness_contributions(&self, randomness: Vec<[u8; 32]>) -> [u8; 32] {
-        fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
-            lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
-            lhs
-        }
-
-        randomness.into_iter().fold([0; 32], xor)
-    }
-
     async fn save_peg_out_signatures<'a>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
@@ -894,43 +861,52 @@ impl Wallet {
         })
     }
 
-    /// # Panics
-    /// * If proposals is empty
-    async fn process_fee_proposals(&self, mut proposals: Vec<Feerate>) -> Feerate {
-        assert!(!proposals.is_empty());
+    fn process_round_consensus(
+        last_height: u32,
+        items: Vec<(PeerId, RoundConsensusItem)>,
+    ) -> RoundConsensus {
+        fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
+            lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
+            lhs
+        }
 
-        proposals.sort();
+        // FIXME: also warn on less than 1/3, that should never happen
+        // FIXME: ban peers instead of panicking
+        // Make sure we have enough contributions to continue
+        if items.is_empty() {
+            panic!("No proposals were submitted this round");
+        }
 
-        *proposals
-            .get(proposals.len() / 2)
-            .expect("We checked before that proposals aren't empty")
-    }
+        let mut dedup = BTreeMap::new();
+        for (peer, item) in items.into_iter() {
+            if dedup.insert(peer, item).is_some() {
+                // FIXME: ban peers instead of warning
+                warn!("Peer {} submitted multiple RoundConsensusItem", peer);
+            }
+        }
+        let items: Vec<_> = dedup.values().into_iter().collect();
 
-    /// # Panics
-    /// * If proposals is empty
-    async fn process_block_height_proposals<'a>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
-        mut proposals: Vec<u32>,
-    ) -> u32 {
-        assert!(!proposals.is_empty());
+        let mut fees: Vec<_> = items.iter().map(|item| item.fee_rate).collect();
+        fees.sort_unstable();
+        let fee_rate = *fees.get(fees.len() / 2).expect("items is non-empty");
 
-        proposals.sort_unstable();
-        let median_proposal = proposals[proposals.len() / 2];
-
-        let consensus_height = self.consensus_height(dbtx).await.unwrap_or(0);
-
-        if median_proposal >= consensus_height {
-            debug!("Setting consensus block height to {}", median_proposal);
-            self.sync_up_to_consensus_height(dbtx, median_proposal)
-                .await;
-        } else {
+        let mut heights: Vec<_> = items.iter().map(|item| item.block_height).collect();
+        heights.sort_unstable();
+        let block_height = heights[heights.len() / 2];
+        if block_height < last_height {
             panic!(
-                "Median proposed consensus block height shrunk from {consensus_height} to {median_proposal}, the federation is broken"
+                "Median proposed consensus block height shrunk from {last_height} to {block_height}, the federation is broken"
             );
         }
 
-        median_proposal
+        let randoms: Vec<_> = items.iter().map(|item| item.randomness).collect();
+        let randomness_beacon = randoms.into_iter().fold([0; 32], xor);
+
+        RoundConsensus {
+            block_height,
+            fee_rate,
+            randomness_beacon,
+        }
     }
 
     pub async fn current_round_consensus(
@@ -1582,12 +1558,61 @@ mod tests {
 
     use bitcoin::Network::{Bitcoin, Testnet};
     use bitcoin::{Address, Amount, Network, OutPoint, Txid};
-    use fedimint_core::{BitcoinHash, Feerate};
-    use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutput};
+    use fedimint_core::{BitcoinHash, Feerate, PeerId};
+    use fedimint_wallet_common::{
+        PegOut, PegOutFees, Rbf, RoundConsensus, RoundConsensusItem, WalletOutput,
+    };
     use miniscript::descriptor::Wsh;
 
     use crate::common::PegInDescriptor;
-    use crate::{CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletError};
+    use crate::{
+        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, Wallet, WalletError,
+    };
+
+    fn round_item(block_height: u32, fee_rate: u64, random: u8) -> RoundConsensusItem {
+        RoundConsensusItem {
+            block_height,
+            fee_rate: Feerate {
+                sats_per_kvb: fee_rate,
+            },
+            randomness: [random; 32],
+        }
+    }
+
+    fn round_consensus(block_height: u32, fee_rate: u64, random: u8) -> RoundConsensus {
+        RoundConsensus {
+            block_height,
+            fee_rate: Feerate {
+                sats_per_kvb: fee_rate,
+            },
+            randomness_beacon: [random; 32],
+        }
+    }
+
+    #[test]
+    fn processes_round_consensus_items() {
+        // properly selects median fees / height and xor randomness
+        let consensus = Wallet::process_round_consensus(
+            0,
+            vec![
+                (PeerId::from(0), round_item(1, 4, 7)),
+                (PeerId::from(1), round_item(2, 5, 8)),
+                (PeerId::from(2), round_item(3, 6, 9)),
+            ],
+        );
+        assert_eq!(consensus, round_consensus(2, 5, 7 ^ 8 ^ 9));
+
+        // removes duplicate entries for a given peer, keeping last entry
+        let consensus = Wallet::process_round_consensus(
+            0,
+            vec![
+                (PeerId::from(0), round_item(1, 4, 7)),
+                (PeerId::from(1), round_item(2, 5, 8)),
+                (PeerId::from(1), round_item(3, 6, 9)),
+            ],
+        );
+        assert_eq!(consensus, round_consensus(3, 6, 7 ^ 9));
+    }
 
     #[test]
     fn create_tx_should_validate_amounts() {
