@@ -254,6 +254,23 @@
             buildInputs = [ pkgs.bbe ];
           };
 
+        # Create a package that contains only one `bin`ary from an input `pkg`
+        #
+        # For efficiency we built some binaries togetherr (like fedimintd + fedimint-cli),
+        # but we would like to expose them separately.
+        pickBinary = { pkg, bin }:
+          stdenv.mkDerivation {
+            inherit system;
+            name = bin;
+
+            dontUnpack = true;
+
+            installPhase = ''
+              mkdir -p $out/bin
+              cp -a ${pkg}/bin/${bin} $out/bin/${bin}
+            '';
+          };
+
         # outputs that do something over the whole workspace
         outputsWorkspace = {
           workspaceDeps = craneBuildNative.workspaceDeps;
@@ -277,10 +294,17 @@
           client-pkgs = craneBuildNative.client-pkgs { };
         };
 
+        replacedGitHashes = builtins.mapAttrs (name: package: replaceGitHash { inherit name package; }) outputsPackages;
         packages = outputsWorkspace //
           # replace git hash in the final binaries
-          (builtins.mapAttrs (name: package: replaceGitHash { inherit name package; }) outputsPackages)
-        ;
+          replacedGitHashes
+          // {
+          fedimintd = pickBinary
+            {
+              pkg = replacedGitHashes.fedimint-pkgs;
+              bin = "fedimintd";
+            };
+        };
 
         devShells =
 
