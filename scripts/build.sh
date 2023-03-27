@@ -43,6 +43,7 @@ mkdir -p $FM_LND_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
 mkdir -p $FM_ELECTRS_DIR
+touch $FM_PID_FILE
 
 # Copy configs to data directories
 cp misc/test/bitcoin.conf $FM_BTC_DIR
