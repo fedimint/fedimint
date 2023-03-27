@@ -481,7 +481,7 @@
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio::sync::Mutex;
-<span class="kw">use </span>tracing::{debug, error};
+<span class="kw">use </span>tracing::{debug, error, info};
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::attach_default_module_gen_params;
@@ -893,7 +893,7 @@
     <span class="kw">let </span>shutdown_future = task_group.make_handle().make_shutdown_rx().<span class="kw">await</span>;
     <span class="kw">let </span>server_future = axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr).serve(app.into_make_service());
 
-    <span class="macro">debug!</span>(<span class="string">&quot;Starting setup UI server&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">&quot;Setup UI is listening on {}&quot;</span>, bind_addr);
     <span class="macro">select! </span>{
         <span class="kw">_ </span>= shutdown_future =&gt; {
             <span class="macro">debug!</span>(<span class="string">&quot;Setup UI server shutting down&quot;</span>);
