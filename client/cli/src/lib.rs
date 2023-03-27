@@ -253,11 +253,11 @@ impl<O> CliOptionExt<O> for Option<O> {
 // TODO: Refactor federation API errors to just delegate to this
 impl From<FederationError> for CliError {
     fn from(e: FederationError) -> Self {
-        CliError::from(
-            CliErrorKind::GeneralFederationError,
-            "Failed API call",
-            Some(e.into()),
-        )
+        CliError {
+            kind: CliErrorKind::GeneralFederationError,
+            message: "Failed API call".into(),
+            raw_error: Some(e.into()),
+        }
     }
 }
 
@@ -268,16 +268,6 @@ impl Debug for CliError {
             .field("message", &self.message)
             .field("raw_error", &self.raw_error)
             .finish()
-    }
-}
-
-impl CliError {
-    fn from(kind: CliErrorKind, message: &str, err: Option<anyhow::Error>) -> CliError {
-        CliError {
-            kind: (kind),
-            message: (String::from(message)),
-            raw_error: err,
-        }
     }
 }
 
@@ -726,58 +716,50 @@ impl FedimintCli {
             }
             Command::PegOut { address, satoshis } => {
                 let client = cli.build_client(&self.module_gens).await?;
-                match client.new_peg_out_with_fees(satoshis, address).await {
-                    Ok(peg_out) => match client.peg_out(peg_out, &mut rng).await {
-                        Ok(out_point) => client
-                            .wallet_client()
-                            .await_peg_out_outcome(out_point)
-                            .await
-                            .map(|txid| CliOutput::PegOut { tx_id: (txid) })
-                            .map_err_cli_msg(
-                                CliErrorKind::GeneralFederationError,
-                                "invalid peg-out outcome",
-                            ),
-                        Err(e) => Err(CliError::from(
-                            CliErrorKind::GeneralFederationError,
-                            "failed to commit peg-out",
-                            Some(e.into()),
-                        )),
-                    },
-                    Err(e) => Err(CliError::from(
+                let peg_out = client
+                    .new_peg_out_with_fees(satoshis, address)
+                    .await
+                    .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
                         "failed to request peg-out",
-                        Some(e.into()),
-                    )),
-                }
+                    )?;
+                let out_point = client.peg_out(peg_out, &mut rng).await.map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to commit peg-out",
+                )?;
+                client
+                    .wallet_client()
+                    .await_peg_out_outcome(out_point)
+                    .await
+                    .map(|tx_id| CliOutput::PegOut { tx_id })
+                    .map_err_cli_msg(
+                        CliErrorKind::GeneralFederationError,
+                        "invalid peg-out outcome",
+                    )
             }
             Command::LnPay { bolt11 } => {
                 let client = cli.build_client(&self.module_gens).await?;
-                match client.fund_outgoing_ln_contract(bolt11, &mut rng).await {
-                    Ok((contract_id, outpoint)) => {
-                        match client.await_outgoing_contract_acceptance(outpoint).await {
-                            Ok(_) => client
-                                .await_outgoing_contract_execution(contract_id, &mut rng)
-                                .await
-                                .map(|_| CliOutput::LnPay {
-                                    contract_id: (contract_id),
-                                })
-                                .map_err_cli_msg(
-                                    CliErrorKind::GeneralFederationError,
-                                    "gateway failed to execute contract",
-                                ),
-                            Err(e) => Err(CliError::from(
-                                CliErrorKind::Timeout,
-                                "contract wasn't accepted in time",
-                                Some(e.into()),
-                            )),
-                        }
-                    }
-                    Err(e) => Err(CliError::from(
+                let (contract_id, outpoint) = client
+                    .fund_outgoing_ln_contract(bolt11, &mut rng)
+                    .await
+                    .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
                         "Failure creating outgoing LN contract",
-                        Some(e.into()),
-                    )),
-                }
+                    )?;
+                client
+                    .await_outgoing_contract_acceptance(outpoint)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::Timeout, "contract wasn't accepted in time")?;
+                client
+                    .await_outgoing_contract_execution(contract_id, &mut rng)
+                    .await
+                    .map(|_| CliOutput::LnPay {
+                        contract_id: (contract_id),
+                    })
+                    .map_err_cli_msg(
+                        CliErrorKind::GeneralFederationError,
+                        "gateway failed to execute contract",
+                    )
             }
             Command::LnInvoice {
                 amount,
@@ -827,71 +809,54 @@ impl FedimintCli {
             }),
             Command::ListGateways {} => {
                 let client = cli.build_client(&self.module_gens).await?;
-                match client.fetch_registered_gateways().await {
-                    Ok(gateways) => {
-                        if !gateways.is_empty() {
-                            let mut gateways_json = json!(&gateways);
-                            match client.fetch_active_gateway().await {
-                                Ok(active_gateway) => {
-                                    gateways_json
-                                        .as_array_mut()
-                                        .expect("gateways_json is not an array")
-                                        .iter_mut()
-                                        .for_each(|gateway| {
-                                            if gateway["node_pub_key"]
-                                                == json!(active_gateway.node_pub_key)
-                                            {
-                                                gateway["active"] = json!(true);
-                                            } else {
-                                                gateway["active"] = json!(false);
-                                            }
-                                        });
-                                    Ok(CliOutput::ListGateways {
-                                        num_gateways: (gateways.len()),
-                                        gateways: (gateways_json),
-                                    })
-                                }
-                                Err(e) => Err(CliError::from(
-                                    CliErrorKind::GeneralFederationError,
-                                    "could not determine active gateway",
-                                    Some(e.into()),
-                                )),
-                            }
-                        } else {
-                            Err(CliError::from(
-                                CliErrorKind::GeneralFederationError,
-                                "no gateways found",
-                                None,
-                            ))
-                        }
-                    }
-                    Err(e) => Err(CliError::from(
-                        CliErrorKind::GeneralFederationError,
-                        "failed to fetch gateways",
-                        Some(e.into()),
-                    )),
+                let gateways = client.fetch_registered_gateways().await.map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to fetch gateways",
+                )?;
+                if gateways.is_empty() {
+                    return Err(CliError {
+                        kind: CliErrorKind::GeneralFederationError,
+                        message: "no gateways found".into(),
+                        raw_error: None,
+                    });
                 }
+
+                let mut gateways_json = json!(&gateways);
+                let active_gateway = client.fetch_active_gateway().await.map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "could not determine active gateway",
+                )?;
+                gateways_json
+                    .as_array_mut()
+                    .expect("gateways_json is not an array")
+                    .iter_mut()
+                    .for_each(|gateway| {
+                        if gateway["node_pub_key"] == json!(active_gateway.node_pub_key) {
+                            gateway["active"] = json!(true);
+                        } else {
+                            gateway["active"] = json!(false);
+                        }
+                    });
+                Ok(CliOutput::ListGateways {
+                    num_gateways: (gateways.len()),
+                    gateways: (gateways_json),
+                })
             }
             Command::SwitchGateway { pubkey } => {
-                match cli
+                let gateway = cli
                     .build_client(&self.module_gens)
                     .await?
                     .switch_active_gateway(Some(pubkey))
                     .await
-                {
-                    Ok(gateway) => {
-                        let mut gateway_json = json!(&gateway);
-                        gateway_json["active"] = json!(true);
-                        Ok(CliOutput::SwitchGateway {
-                            new_gateway: (gateway_json),
-                        })
-                    }
-                    Err(e) => Err(CliError::from(
+                    .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
                         "failed to switch active gateway",
-                        Some(e.into()),
-                    )),
-                }
+                    )?;
+                let mut gateway_json = json!(&gateway);
+                gateway_json["active"] = json!(true);
+                Ok(CliOutput::SwitchGateway {
+                    new_gateway: (gateway_json),
+                })
             }
             Command::Backup => cli
                 .build_client(&self.module_gens)
