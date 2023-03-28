@@ -78,16 +78,34 @@ function cli_test_always_fail() {
 }
 export -f cli_test_always_fail
 
+tmpdir=$(mktemp --tmpdir -d XXXXX)
+trap 'rm -r $tmpdir' EXIT
+joblog="$tmpdir/joblog"
+
 >&2 echo "### Starting all tests in parallel..."
 # --load to keep the load under-control, especially during target dir extraction
 # --delay to let nix start extracting and bump the load
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
-# try to keep the slowest tests first
-parallel --timeout 600 --load 150% --delay 5 --memfree 512M --nice 15 ::: \
+# NOTE: try to keep the slowest tests first
+if parallel \
+  --halt-on-error 1 \
+  --joblog "$joblog" \
+  --timeout 600 \
+  --load 150% \
+  --delay 5 \
+  --memfree 512M \
+  --nice 15 ::: \
   cli_test_rust_tests \
   cli_test_latency \
   cli_test_reconnect \
   cli_test_upgrade \
   cli_test_cli \
-  cli_test_always_fail
+  cli_test_always_fail ; then
+  >&2 echo "All tests successful"
+else
+  >&2 echo "Some tests failed. Full job log:"
+  cat "$joblog"
+  >&2 echo "Search for '## FAILED' to find the end of the failing test"
+fi
+
