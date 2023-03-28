@@ -22,6 +22,7 @@ use anyhow::anyhow;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
+use bitcoin_hashes::hex::ToHex;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
@@ -38,7 +39,7 @@ use tracing::{error, info, warn};
 
 use crate::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
-use crate::gatewaylnrpc::GetPubKeyResponse;
+use crate::gatewaylnrpc::GetNodeInfoResponse;
 use crate::lnrpc_client::DynLnRpcClient;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
@@ -210,7 +211,7 @@ impl Gateway {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
-        let GetPubKeyResponse { pub_key } = self.lnrpc.pubkey().await?;
+        let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.info().await?;
         let node_pub_key = PublicKey::from_slice(&pub_key)
             .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
@@ -258,9 +259,13 @@ impl Gateway {
             .map(|(_, actor)| actor.get_info().expect("Failed to get actor info"))
             .collect();
 
+        let ln_info = self.lnrpc.info().await?;
+
         Ok(GatewayInfo {
             federations,
             version_hash: env!("CODE_VERSION").to_string(),
+            lightning_pub_key: ln_info.pub_key.to_hex(),
+            lightning_alias: ln_info.alias,
         })
     }
 

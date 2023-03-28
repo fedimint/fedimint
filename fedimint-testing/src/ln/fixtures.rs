@@ -10,7 +10,7 @@ use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 use ln_gateway::gatewaylnrpc::{
-    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
@@ -78,9 +78,10 @@ impl LightningTest for FakeLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for FakeLightningTest {
-    async fn pubkey(&self) -> ln_gateway::Result<GetPubKeyResponse> {
-        Ok(GetPubKeyResponse {
+    async fn info(&self) -> ln_gateway::Result<GetNodeInfoResponse> {
+        Ok(GetNodeInfoResponse {
             pub_key: self.gateway_node_pub_key.serialize().to_vec(),
+            alias: "FakeLightningNode".to_string(),
         })
     }
 

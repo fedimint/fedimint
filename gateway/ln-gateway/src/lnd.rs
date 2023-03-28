@@ -18,7 +18,7 @@ use tracing::{error, info, trace};
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -74,7 +74,7 @@ impl fmt::Debug for GatewayLndClient {
 
 #[async_trait]
 impl ILnRpcClient for GatewayLndClient {
-    async fn pubkey(&self) -> crate::Result<GetPubKeyResponse> {
+    async fn info(&self) -> crate::Result<GetNodeInfoResponse> {
         let mut client = self.client.clone();
 
         let info = client
@@ -97,8 +97,9 @@ impl ILnRpcClient for GatewayLndClient {
         })?;
         info!("fetched pubkey {:?}", pub_key);
 
-        Ok(GetPubKeyResponse {
+        Ok(GetNodeInfoResponse {
             pub_key: pub_key.serialize().to_vec(),
+            alias: info.alias,
         })
     }
 
