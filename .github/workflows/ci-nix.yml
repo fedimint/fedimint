@@ -50,26 +50,26 @@ jobs:
         continue-on-error: true
 
       - name: Build workspace
-        run: nix build -L .#debug.workspaceBuild
+        run: nix build -L .#ci.workspaceBuild
 
       - name: Clippy workspace
-        run: nix build -L .#debug.workspaceClippy
+        run: nix build -L .#ci.workspaceClippy
 
       - name: Run cargo doc
-        run: nix build -L .#debug.workspaceDoc
+        run: nix build -L .#ci.workspaceDoc
 
       - name: Run cargo audit
-        run: nix build -L .#debug.workspaceAudit
+        run: nix build -L .#ci.workspaceAudit
 
       # `ccov` job will run `cargo test`, so no need to spend time on it here
       # - name: Test workspace
       #   run: nix build -L .#workspaceTest
 
       - name: Test docs
-        run: nix build -L .#debug.workspaceTestDoc
+        run: nix build -L .#ci.workspaceTestDoc
 
       - name: Tests
-        run: nix build -L .#debug.cli-test.all
+        run: nix build -L .#ci.cli-test.all
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another
@@ -90,7 +90,7 @@ jobs:
         continue-on-error: true
 
       - name: Build and run tests with Code Coverage
-        run: nix build -L .#debug.workspaceCov
+        run: nix build -L .#ci.workspaceCov
 
       - name: Ensure lcov.info exists
         run: test -f result/lcov.info
