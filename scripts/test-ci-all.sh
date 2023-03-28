@@ -25,6 +25,8 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --all --all-targets
 
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
   echo "### Starting reconnect test..."
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/reconnect-test.sh" 2>&1 | ts -s
 }
@@ -32,6 +34,8 @@ export -f cli_test_reconnect
 
 function cli_test_upgrade() {
   set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
   echo "### Starting upgrade test..."
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/upgrade-test.sh" 2>&1 | ts -s
 }
@@ -39,6 +43,8 @@ export -f cli_test_upgrade
 
 function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
   echo "### Starting latency test..."
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/latency-test.sh" 2>&1 | ts -s
 }
@@ -46,6 +52,8 @@ export -f cli_test_latency
 
 function cli_test_cli() {
   set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
   echo "### Starting cli test..."
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/cli-test.sh" 2>&1 | ts -s
 }
@@ -53,6 +61,8 @@ export -f cli_test_cli
 
 function cli_test_rust_tests() {
   set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
   echo "### Starting integration test..."
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/rust-tests.sh" 2>&1 | ts -s
 }
@@ -60,6 +70,8 @@ export -f cli_test_rust_tests
 
 function cli_test_always_fail() {
   set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
   echo "### Starting always_fail test..."
   # this must fail, so we know nix build is actually running tests
   ! unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-fail-test.sh" 2>&1 | ts -s
