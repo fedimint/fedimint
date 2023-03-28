@@ -694,15 +694,23 @@
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
 </pre><pre class="rust"><code><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyRequest {}
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>GetPubKeyResponse {
+</span><span class="kw">pub struct </span>GetNodeInfoResponse {
     <span class="doccomment">/// The public key of the associated lightning node
     </span><span class="attr">#[prost(bytes = <span class="string">&quot;vec&quot;</span>, tag = <span class="string">&quot;1&quot;</span>)]
     </span><span class="kw">pub </span>pub_key: ::prost::alloc::vec::Vec&lt;u8&gt;,
+    <span class="doccomment">/// The alias of the lightning node
+    </span><span class="attr">#[prost(string, tag = <span class="string">&quot;2&quot;</span>)]
+    </span><span class="kw">pub </span>alias: ::prost::alloc::string::String,
 }
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -928,11 +936,11 @@
             <span class="self">self</span>.inner = <span class="self">self</span>.inner.accept_compressed(encoding);
             <span class="self">self
         </span>}
-        <span class="doccomment">/// GetPubKey returns the public key of the associated lightning node
-        </span><span class="kw">pub async fn </span>get_pub_key(
+        <span class="doccomment">/// GetNodeInfo returns the public key and alias of the associated lightning node
+        </span><span class="kw">pub async fn </span>get_node_info(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
             request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::EmptyRequest&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::GetPubKeyResponse&gt;, tonic::Status&gt; {
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::GetNodeInfoResponse&gt;, tonic::Status&gt; {
             <span class="self">self</span>.inner
                 .ready()
                 .<span class="kw">await
@@ -944,7 +952,7 @@
                 })<span class="question-mark">?</span>;
             <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
             <span class="kw">let </span>path = http::uri::PathAndQuery::from_static(
-                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/GetPubKey&quot;</span>,
+                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/GetNodeInfo&quot;</span>,
             );
             <span class="self">self</span>.inner.unary(request.into_request(), path, codec).<span class="kw">await
         </span>}
@@ -1050,11 +1058,11 @@
     <span class="doccomment">/// Generated trait containing gRPC methods that should be implemented for use with GatewayLightningServer.
     </span><span class="attr">#[async_trait]
     </span><span class="kw">pub trait </span>GatewayLightning: Send + Sync + <span class="lifetime">&#39;static </span>{
-        <span class="doccomment">/// GetPubKey returns the public key of the associated lightning node
-        </span><span class="kw">async fn </span>get_pub_key(
+        <span class="doccomment">/// GetNodeInfo returns the public key and alias of the associated lightning node
+        </span><span class="kw">async fn </span>get_node_info(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             request: tonic::Request&lt;<span class="kw">super</span>::EmptyRequest&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::GetPubKeyResponse&gt;, tonic::Status&gt;;
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::GetNodeInfoResponse&gt;, tonic::Status&gt;;
         <span class="doccomment">/// GetRouteHints returns the route hints to the associated lightning node
         </span><span class="kw">async fn </span>get_route_hints(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1151,14 +1159,14 @@
         <span class="kw">fn </span>call(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: http::Request&lt;B&gt;) -&gt; <span class="self">Self</span>::Future {
             <span class="kw">let </span>inner = <span class="self">self</span>.inner.clone();
             <span class="kw">match </span>req.uri().path() {
-                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/GetPubKey&quot; </span>=&gt; {
+                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/GetNodeInfo&quot; </span>=&gt; {
                     <span class="attr">#[allow(non_camel_case_types)]
-                    </span><span class="kw">struct </span>GetPubKeySvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
+                    </span><span class="kw">struct </span>GetNodeInfoSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
                     <span class="kw">impl</span>&lt;
                         T: GatewayLightning,
                     &gt; tonic::server::UnaryService&lt;<span class="kw">super</span>::EmptyRequest&gt;
-                    <span class="kw">for </span>GetPubKeySvc&lt;T&gt; {
-                        <span class="kw">type </span>Response = <span class="kw">super</span>::GetPubKeyResponse;
+                    <span class="kw">for </span>GetNodeInfoSvc&lt;T&gt; {
+                        <span class="kw">type </span>Response = <span class="kw">super</span>::GetNodeInfoResponse;
                         <span class="kw">type </span>Future = BoxFuture&lt;
                             tonic::Response&lt;<span class="self">Self</span>::Response&gt;,
                             tonic::Status,
@@ -1168,7 +1176,9 @@
                             request: tonic::Request&lt;<span class="kw">super</span>::EmptyRequest&gt;,
                         ) -&gt; <span class="self">Self</span>::Future {
                             <span class="kw">let </span>inner = <span class="self">self</span>.<span class="number">0</span>.clone();
-                            <span class="kw">let </span>fut = <span class="kw">async move </span>{ (<span class="kw-2">*</span>inner).get_pub_key(request).<span class="kw">await </span>};
+                            <span class="kw">let </span>fut = <span class="kw">async move </span>{
+                                (<span class="kw-2">*</span>inner).get_node_info(request).<span class="kw">await
+                            </span>};
                             Box::pin(fut)
                         }
                     }
@@ -1177,7 +1187,7 @@
                     <span class="kw">let </span>inner = <span class="self">self</span>.inner.clone();
                     <span class="kw">let </span>fut = <span class="kw">async move </span>{
                         <span class="kw">let </span>inner = inner.<span class="number">0</span>;
-                        <span class="kw">let </span>method = GetPubKeySvc(inner);
+                        <span class="kw">let </span>method = GetNodeInfoSvc(inner);
                         <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
                         <span class="kw">let </span><span class="kw-2">mut </span>grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -147,7 +147,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetNodeInfoResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -158,8 +158,8 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ILnRpcClient: Debug + Send + Sync {
-    <span class="doccomment">/// Get the public key of the lightning node
-    </span><span class="kw">async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetPubKeyResponse&gt;;
+    <span class="doccomment">/// Get the public key and alias of the lightning node
+    </span><span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse&gt;;
 
     <span class="doccomment">/// Get route hints to the lightning node
     </span><span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse&gt;;
@@ -220,11 +220,11 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>NetworkLnRpcClient {
-    <span class="kw">async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetPubKeyResponse&gt; {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse&gt; {
         <span class="kw">let </span>req = Request::new(EmptyRequest {});
 
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
-        <span class="kw">let </span>res = client.get_pub_key(req).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = client.get_node_info(req).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(res.into_inner())
     }

@@ -116,6 +116,7 @@
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -128,7 +129,7 @@
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    <span class="self">self</span>, CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    <span class="self">self</span>, CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 <span class="kw">use </span>ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
@@ -196,9 +197,10 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>FakeLightningTest {
-    <span class="kw">async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;GetPubKeyResponse&gt; {
-        <span class="prelude-val">Ok</span>(GetPubKeyResponse {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;GetNodeInfoResponse&gt; {
+        <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: <span class="self">self</span>.gateway_node_pub_key.serialize().to_vec(),
+            alias: <span class="string">&quot;FakeLightningNode&quot;</span>.to_string(),
         })
     }
 

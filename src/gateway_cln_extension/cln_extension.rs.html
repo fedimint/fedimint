@@ -614,6 +614,9 @@
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
 <a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -637,7 +640,7 @@
 };
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetNodeInfoResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -826,7 +829,7 @@
         })
     }
 
-    <span class="kw">pub async fn </span>pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PublicKey, ClnExtensionError&gt; {
+    <span class="kw">pub async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String), ClnExtensionError&gt; {
         <span class="self">self</span>.rpc_client()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.call(cln_rpc::Request::Getinfo(
@@ -834,7 +837,9 @@
             ))
             .<span class="kw">await
             </span>.map(|response| <span class="kw">match </span>response {
-                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, .. }) =&gt; <span class="prelude-val">Ok</span>(id),
+                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, alias, .. }) =&gt; {
+                    <span class="prelude-val">Ok</span>((id, alias))
+                }
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
             })
             .map_err(ClnExtensionError::RpcError)<span class="question-mark">?
@@ -843,15 +848,16 @@
 
 <span class="attr">#[tonic::async_trait]
 </span><span class="kw">impl </span>GatewayLightning <span class="kw">for </span>ClnRpcService {
-    <span class="kw">async fn </span>get_pub_key(
+    <span class="kw">async fn </span>get_node_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _request: tonic::Request&lt;EmptyRequest&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetPubKeyResponse&gt;, Status&gt; {
-        <span class="self">self</span>.pubkey()
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetNodeInfoResponse&gt;, Status&gt; {
+        <span class="self">self</span>.info()
             .<span class="kw">await
-            </span>.map(|pub_key| {
-                tonic::Response::new(GetPubKeyResponse {
+            </span>.map(|(pub_key, alias)| {
+                tonic::Response::new(GetNodeInfoResponse {
                     pub_key: pub_key.serialize().to_vec(),
+                    alias,
                 })
             })
             .map_err(|e| {
@@ -864,8 +870,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _request: tonic::Request&lt;EmptyRequest&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetRouteHintsResponse&gt;, Status&gt; {
-        <span class="kw">let </span>our_pub_key = <span class="self">self
-            </span>.pubkey()
+        <span class="kw">let </span>node_info = <span class="self">self
+            </span>.info()
             .<span class="kw">await
             </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
 
@@ -927,7 +933,7 @@
 
             <span class="kw">let </span>channel = <span class="kw">match </span>channels_response {
                 cln_rpc::Response::ListChannels(channels) =&gt; {
-                    <span class="kw">let </span><span class="prelude-val">Some</span>(channel) = channels.channels.into_iter().find(|chan| chan.destination == our_pub_key) <span class="kw">else </span>{
+                    <span class="kw">let </span><span class="prelude-val">Some</span>(channel) = channels.channels.into_iter().find(|chan| chan.destination == node_info.<span class="number">0</span>) <span class="kw">else </span>{
                         <span class="macro">warn!</span>(<span class="string">&quot;Channel {:?} not found in graph&quot;</span>, scid);
                         <span class="kw">continue</span>;
                     };

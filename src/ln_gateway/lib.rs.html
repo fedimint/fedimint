@@ -423,6 +423,11 @@
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>lnd;
@@ -447,6 +452,7 @@
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::Address;
+<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_core::api::{FederationError, WsClientConnectInfo};
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -463,7 +469,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::actor::GatewayActor;
 <span class="kw">use </span><span class="kw">crate</span>::client::DynGatewayClientBuilder;
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::GetPubKeyResponse;
+<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::GetNodeInfoResponse;
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::DynLnRpcClient;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
@@ -635,7 +641,7 @@
             GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid federation member string {}&quot;</span>, e))
         })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>GetPubKeyResponse { pub_key } = <span class="self">self</span>.lnrpc.pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias: <span class="kw">_ </span>} = <span class="self">self</span>.lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
             .map_err(|e| GatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid node pubkey {}&quot;</span>, e)))<span class="question-mark">?</span>;
 
@@ -683,9 +689,13 @@
             .map(|(<span class="kw">_</span>, actor)| actor.get_info().expect(<span class="string">&quot;Failed to get actor info&quot;</span>))
             .collect();
 
+        <span class="kw">let </span>ln_info = <span class="self">self</span>.lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(GatewayInfo {
             federations,
             version_hash: <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>).to_string(),
+            lightning_pub_key: ln_info.pub_key.to_hex(),
+            lightning_alias: ln_info.alias,
         })
     }
 
