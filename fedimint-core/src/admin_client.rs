@@ -1,6 +1,7 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 
+use bitcoin_hashes::sha256;
 use fedimint_core::task::MaybeSend;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
@@ -30,7 +31,7 @@ impl WsAdminClient {
     ///
     /// Must be called first before any other calls to the API
     pub async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth("/set_password", ApiRequestErased::new(auth))
+        self.request_auth("set_password", ApiRequestErased::new(auth))
             .await
     }
 
@@ -42,7 +43,7 @@ impl WsAdminClient {
         &self,
         info: ConfigGenConnectionsRequest,
     ) -> FederationResult<()> {
-        self.request_auth("/set_config_gen_connections", ApiRequestErased::new(info))
+        self.request_auth("set_config_gen_connections", ApiRequestErased::new(info))
             .await
     }
 
@@ -54,7 +55,7 @@ impl WsAdminClient {
     ///
     /// This call is not authenticated because it's guardian-to-guardian
     pub async fn add_config_gen_peer(&self, peer: PeerServerParams) -> FederationResult<()> {
-        self.request("/add_config_gen_peer", ApiRequestErased::new(peer))
+        self.request("add_config_gen_peer", ApiRequestErased::new(peer))
             .await
     }
 
@@ -63,7 +64,7 @@ impl WsAdminClient {
     ///
     /// Could be called on the leader, so it's not authenticated
     pub async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>> {
-        self.request("/get_config_gen_peers", ApiRequestErased::default())
+        self.request("get_config_gen_peers", ApiRequestErased::default())
             .await
     }
 
@@ -73,25 +74,22 @@ impl WsAdminClient {
         &self,
         peers: usize,
     ) -> FederationResult<Vec<PeerServerParams>> {
-        self.request("/await_config_gen_peers", ApiRequestErased::new(peers))
+        self.request("await_config_gen_peers", ApiRequestErased::new(peers))
             .await
     }
 
     /// Sends a signal to consensus that we are ready to shutdown the federation
     /// and upgrade
     pub async fn signal_upgrade(&self) -> FederationResult<()> {
-        self.request_auth("/upgrade", ApiRequestErased::default())
+        self.request_auth("upgrade", ApiRequestErased::default())
             .await
     }
 
     /// Gets the default config gen params which can be configured by the
     /// leader, gives them a template to modify
     pub async fn get_default_config_gen_params(&self) -> FederationResult<ConfigGenParamsRequest> {
-        self.request_auth(
-            "/get_default_config_gen_params",
-            ApiRequestErased::default(),
-        )
-        .await
+        self.request_auth("get_default_config_gen_params", ApiRequestErased::default())
+            .await
     }
 
     /// Used by the leader to set the config gen params, after which
@@ -100,7 +98,7 @@ impl WsAdminClient {
         &self,
         requested: ConfigGenParamsRequest,
     ) -> FederationResult<()> {
-        self.request_auth("/set_config_gen_params", ApiRequestErased::new(requested))
+        self.request_auth("set_config_gen_params", ApiRequestErased::new(requested))
             .await
     }
 
@@ -111,10 +109,35 @@ impl WsAdminClient {
         &self,
     ) -> FederationResult<ConfigGenParamsConsensus> {
         self.request(
-            "/get_consensus_config_gen_params",
+            "get_consensus_config_gen_params",
             ApiRequestErased::default(),
         )
         .await
+    }
+
+    /// Runs DKG, can only be called once after configs have been generated in
+    /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
+    /// error and config gen must be restarted.
+    pub async fn run_dkg(&self) -> FederationResult<ConfigGenParamsConsensus> {
+        self.request_auth("run_dkg", ApiRequestErased::default())
+            .await
+    }
+
+    /// After DKG, returns the hash of the consensus config tweaked with our id.
+    /// We need to share this with all other peers to complete verification.
+    pub async fn get_verify_config_hash(&self) -> FederationResult<sha256::Hash> {
+        self.request_auth("get_verify_config_hash", ApiRequestErased::default())
+            .await
+    }
+
+    /// After we exchange verification hashes with other peers, we call this to
+    /// confirm we all have the same consensus configs.
+    pub async fn verify_configs(
+        &self,
+        user_hashes: BTreeSet<sha256::Hash>,
+    ) -> FederationResult<()> {
+        self.request_auth("verify_configs", ApiRequestErased::new(user_hashes))
+            .await
     }
 
     async fn request_auth<Ret>(

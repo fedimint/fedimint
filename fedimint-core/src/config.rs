@@ -247,6 +247,17 @@ pub struct ConfigGenParams(serde_json::Value);
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
+impl ServerModuleGenRegistry {
+    // TODO: Remove this with modularization
+    pub fn legacy_init_modules(&self) -> BTreeMap<u16, (ModuleKind, DynServerModuleGen)> {
+        let mut modules = BTreeMap::new();
+        for (id, (kind, gen)) in self.legacy_init_order_iter().into_iter().enumerate() {
+            modules.insert(u16::try_from(id).expect("cannot fail"), (kind, gen));
+        }
+        modules
+    }
+}
+
 impl ConfigGenParams {
     /// Null value, used as a config gen parameters for module gens that don't
     /// need any parameters

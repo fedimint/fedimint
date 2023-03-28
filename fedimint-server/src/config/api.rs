@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::iter::once;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -6,27 +6,34 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::HashEngine;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
     PeerServerParams, WsAdminClient,
 };
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
+    DynServerModuleGen,
 };
+use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use itertools::Itertools;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::RpcModule;
 use tokio::sync::Notify;
 use tokio_rustls::rustls;
+use tracing::error;
 use url::Url;
 
-use crate::config::{gen_cert_and_key, ServerConfigParams};
+use crate::config::{gen_cert_and_key, ServerConfig, ServerConfigConsensus, ServerConfigParams};
 use crate::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
 use crate::net::connect::TlsConfig;
-use crate::net::peers::NetworkConfig;
+use crate::net::peers::{DelayCalculator, NetworkConfig};
 
 pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
@@ -44,6 +51,10 @@ pub struct ConfigGenApi {
     notify_peer_connection: Notify,
     /// The default params for the modules
     default_params: ConfigGenParamsRequest,
+    /// Modules that will generate configs
+    module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+    /// Registry for config gen
+    registry: ServerModuleGenRegistry,
 }
 
 impl ConfigGenApi {
@@ -52,6 +63,8 @@ impl ConfigGenApi {
         our_connections: ConfigGenConnections,
         db: Database,
         default_params: ConfigGenParamsRequest,
+        module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+        registry: ServerModuleGenRegistry,
     ) -> Self {
         Self {
             _data_dir: data_dir,
@@ -60,6 +73,8 @@ impl ConfigGenApi {
             our_connections,
             notify_peer_connection: Default::default(),
             default_params,
+            module_gens,
+            registry,
         }
     }
 
@@ -80,6 +95,11 @@ impl ConfigGenApi {
         &self,
         request: ConfigGenConnectionsRequest,
     ) -> ApiResult<()> {
+        // TODO: should probably just replace bad chars with '_' in `TlsTcpConnector`
+        if rustls::ServerName::try_from(request.our_name.as_str()).is_err() {
+            return Self::bad_request("Name must be a valid domain string");
+        }
+
         let connection = {
             let mut state = self.state.lock().expect("lock poisoned");
 
@@ -87,7 +107,7 @@ impl ConfigGenApi {
                 ConfigApiState::SetConnections(auth) => {
                     ConfigGenConnectionsState::new(request, self.our_connections.clone(), auth)?
                 }
-                ConfigApiState::SetConfigGenParams(old) => old.with_request(request),
+                ConfigApiState::SetConfigGenParams(old) => old.with_request(request)?,
                 _ => return Err(ApiError::bad_request("Config already set".to_string())),
             };
             *state = ConfigApiState::SetConfigGenParams(connection.clone());
@@ -113,7 +133,7 @@ impl ConfigGenApi {
     /// to the leader
     pub fn add_config_gen_peer(&self, peer: PeerServerParams) -> ApiResult<()> {
         let mut connection = self.get_connection_state()?;
-        connection.peers.insert(peer.cert.clone(), peer);
+        connection.peers.insert(peer.api_url.clone(), peer);
 
         let mut state = self.state.lock().expect("lock poisoned");
         *state = ConfigApiState::SetConfigGenParams(connection);
@@ -200,6 +220,115 @@ impl ConfigGenApi {
         self.set_config_state(connection, consensus.clone())?;
 
         Ok(consensus)
+    }
+
+    /// Once configs are generated, starts DKG and await its
+    /// completion, calling a second time will return an error
+    pub async fn run_dkg(&self) -> ApiResult<()> {
+        let dkg_failed = Err(ApiError::server_error("DKG failed".to_string()));
+
+        let (params, auth) = {
+            let mut state = self.state.lock().expect("lock poisoned");
+
+            let (params, auth) = match &*state {
+                ConfigApiState::VerifyConfigParams(auth, params) => (params.clone(), auth.clone()),
+                ConfigApiState::RunningConsensus(_)
+                | ConfigApiState::VerifyConsensusConfig(_, _)
+                | ConfigApiState::RunningDkg(_) => return Self::bad_request("DKG already run"),
+                ConfigApiState::FailedDkg(_) => return dkg_failed,
+                _ => return Self::bad_request("Must generate configs first"),
+            };
+
+            *state = ConfigApiState::RunningDkg(auth.clone());
+            (params, auth)
+        };
+
+        let task_group = TaskGroup::new();
+        let mut subgroup = task_group.make_subgroup().await;
+        let module_gens = self.module_gens.clone();
+
+        let config = ServerConfig::distributed_gen(
+            &params.to_server_params(),
+            module_gens,
+            DelayCalculator::default(),
+            &mut subgroup,
+        )
+        .await;
+
+        let mut state = self.state.lock().expect("lock poisoned");
+        match config {
+            Ok(config) => {
+                *state = ConfigApiState::VerifyConsensusConfig(auth, config);
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    target: fedimint_logging::LOG_NET_PEER_DKG,
+                    "DKG failed with {:?}", e
+                );
+                *state = ConfigApiState::FailedDkg(auth);
+                dkg_failed
+            }
+        }
+    }
+
+    /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
+    /// with other peers
+    pub fn get_verify_config_hash(&self) -> ApiResult<sha256::Hash> {
+        let state = self.state.lock().expect("lock poisoned");
+        let dkg_failed = Err(ApiError::server_error("DKG failed".to_string()));
+
+        match &*state {
+            ConfigApiState::VerifyConsensusConfig(_, config) => Ok(self
+                .get_hashes(&config.consensus)
+                .remove(&config.local.identity)
+                .expect("our id should exist")),
+            ConfigApiState::FailedDkg(_) => dkg_failed,
+            _ => Self::bad_request("Must run DKG first"),
+        }
+    }
+
+    /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
+    /// with other peers
+    pub async fn verify_configs(&self, user_hashes: BTreeSet<sha256::Hash>) -> ApiResult<()> {
+        let mut state = self.state.lock().expect("lock poisoned");
+
+        let (auth, config) = match &*state {
+            ConfigApiState::VerifyConsensusConfig(auth, config) => (auth.clone(), config.clone()),
+            _ => return Self::bad_request("Not in a state that has configs"),
+        };
+
+        let hashes: BTreeSet<_> = self
+            .get_hashes(&config.consensus)
+            .values()
+            .cloned()
+            .collect();
+        if user_hashes == hashes {
+            *state = ConfigApiState::RunningConsensus(auth);
+            Ok(())
+        } else {
+            Self::bad_request("Config verification failed")
+        }
+    }
+
+    fn get_hashes(&self, config: &ServerConfigConsensus) -> BTreeMap<PeerId, sha256::Hash> {
+        let mut hashes = BTreeMap::new();
+        for (peer, cert) in config.tls_certs.iter() {
+            let mut engine = HashEngine::default();
+            let hashed = config
+                .try_to_config_response(&self.registry)
+                .expect("hashes");
+
+            hashed
+                .consensus_hash
+                .consensus_encode(&mut engine)
+                .expect("hashes");
+            cert.consensus_encode(&mut engine).expect("hashes");
+
+            let hash = sha256::Hash::from_engine(engine);
+            hashes.insert(*peer, hash);
+        }
+        hashes
     }
 
     fn get_connection_state(&self) -> ApiResult<ConfigGenConnectionsState> {
@@ -348,9 +477,9 @@ pub struct ConfigGenConnectionsState {
     tls_cert: rustls::Certificate,
     /// Info sent by the admin user
     request: ConfigGenConnectionsRequest,
-    /// Connection info received from other guardians, unique by certificate
+    /// Connection info received from other guardians, unique by api_url
     /// (because it's non-user configurable)
-    peers: BTreeMap<rustls::Certificate, PeerServerParams>,
+    peers: BTreeMap<Url, PeerServerParams>,
 }
 
 impl ConfigGenConnectionsState {
@@ -371,9 +500,8 @@ impl ConfigGenConnectionsState {
         })
     }
 
-    fn with_request(mut self, request: ConfigGenConnectionsRequest) -> Self {
-        self.request = request;
-        self
+    fn with_request(self, request: ConfigGenConnectionsRequest) -> ApiResult<Self> {
+        Self::new(request, self.our_connections, self.auth)
     }
 
     fn as_peer_info(&self) -> PeerServerParams {
@@ -408,11 +536,13 @@ pub enum ConfigApiState {
     /// Guardian must verify the correct config gen params
     VerifyConfigParams(ApiAuth, ConfigGenParams),
     /// Running DKG may take a minute
-    RunningDkg,
+    RunningDkg(ApiAuth),
+    /// DKG failed, user should restart config gen from the beginning
+    FailedDkg(ApiAuth),
     /// Configs are created, awaiting guardian verification
-    VerifyConsensusConfig,
+    VerifyConsensusConfig(ApiAuth, ServerConfig),
     /// We all agree on consensus configs, we can run consensus
-    RunningConsensus,
+    RunningConsensus(ApiAuth),
 }
 
 #[async_trait]
@@ -431,9 +561,10 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             ConfigApiState::SetConnections(api_auth) => Some(api_auth) == auth,
             ConfigApiState::SetConfigGenParams(connections) => Some(&connections.auth) == auth,
             ConfigApiState::VerifyConfigParams(api_auth, _) => Some(api_auth) == auth,
-            ConfigApiState::RunningDkg => false,
-            ConfigApiState::VerifyConsensusConfig => false,
-            ConfigApiState::RunningConsensus => false,
+            ConfigApiState::RunningDkg(api_auth) => Some(api_auth) == auth,
+            ConfigApiState::FailedDkg(api_auth) => Some(api_auth) == auth,
+            ConfigApiState::VerifyConsensusConfig(api_auth, _) => Some(api_auth) == auth,
+            ConfigApiState::RunningConsensus(api_auth) => Some(api_auth) == auth,
         };
 
         (self, ApiEndpointContext::new(has_auth, dbtx, id))
@@ -447,6 +578,8 @@ pub async fn run_server(
     our_connections: ConfigGenConnections,
     db: Database,
     default_params: ConfigGenParamsRequest,
+    module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+    registry: ServerModuleGenRegistry,
 ) -> ServerHandle {
     let state = RpcHandlerCtx {
         rpc_context: Arc::new(ConfigGenApi::new(
@@ -454,6 +587,8 @@ pub async fn run_server(
             our_connections.clone(),
             db,
             default_params,
+            module_gens,
+            registry,
         )),
     };
     let mut rpc_module = RpcModule::new(state);
@@ -474,21 +609,21 @@ pub async fn run_server(
 fn config_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
     vec![
         api_endpoint! {
-            "/set_password",
+            "set_password",
             async |config: &ConfigGenApi, context, auth: ApiAuth| -> () {
                 check_auth(context)?;
                 config.set_password(auth)
             }
         },
         api_endpoint! {
-            "/set_config_gen_connections",
+            "set_config_gen_connections",
             async |config: &ConfigGenApi, context, server: ConfigGenConnectionsRequest| -> () {
                 check_auth(context)?;
                 config.set_config_gen_connections(server).await
             }
         },
         api_endpoint! {
-            "/add_config_gen_peer",
+            "add_config_gen_peer",
             async |config: &ConfigGenApi, context, peer: PeerServerParams| -> () {
                 // No auth required since this is an API-to-API call and the peer connections will be manually accepted or not in the UI
                 check_no_auth(context)?;
@@ -496,38 +631,59 @@ fn config_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            "/get_config_gen_peers",
+            "get_config_gen_peers",
             async |config: &ConfigGenApi, context, _v: ()| -> Vec<PeerServerParams> {
                 check_no_auth(context)?;
                 config.get_config_gen_peers()
             }
         },
         api_endpoint! {
-            "/await_config_gen_peers",
+            "await_config_gen_peers",
             async |config: &ConfigGenApi, context, peers: usize| -> Vec<PeerServerParams> {
                 check_no_auth(context)?;
                 config.await_config_gen_peers(peers).await
             }
         },
         api_endpoint! {
-            "/get_default_config_gen_params",
+            "get_default_config_gen_params",
             async |config: &ConfigGenApi, context,  _v: ()| -> ConfigGenParamsRequest {
                 check_auth(context)?;
                 config.get_default_config_gen_params()
             }
         },
         api_endpoint! {
-            "/set_config_gen_params",
+            "set_config_gen_params",
             async |config: &ConfigGenApi, context, params: ConfigGenParamsRequest| -> () {
                 check_auth(context)?;
                 config.set_config_gen_params(params).await
             }
         },
         api_endpoint! {
-            "/get_consensus_config_gen_params",
+            "get_consensus_config_gen_params",
             async |config: &ConfigGenApi, context, _v: ()| -> ConfigGenParamsConsensus {
                 check_no_auth(context)?;
                 config.get_consensus_config_gen_params().await
+            }
+        },
+        api_endpoint! {
+            "run_dkg",
+            async |config: &ConfigGenApi, context, _v: ()| -> () {
+                check_auth(context)?;
+                config.run_dkg().await
+            }
+        },
+        api_endpoint! {
+            "get_verify_config_hash",
+            async |config: &ConfigGenApi, context, _v: ()| -> sha256::Hash {
+                check_auth(context)?;
+                config.get_verify_config_hash()
+            }
+        },
+        api_endpoint! {
+            "verify_configs",
+            async |config: &ConfigGenApi, context, user_hashes: BTreeSet<sha256::Hash>| -> () {
+                check_auth(context)?;
+                config.verify_configs(user_hashes).await
             }
         },
     ]
@@ -553,7 +709,7 @@ fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
 
 #[cfg(test)]
 mod tests {
-
+    use std::collections::BTreeSet;
     use std::path::PathBuf;
     use std::{env, fs};
 
@@ -564,6 +720,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::PeerId;
+    use futures::future::join_all;
     use itertools::Itertools;
     use jsonrpsee::server::ServerHandle;
     use url::Url;
@@ -602,6 +759,8 @@ mod tests {
                 data_dir.clone(),
                 our_connections.clone(),
                 db,
+                Default::default(),
+                Default::default(),
                 Default::default(),
             )
             .await;
@@ -672,7 +831,7 @@ mod tests {
             follower.set_password().await.unwrap();
             let leader_url = Some(leader.our_connections.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
-            follower.name = format!("{}!", follower.name);
+            follower.name = format!("{}_", follower.name);
             follower.set_connections(&leader_url).await.unwrap();
             followers.push(follower);
         }
@@ -680,7 +839,7 @@ mod tests {
         // Confirm we can get peer servers if we are the leader
         let peers = leader.client.await_config_gen_peers(4).await.unwrap();
         let names: Vec<_> = peers.into_iter().map(|peer| peer.name).sorted().collect();
-        assert_eq!(names, vec!["leader", "peer1!", "peer2!", "peer3!"]);
+        assert_eq!(names, vec!["leader", "peer1_", "peer2_", "peer3_"]);
 
         // Leader sets the configs and followers can fetch them
         let mut configs = vec![];
@@ -693,7 +852,7 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        for follower in followers {
+        for follower in &followers {
             configs.push(
                 follower
                     .client
@@ -706,7 +865,22 @@ mod tests {
         configs.dedup();
         assert_eq!(configs.len(), 1);
 
-        leader.server.stop().expect("stops");
+        // all peers run DKG
+        followers.push(leader);
+        join_all(followers.iter().map(|peer| peer.client.run_dkg())).await;
+
+        // verify configs for all peers
+        let mut hashes = BTreeSet::new();
+        for peer in &followers {
+            hashes.insert(peer.client.get_verify_config_hash().await.unwrap());
+        }
+        for peer in &followers {
+            peer.client.verify_configs(hashes.clone()).await.unwrap()
+        }
+
+        for peer in followers {
+            peer.server.stop().expect("server stops");
+        }
         fs::remove_dir(data_dir).expect("Unable to remove dir");
     }
 }

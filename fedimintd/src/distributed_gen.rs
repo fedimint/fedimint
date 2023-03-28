@@ -208,7 +208,7 @@ impl DistributedGen {
                 )?;
                 let server = match ServerConfig::distributed_gen(
                     &params,
-                    self.module_gens.clone(),
+                    self.module_gens.clone().legacy_init_modules(),
                     DelayCalculator::default(),
                     &mut task_group,
                 )
