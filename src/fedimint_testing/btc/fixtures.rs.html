@@ -344,7 +344,7 @@
     }
 
     <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="comment">// In fake wallet this might not be technically neccessary,
+        <span class="comment">// In fake wallet this might not be technically necessary,
         // but it makes it behave more like the `RealBitcoinTest`.
         </span><span class="kw">let </span>block_count = <span class="self">self</span>.blocks.lock().unwrap().len() <span class="kw">as </span>u64;
         <span class="kw">if </span>block_count &lt; <span class="number">100 </span>{

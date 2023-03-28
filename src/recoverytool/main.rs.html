@@ -570,7 +570,7 @@
 <span class="kw">fn </span>tweak_parser(hex: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;[u8; <span class="number">32</span>]&gt; {
     &lt;Vec&lt;u8&gt; <span class="kw">as </span>FromHex&gt;::from_hex(hex)<span class="question-mark">?
         </span>.try_into()
-        .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;taks have to be 32 bytes long&quot;</span>))
+        .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;tasks have to be 32 bytes long&quot;</span>))
 }
 
 <span class="attr">#[tokio::main]
