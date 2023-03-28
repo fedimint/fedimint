@@ -374,8 +374,10 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config =
-                ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
+            let server_config = ServerConfig::trusted_dealer_gen(
+                &params,
+                server_module_inits.clone().legacy_init_modules(),
+            );
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
                 .to_config_response(&server_module_inits)
@@ -525,7 +527,7 @@ async fn distributed_config(
 
             let cfg = ServerConfig::distributed_gen(
                 &our_params,
-                registry,
+                registry.legacy_init_modules(),
                 DelayCalculator::TEST_DEFAULT,
                 &mut task_group,
             );

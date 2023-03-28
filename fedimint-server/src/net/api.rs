@@ -257,7 +257,7 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
             }
         },
         api_endpoint! {
-            "/upgrade",
+            "upgrade",
             async |fedimint: &FedimintConsensus, context, _v: ()| -> () {
                 if context.has_auth() {
                     fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;

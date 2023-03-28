@@ -39,8 +39,9 @@ pub mod server;
 // TODO: turn in a newtype
 pub type ModuleInstanceId = u16;
 
-/// Special ID we use for global dkg
+/// Special IDs we use for global dkg
 pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
+pub const MODULE_INSTANCE_ID_DKG_DONE: u16 = u16::MAX - 1;
 
 // Note: needs to be in alphabetical order of ModuleKind of each module,
 // as this is the ordering we currently hardcoded.
