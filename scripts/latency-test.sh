@@ -9,7 +9,8 @@ export PEG_IN_AMOUNT=10000000
 
 source ./scripts/setup-tests.sh $FM_FED_SIZE
 ./scripts/pegin.sh
-start_gatewayd
+start_gateways
+use_cln_gw
 
 #### BEGIN TESTS ####
 echo "Running with fed size $FM_FED_SIZE"
@@ -25,7 +26,7 @@ do
 done
 time2=$(date +%s.%N)
 
-await_gateway_registered
+await_gateways_registered
 
 ## outgoing lightning
 for i in $( seq 1 $ITERATIONS )

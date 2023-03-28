@@ -15,7 +15,8 @@ scripts/pegin.sh 10000.0 | show_verbose_output
 
 # gatewayd needs a channel or initialization takes 20 seconds longer,
 # we wait for channel to open before waiting for it
-await_gateway_registered | show_verbose_output
+await_gateways_registered | show_verbose_output
+use_cln_gw
 
 echo Funding gateway e-cash wallet ...
 scripts/pegin.sh 20000.0 1 | show_verbose_output

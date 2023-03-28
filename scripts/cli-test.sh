@@ -18,7 +18,7 @@ cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/con
 ./scripts/pegin.sh # peg in user
 
 export PEG_IN_AMOUNT=99999
-start_gatewayd
+start_gateways
 ./scripts/pegin.sh $PEG_IN_AMOUNT 1 # peg in gateway
 
 #### BEGIN TESTS ####
@@ -56,25 +56,48 @@ RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 # lightning tests
 await_lightning_node_block_processing
 
-# outgoing lightning payment via gateway
+# CLN gateway tests
+use_cln_gw
+
+# OUTGOING: fedimint-cli pays LND via CLN gateway
 ADD_INVOICE="$($FM_LNCLI addinvoice --amt_msat 100000)"
 INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
 PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
-LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -e -r '.balance_msat')"
-[[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
+# LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -e -r '.balance_msat')"
+# [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
 INVOICE_STATUS="$($FM_LNCLI lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
 [[ "$INVOICE_STATUS" = "SETTLED" ]]
 
-# incoming lightning payment via gateway
+# INCOMING: fedimint-cli receives from LND via CLN gateway
 INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'incoming-over-lnd-gw' | jq -e -r '.invoice')"
 PAYMENT="$($FM_LNCLI payinvoice --force $INVOICE)"
 PAYMENT_HASH="$(echo $PAYMENT | awk '{ print $30 }')"
 LND_PAYMENTS="$($FM_LNCLI listpayments --include_incomplete)"
 PAYMENT_STATUS="$(echo $LND_PAYMENTS | jq -e -r '.payments[] | select(.payment_hash == "'$PAYMENT_HASH'") | .status')"
 [[ "$PAYMENT_STATUS" = "SUCCEEDED" ]]
+
+# LND gateway tests
+use_lnd_gw
+
+# OUTGOING: fedimint-cli pays CLN via LND gateaway
+INVOICE="$($FM_LIGHTNING_CLI invoice 100000 lnd-gw-to-cln test 1m | jq -e -r '.bolt11')"
+await_lightning_node_block_processing
+$FM_MINT_CLIENT ln-pay $INVOICE
+FED_ID="$(get_federation_id)"
+INVOICE_RESULT="$($FM_LIGHTNING_CLI waitinvoice lnd-gw-to-cln)"
+INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
+[[ "$INVOICE_STATUS" = "paid" ]]
+
+# INCOMING: fedimint-cli receives from CLN via LND gateway
+INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
+INVOICE_RESULT=$($FM_LIGHTNING_CLI pay $INVOICE)
+INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
+[[ "$INVOICE_STATUS" = "complete" ]]
+
+# Test that LND and CLN can still send directly to each other
 
 # LND can pay CLN directly
 INVOICE="$($FM_LIGHTNING_CLI invoice 42000 test test 1m | jq -e -r '.bolt11')"

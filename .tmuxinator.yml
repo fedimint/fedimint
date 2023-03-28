@@ -7,7 +7,7 @@ pre_window:
   - alias lncli="\$FM_LNCLI"
   - alias bitcoin-cli="\$FM_BTC_CLIENT"
   - alias fedimint-cli="\$FM_MINT_CLIENT"
-  - alias gateway-cli="\$FM_GATEWAY_CLI"
+  - alias gateway-cli="\$FM_GWCLI_CLN"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
   - alias dbtool="\$FM_DB_TOOL"
   - alias restart="./scripts/restart-tmux.sh"
@@ -33,7 +33,7 @@ windows:
           - start_lnd &
           - fg
         - gateway:
-          - start_gatewayd &
+          - start_gateways &
           - fg
         - federation:
           - run_dkg
