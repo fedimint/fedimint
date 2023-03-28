@@ -53,6 +53,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 [profile.dev]
 split-debuginfo = "packed"
+debug = 1
 
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
