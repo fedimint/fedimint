@@ -428,6 +428,8 @@
 <a href="#428" id="428">428</a>
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>lnd;
@@ -479,6 +481,8 @@
 
 <span class="kw">const </span>ROUTE_HINT_RETRIES: usize = <span class="number">10</span>;
 <span class="kw">const </span>ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(<span class="number">2</span>);
+<span class="doccomment">/// LND HTLC interceptor can&#39;t handle SCID of 0, so start from 1
+</span><span class="kw">const </span>INITIAL_SCID: u64 = <span class="number">1</span>;
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, GatewayError&gt;;
 
@@ -534,7 +538,7 @@
             receiver,
             client_builder,
             task_group,
-            channel_id_generator: AtomicU64::new(<span class="number">0</span>),
+            channel_id_generator: AtomicU64::new(INITIAL_SCID),
             decoders: decoders.clone(),
             module_gens: module_gens.clone(),
         };

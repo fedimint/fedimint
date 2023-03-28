@@ -571,6 +571,22 @@
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
 </pre><pre class="rust"><code><span class="doccomment">/// This tool assumes that `scripts/build.sh` has been sourced in the
 /// environment which calls it
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -583,7 +599,7 @@
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>bitcoincore_rpc::{Client <span class="kw">as </span>BitcoinClient, RpcApi};
-<span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>clap::{Parser, Subcommand, ValueEnum};
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -602,6 +618,22 @@
 <span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>url::Url;
 
+<span class="attr">#[allow(dead_code)]
+#[derive(ValueEnum, Clone, Debug)]
+</span><span class="kw">pub enum </span>GatewayNode {
+    Cln,
+    Lnd,
+}
+
+<span class="kw">impl </span>ToString <span class="kw">for </span>GatewayNode {
+    <span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="kw">match </span><span class="self">self </span>{
+            GatewayNode::Cln =&gt; <span class="string">&quot;cln&quot;</span>.to_string(),
+            GatewayNode::Lnd =&gt; <span class="string">&quot;lnd&quot;</span>.to_string(),
+        }
+    }
+}
+
 <span class="attr">#[derive(Subcommand)]
 </span><span class="kw">enum </span>Cmd {
     <span class="comment">// daemons
@@ -613,7 +645,7 @@
     AllDaemons,
     Dkg { servers: usize },
     Fedimintd { id: usize },
-    Gatewayd,
+    Gatewayd { node: GatewayNode },
     Federation { start_id: usize, stop_id: usize },
 
     <span class="comment">// commands
@@ -850,18 +882,18 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>run_gatewayd() -&gt; anyhow::Result&lt;()&gt; {
+<span class="kw">async fn </span>run_gatewayd(node: GatewayNode) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
 
     <span class="comment">// TODO: await_fedimint_block_sync()
 
     </span><span class="kw">let </span><span class="kw-2">mut </span>gatewayd = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/gatewayd&quot;</span>))
-        .arg(<span class="string">&quot;cln&quot;</span>)
+        .arg(node.to_string())
         .spawn()<span class="question-mark">?</span>;
     kill_on_exit(<span class="kw-2">&amp;</span>gatewayd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;gatewayd started&quot;</span>);
 
-    <span class="comment">// TODO: gw_connect_fed
+    <span class="comment">// TODO: connect_gateways
 
     </span>gatewayd.wait().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1131,7 +1163,7 @@
         Cmd::Electrs =&gt; run_electrs().<span class="kw">await</span>.expect(<span class="string">&quot;electrs failed&quot;</span>),
         Cmd::Esplora =&gt; run_esplora().<span class="kw">await</span>.expect(<span class="string">&quot;esplora failed&quot;</span>),
         Cmd::Fedimintd { id } =&gt; run_fedimintd(id).<span class="kw">await</span>.expect(<span class="string">&quot;fedimint failed&quot;</span>),
-        Cmd::Gatewayd =&gt; run_gatewayd().<span class="kw">await</span>.expect(<span class="string">&quot;gatewayd failed&quot;</span>),
+        Cmd::Gatewayd { node } =&gt; run_gatewayd(node).<span class="kw">await</span>.expect(<span class="string">&quot;gatewayd failed&quot;</span>),
         Cmd::Dkg { servers } =&gt; run_dkg(servers).<span class="kw">await</span>.expect(<span class="string">&quot;dkg failed&quot;</span>),
         Cmd::Federation { start_id, stop_id } =&gt; run_federation(start_id, stop_id)
             .<span class="kw">await
