@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs a CLI-based integration test
 
-set -euo pipefail
+set -euxo pipefail
 export RUST_LOG="${RUST_LOG:-info}"
 
 export PEG_IN_AMOUNT=10000
@@ -51,7 +51,10 @@ until [ "$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00000500"
 done
 mine_blocks 10
 RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
-[[ "$RECEIVED" = "0.00000500" ]]
+if [[ "$RECEIVED" != "0.00000500" ]]; then
+  echo "Peg-out address received $RECEIVED, expected 0.00000500"
+  exit 1
+fi
 
 # lightning tests
 await_lightning_node_block_processing
@@ -60,16 +63,27 @@ await_lightning_node_block_processing
 use_cln_gw
 
 # OUTGOING: fedimint-cli pays LND via CLN gateway
+INITIAL_CLIENT_BALANCE="$($FM_MINT_CLIENT info | jq -e -r '.total_amount')"
+INITIAL_GATEWAY_BALANCE="$($FM_GWCLI_CLN balance $FED_ID | jq -e -r '.balance_msat')"
 ADD_INVOICE="$($FM_LNCLI addinvoice --amt_msat 100000)"
 INVOICE="$(echo $ADD_INVOICE| jq -e -r '.payment_request')"
 PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
 $FM_MINT_CLIENT ln-pay $INVOICE
-# Check that ln-gateway has received the ecash notes from the user payment
-# 100,000 sats + 100 sats without processing fee
-# LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance --federation-id $FED_ID | jq -e -r '.balance_msat')"
-# [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
+
 INVOICE_STATUS="$($FM_LNCLI lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
 [[ "$INVOICE_STATUS" = "SETTLED" ]]
+
+# Assert balances changed by 100000 msat (amount sent) + 1000 msat (fee)
+FINAL_CLIENT_BALANCE="$($FM_MINT_CLIENT info | jq -e -r '.total_amount')"
+FINAL_GATEWAY_BALANCE="$($FM_GWCLI_CLN balance $FED_ID | jq -e -r '.balance_msat')"
+if [[ "$(($INITIAL_CLIENT_BALANCE - $FINAL_CLIENT_BALANCE))" != 101000 ]]; then
+  echo "Client balance changed by $(($INITIAL_CLIENT_BALANCE - $FINAL_CLIENT_BALANCE)), expected 101000"
+  exit 1
+fi
+if [[ "$(($FINAL_GATEWAY_BALANCE - $INITIAL_GATEWAY_BALANCE))" != 101000 ]]; then
+  echo "Gateway balance changed by $(($FINAL_GATEWAY_BALANCE - $INITIAL_GATEWAY_BALANCE)), expected 101000"
+  exit 1
+fi
 
 # INCOMING: fedimint-cli receives from LND via CLN gateway
 INVOICE="$($FM_MINT_CLIENT ln-invoice --amount '100000msat' --description 'incoming-over-lnd-gw' | jq -e -r '.invoice')"
@@ -83,13 +97,28 @@ PAYMENT_STATUS="$(echo $LND_PAYMENTS | jq -e -r '.payments[] | select(.payment_h
 use_lnd_gw
 
 # OUTGOING: fedimint-cli pays CLN via LND gateaway
+INITIAL_CLIENT_BALANCE="$($FM_MINT_CLIENT info | jq -e -r '.total_amount')"
+INITIAL_GATEWAY_BALANCE="$($FM_GWCLI_LND balance $FED_ID | jq -e -r '.balance_msat')"
 INVOICE="$($FM_LIGHTNING_CLI invoice 100000 lnd-gw-to-cln test 1m | jq -e -r '.bolt11')"
 await_lightning_node_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 FED_ID="$(get_federation_id)"
+
 INVOICE_RESULT="$($FM_LIGHTNING_CLI waitinvoice lnd-gw-to-cln)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
+
+# Assert balances changed by 100000 msat (amount sent) + 1000 msat (fee)
+FINAL_CLIENT_BALANCE="$($FM_MINT_CLIENT info | jq -e -r '.total_amount')"
+FINAL_GATEWAY_BALANCE="$($FM_GWCLI_LND balance $FED_ID | jq -e -r '.balance_msat')"
+if [[ "$(($INITIAL_CLIENT_BALANCE - $FINAL_CLIENT_BALANCE))" != 101000 ]]; then
+  echo "Client balance changed by $(($INITIAL_CLIENT_BALANCE - $FINAL_CLIENT_BALANCE)), expected 101000"
+  exit 1
+fi
+if [[ "$(($FINAL_GATEWAY_BALANCE - $INITIAL_GATEWAY_BALANCE))" != 101000 ]]; then
+  echo "Gateway balance changed by $(($FINAL_GATEWAY_BALANCE - $INITIAL_GATEWAY_BALANCE)), expected 101000"
+  exit 1
+fi
 
 # INCOMING: fedimint-cli receives from CLN via LND gateway
 INVOICE="$($FM_MINT_CLIENT ln-invoice --amount '100000msat' --description 'integration test' | jq -e -r '.invoice')"
