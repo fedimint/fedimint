@@ -113,6 +113,8 @@ pub struct FederationInfo {
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
+    pub lightning_pub_key: String,
+    pub lightning_alias: String,
 }
 
 #[derive(Debug)]

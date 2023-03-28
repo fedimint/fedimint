@@ -21,7 +21,7 @@ use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
 };
 use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetNodeInfoResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -210,7 +210,7 @@ impl ClnRpcService {
         })
     }
 
-    pub async fn pubkey(&self) -> Result<PublicKey, ClnExtensionError> {
+    pub async fn info(&self) -> Result<(PublicKey, String), ClnExtensionError> {
         self.rpc_client()
             .await?
             .call(cln_rpc::Request::Getinfo(
@@ -218,7 +218,9 @@ impl ClnRpcService {
             ))
             .await
             .map(|response| match response {
-                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, .. }) => Ok(id),
+                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, alias, .. }) => {
+                    Ok((id, alias))
+                }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
             .map_err(ClnExtensionError::RpcError)?
@@ -227,15 +229,16 @@ impl ClnRpcService {
 
 #[tonic::async_trait]
 impl GatewayLightning for ClnRpcService {
-    async fn get_pub_key(
+    async fn get_node_info(
         &self,
         _request: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<GetPubKeyResponse>, Status> {
-        self.pubkey()
+    ) -> Result<tonic::Response<GetNodeInfoResponse>, Status> {
+        self.info()
             .await
-            .map(|pub_key| {
-                tonic::Response::new(GetPubKeyResponse {
+            .map(|(pub_key, alias)| {
+                tonic::Response::new(GetNodeInfoResponse {
                     pub_key: pub_key.serialize().to_vec(),
+                    alias,
                 })
             })
             .map_err(|e| {
@@ -248,8 +251,8 @@ impl GatewayLightning for ClnRpcService {
         &self,
         _request: tonic::Request<EmptyRequest>,
     ) -> Result<tonic::Response<GetRouteHintsResponse>, Status> {
-        let our_pub_key = self
-            .pubkey()
+        let node_info = self
+            .info()
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
@@ -311,7 +314,7 @@ impl GatewayLightning for ClnRpcService {
 
             let channel = match channels_response {
                 cln_rpc::Response::ListChannels(channels) => {
-                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == our_pub_key) else {
+                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == node_info.0) else {
                         warn!("Channel {:?} not found in graph", scid);
                         continue;
                     };

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
@@ -45,8 +45,8 @@ impl LnRpcAdapter {
 
 #[async_trait]
 impl ILnRpcClient for LnRpcAdapter {
-    async fn pubkey(&self) -> ln_gateway::Result<GetPubKeyResponse> {
-        self.client.pubkey().await
+    async fn info(&self) -> ln_gateway::Result<GetNodeInfoResponse> {
+        self.client.info().await
     }
 
     async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
