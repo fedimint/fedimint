@@ -15,7 +15,8 @@ scripts/pegin.sh 10000.0 | show_verbose_output
 
 # gatewayd needs a channel or initialization takes 20 seconds longer,
 # we wait for channel to open before waiting for it
-await_gateway_registered | show_verbose_output
+await_gateways_registered | show_verbose_output
+use_cln_gw
 
 echo Funding gateway e-cash wallet ...
 scripts/pegin.sh 20000.0 1 | show_verbose_output
@@ -28,7 +29,8 @@ echo "  fedimint-cli   - cli client to interact with the federation"
 echo "  lightning-cli  - cli client for Core Lightning"
 echo "  lncli          - cli client for LND"
 echo "  bitcoin-cli    - cli client for bitcoind"
-echo "  gateway-cli    - cli client for the gateway"
+echo "  gateway-cln    - cli client for the CLN gateway"
+echo "  gateway-lnd    - cli client for the LND gateway"
 echo
 echo "Use '--help' on each command for more information"
 echo ""

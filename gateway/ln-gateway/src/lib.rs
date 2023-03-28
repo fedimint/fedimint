@@ -49,6 +49,8 @@ use crate::rpc::{
 
 const ROUTE_HINT_RETRIES: usize = 10;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
+/// LND HTLC interceptor can't handle SCID of 0, so start from 1
+const INITIAL_SCID: u64 = 1;
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
 
@@ -104,7 +106,7 @@ impl Gateway {
             receiver,
             client_builder,
             task_group,
-            channel_id_generator: AtomicU64::new(0),
+            channel_id_generator: AtomicU64::new(INITIAL_SCID),
             decoders: decoders.clone(),
             module_gens: module_gens.clone(),
         };

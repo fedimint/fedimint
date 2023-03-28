@@ -115,10 +115,10 @@ $ fedimint-cli fetch
 
 ### Using the Gateway
 
-The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The tmuxinator setup scripts also give it some ecash. To check its balance, run `gateway-cli info`, copy the federation id and then:
+The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The tmuxinator setup scripts also give it some ecash. To check its balance, we use the [`gateway-cli`](../gateway/cli) utility. In the tmuxinator environment there are 2 lightning gateways -- one for Core Lightning and one for LND -- so we add `gateway-cln` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the Core Lightinng gateway, run `gateway-cln info`, copy the federation id and then:
 
 ```shell
-$ gateway-cli balance <FEDERATION-ID>
+$ gateway-cln balance <FEDERATION-ID>
 
 {
   "balance_msat": 30000000
