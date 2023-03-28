@@ -1,3 +1,4 @@
+use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -18,6 +19,7 @@ pub mod gen;
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
 /// Fedimint module client
+#[apply(async_trait_maybe_send!)]
 pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Common module types shared between client and server
     type Common: ModuleCommon;
@@ -40,6 +42,15 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     fn context(&self) -> Self::ModuleStateMachineContext;
 
+    async fn handle_cli_command(
+        &self,
+        _args: &[ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        Err(anyhow::format_err!(
+            "This module does not implement cli commands"
+        ))
+    }
+
     /// Returns the amount represented by the input and the fee its processing
     /// requires
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount;
@@ -53,16 +64,23 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 }
 
 /// Type-erased version of [`ClientModule`]
+#[apply(async_trait_maybe_send!)]
 pub trait IClientModule: Debug {
     fn decoder(&self) -> Decoder;
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
+
+    async fn handle_cli_command(
+        &self,
+        _args: &[ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value>;
 
     fn input_amount(&self, input: &DynInput) -> TransactionItemAmount;
 
     fn output_amount(&self, output: &DynOutput) -> TransactionItemAmount;
 }
 
+#[apply(async_trait_maybe_send!)]
 impl<T> IClientModule for T
 where
     T: ClientModule,
@@ -73,6 +91,13 @@ where
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext {
         DynContext::from_typed(instance, <T as ClientModule>::context(self))
+    }
+
+    async fn handle_cli_command(
+        &self,
+        args: &[ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        <T as ClientModule>::handle_cli_command(self, args).await
     }
 
     fn input_amount(&self, input: &DynInput) -> TransactionItemAmount {

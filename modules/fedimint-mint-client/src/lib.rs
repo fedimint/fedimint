@@ -23,7 +23,7 @@ impl ClientModuleGen for MintClientGen {
     type Config = MintClientConfig;
 
     async fn init(&self, _cfg: Self::Config, _db: Database) -> anyhow::Result<Self::Module> {
-        unimplemented!()
+        Ok(MintClientModule {})
     }
 }
 
