@@ -474,7 +474,7 @@
                 )<span class="question-mark">?</span>;
                 <span class="kw">let </span>server = <span class="kw">match </span>ServerConfig::distributed_gen(
                     <span class="kw-2">&amp;</span>params,
-                    <span class="self">self</span>.module_gens.clone(),
+                    <span class="self">self</span>.module_gens.clone().legacy_init_modules(),
                     DelayCalculator::default(),
                     <span class="kw-2">&amp;mut </span>task_group,
                 )

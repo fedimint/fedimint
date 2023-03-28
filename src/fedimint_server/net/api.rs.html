@@ -528,7 +528,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/upgrade&quot;</span>,
+            <span class="string">&quot;upgrade&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, context, _v: ()| -&gt; () {
                 <span class="kw">if </span>context.has_auth() {
                     fedimint.signal_upgrade().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to send signal to server&quot;</span>.to_string()))<span class="question-mark">?</span>;

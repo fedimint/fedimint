@@ -868,7 +868,6 @@
 <a href="#868" id="868">868</a>
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -886,8 +885,10 @@
     ApiEndpoint, ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind,
     ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-<span class="kw">use </span>fedimint_core::module::{ApiAuth, PeerHandle};
+<span class="kw">use </span>fedimint_core::core::{
+    ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
+};
+<span class="kw">use </span>fedimint_core::module::{ApiAuth, DynServerModuleGen, PeerHandle};
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_core::task::{timeout, Elapsed, TaskGroup};
 <span class="kw">use </span>fedimint_core::PeerId;
@@ -1035,7 +1036,7 @@
 
     <span class="doccomment">/// encodes the fields into a sha256 hash for comparison
     /// TODO use the derive macro to automatically pick up new fields here
-    </span><span class="kw">fn </span>try_to_config_response(
+    </span><span class="kw">pub fn </span>try_to_config_response(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
     ) -&gt; anyhow::Result&lt;ConfigResponse&gt; {
@@ -1233,7 +1234,7 @@
 
     <span class="kw">pub fn </span>trusted_dealer_gen(
         params: <span class="kw-2">&amp;</span>HashMap&lt;PeerId, ServerConfigParams&gt;,
-        registry: ServerModuleGenRegistry,
+        registry: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
     ) -&gt; BTreeMap&lt;PeerId, <span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
@@ -1250,11 +1251,10 @@
 
         <span class="comment">// We assume user wants one module instance for every module kind
         </span><span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = registry
-            .legacy_init_order_iter()
-            .enumerate()
+            .into_iter()
             .map(|(module_id, (kind, gen))| {
                 (
-                    u16::try_from(module_id).expect(<span class="string">&quot;Can&#39;t fail&quot;</span>),
+                    module_id,
                     gen.trusted_dealer_gen(
                         peers,
                         peer0.modules.get(<span class="kw-2">&amp;</span>kind).unwrap_or(<span class="kw-2">&amp;</span>null_config_gen),
@@ -1294,7 +1294,7 @@
     <span class="doccomment">/// Runs the distributed key gen algorithm
     </span><span class="kw">pub async fn </span>distributed_gen(
         params: <span class="kw-2">&amp;</span>ServerConfigParams,
-        registry: ServerModuleGenRegistry,
+        registry: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
         delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
@@ -1342,9 +1342,7 @@
         // initially, where we consider &quot;module as a code&quot; as &quot;module as an instance at
         // runtime&quot;
         </span><span class="kw">let </span>null_config_gen = ConfigGenParams::null();
-        <span class="kw">for </span>(module_instance_id, (kind, gen)) <span class="kw">in </span>registry.legacy_init_order_iter().enumerate() {
-            <span class="kw">let </span>module_instance_id = u16::try_from(module_instance_id)
-                .expect(<span class="string">&quot;64k module instances should be enough for everyone&quot;</span>);
+        <span class="kw">for </span>(module_instance_id, (kind, gen)) <span class="kw">in </span>registry {
             <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
@@ -1361,7 +1359,7 @@
         // if other peers received our message, just because we received theirs.
         // That&#39;s why we need to do a one last best effort sync.
         </span>connections
-            .send(peers, MODULE_INSTANCE_ID_GLOBAL, DkgPeerMsg::Done)
+            .send(peers, MODULE_INSTANCE_ID_DKG_DONE, DkgPeerMsg::Done)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(
@@ -1372,7 +1370,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>done_peers = BTreeSet::from([<span class="kw-2">*</span>our_id]);
 
             <span class="kw">while </span>done_peers.len() &lt; peers.len() {
-                <span class="kw">match </span>connections.receive(MODULE_INSTANCE_ID_GLOBAL).<span class="kw">await </span>{
+                <span class="kw">match </span>connections.receive(MODULE_INSTANCE_ID_DKG_DONE).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>((peer_id, DkgPeerMsg::Done)) =&gt; {
                         <span class="macro">info!</span>(
                             target: LOG_NET_PEER_DKG,

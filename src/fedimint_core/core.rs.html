@@ -474,6 +474,7 @@
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -515,8 +516,9 @@
 </span><span class="comment">// TODO: turn in a newtype
 </span><span class="kw">pub type </span>ModuleInstanceId = u16;
 
-<span class="doccomment">/// Special ID we use for global dkg
+<span class="doccomment">/// Special IDs we use for global dkg
 </span><span class="kw">pub const </span>MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
+<span class="kw">pub const </span>MODULE_INSTANCE_ID_DKG_DONE: u16 = u16::MAX - <span class="number">1</span>;
 
 <span class="comment">// Note: needs to be in alphabetical order of ModuleKind of each module,
 // as this is the ordering we currently hardcoded.
