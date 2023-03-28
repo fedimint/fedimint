@@ -100,7 +100,7 @@ impl BitcoinTest for FakeBitcoinTest {
     }
 
     async fn prepare_funding_wallet(&self) {
-        // In fake wallet this might not be technically neccessary,
+        // In fake wallet this might not be technically necessary,
         // but it makes it behave more like the `RealBitcoinTest`.
         let block_count = self.blocks.lock().unwrap().len() as u64;
         if block_count < 100 {

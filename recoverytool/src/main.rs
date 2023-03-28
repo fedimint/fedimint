@@ -96,7 +96,7 @@ enum TweakSource {
 fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 32]> {
     <Vec<u8> as FromHex>::from_hex(hex)?
         .try_into()
-        .map_err(|_| anyhow!("taks have to be 32 bytes long"))
+        .map_err(|_| anyhow!("tasks have to be 32 bytes long"))
 }
 
 #[tokio::main]

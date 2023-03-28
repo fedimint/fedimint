@@ -36,7 +36,7 @@ function await_server_on_port() {
   done
 }
 
-# Check that lightning block-proccessing is caught up
+# Check that lightning block-processing is caught up
 # CLI integration tests should call this before attempting to pay invoices
 function await_lightning_node_block_processing() {
   await_bitcoind_ready
