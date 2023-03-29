@@ -285,7 +285,7 @@ impl fmt::Display for CliError {
 #[command(version)]
 struct Opts {
     /// The working directory of the client containing the config and db
-    #[arg(long = "workdir")]
+    #[arg(long = "data-dir", alias = "workdir", env = "FM_DATA_DIR")]
     workdir: Option<PathBuf>,
 
     #[clap(subcommand)]
@@ -296,7 +296,7 @@ impl Opts {
     fn workdir(&self) -> CliResult<&PathBuf> {
         self.workdir
             .as_ref()
-            .ok_or_cli_msg(CliErrorKind::IOError, "`--workdir=` argument not set.")
+            .ok_or_cli_msg(CliErrorKind::IOError, "`--data-dir=` argument not set.")
     }
 
     fn load_config(&self) -> CliResult<UserClientConfig> {
