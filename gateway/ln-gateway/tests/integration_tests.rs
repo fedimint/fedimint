@@ -12,7 +12,7 @@ use ln_gateway::rpc::ConnectFedPayload;
 async fn gatewayd_supports_connecting_multiple_federations() {
     let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
 
-    assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+    assert_eq!(rpc.get_info(None).await.unwrap().federations.len(), 0);
 
     let connection1 = fed1.connection_code();
     let info = rpc
@@ -38,14 +38,14 @@ async fn gatewayd_supports_connecting_multiple_federations() {
 async fn gatewayd_shows_info_about_all_connected_federations() {
     let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
 
-    assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+    assert_eq!(rpc.get_info(None).await.unwrap().federations.len(), 0);
 
     let id1 = fed1.connection_code().id;
     let id2 = fed2.connection_code().id;
 
     connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
 
-    let info = rpc.get_info().await.unwrap();
+    let info = rpc.get_info(None).await.unwrap();
 
     assert_eq!(info.federations.len(), 2);
     assert!(info

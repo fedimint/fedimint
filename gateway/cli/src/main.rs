@@ -30,8 +30,9 @@ struct Cli {
 pub enum Commands {
     /// Display CLI version hash
     VersionHash,
-    /// Display high-level information about the Gateway
-    Info,
+    /// Display high-level information about the Gateway, or display in-depth
+    /// Federation information for given [FederationId]
+    Info { federation_id: Option<FederationId> },
     /// Check gateway balance
     Balance {
         #[clap(long)]
@@ -97,8 +98,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::VersionHash => {
             println!("version: {}", env!("CODE_VERSION"));
         }
-        Commands::Info => {
-            let response = client.get_info().await?;
+        Commands::Info { federation_id } => {
+            let response = client.get_info(federation_id).await?;
 
             print_response(response).await;
         }

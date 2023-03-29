@@ -1,6 +1,7 @@
 use std::result::Result;
 
 use bitcoin::Address;
+use fedimint_core::config::FederationId;
 use fedimint_core::{Amount, TransactionId};
 use reqwest::StatusCode;
 pub use reqwest::{Error, Response};
@@ -37,8 +38,16 @@ impl GatewayRpcClient {
         GatewayRpcClient::new(self.base_url.clone(), password)
     }
 
-    pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
-        let url = self.base_url.join("/info").expect("invalid base url");
+    pub async fn get_info(
+        &self,
+        federation_id: Option<FederationId>,
+    ) -> GatewayRpcResult<GatewayInfo> {
+        let path = match federation_id {
+            Some(id) => format!("/info?federation_id={id}"),
+            None => "/info".to_string(),
+        };
+
+        let url = self.base_url.join(path.as_str()).expect("invalid base url");
         self.call(url, ()).await
     }
 

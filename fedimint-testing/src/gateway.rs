@@ -43,7 +43,7 @@ impl GatewayTest {
 
     /// Returns the last registration we sent to a fed
     pub async fn last_registered(&self) -> LightningGateway {
-        let info = self.get_rpc().await.get_info().await;
+        let info = self.get_rpc().await.get_info(None).await;
         let fed = info.expect("Failed to get_info").federations;
         fed.last().expect("No feds registered").registration.clone()
     }

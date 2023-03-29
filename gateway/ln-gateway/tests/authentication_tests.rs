@@ -40,8 +40,8 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
     auth_fails(|| client2.connect_federation(payload.clone())).await;
 
     // Test gateway authentication on `get_info` function
-    auth_success(|| client1.get_info()).await;
-    auth_fails(|| client2.get_info()).await;
+    auth_success(|| client1.get_info(None)).await;
+    auth_fails(|| client2.get_info(None)).await;
 
     // Test gateway authentication on `get_balance` function
     let payload = BalancePayload { federation_id };
