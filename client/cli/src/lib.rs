@@ -1,15 +1,13 @@
 use core::fmt;
 use std::collections::BTreeMap;
-use std::error::Error;
 use std::fmt::Debug;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{ffi, fs};
+use std::{ffi, fs, result};
 
-use anyhow::format_err;
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
@@ -43,9 +41,11 @@ use mint_client::utils::{
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use thiserror::Error;
 use tracing::info;
 use url::Url;
 
+/// Type of output the cli produces
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
 #[serde(untagged)]
@@ -155,6 +155,7 @@ impl fmt::Display for CliOutput {
     }
 }
 
+/// Types of error the cli return
 #[derive(Debug, Serialize, Deserialize)]
 enum CliErrorKind {
     NetworkError,
@@ -169,33 +170,94 @@ enum CliErrorKind {
     GeneralFailure,
 }
 
-#[derive(Serialize)]
+/// `Result` with `CliError` as `Error`
+type CliResult<E> = Result<E, CliError>;
+
+/// `Result` with `CliError` as `Error` and `CliOutput` as `Ok`
+type CliOutputResult = Result<CliOutput, CliError>;
+
+/// Cli error
+#[derive(Serialize, Error)]
 #[serde(tag = "error", rename_all(serialize = "snake_case"))]
 struct CliError {
     kind: CliErrorKind,
     message: String,
     #[serde(skip_serializing)]
-    raw_error: Option<Box<dyn Error>>,
+    #[source]
+    raw_error: Option<anyhow::Error>,
+}
+
+/// Extension trait making turning Results/Errors into
+/// [`CliError`]/[`CliOutputResult`] easier
+trait CliResultExt<O, E> {
+    /// Map error into `CliError` of [`CliErrorKind::GeneralFailure`] kind, use
+    /// the error message as the message
+    fn map_err_cli_general(self) -> Result<O, CliError>;
+    /// Map error into `CliError` of [`CliErrorKind::IOError`] kind, use the
+    /// error message as the message
+    fn map_err_cli_io(self) -> Result<O, CliError>;
+    /// Map error into `CliError` of `kind` and use custom `msg`
+    fn map_err_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError>;
+}
+
+impl<O, E> CliResultExt<O, E> for result::Result<O, E>
+where
+    E: Into<anyhow::Error>,
+{
+    fn map_err_cli_io(self) -> Result<O, CliError> {
+        self.map_err(|e| {
+            let e = e.into();
+            CliError {
+                kind: CliErrorKind::IOError,
+                message: e.to_string(),
+                raw_error: Some(e),
+            }
+        })
+    }
+    fn map_err_cli_general(self) -> Result<O, CliError> {
+        self.map_err(|e| {
+            let e = e.into();
+            CliError {
+                kind: CliErrorKind::GeneralFailure,
+                message: e.to_string(),
+                raw_error: Some(e),
+            }
+        })
+    }
+
+    fn map_err_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError> {
+        self.map_err(|e| CliError {
+            kind,
+            message: msg.into(),
+            raw_error: Some(e.into()),
+        })
+    }
+}
+
+/// Extension trait to make turning `Option`s into
+/// [`CliError`]/[`CliOutputResult`] easier
+trait CliOptionExt<O> {
+    fn ok_or_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError>;
+}
+
+impl<O> CliOptionExt<O> for Option<O> {
+    fn ok_or_cli_msg(self, kind: CliErrorKind, msg: impl Into<String>) -> Result<O, CliError> {
+        self.ok_or_else(|| CliError {
+            kind,
+            message: msg.into(),
+            raw_error: None,
+        })
+    }
 }
 
 // TODO: Refactor federation API errors to just delegate to this
 impl From<FederationError> for CliError {
     fn from(e: FederationError) -> Self {
-        CliError::from(
-            CliErrorKind::GeneralFederationError,
-            "Failed API call",
-            Some(e.into()),
-        )
-    }
-}
-
-impl From<anyhow::Error> for CliError {
-    fn from(e: anyhow::Error) -> Self {
-        CliError::from(
-            CliErrorKind::GeneralFederationError,
-            "Failed",
-            Some(e.into()),
-        )
+        CliError {
+            kind: CliErrorKind::GeneralFederationError,
+            message: "Failed API call".into(),
+            raw_error: Some(e.into()),
+        }
     }
 }
 
@@ -209,16 +271,6 @@ impl Debug for CliError {
     }
 }
 
-impl CliError {
-    fn from(kind: CliErrorKind, message: &str, err: Option<Box<dyn Error>>) -> CliError {
-        CliError {
-            kind: (kind),
-            message: (String::from(message)),
-            raw_error: err,
-        }
-    }
-}
-
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut json = serde_json::to_value(self).unwrap();
@@ -228,8 +280,6 @@ impl fmt::Display for CliError {
         write!(f, "{}", serde_json::to_string_pretty(&json).unwrap())
     }
 }
-
-impl Error for CliError {}
 
 #[derive(Parser)]
 #[command(version)]
@@ -243,26 +293,21 @@ struct Opts {
 }
 
 impl Opts {
-    fn workdir(&self) -> &Path {
+    fn workdir(&self) -> CliResult<&PathBuf> {
         self.workdir
             .as_ref()
-            .or_terminate_msg(CliErrorKind::IOError, "`--workdir=` argument not set.")
+            .ok_or_cli_msg(CliErrorKind::IOError, "`--workdir=` argument not set.")
     }
 
-    fn load_config(&self) -> anyhow::Result<UserClientConfig> {
-        let cfg_path = self.workdir().join("client.json");
-        load_from_file(&cfg_path)
+    fn load_config(&self) -> CliResult<UserClientConfig> {
+        let cfg_path = self.workdir()?.join("client.json");
+        load_from_file(&cfg_path).map_err_cli_msg(CliErrorKind::IOError, "could not load config")
     }
 
-    fn load_config_or_terminate(&self) -> UserClientConfig {
-        self.load_config()
-            .or_terminate_msg(CliErrorKind::IOError, "could not load config")
-    }
-
-    fn load_rocks_db_or_terminate(&self) -> fedimint_rocksdb::RocksDb {
-        let db_path = self.workdir().join("client.db");
+    fn load_rocks_db(&self) -> CliResult<fedimint_rocksdb::RocksDb> {
+        let db_path = self.workdir()?.join("client.db");
         fedimint_rocksdb::RocksDb::open(db_path)
-            .or_terminate_msg(CliErrorKind::IOError, "could not open transaction db")
+            .map_err_cli_msg(CliErrorKind::IOError, "could not open transaction db")
     }
 
     fn load_decoders(
@@ -279,27 +324,27 @@ impl Opts {
         ))
     }
 
-    fn load_db_or_terminate(&self, decoders: &ModuleDecoderRegistry) -> Database {
-        let db = self.load_rocks_db_or_terminate();
-        Database::new(db, decoders.clone())
+    fn load_db(&self, decoders: &ModuleDecoderRegistry) -> CliResult<Database> {
+        let db = self.load_rocks_db()?;
+        Ok(Database::new(db, decoders.clone()))
     }
 
     async fn build_client(
         &self,
         module_gens: &ClientModuleGenRegistry,
-    ) -> Client<UserClientConfig> {
-        let cfg = self.load_config_or_terminate();
+    ) -> CliResult<Client<UserClientConfig>> {
+        let cfg = self.load_config()?;
         let decoders = self.load_decoders(&cfg, module_gens);
-        let db = self.load_db_or_terminate(&decoders);
+        let db = self.load_db(&decoders)?;
 
-        Client::new(
+        Ok(Client::new(
             cfg.clone(),
             decoders,
             module_gens.clone(),
             db,
             Default::default(),
         )
-        .await
+        .await)
     }
 }
 
@@ -468,79 +513,6 @@ impl FromStr for ModuleSelector {
         })
     }
 }
-/// Extension trait for values that either return `T` or terminate the program
-/// with CLI error
-trait OrTerminate<T> {
-    fn or_terminate(self, err_kind: CliErrorKind) -> T;
-    fn or_terminate_msg(self, err_kind: CliErrorKind, msg: &str) -> T;
-}
-
-trait ErrorHandler<T, E>: OrTerminate<T> {
-    fn transform<F>(self, success: F, err: CliErrorKind, msg: &str) -> CliResult
-    where
-        F: Fn(T) -> CliOutput;
-}
-
-impl<T, E: Into<Box<dyn Error>>> OrTerminate<T> for Result<T, E> {
-    fn or_terminate_msg(self, err_kind: CliErrorKind, msg: &str) -> T {
-        match self {
-            Ok(v) => v,
-            Err(e) => {
-                let cli_error = CliError::from(err_kind, msg, Some(e.into()));
-                eprintln!("{cli_error}");
-                exit(1);
-            }
-        }
-    }
-    fn or_terminate(self, err_kind: CliErrorKind) -> T {
-        match self {
-            Ok(v) => v,
-            Err(e) => {
-                let e = e.into();
-                let cli_error = CliError::from(err_kind, &e.to_string(), Some(e));
-                eprintln!("{cli_error}");
-                exit(1);
-            }
-        }
-    }
-}
-
-impl<T, E: Into<Box<dyn Error>>> ErrorHandler<T, E> for Result<T, E> {
-    fn transform<F>(self, success: F, err: CliErrorKind, msg: &str) -> CliResult
-    where
-        F: Fn(T) -> CliOutput,
-    {
-        match self {
-            Ok(v) => Ok(success(v)),
-            Err(e) => Err(CliError::from(err, msg, Some(e.into()))),
-        }
-    }
-}
-
-impl<T> OrTerminate<T> for Option<T> {
-    fn or_terminate_msg(self, err_kind: CliErrorKind, msg: &str) -> T {
-        match self {
-            Some(v) => v,
-            None => {
-                let cli_error = CliError::from(err_kind, msg, None);
-                eprintln!("{cli_error}");
-                exit(1);
-            }
-        }
-    }
-    fn or_terminate(self, err_kind: CliErrorKind) -> T {
-        match self {
-            Some(v) => v,
-            None => {
-                let cli_error = CliError::from(err_kind, "Missing value", None);
-                eprintln!("{cli_error}");
-                exit(1);
-            }
-        }
-    }
-}
-
-type CliResult = Result<CliOutput, CliError>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
@@ -601,37 +573,36 @@ impl FedimintCli {
         }
     }
 
-    async fn handle_command(&self, cli: Opts) -> CliResult {
+    async fn handle_command(&self, cli: Opts) -> CliOutputResult {
         let mut task_group = TaskGroup::new();
         let mut rng = rand::rngs::OsRng;
 
         match cli.command.clone() {
             Command::JoinFederation { connect } => {
                 let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
-                    .map_err(Box::<dyn Error>::from)
-                    .or_terminate_msg(CliErrorKind::InvalidValue, "invalid connect info");
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid connect info")?;
                 let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
                     as Arc<dyn IFederationApi + Send + Sync + 'static>;
                 let cfg: ClientConfig = api
                     .download_client_config(&connect_obj.id, self.module_gens.to_common())
                     .await
-                    .or_terminate_msg(
+                    .map_err_cli_msg(
                         CliErrorKind::NetworkError,
                         "couldn't download config from peer",
-                    );
-                let cfg_path = cli.workdir().join("client.json");
-                std::fs::create_dir_all(cli.workdir())
-                    .or_terminate_msg(CliErrorKind::IOError, "failed to create config directory");
+                    )?;
+                std::fs::create_dir_all(cli.workdir()?)
+                    .map_err_cli_msg(CliErrorKind::IOError, "failed to create config directory")?;
+                let cfg_path = cli.workdir()?.join("client.json");
                 let writer = std::fs::File::create(cfg_path)
-                    .or_terminate_msg(CliErrorKind::IOError, "couldn't create config.json");
+                    .map_err_cli_msg(CliErrorKind::IOError, "couldn't create config.json")?;
                 serde_json::to_writer_pretty(writer, &cfg)
-                    .or_terminate_msg(CliErrorKind::IOError, "couldn't write config");
-                Ok(CliOutput::JoinFederation { joined: (connect) })
+                    .map_err_cli_msg(CliErrorKind::IOError, "couldn't write config")?;
+                Ok(CliOutput::JoinFederation { joined: connect })
             }
             Command::Api { method, arg } => {
                 let arg: Value = serde_json::from_str(&arg).unwrap();
                 let ws_api: Arc<_> = WsFederationApi::from_config(
-                    cli.build_client(&self.module_gens).await.config().as_ref(),
+                    cli.build_client(&self.module_gens).await?.config().as_ref(),
                 )
                 .into();
                 let response: Value = ws_api
@@ -651,7 +622,7 @@ impl FedimintCli {
             Command::PegInAddress => {
                 let peg_in_address = cli
                     .build_client(&self.module_gens)
-                    .await
+                    .await?
                     .get_new_pegin_address(rng)
                     .await;
                 Ok(CliOutput::PegInAddress {
@@ -663,31 +634,29 @@ impl FedimintCli {
                 transaction,
             } => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .peg_in(txout_proof, transaction, &mut rng)
                 .await
-                .transform(
-                    |v| CliOutput::PegIn { id: (v) },
+                .map(|v| CliOutput::PegIn { id: (v) })
+                .map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
                     "peg-in failed (no further information)",
                 ),
 
-            Command::Reissue { notes } => {
-                let id = cli
-                    .build_client(&self.module_gens)
-                    .await
-                    .reissue(notes, &mut rng)
-                    .await;
-                id.transform(
-                    |v| CliOutput::Reissue { id: (v) },
+            Command::Reissue { notes } => cli
+                .build_client(&self.module_gens)
+                .await?
+                .reissue(notes, &mut rng)
+                .await
+                .map(|v| CliOutput::Reissue { id: (v) })
+                .map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
                     "could not reissue notes (no further information)",
-                )
-            }
+                ),
             Command::Validate { notes } => {
                 let validate_result = cli
                     .build_client(&self.module_gens)
-                    .await
+                    .await?
                     .validate_note_signatures(&notes)
                     .await;
                 let details_vec = notes
@@ -708,31 +677,28 @@ impl FedimintCli {
             }
             Command::Spend { amount } => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .spend_ecash(amount, rng)
                 .await
-                .transform(
-                    |v| CliOutput::Spend {
-                        note: (serialize_ecash(&v)),
-                    },
+                .map(|v| CliOutput::Spend {
+                    note: (serialize_ecash(&v)),
+                })
+                .map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
                     "failed to execute spend (no further information)",
                 ),
-            Command::Fetch => match cli
+            Command::Fetch => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .fetch_all_notes()
                 .await
-            {
-                Ok(result) => Ok(CliOutput::Fetch { issuance: (result) }),
-                Err(error) => Err(CliError::from(
+                .map(|issuance| CliOutput::Fetch { issuance })
+                .map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
                     "failed to fetch notes",
-                    Some(Box::new(error)),
-                )),
-            },
+                ),
             Command::Info => {
-                let client = cli.build_client(&self.module_gens).await;
+                let client = cli.build_client(&self.module_gens).await?;
                 let notes = client.notes().await;
                 let details_vec = notes
                     .iter()
@@ -749,59 +715,51 @@ impl FedimintCli {
                 })
             }
             Command::PegOut { address, satoshis } => {
-                let client = cli.build_client(&self.module_gens).await;
-                match client.new_peg_out_with_fees(satoshis, address).await {
-                    Ok(peg_out) => match client.peg_out(peg_out, &mut rng).await {
-                        Ok(out_point) => client
-                            .wallet_client()
-                            .await_peg_out_outcome(out_point)
-                            .await
-                            .transform(
-                                |txid| CliOutput::PegOut { tx_id: (txid) },
-                                CliErrorKind::GeneralFederationError,
-                                "invalid peg-out outcome",
-                            ),
-                        Err(e) => Err(CliError::from(
-                            CliErrorKind::GeneralFederationError,
-                            "failed to commit peg-out",
-                            Some(Box::new(e)),
-                        )),
-                    },
-                    Err(e) => Err(CliError::from(
+                let client = cli.build_client(&self.module_gens).await?;
+                let peg_out = client
+                    .new_peg_out_with_fees(satoshis, address)
+                    .await
+                    .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
                         "failed to request peg-out",
-                        Some(Box::new(e)),
-                    )),
-                }
+                    )?;
+                let out_point = client.peg_out(peg_out, &mut rng).await.map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to commit peg-out",
+                )?;
+                client
+                    .wallet_client()
+                    .await_peg_out_outcome(out_point)
+                    .await
+                    .map(|tx_id| CliOutput::PegOut { tx_id })
+                    .map_err_cli_msg(
+                        CliErrorKind::GeneralFederationError,
+                        "invalid peg-out outcome",
+                    )
             }
             Command::LnPay { bolt11 } => {
-                let client = cli.build_client(&self.module_gens).await;
-                match client.fund_outgoing_ln_contract(bolt11, &mut rng).await {
-                    Ok((contract_id, outpoint)) => {
-                        match client.await_outgoing_contract_acceptance(outpoint).await {
-                            Ok(_) => client
-                                .await_outgoing_contract_execution(contract_id, &mut rng)
-                                .await
-                                .transform(
-                                    |_| CliOutput::LnPay {
-                                        contract_id: (contract_id),
-                                    },
-                                    CliErrorKind::GeneralFederationError,
-                                    "gateway failed to execute contract",
-                                ),
-                            Err(e) => Err(CliError::from(
-                                CliErrorKind::Timeout,
-                                "contract wasn't accepted in time",
-                                Some(Box::new(e)),
-                            )),
-                        }
-                    }
-                    Err(e) => Err(CliError::from(
+                let client = cli.build_client(&self.module_gens).await?;
+                let (contract_id, outpoint) = client
+                    .fund_outgoing_ln_contract(bolt11, &mut rng)
+                    .await
+                    .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
                         "Failure creating outgoing LN contract",
-                        Some(Box::new(e)),
-                    )),
-                }
+                    )?;
+                client
+                    .await_outgoing_contract_acceptance(outpoint)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::Timeout, "contract wasn't accepted in time")?;
+                client
+                    .await_outgoing_contract_execution(contract_id, &mut rng)
+                    .await
+                    .map(|_| CliOutput::LnPay {
+                        contract_id: (contract_id),
+                    })
+                    .map_err_cli_msg(
+                        CliErrorKind::GeneralFederationError,
+                        "gateway failed to execute contract",
+                    )
             }
             Command::LnInvoice {
                 amount,
@@ -809,48 +767,39 @@ impl FedimintCli {
                 expiry_time,
             } => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .generate_confirmed_invoice(amount, description, &mut rng, expiry_time)
                 .await
-                .transform(
-                    |confirmed_invoice| CliOutput::LnInvoice {
-                        invoice: (confirmed_invoice.invoice),
-                    },
+                .map(|confirmed_invoice| CliOutput::LnInvoice {
+                    invoice: (confirmed_invoice.invoice),
+                })
+                .map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
                     "couldn't create invoice",
                 ),
             Command::WaitInvoice { invoice } => {
                 let contract_id = (*invoice.payment_hash()).into();
                 cli.build_client(&self.module_gens)
-                    .await
+                    .await?
                     .claim_incoming_contract(contract_id, &mut rng)
                     .await
-                    .transform(
-                        |outpoint| CliOutput::WaitInvoice {
-                            paid_in_tx: (outpoint),
-                        },
-                        CliErrorKind::Timeout,
-                        "invoice did not get paid in time",
-                    )
+                    .map(|outpoint| CliOutput::WaitInvoice {
+                        paid_in_tx: (outpoint),
+                    })
+                    .map_err_cli_msg(CliErrorKind::Timeout, "invoice did not get paid in time")
             }
             Command::WaitBlockHeight { height } => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .await_consensus_block_height(height)
                 .await
-                .transform(
-                    |_| CliOutput::WaitBlockHeight { reached: (height) },
-                    CliErrorKind::Timeout,
-                    "timeout reached",
+                .map(|_| CliOutput::WaitBlockHeight { reached: (height) })
+                .map_err_cli_msg(CliErrorKind::Timeout, "timeout reached"),
+            Command::ConnectInfo => Ok(CliOutput::ConnectInfo {
+                connect_info: WsClientConnectInfo::from_honest_peers(
+                    cli.build_client(&self.module_gens).await?.config().as_ref(),
                 ),
-            Command::ConnectInfo => {
-                let info = WsClientConnectInfo::from_honest_peers(
-                    cli.build_client(&self.module_gens).await.config().as_ref(),
-                );
-                Ok(CliOutput::ConnectInfo {
-                    connect_info: (info),
-                })
-            }
+            }),
             Command::DecodeConnectInfo { connect_info } => Ok(CliOutput::DecodeConnectInfo {
                 urls: connect_info.urls,
                 id: connect_info.id,
@@ -859,136 +808,96 @@ impl FedimintCli {
                 connect_info: WsClientConnectInfo { urls, id },
             }),
             Command::ListGateways {} => {
-                let client = cli.build_client(&self.module_gens).await;
-                match client.fetch_registered_gateways().await {
-                    Ok(gateways) => {
-                        if !gateways.is_empty() {
-                            let mut gateways_json = json!(&gateways);
-                            match client.fetch_active_gateway().await {
-                                Ok(active_gateway) => {
-                                    gateways_json
-                                        .as_array_mut()
-                                        .expect("gateways_json is not an array")
-                                        .iter_mut()
-                                        .for_each(|gateway| {
-                                            if gateway["node_pub_key"]
-                                                == json!(active_gateway.node_pub_key)
-                                            {
-                                                gateway["active"] = json!(true);
-                                            } else {
-                                                gateway["active"] = json!(false);
-                                            }
-                                        });
-                                    Ok(CliOutput::ListGateways {
-                                        num_gateways: (gateways.len()),
-                                        gateways: (gateways_json),
-                                    })
-                                }
-                                Err(e) => Err(CliError::from(
-                                    CliErrorKind::GeneralFederationError,
-                                    "could not determine active gateway",
-                                    Some(Box::new(e)),
-                                )),
-                            }
-                        } else {
-                            Err(CliError::from(
-                                CliErrorKind::GeneralFederationError,
-                                "no gateways found",
-                                None,
-                            ))
-                        }
-                    }
-                    Err(e) => Err(CliError::from(
-                        CliErrorKind::GeneralFederationError,
-                        "failed to fetch gateways",
-                        Some(Box::new(e)),
-                    )),
+                let client = cli.build_client(&self.module_gens).await?;
+                let gateways = client.fetch_registered_gateways().await.map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to fetch gateways",
+                )?;
+                if gateways.is_empty() {
+                    return Err(CliError {
+                        kind: CliErrorKind::GeneralFederationError,
+                        message: "no gateways found".into(),
+                        raw_error: None,
+                    });
                 }
+
+                let mut gateways_json = json!(&gateways);
+                let active_gateway = client.fetch_active_gateway().await.map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "could not determine active gateway",
+                )?;
+                gateways_json
+                    .as_array_mut()
+                    .expect("gateways_json is not an array")
+                    .iter_mut()
+                    .for_each(|gateway| {
+                        if gateway["node_pub_key"] == json!(active_gateway.node_pub_key) {
+                            gateway["active"] = json!(true);
+                        } else {
+                            gateway["active"] = json!(false);
+                        }
+                    });
+                Ok(CliOutput::ListGateways {
+                    num_gateways: (gateways.len()),
+                    gateways: (gateways_json),
+                })
             }
             Command::SwitchGateway { pubkey } => {
-                match cli
+                let gateway = cli
                     .build_client(&self.module_gens)
-                    .await
+                    .await?
                     .switch_active_gateway(Some(pubkey))
                     .await
-                {
-                    Ok(gateway) => {
-                        let mut gateway_json = json!(&gateway);
-                        gateway_json["active"] = json!(true);
-                        Ok(CliOutput::SwitchGateway {
-                            new_gateway: (gateway_json),
-                        })
-                    }
-                    Err(e) => Err(CliError::from(
+                    .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
                         "failed to switch active gateway",
-                        Some(Box::new(e)),
-                    )),
-                }
+                    )?;
+                let mut gateway_json = json!(&gateway);
+                gateway_json["active"] = json!(true);
+                Ok(CliOutput::SwitchGateway {
+                    new_gateway: (gateway_json),
+                })
             }
-            Command::Backup => match cli
+            Command::Backup => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .mint_client()
                 .back_up_ecash_to_federation()
                 .await
-            {
-                Ok(_) => Ok(CliOutput::Backup),
-                Err(e) => Err(CliError::from(
-                    CliErrorKind::GeneralFederationError,
-                    "failed",
-                    Some(e.into()),
-                )),
-            },
-            Command::Restore { gap_limit } => match cli
+                .map(|_| CliOutput::Backup)
+                .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed"),
+            Command::Restore { gap_limit } => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .mint_client()
                 .restore_ecash_from_federation(gap_limit, &mut task_group)
                 .await
-            {
-                Ok(_) => Ok(CliOutput::Backup),
-                Err(e) => Err(CliError::from(
-                    CliErrorKind::GeneralFederationError,
-                    "failed",
-                    Some(e.into()),
-                )),
-            },
-            Command::WipeNotes => match cli
+                .map(|_| CliOutput::Backup)
+                .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed"),
+            Command::WipeNotes => cli
                 .build_client(&self.module_gens)
-                .await
+                .await?
                 .mint_client()
                 .wipe_notes()
                 .await
-            {
-                Ok(_) => Ok(CliOutput::Backup),
-                Err(e) => Err(CliError::from(
-                    CliErrorKind::GeneralFederationError,
-                    "failed",
-                    Some(e.into()),
-                )),
-            },
+                .map(|_| CliOutput::Backup)
+                .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed"),
+
             Command::DecodeTransaction { hex_string } => {
-                let bytes: Vec<u8> =
-                    bitcoin_hashes::hex::FromHex::from_hex(&hex_string).map_err(|e| {
-                        CliError::from(
-                            CliErrorKind::SerializationError,
-                            "failed to decode transaction",
-                            Some(Box::new(e)),
-                        )
-                    })?;
+                let bytes: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(&hex_string)
+                    .map_err_cli_msg(
+                        CliErrorKind::SerializationError,
+                        "failed to decode transaction",
+                    )?;
 
                 let tx = fedimint_core::transaction::Transaction::from_bytes(
                     &bytes,
-                    cli.build_client(&self.module_gens).await.decoders(),
+                    cli.build_client(&self.module_gens).await?.decoders(),
                 )
-                .map_err(|e| {
-                    CliError::from(
-                        CliErrorKind::SerializationError,
-                        "failed to decode transaction",
-                        Some(Box::new(e)),
-                    )
-                })?;
+                .map_err_cli_msg(
+                    CliErrorKind::SerializationError,
+                    "failed to decode transaction",
+                )?;
 
                 Ok(CliOutput::DecodeTransaction {
                     transaction: (format!("{tx:?}")),
@@ -1000,11 +909,11 @@ impl FedimintCli {
                 our_id,
             } => {
                 let salt = fs::read_to_string(salt_path)
-                    .map_err(|_| format_err!("Unable to open salt file"))?;
-                let auth = ApiAuth(get_password_hash(&password, &salt)?);
+                    .map_err_cli_msg(CliErrorKind::IOError, "Unable to open salt file")?;
+                let auth = ApiAuth(get_password_hash(&password, &salt).map_err_cli_io()?);
                 let url = cli
                     .build_client(&self.module_gens)
-                    .await
+                    .await?
                     .config()
                     .as_ref()
                     .api_endpoints
@@ -1019,7 +928,7 @@ impl FedimintCli {
             Command::EpochCount => {
                 let count = cli
                     .build_client(&self.module_gens)
-                    .await
+                    .await?
                     .context()
                     .api
                     .fetch_epoch_count()
@@ -1027,20 +936,21 @@ impl FedimintCli {
                 Ok(CliOutput::EpochCount { count })
             }
             Command::Module { id, arg } => {
-                let cfg = cli.load_config_or_terminate();
+                let cfg = cli.load_config()?;
                 let decoders = cli.load_decoders(&cfg, &self.module_gens);
-                let db = cli.load_db_or_terminate(&decoders);
+                let db = cli.load_db(&decoders)?;
                 let (_id, module_cfg) = match id {
                     ModuleSelector::Id(id) => (
                         id,
                         cfg.as_ref()
                             .get_module_cfg(id)
-                            .or_terminate_msg(CliErrorKind::IOError, "Can't load module"),
+                            .map_err_cli_msg(CliErrorKind::IOError, "Can't load module")?,
                     ),
-                    ModuleSelector::Kind(kind) => cfg
-                        .as_ref()
-                        .get_first_module_by_kind_cfg(kind)
-                        .or_terminate(CliErrorKind::InvalidValue),
+                    ModuleSelector::Kind(kind) => {
+                        cfg.as_ref()
+                            .get_first_module_by_kind_cfg(kind)
+                            .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid kind")?
+                    }
                 };
                 let module_gen =
                     self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
@@ -1048,13 +958,13 @@ impl FedimintCli {
                 let module = module_gen
                     .init(module_cfg, db)
                     .await
-                    .or_terminate_msg(CliErrorKind::GeneralFailure, "Loading module failed");
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;
 
                 Ok(CliOutput::Raw(
                     module
                         .handle_cli_command(&arg)
                         .await
-                        .or_terminate(CliErrorKind::GeneralFailure),
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))
             }
         }
