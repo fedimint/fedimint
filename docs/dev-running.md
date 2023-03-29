@@ -1,25 +1,8 @@
-## Running Fedimint for dev testing
-
-Fedimint consists of three kinds of executables:
-
-* **Federation nodes** - servers who form the mint by running a consensus protocol
-* **Lightning gateways** - allows users send and receive over Lightning by bridging between the mint and an LN node
-* **User clients** - handles user communication with the mint and the gateway
-
 ### Prerequisites
 
-In order to run Fedimint you will need:
-- The [Rust toolchain](https://www.rust-lang.org/tools/install) to build and run the executables
-- The [Nix package manager](https://nixos.org/download.html) for managing build and test dependencies
+Fedimint's developer environment is build around the [Nix package manager](https://nixos.org). Once setup, you can execute one `nix develop` command to create a completely deterministic development, test and build environment with all required dependencies installed and pinned to exact versions. Detailed setup instructions are available in [dev-env.md](./dev-env.md).
 
-Clone and `cd` into the Fedimint repo:
-
-```shell
-git clone git@github.com:fedimint/fedimint.git
-cd fedimint
-```
-
-It's recommended to **start all the commands in "Nix dev shell"**, which can be started with `nix develop` command.
+Once you have cloned fedimint and can run `nix develop` as described in [dev-env.md](./dev-env.md), you're ready to setup a federation locally!
 
 ### Setting up the federation
 
