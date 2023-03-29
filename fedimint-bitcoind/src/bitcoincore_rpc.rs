@@ -215,8 +215,7 @@ where
             self.0
                 .estimate_smart_fee(confirmation_target, Some(EstimateMode::Conservative))
                 .map_err(anyhow::Error::from)
-        })
-        .expect("Bitcoind returned an error") // TODO: implement retry logic in case bitcoind is temporarily unreachable
+        })?
         .fee_rate
         .map(|per_kb| Feerate {
             sats_per_kvb: per_kb.to_sat(),
@@ -335,7 +334,7 @@ impl IBitcoindRpc for ElectrumClient {
             let output = transaction
                 .output
                 .first()
-                .expect("Transaction must contain at least one output");
+                .ok_or(format_err!("Transaction must contain at least one output"))?;
 
             // if transaction is confirmed, we're going to find the confirmation event in
             // the history of ifs first output
