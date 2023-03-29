@@ -28,6 +28,11 @@ use crate::ui::{run_ui, UiMessage};
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// function without coverage to see if CI yells at me
+pub fn foobar() {
+    println!("foobar");
+}
+
 #[derive(Parser)]
 pub struct ServerOpts {
     /// Path to folder containing federation config files
