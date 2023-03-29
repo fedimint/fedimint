@@ -333,81 +333,93 @@
           # Technically nested sets are not allowed in `packages`, so we can
           # dump the nested things here. They'll work the same way for most
           # purposes (like `nix build`).
-          legacyPackages = {
-            # Debug Builds
-            #
-            # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
-            # recursing into `cargoArtifacts` to do the same. This way a debug build depends on debug build of all dependencies.
-            # See https://github.com/ipetkov/crane/discussions/140#discussioncomment-3857137 for more info.
-            debug =
-              let
-                overrideCargoProfileRecursively = deriv: profile: deriv.overrideAttrs (oldAttrs: {
-                  CARGO_PROFILE = profile;
-                  cargoArtifacts = if oldAttrs ? "cargoArtifacts" && oldAttrs.cargoArtifacts != null then overrideCargoProfileRecursively oldAttrs.cargoArtifacts profile else null;
-                });
-              in
-              (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") workspaceOutputs) //
-              (builtins.mapAttrs
-                (name: deriv: replaceGitHash {
-                  inherit name; package = overrideCargoProfileRecursively deriv "dev";
+          legacyPackages =
+            let
+
+              overrideCargoProfileRecursively = deriv: profile: deriv.overrideAttrs (oldAttrs: {
+                CARGO_PROFILE = profile;
+                cargoArtifacts = if oldAttrs ? "cargoArtifacts" && oldAttrs.cargoArtifacts != null then overrideCargoProfileRecursively oldAttrs.cargoArtifacts profile else null;
+              });
+            in
+            {
+              # Debug Builds
+              #
+              # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
+              # recursing into `cargoArtifacts` to do the same. This way a debug build depends on debug build of all dependencies.
+              # See https://github.com/ipetkov/crane/discussions/140#discussioncomment-3857137 for more info.
+              debug =
+                (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") workspaceOutputs) //
+                (builtins.mapAttrs
+                  (name: deriv: replaceGitHash {
+                    inherit name; package = overrideCargoProfileRecursively deriv "dev";
+                  })
+                  rustPackageOutputs) // {
+                  cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") cli-test);
+                };
+
+              ci =
+                (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "ci") workspaceOutputs) //
+                (builtins.mapAttrs
+                  (name: deriv: replaceGitHash {
+                    inherit name; package = overrideCargoProfileRecursively deriv "ci";
+                  })
+                  rustPackageOutputs) // {
+                  cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "ci") cli-test);
+                };
+
+              cross = builtins.mapAttrs
+                (name: target: {
+                  client-pkgs = (craneBuildCross name).client-pkgs { inherit target; };
                 })
-                rustPackageOutputs) // {
-                cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") cli-test);
-              };
-
-            cross = builtins.mapAttrs
-              (name: target: {
-                client-pkgs = (craneBuildCross name).client-pkgs { inherit target; };
-              })
-              crossTargets;
+                crossTargets;
 
 
-            container =
-              let
-                entrypointScript =
-                  pkgs.writeShellScriptBin "entrypoint" ''
-                    exec bash "${./misc/fedimintd-container-entrypoint.sh}" "$@"
-                  '';
-              in
-              {
-                fedimintd = pkgs.dockerTools.buildLayeredImage {
-                  name = "fedimintd";
-                  contents = [
-                    packages.fedimint-pkgs
-                    pkgs.bash
-                    pkgs.coreutils
-                  ];
-                  config = {
-                    Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
-                    Env = [
-                      "FM_DATA_DIR=/data"
+              container =
+                let
+                  entrypointScript =
+                    pkgs.writeShellScriptBin "entrypoint" ''
+                      exec bash "${./misc/fedimintd-container-entrypoint.sh}" "$@"
+                    '';
+                in
+                {
+                  fedimintd = pkgs.dockerTools.buildLayeredImage {
+                    name = "fedimintd";
+                    contents = [
+                      packages.fedimint-pkgs
+                      pkgs.bash
+                      pkgs.coreutils
                     ];
-                    Entrypoint = [
-                      "${entrypointScript}/bin/entrypoint"
-                    ];
-                    WorkDir = "/data";
-                    Volumes = {
-                      "/data" = { };
+                    config = {
+                      Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
+                      Env = [
+                        "FM_DATA_DIR=/data"
+                      ];
+                      Entrypoint = [
+                        "${entrypointScript}/bin/entrypoint"
+                      ];
+                      WorkDir = "/data";
+                      Volumes = {
+                        "/data" = { };
+                      };
+                      ExposedPorts = {
+                        "${builtins.toString 8173}/tcp" = { };
+                        "${builtins.toString 8174}/tcp" = { };
+                        "${builtins.toString 8176}/tcp" = { };
+                      };
                     };
-                    ExposedPorts = {
-                      "${builtins.toString 8173}/tcp" = { };
-                      "${builtins.toString 8174}/tcp" = { };
-                      "${builtins.toString 8176}/tcp" = { };
+                  };
+
+                  fedimint-cli = pkgs.dockerTools.buildLayeredImage {
+                    name = "fedimint-cli";
+                    contents = [ craneBuildNative.fedimint-pkgs pkgs.bash pkgs.coreutils ];
+                    config = {
+                      Cmd = [
+                        "${craneBuildNative.fedimint-pkgs}/bin/fedimint-cli"
+                      ];
                     };
                   };
                 };
-
-                fedimint-cli = pkgs.dockerTools.buildLayeredImage {
-                  name = "fedimint-cli";
-                  contents = [ craneBuildNative.fedimint-pkgs pkgs.bash pkgs.coreutils ];
-                  config = {
-                    Cmd = [
-                      "${craneBuildNative.fedimint-pkgs}/bin/fedimint-cli"
-                    ];
-                  };
-                };
-              };
-          };
+            };
 
 
           devShells =

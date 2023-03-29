@@ -31,7 +31,7 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 
 # Define temporary directories to not overwrite manually created config if run locally
 export FM_TEST_DIR=$FM_TMP_DIR
-export FM_BIN_DIR="$SRC_DIR/target/debug"
+export FM_BIN_DIR="$SRC_DIR/target/${CARGO_PROFILE:-debug}"
 export FM_PID_FILE="$FM_TMP_DIR/.pid"
 export FM_CLN_DIR="$FM_TEST_DIR/cln"
 export FM_LND_DIR="$FM_TEST_DIR/lnd"
