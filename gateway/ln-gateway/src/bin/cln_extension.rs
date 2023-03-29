@@ -61,6 +61,9 @@ async fn main() -> Result<(), anyhow::Error> {
             // Wait for plugin to signal it's shutting down
             // Shut down everything else via TaskGroup regardless of error
             let _ = plugin.join().await;
+            // lightningd needs to see exit code 0 to notice the plugin has
+            // terminated -- even if we return from main().
+            std::process::exit(0);
         })
         .await
         .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
