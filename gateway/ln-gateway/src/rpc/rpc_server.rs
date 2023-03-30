@@ -12,7 +12,7 @@ use tracing::instrument;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
+    GatewayRpcSender, InfoPayload, LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 use crate::GatewayError;
 
@@ -34,6 +34,7 @@ pub async fn run_webserver(
         .route("/connect", post(connect))
         .route("/backup", post(backup))
         .route("/restore", post(restore))
+        .route("/reconnect", post(reconnect))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -139,6 +140,16 @@ async fn backup(
 async fn restore(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<RestorePayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    rpc.send(payload).await?;
+    Ok(())
+}
+
+// Reconnect to the lightning node
+#[instrument(skip_all, err)]
+async fn reconnect(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<LightningReconnectPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())

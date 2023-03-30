@@ -16,7 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
-use crate::{GatewayError, Result};
+use crate::{Gateway, GatewayError, Mode, Result};
 
 #[derive(Debug, Clone)]
 pub struct GatewayRpcSender {
@@ -74,6 +74,13 @@ pub struct RestorePayload {
     pub federation_id: FederationId,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LightningReconnectPayload {
+    // Sending `None` for node_type will be interpreted as just reconnecting using the existing
+    // settings
+    pub node_type: Option<Mode>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BalancePayload {
     pub federation_id: FederationId,
@@ -128,6 +135,7 @@ pub enum GatewayRequest {
     Withdraw(GatewayRequestInner<WithdrawPayload>),
     Backup(GatewayRequestInner<BackupPayload>),
     Restore(GatewayRequestInner<RestorePayload>),
+    LightningReconnect(GatewayRequestInner<LightningReconnectPayload>),
 }
 
 #[derive(Debug)]
@@ -169,17 +177,27 @@ impl_gateway_request_trait!(DepositPayload, TransactionId, GatewayRequest::Depos
 impl_gateway_request_trait!(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
 impl_gateway_request_trait!(BackupPayload, (), GatewayRequest::Backup);
 impl_gateway_request_trait!(RestorePayload, (), GatewayRequest::Restore);
+impl_gateway_request_trait!(
+    LightningReconnectPayload,
+    (),
+    GatewayRequest::LightningReconnect
+);
 
 impl<T> GatewayRequestInner<T>
 where
     T: GatewayRequestTrait,
     T::Response: std::fmt::Debug,
 {
-    pub async fn handle<F: Fn(T) -> FF, FF: Future<Output = Result<T::Response>> + Send>(
+    pub async fn handle<
+        'gateway,
+        F: Fn(&'gateway mut Gateway, T) -> FF,
+        FF: Future<Output = Result<T::Response>> + Send + 'gateway,
+    >(
         self,
+        gateway: &'gateway mut Gateway,
         handler: F,
     ) {
-        let result = handler(self.request).await;
+        let result = handler(gateway, self.request).await;
         if self.sender.send(result).is_err() {
             // TODO: figure out how to log the result
             tracing::error!("Plugin hung up");

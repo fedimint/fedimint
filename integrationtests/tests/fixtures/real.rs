@@ -40,7 +40,11 @@ pub struct RealLightningTest {
 
 #[async_trait]
 impl LightningTest for RealLightningTest {
-    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
+    async fn invoice(
+        &self,
+        amount: Amount,
+        expiry_time: Option<u64>,
+    ) -> ln_gateway::Result<Invoice> {
         match self.gateway_node {
             // If we're using CLN as the gateway, use LND to fetch an invoice
             GatewayNode::Cln => {
@@ -64,7 +68,7 @@ impl LightningTest for RealLightningTest {
                     .unwrap()
                     .into_inner();
 
-                Invoice::from_str(&invoice_resp.payment_request).unwrap()
+                Ok(Invoice::from_str(&invoice_resp.payment_request).unwrap())
             }
             // If we're using LND as the gateway, use CLN to fetch an invoice
             GatewayNode::Lnd => {
@@ -95,7 +99,7 @@ impl LightningTest for RealLightningTest {
                     panic!("cln-rpc response did not match expected InvoiceResponse")
                 };
 
-                Invoice::from_str(&invoice_resp.bolt11).unwrap()
+                Ok(Invoice::from_str(&invoice_resp.bolt11).unwrap())
             }
         }
     }

@@ -1,8 +1,9 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
+use std::sync::Arc;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -10,12 +11,12 @@ use fedimint_core::core::{
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::ModuleCommon;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
-use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
-use ln_gateway::Gateway;
+use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
+use ln_gateway::{Gateway, Mode};
 use mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
 use mint_client::modules::mint::{MintClientGen, MintModuleTypes};
 use mint_client::modules::wallet::{WalletClientGen, WalletModuleTypes};
@@ -42,29 +43,6 @@ pub struct GatewayOpts {
     /// Gateway webserver authentication password
     #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
     pub password: String,
-}
-
-#[derive(Debug, Clone, Subcommand)]
-enum Mode {
-    #[clap(name = "lnd")]
-    Lnd {
-        /// LND RPC address
-        #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
-        lnd_rpc_addr: String,
-
-        /// LND TLS cert file path
-        #[arg(long = "lnd-tls-cert", env = "FM_LND_TLS_CERT")]
-        lnd_tls_cert: String,
-
-        /// LND macaroon file path
-        #[arg(long = "lnd-macaroon", env = "FM_LND_MACAROON")]
-        lnd_macaroon: String,
-    },
-    #[clap(name = "cln")]
-    Cln {
-        #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
-        cln_extension_addr: Url,
-    },
 }
 
 // Fedimint Gateway Binary
@@ -106,13 +84,15 @@ async fn main() -> Result<(), anyhow::Error> {
     // Create task group for controlled shutdown of the gateway
     let task_group = TaskGroup::new();
 
-    let lnrpc: DynLnRpcClient = match mode {
+    let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = match mode {
         Mode::Cln { cln_extension_addr } => {
             info!(
                 "Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} ",
                 cln_extension_addr
             );
-            NetworkLnRpcClient::new(cln_extension_addr).await?.into()
+            Arc::new(RwLock::new(
+                NetworkLnRpcClient::new(cln_extension_addr).await?,
+            ))
         }
         Mode::Lnd {
             lnd_rpc_addr,
@@ -123,14 +103,15 @@ async fn main() -> Result<(), anyhow::Error> {
                 "Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} ",
                 lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
             );
-            GatewayLndClient::new(
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-                task_group.make_subgroup().await,
-            )
-            .await?
-            .into()
+            Arc::new(RwLock::new(
+                GatewayLndClient::new(
+                    lnd_rpc_addr,
+                    lnd_tls_cert,
+                    lnd_macaroon,
+                    task_group.make_subgroup().await,
+                )
+                .await?,
+            ))
         }
     };
 

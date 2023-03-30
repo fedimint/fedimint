@@ -7,8 +7,9 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    RestorePayload, WithdrawPayload,
+    LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
+use ln_gateway::Mode;
 use mint_client::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::from_hex;
 use url::Url;
@@ -63,6 +64,11 @@ pub enum Commands {
     Backup { federation_id: FederationId },
     /// Restore ecash from last available snapshot or from scratch
     Restore { federation_id: FederationId },
+    // Reconnect to the Lightning Node
+    Reconnect {
+        #[clap(subcommand)]
+        mode: Mode,
+    },
 }
 
 #[tokio::main]
@@ -165,6 +171,28 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await?;
 
+            print_response(response).await;
+        }
+        Commands::Reconnect { mode } => {
+            let payload = match mode {
+                Mode::Cln { cln_extension_addr } => LightningReconnectPayload {
+                    node_type: Some(Mode::Cln { cln_extension_addr }),
+                },
+                Mode::Lnd {
+                    lnd_rpc_addr,
+                    lnd_tls_cert,
+                    lnd_macaroon,
+                } => LightningReconnectPayload {
+                    node_type: Some(Mode::Lnd {
+                        lnd_rpc_addr,
+                        lnd_tls_cert,
+                        lnd_macaroon,
+                    }),
+                },
+            };
+            let response = client
+                .reconnect(source_password(cli.rpcpassword), payload)
+                .await?;
             print_response(response).await;
         }
     }
