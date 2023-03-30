@@ -41,9 +41,6 @@ pub struct ClnExtensionOpts {
     pub listen: SocketAddr,
 }
 
-// Note: Once this binary is stable, we should be able to remove current
-// 'ln_gateway' Use CLN_PLUGIN_LOG=<log-level> to enable debug logging from
-// within cln-plugin
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let (service, listen, plugin) = ClnRpcService::new()
