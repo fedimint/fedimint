@@ -587,6 +587,7 @@
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
 </pre><pre class="rust"><code><span class="doccomment">/// This tool assumes that `scripts/build.sh` has been sourced in the
 /// environment which calls it
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -869,6 +870,7 @@
 
     <span class="comment">// spawn fedimintd
     </span><span class="kw">let </span><span class="kw-2">mut </span>fedimintd = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/fedimintd&quot;</span>))
+        .arg(<span class="string">&quot;--data-dir&quot;</span>)
         .arg(data_dir)
         .envs(env_vars)
         .spawn()<span class="question-mark">?</span>;

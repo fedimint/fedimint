@@ -267,6 +267,7 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
@@ -300,6 +301,7 @@
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">pub struct </span>ServerOpts {
     <span class="doccomment">/// Path to folder containing federation config files
+    </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, env = <span class="string">&quot;FM_DATA_DIR&quot;</span>)]
     </span><span class="kw">pub </span>data_dir: PathBuf,
     <span class="doccomment">/// Password to encrypt sensitive config files
     </span><span class="comment">// TODO: should probably never send password to the server directly, rather send the hash via
