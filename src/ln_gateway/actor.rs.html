@@ -506,19 +506,100 @@
 <a href="#506" id="506">506</a>
 <a href="#507" id="507">507</a>
 <a href="#508" id="508">508</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::sync::atomic::AtomicBool;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{RwLock, TaskGroup};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>futures::stream::StreamExt;
+<span class="kw">use </span>futures::Stream;
 <span class="kw">use </span>mint_client::modules::ln::contracts::{ContractId, Preimage};
 <span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
 <span class="kw">use </span>mint_client::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>mint_client::{GatewayClient, PaymentParameters};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
+<span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
@@ -526,8 +607,8 @@
     CompleteHtlcsRequest, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
-<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::DynLnRpcClient;
-<span class="kw">use </span><span class="kw">crate</span>::rpc::FederationInfo;
+<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
+<span class="kw">use </span><span class="kw">crate</span>::rpc::{FederationInfo, GatewayRpcSender, LightningReconnectPayload};
 <span class="kw">use </span><span class="kw">crate</span>::utils::retry;
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
 
@@ -537,8 +618,10 @@
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>GatewayActor {
     client: Arc&lt;GatewayClient&gt;,
-    lnrpc: DynLnRpcClient,
+    <span class="kw">pub </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
     task_group: TaskGroup,
+    gw_rpc: GatewayRpcSender,
+    sender: <span class="prelude-ty">Option</span>&lt;Sender&lt;Arc&lt;AtomicBool&gt;&gt;&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -547,15 +630,25 @@
     External(Preimage),
 }
 
+<span class="kw">type </span>HTLCStream = Pin&lt;
+    Box&lt;
+        <span class="kw">dyn </span>Stream&lt;Item = std::result::Result&lt;SubscribeInterceptHtlcsResponse, Status&gt;&gt;
+            + Send
+            + <span class="lifetime">&#39;static</span>,
+    &gt;,
+&gt;;
+
 <span class="kw">impl </span>GatewayActor {
     <span class="kw">pub async fn </span>new(
         client: Arc&lt;GatewayClient&gt;,
-        lnrpc: DynLnRpcClient,
+        lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
         route_hints: Vec&lt;RouteHint&gt;,
         task_group: TaskGroup,
+        gw_rpc: GatewayRpcSender,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>register_client = client.clone();
-        tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>tg = task_group.make_subgroup().<span class="kw">await</span>;
+        tg.spawn(<span class="string">&quot;Register with federation&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="kw">loop </span>{
                 <span class="comment">// Retry gateway registration
                 </span><span class="kw">match </span>retry(
@@ -584,12 +677,15 @@
                     }
                 }
             }
-        });
+        })
+        .<span class="kw">await</span>;
 
-        <span class="kw">let </span>actor = <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>actor = <span class="self">Self </span>{
             client,
             lnrpc,
-            task_group,
+            task_group: tg,
+            gw_rpc,
+            sender: <span class="prelude-val">None</span>,
         };
 
         actor.subscribe_htlcs().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -597,141 +693,195 @@
         <span class="prelude-val">Ok</span>(actor)
     }
 
-    <span class="kw">async fn </span>subscribe_htlcs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>stop_subscribing_htlcs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = <span class="kw-2">&amp;</span><span class="self">self</span>.sender {
+            sender
+                .send(Arc::new(AtomicBool::new(<span class="bool-val">true</span>)))
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Couldn&#39;t send signal to shutdown HTLC thread&quot;</span>);
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>wait_for_htlc_or_shutdown(
+        stream: <span class="kw-2">&amp;mut </span>HTLCStream,
+        receiver: <span class="kw-2">&amp;mut </span>Receiver&lt;Arc&lt;AtomicBool&gt;&gt;,
+        gw_rpc_copy: GatewayRpcSender,
+        lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;SubscribeInterceptHtlcsResponse&gt; {
+        <span class="macro">tokio::select! </span>{
+            msg = stream.next() =&gt; <span class="kw">match </span>msg {
+                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(msg)) =&gt; <span class="prelude-val">Some</span>(msg),
+                <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Error sent over HTLC subscription: {}. Sending reconnect RPC&quot;</span>, e);
+                    <span class="comment">// Disconnect the lightning node connection in case the RPC fails
+                    </span>lnrpc.write().<span class="kw">await</span>.disconnect().<span class="kw">await</span>.expect(<span class="string">&quot;Error disconnecting the lightning node connection&quot;</span>);
+
+                    <span class="comment">// Sending a `LightningReconnectPayload` with `node_type` as None will use the existing
+                    // credentials to reconnect to the same node.
+                    </span><span class="kw">let </span>reconnect_req = LightningReconnectPayload { node_type: <span class="prelude-val">None </span>};
+                    gw_rpc_copy.send(reconnect_req).<span class="kw">await</span>.expect(<span class="string">&quot;Error sending reconnect RPC to gatewayd&quot;</span>);
+                    <span class="prelude-val">None
+                </span>}
+                <span class="prelude-val">None </span>=&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;HTLC stream closed by service&quot;</span>);
+                    <span class="prelude-val">None
+                </span>}
+            },
+            <span class="kw">_ </span>= receiver.recv() =&gt; {
+                <span class="macro">tracing::info!</span>(<span class="string">&quot;Received signal to shutdown HTLC thread&quot;</span>);
+                <span class="prelude-val">None
+            </span>}
+        }
+    }
+
+    <span class="kw">pub async fn </span>subscribe_htlcs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>short_channel_id = <span class="self">self</span>.client.config().mint_channel_id;
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = <span class="self">self</span>.task_group.clone();
+
+        <span class="comment">// Create a channel that will be used to shutdown the HTLC thread
+        </span><span class="kw">let </span>(sender, <span class="kw-2">mut </span>receiver) = mpsc::channel::&lt;Arc&lt;AtomicBool&gt;&gt;(<span class="number">100</span>);
+        <span class="self">self</span>.sender = <span class="prelude-val">Some</span>(sender);
 
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
             </span>.lnrpc
-            .to_owned()
-            .subscribe_htlcs(SubscribeInterceptHtlcsRequest { short_channel_id })
+            .read()
+            .<span class="kw">await
+            </span>.subscribe_htlcs(SubscribeInterceptHtlcsRequest { short_channel_id })
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">&quot;Subscribed to HTLCs with {:?}&quot;</span>, short_channel_id);
 
         <span class="kw">let </span>actor = <span class="self">self</span>.to_owned();
         <span class="kw">let </span>lnrpc_copy = <span class="self">self</span>.lnrpc.to_owned();
-        tg.spawn(
-            <span class="string">&quot;Subscribe to intercepted HTLCs in stream&quot;</span>,
-            <span class="kw">move </span>|subscription| <span class="kw">async move </span>{
-                <span class="kw">while let </span><span class="prelude-val">Some</span>(SubscribeInterceptHtlcsResponse {
-                    payment_hash,
-                    outgoing_amount_msat,
-                    intercepted_htlc_id,
-                    ..
-                }) = <span class="kw">match </span>stream.next().<span class="kw">await </span>{
-                    <span class="prelude-val">Some</span>(msg) =&gt; <span class="kw">match </span>msg {
-                        <span class="prelude-val">Ok</span>(msg) =&gt; <span class="prelude-val">Some</span>(msg),
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">warn!</span>(<span class="string">&quot;Error sent over HTLC subscription: {}&quot;</span>, e);
-                            <span class="prelude-val">None
-                        </span>}
-                    },
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">warn!</span>(<span class="string">&quot;HTLC stream closed by service&quot;</span>);
-                        <span class="prelude-val">None
-                    </span>}
-                } {
-                    <span class="kw">if </span>subscription.is_shutting_down() {
-                        <span class="macro">info!</span>(<span class="string">&quot;Shutting down HTLC subscription&quot;</span>);
-                        <span class="kw">break</span>;
+        <span class="kw">let </span>gw_rpc_copy = <span class="self">self</span>.gw_rpc.clone();
+        <span class="self">self</span>.task_group
+            .spawn(
+                <span class="string">&quot;Subscribe to intercepted HTLCs in stream&quot;</span>,
+                <span class="kw">move </span>|subscription| <span class="kw">async move </span>{
+                    <span class="kw">while let </span><span class="prelude-val">Some</span>(SubscribeInterceptHtlcsResponse {
+                        payment_hash,
+                        outgoing_amount_msat,
+                        intercepted_htlc_id,
+                        ..
+                    }) = <span class="self">Self</span>::wait_for_htlc_or_shutdown(
+                        <span class="kw-2">&amp;mut </span>stream,
+                        <span class="kw-2">&amp;mut </span>receiver,
+                        gw_rpc_copy.clone(),
+                        lnrpc_copy.clone(),
+                    )
+                    .<span class="kw">await
+                    </span>{
+                        <span class="kw">if </span>subscription.is_shutting_down() {
+                            <span class="macro">info!</span>(<span class="string">&quot;Shutting down HTLC subscription&quot;</span>);
+                            <span class="kw">break</span>;
+                        }
+
+                        <span class="comment">// TODO: Assert short channel id matches the one we subscribed to, or cancel
+                        // processing of intercepted HTLC TODO: Assert the offered
+                        // fee derived from invoice amount and outgoing amount is acceptable or
+                        // cancel processing of intercepted HTLC TODO:
+                        // Assert the HTLC expiry or cancel processing of
+                        // intercepted HTLC
+
+                        </span><span class="kw">let </span>hash = <span class="kw">match </span>sha256::Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash) {
+                            <span class="prelude-val">Ok</span>(hash) =&gt; hash,
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="kw">let </span>fail = <span class="string">&quot;Failed to parse payment hash&quot;</span>;
+
+                                <span class="macro">error!</span>(<span class="string">&quot;{}: {:?}&quot;</span>, fail, e);
+                                <span class="kw">let _ </span>= lnrpc_copy
+                                    .read()
+                                    .<span class="kw">await
+                                    </span>.complete_htlc(CompleteHtlcsRequest {
+                                        intercepted_htlc_id,
+                                        action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
+                                            reason: fail.to_string(),
+                                        })),
+                                    })
+                                    .<span class="kw">await</span>;
+                                <span class="kw">continue</span>;
+                            }
+                        };
+
+                        <span class="kw">let </span>amount_msat = Amount::from_msats(outgoing_amount_msat);
+
+                        <span class="kw">let </span>(outpoint, contract_id) = <span class="kw">match </span>actor
+                            .buy_preimage_from_federation(<span class="kw-2">&amp;</span>hash, <span class="kw-2">&amp;</span>amount_msat)
+                            .<span class="kw">await
+                        </span>{
+                            <span class="prelude-val">Ok</span>((outpoint, contract_id)) =&gt; (outpoint, contract_id),
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="macro">error!</span>(<span class="string">&quot;Failed to buy preimage: {:?}&quot;</span>, e);
+                                <span class="comment">// Note: this specific complete htlc requires no further action.
+                                // If we fail to send the complete htlc message, or get an error
+                                // result, lightning node will still
+                                // cancel HTCL after expiry period lapses.
+                                // Result can be safely ignored.
+                                // TODO: make sure this succeeded?
+                                </span><span class="kw">let _ </span>= lnrpc_copy
+                                    .read()
+                                    .<span class="kw">await
+                                    </span>.complete_htlc(CompleteHtlcsRequest {
+                                        intercepted_htlc_id,
+                                        action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
+                                            reason: e.to_string(),
+                                        })),
+                                    })
+                                    .<span class="kw">await</span>;
+                                <span class="kw">continue</span>;
+                            }
+                        };
+
+                        <span class="kw">match </span>actor
+                            .pay_invoice_buy_preimage_finalize(BuyPreimage::Internal((
+                                outpoint,
+                                contract_id,
+                            )))
+                            .<span class="kw">await
+                        </span>{
+                            <span class="prelude-val">Ok</span>(preimage) =&gt; {
+                                <span class="macro">info!</span>(<span class="string">&quot;Successfully processed intercepted HTLC&quot;</span>);
+                                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = lnrpc_copy
+                                    .read()
+                                    .<span class="kw">await
+                                    </span>.complete_htlc(CompleteHtlcsRequest {
+                                        intercepted_htlc_id,
+                                        action: <span class="prelude-val">Some</span>(Action::Settle(Settle {
+                                            preimage: preimage.<span class="number">0</span>.to_vec(),
+                                        })),
+                                    })
+                                    .<span class="kw">await
+                                </span>{
+                                    <span class="macro">error!</span>(<span class="string">&quot;Failed to complete HTLC: {:?}&quot;</span>, e);
+                                    <span class="comment">// Note: To prevent loss of funds for the
+                                    // gateway,
+                                    // we should either retry completing the
+                                    // htlc or
+                                    // reclaim funds from the federation
+                                </span>};
+                            }
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="macro">error!</span>(<span class="string">&quot;Failed to process intercepted HTLC: {:?}&quot;</span>, e);
+                                <span class="comment">// Note: this specific complete htlc requires no further action.
+                                // If we fail to send the complete htlc message, or get an error
+                                // result, lightning node will still
+                                // cancel HTCL after expiry period lapses.
+                                // Result can be safely ignored.
+                                </span><span class="kw">let _ </span>= lnrpc_copy
+                                    .read()
+                                    .<span class="kw">await
+                                    </span>.complete_htlc(CompleteHtlcsRequest {
+                                        intercepted_htlc_id,
+                                        action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
+                                            reason: e.to_string(),
+                                        })),
+                                    })
+                                    .<span class="kw">await</span>;
+                            }
+                        };
                     }
-
-                    <span class="comment">// TODO: Assert short channel id matches the one we subscribed to, or cancel
-                    // processing of intercepted HTLC TODO: Assert the offered
-                    // fee derived from invoice amount and outgoing amount is acceptable or cancel
-                    // processing of intercepted HTLC TODO: Assert the HTLC
-                    // expiry or cancel processing of intercepted HTLC
-
-                    </span><span class="kw">let </span>hash = <span class="kw">match </span>sha256::Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash) {
-                        <span class="prelude-val">Ok</span>(hash) =&gt; hash,
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="kw">let </span>fail = <span class="string">&quot;Failed to parse payment hash&quot;</span>;
-
-                            <span class="macro">error!</span>(<span class="string">&quot;{}: {:?}&quot;</span>, fail, e);
-                            <span class="kw">let _ </span>= lnrpc_copy
-                                .complete_htlc(CompleteHtlcsRequest {
-                                    intercepted_htlc_id,
-                                    action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
-                                        reason: fail.to_string(),
-                                    })),
-                                })
-                                .<span class="kw">await</span>;
-                            <span class="kw">continue</span>;
-                        }
-                    };
-
-                    <span class="kw">let </span>amount_msat = Amount::from_msats(outgoing_amount_msat);
-
-                    <span class="kw">let </span>(outpoint, contract_id) = <span class="kw">match </span>actor
-                        .buy_preimage_from_federation(<span class="kw-2">&amp;</span>hash, <span class="kw-2">&amp;</span>amount_msat)
-                        .<span class="kw">await
-                    </span>{
-                        <span class="prelude-val">Ok</span>((outpoint, contract_id)) =&gt; (outpoint, contract_id),
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to buy preimage: {:?}&quot;</span>, e);
-                            <span class="comment">// Note: this specific complete htlc requires no further action.
-                            // If we fail to send the complete htlc message, or get an error
-                            // result, lightning node will still
-                            // cancel HTCL after expiry period lapses.
-                            // Result can be safely ignored.
-                            // TODO: make sure this succeeded?
-                            </span><span class="kw">let _ </span>= lnrpc_copy
-                                .complete_htlc(CompleteHtlcsRequest {
-                                    intercepted_htlc_id,
-                                    action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
-                                        reason: e.to_string(),
-                                    })),
-                                })
-                                .<span class="kw">await</span>;
-                            <span class="kw">continue</span>;
-                        }
-                    };
-
-                    <span class="kw">match </span>actor
-                        .pay_invoice_buy_preimage_finalize(BuyPreimage::Internal((
-                            outpoint,
-                            contract_id,
-                        )))
-                        .<span class="kw">await
-                    </span>{
-                        <span class="prelude-val">Ok</span>(preimage) =&gt; {
-                            <span class="macro">info!</span>(<span class="string">&quot;Successfully processed intercepted HTLC&quot;</span>);
-                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = lnrpc_copy
-                                .complete_htlc(CompleteHtlcsRequest {
-                                    intercepted_htlc_id,
-                                    action: <span class="prelude-val">Some</span>(Action::Settle(Settle {
-                                        preimage: preimage.<span class="number">0</span>.to_vec(),
-                                    })),
-                                })
-                                .<span class="kw">await
-                            </span>{
-                                <span class="macro">error!</span>(<span class="string">&quot;Failed to complete HTLC: {:?}&quot;</span>, e);
-                                <span class="comment">// Note: To prevent loss of funds for the
-                                // gateway,
-                                // we should either retry completing the htlc or
-                                // reclaim funds from the federation
-                            </span>};
-                        }
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to process intercepted HTLC: {:?}&quot;</span>, e);
-                            <span class="comment">// Note: this specific complete htlc requires no further action.
-                            // If we fail to send the complete htlc message, or get an error result,
-                            // lightning node will still cancel HTCL after expiry period lapses.
-                            // Result can be safely ignored.
-                            </span><span class="kw">let _ </span>= lnrpc_copy
-                                .complete_htlc(CompleteHtlcsRequest {
-                                    intercepted_htlc_id,
-                                    action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
-                                        reason: e.to_string(),
-                                    })),
-                                })
-                                .<span class="kw">await</span>;
-                        }
-                    };
-                }
-            },
-        )
-        .<span class="kw">await</span>;
+                },
+            )
+            .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -906,7 +1056,9 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">match </span><span class="self">self
             </span>.lnrpc
-            .pay(PayInvoiceRequest {
+            .read()
+            .<span class="kw">await
+            </span>.pay(PayInvoiceRequest {
                 invoice: invoice.to_string(),
                 max_delay: payment_params.max_delay,
                 max_fee_percent: payment_params.max_fee_percent(),

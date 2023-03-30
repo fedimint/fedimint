@@ -143,6 +143,17 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -157,7 +168,7 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
+    GatewayRpcSender, InfoPayload, LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::GatewayError;
 
@@ -179,6 +190,7 @@
         .route(<span class="string">&quot;/connect&quot;</span>, post(connect))
         .route(<span class="string">&quot;/backup&quot;</span>, post(backup))
         .route(<span class="string">&quot;/restore&quot;</span>, post(restore))
+        .route(<span class="string">&quot;/reconnect&quot;</span>, post(reconnect))
         .layer(RequireAuthorizationLayer::bearer(<span class="kw-2">&amp;</span>authkey));
 
     <span class="kw">let </span>app = Router::new()
@@ -284,6 +296,16 @@
 </span><span class="kw">async fn </span>restore(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
     Json(payload): Json&lt;RestorePayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="comment">// Reconnect to the lightning node
+</span><span class="attr">#[instrument(skip_all, err)]
+</span><span class="kw">async fn </span>reconnect(
+    Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
+    Json(payload): Json&lt;LightningReconnectPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())

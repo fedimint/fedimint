@@ -213,6 +213,24 @@
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -231,7 +249,7 @@
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot};
 <span class="kw">use </span>tracing::error;
 
-<span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
+<span class="kw">use crate</span>::{Gateway, GatewayError, Mode, <span class="prelude-ty">Result</span>};
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayRpcSender {
@@ -289,6 +307,13 @@
     <span class="kw">pub </span>federation_id: FederationId,
 }
 
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>LightningReconnectPayload {
+    <span class="comment">// Sending `None` for node_type will be interpreted as just reconnecting using the existing
+    // settings
+    </span><span class="kw">pub </span>node_type: <span class="prelude-ty">Option</span>&lt;Mode&gt;,
+}
+
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>BalancePayload {
     <span class="kw">pub </span>federation_id: FederationId,
@@ -343,6 +368,7 @@
     Withdraw(GatewayRequestInner&lt;WithdrawPayload&gt;),
     Backup(GatewayRequestInner&lt;BackupPayload&gt;),
     Restore(GatewayRequestInner&lt;RestorePayload&gt;),
+    LightningReconnect(GatewayRequestInner&lt;LightningReconnectPayload&gt;),
 }
 
 <span class="attr">#[derive(Debug)]
@@ -384,17 +410,27 @@
 <span class="macro">impl_gateway_request_trait!</span>(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
 <span class="macro">impl_gateway_request_trait!</span>(BackupPayload, (), GatewayRequest::Backup);
 <span class="macro">impl_gateway_request_trait!</span>(RestorePayload, (), GatewayRequest::Restore);
+<span class="macro">impl_gateway_request_trait!</span>(
+    LightningReconnectPayload,
+    (),
+    GatewayRequest::LightningReconnect
+);
 
 <span class="kw">impl</span>&lt;T&gt; GatewayRequestInner&lt;T&gt;
 <span class="kw">where
     </span>T: GatewayRequestTrait,
     T::Response: std::fmt::Debug,
 {
-    <span class="kw">pub async fn </span>handle&lt;F: Fn(T) -&gt; FF, FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T::Response&gt;&gt; + Send&gt;(
+    <span class="kw">pub async fn </span>handle&lt;
+        <span class="lifetime">&#39;gateway</span>,
+        F: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;gateway </span><span class="kw-2">mut </span>Gateway, T) -&gt; FF,
+        FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T::Response&gt;&gt; + Send + <span class="lifetime">&#39;gateway</span>,
+    &gt;(
         <span class="self">self</span>,
+        gateway: <span class="kw-2">&amp;</span><span class="lifetime">&#39;gateway </span><span class="kw-2">mut </span>Gateway,
         handler: F,
     ) {
-        <span class="kw">let </span>result = handler(<span class="self">self</span>.request).<span class="kw">await</span>;
+        <span class="kw">let </span>result = handler(gateway, <span class="self">self</span>.request).<span class="kw">await</span>;
         <span class="kw">if </span><span class="self">self</span>.sender.send(result).is_err() {
             <span class="comment">// TODO: figure out how to log the result
             </span><span class="macro">tracing::error!</span>(<span class="string">&quot;Plugin hung up&quot;</span>);

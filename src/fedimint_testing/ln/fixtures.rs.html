@@ -117,6 +117,59 @@
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -133,6 +186,7 @@
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 <span class="kw">use </span>ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
+<span class="kw">use </span>ln_gateway::GatewayError;
 <span class="kw">use </span>mint_client::modules::ln::contracts::Preimage;
 <span class="kw">use </span>rand::rngs::OsRng;
 
@@ -144,6 +198,7 @@
     <span class="kw">pub </span>gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: Arc&lt;Mutex&lt;u64&gt;&gt;,
+    is_connected: bool,
 }
 
 <span class="kw">impl </span>FakeLightningTest {
@@ -157,6 +212,7 @@
             gateway_node_sec_key: SecretKey::from_keypair(<span class="kw-2">&amp;</span>kp),
             gateway_node_pub_key: PublicKey::from_keypair(<span class="kw-2">&amp;</span>kp),
             amount_sent,
+            is_connected: <span class="bool-val">true</span>,
         }
     }
 }
@@ -169,10 +225,20 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>LightningTest <span class="kw">for </span>FakeLightningTest {
-    <span class="kw">async fn </span>invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;) -&gt; Invoice {
+    <span class="kw">async fn </span>invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    ) -&gt; ln_gateway::Result&lt;Invoice&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.is_connected {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Error not connected to Lightning&quot;
+            </span>)));
+        }
+
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
 
-        InvoiceBuilder::new(Currency::Regtest)
+        <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
             .description(<span class="string">&quot;&quot;</span>.to_string())
             .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span><span class="self">self</span>.preimage.<span class="number">0</span>))
             .current_timestamp()
@@ -183,7 +249,7 @@
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
-            .unwrap()
+            .unwrap())
     }
 
     <span class="kw">async fn </span>amount_sent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
@@ -198,6 +264,12 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>FakeLightningTest {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;GetNodeInfoResponse&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.is_connected {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Error not connected to Lightning&quot;
+            </span>)));
+        }
+
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: <span class="self">self</span>.gateway_node_pub_key.serialize().to_vec(),
             alias: <span class="string">&quot;FakeLightningNode&quot;</span>.to_string(),
@@ -205,12 +277,24 @@
     }
 
     <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;GetRouteHintsResponse&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.is_connected {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Error not connected to Lightning&quot;
+            </span>)));
+        }
+
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse {
             route_hints: <span class="macro">vec!</span>[gatewaylnrpc::get_route_hints_response::RouteHint { hops: <span class="macro">vec!</span>[] }],
         })
     }
 
     <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; ln_gateway::Result&lt;PayInvoiceResponse&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.is_connected {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Error not connected to Lightning&quot;
+            </span>)));
+        }
+
         <span class="kw">let </span>signed = invoice.invoice.parse::&lt;SignedRawInvoice&gt;().unwrap();
         <span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap() += Invoice::from_signed(signed)
             .unwrap()
@@ -226,6 +310,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _subscription: SubscribeInterceptHtlcsRequest,
     ) -&gt; ln_gateway::Result&lt;HtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.is_connected {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Error not connected to Lightning&quot;
+            </span>)));
+        }
+
         <span class="prelude-val">Ok</span>(Box::pin(stream::iter(<span class="macro">vec!</span>[])))
     }
 
@@ -233,7 +323,23 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _complete: CompleteHtlcsRequest,
     ) -&gt; ln_gateway::Result&lt;CompleteHtlcsResponse&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.is_connected {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Error not connected to Lightning&quot;
+            </span>)));
+        }
+
         <span class="prelude-val">Ok</span>(CompleteHtlcsResponse {})
+    }
+
+    <span class="kw">async fn </span>connect(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;()&gt; {
+        <span class="self">self</span>.is_connected = <span class="bool-val">true</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>disconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;()&gt; {
+        <span class="self">self</span>.is_connected = <span class="bool-val">false</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div>
