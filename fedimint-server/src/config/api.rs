@@ -647,7 +647,8 @@ pub async fn run_server(
         let auth = config_generated_rx.recv().await.expect("should not close");
         server_handle.stop().expect("Able to stop server");
         let cfg = read_server_config(&auth.0, data_dir.clone())?;
-        FedimintServer::run(cfg, db.clone(), registry.clone(), None, &mut task_group).await?;
+        FedimintServer::run(cfg, db.clone(), registry.clone(), None, &mut task_group)
+            .await?;
     }
 }
 
