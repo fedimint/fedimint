@@ -23,24 +23,30 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::Address;
 use bitcoin_hashes::hex::ToHex;
+use clap::Subcommand;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{Amount, TransactionId};
+use gatewaylnrpc::GetNodeInfoResponse;
+use lnrpc_client::ILnRpcClient;
 use mint_client::ln::PayInvoicePayload;
 use mint_client::modules::ln::route_hints::RouteHint;
 use mint_client::{ClientError, GatewayClient};
+use rpc::{FederationInfo, LightningReconnectPayload};
 use secp256k1::PublicKey;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info, warn};
+use url::Url;
 
 use crate::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
-use crate::gatewaylnrpc::GetNodeInfoResponse;
-use crate::lnrpc_client::DynLnRpcClient;
+use crate::lnd::GatewayLndClient;
+use crate::lnrpc_client::NetworkLnRpcClient;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
@@ -53,6 +59,29 @@ const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 const INITIAL_SCID: u64 = 1;
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
+
+#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
+pub enum Mode {
+    #[clap(name = "lnd")]
+    Lnd {
+        /// LND RPC address
+        #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
+        lnd_rpc_addr: String,
+
+        /// LND TLS cert file path
+        #[arg(long = "lnd-tls-cert", env = "FM_LND_TLS_CERT")]
+        lnd_tls_cert: String,
+
+        /// LND macaroon file path
+        #[arg(long = "lnd-macaroon", env = "FM_LND_MACAROON")]
+        lnd_macaroon: String,
+    },
+    #[clap(name = "cln")]
+    Cln {
+        #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
+        cln_extension_addr: Url,
+    },
+}
 
 #[derive(Debug, Error)]
 pub enum GatewayError {
@@ -68,6 +97,13 @@ pub enum GatewayError {
     FailedToFetchRouteHints,
 }
 
+impl GatewayError {
+    pub fn other(msg: String) -> Self {
+        error!(msg);
+        GatewayError::Other(anyhow!(msg))
+    }
+}
+
 impl IntoResponse for GatewayError {
     fn into_response(self) -> Response {
         let mut err = Cow::<'static, str>::Owned(format!("{self:?}")).into_response();
@@ -78,8 +114,8 @@ impl IntoResponse for GatewayError {
 pub struct Gateway {
     decoders: ModuleDecoderRegistry,
     module_gens: ClientModuleGenRegistry,
-    lnrpc: DynLnRpcClient,
-    actors: Mutex<HashMap<String, Arc<GatewayActor>>>,
+    lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
+    actors: Mutex<HashMap<String, Arc<RwLock<GatewayActor>>>>,
     client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
@@ -90,7 +126,7 @@ pub struct Gateway {
 impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
-        lnrpc: DynLnRpcClient,
+        lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
         client_builder: DynGatewayClientBuilder,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
@@ -126,6 +162,8 @@ impl Gateway {
         let route_hints = loop {
             let route_hints: Vec<RouteHint> = self
                 .lnrpc
+                .read()
+                .await
                 .routehints()
                 .await
                 .expect("Could not fetch route hints")
@@ -174,16 +212,17 @@ impl Gateway {
         &self,
         client: Arc<GatewayClient>,
         route_hints: Vec<RouteHint>,
-    ) -> Result<Arc<GatewayActor>> {
-        let actor = Arc::new(
+    ) -> Result<Arc<RwLock<GatewayActor>>> {
+        let actor = Arc::new(RwLock::new(
             GatewayActor::new(
                 client.clone(),
                 self.lnrpc.clone(),
                 route_hints,
                 self.task_group.clone(),
+                GatewayRpcSender::new(self.sender.clone()),
             )
             .await?,
-        );
+        ));
 
         self.actors.lock().await.insert(
             client.config().client_config.federation_id.to_string(),
@@ -192,7 +231,7 @@ impl Gateway {
         Ok(actor)
     }
 
-    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<GatewayActor>> {
+    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<RwLock<GatewayActor>>> {
         self.actors
             .lock()
             .await
@@ -213,7 +252,7 @@ impl Gateway {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
-        let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.info().await?;
+        let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.read().await.info().await?;
         let node_pub_key = PublicKey::from_slice(&pub_key)
             .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
@@ -253,15 +292,13 @@ impl Gateway {
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        let federations = self
-            .actors
-            .lock()
-            .await
-            .iter()
-            .map(|(_, actor)| actor.get_info().expect("Failed to get actor info"))
-            .collect();
+        let actors = self.actors.lock().await;
+        let mut federations: Vec<FederationInfo> = Vec::new();
+        for actor in actors.values() {
+            federations.push(actor.read().await.get_info()?);
+        }
 
-        let ln_info = self.lnrpc.info().await?;
+        let ln_info = self.lnrpc.read().await.info().await?;
 
         Ok(GatewayInfo {
             federations,
@@ -277,7 +314,8 @@ impl Gateway {
             contract_id,
         } = payload;
 
-        let actor = self.select_actor(federation_id).await?;
+        let actor_lock = self.select_actor(federation_id).await?;
+        let actor = actor_lock.read().await;
         let outpoint = actor.pay_invoice(contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
@@ -288,6 +326,8 @@ impl Gateway {
     async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
         self.select_actor(payload.federation_id)
             .await?
+            .read()
+            .await
             .get_balance()
             .await
     }
@@ -295,6 +335,8 @@ impl Gateway {
     async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
         self.select_actor(payload.federation_id)
             .await?
+            .read()
+            .await
             .get_deposit_address()
             .await
     }
@@ -308,6 +350,8 @@ impl Gateway {
 
         self.select_actor(federation_id)
             .await?
+            .read()
+            .await
             .deposit(txout_proof, transaction)
             .await
     }
@@ -321,6 +365,8 @@ impl Gateway {
 
         self.select_actor(federation_id)
             .await?
+            .read()
+            .await
             .withdraw(amount, address)
             .await
     }
@@ -329,14 +375,79 @@ impl Gateway {
         &self,
         BackupPayload { federation_id }: BackupPayload,
     ) -> Result<()> {
-        self.select_actor(federation_id).await?.backup().await
+        self.select_actor(federation_id)
+            .await?
+            .read()
+            .await
+            .backup()
+            .await
     }
 
     async fn handle_restore_msg(
         &self,
         RestorePayload { federation_id }: RestorePayload,
     ) -> Result<()> {
-        self.select_actor(federation_id).await?.restore().await
+        self.select_actor(federation_id)
+            .await?
+            .read()
+            .await
+            .restore()
+            .await
+    }
+
+    async fn handle_lightning_reconnect(
+        &mut self,
+        payload: LightningReconnectPayload,
+    ) -> Result<()> {
+        let LightningReconnectPayload { node_type } = payload;
+
+        let actors = self.actors.lock().await;
+
+        // Stop all threads that are listening for HTLCs
+        tracing::info!("Stopping all HTLC subscription threads.");
+        for actor in actors.values() {
+            actor.write().await.stop_subscribing_htlcs().await?;
+        }
+
+        // Disconnect the lightning connection, then reconnect it
+        self.lnrpc.write().await.disconnect().await?;
+
+        let new_lnrpc: Arc<RwLock<dyn ILnRpcClient>> = match node_type {
+            Some(Mode::Cln { cln_extension_addr }) => Arc::new(RwLock::new(
+                NetworkLnRpcClient::new(cln_extension_addr).await?,
+            )),
+            Some(Mode::Lnd {
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+            }) => Arc::new(RwLock::new(
+                GatewayLndClient::new(
+                    lnd_rpc_addr,
+                    lnd_tls_cert,
+                    lnd_macaroon,
+                    self.task_group.make_subgroup().await,
+                )
+                .await?,
+            )),
+            None => {
+                let new_client = self.lnrpc.clone();
+                // Reconnect the existing client without re-creating it
+                new_client.write().await.connect().await?;
+                new_client
+            }
+        };
+
+        self.lnrpc = new_lnrpc.clone();
+
+        // Restart the subscription of HTLCs for each actor
+        tracing::info!("Restarting HTLC subscription threads.");
+        for actor in actors.values() {
+            let mut actor = actor.write().await;
+            actor.lnrpc = new_lnrpc.clone();
+            actor.subscribe_htlcs().await?;
+        }
+
+        Ok(())
     }
 
     pub async fn run(mut self, listen: SocketAddr, password: String) -> Result<()> {
@@ -370,50 +481,75 @@ impl Gateway {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
                     GatewayRequest::Info(inner) => {
-                        inner.handle(|payload| self.handle_get_info(payload)).await;
+                        inner
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_get_info(payload)
+                            })
+                            .await;
                     }
                     GatewayRequest::ConnectFederation(inner) => {
                         let route_hints: Vec<RouteHint> =
-                            self.lnrpc.routehints().await?.try_into()?;
+                            self.lnrpc.read().await.routehints().await?.try_into()?;
                         inner
-                            .handle(|payload| {
-                                self.handle_connect_federation(payload, route_hints.clone())
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_connect_federation(payload, route_hints.clone())
                             })
                             .await;
                     }
                     GatewayRequest::PayInvoice(inner) => {
                         inner
-                            .handle(|payload| self.handle_pay_invoice_msg(payload))
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_pay_invoice_msg(payload)
+                            })
                             .await;
                     }
                     GatewayRequest::Balance(inner) => {
                         inner
-                            .handle(|payload| self.handle_balance_msg(payload))
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_balance_msg(payload)
+                            })
                             .await;
                     }
                     GatewayRequest::DepositAddress(inner) => {
                         inner
-                            .handle(|payload| self.handle_address_msg(payload))
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_address_msg(payload)
+                            })
                             .await;
                     }
                     GatewayRequest::Deposit(inner) => {
                         inner
-                            .handle(|payload| self.handle_deposit_msg(payload))
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_deposit_msg(payload)
+                            })
                             .await;
                     }
                     GatewayRequest::Withdraw(inner) => {
                         inner
-                            .handle(|payload| self.handle_withdraw_msg(payload))
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_withdraw_msg(payload)
+                            })
                             .await;
                     }
                     GatewayRequest::Backup(inner) => {
                         inner
-                            .handle(|payload| self.handle_backup_msg(payload))
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_backup_msg(payload)
+                            })
                             .await;
                     }
                     GatewayRequest::Restore(inner) => {
                         inner
-                            .handle(|payload| self.handle_restore_msg(payload))
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_restore_msg(payload)
+                            })
+                            .await;
+                    }
+                    GatewayRequest::LightningReconnect(inner) => {
+                        inner
+                            .handle(&mut self, |gateway, payload| {
+                                gateway.handle_lightning_reconnect(payload)
+                            })
                             .await;
                     }
                 }

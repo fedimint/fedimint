@@ -1,9 +1,9 @@
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fedimint_core::dyn_newtype_define;
+use fedimint_core::task::sleep;
 use futures::stream::BoxStream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
@@ -42,18 +42,12 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Request completion of an intercepted htlc after processing and
     /// determining an outcome
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse>;
-}
 
-dyn_newtype_define!(
-    /// Arc reference to a gateway lightning rpc client
-    #[derive(Clone)]
-    pub DynLnRpcClient(Arc<ILnRpcClient>)
-);
+    /// Create a connection to the lightning node
+    async fn connect(&mut self) -> Result<()>;
 
-impl DynLnRpcClient {
-    pub fn new(client: Arc<dyn ILnRpcClient + Send + Sync>) -> Self {
-        DynLnRpcClient(client)
-    }
+    // Disconnect the current connection to the lightning node
+    async fn disconnect(&mut self) -> Result<()>;
 }
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -62,7 +56,8 @@ impl DynLnRpcClient {
 /// `GatewayLightningServer`.
 #[derive(Debug)]
 pub struct NetworkLnRpcClient {
-    client: GatewayLightningClient<Channel>,
+    client: Option<GatewayLightningClient<Channel>>,
+    endpoint: Endpoint,
 }
 
 impl NetworkLnRpcClient {
@@ -72,64 +67,103 @@ impl NetworkLnRpcClient {
             GatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
         })?;
 
-        let client = GatewayLightningClient::connect(endpoint)
-            .await
-            .map_err(|e| {
-                error!("Failed to connect to lnrpc server: {:?}", e);
-                GatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
-            })?;
-
-        Ok(Self { client })
+        let mut gw_rpc = NetworkLnRpcClient {
+            client: None,
+            endpoint,
+        };
+        gw_rpc.connect().await?;
+        Ok(gw_rpc)
     }
 }
 
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
     async fn info(&self) -> Result<GetNodeInfoResponse> {
-        let req = Request::new(EmptyRequest {});
+        if let Some(mut client) = self.client.clone() {
+            let req = Request::new(EmptyRequest {});
+            let res = client.get_node_info(req).await?;
 
-        let mut client = self.client.clone();
-        let res = client.get_node_info(req).await?;
+            return Ok(res.into_inner());
+        }
 
-        Ok(res.into_inner())
+        Err(GatewayError::other(
+            "Error: not connected to CLN extension".to_string(),
+        ))
     }
 
     async fn routehints(&self) -> Result<GetRouteHintsResponse> {
-        let req = Request::new(EmptyRequest {});
+        if let Some(mut client) = self.client.clone() {
+            let req = Request::new(EmptyRequest {});
+            let res = client.get_route_hints(req).await?;
 
-        let mut client = self.client.clone();
-        let res = client.get_route_hints(req).await?;
+            return Ok(res.into_inner());
+        }
 
-        Ok(res.into_inner())
+        Err(GatewayError::other(
+            "Error: not connected to CLN extension".to_string(),
+        ))
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
-        let req = Request::new(invoice);
+        if let Some(mut client) = self.client.clone() {
+            let req = Request::new(invoice);
+            let res = client.pay_invoice(req).await?;
 
-        let mut client = self.client.clone();
-        let res = client.pay_invoice(req).await?;
+            return Ok(res.into_inner());
+        }
 
-        Ok(res.into_inner())
+        Err(GatewayError::other(
+            "Error: not connected to CLN extension".to_string(),
+        ))
     }
 
     async fn subscribe_htlcs<'a>(
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> Result<HtlcStream<'a>> {
-        let req = Request::new(subscription);
+        if let Some(mut client) = self.client.clone() {
+            let req = Request::new(subscription);
+            let res = client.subscribe_intercept_htlcs(req).await?;
 
-        let mut client = self.client.clone();
-        let res = client.subscribe_intercept_htlcs(req).await?;
+            return Ok(Box::pin(res.into_inner()));
+        }
 
-        Ok(Box::pin(res.into_inner()))
+        Err(GatewayError::other(
+            "Error: not connected to CLN extension".to_string(),
+        ))
     }
 
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
-        let req = Request::new(outcome);
+        if let Some(mut client) = self.client.clone() {
+            let req = Request::new(outcome);
+            let res = client.complete_htlc(req).await?;
 
-        let mut client = self.client.clone();
-        let res = client.complete_htlc(req).await?;
+            return Ok(res.into_inner());
+        }
 
-        Ok(res.into_inner())
+        Err(GatewayError::other(
+            "Error: not connected to CLN extension".to_string(),
+        ))
+    }
+
+    async fn connect(&mut self) -> Result<()> {
+        let client = loop {
+            match GatewayLightningClient::connect(self.endpoint.clone()).await {
+                Ok(client) => break client,
+                Err(_) => {
+                    tracing::warn!("Couldn't connect to CLN extension, retrying in 5 seconds...");
+                    sleep(Duration::from_secs(5)).await;
+                }
+            }
+        };
+
+        self.client = Some(client);
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        tracing::warn!("Disconnected from CLN extension");
+        self.client = None;
+        Ok(())
     }
 }

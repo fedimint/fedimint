@@ -6,7 +6,7 @@ use url::Url;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    RestorePayload, WithdrawPayload,
+    LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 
 pub struct RpcClient {
@@ -89,6 +89,15 @@ impl RpcClient {
         payload: RestorePayload,
     ) -> Result<Response, Error> {
         let url = self.base_url.join("/restore").expect("invalid base url");
+        self.call(url, password, payload).await
+    }
+
+    pub async fn reconnect(
+        &self,
+        password: String,
+        payload: LightningReconnectPayload,
+    ) -> Result<Response, Error> {
+        let url = self.base_url.join("/reconnect").expect("invalid base url");
         self.call(url, password, payload).await
     }
 

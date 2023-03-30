@@ -29,7 +29,7 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::{timeout, TaskGroup};
+use fedimint_core::task::{timeout, RwLock, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::{LightningClientGen, LightningGateway};
 use fedimint_ln_server::LightningGen;
@@ -64,7 +64,7 @@ use itertools::Itertools;
 use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
-use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
+use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
 use mint_client::mint::SpendableNote;
 use mint_client::transaction::legacy::Transaction;
@@ -336,8 +336,9 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
             let lnrpc_adapter = match gateway_node {
                 GatewayNode::Cln => {
-                    let lnrpc: DynLnRpcClient =
-                        NetworkLnRpcClient::new(lnrpc_addr).await.unwrap().into();
+                    let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = Arc::new(RwLock::new(
+                        NetworkLnRpcClient::new(lnrpc_addr).await.unwrap(),
+                    ));
                     LnRpcAdapter::new(lnrpc)
                 }
                 GatewayNode::Lnd => {
@@ -349,7 +350,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                     )
                     .await
                     .unwrap();
-                    let lnrpc = DynLnRpcClient::new(Arc::new(gateway_lnd_client));
+                    let lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
                     LnRpcAdapter::new(lnrpc)
                 }
             };
@@ -388,7 +389,8 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             let bitcoin_rpc_2: DynBitcoindRpc = bitcoin.clone().into();
 
             let lightning = FakeLightningTest::new();
-            let lnrpc_adapter = LnRpcAdapter::new(lightning.clone().into());
+            let ln_arc = Arc::new(RwLock::new(lightning.clone()));
+            let lnrpc_adapter = LnRpcAdapter::new(ln_arc.clone());
 
             let net = MockNetwork::new();
             let net_ref = &net;
@@ -559,8 +561,8 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
 }
 
 pub struct GatewayTest {
-    pub actor: Arc<GatewayActor>,
-    pub adapter: Arc<LnRpcAdapter>,
+    pub actor: Arc<RwLock<GatewayActor>>,
+    pub adapter: Arc<RwLock<LnRpcAdapter>>,
     pub keys: LightningGateway,
     pub user: UserTest<GatewayClientConfig>,
     pub client: Arc<GatewayClient>,
@@ -613,7 +615,7 @@ impl GatewayTest {
         .into();
 
         let gateway = Gateway::new(
-            adapter.clone().into(),
+            Arc::new(RwLock::new(adapter.clone())),
             client_builder.clone(),
             decoders.clone(),
             module_gens.clone(),
@@ -640,7 +642,7 @@ impl GatewayTest {
 
         GatewayTest {
             actor,
-            adapter: Arc::new(adapter),
+            adapter: Arc::new(RwLock::new(adapter)),
             keys,
             user,
             client,

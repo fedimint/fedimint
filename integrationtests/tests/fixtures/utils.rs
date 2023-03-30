@@ -3,11 +3,12 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use fedimint_core::task::RwLock;
 use ln_gateway::gatewaylnrpc::{
     CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
-use ln_gateway::lnrpc_client::{DynLnRpcClient, HtlcStream, ILnRpcClient};
+use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
 use ln_gateway::GatewayError;
 use tokio::sync::Mutex;
 
@@ -16,14 +17,14 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone)]
 pub struct LnRpcAdapter {
     /// The actual `ILnRpcClient` that we add behavior to.
-    client: DynLnRpcClient,
+    client: Arc<RwLock<dyn ILnRpcClient>>,
     /// A pair of <PayInvoiceRequest> and <Count> where client.pay() will fail
     /// <Count> times for each <String> (bolt11 invoice)
     fail_invoices: Arc<Mutex<HashMap<String, u8>>>,
 }
 
 impl LnRpcAdapter {
-    pub fn new(client: DynLnRpcClient) -> Self {
+    pub fn new(client: Arc<RwLock<dyn ILnRpcClient>>) -> Self {
         let fail_invoices = Arc::new(Mutex::new(HashMap::new()));
 
         LnRpcAdapter {
@@ -46,11 +47,11 @@ impl LnRpcAdapter {
 #[async_trait]
 impl ILnRpcClient for LnRpcAdapter {
     async fn info(&self) -> ln_gateway::Result<GetNodeInfoResponse> {
-        self.client.info().await
+        self.client.read().await.info().await
     }
 
     async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
-        self.client.routehints().await
+        self.client.read().await.routehints().await
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
@@ -67,20 +68,28 @@ impl ILnRpcClient for LnRpcAdapter {
             }
         }
         self.fail_invoices.lock().await.remove(&invoice.invoice);
-        self.client.pay(invoice).await
+        self.client.read().await.pay(invoice).await
     }
 
     async fn subscribe_htlcs<'a>(
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> ln_gateway::Result<HtlcStream<'a>> {
-        self.client.subscribe_htlcs(subscription).await
+        self.client.read().await.subscribe_htlcs(subscription).await
     }
 
     async fn complete_htlc(
         &self,
         complete: CompleteHtlcsRequest,
     ) -> ln_gateway::Result<CompleteHtlcsResponse> {
-        self.client.complete_htlc(complete).await
+        self.client.read().await.complete_htlc(complete).await
+    }
+
+    async fn connect(&mut self) -> ln_gateway::Result<()> {
+        self.client.write().await.connect().await
+    }
+
+    async fn disconnect(&mut self) -> ln_gateway::Result<()> {
+        self.client.write().await.disconnect().await
     }
 }
