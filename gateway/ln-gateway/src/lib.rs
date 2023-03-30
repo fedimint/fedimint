@@ -412,7 +412,7 @@ impl Gateway {
         // Disconnect the lightning connection, then reconnect it
         self.lnrpc.write().await.disconnect().await?;
 
-        let new_lnrpc: Arc<RwLock<dyn ILnRpcClient>> = match node_type {
+        self.lnrpc = match node_type {
             Some(Mode::Cln { cln_extension_addr }) => Arc::new(RwLock::new(
                 NetworkLnRpcClient::new(cln_extension_addr).await?,
             )),
@@ -437,14 +437,10 @@ impl Gateway {
             }
         };
 
-        self.lnrpc = new_lnrpc.clone();
-
         // Restart the subscription of HTLCs for each actor
         tracing::info!("Restarting HTLC subscription threads.");
         for actor in actors.values() {
-            let mut actor = actor.write().await;
-            actor.lnrpc = new_lnrpc.clone();
-            actor.subscribe_htlcs().await?;
+            actor.write().await.subscribe_htlcs().await?;
         }
 
         Ok(())

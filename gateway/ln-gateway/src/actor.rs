@@ -123,12 +123,16 @@ impl GatewayActor {
         stream: &mut HTLCStream,
         receiver: &mut Receiver<Arc<AtomicBool>>,
         gw_rpc_copy: GatewayRpcSender,
+        lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
     ) -> Option<SubscribeInterceptHtlcsResponse> {
         tokio::select! {
             msg = stream.next() => match msg {
                 Some(Ok(msg)) => Some(msg),
                 Some(Err(e)) => {
                     warn!("Error sent over HTLC subscription: {}. Sending reconnect RPC", e);
+                    // Disconnect the lightning node connection in case the RPC fails
+                    lnrpc.write().await.disconnect().await.expect("Error disconnecting the lightning node connection");
+
                     // Sending a `LightningReconnectPayload` with `node_type` as None will use the existing
                     // credentials to reconnect to the same node.
                     let reconnect_req = LightningReconnectPayload { node_type: None };
@@ -178,6 +182,7 @@ impl GatewayActor {
                         &mut stream,
                         &mut receiver,
                         gw_rpc_copy.clone(),
+                        lnrpc_copy.clone(),
                     )
                     .await
                     {

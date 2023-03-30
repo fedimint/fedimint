@@ -362,7 +362,6 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn disconnect(&mut self) -> crate::Result<()> {
-        tracing::warn!("Disconnected from LND");
         self.client = None;
         Ok(())
     }

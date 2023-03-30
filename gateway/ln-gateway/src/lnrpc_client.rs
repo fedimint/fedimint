@@ -162,7 +162,6 @@ impl ILnRpcClient for NetworkLnRpcClient {
     }
 
     async fn disconnect(&mut self) -> Result<()> {
-        tracing::warn!("Disconnected from CLN extension");
         self.client = None;
         Ok(())
     }
