@@ -280,6 +280,7 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
 
     // spawn fedimintd
     let mut fedimintd = Command::new(format!("{bin_dir}/fedimintd"))
+        .arg("--data-dir")
         .arg(data_dir)
         .envs(env_vars)
         .spawn()?;

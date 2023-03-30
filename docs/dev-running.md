@@ -190,7 +190,7 @@ There also exist some other, more experimental commands that can be explored usi
 ```shell
 $ fedimint-cli help
 
-Usage: fedimint-cli --workdir <WORKDIR> <COMMAND>
+Usage: fedimint-cli --data-dir <WORKDIR> <COMMAND>
 
 Commands:
   version-hash         Print the latest git commit hash this bin. was build with
@@ -221,7 +221,7 @@ Commands:
   help                 Print this message or the help of the given subcommand(s)
 
 Options:
-      --workdir <WORKDIR>  The working directory of the client containing the config and db
+      --data-dir <WORKDIR>  The working directory of the client containing the config and db
   -h, --help               Print help
   -V, --version            Print version
 ```

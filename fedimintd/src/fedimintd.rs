@@ -31,6 +31,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Parser)]
 pub struct ServerOpts {
     /// Path to folder containing federation config files
+    #[arg(long = "data-dir", env = "FM_DATA_DIR")]
     pub data_dir: PathBuf,
     /// Password to encrypt sensitive config files
     // TODO: should probably never send password to the server directly, rather send the hash via

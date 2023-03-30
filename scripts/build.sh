@@ -70,7 +70,7 @@ mkdir -p $FM_GATEWAY_DATA_DIR
 export FM_LIGHTNING_CLI="lightning-cli --network regtest --lightning-dir=$FM_CLN_DIR"
 export FM_LNCLI="lncli -n regtest --lnddir=$FM_LND_DIR --rpcserver=localhost:11009"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
-export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
+export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --data-dir $FM_CFG_DIR"
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
 export FM_GWCLI_CLN="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
 export FM_GWCLI_LND="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:28175/"
