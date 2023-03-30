@@ -1,0 +1,13 @@
+codecov:
+  require_ci_to_pass: true
+  coverage:
+    precision: 2
+    round: down
+    range: "60...100"
+    status:
+      project:
+        default:
+          target: auto
+          threshold: 1%
+  notify:
+    wait_for_ci: no
