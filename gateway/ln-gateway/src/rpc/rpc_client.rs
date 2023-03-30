@@ -100,7 +100,7 @@ impl RpcClient {
         password: String,
         payload: LightningReconnectPayload,
     ) -> Result<Response, Error> {
-        let url = self.base_url.join("/reconnect").expect("invalid base url");
+        let url = self.base_url.join("/connect-ln").expect("invalid base url");
         self.call(url, password, payload).await
     }
 

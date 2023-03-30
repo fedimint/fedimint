@@ -34,7 +34,7 @@ pub async fn run_webserver(
         .route("/connect-fed", post(connect_fed))
         .route("/backup", post(backup))
         .route("/restore", post(restore))
-        .route("/reconnect", post(reconnect))
+        .route("/connect-ln", post(connect_ln))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -147,7 +147,7 @@ async fn restore(
 
 // Reconnect to the lightning node
 #[instrument(skip_all, err)]
-async fn reconnect(
+async fn connect_ln(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<LightningReconnectPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
