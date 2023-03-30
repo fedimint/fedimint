@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -8,6 +9,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_aead::random_salt;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
     PeerServerParams, WsAdminClient,
@@ -23,24 +25,27 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use itertools::Itertools;
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::RpcModule;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::Notify;
 use tokio_rustls::rustls;
 use tracing::error;
 use url::Url;
 
+use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
 use crate::config::{gen_cert_and_key, ServerConfig, ServerConfigConsensus, ServerConfigParams};
 use crate::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
 use crate::net::connect::TlsConfig;
 use crate::net::peers::{DelayCalculator, NetworkConfig};
+use crate::FedimintServer;
 
 pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
 /// Serves the config gen API endpoints
 pub struct ConfigGenApi {
     /// Directory the configs will be created in
-    _data_dir: PathBuf,
+    data_dir: PathBuf,
     /// In-memory state machine
     state: Mutex<ConfigApiState>,
     /// DB not really used
@@ -55,6 +60,8 @@ pub struct ConfigGenApi {
     module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
     /// Registry for config gen
     registry: ServerModuleGenRegistry,
+    /// Tracks when the config is generated
+    config_generated_tx: Sender<ApiAuth>,
 }
 
 impl ConfigGenApi {
@@ -65,9 +72,10 @@ impl ConfigGenApi {
         default_params: ConfigGenParamsRequest,
         module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
         registry: ServerModuleGenRegistry,
+        config_generated_tx: Sender<ApiAuth>,
     ) -> Self {
         Self {
-            _data_dir: data_dir,
+            data_dir,
             state: Mutex::new(ConfigApiState::SetPassword),
             db,
             our_connections,
@@ -75,6 +83,7 @@ impl ConfigGenApi {
             default_params,
             module_gens,
             registry,
+            config_generated_tx,
         }
     }
 
@@ -233,7 +242,7 @@ impl ConfigGenApi {
             let (params, auth) = match &*state {
                 ConfigApiState::VerifyConfigParams(auth, params) => (params.clone(), auth.clone()),
                 ConfigApiState::RunningConsensus(_)
-                | ConfigApiState::VerifyConsensusConfig(_, _)
+                | ConfigApiState::VerifyConsensusConfig(_)
                 | ConfigApiState::RunningDkg(_) => return Self::bad_request("DKG already run"),
                 ConfigApiState::FailedDkg(_) => return dkg_failed,
                 _ => return Self::bad_request("Must generate configs first"),
@@ -258,7 +267,7 @@ impl ConfigGenApi {
         let mut state = self.state.lock().expect("lock poisoned");
         match config {
             Ok(config) => {
-                *state = ConfigApiState::VerifyConsensusConfig(auth, config);
+                *state = ConfigApiState::VerifyConsensusConfig(config);
                 Ok(())
             }
             Err(e) => {
@@ -279,7 +288,7 @@ impl ConfigGenApi {
         let dkg_failed = Err(ApiError::server_error("DKG failed".to_string()));
 
         match &*state {
-            ConfigApiState::VerifyConsensusConfig(_, config) => Ok(self
+            ConfigApiState::VerifyConsensusConfig(config) => Ok(self
                 .get_hashes(&config.consensus)
                 .remove(&config.local.identity)
                 .expect("our id should exist")),
@@ -288,13 +297,16 @@ impl ConfigGenApi {
         }
     }
 
-    /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
-    /// with other peers
+    /// User must pass in the hashes received from other peers in order to
+    /// confirm that all guardians have the same consensus config.  If
+    /// successful, writes the configs to disk.  We stretch the auth string with
+    /// `get_encryption_key` to make brute-force attacks against the
+    /// encrypted configs more difficult.
     pub async fn verify_configs(&self, user_hashes: BTreeSet<sha256::Hash>) -> ApiResult<()> {
-        let mut state = self.state.lock().expect("lock poisoned");
+        let state = self.state.lock().expect("lock poisoned");
 
-        let (auth, config) = match &*state {
-            ConfigApiState::VerifyConsensusConfig(auth, config) => (auth.clone(), config.clone()),
+        let config = match &*state {
+            ConfigApiState::VerifyConsensusConfig(config) => config.clone(),
             _ => return Self::bad_request("Not in a state that has configs"),
         };
 
@@ -303,12 +315,34 @@ impl ConfigGenApi {
             .values()
             .cloned()
             .collect();
-        if user_hashes == hashes {
-            *state = ConfigApiState::RunningConsensus(auth);
-            Ok(())
-        } else {
-            Self::bad_request("Config verification failed")
+
+        if user_hashes != hashes {
+            return Self::bad_request("Config verification failed");
         }
+
+        let auth = config.private.api_auth.0.clone();
+        fs::write(self.data_dir.join(SALT_FILE), random_salt())
+            .map_err(|e| ApiError::server_error(format!("Unable to write to data dir {e:?}")))?;
+        write_server_config(&config, self.data_dir.clone(), &auth, &self.registry)
+            .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
+    }
+
+    /// Creates the Fedimint server, decrypting the config files from disk using
+    /// the auth string.  We send a message to the `run_server` task to shutdown
+    /// the API so that the Fedimint API can start.
+    pub async fn start_consensus(&self, auth: ApiAuth) -> ApiResult<()> {
+        {
+            let cfg = read_server_config(&auth.0, self.data_dir.clone())
+                .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
+
+            let mut state = self.state.lock().expect("lock poisoned");
+            *state = ConfigApiState::RunningConsensus(cfg);
+        }
+        self.config_generated_tx
+            .send(auth.clone())
+            .await
+            .expect("Can send");
+        Ok(())
     }
 
     fn get_hashes(&self, config: &ServerConfigConsensus) -> BTreeMap<PeerId, sha256::Hash> {
@@ -540,9 +574,9 @@ pub enum ConfigApiState {
     /// DKG failed, user should restart config gen from the beginning
     FailedDkg(ApiAuth),
     /// Configs are created, awaiting guardian verification
-    VerifyConsensusConfig(ApiAuth, ServerConfig),
+    VerifyConsensusConfig(ServerConfig),
     /// We all agree on consensus configs, we can run consensus
-    RunningConsensus(ApiAuth),
+    RunningConsensus(ServerConfig),
 }
 
 #[async_trait]
@@ -563,15 +597,18 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             ConfigApiState::VerifyConfigParams(api_auth, _) => Some(api_auth) == auth,
             ConfigApiState::RunningDkg(api_auth) => Some(api_auth) == auth,
             ConfigApiState::FailedDkg(api_auth) => Some(api_auth) == auth,
-            ConfigApiState::VerifyConsensusConfig(api_auth, _) => Some(api_auth) == auth,
-            ConfigApiState::RunningConsensus(api_auth) => Some(api_auth) == auth,
+            ConfigApiState::VerifyConsensusConfig(cfg) => Some(&cfg.private.api_auth) == auth,
+            ConfigApiState::RunningConsensus(cfg) => Some(&cfg.private.api_auth) == auth,
         };
 
         (self, ApiEndpointContext::new(has_auth, dbtx, id))
     }
 }
 
-/// Starts the configuration server
+/// Starts the config gen server
+///
+/// Runs the consensus server once the configuration has been created
+/// If the server exits, restarts config gen
 // TODO: combine with net::run_server and replace DKG CLI with the API
 pub async fn run_server(
     data_dir: PathBuf,
@@ -580,29 +617,38 @@ pub async fn run_server(
     default_params: ConfigGenParamsRequest,
     module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
     registry: ServerModuleGenRegistry,
-) -> ServerHandle {
-    let state = RpcHandlerCtx {
-        rpc_context: Arc::new(ConfigGenApi::new(
-            data_dir,
-            our_connections.clone(),
-            db,
-            default_params,
-            module_gens,
-            registry,
-        )),
-    };
-    let mut rpc_module = RpcModule::new(state);
+    mut task_group: TaskGroup,
+) -> anyhow::Result<()> {
+    loop {
+        let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
+        let state = RpcHandlerCtx {
+            rpc_context: Arc::new(ConfigGenApi::new(
+                data_dir.clone(),
+                our_connections.clone(),
+                db.clone(),
+                default_params.clone(),
+                module_gens.clone(),
+                registry.clone(),
+                config_generated_tx,
+            )),
+        };
+        let mut rpc_module = RpcModule::new(state);
 
-    attach_endpoints(&mut rpc_module, config_endpoints(), None);
+        attach_endpoints(&mut rpc_module, config_endpoints(), None);
 
-    ServerBuilder::new()
-        .max_connections(10)
-        .ping_interval(Duration::from_secs(10))
-        .build(&our_connections.api_bind.to_string())
-        .await
-        .expect("Could not start API server")
-        .start(rpc_module)
-        .expect("Could not start API server")
+        let server_handle = ServerBuilder::new()
+            .max_connections(10)
+            .ping_interval(Duration::from_secs(10))
+            .build(&our_connections.api_bind.to_string())
+            .await?
+            .start(rpc_module)?;
+
+        // TODO: Return failures by restarting the config API
+        let auth = config_generated_rx.recv().await.expect("should not close");
+        server_handle.stop().expect("Able to stop server");
+        let cfg = read_server_config(&auth.0, data_dir.clone())?;
+        FedimintServer::run(cfg, db.clone(), registry.clone(), None, &mut task_group).await?;
+    }
 }
 
 /// Returns the endpoints that are necessary prior to the config being generated
@@ -686,6 +732,13 @@ fn config_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                 config.verify_configs(user_hashes).await
             }
         },
+        api_endpoint! {
+            "start_consensus",
+            async |config: &ConfigGenApi, context, auth: ApiAuth| -> () {
+                check_auth(context)?;
+                config.start_consensus(auth).await
+            }
+        },
     ]
 }
 
@@ -711,6 +764,7 @@ fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
 mod tests {
     use std::collections::BTreeSet;
     use std::path::PathBuf;
+    use std::time::Duration;
     use std::{env, fs};
 
     use fedimint_core::admin_client::WsAdminClient;
@@ -719,10 +773,10 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
+    use fedimint_core::task::{sleep, TaskGroup};
     use fedimint_core::PeerId;
     use futures::future::join_all;
     use itertools::Itertools;
-    use jsonrpsee::server::ServerHandle;
     use url::Url;
 
     use crate::config::api::{run_server, ConfigGenConnections, ConfigGenConnectionsRequest};
@@ -730,10 +784,9 @@ mod tests {
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
         client: WsAdminClient,
-        server: ServerHandle,
-        auth: ApiAuth,
         name: String,
         our_connections: ConfigGenConnections,
+        task_group: TaskGroup,
     }
 
     impl TestConfigApi {
@@ -755,31 +808,45 @@ mod tests {
                 p2p_url,
                 api_url: api_url.clone(),
             };
-            let server = run_server(
-                data_dir.clone(),
-                our_connections.clone(),
-                db,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            )
-            .await;
+            let dir = data_dir.join(name_suffix.to_string());
+            fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
+
+            let connections = our_connections.clone();
+            let mut task_group = TaskGroup::new();
+            let subgroup = task_group.make_subgroup().await;
+            task_group
+                .spawn("run-server", move |_| async move {
+                    run_server(
+                        dir,
+                        connections,
+                        db,
+                        Default::default(),
+                        Default::default(),
+                        Default::default(),
+                        subgroup,
+                    )
+                    .await
+                })
+                .await;
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = WsAdminClient::new(api_url.clone(), PeerId::from(0), auth.clone());
+            let client = WsAdminClient::new(api_url.clone(), PeerId::from(0), auth);
 
             TestConfigApi {
                 client,
-                server,
-                auth,
+                task_group,
                 name,
                 our_connections,
             }
         }
 
-        /// Helper function using the auth we generated
-        async fn set_password(&self) -> FederationResult<()> {
-            self.client.set_password(self.auth.clone()).await
+        /// Helper function using the auth we generated, retries until the API
+        /// is up
+        async fn retry_set_password(&self) {
+            while self.client.set_password().await.is_err() {
+                sleep(Duration::from_millis(100)).await;
+                tracing::info!("Test retrying set password, waiting for API to start")
+            }
         }
 
         /// Helper function using generated urls
@@ -793,7 +860,7 @@ mod tests {
         }
     }
 
-    #[test_log::test(tokio::test)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_config_api() {
         let (parent, _maybe_tmp_dir_guard) = match env::var("FM_TEST_DIR") {
             Ok(directory) => (directory, None),
@@ -808,15 +875,14 @@ mod tests {
         };
 
         let data_dir = PathBuf::from(parent).join("test-config-api");
-        fs::create_dir(data_dir.clone()).expect("Unable to create test dir");
 
         // TODO: Choose port in common way with `fedimint_env`
         let base_port = 18103;
         let mut leader = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
         // Cannot set the password twice
-        leader.set_password().await.unwrap();
-        assert!(leader.set_password().await.is_err());
+        leader.retry_set_password().await;
+        assert!(leader.client.set_password().await.is_err());
 
         // We can call this twice to change the leader name
         leader.set_connections(&None).await.unwrap();
@@ -828,7 +894,7 @@ mod tests {
         for i in 1..=3 {
             let port = base_port + (i * 2);
             let mut follower = TestConfigApi::new(port, i, data_dir.clone()).await;
-            follower.set_password().await.unwrap();
+            follower.retry_set_password().await;
             let leader_url = Some(leader.our_connections.api_url.clone());
             follower.set_connections(&leader_url).await.unwrap();
             follower.name = format!("{}_", follower.name);
@@ -875,12 +941,17 @@ mod tests {
             hashes.insert(peer.client.get_verify_config_hash().await.unwrap());
         }
         for peer in &followers {
-            peer.client.verify_configs(hashes.clone()).await.unwrap()
+            peer.client.verify_configs(hashes.clone()).await.unwrap();
         }
 
-        for peer in followers {
-            peer.server.stop().expect("server stops");
+        // start consensus
+        for peer in &followers {
+            peer.client.start_consensus().await.unwrap();
         }
-        fs::remove_dir(data_dir).expect("Unable to remove dir");
+
+        // shutdown
+        for peer in &followers {
+            peer.task_group.shutdown().await;
+        }
     }
 }
