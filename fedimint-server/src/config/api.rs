@@ -51,15 +51,9 @@ pub struct ConfigGenApi {
     /// DB not really used
     db: Database,
     /// Our connection info configured locally
-    our_connections: ConfigGenConnections,
+    settings: ConfigGenSettings,
     /// Notify if we receive connections from peer
     notify_peer_connection: Notify,
-    /// The default params for the modules
-    default_params: ConfigGenParamsRequest,
-    /// Modules that will generate configs
-    module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
-    /// Registry for config gen
-    registry: ServerModuleGenRegistry,
     /// Tracks when the config is generated
     config_generated_tx: Sender<ApiAuth>,
 }
@@ -67,22 +61,16 @@ pub struct ConfigGenApi {
 impl ConfigGenApi {
     pub fn new(
         data_dir: PathBuf,
-        our_connections: ConfigGenConnections,
+        settings: ConfigGenSettings,
         db: Database,
-        default_params: ConfigGenParamsRequest,
-        module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
-        registry: ServerModuleGenRegistry,
         config_generated_tx: Sender<ApiAuth>,
     ) -> Self {
         Self {
             data_dir,
             state: Mutex::new(ConfigApiState::SetPassword),
             db,
-            our_connections,
+            settings,
             notify_peer_connection: Default::default(),
-            default_params,
-            module_gens,
-            registry,
             config_generated_tx,
         }
     }
@@ -114,7 +102,7 @@ impl ConfigGenApi {
 
             let connection = match (*state).clone() {
                 ConfigApiState::SetConnections(auth) => {
-                    ConfigGenConnectionsState::new(request, self.our_connections.clone(), auth)?
+                    ConfigGenConnectionsState::new(request, self.settings.clone(), auth)?
                 }
                 ConfigApiState::SetConfigGenParams(old) => old.with_request(request)?,
                 _ => return Err(ApiError::bad_request("Config already set".to_string())),
@@ -179,7 +167,7 @@ impl ConfigGenApi {
 
     /// Returns default config gen params that can be modified by the leader
     pub fn get_default_config_gen_params(&self) -> ApiResult<ConfigGenParamsRequest> {
-        Ok(self.default_params.clone())
+        Ok(self.settings.default_params.clone())
     }
 
     /// Sets the config gen params, should only be called by the leader
@@ -254,7 +242,7 @@ impl ConfigGenApi {
 
         let task_group = TaskGroup::new();
         let mut subgroup = task_group.make_subgroup().await;
-        let module_gens = self.module_gens.clone();
+        let module_gens = self.settings.module_gens.clone();
 
         let config = ServerConfig::distributed_gen(
             &params.to_server_params(),
@@ -323,8 +311,13 @@ impl ConfigGenApi {
         let auth = config.private.api_auth.0.clone();
         fs::write(self.data_dir.join(SALT_FILE), random_salt())
             .map_err(|e| ApiError::server_error(format!("Unable to write to data dir {e:?}")))?;
-        write_server_config(&config, self.data_dir.clone(), &auth, &self.registry)
-            .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
+        write_server_config(
+            &config,
+            self.data_dir.clone(),
+            &auth,
+            &self.settings.registry,
+        )
+        .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
     }
 
     /// Creates the Fedimint server, decrypting the config files from disk using
@@ -350,7 +343,7 @@ impl ConfigGenApi {
         for (peer, cert) in config.tls_certs.iter() {
             let mut engine = HashEngine::default();
             let hashed = config
-                .try_to_config_response(&self.registry)
+                .try_to_config_response(&self.settings.registry)
                 .expect("hashes");
 
             hashed
@@ -401,8 +394,8 @@ impl ConfigGenApi {
             our_id: *our_id,
             our_private_key: connection.tls_private,
             api_auth: connection.auth,
-            p2p_bind: connection.our_connections.p2p_bind,
-            api_bind: connection.our_connections.api_bind,
+            p2p_bind: connection.settings.p2p_bind,
+            api_bind: connection.settings.api_bind,
         };
 
         let params = ConfigGenParams { local, consensus };
@@ -487,7 +480,7 @@ pub struct ConfigGenParamsLocal {
 
 /// All the connections info we configure locally without talking to peers
 #[derive(Debug, Clone)]
-pub struct ConfigGenConnections {
+pub struct ConfigGenSettings {
     /// Bind address for our P2P connection
     pub p2p_bind: SocketAddr,
     /// Bind address for our API connection
@@ -496,13 +489,19 @@ pub struct ConfigGenConnections {
     pub p2p_url: Url,
     /// Url for our API connection
     pub api_url: Url,
+    /// The default params for the modules
+    default_params: ConfigGenParamsRequest,
+    /// Modules that will generate configs
+    module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+    /// Registry for config gen
+    registry: ServerModuleGenRegistry,
 }
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
 #[derive(Debug, Clone)]
 pub struct ConfigGenConnectionsState {
-    /// Our connection info configured locally
-    our_connections: ConfigGenConnections,
+    /// Our config gen settings configured locally
+    settings: ConfigGenSettings,
     /// Our auth string
     auth: ApiAuth,
     /// Our TLS private key
@@ -519,13 +518,13 @@ pub struct ConfigGenConnectionsState {
 impl ConfigGenConnectionsState {
     fn new(
         request: ConfigGenConnectionsRequest,
-        our_connections: ConfigGenConnections,
+        our_connections: ConfigGenSettings,
         auth: ApiAuth,
     ) -> ApiResult<Self> {
         let (tls_cert, tls_private) = gen_cert_and_key(&request.our_name)
             .map_err(|_| ApiError::server_error("Unable to generate TLS keys".to_string()))?;
         Ok(Self {
-            our_connections,
+            settings: our_connections,
             auth,
             tls_private,
             tls_cert,
@@ -535,14 +534,14 @@ impl ConfigGenConnectionsState {
     }
 
     fn with_request(self, request: ConfigGenConnectionsRequest) -> ApiResult<Self> {
-        Self::new(request, self.our_connections, self.auth)
+        Self::new(request, self.settings, self.auth)
     }
 
     fn as_peer_info(&self) -> PeerServerParams {
         PeerServerParams {
             cert: self.tls_cert.clone(),
-            p2p_url: self.our_connections.p2p_url.clone(),
-            api_url: self.our_connections.api_url.clone(),
+            p2p_url: self.settings.p2p_url.clone(),
+            api_url: self.settings.api_url.clone(),
             name: self.request.our_name.clone(),
         }
     }
@@ -612,11 +611,8 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
 // TODO: combine with net::run_server and replace DKG CLI with the API
 pub async fn run_server(
     data_dir: PathBuf,
-    our_connections: ConfigGenConnections,
+    settings: ConfigGenSettings,
     db: Database,
-    default_params: ConfigGenParamsRequest,
-    module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
-    registry: ServerModuleGenRegistry,
     mut task_group: TaskGroup,
 ) -> anyhow::Result<()> {
     loop {
@@ -624,11 +620,8 @@ pub async fn run_server(
         let state = RpcHandlerCtx {
             rpc_context: Arc::new(ConfigGenApi::new(
                 data_dir.clone(),
-                our_connections.clone(),
+                settings.clone(),
                 db.clone(),
-                default_params.clone(),
-                module_gens.clone(),
-                registry.clone(),
                 config_generated_tx,
             )),
         };
@@ -639,7 +632,7 @@ pub async fn run_server(
         let server_handle = ServerBuilder::new()
             .max_connections(10)
             .ping_interval(Duration::from_secs(10))
-            .build(&our_connections.api_bind.to_string())
+            .build(&settings.api_bind.to_string())
             .await?
             .start(rpc_module)?;
 
@@ -647,8 +640,14 @@ pub async fn run_server(
         let auth = config_generated_rx.recv().await.expect("should not close");
         server_handle.stop().expect("Able to stop server");
         let cfg = read_server_config(&auth.0, data_dir.clone())?;
-        FedimintServer::run(cfg, db.clone(), registry.clone(), None, &mut task_group)
-            .await?;
+        FedimintServer::run(
+            cfg,
+            db.clone(),
+            settings.registry.clone(),
+            None,
+            &mut task_group,
+        )
+        .await?;
     }
 }
 
@@ -780,13 +779,13 @@ mod tests {
     use itertools::Itertools;
     use url::Url;
 
-    use crate::config::api::{run_server, ConfigGenConnections, ConfigGenConnectionsRequest};
+    use crate::config::api::{run_server, ConfigGenConnectionsRequest, ConfigGenSettings};
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
         client: WsAdminClient,
         name: String,
-        our_connections: ConfigGenConnections,
+        our_connections: ConfigGenSettings,
         task_group: TaskGroup,
     }
 
@@ -803,11 +802,14 @@ mod tests {
             let p2p_url = format!("ws://127.0.0.1:{}", port + 1)
                 .parse()
                 .expect("parses");
-            let our_connections = ConfigGenConnections {
+            let our_connections = ConfigGenSettings {
                 p2p_bind,
                 api_bind,
                 p2p_url,
                 api_url: api_url.clone(),
+                default_params: Default::default(),
+                module_gens: Default::default(),
+                registry: Default::default(),
             };
             let dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
@@ -817,16 +819,7 @@ mod tests {
             let subgroup = task_group.make_subgroup().await;
             task_group
                 .spawn("run-server", move |_| async move {
-                    run_server(
-                        dir,
-                        connections,
-                        db,
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        subgroup,
-                    )
-                    .await
+                    run_server(dir, connections, db, subgroup).await
                 })
                 .await;
             // our id doesn't really exist at this point
@@ -846,7 +839,10 @@ mod tests {
         async fn retry_set_password(&self) {
             while self.client.set_password().await.is_err() {
                 sleep(Duration::from_millis(100)).await;
-                tracing::info!("Test retrying set password, waiting for API to start")
+                tracing::info!(
+                    target: fedimint_logging::LOG_TEST,
+                    "Test retrying set password, waiting for API to start"
+                )
             }
         }
 
