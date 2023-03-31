@@ -89,7 +89,15 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
                     &cookie_file_path,
                     std::fs::Permissions::from_mode(0o400),
                 )?;
-                Auth::UserPass("bitcoin".to_owned(), "bitcoin".to_owned())
+                Auth::UserPass("bitcoin".to_owned(), "bitcoin".to_owned());
+
+                // Get the process ID of the bitcoind process
+                let pid = Command::new("pgrep").arg("bitcoind").output()?.stdout;
+                let pid_str = std::str::from_utf8(&pid)?.trim();
+                let pid_num = pid_str.parse::<i32>()?;
+
+                monitor_bitcoind(cookie_file_path, pid_num)?;
+                Ok(())
             }
         } else {
             Auth::UserPass(
@@ -100,6 +108,15 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
             )
         },
     ))
+}
+
+fn get_rpc_cookie_file() -> Option<String> {
+    for (i, arg) in std::env::args().enumerate() {
+        if arg == "-rpccookiefile" && i + 1 < std::env::args().len() {
+            return Some(std::env::args().nth(i + 1).unwrap());
+        }
+    }
+    None
 }
 
 pub fn make_bitcoin_rpc_backend(
