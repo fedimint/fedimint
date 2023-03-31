@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::os::unix::fs::PermissionsExt;
 
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
@@ -48,56 +49,15 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
         if url.username().is_empty() {
             Auth::None
         } else if url.password().is_none() {
-            if let Some(cookie_file) = rpc_cookie_file {
+            if let Some(cookie_file) = rpc_cookie_file() {
                 let cookie = std::fs::read_to_string(cookie_file)?;
-                let mut auth = Auth::None;
-                for line in cookie.lines() {
-                    let tokens: Vec<_> = line.split('=').collect();
-                    if tokens.len() == 2 {
-                        match tokens[0] {
-                            "rpcuser" => {
-                                auth = match auth {
-                                    Auth::None => {
-                                        Auth::UserPass(tokens[1].to_owned(), "".to_owned())
-                                    }
-                                    Auth::UserPass(_, password) => {
-                                        Auth::UserPass(tokens[1].to_owned(), password)
-                                    }
-                                    Auth::CookieFile(_) => auth,
-                                };
-                            }
-                            "rpcpassword" => {
-                                auth = match auth {
-                                    Auth::None => {
-                                        Auth::UserPass("".to_owned(), tokens[1].to_owned())
-                                    }
-                                    Auth::UserPass(username, _) => {
-                                        Auth::UserPass(username, tokens[1].to_owned())
-                                    }
-                                    Auth::CookieFile(_) => auth,
-                                };
-                            }
-                            _ => {}
-                        }
-                    }
-                }
+                let auth = parse_cookie_string(&cookie).unwrap_or(Auth::None);
                 auth
             } else {
                 let cookie_file_path = format!("{}/.cookie", url.path());
-                std::fs::write(&cookie_file_path, "rpcuser=bitcoin\nrpcpassword=bitcoin\n")?;
-                std::fs::set_permissions(
-                    &cookie_file_path,
-                    std::fs::Permissions::from_mode(0o400),
-                )?;
-                Auth::UserPass("bitcoin".to_owned(), "bitcoin".to_owned());
-
-                // Get the process ID of the bitcoind process
-                let pid = Command::new("pgrep").arg("bitcoind").output()?.stdout;
-                let pid_str = std::str::from_utf8(&pid)?.trim();
-                let pid_num = pid_str.parse::<i32>()?;
-
-                monitor_bitcoind(cookie_file_path, pid_num)?;
-                Ok(())
+                create_cookie_file(&cookie_file_path, "bitcoin", "bitcoin")?;
+                let auth = Auth::UserPass("bitcoin".to_owned(), "bitcoin".to_owned());
+                auth
             }
         } else {
             Auth::UserPass(
@@ -117,6 +77,36 @@ fn rpc_cookie_file() -> Option<String> {
         }
     }
     None
+}
+
+fn parse_cookie_string(cookie_str: &str) -> Option<Auth> {
+    let mut username = None;
+    let mut password = None;
+
+    for line in cookie_str.lines() {
+        let parts: Vec<&str> = line.split('=').collect();
+
+        if parts.len() == 2 {
+            match parts[0] {
+                "rpcuser" => username = Some(parts[1].to_owned()),
+                "rpcpassword" => password = Some(parts[1].to_owned()),
+                _ => (),
+            }
+        }
+    }
+
+    if let (Some(user), Some(pass)) = (username, password) {
+        Some(Auth::UserPass(user, pass))
+    } else {
+        None
+    }
+}
+
+fn create_cookie_file(path: &str, username: &str, password: &str) -> std::io::Result<()> {
+    let cookie_str = format!("rpcuser={}\nrpcpassword={}\n", username, password);
+    std::fs::write(path, cookie_str)?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o400))?;
+    Ok(())
 }
 
 pub fn make_bitcoin_rpc_backend(
