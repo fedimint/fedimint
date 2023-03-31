@@ -423,6 +423,16 @@
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -446,7 +456,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
 <span class="kw">use </span><span class="kw">crate</span>::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{
-    ActiveState, DynState, Executor, GlobalContext, InactiveState, OperationId, OperationState,
+    ActiveState, ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, InactiveState,
+    OperationId, OperationState,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -474,7 +485,7 @@
     /// committed.
     </span><span class="kw">async fn </span>finalize_and_submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;TransactionId&gt;;
@@ -551,11 +562,17 @@
 
     <span class="kw">async fn </span>finalize_and_submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;TransactionId&gt; {
-        ClientInner::finalize_and_submit_transaction(<span class="self">self</span>, dbtx, operation_id, tx_builder).<span class="kw">await
+        ClientInner::finalize_and_submit_transaction(
+            <span class="self">self</span>,
+            dbtx.global_tx(),
+            operation_id,
+            tx_builder,
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>await_active_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;DynGlobalClientContext&gt;) -&gt; ActiveState {
@@ -584,10 +601,13 @@
         tx_builder: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;TransactionId&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.inner.db.begin_transaction().<span class="kw">await</span>;
-        <span class="self">self</span>.inner
+        <span class="kw">let </span>txid = <span class="self">self
+            </span>.inner
             .finalize_and_submit_transaction(<span class="kw-2">&amp;mut </span>dbtx, operation_id, tx_builder)
-            .<span class="kw">await
-    </span>}
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(txid)
+    }
 }
 
 <span class="kw">struct </span>ClientInner {
@@ -802,7 +822,7 @@
                         </span>.module_gens
                         .get(module_config.kind())
                         .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Unknown module kind in config&quot;</span>))<span class="question-mark">?
-                        </span>.init(module_config, db.clone())
+                        </span>.init(module_config, db.clone(), module_instance)
                         .<span class="kw">await</span><span class="question-mark">?</span>;
                     modules.register_module(module_instance, module);
                 }

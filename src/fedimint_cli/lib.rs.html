@@ -1911,7 +1911,7 @@
                 <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
                 <span class="kw">let </span>decoders = cli.load_decoders(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens);
                 <span class="kw">let </span>db = cli.load_db(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-                <span class="kw">let </span>(_id, module_cfg) = <span class="kw">match </span>id {
+                <span class="kw">let </span>(id, module_cfg) = <span class="kw">match </span>id {
                     ModuleSelector::Id(id) =&gt; (
                         id,
                         cfg.as_ref()
@@ -1928,7 +1928,7 @@
                     <span class="self">self</span>.module_gens.get(module_cfg.kind()).unwrap(<span class="comment">/* already checked */</span>);
 
                 <span class="kw">let </span>module = module_gen
-                    .init(module_cfg, db)
+                    .init(module_cfg, db, id)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;Loading module failed&quot;</span>)<span class="question-mark">?</span>;
 

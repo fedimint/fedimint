@@ -2267,6 +2267,7 @@
 <a href="#2267" id="2267">2267</a>
 <a href="#2268" id="2268">2268</a>
 <a href="#2269" id="2269">2269</a>
+<a href="#2270" id="2270">2270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2878,7 +2879,8 @@
 /// modules are allowed to interact with are a subset of `DatabaseTransaction`,
 /// since modules do not manage the lifetime of database transactions.
 /// Committing to the database or rolling back a transaction is not exposed.
-</span><span class="kw">pub struct </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, T: Send + Encodable + <span class="lifetime">&#39;isolated</span>&gt; {
+</span><span class="kw">pub struct </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, T: Send + Encodable + <span class="lifetime">&#39;isolated </span>= ModuleInstanceId&gt;
+{
     isolated_tx: Box&lt;<span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>&gt;&gt;,
     decoders: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span>ModuleDecoderRegistry,
     commit_tracker: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span>CommitTracker,

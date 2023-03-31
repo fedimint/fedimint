@@ -126,6 +126,21 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -134,7 +149,7 @@
 <span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, CommonModuleGenRegistry, ModuleGenRegistry, TypedClientModuleConfig,
 };
-<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind};
+<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -162,7 +177,12 @@
     <span class="kw">type </span>Config: TypedClientModuleConfig;
 
     <span class="doccomment">/// Initialize a [`ClientModule`] instance from its config
-    </span><span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: <span class="self">Self</span>::Config, db: Database) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt;;
+    </span><span class="kw">async fn </span>init(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        cfg: <span class="self">Self</span>::Config,
+        db: Database,
+        instance_id: ModuleInstanceId,
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt;;
 
     <span class="doccomment">/// Initialize a [`crate::module::PrimaryClientModule`] instance from its
     /// config
@@ -199,7 +219,12 @@
 
     <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>);
 
-    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: ClientModuleConfig, db: Database) -&gt; anyhow::Result&lt;DynClientModule&gt;;
+    <span class="kw">async fn </span>init(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        cfg: ClientModuleConfig,
+        db: Database,
+        instance_id: ModuleInstanceId,
+    ) -&gt; anyhow::Result&lt;DynClientModule&gt;;
 
     <span class="kw">async fn </span>init_primary(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -229,9 +254,14 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: ClientModuleConfig, db: Database) -&gt; anyhow::Result&lt;DynClientModule&gt; {
+    <span class="kw">async fn </span>init(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        cfg: ClientModuleConfig,
+        db: Database,
+        instance_id: ModuleInstanceId,
+    ) -&gt; anyhow::Result&lt;DynClientModule&gt; {
         <span class="kw">let </span>typed_cfg = cfg.cast::&lt;T::Config&gt;()<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.init(typed_cfg, db).<span class="kw">await</span><span class="question-mark">?</span>.into())
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.init(typed_cfg, db, instance_id).<span class="kw">await</span><span class="question-mark">?</span>.into())
     }
 
     <span class="kw">async fn </span>init_primary(
