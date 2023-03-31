@@ -110,7 +110,7 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
     ))
 }
 
-fn get_rpc_cookie_file() -> Option<String> {
+fn rpc_cookie_file() -> Option<String> {
     for (i, arg) in std::env::args().enumerate() {
         if arg == "-rpccookiefile" && i + 1 < std::env::args().len() {
             return Some(std::env::args().nth(i + 1).unwrap());
