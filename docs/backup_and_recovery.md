@@ -4,7 +4,7 @@
 
 The client uses [the deterministic e-cash derivation scheme](./recoverable_e-cash.md). This allows e-cash recovery from the root key (exported and backed up securely during wallet creation) in case of data corruption or losing access to the wallet.
 
-Using the root key it's possible to deterministically derive all the secret material, and by matching it against publically available Fedimint federation history, recreate all the lost data.
+Using the root key it's possible to deterministically derive all the secret material, and by matching it against publicly available Fedimint federation history, recreate all the lost data.
 
 However, recreating user funds by scanning the entire federation history might be very time and resource-consuming. To help with this problem Fedimint's backup&recovery supports backup snapshots, allowing practical and fast, yet privacy-preserving recovery.
 
@@ -26,7 +26,7 @@ All this data is serialized, padded (to avoid leaking any information), and encr
 
 ### Federation provided backup snapshot storage
 
-In principle, the encrypted backup snapshot could be stored anywhere, privately or publically, but for the user's convenience, the Federation provides the ability to store and retrieve them.
+In principle, the encrypted backup snapshot could be stored anywhere, privately or publicly, but for the user's convenience, the Federation provides the ability to store and retrieve them.
 
 The client creates a backup request containing:
 
