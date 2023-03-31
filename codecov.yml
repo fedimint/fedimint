@@ -1,3 +1,4 @@
+comment: false # https://docs.codecov.com/docs/pull-request-comments#disable-comment
 codecov:
   require_ci_to_pass: true
   coverage:
