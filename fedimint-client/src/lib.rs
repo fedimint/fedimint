@@ -21,7 +21,8 @@ use secp256k1_zkp::Secp256k1;
 use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
 use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::{
-    ActiveState, DynState, Executor, GlobalContext, InactiveState, OperationId, OperationState,
+    ActiveState, ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, InactiveState,
+    OperationId, OperationState,
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -49,7 +50,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// committed.
     async fn finalize_and_submit_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId>;
@@ -126,11 +127,17 @@ impl IGlobalClientContext for ClientInner {
 
     async fn finalize_and_submit_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId> {
-        ClientInner::finalize_and_submit_transaction(self, dbtx, operation_id, tx_builder).await
+        ClientInner::finalize_and_submit_transaction(
+            self,
+            dbtx.global_tx(),
+            operation_id,
+            tx_builder,
+        )
+        .await
     }
 
     async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState {
@@ -159,9 +166,12 @@ impl Client {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId> {
         let mut dbtx = self.inner.db.begin_transaction().await;
-        self.inner
+        let txid = self
+            .inner
             .finalize_and_submit_transaction(&mut dbtx, operation_id, tx_builder)
-            .await
+            .await?;
+        dbtx.commit_tx().await;
+        Ok(txid)
     }
 }
 
@@ -377,7 +387,7 @@ impl ClientBuilder {
                         .module_gens
                         .get(module_config.kind())
                         .ok_or(anyhow!("Unknown module kind in config"))?
-                        .init(module_config, db.clone())
+                        .init(module_config, db.clone(), module_instance)
                         .await?;
                     modules.register_module(module_instance, module);
                 }

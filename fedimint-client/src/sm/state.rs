@@ -6,27 +6,17 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send, maybe_add_send_sync};
 
-use crate::sm::{GlobalContext, OperationId};
+use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId};
 
 /// Implementors act as state machines that can be executed
 pub trait State:
-    Debug
-    + Clone
-    + Eq
-    + PartialEq
-    + Encodable
-    + Decodable
-    + IntoDynInstance<DynType = DynState<Self::GlobalContext>>
-    + MaybeSend
-    + MaybeSync
-    + 'static
+    Debug + Clone + Eq + PartialEq + Encodable + Decodable + MaybeSend + MaybeSync + 'static
 {
     /// Additional resources made available in this module's state transitions
     type ModuleContext: Context;
@@ -103,7 +93,7 @@ type TriggerFuture = Pin<Box<maybe_add_send!(dyn Future<Output = serde_json::Val
 type StateTransitionFunction<S> = Arc<
     maybe_add_send_sync!(
         dyn for<'a> Fn(
-            &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+            &'a mut ClientSMDatabaseTransaction<'_, '_>,
             serde_json::Value,
             S,
         ) -> BoxFuture<'a, S>
@@ -151,14 +141,10 @@ impl<S> StateTransition<S> {
         S: MaybeSend + MaybeSync + Clone + 'static,
         V: serde::Serialize + serde::de::DeserializeOwned + Send,
         Trigger: Future<Output = V> + MaybeSend + 'static,
-        TransitionFn: for<'a> Fn(
-                &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-                V,
-                S,
-            ) -> BoxFuture<'a, S>
+        TransitionFn: for<'a> Fn(&'a mut ClientSMDatabaseTransaction<'_, '_>, V, S) -> BoxFuture<'a, S>
             + MaybeSend
             + MaybeSync
-            + Copy
+            + Clone
             + 'static,
     {
         StateTransition {
@@ -167,6 +153,7 @@ impl<S> StateTransition<S> {
                 serde_json::to_value(val).expect("Value could not be serialized")
             }),
             transition: Arc::new(move |dbtx, val, state| {
+                let transition = transition.clone();
                 Box::pin(async move {
                     let typed_val: V = serde_json::from_value(val)
                         .expect("Deserialize trigger return value failed");
@@ -200,9 +187,7 @@ where
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                move |dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-                      val,
-                      state: DynState<GC>| {
+                move |dbtx: &mut ClientSMDatabaseTransaction<'_, '_>, val, state: DynState<GC>| {
                     let transition = st.transition.clone();
                     Box::pin(async move {
                         let new_state = transition(

@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::sm::state::{DynContext, DynState};
-use crate::sm::{GlobalContext, State, StateTransition};
+use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
 
 /// After how many attempts a DB transaction is aborted with an error
 const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
@@ -294,7 +294,7 @@ where
                     let transition_outcome = transition_outcome.clone();
                     Box::pin(async move {
                         let new_state = transition_fn(
-                            &mut dbtx.with_module_prefix(state.module_instance_id()),
+                            &mut ClientSMDatabaseTransaction::new(dbtx, state.module_instance_id()),
                             transition_outcome,
                             state.clone(),
                         )

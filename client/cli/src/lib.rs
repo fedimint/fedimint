@@ -939,7 +939,7 @@ impl FedimintCli {
                 let cfg = cli.load_config()?;
                 let decoders = cli.load_decoders(&cfg, &self.module_gens);
                 let db = cli.load_db(&decoders)?;
-                let (_id, module_cfg) = match id {
+                let (id, module_cfg) = match id {
                     ModuleSelector::Id(id) => (
                         id,
                         cfg.as_ref()
@@ -956,7 +956,7 @@ impl FedimintCli {
                     self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
 
                 let module = module_gen
-                    .init(module_cfg, db)
+                    .init(module_cfg, db, id)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;
 
