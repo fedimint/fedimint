@@ -47,6 +47,50 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
         }),
         if url.username().is_empty() {
             Auth::None
+        } else if url.password().is_none() {
+            if let Some(cookie_file) = rpc_cookie_file {
+                let cookie = std::fs::read_to_string(cookie_file)?;
+                let mut auth = Auth::None;
+                for line in cookie.lines() {
+                    let tokens: Vec<_> = line.split('=').collect();
+                    if tokens.len() == 2 {
+                        match tokens[0] {
+                            "rpcuser" => {
+                                auth = match auth {
+                                    Auth::None => {
+                                        Auth::UserPass(tokens[1].to_owned(), "".to_owned())
+                                    }
+                                    Auth::UserPass(_, password) => {
+                                        Auth::UserPass(tokens[1].to_owned(), password)
+                                    }
+                                    Auth::CookieFile(_) => auth,
+                                };
+                            }
+                            "rpcpassword" => {
+                                auth = match auth {
+                                    Auth::None => {
+                                        Auth::UserPass("".to_owned(), tokens[1].to_owned())
+                                    }
+                                    Auth::UserPass(username, _) => {
+                                        Auth::UserPass(username, tokens[1].to_owned())
+                                    }
+                                    Auth::CookieFile(_) => auth,
+                                };
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                auth
+            } else {
+                let cookie_file_path = format!("{}/.cookie", url.path());
+                std::fs::write(&cookie_file_path, "rpcuser=bitcoin\nrpcpassword=bitcoin\n")?;
+                std::fs::set_permissions(
+                    &cookie_file_path,
+                    std::fs::Permissions::from_mode(0o400),
+                )?;
+                Auth::UserPass("bitcoin".to_owned(), "bitcoin".to_owned())
+            }
         } else {
             Auth::UserPass(
                 url.username().to_owned(),
