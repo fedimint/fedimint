@@ -151,6 +151,6 @@ mod tests {
         let key2 = get_password_hash(password, salt2).unwrap();
 
         assert_ne!(key1, key2);
-        assert_eq!(key2, "$argon2id$v=19$m=19456,t=2,p=1$HVwJovQIaTEXAkPyXl3MqQ$pQ1T/qsHMGBWxQFLSZ4hqBUfLInIAQzPWIQiVNt4UNI");
+        assert_eq!(key2, "$argon2id$v=19$m=8,t=2,p=1$HVwJovQIaTEXAkPyXl3MqQ$+MeiEZswPa1JlqwlHw8oB/fvjY2gzj+21E/AE09TZUE");
     }
 }
