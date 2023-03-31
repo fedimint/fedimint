@@ -187,10 +187,10 @@
         .route(<span class="string">&quot;/address&quot;</span>, post(address))
         .route(<span class="string">&quot;/deposit&quot;</span>, post(deposit))
         .route(<span class="string">&quot;/withdraw&quot;</span>, post(withdraw))
-        .route(<span class="string">&quot;/connect&quot;</span>, post(connect))
+        .route(<span class="string">&quot;/connect-fed&quot;</span>, post(connect_fed))
         .route(<span class="string">&quot;/backup&quot;</span>, post(backup))
         .route(<span class="string">&quot;/restore&quot;</span>, post(restore))
-        .route(<span class="string">&quot;/reconnect&quot;</span>, post(reconnect))
+        .route(<span class="string">&quot;/connect-ln&quot;</span>, post(connect_ln))
         .layer(RequireAuthorizationLayer::bearer(<span class="kw-2">&amp;</span>authkey));
 
     <span class="kw">let </span>app = Router::new()
@@ -273,7 +273,7 @@
 
 <span class="doccomment">/// Connect a new federation
 </span><span class="attr">#[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>connect(
+</span><span class="kw">async fn </span>connect_fed(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
     Json(payload): Json&lt;ConnectFedPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
@@ -303,7 +303,7 @@
 
 <span class="comment">// Reconnect to the lightning node
 </span><span class="attr">#[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>reconnect(
+</span><span class="kw">async fn </span>connect_ln(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
     Json(payload): Json&lt;LightningReconnectPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {

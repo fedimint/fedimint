@@ -119,6 +119,9 @@
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::result::Result;
 
 <span class="kw">pub use </span>reqwest::{Error, Response};
@@ -191,7 +194,10 @@
         password: String,
         payload: ConnectFedPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Response, Error&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/connect&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(<span class="string">&quot;/connect-fed&quot;</span>)
+            .expect(<span class="string">&quot;invalid base url&quot;</span>);
         <span class="self">self</span>.call(url, password, payload).<span class="kw">await
     </span>}
 
@@ -218,7 +224,7 @@
         password: String,
         payload: LightningReconnectPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Response, Error&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/reconnect&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
+        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">&quot;/connect-ln&quot;</span>).expect(<span class="string">&quot;invalid base url&quot;</span>);
         <span class="self">self</span>.call(url, password, payload).<span class="kw">await
     </span>}
 
