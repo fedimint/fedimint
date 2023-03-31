@@ -4,3 +4,13 @@
 .tmpenv
 .direnv
 .vscode
+
+# UI ignores
+.pnp.js
+.DS_Store
+*.log*
+.env*
+/.pnp
+/node_modules
+/coverage
+/build
