@@ -71,6 +71,11 @@ impl IDatabase for SqliteDb {
     }
 }
 
+fn get_key_prefix_search_hex(key_prefix: &[u8]) -> String {
+    use bitcoin_hashes::hex::ToHex;
+    format!("{}%", key_prefix.to_hex().to_uppercase())
+}
+
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
@@ -111,15 +116,13 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        let mut str_prefix = "".to_string();
-        for prefix in key_prefix {
-            str_prefix = format!("{str_prefix}{prefix:02X?}");
-        }
-        str_prefix = format!("{}{}", str_prefix, "%");
+        let str_prefix = get_key_prefix_search_hex(key_prefix);
         let query = "SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY value DESC";
         let query_prepared = sqlx::query(query).bind(str_prefix);
+        // FIXME: this should be a stream
         let results = self.tx.fetch_all(query_prepared).await;
 
+        // FIXME: this should return an error or panic
         if results.is_err() {
             warn!("sqlite find_by_prefix failed to retrieve key range. Returning empty iterator");
             return Box::pin(stream::iter(Vec::new()));
@@ -135,12 +138,28 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         Box::pin(stream::iter(rows))
     }
 
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        let str_prefix = get_key_prefix_search_hex(key_prefix);
+        let query = "SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY key DESC, value DESC";
+        let query_prepared = sqlx::query(query).bind(str_prefix);
+        // FIXME: this should be a stream
+        let results = self.tx.fetch_all(query_prepared).await?;
+
+        let rows = results.into_iter().map(|row| {
+            (
+                row.get::<Vec<u8>, &str>("key"),
+                row.get::<Vec<u8>, &str>("value"),
+            )
+        });
+
+        Ok(Box::pin(stream::iter(rows)))
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        let mut str_prefix = "".to_string();
-        for prefix in key_prefix {
-            str_prefix = format!("{str_prefix}{prefix:02X?}");
-        }
-        str_prefix = format!("{}{}", str_prefix, "%");
+        let str_prefix = get_key_prefix_search_hex(key_prefix);
         let query = "DELETE FROM kv WHERE hex(key) LIKE ?";
         let query_prepared = sqlx::query(query).bind(str_prefix);
         self.error |= self.tx.execute(query_prepared).await.is_err();
@@ -175,7 +194,7 @@ mod fedimint_sqlite_tests {
     use rand::rngs::OsRng;
     use rand::RngCore;
 
-    use crate::SqliteDb;
+    use super::*;
 
     async fn open_temp_db(db_name: &str) -> Database {
         let dir = format!("/tmp/sqlite-{}/{}", db_name, OsRng.next_u64());
@@ -284,5 +303,10 @@ mod fedimint_sqlite_tests {
             open_temp_module_db("verify-module-db2", 1).await,
         )
         .await;
+    }
+
+    #[test]
+    fn test_get_key_prefix_search_hex() {
+        assert_eq!(get_key_prefix_search_hex(&[0x01, 0xff, 0x03]), "01FF03%");
     }
 }

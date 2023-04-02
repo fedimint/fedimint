@@ -42,7 +42,7 @@ use fedimint_core::module::ModuleCommon;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
+use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
 use fedimint_logging::LOG_WALLET;
@@ -717,6 +717,11 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         }
     }
 
+    pub async fn summary(&self) -> TieredSummary {
+        self.mint_client().summary().await
+    }
+
+    // FIXME: loading all notes on memory isn't ideal, consider changing the API
     pub async fn notes(&self) -> TieredMulti<SpendableNote> {
         self.mint_client().notes().await
     }

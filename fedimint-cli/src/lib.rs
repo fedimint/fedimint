@@ -731,19 +731,15 @@ impl FedimintCli {
                 ),
             Command::Info => {
                 let client = cli.build_client(&self.module_gens).await?;
-                let notes = client.notes().await;
-                let details_vec = notes
-                    .iter()
-                    .map(|(amount, notes)| (amount.to_owned(), notes.len()))
-                    .collect();
+                let summary = client.summary().await;
 
                 Ok(CliOutput::Info {
                     federation_id: client.config().as_ref().federation_id.clone(),
                     network: client.wallet_client().config.network,
                     meta: client.config().0.meta,
-                    total_amount: (notes.total_amount()),
-                    total_num_notes: (notes.count_items()),
-                    details: (details_vec),
+                    total_amount: summary.total_amount(),
+                    total_num_notes: summary.count_items(),
+                    details: summary.iter().collect(),
                 })
             }
             Command::PegOut { address, amount } => {

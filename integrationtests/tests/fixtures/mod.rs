@@ -770,7 +770,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> UserTest<T> {
 
     /// Returns sum total of all notes
     pub async fn total_notes(&self) -> Amount {
-        self.client.notes().await.total_amount()
+        self.client.summary().await.total_amount()
     }
 
     pub async fn assert_total_notes(&self, amount: Amount) {
@@ -781,10 +781,10 @@ impl<T: AsRef<ClientConfig> + Clone + Send> UserTest<T> {
     /// Asserts the amounts are equal to the denominations held by the user
     pub fn assert_note_amounts(&self, amounts: Vec<Amount>) {
         block_on(self.client.fetch_all_notes()).unwrap();
-        let notes = block_on(self.client.notes());
-        let user_amounts = notes
+        let summary = block_on(self.client.summary());
+        let user_amounts = summary
             .iter()
-            .flat_map(|(a, c)| repeat(*a).take(c.len()))
+            .flat_map(|(a, len)| repeat(a).take(len))
             .sorted()
             .collect::<Vec<Amount>>();
 

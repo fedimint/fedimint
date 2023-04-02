@@ -630,7 +630,7 @@ impl GatewayActor {
     pub async fn get_balance(&self) -> Result<Amount> {
         self.fetch_all_notes().await;
 
-        Ok(self.client.notes().await.total_amount())
+        Ok(self.client.summary().await.total_amount())
     }
 
     pub fn get_info(&self) -> Result<FederationInfo> {

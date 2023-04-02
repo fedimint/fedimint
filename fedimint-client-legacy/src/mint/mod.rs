@@ -1,5 +1,6 @@
 pub mod db;
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
+use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TieredSummary, TransactionId};
 use fedimint_mint_client::MintModuleTypes;
 use futures::{Future, StreamExt};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
@@ -260,14 +261,14 @@ impl MintClient {
     ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
-        let denominations = TieredMulti::represent_amount(
+        let denominations = TieredSummary::represent_amount(
             amount,
-            &self.notes().await,
+            &self.summary().await,
             &self.config.tbs_pks,
             notes_per_denomination,
         );
         for (amt, num) in denominations.iter() {
-            for _ in 0..*num {
+            for _ in 0..num {
                 let (request, blind_nonce) =
                     self.new_ecash_note(&self.context.secp, amt, dbtx).await;
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
@@ -301,7 +302,7 @@ impl MintClient {
                 if &spend_pub_key == note.note.spend_key() {
                     Ok((note.spend_key, (amt, note.note)))
                 } else {
-                    Err(MintClientError::ReceivedUspendableNote)
+                    Err(MintClientError::ReceivedUnspendableNote)
                 }
             })
             .collect::<Result<Vec<_>>>()?;
@@ -383,13 +384,101 @@ impl MintClient {
         NoteIssuanceRequest::new(ctx, secret)
     }
 
-    pub async fn select_notes(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
-        let notes = self.notes().await;
-        let selected_notes = notes.select_notes(amount).ok_or_else(|| {
-            MintClientError::InsufficientBalance(amount, TieredMulti::total_amount(&notes))
-        })?;
+    pub async fn summary(&self) -> TieredSummary {
+        self.start_dbtx()
+            .await
+            .find_by_prefix(&NoteKeyPrefix)
+            .await
+            .fold(
+                TieredSummary::default(),
+                |mut acc, (key, _note)| async move {
+                    acc.inc(key.amount, 1);
+                    acc
+                },
+            )
+            .await
+    }
 
-        Ok(selected_notes)
+    /// Select notes with total amount of *at least* `amount`. If more than
+    /// requested amount of notes are returned it was because exact change
+    /// couldn't be made, and the next smallest amount will be returned.
+    ///
+    /// The caller can request change from the federation.
+    pub async fn select_notes(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
+        let mut dbtx = self.start_dbtx().await;
+        let note_stream = dbtx
+            .find_by_prefix_sorted_descending(&NoteKeyPrefix)
+            .await
+            .map(|(key, note)| (key.amount, note));
+        Self::select_notes_from_stream(note_stream, amount).await
+    }
+
+    // We are using a greedy algorithm to select notes. We start with the largest
+    // then proceed to the lowest tiers/denominations.
+    // But there is a catch: we don't know if there are enough notes in the lowest
+    // tiers, so we need to save a big note in case the sum of the following
+    // small notes are not enough.
+    async fn select_notes_from_stream<Note>(
+        stream: impl futures::Stream<Item = (Amount, Note)>,
+        requested_amount: Amount,
+    ) -> Result<TieredMulti<Note>> {
+        if requested_amount == Amount::ZERO {
+            return Ok(TieredMulti::default());
+        }
+        let mut stream = Box::pin(stream);
+        let mut selected = vec![];
+        // This is the big note we save in case the sum of the following small notes are
+        // not sufficient to cover the pending amount
+        // The tuple is (amount, note, checkpoint), where checkpoint is the index where
+        // the note should be inserted on the selected vector if it is needed
+        let mut last_big_note_checkpoint: Option<(Amount, Note, usize)> = None;
+        let mut pending_amount = requested_amount;
+        let mut previous_amount: Option<Amount> = None; // used to assert descending order
+        loop {
+            if let Some((note_amount, note)) = stream.next().await {
+                assert!(
+                    previous_amount.map_or(true, |previous| previous >= note_amount),
+                    "notes are not sorted in descending order"
+                );
+                previous_amount = Some(note_amount);
+                match note_amount.cmp(&pending_amount) {
+                    Ordering::Less => {
+                        // keep adding notes until we have enough
+                        pending_amount -= note_amount;
+                        selected.push((note_amount, note))
+                    }
+                    Ordering::Greater => {
+                        // probably we don't need this big note, but we'll keep it in case the
+                        // following small notes don't add up to the
+                        // requested amount
+                        last_big_note_checkpoint = Some((note_amount, note, selected.len()));
+                    }
+                    Ordering::Equal => {
+                        // exactly enough notes, return
+                        selected.push((note_amount, note));
+                        return Ok(selected.into_iter().collect());
+                    }
+                }
+            } else {
+                assert!(pending_amount > Amount::ZERO);
+                if let Some((big_note_amount, big_note, checkpoint)) = last_big_note_checkpoint {
+                    // the sum of the small notes don't add up to the pending amount, remove
+                    // them
+                    selected.truncate(checkpoint);
+                    // and use the big note to cover it
+                    selected.push((big_note_amount, big_note));
+                    // so now we have enough to cover the requested amount, return
+                    return Ok(selected.into_iter().collect());
+                } else {
+                    let total_amount = requested_amount - pending_amount;
+                    // not enough notes, return
+                    return Err(MintClientError::InsufficientBalance(
+                        requested_amount,
+                        total_amount,
+                    ));
+                }
+            }
+        }
     }
 
     pub async fn receive_notes<'a, F, Fut>(
@@ -623,7 +712,7 @@ pub enum MintClientError {
     #[error("The transaction outcome returned by the mint has an invalid type (output {0})")]
     InvalidOutcomeType(OutPoint),
     #[error("One of the notes meant to be spent is unspendable")]
-    ReceivedUspendableNote,
+    ReceivedUnspendableNote,
 }
 
 impl MintClientError {
@@ -662,12 +751,14 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
-    use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TransactionId};
+    use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TieredMulti, TransactionId};
     use fedimint_mint_server::{Mint, MintGen, MintGenParams};
     use fedimint_testing::FakeFed;
     use futures::executor::block_on;
+    use itertools::Itertools;
     use tokio::sync::Mutex;
 
+    use super::*;
     use crate::api::fake::FederationApiFaker;
     use crate::mint::db::NextECashNoteIndexKey;
     use crate::mint::MintClient;
@@ -815,7 +906,11 @@ mod tests {
         const ISSUE_AMOUNT: Amount = Amount::from_sats(12);
         issue_notes(&fed, &client, &context.db, ISSUE_AMOUNT).await;
 
-        assert_eq!(client.notes().await.total_amount(), ISSUE_AMOUNT)
+        assert_eq!(client.summary().await.total_amount(), ISSUE_AMOUNT)
+    }
+
+    fn notes_distribution(summary: &TieredSummary) -> Vec<(Amount, usize)> {
+        summary.iter().collect::<Vec<_>>()
     }
 
     #[test_log::test(tokio::test)]
@@ -833,6 +928,18 @@ mod tests {
         };
 
         issue_notes(&fed, &client, &context.db, SPEND_AMOUNT * 2).await;
+        let summary = client.summary().await;
+        let notes = client.notes().await;
+        assert_eq!(notes.total_amount(), SPEND_AMOUNT * 2);
+        assert_eq!(summary.total_amount(), notes.total_amount());
+        assert_eq!(
+            notes_distribution(&summary),
+            vec![
+                (Amount::from_sats(1), 2),
+                (Amount::from_sats(10), 2),
+                (Amount::from_sats(20), 1)
+            ]
+        );
 
         // Spending works
         let mut dbtx = client.context.db.begin_transaction().await;
@@ -841,6 +948,11 @@ mod tests {
         let _tbs_pks = &client.config.tbs_pks;
         let rng = rand::rngs::OsRng;
         let notes = client.select_notes(SPEND_AMOUNT).await.unwrap();
+        let summary = notes.summary();
+        assert_eq!(
+            notes_distribution(&summary),
+            vec![(Amount::from_sats(1), 1), (Amount::from_sats(20), 1)]
+        );
         let (spend_keys, ecash_input) = MintClient::ecash_input(notes.clone()).unwrap();
 
         builder.input(&mut spend_keys.clone(), ecash_input.clone());
@@ -871,9 +983,13 @@ mod tests {
                 .await
                 .consensus_round(&[input.clone()], &[])
                 .await;
-
+            let summary = client.summary().await;
             // The right amount of money is left
-            assert_eq!(client.notes().await.total_amount(), SPEND_AMOUNT);
+            assert_eq!(summary.total_amount(), SPEND_AMOUNT);
+            assert_eq!(
+                notes_distribution(&summary),
+                vec![(Amount::from_sats(1), 1), (Amount::from_sats(10), 2)]
+            );
 
             // Double spends aren't possible
             assert!(fed.lock().await.verify_input(&input).await.is_err());
@@ -883,6 +999,11 @@ mod tests {
         let mut dbtx = client.context.db.begin_transaction().await;
         let mut builder = TransactionBuilder::default();
         let notes = client.select_notes(SPEND_AMOUNT).await.unwrap();
+        let summary = client.summary().await;
+        assert_eq!(
+            notes_distribution(&summary),
+            vec![(Amount::from_sats(1), 1), (Amount::from_sats(10), 2)]
+        );
         let rng = rand::rngs::OsRng;
         let (spend_keys, ecash_input) = MintClient::ecash_input(notes).unwrap();
 
@@ -910,7 +1031,7 @@ mod tests {
             );
 
             // No money is left
-            assert_eq!(client.notes().await.total_amount(), Amount::ZERO);
+            assert_eq!(client.summary().await.total_amount(), Amount::ZERO);
         }
     }
 
@@ -972,7 +1093,6 @@ mod tests {
                 let output = t.join().unwrap();
                 // Most threads will have produces far less than ITERATIONS items notes due to
                 // database transactions failing
-                output.len();
                 output
             })
             .collect::<Vec<_>>();
@@ -993,5 +1113,110 @@ mod tests {
             .unwrap_or(0);
         // Ensure we didn't skip any keys
         assert_eq!(last_idx, result_count as u64);
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn select_notes_avg_test() {
+        let max_amount = Amount::from_sats(1000000);
+        let tiers = Tiered::gen_denominations(max_amount);
+        let tiered =
+            TieredSummary::represent_amount::<()>(max_amount, &Default::default(), &tiers, 3);
+
+        let mut total_notes = 0;
+        for multiplier in 1..100 {
+            let stream = reverse_sorted_note_stream(tiered.iter().collect());
+            let select =
+                MintClient::select_notes_from_stream(stream, Amount::from_sats(multiplier * 1000))
+                    .await;
+            total_notes += select.unwrap().into_iter_items().count();
+        }
+        assert_eq!(total_notes / 100, 10);
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn select_notes_returns_exact_amount_with_minimum_notes() {
+        let f = || {
+            reverse_sorted_note_stream(vec![
+                (Amount::from_sats(1), 10),
+                (Amount::from_sats(5), 10),
+                (Amount::from_sats(20), 10),
+            ])
+        };
+        assert_eq!(
+            MintClient::select_notes_from_stream(f(), Amount::from_sats(7))
+                .await
+                .unwrap(),
+            notes(vec![(Amount::from_sats(1), 2), (Amount::from_sats(5), 1)])
+        );
+        assert_eq!(
+            MintClient::select_notes_from_stream(f(), Amount::from_sats(20))
+                .await
+                .unwrap(),
+            notes(vec![(Amount::from_sats(20), 1)])
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn select_notes_returns_next_smallest_amount_if_exact_change_cannot_be_made() {
+        let stream = reverse_sorted_note_stream(vec![
+            (Amount::from_sats(1), 1),
+            (Amount::from_sats(5), 5),
+            (Amount::from_sats(20), 5),
+        ]);
+        assert_eq!(
+            MintClient::select_notes_from_stream(stream, Amount::from_sats(7))
+                .await
+                .unwrap(),
+            notes(vec![(Amount::from_sats(5), 2)])
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn select_notes_uses_big_note_if_small_amounts_are_not_sufficient() {
+        let stream = reverse_sorted_note_stream(vec![
+            (Amount::from_sats(1), 3),
+            (Amount::from_sats(5), 3),
+            (Amount::from_sats(20), 2),
+        ]);
+        assert_eq!(
+            MintClient::select_notes_from_stream(stream, Amount::from_sats(39))
+                .await
+                .unwrap(),
+            notes(vec![(Amount::from_sats(20), 2)])
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn select_notes_returns_error_if_amount_is_too_large() {
+        let stream = reverse_sorted_note_stream(vec![(Amount::from_sats(10), 1)]);
+        match MintClient::select_notes_from_stream(stream, Amount::from_sats(100))
+            .await
+            .unwrap_err()
+        {
+            MintClientError::InsufficientBalance(_, total) => {
+                assert_eq!(total, Amount::from_sats(10))
+            }
+            other => panic!("Unexpected error: {other:?}"),
+        };
+    }
+
+    fn reverse_sorted_note_stream(
+        notes: Vec<(Amount, usize)>,
+    ) -> impl futures::Stream<Item = (Amount, String)> {
+        futures::stream::iter(
+            notes
+                .into_iter()
+                // We are creating `number` dummy notes of `amount` value
+                .flat_map(|(amount, number)| vec![(amount, "dummy note".into()); number])
+                .sorted()
+                .rev(),
+        )
+    }
+
+    fn notes(notes: Vec<(Amount, usize)>) -> TieredMulti<String> {
+        notes
+            .into_iter()
+            .flat_map(|(amount, number)| vec![(amount, "dummy note".into()); number])
+            .collect()
     }
 }
