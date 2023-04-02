@@ -51,8 +51,10 @@ impl<T> TieredMulti<T> {
     }
 
     /// Returns the summary of number of items in each tier
-    pub fn summary(&self) -> Tiered<usize> {
-        Tiered::from_iter(self.iter().map(|(amount, values)| (*amount, values.len())))
+    pub fn summary(&self) -> TieredSummary {
+        TieredSummary(Tiered::from_iter(
+            self.iter().map(|(amount, values)| (*amount, values.len())),
+        ))
     }
 
     /// Verifies whether all vectors in all tiers are empty
@@ -146,86 +148,6 @@ impl<T> TieredMulti<T> {
     // sure there are no empty `Vec`s after removal)
     pub fn get_mut(&mut self, amt: Amount) -> Option<&mut Vec<T>> {
         self.0.get_mut(&amt)
-    }
-}
-
-impl<C> TieredMulti<C>
-where
-    C: Clone,
-{
-    /// Select notes with total amount of *at least* `amount`. If more than
-    /// requested amount of notes are returned it was because exact change
-    /// couldn't be made, and the next smallest amount will be returned.
-    ///
-    /// The caller can request change from the federation.
-    // TODO: move somewhere else?
-    pub fn select_notes(&self, mut amount: Amount) -> Option<TieredMulti<C>> {
-        if amount > self.total_amount() {
-            return None;
-        }
-
-        let mut selected = vec![];
-        let mut remaining = self.total_amount();
-
-        for (note_amount, note) in self.iter_items().rev() {
-            remaining -= note_amount;
-
-            if note_amount <= amount {
-                amount -= note_amount;
-                selected.push((note_amount, (*note).clone()))
-            } else if remaining < amount {
-                // we can't make exact change, so just use this note
-                selected.push((note_amount, (*note).clone()));
-                break;
-            }
-        }
-
-        Some(selected.into_iter().collect::<TieredMulti<C>>())
-    }
-}
-
-impl TieredMulti<()> {
-    /// Determines the denominations to use when representing an amount
-    ///
-    /// Algorithm tries to leave the user with a target number of
-    /// `denomination_sets` starting at the lowest denomination.  `self`
-    /// gives the denominations that the user already has.
-    pub fn represent_amount<K, V>(
-        amount: Amount,
-        current_denominations: &TieredMulti<V>,
-        tiers: &Tiered<K>,
-        denomination_sets: u16,
-    ) -> Tiered<usize> {
-        let mut remaining_amount = amount;
-        let mut denominations: Tiered<usize> = Default::default();
-
-        // try to hit the target `denomination_sets`
-        for tier in tiers.tiers() {
-            let notes = current_denominations
-                .get(*tier)
-                .map(|v| v.len())
-                .unwrap_or(0);
-            let missing_notes = (denomination_sets as u64).saturating_sub(notes as u64);
-            let possible_notes = remaining_amount / *tier;
-
-            let add_notes = min(possible_notes, missing_notes);
-            *denominations.get_mut_or_default(*tier) = add_notes as usize;
-            remaining_amount -= *tier * add_notes;
-        }
-
-        // if there is a remaining amount, add denominations with a greedy algorithm
-        for tier in tiers.tiers().rev() {
-            let res = remaining_amount / *tier;
-            remaining_amount %= *tier;
-            *denominations.get_mut_or_default(*tier) += res as usize;
-        }
-
-        let represented: u64 = denominations
-            .iter()
-            .map(|(k, v)| k.msats * (*v as u64))
-            .sum();
-        assert_eq!(represented, amount.msats);
-        denominations
     }
 }
 
@@ -344,11 +266,70 @@ where
     }
 }
 
+#[derive(Debug, PartialEq, Default)]
+pub struct TieredSummary(Tiered<usize>);
+
+impl TieredSummary {
+    /// Determines the denominations to use when representing an amount
+    ///
+    /// Algorithm tries to leave the user with a target number of
+    /// `denomination_sets` starting at the lowest denomination.  `self`
+    /// gives the denominations that the user already has.
+    pub fn represent_amount<K>(
+        amount: Amount,
+        current_denominations: &TieredSummary,
+        tiers: &Tiered<K>,
+        denomination_sets: u16,
+    ) -> TieredSummary {
+        let mut remaining_amount = amount;
+        let mut denominations: TieredSummary = Default::default();
+
+        // try to hit the target `denomination_sets`
+        for tier in tiers.tiers() {
+            let notes = current_denominations
+                .0
+                .get(*tier)
+                .copied()
+                .unwrap_or_default();
+            let missing_notes = (denomination_sets as u64).saturating_sub(notes as u64);
+            let possible_notes = remaining_amount / *tier;
+
+            let add_notes = min(possible_notes, missing_notes);
+            denominations.inc(*tier, add_notes as usize);
+            remaining_amount -= *tier * add_notes;
+        }
+
+        // if there is a remaining amount, add denominations with a greedy algorithm
+        for tier in tiers.tiers().rev() {
+            let res = remaining_amount / *tier;
+            remaining_amount %= *tier;
+            denominations.inc(*tier, res as usize);
+        }
+
+        let represented: u64 = denominations
+            .0
+            .iter()
+            .map(|(k, v)| k.msats * (*v as u64))
+            .sum();
+        assert_eq!(represented, amount.msats);
+        denominations
+    }
+
+    pub fn inc(&mut self, tier: Amount, n: usize) {
+        *self.0.get_mut_or_default(tier) += n;
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, usize)> + '_ {
+        self.0.iter().map(|(k, v)| (k, *v))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use fedimint_core::Amount;
 
-    use crate::{Tiered, TieredMulti};
+    use super::*;
+    use crate::{Tiered, TieredMulti, TieredSummary};
 
     #[test]
     fn represent_amount_targets_denomination_sets() {
@@ -356,12 +337,13 @@ mod test {
             (Amount::from_sats(1), 1),
             (Amount::from_sats(2), 3),
             (Amount::from_sats(3), 2),
-        ]);
+        ])
+        .summary();
         let tiers = tiers(vec![1, 2, 3, 4]);
 
         // target 3 tiers will fill out the 1 and 3 denominations
         assert_eq!(
-            TieredMulti::represent_amount(Amount::from_sats(6), &starting, &tiers, 3),
+            TieredSummary::represent_amount(Amount::from_sats(6), &starting, &tiers, 3),
             denominations(vec![
                 (Amount::from_sats(1), 3),
                 (Amount::from_sats(2), 0),
@@ -372,7 +354,7 @@ mod test {
 
         // target 2 tiers will fill out the 1 and 4 denominations
         assert_eq!(
-            TieredMulti::represent_amount(Amount::from_sats(6), &starting, &tiers, 2),
+            TieredSummary::represent_amount(Amount::from_sats(6), &starting, &tiers, 2),
             denominations(vec![
                 (Amount::from_sats(1), 2),
                 (Amount::from_sats(2), 0),
@@ -380,65 +362,6 @@ mod test {
                 (Amount::from_sats(4), 1)
             ])
         );
-    }
-
-    #[test]
-    fn select_notes_returns_exact_amount_with_minimum_notes() {
-        let starting = notes(vec![
-            (Amount::from_sats(1), 10),
-            (Amount::from_sats(5), 10),
-            (Amount::from_sats(20), 10),
-        ]);
-
-        assert_eq!(
-            starting.select_notes(Amount::from_sats(7)),
-            Some(notes(vec![
-                (Amount::from_sats(1), 2),
-                (Amount::from_sats(5), 1)
-            ]))
-        );
-
-        assert_eq!(
-            starting.select_notes(Amount::from_sats(20)),
-            Some(notes(vec![(Amount::from_sats(20), 1),]))
-        );
-    }
-
-    #[test]
-    fn select_notes_returns_next_smallest_amount_if_exact_change_cannot_be_made() {
-        let starting = notes(vec![
-            (Amount::from_sats(1), 1),
-            (Amount::from_sats(5), 5),
-            (Amount::from_sats(20), 5),
-        ]);
-
-        assert_eq!(
-            starting.select_notes(Amount::from_sats(7)),
-            Some(notes(vec![(Amount::from_sats(5), 2)]))
-        );
-    }
-
-    #[test]
-    fn select_notes_returns_none_if_amount_is_too_large() {
-        let starting = notes(vec![(Amount::from_sats(10), 1)]);
-
-        assert_eq!(starting.select_notes(Amount::from_sats(100)), None);
-    }
-
-    #[test]
-    fn select_notes_avg_test() {
-        let max_amount = Amount::from_sats(1000000);
-        let tiers = Tiered::gen_denominations(max_amount);
-        let tiered =
-            TieredMulti::represent_amount::<(), ()>(max_amount, &Default::default(), &tiers, 3);
-
-        let mut total_notes = 0;
-        for multiplier in 1..100 {
-            let notes = notes(tiered.as_map().clone().into_iter().collect());
-            let select = notes.select_notes(Amount::from_sats(multiplier * 1000));
-            total_notes += select.unwrap().into_iter_items().count();
-        }
-        assert_eq!(total_notes / 100, 10);
     }
 
     fn notes(notes: Vec<(Amount, usize)>) -> TieredMulti<usize> {
@@ -455,7 +378,7 @@ mod test {
             .collect()
     }
 
-    fn denominations(denominations: Vec<(Amount, usize)>) -> Tiered<usize> {
-        denominations.into_iter().collect()
+    fn denominations(denominations: Vec<(Amount, usize)>) -> TieredSummary {
+        TieredSummary(denominations.into_iter().collect())
     }
 }

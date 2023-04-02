@@ -136,6 +136,34 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         Box::pin(stream::iter(rows))
     }
 
+    async fn raw_find_by_prefix_sorted_reverse(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        let mut str_prefix = "".to_string();
+        for prefix in key_prefix {
+            str_prefix = format!("{str_prefix}{prefix:02X?}");
+        }
+        str_prefix = format!("{}{}", str_prefix, "%");
+        let query = "SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY key DESC, value DESC";
+        let query_prepared = sqlx::query(query).bind(str_prefix);
+        let results = self.tx.fetch_all(query_prepared).await;
+
+        if results.is_err() {
+            warn!("sqlite find_by_prefix failed to retrieve key range. Returning empty iterator");
+            return Ok(Box::pin(stream::iter(Vec::new())));
+        }
+
+        let rows = results.unwrap().into_iter().map(|row| {
+            (
+                row.get::<Vec<u8>, &str>("key"),
+                row.get::<Vec<u8>, &str>("value"),
+            )
+        });
+
+        Ok(Box::pin(stream::iter(rows)))
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let mut str_prefix = "".to_string();
         for prefix in key_prefix {

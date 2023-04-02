@@ -745,6 +745,10 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         }
     }
 
+    pub async fn total_amount(&self) -> Amount {
+        self.mint_client().total_amount().await
+    }
+
     pub async fn notes(&self) -> TieredMulti<SpendableNote> {
         self.mint_client().notes().await
     }

@@ -1,7 +1,7 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use fedimint_core::db::{
     IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, PrefixStream,
@@ -49,6 +49,22 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
     fn from(db: RocksDb) -> Self {
         db.0
     }
+}
+
+fn next_prefix(prefix: &[u8]) -> Result<Vec<u8>> {
+    let mut next_prefix = prefix.to_vec();
+    let mut increased = false;
+    for i in (0..next_prefix.len()).rev() {
+        if next_prefix[i] < 0xff {
+            next_prefix[i] += 1;
+            increased = true;
+            break;
+        }
+    }
+    if !increased {
+        bail!("Prefix is already the max one: {prefix:?}")
+    }
+    Ok(next_prefix)
 }
 
 #[async_trait]
@@ -111,6 +127,33 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         })
     }
 
+    async fn raw_find_by_prefix_sorted_reverse(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        let prefix = key_prefix.to_vec();
+        let next_prefix = next_prefix(&prefix)?;
+        Ok(fedimint_core::task::block_in_place(|| {
+            let mut options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+            let iter = self.0.snapshot().iterator_opt(
+                rocksdb::IteratorMode::From(&next_prefix, rocksdb::Direction::Reverse),
+                options,
+            );
+
+            let rocksdb_iter = iter
+                .map_while(move |res| {
+                    let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                    key_bytes
+                        .starts_with(&prefix)
+                        .then_some((key_bytes, value_bytes))
+                })
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+
+            Box::pin(stream::iter(rocksdb_iter))
+        }))
+    }
+
     async fn commit_tx(self) -> Result<()> {
         fedimint_core::task::block_in_place(|| {
             self.0.commit()?;
@@ -165,6 +208,13 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
 
             Box::pin(stream::iter(rocksdb_iter))
         })
+    }
+
+    async fn raw_find_by_prefix_sorted_reverse(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        unimplemented!()
     }
 
     async fn commit_tx(self) -> Result<()> {

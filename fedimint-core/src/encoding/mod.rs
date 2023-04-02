@@ -129,7 +129,7 @@ macro_rules! impl_encode_decode_num {
     ($num_type:ty) => {
         impl Encodable for $num_type {
             fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-                let bytes = self.to_le_bytes();
+                let bytes = self.to_be_bytes();
                 writer.write_all(&bytes[..])?;
                 Ok(bytes.len())
             }
@@ -142,7 +142,7 @@ macro_rules! impl_encode_decode_num {
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; (<$num_type>::BITS / 8) as usize];
                 d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-                Ok(<$num_type>::from_le_bytes(bytes))
+                Ok(<$num_type>::from_be_bytes(bytes))
             }
         }
     };

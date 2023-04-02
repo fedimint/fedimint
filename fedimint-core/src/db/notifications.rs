@@ -143,6 +143,15 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for NotifyingTransaction<'a> {
         self.dbtx.raw_find_by_prefix(key_prefix).await
     }
 
+    async fn raw_find_by_prefix_sorted_reverse(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        self.dbtx
+            .raw_find_by_prefix_sorted_reverse(key_prefix)
+            .await
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         self.dbtx.raw_remove_by_prefix(key_prefix).await
     }

@@ -114,15 +114,28 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
+        let data = self
+            .tx_data
+            .range::<Vec<u8>, _>((key_prefix.to_vec())..)
+            .take_while(|(key, _)| key.starts_with(key_prefix))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>();
+        Box::pin(stream::iter(data))
+    }
+
+    async fn raw_find_by_prefix_sorted_reverse(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
         let mut data = self
             .tx_data
             .range::<Vec<u8>, _>((key_prefix.to_vec())..)
             .take_while(|(key, _)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<Vec<_>>();
-        data.reverse();
+        data.sort_by(|a, b| a.cmp(b).reverse());
 
-        Box::pin(stream::iter(data))
+        Ok(Box::pin(stream::iter(data)))
     }
 
     async fn commit_tx(self) -> Result<()> {

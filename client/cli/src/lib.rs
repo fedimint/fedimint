@@ -699,6 +699,7 @@ impl FedimintCli {
                 ),
             Command::Info => {
                 let client = cli.build_client(&self.module_gens).await?;
+                // FIXME: replace by methods that don't load everything in memory
                 let notes = client.notes().await;
                 let details_vec = notes
                     .iter()
