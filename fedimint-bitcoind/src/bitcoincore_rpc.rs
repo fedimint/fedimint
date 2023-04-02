@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::fmt;
-use std::os::unix::fs::PermissionsExt;
+// use std::os::unix::fs::PermissionsExt;
+use std::env;
+// use std::{env, path::PathBuf};
+use anyhow::anyhow;
 
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
@@ -32,42 +35,41 @@ const SIGNET_GENESIS_BLOCK_HASH: &str =
     "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6";
 
 pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
-    Ok((
-        (if let Some(port) = url.port() {
-            format!(
-                "{}://{}:{port}",
-                url.scheme(),
-                url.host_str().unwrap_or("127.0.0.1")
-            )
+    let url_str = if let Some(port) = url.port() {
+        format!(
+            "{}://{}:{port}",
+            url.scheme(),
+            url.host_str().unwrap_or("127.0.0.1"),
+            port = port,
+        )
+    } else {
+        format!(
+            "{}://{}",
+            url.scheme(),
+            url.host_str().unwrap_or("127.0.0.1"),
+        )
+    };
+    let url_auth = if url.username().is_empty() {
+        Auth::None
+    } else {
+        Auth::UserPass(
+            url.username().to_owned(),
+            url.password()
+                .ok_or_else(|| format_err!("Password missing for {}", url.username()))?
+                .to_owned(),
+        )
+    };
+    let auth = if env::var("BITCOIND_USE_COOKIE").is_ok() {
+        if let Some(cookie_file) = rpc_cookie_file() {
+            let cookie = std::fs::read_to_string(cookie_file)?;
+            Auth::CookieFile(cookie.into())
         } else {
-            format!(
-                "{}://{}",
-                url.scheme(),
-                url.host_str().unwrap_or("127.0.0.1")
-            )
-        }),
-        if url.username().is_empty() {
-            Auth::None
-        } else if url.password().is_none() {
-            if let Some(cookie_file) = rpc_cookie_file() {
-                let cookie = std::fs::read_to_string(cookie_file)?;
-                let auth = parse_cookie_string(&cookie).unwrap_or(Auth::None);
-                auth
-            } else {
-                let cookie_file_path = format!("{}/.cookie", url.path());
-                create_cookie_file(&cookie_file_path, "bitcoin", "bitcoin")?;
-                let auth = Auth::UserPass("bitcoin".to_owned(), "bitcoin".to_owned());
-                auth
-            }
-        } else {
-            Auth::UserPass(
-                url.username().to_owned(),
-                url.password()
-                    .ok_or_else(|| format_err!("Password missing for {}", url.username()))?
-                    .to_owned(),
-            )
-        },
-    ))
+            return Err(anyhow!("Could not find cookie file"));
+        }
+    } else {
+        url_auth
+    };
+    Ok((url_str, auth))
 }
 
 fn rpc_cookie_file() -> Option<String> {
@@ -77,36 +79,6 @@ fn rpc_cookie_file() -> Option<String> {
         }
     }
     None
-}
-
-fn parse_cookie_string(cookie_str: &str) -> Option<Auth> {
-    let mut username = None;
-    let mut password = None;
-
-    for line in cookie_str.lines() {
-        let parts: Vec<&str> = line.split('=').collect();
-
-        if parts.len() == 2 {
-            match parts[0] {
-                "rpcuser" => username = Some(parts[1].to_owned()),
-                "rpcpassword" => password = Some(parts[1].to_owned()),
-                _ => (),
-            }
-        }
-    }
-
-    if let (Some(user), Some(pass)) = (username, password) {
-        Some(Auth::UserPass(user, pass))
-    } else {
-        None
-    }
-}
-
-fn create_cookie_file(path: &str, username: &str, password: &str) -> std::io::Result<()> {
-    let cookie_str = format!("rpcuser={}\nrpcpassword={}\n", username, password);
-    std::fs::write(path, cookie_str)?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o400))?;
-    Ok(())
 }
 
 pub fn make_bitcoin_rpc_backend(
