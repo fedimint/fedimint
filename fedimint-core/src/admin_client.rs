@@ -5,7 +5,7 @@ use bitcoin_hashes::sha256;
 use fedimint_core::task::MaybeSend;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
-use url::Url;
+use url::{Url, ParseError};
 
 use crate::api::{DynFederationApi, FederationApiExt, FederationResult, WsFederationApi};
 use crate::config::ServerModuleGenParamsRegistry;
@@ -172,6 +172,26 @@ pub struct ConfigGenConnectionsRequest {
     /// Will be `None` if we are the leader
     pub leader_api_url: Option<Url>,
 }
+
+impl ConfigGenConnectionsRequest {
+    pub fn new(our_name: String, leader_api_url_string: Option<String>) -> Result<Self, ParseError> {
+        let leader_api_url = match leader_api_url_string {
+            Some(url_string) => {
+                let replaced_url_string = url_string.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+                Some(Url::from_str(&replaced_url_string)?)
+            },
+            None => None,
+        };
+        Ok(Self {
+            our_name,
+            leader_api_url,
+        })
+    }
+}
+
+
+
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct PeerServerParams {

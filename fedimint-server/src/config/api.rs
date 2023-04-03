@@ -28,7 +28,7 @@ use jsonrpsee::RpcModule;
 use tokio::sync::Notify;
 use tokio_rustls::rustls;
 use tracing::error;
-use url::Url;
+use url::{Url, ParseError};
 
 use crate::config::{gen_cert_and_key, ServerConfig, ServerConfigConsensus, ServerConfigParams};
 use crate::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
