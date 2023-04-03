@@ -355,13 +355,17 @@ enum Command {
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
 
-    /// Send direct method call to the API, waiting for all peers to agree on a
-    /// response
+    /// Send direct method call to the API. If you specify --peer-id, it will
+    /// just ask one server, otherwise it will get consensus from all servers
     Api {
+        /// JSON-RPC method to call
         method: String,
-        /// JSON args that will be serialized and send with the request
+        /// JSON-RPC parameters for the request
         #[clap(default_value = "null")]
-        arg: String,
+        params: String,
+        /// Which server to send requst to
+        #[clap(long = "peer-id")]
+        peer_id: Option<u16>,
     },
 
     /// Issue notes in exchange for a peg-in proof
@@ -599,20 +603,32 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::IOError, "couldn't write config")?;
                 Ok(CliOutput::JoinFederation { joined: connect })
             }
-            Command::Api { method, arg } => {
-                let arg: Value = serde_json::from_str(&arg).unwrap();
+            Command::Api {
+                method,
+                params,
+                peer_id,
+            } => {
+                let params: Value = serde_json::from_str(&params)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
+                let params = ApiRequestErased::new(params);
                 let ws_api: Arc<_> = WsFederationApi::from_config(
                     cli.build_client(&self.module_gens).await?.config().as_ref(),
                 )
                 .into();
-                let response: Value = ws_api
-                    .request_with_strategy(
-                        EventuallyConsistent::new(ws_api.peers().len()),
-                        method,
-                        ApiRequestErased::new(arg),
-                    )
-                    .await
-                    .unwrap();
+                let response: Value = match peer_id {
+                    Some(peer_id) => ws_api
+                        .request_raw(peer_id.into(), &method, &[params.to_json()])
+                        .await
+                        .map_err_cli_general()?,
+                    None => ws_api
+                        .request_with_strategy(
+                            EventuallyConsistent::new(ws_api.peers().len()),
+                            method,
+                            params,
+                        )
+                        .await
+                        .map_err_cli_general()?,
+                };
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
             }
