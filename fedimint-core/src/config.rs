@@ -251,6 +251,11 @@ impl ClientConfig {
             .map(|(id, v)| (*id, v.clone()))
             .ok_or_else(|| anyhow::format_err!("Module kind {kind} not found"))
     }
+
+    /// Federation name from config metadata (if set)
+    pub fn federation_name(&self) -> Option<&str> {
+        self.meta.get(META_FEDERATION_NAME_KEY).map(|x| &**x)
+    }
 }
 
 #[derive(Clone, Debug)]
