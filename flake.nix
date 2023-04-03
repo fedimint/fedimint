@@ -429,8 +429,9 @@
                 let
                   build = craneBuild craneBuild;
                   commonArgs = build.commonArgs;
+                  commonEnvs = build.commonEnvs;
                 in
-                {
+                commonEnvs // {
                   buildInputs = commonArgs.buildInputs;
                   nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
                     fenix.packages.${system}.rust-analyzer
@@ -463,8 +464,6 @@
                     pkgs.semgrep
                   ];
                   RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
-                  LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-                  ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
 
                   shellHook = ''
                     # auto-install git hooks
