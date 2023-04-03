@@ -17,13 +17,14 @@
 //! is thus undesirable.
 mod fixtures;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln_client::LightningConsensusItem;
@@ -38,7 +39,6 @@ use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
 use fedimint_wallet_server::common::{PegOutFees, PegOutSignatureItem, Rbf};
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
-use ln_gateway::lnrpc_client::ILnRpcClient;
 use mint_client::mint::MintClient;
 use mint_client::transaction::legacy::Output;
 use mint_client::transaction::TransactionBuilder;
@@ -47,7 +47,10 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use tracing::log::warn;
 use tracing::{debug, info, instrument};
 
-use crate::fixtures::{lightning_test, non_lightning_test, peers, unwrap_item, FederationTest};
+use crate::fixtures::{
+    create_lightning_adapter, lightning_test, non_lightning_test, peers, unwrap_item,
+    FederationTest,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
@@ -1350,7 +1353,7 @@ async fn cannot_replay_transactions() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_can_reconnect() -> Result<()> {
-    lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
+    lightning_test(2, |fed, user, bitcoin, mut gateway, lightning| async move {
         // TODO: in theory this test should work without this lock
         // but for some reason it's flaky
         let bitcoin = bitcoin.lock_exclusive().await;
@@ -1377,14 +1380,18 @@ async fn lightning_gateway_can_reconnect() -> Result<()> {
             .await
             .unwrap();
 
-        gateway.adapter.write().await.disconnect().await.expect("Error while disconnecting the lightning connection from the gateway");
+        // Replace the gateway's lightning connection and verify that payments still
+        // succeed
+        let new_lnrpc = create_lightning_adapter(gateway.node, TaskGroup::new()).await;
+        gateway.adapter = Arc::new(RwLock::new(new_lnrpc));
 
-        let payment_res = gateway.actor.read().await.pay_invoice(contract_id).await;
-        assert!(payment_res.is_err(), "Error expected pay_invoice to return error since the gateway is not connected to the lightning node.");
-
-        gateway.adapter.write().await.connect().await.expect("Error while reconnecting the gateway to the lightning node");
-
-        let claim_outpoint = gateway.actor.read().await.pay_invoice(contract_id).await.unwrap();
+        let claim_outpoint = gateway
+            .actor
+            .read()
+            .await
+            .pay_invoice(contract_id)
+            .await
+            .unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway

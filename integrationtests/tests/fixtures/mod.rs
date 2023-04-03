@@ -329,38 +329,15 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             ));
             user.client.await_consensus_block_height(0).await?;
 
-            // gateway
-            let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
-                .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
-                .parse::<Url>()
-                .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
-            let lnrpc_adapter = match gateway_node {
-                GatewayNode::Cln => {
-                    let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = Arc::new(RwLock::new(
-                        NetworkLnRpcClient::new(lnrpc_addr).await.unwrap(),
-                    ));
-                    LnRpcAdapter::new(lnrpc)
-                }
-                GatewayNode::Lnd => {
-                    let gateway_lnd_client = GatewayLndClient::new(
-                        lnd_rpc_addr.clone(),
-                        lnd_tls_cert.clone(),
-                        lnd_macaroon.clone(),
-                        task_group.make_subgroup().await,
-                    )
-                    .await
-                    .unwrap();
-                    let lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
-                    LnRpcAdapter::new(lnrpc)
-                }
-            };
             let gateway = GatewayTest::new(
-                lnrpc_adapter,
+                create_lightning_adapter(gateway_node.clone(), task_group.make_subgroup().await)
+                    .await,
                 client_config.clone(),
                 decoders,
                 client_module_inits.clone(),
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
+                gateway_node,
             )
             .await;
 
@@ -457,6 +434,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 client_module_inits,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
+                gateway_node.clone(),
             )
             .await;
 
@@ -481,6 +459,45 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     }
 
     Ok(fixtures)
+}
+
+pub async fn create_lightning_adapter(
+    gateway_node: GatewayNode,
+    task_group: TaskGroup,
+) -> LnRpcAdapter {
+    match env::var("FM_TEST_USE_REAL_DAEMONS") {
+        Ok(s) if s == "1" => {
+            let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
+                .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
+                .parse::<Url>()
+                .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
+            match gateway_node {
+                GatewayNode::Cln => {
+                    let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = Arc::new(RwLock::new(
+                        NetworkLnRpcClient::new(lnrpc_addr).await.unwrap(),
+                    ));
+                    LnRpcAdapter::new(lnrpc)
+                }
+                GatewayNode::Lnd => {
+                    let gateway_lnd_client = GatewayLndClient::new(
+                        env::var("FM_LND_RPC_ADDR").unwrap(),
+                        env::var("FM_LND_TLS_CERT").unwrap(),
+                        env::var("FM_LND_MACAROON").unwrap(),
+                        task_group.make_subgroup().await,
+                    )
+                    .await
+                    .unwrap();
+                    let lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
+                    LnRpcAdapter::new(lnrpc)
+                }
+            }
+        }
+        _ => {
+            let lightning = FakeLightningTest::new();
+            let ln_arc = Arc::new(RwLock::new(lightning));
+            LnRpcAdapter::new(ln_arc)
+        }
+    }
 }
 
 pub fn peers(peers: &[u16]) -> Vec<PeerId> {
@@ -566,6 +583,7 @@ pub struct GatewayTest {
     pub keys: LightningGateway,
     pub user: UserTest<GatewayClientConfig>,
     pub client: Arc<GatewayClient>,
+    pub node: GatewayNode,
 }
 
 impl GatewayTest {
@@ -576,6 +594,7 @@ impl GatewayTest {
         module_gens: ClientModuleGenRegistry,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
+        node: GatewayNode,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -614,7 +633,7 @@ impl GatewayTest {
         )
         .into();
 
-        let gateway = Gateway::new(
+        let gateway = Gateway::new_with_lightning_connection(
             Arc::new(RwLock::new(adapter.clone())),
             client_builder.clone(),
             decoders.clone(),
@@ -646,6 +665,7 @@ impl GatewayTest {
             keys,
             user,
             client,
+            node,
         }
     }
 }

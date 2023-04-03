@@ -159,14 +159,4 @@ impl ILnRpcClient for FakeLightningTest {
 
         Ok(CompleteHtlcsResponse {})
     }
-
-    async fn connect(&mut self) -> ln_gateway::Result<()> {
-        self.is_connected = true;
-        Ok(())
-    }
-
-    async fn disconnect(&mut self) -> ln_gateway::Result<()> {
-        self.is_connected = false;
-        Ok(())
-    }
 }

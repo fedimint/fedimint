@@ -84,12 +84,4 @@ impl ILnRpcClient for LnRpcAdapter {
     ) -> ln_gateway::Result<CompleteHtlcsResponse> {
         self.client.read().await.complete_htlc(complete).await
     }
-
-    async fn connect(&mut self) -> ln_gateway::Result<()> {
-        self.client.write().await.connect().await
-    }
-
-    async fn disconnect(&mut self) -> ln_gateway::Result<()> {
-        self.client.write().await.disconnect().await
-    }
 }
