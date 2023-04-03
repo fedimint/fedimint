@@ -256,18 +256,6 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
@@ -286,7 +274,6 @@
 <span class="kw">use </span>fedimint_server::config::io::{
     read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG,
 };
-<span class="kw">use </span>fedimint_server::consensus::FedimintConsensus;
 <span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
 <span class="kw">use </span>futures::FutureExt;
@@ -519,24 +506,13 @@
     <span class="macro">info!</span>(<span class="string">&quot;Starting consensus&quot;</span>);
 
     <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>opts.password, opts.data_dir.clone())<span class="question-mark">?</span>;
-
     <span class="kw">let </span>decoders = module_gens.decoders(cfg.iter_module_instances())<span class="question-mark">?</span>;
-
     <span class="kw">let </span>db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
         decoders.clone(),
     );
 
-    <span class="kw">let </span>(consensus, api_receiver) =
-        FedimintConsensus::new(cfg.clone(), db, module_gens, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = opts.upgrade_epoch {
-        consensus.remove_upgrade_items(epoch).<span class="kw">await</span><span class="question-mark">?</span>;
-    }
-
-    FedimintServer::run(cfg, consensus, api_receiver, decoders, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(())
-}
+    FedimintServer::run(cfg, db, module_gens, opts.upgrade_epoch, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await
+</span>}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

@@ -612,6 +612,17 @@
 <a href="#612" id="612">612</a>
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -625,6 +636,8 @@
 <span class="kw">use </span>config::ServerConfig;
 <span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
 <span class="kw">use </span>fedimint_core::cancellable::Cancellable;
+<span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::DecodeError;
 <span class="kw">use </span>fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
@@ -730,11 +743,20 @@
     <span class="doccomment">/// Start all the components of the mint and plug them together
     </span><span class="kw">pub async fn </span>run(
         cfg: ServerConfig,
-        consensus: FedimintConsensus,
-        api_receiver: Receiver&lt;ApiEvent&gt;,
-        decoders: ModuleDecoderRegistry,
+        db: Database,
+        module_gens: ServerModuleGenRegistry,
+        upgrade_epoch: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>decoders = module_gens.decoders(cfg.iter_module_instances())<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>(consensus, api_receiver) =
+            FedimintConsensus::new(cfg.clone(), db, module_gens, task_group).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = upgrade_epoch {
+            consensus.remove_upgrade_items(epoch).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
         <span class="kw">let </span>server =
             FedimintServer::new(cfg.clone(), consensus, api_receiver, decoders, task_group).<span class="kw">await</span>;
         <span class="kw">let </span>server_consensus = server.consensus.clone();

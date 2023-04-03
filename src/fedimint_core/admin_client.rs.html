@@ -230,6 +230,18 @@
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -262,8 +274,8 @@
     <span class="doccomment">/// Sets the password used to decrypt the configs and authenticate
     ///
     /// Must be called first before any other calls to the API
-    </span><span class="kw">pub async fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;set_password&quot;</span>, ApiRequestErased::new(auth))
+    </span><span class="kw">pub async fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_auth(<span class="string">&quot;set_password&quot;</span>, ApiRequestErased::new(<span class="self">self</span>.auth.clone()))
             .<span class="kw">await
     </span>}
 
@@ -372,6 +384,13 @@
             .<span class="kw">await
     </span>}
 
+    <span class="doccomment">/// Reads the configs from the disk, starts the consensus server, and shuts
+    /// down the config gen API to start the Fedimint API
+    </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_auth(<span class="string">&quot;start_consensus&quot;</span>, ApiRequestErased::new(<span class="self">self</span>.auth.clone()))
+            .<span class="kw">await
+    </span>}
+
     <span class="kw">async fn </span>request_auth&lt;Ret&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: <span class="kw-2">&amp;</span>str,
@@ -406,12 +425,17 @@
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+</span><span class="doccomment">/// Connection information sent between peers in order to start config gen
 </span><span class="kw">pub struct </span>PeerServerParams {
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    <span class="doccomment">/// TLS cert is necessary for P2P auth during DKG and  consensus
+    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>cert: rustls::Certificate,
-    <span class="kw">pub </span>p2p_url: Url,
-    <span class="kw">pub </span>api_url: Url,
-    <span class="kw">pub </span>name: String,
+    <span class="doccomment">/// P2P is the network for running DKG and consensus
+    </span><span class="kw">pub </span>p2p_url: Url,
+    <span class="doccomment">/// API for secure websocket requests
+    </span><span class="kw">pub </span>api_url: Url,
+    <span class="doccomment">/// Name of the peer, used in TLS auth
+    </span><span class="kw">pub </span>name: String,
 }
 
 <span class="doccomment">/// The config gen params that need to be in consensus, sent by the config gen
