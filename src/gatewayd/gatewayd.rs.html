@@ -127,44 +127,9 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
-<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -174,11 +139,9 @@
 };
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::ModuleCommon;
-<span class="kw">use </span>fedimint_core::task::{RwLock, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-<span class="kw">use </span>ln_gateway::lnd::GatewayLndClient;
-<span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
 <span class="kw">use </span>ln_gateway::{Gateway, Mode};
 <span class="kw">use </span>mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
 <span class="kw">use </span>mint_client::modules::mint::{MintClientGen, MintModuleTypes};
@@ -247,37 +210,6 @@
     <span class="comment">// Create task group for controlled shutdown of the gateway
     </span><span class="kw">let </span>task_group = TaskGroup::new();
 
-    <span class="kw">let </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt; = <span class="kw">match </span>mode {
-        Mode::Cln { cln_extension_addr } =&gt; {
-            <span class="macro">info!</span>(
-                <span class="string">&quot;Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} &quot;</span>,
-                cln_extension_addr
-            );
-            Arc::new(RwLock::new(
-                NetworkLnRpcClient::new(cln_extension_addr).<span class="kw">await</span><span class="question-mark">?</span>,
-            ))
-        }
-        Mode::Lnd {
-            lnd_rpc_addr,
-            lnd_tls_cert,
-            lnd_macaroon,
-        } =&gt; {
-            <span class="macro">info!</span>(
-                <span class="string">&quot;Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} &quot;</span>,
-                lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
-            );
-            Arc::new(RwLock::new(
-                GatewayLndClient::new(
-                    lnd_rpc_addr,
-                    lnd_tls_cert,
-                    lnd_macaroon,
-                    task_group.make_subgroup().<span class="kw">await</span>,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>,
-            ))
-        }
-    };
-
     <span class="comment">// Create module decoder registry
     </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
         (
@@ -303,7 +235,7 @@
 
     <span class="comment">// Create gateway instance
     </span><span class="kw">let </span>gateway = Gateway::new(
-        lnrpc,
+        mode,
         client_builder,
         decoders,
         module_gens,

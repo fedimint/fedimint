@@ -850,6 +850,11 @@
 <a href="#850" id="850">850</a>
 <a href="#851" id="851">851</a>
 <a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1102,6 +1107,11 @@
             .find(|(<span class="kw">_</span>, v)| v.is_kind(<span class="kw-2">&amp;</span>kind))
             .map(|(id, v)| (<span class="kw-2">*</span>id, v.clone()))
             .ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">&quot;Module kind {kind} not found&quot;</span>))
+    }
+
+    <span class="doccomment">/// Federation name from config metadata (if set)
+    </span><span class="kw">pub fn </span>federation_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.meta.get(META_FEDERATION_NAME_KEY).map(|x| <span class="kw-2">&amp;**</span>x)
     }
 }
 
