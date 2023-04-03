@@ -361,7 +361,7 @@ enum Command {
         #[clap(long)]
         method: String,
         /// JSON args that will be serialized and send with the request
-        #[clap(long, default_value = "null")]
+        #[clap(default_value = "null")]
         arg: String,
     },
 
@@ -429,10 +429,7 @@ enum Command {
     },
 
     /// Wait for the fed to reach a consensus block height
-    WaitBlockHeight {
-        #[clap(long)]
-        height: u64,
-    },
+    WaitBlockHeight { height: u64 },
 
     /// Decode connection info into its JSON representation
     DecodeConnectInfo { connect_info: WsClientConnectInfo },
