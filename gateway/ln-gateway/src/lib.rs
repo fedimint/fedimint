@@ -115,6 +115,7 @@ pub struct Gateway {
     decoders: ModuleDecoderRegistry,
     module_gens: ClientModuleGenRegistry,
     lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
+    lightning_mode: Option<Mode>,
     actors: Mutex<HashMap<String, Arc<RwLock<GatewayActor>>>>,
     client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
@@ -126,6 +127,39 @@ pub struct Gateway {
 impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
+        lightning_mode: Mode,
+        client_builder: DynGatewayClientBuilder,
+        decoders: ModuleDecoderRegistry,
+        module_gens: ClientModuleGenRegistry,
+        task_group: TaskGroup,
+    ) -> Result<Self> {
+        // Create message channels for the webserver
+        let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
+
+        let lnrpc =
+            Self::create_lightning_client(lightning_mode.clone(), task_group.make_subgroup().await)
+                .await?;
+
+        let gw = Self {
+            lnrpc,
+            actors: Mutex::new(HashMap::new()),
+            sender,
+            receiver,
+            client_builder,
+            task_group,
+            channel_id_generator: AtomicU64::new(INITIAL_SCID),
+            decoders: decoders.clone(),
+            module_gens: module_gens.clone(),
+            lightning_mode: Some(lightning_mode),
+        };
+
+        gw.load_actors(decoders, module_gens).await?;
+
+        Ok(gw)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_with_lightning_connection(
         lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
         client_builder: DynGatewayClientBuilder,
         decoders: ModuleDecoderRegistry,
@@ -145,11 +179,45 @@ impl Gateway {
             channel_id_generator: AtomicU64::new(INITIAL_SCID),
             decoders: decoders.clone(),
             module_gens: module_gens.clone(),
+            lightning_mode: None,
         };
 
         gw.load_actors(decoders, module_gens).await?;
 
         Ok(gw)
+    }
+
+    async fn create_lightning_client(
+        mode: Mode,
+        task_group: TaskGroup,
+    ) -> Result<Arc<RwLock<dyn ILnRpcClient>>> {
+        let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = match mode {
+            Mode::Cln { cln_extension_addr } => {
+                info!(
+                    "Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} ",
+                    cln_extension_addr
+                );
+                Arc::new(RwLock::new(
+                    NetworkLnRpcClient::new(cln_extension_addr).await?,
+                ))
+            }
+            Mode::Lnd {
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+            } => {
+                info!(
+                    "Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} ",
+                    lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
+                );
+                Arc::new(RwLock::new(
+                    GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, task_group)
+                        .await?,
+                ))
+            }
+        };
+
+        Ok(lnrpc)
     }
 
     async fn load_actors(
@@ -409,31 +477,22 @@ impl Gateway {
             actor.write().await.stop_subscribing_htlcs().await?;
         }
 
-        // Disconnect the lightning connection, then reconnect it
-        self.lnrpc.write().await.disconnect().await?;
-
         self.lnrpc = match node_type {
-            Some(Mode::Cln { cln_extension_addr }) => Arc::new(RwLock::new(
-                NetworkLnRpcClient::new(cln_extension_addr).await?,
-            )),
-            Some(Mode::Lnd {
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-            }) => Arc::new(RwLock::new(
-                GatewayLndClient::new(
-                    lnd_rpc_addr,
-                    lnd_tls_cert,
-                    lnd_macaroon,
-                    self.task_group.make_subgroup().await,
-                )
-                .await?,
-            )),
+            Some(node_type) => {
+                Self::create_lightning_client(node_type, self.task_group.make_subgroup().await)
+                    .await?
+            }
             None => {
-                let new_client = self.lnrpc.clone();
-                // Reconnect the existing client without re-creating it
-                new_client.write().await.connect().await?;
-                new_client
+                // `lightning_mode` can be None during tests
+                if self.lightning_mode.is_some() {
+                    Self::create_lightning_client(
+                        self.lightning_mode.clone().unwrap(),
+                        self.task_group.make_subgroup().await,
+                    )
+                    .await?
+                } else {
+                    self.lnrpc.clone()
+                }
             }
         };
 

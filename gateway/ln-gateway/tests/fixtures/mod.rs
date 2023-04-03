@@ -48,7 +48,7 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
     // Create task group for controlled shutdown of the gateway
     let task_group = TaskGroup::new();
 
-    let gateway = Gateway::new(
+    let gateway = Gateway::new_with_lightning_connection(
         lnrpc,
         client_builder,
         decoders,

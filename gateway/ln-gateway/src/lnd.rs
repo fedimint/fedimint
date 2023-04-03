@@ -36,14 +36,11 @@ type OutcomeMap = Arc<Mutex<HashMap<sha256::Hash, (LndSenderRef, Option<CircuitK
 
 pub struct GatewayLndClient {
     /// LND client
-    client: Option<LndClient>,
+    client: LndClient,
     /// Passes state between subscribe_htlcs() and complete_htlc()
     outcomes: OutcomeMap,
     /// Used to spawn a task handling HTLC subscriptions
     task_group: TaskGroup,
-    address: String,
-    tls_cert: String,
-    macaroon: String,
 }
 
 // Reference to a sender that forwards ForwardHtlcInterceptResponse messages to
@@ -57,16 +54,30 @@ impl GatewayLndClient {
         macaroon: String,
         task_group: TaskGroup,
     ) -> crate::Result<Self> {
-        let mut gw_rpc = GatewayLndClient {
-            client: None,
+        let gw_rpc = GatewayLndClient {
+            client: Self::connect(address, tls_cert, macaroon).await?,
             outcomes: Arc::new(Mutex::new(HashMap::new())),
             task_group,
-            address,
-            tls_cert,
-            macaroon,
         };
-        gw_rpc.connect().await?;
         Ok(gw_rpc)
+    }
+
+    async fn connect(
+        address: String,
+        tls_cert: String,
+        macaroon: String,
+    ) -> crate::Result<LndClient> {
+        let client = loop {
+            match connect(address.clone(), tls_cert.clone(), macaroon.clone()).await {
+                Ok(client) => break client,
+                Err(_) => {
+                    tracing::warn!("Couldn't connect to LND, retrying in 5 seconds...");
+                    sleep(Duration::from_secs(5)).await;
+                }
+            }
+        };
+
+        Ok(client)
     }
 }
 
@@ -79,36 +90,31 @@ impl fmt::Debug for GatewayLndClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLndClient {
     async fn info(&self) -> crate::Result<GetNodeInfoResponse> {
-        if let Some(mut client) = self.client.clone() {
-            let info = client
-                .lightning()
-                .get_info(GetInfoRequest {})
-                .await
-                .map_err(|e| {
-                    GatewayError::LnRpcError(tonic::Status::new(
-                        tonic::Code::Internal,
-                        format!("LND error: {e:?}"),
-                    ))
-                })?
-                .into_inner();
-
-            let pub_key: PublicKey = info.identity_pubkey.parse().map_err(|e| {
+        let mut client = self.client.clone();
+        let info = client
+            .lightning()
+            .get_info(GetInfoRequest {})
+            .await
+            .map_err(|e| {
                 GatewayError::LnRpcError(tonic::Status::new(
                     tonic::Code::Internal,
                     format!("LND error: {e:?}"),
                 ))
-            })?;
-            info!("LND pubkey {:?} Alias: {}", pub_key, info.alias);
+            })?
+            .into_inner();
 
-            return Ok(GetNodeInfoResponse {
-                pub_key: pub_key.serialize().to_vec(),
-                alias: info.alias,
-            });
-        }
+        let pub_key: PublicKey = info.identity_pubkey.parse().map_err(|e| {
+            GatewayError::LnRpcError(tonic::Status::new(
+                tonic::Code::Internal,
+                format!("LND error: {e:?}"),
+            ))
+        })?;
+        info!("LND pubkey {:?} Alias: {}", pub_key, info.alias);
 
-        Err(GatewayError::other(
-            "Error: not connected to LND".to_string(),
-        ))
+        return Ok(GetNodeInfoResponse {
+            pub_key: pub_key.serialize().to_vec(),
+            alias: info.alias,
+        });
     }
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
@@ -119,45 +125,34 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
-        if let Some(mut client) = self.client.clone() {
-            let send_response = client
-                .lightning()
-                .send_payment_sync(SendRequest {
-                    payment_request: invoice.invoice.to_string(),
-                    ..Default::default()
-                })
-                .await
-                .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
-                .into_inner();
-            info!("send response {:?}", send_response);
+        let mut client = self.client.clone();
+        let send_response = client
+            .lightning()
+            .send_payment_sync(SendRequest {
+                payment_request: invoice.invoice.to_string(),
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
+            .into_inner();
+        info!("send response {:?}", send_response);
 
-            if send_response.payment_preimage.is_empty() {
-                return Err(GatewayError::LnRpcError(tonic::Status::new(
-                    tonic::Code::Internal,
-                    "LND did not return a preimage",
-                )));
-            };
+        if send_response.payment_preimage.is_empty() {
+            return Err(GatewayError::LnRpcError(tonic::Status::new(
+                tonic::Code::Internal,
+                "LND did not return a preimage",
+            )));
+        };
 
-            return Ok(PayInvoiceResponse {
-                preimage: send_response.payment_preimage,
-            });
-        }
-
-        Err(GatewayError::other(
-            "Error: not connected to LND".to_string(),
-        ))
+        return Ok(PayInvoiceResponse {
+            preimage: send_response.payment_preimage,
+        });
     }
 
     async fn subscribe_htlcs<'a>(
         &self,
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> crate::Result<HtlcStream<'a>> {
-        if self.client.is_none() {
-            return Err(GatewayError::other(
-                "Error: not connected to LND".to_string(),
-            ));
-        }
-
         const CHANNEL_SIZE: usize = 100;
 
         // Channel to send responses to LND after processing intercepted HTLC
@@ -168,7 +163,7 @@ impl ILnRpcClient for GatewayLndClient {
             mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, tonic::Status>>(CHANNEL_SIZE);
 
         let scid = subscription.short_channel_id;
-        let mut client = self.client.clone().unwrap();
+        let mut client = self.client.clone();
 
         let mut tg = self.task_group.clone();
         let outcomes = self.outcomes.clone();
@@ -285,12 +280,6 @@ impl ILnRpcClient for GatewayLndClient {
         &self,
         request: CompleteHtlcsRequest,
     ) -> crate::Result<CompleteHtlcsResponse> {
-        if self.client.is_none() {
-            return Err(GatewayError::other(
-                "Error: not connected to LND".to_string(),
-            ));
-        }
-
         let CompleteHtlcsRequest {
             action,
             intercepted_htlc_id,
@@ -338,32 +327,6 @@ impl ILnRpcClient for GatewayLndClient {
                 "No interceptor reference found for this processed htlc with id: {intercepted_htlc_id:?}",
             );
         }
-    }
-
-    async fn connect(&mut self) -> crate::Result<()> {
-        let client = loop {
-            match connect(
-                self.address.clone(),
-                self.tls_cert.clone(),
-                self.macaroon.clone(),
-            )
-            .await
-            {
-                Ok(client) => break client,
-                Err(_) => {
-                    tracing::warn!("Couldn't connect to LND, retrying in 5 seconds...");
-                    sleep(Duration::from_secs(5)).await;
-                }
-            }
-        };
-
-        self.client = Some(client);
-        Ok(())
-    }
-
-    async fn disconnect(&mut self) -> crate::Result<()> {
-        self.client = None;
-        Ok(())
     }
 }
 
