@@ -16,7 +16,6 @@ use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{
     read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG,
 };
-use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
@@ -249,22 +248,11 @@ async fn run(
     info!("Starting consensus");
 
     let cfg = read_server_config(&opts.password, opts.data_dir.clone())?;
-
     let decoders = module_gens.decoders(cfg.iter_module_instances())?;
-
     let db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
         decoders.clone(),
     );
 
-    let (consensus, api_receiver) =
-        FedimintConsensus::new(cfg.clone(), db, module_gens, &mut task_group).await?;
-
-    if let Some(epoch) = opts.upgrade_epoch {
-        consensus.remove_upgrade_items(epoch).await?;
-    }
-
-    FedimintServer::run(cfg, consensus, api_receiver, decoders, &mut task_group).await?;
-
-    Ok(())
+    FedimintServer::run(cfg, db, module_gens, opts.upgrade_epoch, &mut task_group).await
 }

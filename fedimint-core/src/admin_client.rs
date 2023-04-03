@@ -30,8 +30,8 @@ impl WsAdminClient {
     /// Sets the password used to decrypt the configs and authenticate
     ///
     /// Must be called first before any other calls to the API
-    pub async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth("set_password", ApiRequestErased::new(auth))
+    pub async fn set_password(&self) -> FederationResult<()> {
+        self.request_auth("set_password", ApiRequestErased::new(self.auth.clone()))
             .await
     }
 
@@ -140,6 +140,13 @@ impl WsAdminClient {
             .await
     }
 
+    /// Reads the configs from the disk, starts the consensus server, and shuts
+    /// down the config gen API to start the Fedimint API
+    pub async fn start_consensus(&self) -> FederationResult<()> {
+        self.request_auth("start_consensus", ApiRequestErased::new(self.auth.clone()))
+            .await
+    }
+
     async fn request_auth<Ret>(
         &self,
         method: &str,
@@ -174,11 +181,16 @@ pub struct ConfigGenConnectionsRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+/// Connection information sent between peers in order to start config gen
 pub struct PeerServerParams {
+    /// TLS cert is necessary for P2P auth during DKG and  consensus
     #[serde(with = "serde_tls_cert")]
     pub cert: rustls::Certificate,
+    /// P2P is the network for running DKG and consensus
     pub p2p_url: Url,
+    /// API for secure websocket requests
     pub api_url: Url,
+    /// Name of the peer, used in TLS auth
     pub name: String,
 }
 

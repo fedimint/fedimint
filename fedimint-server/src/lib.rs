@@ -11,6 +11,8 @@ use anyhow::bail;
 use config::ServerConfig;
 use fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
 use fedimint_core::cancellable::Cancellable;
+use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::db::Database;
 use fedimint_core::encoding::DecodeError;
 use fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
@@ -116,11 +118,20 @@ impl FedimintServer {
     /// Start all the components of the mint and plug them together
     pub async fn run(
         cfg: ServerConfig,
-        consensus: FedimintConsensus,
-        api_receiver: Receiver<ApiEvent>,
-        decoders: ModuleDecoderRegistry,
+        db: Database,
+        module_gens: ServerModuleGenRegistry,
+        upgrade_epoch: Option<u64>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<()> {
+        let decoders = module_gens.decoders(cfg.iter_module_instances())?;
+
+        let (consensus, api_receiver) =
+            FedimintConsensus::new(cfg.clone(), db, module_gens, task_group).await?;
+
+        if let Some(epoch) = upgrade_epoch {
+            consensus.remove_upgrade_items(epoch).await?;
+        }
+
         let server =
             FedimintServer::new(cfg.clone(), consensus, api_receiver, decoders, task_group).await;
         let server_consensus = server.consensus.clone();
