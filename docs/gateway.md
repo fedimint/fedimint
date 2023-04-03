@@ -72,9 +72,13 @@ Options:
   -V, --version                    Print version information
 ```
 
-### mintgate
+### Mintgate
 
-A simple and delightful admin dashboard for everyday access and control of your Fedimint gateway. Currently [under development here](https://github.com/GETLN/mintgate)
+A simple and delightful dashboard for administrative access and control of your Fedimint gateway. Presently, Mintgate supports admin functions like:
+
+- Connecting new federations to the gateway
+- Depositing funds into a connected federation
+- Withdrawing funds from the federations
 
 ---
 
@@ -87,6 +91,26 @@ As described in [Running Fedimint for dev testing](./dev-running.md#using-the-ga
 - See and contribute to [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs)
 - Help add support to other node implementations by building [gateway-lnrpc-extensions](#gateway-lnrpc-extension) for them. You can parent your brand-new extension in this directory, or in your own repository and we will link to it in this open documentation
 - Contributions are highly welcome!
+
+### Developing Gateway-UI (aka, Mintgate)
+
+To interact with and develop Mintgate, open a new terminal and change directories to `/gateway/ui/` and start the development shell
+
+```sh
+cd /gateway/ui
+nix develop .#gateway-ui
+```
+
+Install the required dependencies and run the Mintgate client
+
+```sh
+yarn install
+yarn start
+```
+
+You should see a running Mintgate instance in your local browser. Probably at `https://localhost:3000`
+
+---
 
 ## Deploying a Gateway in Production
 
