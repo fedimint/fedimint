@@ -8,7 +8,7 @@ use fedimint_core::{msats, Amount, OutPoint, PeerId, Tiered, TieredMulti};
 use fedimint_derive_secret::DerivableSecret;
 use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare};
 
-use super::{EcashRecoveryTracker, PlaintextEcashBackup};
+use super::{EcashRecoveryTracker, Metadata, PlaintextEcashBackup};
 use crate::mint::db::OutputFinalizationKey;
 use crate::mint::{
     MintClient, NoteIndex, NoteIssuanceRequest, NoteIssuanceRequests, SpendableNote,
@@ -49,6 +49,7 @@ impl MicroMintClient {
         spendable_notes: impl IntoIterator<Item = (Amount, SpendableNote)>,
         // pending_notes: impl IntoIterator<Item = (OutPoint, NoteIssuanceRequests)>,
         pending_notes: impl IntoIterator<Item = (OutPoint, PendingInner)>,
+        metadata: &Metadata,
     ) -> PlaintextEcashBackup
     where
         PendingInner: IntoIterator<Item = (Amount, NoteIssuanceRequest)>,
@@ -68,6 +69,7 @@ impl MicroMintClient {
                 .collect(),
             epoch_count: 0,
             next_note_idx: self.next_note_idx.clone(),
+            metadata: metadata.clone(),
         }
     }
 
@@ -265,6 +267,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
             [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
         ),
         epoch_count: 0,
+        metadata: Metadata::from_raw(vec![1, 2, 3]),
     };
 
     let encoded = orig.encode()?;
@@ -283,6 +286,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
             [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
         ),
         epoch_count: 1,
+        metadata: Metadata::from_raw(vec![1, 2, 3]),
     };
 
     let secret = DerivableSecret::new_root(&[1; 32], &[1, 32]);
@@ -314,6 +318,7 @@ fn sanity_check_recovery_fresh_backup() {
     let threshold = 2;
     let gap_limit = 10;
     let amount_tiers = [msats(1), msats(2), msats(4)];
+    let metadata = Metadata::from_raw(vec![1, 2, 3]);
 
     let fed = MicroMintFed::new(threshold, peers_num, &amount_tiers);
 
@@ -321,7 +326,7 @@ fn sanity_check_recovery_fresh_backup() {
     let mut c1 = MicroMintClient::from_short_seed(0);
 
     // Make an empty backup of client1
-    let empty_backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![]);
+    let empty_backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![], &metadata);
 
     // Start a recovery nonce tracker from the backup.
     // This simulates the simplest (yet corner) case, where we start from
@@ -509,6 +514,7 @@ fn sanity_check_recovery_non_empty_backup() {
                 .iter()
                 .map(|(amount, _bn, iss_req)| (*amount, *iss_req)),
         )],
+        &Metadata::empty(),
     );
 
     // Start a recovery nonce tracker from the backup.
@@ -579,7 +585,7 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
     // Client 2
     let mut c2 = MicroMintClient::from_short_seed(1);
 
-    let backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![]);
+    let backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![], &Metadata::empty());
 
     let mut tracker = EcashRecoveryTracker::from_backup(
         backup_c1,
@@ -664,7 +670,7 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     // Client 2
     let mut c2 = MicroMintClient::from_short_seed(1);
 
-    let backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![]);
+    let backup_c1 = c1.make_backup::<Vec<_>>(vec![], vec![], &Metadata::empty());
 
     let mut tracker = EcashRecoveryTracker::from_backup(
         backup_c1,
