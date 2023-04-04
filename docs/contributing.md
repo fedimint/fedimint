@@ -22,6 +22,8 @@ Below are some broad and general areas of contribution to get you started
 * [Fedimint Modules](./architecture.md)
 * [Fedimint Database System](./database.md)
 * [The Lightning Gateway](./gateway.md)
+    * [Developing gateway-lnrpc-extension](./gateway.md#developing-gateway-lnrpc-extension)
+    * [Developing Gateway-UI (aka, Mintgate)](./gateway.md#developing-gateway-ui-aka-mintgate)
 * [Fedimint Setup UI](./ui.md)
 * [Nix Build System](./nix-ci.md)
 
