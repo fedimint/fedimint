@@ -1,10 +1,11 @@
 use std::net::SocketAddr;
 
-use axum::response::IntoResponse;
-use axum::routing::post;
-use axum::{Extension, Json, Router};
+use axum::extract::{Extension, Json, Router};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
 use axum_macros::debug_handler;
 use mint_client::ln::PayInvoicePayload;
+use rust_embed::RustEmbed;
 use serde_json::json;
 use tower_http::auth::RequireAuthorizationLayer;
 use tower_http::cors::CorsLayer;
@@ -15,6 +16,11 @@ use super::{
     GatewayRpcSender, InfoPayload, LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 use crate::GatewayError;
+
+// TODO: Gate UI embedding under feature gate
+#[derive(RustEmbed, Clone)]
+#[folder = "../ui/build"]
+struct Asset;
 
 pub async fn run_webserver(
     authkey: String,
@@ -37,6 +43,10 @@ pub async fn run_webserver(
         .route("/connect-ln", post(connect_ln))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
+    let home_route = Router::new()
+        .route("/", get(home))
+        .layer(Extension(Asset {}));
+
     let app = Router::new()
         .merge(routes)
         .merge(admin_routes)
@@ -49,6 +59,20 @@ pub async fn run_webserver(
         .expect("Failed to start webserver");
 
     Ok(())
+}
+
+/// Serve the gateway UI
+#[debug_handler]
+#[instrument(skip_all, err)]
+async fn home(Extension(asset): Extension<Asset>) -> Result<impl IntoResponse, GatewayError> {
+    let index = asset.get(asset, "index.html").ok_or(GatewayError::other(
+        "Gateway UI not available in headless mode".into(),
+    ))?;
+
+    Ok(Response::builder()
+        .header("Content-Type", "text/html")
+        .body(index)
+        .map_err(|_| GatewayError::other("Failed to build response".into()))?)
 }
 
 /// Display gateway ecash note balance
