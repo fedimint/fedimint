@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["fedimint_env","Create a map of environment variables which fedimintd and DKG can use, but which can’t be defined by `build.sh` because multiple of these daemons run concurrently with different values."],["run_dkg",""]],"struct":[["Federation",""],["Fedimintd",""]]};
