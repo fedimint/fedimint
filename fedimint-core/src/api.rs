@@ -11,7 +11,6 @@ use std::{cmp, result};
 use anyhow::{anyhow, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
-use bitcoin::consensus::ReadExt;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{
     ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId, PeerUrl,
@@ -624,8 +623,10 @@ impl FromStr for WsClientConnectInfo {
 
         let mut urls = vec![];
         while cursor.position() < total_len {
-            let len = cursor.read_u16()? as usize;
-            let mut url_bytes = vec![0; len];
+            let mut url_len = [0; 2];
+            cursor.read_exact(&mut url_len)?;
+            let url_len = u16::from_be_bytes(url_len).into();
+            let mut url_bytes = vec![0; url_len];
             cursor.read_exact(&mut url_bytes)?;
 
             let url = std::str::from_utf8(&url_bytes)?;
@@ -646,7 +647,7 @@ impl Display for WsClientConnectInfo {
         data.extend(self.id.0.to_bytes());
         for url in &self.urls {
             let url_bytes = url.as_str().as_bytes();
-            data.extend((url_bytes.len() as u16).to_le_bytes());
+            data.extend((url_bytes.len() as u16).to_be_bytes());
             data.extend(url.as_str().as_bytes());
         }
         let encode =

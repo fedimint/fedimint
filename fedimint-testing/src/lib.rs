@@ -374,10 +374,10 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 }
 
 /// Creates the database backup directory by appending the `snapshot_name`
-/// to the `DB_MIGRATION_DIR`. Then this function will execute the provided
+/// to `db/migrations`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
-/// data for testing a migration. If `DB_MIGRATION_DIR` is not set, this
-/// function doesn't do anything.
+/// data for testing a migration. If the snapshot directory already exists,
+/// this function will do nothing.
 pub async fn prepare_snapshot<F>(
     snapshot_name: &str,
     prepare_fn: F,
@@ -402,8 +402,7 @@ pub const BYTE_32: [u8; 32] = [
 ];
 
 /// Iterates over all of the databases supplied in the database backup
-/// directory, which is specified by `DB_MIGRATION_DIR` environment
-/// variable. First, a temporary database will be created and the contents will
+/// directory. First, a temporary database will be created and the contents will
 /// be populated from the database backup directory. Next, this function will
 /// execute the provided `validate` closure. The `validate` closure is expected
 /// to do any validation necessary on the temporary database, such as applying
