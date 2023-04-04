@@ -328,6 +328,16 @@
                 pkg = rustPackageOutputsFinal.fedimint-pkgs;
                 bin = "distributedgen";
               };
+            gatewayd = pickBinary
+              {
+                pkg = rustPackageOutputsFinal.gateway-pkgs;
+                bin = "gatewayd";
+              };
+            gateway-cli = pickBinary
+              {
+                pkg = rustPackageOutputsFinal.gateway-pkgs;
+                bin = "gateway-cli";
+              };
           };
 
           # Technically nested sets are not allowed in `packages`, so we can
