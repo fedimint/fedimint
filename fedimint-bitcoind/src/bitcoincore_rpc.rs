@@ -35,41 +35,37 @@ const SIGNET_GENESIS_BLOCK_HASH: &str =
     "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6";
 
 pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
-    let url_str = if let Some(port) = url.port() {
-        format!(
-            "{}://{}:{port}",
-            url.scheme(),
-            url.host_str().unwrap_or("127.0.0.1"),
-            port = port,
-        )
-    } else {
-        format!(
-            "{}://{}",
-            url.scheme(),
-            url.host_str().unwrap_or("127.0.0.1"),
-        )
-    };
-    let url_auth = if url.username().is_empty() {
-        Auth::None
-    } else {
-        Auth::UserPass(
-            url.username().to_owned(),
-            url.password()
-                .ok_or_else(|| format_err!("Password missing for {}", url.username()))?
-                .to_owned(),
-        )
-    };
-    let auth = if env::var("BITCOIND_USE_COOKIE").is_ok() {
-        if let Some(cookie_file) = rpc_cookie_file() {
-            let cookie = std::fs::read_to_string(cookie_file)?;
-            Auth::CookieFile(cookie.into())
+    Ok((
+        (if let Some(port) = url.port() {
+            format!(
+                "{}://{}:{port}",
+                url.scheme(),
+                url.host_str().unwrap_or("127.0.0.1")
+            )
         } else {
-            return Err(anyhow!("Could not find cookie file"));
-        }
-    } else {
-        url_auth
-    };
-    Ok((url_str, auth))
+            format!(
+                "{}://{}",
+                url.scheme(),
+                url.host_str().unwrap_or("127.0.0.1")
+            )
+        }),
+        if env::var("BITCOIND_USE_COOKIE").is_ok() {
+            if let Some(cookie_file) = rpc_cookie_file() {
+                Auth::CookieFile(cookie_file.into())
+            } else {
+                return Err(anyhow!("Could not find cookie file"));
+            }
+        } else if url.username().is_empty() {
+            Auth::None
+        } else {
+            Auth::UserPass(
+                url.username().to_owned(),
+                url.password()
+                    .ok_or_else(|| format_err!("Password missing for {}", url.username()))?
+                    .to_owned(),
+            )
+        },
+    ))  
 }
 
 fn rpc_cookie_file() -> Option<String> {
