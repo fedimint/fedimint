@@ -43,6 +43,15 @@ pub struct ClnExtensionOpts {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let mut args = std::env::args();
+
+    if let Some(ref arg) = args.nth(1) {
+        if arg.as_str() == "version-hash" {
+            println!("{}", env!("CODE_VERSION"));
+            return Ok(());
+        }
+    }
+
     let (service, listen, plugin) = ClnRpcService::new()
         .await
         .expect("Failed to create cln rpc service");

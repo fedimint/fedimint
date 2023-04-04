@@ -45,7 +45,7 @@ pub struct GatewayOpts {
     pub password: String,
 }
 
-// Fedimint Gateway Binary
+/// Fedimint Gateway Binary
 ///
 /// This binary runs a webserver with an API that can be used by Fedimint
 /// clients to request routing of payments through the Lightning Network.
