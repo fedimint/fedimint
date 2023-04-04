@@ -252,6 +252,8 @@ impl Gateway {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
+        let _ = self.select_actor(connect.id.clone()).await?;
+
         let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.read().await.info().await?;
         let node_pub_key = PublicKey::from_slice(&pub_key)
             .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
