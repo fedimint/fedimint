@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::{
+    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+};
+use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -13,7 +16,6 @@ use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{
     read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG,
 };
-use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
@@ -28,6 +30,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Parser)]
 pub struct ServerOpts {
     /// Path to folder containing federation config files
+    #[arg(long = "data-dir", env = "FM_DATA_DIR")]
     pub data_dir: PathBuf,
     /// Password to encrypt sensitive config files
     // TODO: should probably never send password to the server directly, rather send the hash via
@@ -80,6 +83,7 @@ pub struct ServerOpts {
 /// ```
 pub struct Fedimintd {
     module_gens: ServerModuleGenRegistry,
+    module_gens_params: ServerModuleGenParamsRegistry,
     opts: ServerOpts,
 }
 
@@ -103,6 +107,7 @@ impl Fedimintd {
 
         Ok(Self {
             module_gens: ServerModuleGenRegistry::new(),
+            module_gens_params: ServerModuleGenParamsRegistry::new(),
             opts,
         })
     }
@@ -112,6 +117,15 @@ impl Fedimintd {
         T: ServerModuleGen + 'static + Send + Sync,
     {
         self.module_gens.attach(gen);
+        self
+    }
+
+    pub fn with_extra_module_gens_params<P>(mut self, kind: ModuleKind, params: P) -> Self
+    where
+        P: ModuleGenParams,
+    {
+        self.module_gens_params
+            .attach_config_gen_params(kind, params);
         self
     }
 
@@ -132,7 +146,14 @@ impl Fedimintd {
         let task_group = root_task_group.clone();
         root_task_group
             .spawn_local("main", move |_task_handle| async move {
-                match run(self.opts, task_group.clone(), self.module_gens).await {
+                match run(
+                    self.opts,
+                    task_group.clone(),
+                    self.module_gens,
+                    self.module_gens_params,
+                )
+                .await
+                {
                     Ok(()) => {}
                     Err(e) => {
                         error!(?e, "Main task returned error, shutting down");
@@ -180,6 +201,7 @@ async fn run(
     opts: ServerOpts,
     mut task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
+    module_gens_params: ServerModuleGenParamsRegistry,
 ) -> anyhow::Result<()> {
     let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
 
@@ -201,6 +223,7 @@ async fn run(
                     password,
                     ui_task_group,
                     module_gens,
+                    module_gens_params,
                 )
                 .await;
             })
@@ -225,22 +248,11 @@ async fn run(
     info!("Starting consensus");
 
     let cfg = read_server_config(&opts.password, opts.data_dir.clone())?;
-
     let decoders = module_gens.decoders(cfg.iter_module_instances())?;
-
     let db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
         decoders.clone(),
     );
 
-    let (consensus, api_receiver) =
-        FedimintConsensus::new(cfg.clone(), db, module_gens, &mut task_group).await?;
-
-    if let Some(epoch) = opts.upgrade_epoch {
-        consensus.remove_upgrade_items(epoch).await?;
-    }
-
-    FedimintServer::run(cfg, consensus, api_receiver, decoders, &mut task_group).await?;
-
-    Ok(())
+    FedimintServer::run(cfg, db, module_gens, opts.upgrade_epoch, &mut task_group).await
 }

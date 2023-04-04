@@ -592,7 +592,7 @@ impl ServerModule for Lightning {
         for (contract_id, shares) in preimage_decryption_shares {
             let peers: Vec<PeerId> = shares.iter().map(|(peer, _)| *peer).collect();
             let span = info_span!("decrypt_preimage", %contract_id);
-            let _gaurd = span.enter();
+            let _guard = span.enter();
 
             let incoming_contract = match self.get_contract_account(dbtx, contract_id).await {
                 Some(ContractAccount {
@@ -755,7 +755,7 @@ impl ServerModule for Lightning {
                 "/account",
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     module
-                        .get_contract_account(context.dbtx(), contract_id)
+                        .get_contract_account(&mut context.dbtx(), contract_id)
                         .await
                         .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
                 }
@@ -764,7 +764,7 @@ impl ServerModule for Lightning {
                 "/offer",
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     let offer = module
-                        .get_offer(context.dbtx(), payment_hash)
+                        .get_offer(&mut context.dbtx(), payment_hash)
                         .await
                         .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
 
@@ -775,13 +775,13 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 "/list_gateways",
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGateway> {
-                    Ok(module.list_gateways(context.dbtx()).await)
+                    Ok(module.list_gateways(&mut context.dbtx()).await)
                 }
             },
             api_endpoint! {
                 "/register_gateway",
                 async |module: &Lightning, context, gateway: LightningGateway| -> () {
-                    module.register_gateway(context.dbtx(), gateway).await;
+                    module.register_gateway(&mut context.dbtx(), gateway).await;
                     Ok(())
                 }
             },

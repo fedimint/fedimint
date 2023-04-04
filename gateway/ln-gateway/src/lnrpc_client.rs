@@ -1,9 +1,9 @@
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fedimint_core::dyn_newtype_define;
+use fedimint_core::task::sleep;
 use futures::stream::BoxStream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetNodeInfoResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -23,8 +23,8 @@ pub type HtlcStream<'a> =
 
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
-    /// Get the public key of the lightning node
-    async fn pubkey(&self) -> Result<GetPubKeyResponse>;
+    /// Get the public key and alias of the lightning node
+    async fn info(&self) -> Result<GetNodeInfoResponse>;
 
     /// Get route hints to the lightning node
     async fn routehints(&self) -> Result<GetRouteHintsResponse>;
@@ -44,18 +44,6 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse>;
 }
 
-dyn_newtype_define!(
-    /// Arc reference to a gateway lightning rpc client
-    #[derive(Clone)]
-    pub DynLnRpcClient(Arc<ILnRpcClient>)
-);
-
-impl DynLnRpcClient {
-    pub fn new(client: Arc<dyn ILnRpcClient + Send + Sync>) -> Self {
-        DynLnRpcClient(client)
-    }
-}
-
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
 /// convenience, and makes real RPC requests over the wire to a remote lightning
 /// node. The lightning node is exposed via a corresponding
@@ -72,44 +60,48 @@ impl NetworkLnRpcClient {
             GatewayError::Other(anyhow!("Failed to create lnrpc endpoint from url"))
         })?;
 
-        let client = GatewayLightningClient::connect(endpoint)
-            .await
-            .map_err(|e| {
-                error!("Failed to connect to lnrpc server: {:?}", e);
-                GatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
-            })?;
+        let gw_rpc = NetworkLnRpcClient {
+            client: Self::connect(endpoint).await?,
+        };
+        Ok(gw_rpc)
+    }
 
-        Ok(Self { client })
+    async fn connect(endpoint: Endpoint) -> Result<GatewayLightningClient<Channel>> {
+        let client = loop {
+            match GatewayLightningClient::connect(endpoint.clone()).await {
+                Ok(client) => break client,
+                Err(_) => {
+                    tracing::warn!("Couldn't connect to CLN extension, retrying in 5 seconds...");
+                    sleep(Duration::from_secs(5)).await;
+                }
+            }
+        };
+
+        Ok(client)
     }
 }
 
 #[async_trait]
 impl ILnRpcClient for NetworkLnRpcClient {
-    async fn pubkey(&self) -> Result<GetPubKeyResponse> {
+    async fn info(&self) -> Result<GetNodeInfoResponse> {
         let req = Request::new(EmptyRequest {});
-
         let mut client = self.client.clone();
-        let res = client.get_pub_key(req).await?;
-
-        Ok(res.into_inner())
+        let res = client.get_node_info(req).await?;
+        return Ok(res.into_inner());
     }
 
     async fn routehints(&self) -> Result<GetRouteHintsResponse> {
         let req = Request::new(EmptyRequest {});
-
         let mut client = self.client.clone();
         let res = client.get_route_hints(req).await?;
-
-        Ok(res.into_inner())
+        return Ok(res.into_inner());
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
         let req = Request::new(invoice);
-
         let mut client = self.client.clone();
         let res = client.pay_invoice(req).await?;
-
-        Ok(res.into_inner())
+        return Ok(res.into_inner());
     }
 
     async fn subscribe_htlcs<'a>(
@@ -117,19 +109,15 @@ impl ILnRpcClient for NetworkLnRpcClient {
         subscription: SubscribeInterceptHtlcsRequest,
     ) -> Result<HtlcStream<'a>> {
         let req = Request::new(subscription);
-
         let mut client = self.client.clone();
         let res = client.subscribe_intercept_htlcs(req).await?;
-
-        Ok(Box::pin(res.into_inner()))
+        return Ok(Box::pin(res.into_inner()));
     }
 
     async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
         let req = Request::new(outcome);
-
         let mut client = self.client.clone();
         let res = client.complete_htlc(req).await?;
-
-        Ok(res.into_inner())
+        return Ok(res.into_inner());
     }
 }

@@ -11,6 +11,8 @@ use anyhow::bail;
 use config::ServerConfig;
 use fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
 use fedimint_core::cancellable::Cancellable;
+use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::db::Database;
 use fedimint_core::encoding::DecodeError;
 use fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
@@ -26,6 +28,7 @@ use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo, Target};
 use itertools::Itertools;
+use net::peers::DelayCalculator;
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -115,11 +118,20 @@ impl FedimintServer {
     /// Start all the components of the mint and plug them together
     pub async fn run(
         cfg: ServerConfig,
-        consensus: FedimintConsensus,
-        api_receiver: Receiver<ApiEvent>,
-        decoders: ModuleDecoderRegistry,
+        db: Database,
+        module_gens: ServerModuleGenRegistry,
+        upgrade_epoch: Option<u64>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<()> {
+        let decoders = module_gens.decoders(cfg.iter_module_instances())?;
+
+        let (consensus, api_receiver) =
+            FedimintConsensus::new(cfg.clone(), db, module_gens, task_group).await?;
+
+        if let Some(epoch) = upgrade_epoch {
+            consensus.remove_upgrade_items(epoch).await?;
+        }
+
         let server =
             FedimintServer::new(cfg.clone(), consensus, api_receiver, decoders, task_group).await;
         let server_consensus = server.consensus.clone();
@@ -171,6 +183,7 @@ impl FedimintServer {
             api_receiver,
             connector,
             decoders,
+            DelayCalculator::default(),
             task_group,
         )
         .await
@@ -182,15 +195,20 @@ impl FedimintServer {
         api_receiver: Receiver<ApiEvent>,
         connector: PeerConnector<EpochMessage>,
         decoders: ModuleDecoderRegistry,
+        delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> Self {
         cfg.validate_config(&cfg.local.identity, &consensus.module_inits)
             .expect("invalid config");
 
-        let connections =
-            ReconnectPeerConnections::new(cfg.network_config(), connector, task_group)
-                .await
-                .into_dyn();
+        let connections = ReconnectPeerConnections::new(
+            cfg.network_config(),
+            delay_calculator,
+            connector,
+            task_group,
+        )
+        .await
+        .into_dyn();
 
         let net_info = NetworkInfo::new(
             cfg.local.identity,
@@ -249,7 +267,7 @@ impl FedimintServer {
             {
                 v
             } else {
-                // `None` is supposed to mean the proccess is shutting down
+                // `None` is supposed to mean the process is shutting down
                 debug_assert!(task_handle.is_shutting_down());
                 break;
             };

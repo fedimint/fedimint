@@ -2,20 +2,20 @@
 
 source ./scripts/lib.sh
 
-# wait for bitcoin RPC, lightningd & fedimint block sync
-await_bitcoind_ready
-await_lightning_node_block_processing | show_verbose_output
-await_fedimint_block_sync | show_verbose_output
+echo Waiting for fedimint start
 
-echo Setting up lightning channel ...
-open_channel | show_verbose_output
+# waits for rust to write to this pipe
+STATUS=$(cat $FM_READY_FILE)
+if [ "$STATUS" = "ERROR" ]
+then
+    echo "fedimint didn't start correctly"
+    echo "See other panes for errors"
+    exit 1
+fi
 
-echo Funding user e-cash wallet ...
 scripts/pegin.sh 10000.0 | show_verbose_output
 
-# gatewayd needs a channel or initialization takes 20 seconds longer,
-# we wait for channel to open before waiting for it
-await_gateway_registered | show_verbose_output
+use_cln_gw
 
 echo Funding gateway e-cash wallet ...
 scripts/pegin.sh 20000.0 1 | show_verbose_output
@@ -28,7 +28,8 @@ echo "  fedimint-cli   - cli client to interact with the federation"
 echo "  lightning-cli  - cli client for Core Lightning"
 echo "  lncli          - cli client for LND"
 echo "  bitcoin-cli    - cli client for bitcoind"
-echo "  gateway-cli    - cli client for the gateway"
+echo "  gateway-cln    - cli client for the CLN gateway"
+echo "  gateway-lnd    - cli client for the LND gateway"
 echo
 echo "Use '--help' on each command for more information"
 echo ""

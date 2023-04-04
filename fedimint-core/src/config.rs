@@ -18,6 +18,7 @@ use fedimint_core::core::{
 use fedimint_core::encoding::Encodable;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tbs::{serde_impl, Scalar};
 use thiserror::Error;
@@ -53,7 +54,7 @@ impl JsonWithKind {
     /// When `kind` gets removed and `value` is parsed, it will
     /// parse as `Value::Object` that is empty.
     ///
-    /// Howerver empty module structs, like `struct FooConfigLocal;` (unit
+    /// However empty module structs, like `struct FooConfigLocal;` (unit
     /// struct), will fail to deserialize with this value, as they expect
     /// `Value::Null`.
     ///
@@ -147,9 +148,10 @@ impl Display for FederationId {
 
 /// Display as a hex encoding
 impl FederationId {
-    /// Non-unique dummy id for testing
+    /// Random dummy id for testing
     pub fn dummy() -> Self {
-        Self(threshold_crypto::PublicKey::from(G1Projective::identity()))
+        let rand_pk = threshold_crypto::SecretKey::random().public_key();
+        Self(rand_pk)
     }
 
     fn try_from_bytes(bytes: [u8; 48]) -> Option<Self> {
@@ -205,7 +207,16 @@ impl ClientConfig {
         if let Some(client_cfg) = self.modules.get(&id) {
             Ok(serde_json::from_value(client_cfg.value().clone())?)
         } else {
-            Err(format_err!("Client config for module id: {id} not found"))
+            Err(format_err!("Client config for module id {id} not found"))
+        }
+    }
+
+    // TODO: rename this and one above
+    pub fn get_module_cfg(&self, id: ModuleInstanceId) -> anyhow::Result<ClientModuleConfig> {
+        if let Some(client_cfg) = self.modules.get(&id) {
+            Ok(client_cfg.clone())
+        } else {
+            Err(format_err!("Client config for module id {id} not found"))
         }
     }
 
@@ -227,36 +238,23 @@ impl ClientConfig {
 
         Ok((*id, serde_json::from_value(module_cfg.value().clone())?))
     }
-}
 
-/// Parameters for generating all module configs
-///
-/// The same `ModuleKind` may have multiple instances with different settings
-#[derive(Debug, Clone, Default)]
-pub struct ConfigGenParams(BTreeMap<String, serde_json::Value>);
-
-impl ConfigGenParams {
-    pub fn new() -> ConfigGenParams {
-        ConfigGenParams::default()
+    // TODO: rename this and above
+    pub fn get_first_module_by_kind_cfg(
+        &self,
+        kind: impl Into<ModuleKind>,
+    ) -> anyhow::Result<(ModuleInstanceId, ClientModuleConfig)> {
+        let kind: ModuleKind = kind.into();
+        self.modules
+            .iter()
+            .find(|(_, v)| v.is_kind(&kind))
+            .map(|(id, v)| (*id, v.clone()))
+            .ok_or_else(|| anyhow::format_err!("Module kind {kind} not found"))
     }
 
-    /// Add params for a module
-    pub fn attach<P: ModuleGenParams>(mut self, module_params: P) -> Self {
-        self.0.insert(
-            P::MODULE_NAME.to_string(),
-            serde_json::to_value(&module_params).expect("Encoding to value doesn't fail"),
-        );
-        self
-    }
-
-    /// Retrieve a typed config generation parameters for a module
-    pub fn get<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
-        let value = self
-            .0
-            .get(P::MODULE_NAME)
-            .ok_or_else(|| anyhow::anyhow!("No params found for module {}", P::MODULE_NAME))?;
-        serde_json::from_value(value.clone())
-            .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
+    /// Federation name from config metadata (if set)
+    pub fn federation_name(&self) -> Option<&str> {
+        self.meta.get(META_FEDERATION_NAME_KEY).map(|x| &**x)
     }
 }
 
@@ -269,9 +267,83 @@ impl<M> Default for ModuleGenRegistry<M> {
     }
 }
 
+/// Module **generation** (so passed to dkg, not to the module itself) config
+/// parameters
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
+pub struct ConfigGenParams(serde_json::Value);
+
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
+impl ServerModuleGenRegistry {
+    // TODO: Remove this with modularization
+    pub fn legacy_init_modules(&self) -> BTreeMap<u16, (ModuleKind, DynServerModuleGen)> {
+        let mut modules = BTreeMap::new();
+        for (id, (kind, gen)) in self.legacy_init_order_iter().into_iter().enumerate() {
+            modules.insert(u16::try_from(id).expect("cannot fail"), (kind, gen));
+        }
+        modules
+    }
+}
+
+impl ConfigGenParams {
+    /// Null value, used as a config gen parameters for module gens that don't
+    /// need any parameters
+    pub fn null() -> Self {
+        Self(jsonrpsee_core::JsonValue::Null)
+    }
+
+    pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
+        serde_json::from_value(self.0.clone())
+            .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
+    }
+
+    pub fn from_typed<P: ModuleGenParams>(p: P) -> anyhow::Result<Self> {
+        Ok(Self(serde_json::to_value(p)?))
+    }
+}
+
 pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
+
+/// Configs for each module's DKG
+///
+/// Note: in the future, we should make this one a
+/// `ModuleRegistry<ConfigGenParams>`, as each module **instance** will need a
+/// distinct config for dkg.
+pub type ServerModuleGenParamsRegistry = ModuleGenRegistry<ConfigGenParams>;
+
+impl Eq for ServerModuleGenParamsRegistry {}
+
+impl PartialEq for ServerModuleGenParamsRegistry {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl Serialize for ServerModuleGenParamsRegistry {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut serializer = serializer.serialize_map(Some(self.0.len()))?;
+        for (key, value) in self.0.iter() {
+            serializer.serialize_key(key)?;
+            serializer.serialize_value(&value.0)?;
+        }
+        serializer.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let json: BTreeMap<ModuleKind, serde_json::Value> = Deserialize::deserialize(deserializer)?;
+        let mut params = BTreeMap::new();
+
+        for (key, value) in json {
+            params.insert(key, ConfigGenParams(value));
+        }
+        Ok(ModuleGenRegistry(params))
+    }
+}
 
 impl<M> From<Vec<M>> for ModuleGenRegistry<M>
 where
@@ -334,6 +406,42 @@ impl<M> ModuleGenRegistry<M> {
             next_id: 0,
             rest: self.0.clone(),
         }
+    }
+}
+
+impl ModuleGenRegistry<ConfigGenParams> {
+    pub fn attach_config_gen_params<T>(&mut self, kind: ModuleKind, gen: T) -> &mut Self
+    where
+        T: ModuleGenParams,
+    {
+        if self
+            .0
+            .insert(
+                kind.clone(),
+                ConfigGenParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+            )
+            .is_some()
+        {
+            panic!("Can't insert module of same kind twice: {kind}");
+        }
+        self
+    }
+
+    pub fn with_config_gen_params<T>(mut self, kind: ModuleKind, gen: T) -> Self
+    where
+        T: ModuleGenParams,
+    {
+        if self
+            .0
+            .insert(
+                kind.clone(),
+                ConfigGenParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+            )
+            .is_some()
+        {
+            panic!("Can't insert module of same kind twice: {kind}");
+        }
+        self
     }
 }
 
@@ -418,7 +526,14 @@ impl<M> Iterator for LegacyInitOrderIter<M> {
 }
 
 pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
-    const MODULE_NAME: &'static str;
+    fn from_json<P: ModuleGenParams>(value: serde_json::Value) -> anyhow::Result<Self> {
+        serde_json::from_value(value)
+            .map_err(|e| anyhow::Error::new(e).context("Invalid module gen params"))
+    }
+
+    fn to_json(p: Self) -> anyhow::Result<serde_json::Value> {
+        Ok(serde_json::to_value(p)?)
+    }
 }
 
 /// Response from the API for this particular module

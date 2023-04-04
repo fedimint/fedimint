@@ -86,7 +86,7 @@ impl<MuxKey, Msg> Deref for MuxPeerConnections<MuxKey, Msg> {
 /// destinations (like modules) per each peer-connection.
 ///
 /// Notably, unlike [`IPeerConnections`] implementations need to be thread-safe,
-/// as the primary intendet use should support multiple threads using
+/// as the primary intended use should support multiple threads using
 /// multiplexed channel at the same time.
 pub trait IMuxPeerConnections<MuxKey, Msg>
 where

@@ -11,6 +11,10 @@ license = "MIT"
 name = "fedimint-cli"
 path = "src/main.rs"
 
+[lib]
+name = "fedimint_cli"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = "1.0.66"
 bitcoin = "0.29.2"
@@ -27,6 +31,7 @@ fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../../fedimint-logging" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
+thiserror = "1.0.39"
 tokio = { version = "1.26.0", features = ["full"] }
 tracing ="0.1.37"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }

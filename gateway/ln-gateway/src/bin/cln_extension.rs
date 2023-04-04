@@ -13,7 +13,6 @@ use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
@@ -21,7 +20,7 @@ use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
 };
 use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetPubKeyResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetNodeInfoResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -42,13 +41,8 @@ pub struct ClnExtensionOpts {
     pub listen: SocketAddr,
 }
 
-// Note: Once this binary is stable, we should be able to remove current
-// 'ln_gateway' Use CLN_PLUGIN_LOG=<log-level> to enable debug logging from
-// within cln-plugin
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let tg = TaskGroup::new();
-
     let (service, listen, plugin) = ClnRpcService::new()
         .await
         .expect("Failed to create cln rpc service");
@@ -64,7 +58,9 @@ async fn main() -> Result<(), anyhow::Error> {
             // Wait for plugin to signal it's shutting down
             // Shut down everything else via TaskGroup regardless of error
             let _ = plugin.join().await;
-            tg.shutdown().await;
+            // lightningd needs to see exit code 0 to notice the plugin has
+            // terminated -- even if we return from main().
+            std::process::exit(0);
         })
         .await
         .map_err(|e| ClnExtensionError::Error(anyhow!("Failed to start server, {:?}", e)))?;
@@ -210,7 +206,7 @@ impl ClnRpcService {
         })
     }
 
-    pub async fn pubkey(&self) -> Result<PublicKey, ClnExtensionError> {
+    pub async fn info(&self) -> Result<(PublicKey, String), ClnExtensionError> {
         self.rpc_client()
             .await?
             .call(cln_rpc::Request::Getinfo(
@@ -218,7 +214,9 @@ impl ClnRpcService {
             ))
             .await
             .map(|response| match response {
-                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, .. }) => Ok(id),
+                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, alias, .. }) => {
+                    Ok((id, alias))
+                }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
             .map_err(ClnExtensionError::RpcError)?
@@ -227,15 +225,16 @@ impl ClnRpcService {
 
 #[tonic::async_trait]
 impl GatewayLightning for ClnRpcService {
-    async fn get_pub_key(
+    async fn get_node_info(
         &self,
         _request: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<GetPubKeyResponse>, Status> {
-        self.pubkey()
+    ) -> Result<tonic::Response<GetNodeInfoResponse>, Status> {
+        self.info()
             .await
-            .map(|pub_key| {
-                tonic::Response::new(GetPubKeyResponse {
+            .map(|(pub_key, alias)| {
+                tonic::Response::new(GetNodeInfoResponse {
                     pub_key: pub_key.serialize().to_vec(),
+                    alias,
                 })
             })
             .map_err(|e| {
@@ -248,8 +247,8 @@ impl GatewayLightning for ClnRpcService {
         &self,
         _request: tonic::Request<EmptyRequest>,
     ) -> Result<tonic::Response<GetRouteHintsResponse>, Status> {
-        let our_pub_key = self
-            .pubkey()
+        let node_info = self
+            .info()
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
@@ -311,7 +310,7 @@ impl GatewayLightning for ClnRpcService {
 
             let channel = match channels_response {
                 cln_rpc::Response::ListChannels(channels) => {
-                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == our_pub_key) else {
+                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == node_info.0) else {
                         warn!("Channel {:?} not found in graph", scid);
                         continue;
                     };

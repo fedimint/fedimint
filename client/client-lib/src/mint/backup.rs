@@ -70,7 +70,7 @@ impl MintClient {
 
         task_group.join_all(None).await?;
 
-        info!("Writting out the recovered state to the database");
+        info!("Writing out the recovered state to the database");
 
         let mut dbtx = self.start_dbtx().await;
 
@@ -296,21 +296,21 @@ impl MintClient {
             if task_handle.is_shutting_down() {
                 return Ok(Err(Cancelled));
             }
-            // if `recv` returned `None` that means fetch_epoch finished prematurelly,
-            // withouth sending an `Err` which is supposed to mean `is_shutting_down() ==
+            // if `recv` returned `None` that means fetch_epoch finished prematurely,
+            // without sending an `Err` which is supposed to mean `is_shutting_down() ==
             // true`
             info!(target: LOG_ECASH_RECOVERY, epoch, "Awaiting epoch");
             let epoch_history = epoch_res?;
             assert_eq!(epoch_history.outcome.epoch, epoch);
 
             info!(target: LOG_ECASH_RECOVERY, epoch, "Processing epoch");
-            let mut procesed_txs = Default::default();
+            let mut processed_txs = Default::default();
             for (peer_id, items) in &epoch_history.outcome.items {
                 for item in items {
                     tracker.handle_consensus_item(
                         *peer_id,
                         item,
-                        &mut procesed_txs,
+                        &mut processed_txs,
                         &epoch_history.outcome.rejected_txs,
                     );
                 }
@@ -414,7 +414,7 @@ pub struct EcashRecoveryFinalState {
     next_note_idx: Tiered<NoteIndex>,
 }
 
-/// The state machine used for fast-fowarding backup from point when it was
+/// The state machine used for fast-forwarding backup from point when it was
 /// taken to the present time by following epoch history items from the time the
 /// snapshot was taken.
 ///
@@ -434,8 +434,9 @@ struct EcashRecoveryTracker {
     ///
     /// Note that `NoteIssuanceRequest` is optional, as sometimes we might need
     /// to handle a tx where only some of the blind nonces were in the pool.
-    /// A `None` means tha this blind nonce/message is there only for validation
-    /// purposes, and will actually not create a `spendable_note_by_nonce`
+    /// A `None` means that this blind nonce/message is there only for
+    /// validation purposes, and will actually not create a
+    /// `spendable_note_by_nonce`
     #[allow(clippy::type_complexity)]
     pending_outputs: HashMap<
         OutPoint,
@@ -668,7 +669,7 @@ impl EcashRecoveryTracker {
     ///
     /// (Possibly) increment the `self.last_mined_nonce_idx`, then replenish the
     /// pending pool to always maintain at least `gap_limit` of pending
-    /// onces in each amount tier.
+    /// nonces in each amount tier.
     fn observe_nonce_idx_being_used(&mut self, amount: Amount, note_idx: NoteIndex) {
         *self.last_mined_nonce_idx.entry(amount).or_default() = max(
             self.last_mined_nonce_idx

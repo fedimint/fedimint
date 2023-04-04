@@ -84,7 +84,7 @@ pub trait DatabaseValue: Sized + Debug {
 pub type PrefixStream<'a> = Pin<Box<maybe_add_send!(dyn Stream<Item = (Vec<u8>, Vec<u8>)> + 'a)>>;
 
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabase: Debug + MaybeSend + MaybeSync {
+pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>>;
 }
 
@@ -108,20 +108,20 @@ struct DatabaseInner<Db: IDatabase + ?Sized> {
 pub enum AutocommitError<E> {
     /// Committing the transaction failed too many times, giving up
     CommitFailed {
-        /// Number of retries
-        retries: usize,
+        /// Number of attempts
+        attempts: usize,
         /// Last error on commit
         last_error: anyhow::Error,
     },
     /// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
     ClosureError {
-        /// Retry on which the closure returned an error
+        /// The attempt on which the closure returned an error
         ///
         /// Values other than 0 typically indicate a logic error since the
         /// closure given to `autocommit` should not have side effects
         /// and thus keep succeeding if it succeeded once.
-        retries: usize,
+        attempts: usize,
         /// Error returned by the closure
         error: E,
     },
@@ -168,8 +168,8 @@ impl Database {
 
     /// Runs a closure with a reference to a database transaction and tries to
     /// commit the transaction if the closure returns `Ok` and rolls it back
-    /// otherwise. If committing fails the closure is run again for up to
-    /// `max_retries` times. If `max_retries` is `None` it will run
+    /// otherwise. If committing fails the closure is run for up to
+    /// `max_attempts` times. If `max_attempts` is `None` it will run
     /// `usize::MAX` times which is close enough to infinite times.
     ///
     /// The closure `tx_fn` provided should not have side effects outside of the
@@ -188,47 +188,57 @@ impl Database {
     /// `DatabaseTransaction` must live as least as long as `self` and that is
     /// true as the `DatabaseTransaction` is only dropped at the end of the
     /// `loop{}`.
+    ///
+    /// # Panics
+    ///
+    /// This function panics when the given number of maximum attempts is zero.
+    /// `max_attempts` must be greater or equal to one.
     pub async fn autocommit<'s: 'dt, 'dt, F, T, E>(
         &'s self,
         tx_fn: F,
-        max_retries: Option<usize>,
+        max_attempts: Option<usize>,
     ) -> Result<T, AutocommitError<E>>
     where
         for<'a> F: Fn(&'a mut DatabaseTransaction<'dt>) -> BoxFuture<'a, Result<T, E>>,
     {
-        let mut retries: usize = 0;
+        assert_ne!(max_attempts, Some(0));
+        let mut curr_attempts: usize = 0;
+
         loop {
-            let mut dbtx = self.begin_transaction().await;
-
-            match tx_fn(&mut dbtx).await {
-                Ok(val) => {
-                    match dbtx.commit_tx_result().await {
-                        Ok(()) => {
-                            return Ok(val);
-                        }
-                        Err(e) if max_retries.map(|mr| mr <= retries).unwrap_or(false) => {
-                            return Err(AutocommitError::CommitFailed {
-                                retries,
-                                last_error: e,
-                            });
-                        }
-                        Err(_) => {
-                            // try again
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(AutocommitError::ClosureError { retries, error: e });
-                }
-            };
-
             // The `checked_add()` function is used to catch the `usize` overflow.
             // With `usize=32bit` and an assumed time of 1ms per iteration, this would crash
             // after ~50 days. But if that's the case, something else must be wrong.
             // With `usize=64bit` it would take much longer, obviously.
-            retries = retries
+            curr_attempts = curr_attempts
                 .checked_add(1)
-                .expect("db autocommit retry counter overflowed");
+                .expect("db autocommit attempt counter overflowed");
+
+            let mut dbtx = self.begin_transaction().await;
+
+            match tx_fn(&mut dbtx).await {
+                Ok(val) => match dbtx.commit_tx_result().await {
+                    Ok(()) => {
+                        return Ok(val);
+                    }
+                    Err(err) => {
+                        if max_attempts
+                            .map(|max_att| max_att <= curr_attempts)
+                            .unwrap_or(false)
+                        {
+                            return Err(AutocommitError::CommitFailed {
+                                attempts: curr_attempts,
+                                last_error: err,
+                            });
+                        }
+                    }
+                },
+                Err(err) => {
+                    return Err(AutocommitError::ClosureError {
+                        attempts: curr_attempts,
+                        error: err,
+                    });
+                }
+            };
         } // end of loop
     }
 
@@ -448,7 +458,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + Send> ISingleUseDatabaseTransaction<'a>
         Ok(self
             .0
             .as_mut()
-            .context("Cannot retreive from already consumed transaction")?
+            .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_prefix(key_prefix)
             .await)
     }
@@ -514,35 +524,35 @@ impl Drop for CommitTracker {
     }
 }
 
-/// `CommitableIsolatedDatabaseTransaction` is a private, isolated database
+/// `CommittableIsolatedDatabaseTransaction` is a private, isolated database
 /// transaction that consumes an existing `ISingleUseDatabaseTransaction`.
 /// Unlike `IsolatedDatabaseTransaction`,
-/// `CommitableIsolatedDatabaseTransaction` can be owned by the module as long
+/// `CommittableIsolatedDatabaseTransaction` can be owned by the module as long
 /// as it has a handle to the isolated `Database`. This allows the module to
 /// make changes only affecting it's own portion of the database and also being
 /// able to commit those changes. From the module's perspective, the `Database`
 /// is isolated and calling `begin_transaction` will always produce a
-/// `CommitableIsolatedDatabaseTransaction`, which is isolated from other
+/// `CommittableIsolatedDatabaseTransaction`, which is isolated from other
 /// modules by prepending a prefix to each key.
 ///
-/// `CommitableIsolatedDatabaseTransaction` cannot be used as an atomic database
-/// transaction across modules.
-struct CommitableIsolatedDatabaseTransaction<'a> {
+/// `CommittableIsolatedDatabaseTransaction` cannot be used as an atomic
+/// database transaction across modules.
+struct CommittableIsolatedDatabaseTransaction<'a> {
     dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     prefix: ModuleInstanceId,
 }
 
-impl<'a> CommitableIsolatedDatabaseTransaction<'a> {
+impl<'a> CommittableIsolatedDatabaseTransaction<'a> {
     pub fn new(
         dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
         prefix: ModuleInstanceId,
-    ) -> CommitableIsolatedDatabaseTransaction<'a> {
-        CommitableIsolatedDatabaseTransaction { dbtx, prefix }
+    ) -> CommittableIsolatedDatabaseTransaction<'a> {
+        CommittableIsolatedDatabaseTransaction { dbtx, prefix }
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> ISingleUseDatabaseTransaction<'a> for CommitableIsolatedDatabaseTransaction<'a> {
+impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
         isolated.raw_insert_bytes(key, value).await
@@ -599,7 +609,8 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommitableIsolatedDatabaseTransac
 /// modules are allowed to interact with are a subset of `DatabaseTransaction`,
 /// since modules do not manage the lifetime of database transactions.
 /// Committing to the database or rolling back a transaction is not exposed.
-pub struct ModuleDatabaseTransaction<'isolated, T: Send + Encodable + 'isolated> {
+pub struct ModuleDatabaseTransaction<'isolated, T: Send + Encodable + 'isolated = ModuleInstanceId>
+{
     isolated_tx: Box<dyn ISingleUseDatabaseTransaction<'isolated>>,
     decoders: &'isolated ModuleDecoderRegistry,
     commit_tracker: &'isolated mut CommitTracker,
@@ -918,7 +929,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     ) -> DatabaseTransaction<'parent> {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
-        let single_use = CommitableIsolatedDatabaseTransaction::new(self.tx, module_instance_id);
+        let single_use = CommittableIsolatedDatabaseTransaction::new(self.tx, module_instance_id);
         DatabaseTransaction {
             tx: Box::new(single_use),
             decoders,
@@ -1501,7 +1512,7 @@ mod test_utils {
         let removed = dbtx.remove_entry(&TestKey(1)).await;
         assert!(removed.is_none());
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1516,7 +1527,7 @@ mod test_utils {
         assert_eq!(removed, Some(TestVal(2)));
         assert_eq!(dbtx.get_value(&TestKey(1)).await, None);
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1527,7 +1538,7 @@ mod test_utils {
 
         assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(2)));
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1540,7 +1551,7 @@ mod test_utils {
         let mut dbtx2 = db.begin_transaction().await;
         assert_eq!(dbtx2.get_value(&TestKey(1)).await, None);
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx.commit_tx().await;
     }
 
@@ -1646,7 +1657,7 @@ mod test_utils {
 
         assert_eq!(dbtx_rollback.get_value(&TestKey(21)).await, None);
 
-        // Commit to surpress the warning message
+        // Commit to suppress the warning message
         dbtx_rollback.commit_tx().await;
     }
 
@@ -2099,8 +2110,11 @@ mod test_utils {
             .unwrap_err();
 
         match err {
-            AutocommitError::CommitFailed { retries, .. } => {
-                assert_eq!(retries, 5)
+            AutocommitError::CommitFailed {
+                attempts: failed_attempts,
+                ..
+            } => {
+                assert_eq!(failed_attempts, 5)
             }
             AutocommitError::ClosureError { .. } => panic!("Closure did not return error"),
         }

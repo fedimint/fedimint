@@ -12,7 +12,12 @@ and follow the instructions instead of reading this document.
 
 ## Clone repository
 
-Clone this repository locally, with `git clone <repo-url>`, then `cd <repo-dir>`,
+Clone the fedimint git repository locally and cd into it:
+
+```
+git clone git@github.com:fedimint/fedimint.git
+cd fedimint
+```
 
 ## MacOS
 
@@ -33,10 +38,11 @@ it ensures consistent and reproducible environment for all developers.
 
 ### Install Nix
 
-If you don't have it set up already,
-follow the instructions at: https://nixos.org/download.html
+You have 2 options to install nix:
+* [The official installer](https://nixos.org/download.html)
+* The [Determinate Nix Installer](https://zero-to-nix.com/start/install) which is maintained by a 3rd party, but is a little more user-friendly.
 
-The end result is having a working `nix` command in your shell.
+If one doesn't work for you, consider trying the other. The end result is having a working `nix` command in your shell.
 
 Example:
 
@@ -49,7 +55,7 @@ The exact version might be different.
 
 ### Enable nix flakes
 
-Edit either `~/.config/nix/nix.conf` or `/etc/nix/nix.conf` and add:
+If you installed Nix using the "determinate installer" you can skip this step. If you used the "official installer", edit either `~/.config/nix/nix.conf` or `/etc/nix/nix.conf` and add:
 
 ```
 experimental-features = nix-command flakes
@@ -88,6 +94,9 @@ in your home directory with the following line:
 ```
 set -g default-command "${SHELL}"
 ```
+
+Tmuxinator tests run 2 lightning nodes. One node, [Core Lightning](https://github.com/ElementsProject/lightning), runs as a gateway to the federation, and the other node, [LND](https://github.com/lightningnetwork/lnd), represents the rest of the Lightning network. These tests are conducted to simulate the process of sending and receiving transactions via Lightning network to and from Fedimint.
+
 
 ## Setting up `direnv` or `lorri`
 

@@ -5,8 +5,8 @@ package gatewaylnrpc;
 /* GatewayLightning is a service that provides limited access and functionality
  * from a lightning node to Fedimint gateways */
 service GatewayLightning {
-  /* GetPubKey returns the public key of the associated lightning node */
-  rpc GetPubKey(EmptyRequest) returns (GetPubKeyResponse) {}
+  /* GetNodeInfo returns the public key and alias of the associated lightning node */
+  rpc GetNodeInfo(EmptyRequest) returns (GetNodeInfoResponse) {}
 
   /* GetRouteHints returns the route hints to the associated lightning node */
   rpc GetRouteHints(EmptyRequest) returns (GetRouteHintsResponse) {}
@@ -35,9 +35,12 @@ service GatewayLightning {
 
 message EmptyRequest {}
 
-message GetPubKeyResponse {
+message GetNodeInfoResponse {
   // The public key of the associated lightning node
   bytes pub_key = 1;
+
+  // The alias of the lightning node
+  string alias = 2;
 }
 
 message PayInvoiceRequest {

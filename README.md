@@ -30,3 +30,4 @@ Fedimint is alpha software. Use cautiously, with small amounts of money. There a
   * [Introduction for contributors](./docs/contributing.md)
   * [Setting up dev environment](./docs/dev-env.md)
   * [Running Fedimint for dev testing](./docs/dev-running.md)
+  * [Developer calls on Monday & Thursday](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com)

@@ -19,6 +19,7 @@ use std::ops::Add;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
+use anyhow::anyhow;
 use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
@@ -43,7 +44,7 @@ use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_ln_client::LightningModuleTypes;
+use fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
 use fedimint_logging::LOG_WALLET;
 use fedimint_mint_client::MintModuleTypes;
 use fedimint_wallet_client::WalletModuleTypes;
@@ -618,7 +619,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     /// For tests only: Select notes of a given amount, and then remint them,
     /// remove the amount of notes from the database and return it to the user.
     ///
-    /// This is a respin of `spent_ecash` for tests, where it is neccessary
+    /// This is a respin of `spent_ecash` for tests, where it is necessary
     /// to process epochs after `self.submit_tx_with_change`. Then
     /// `remint_ecash_await` can be called to do the rest.
     ///
@@ -906,7 +907,7 @@ impl Client<UserClientConfig> {
     pub async fn await_outgoing_contract_acceptance(&self, outpoint: OutPoint) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<OutputOutcome>(
+            .await_output_outcome::<LightningOutputOutcome>(
                 outpoint,
                 Duration::from_secs(30),
                 &self.context.decoders,
@@ -926,18 +927,13 @@ impl Client<UserClientConfig> {
                 let res = self
                     .context
                     .api
-                    .await_output_outcome::<OutputOutcome>(
+                    .await_output_outcome::<MintOutputOutcome>(
                         outpoint,
                         Duration::from_secs(30),
                         &self.context.decoders,
                     )
                     .await;
-                if res.is_ok()
-                    && res
-                        .unwrap()
-                        .try_into_variant::<MintOutputOutcome>()?
-                        .is_some()
-                {
+                if matches!(res, Ok(MintOutputOutcome(Some(_)))) {
                     return Ok(());
                 }
                 tracing::info!("Signature response not returned yet");
@@ -1092,7 +1088,11 @@ impl Client<UserClientConfig> {
         let outpoint = OutPoint { txid, out_idx: 0 };
         self.context
             .api
-            .await_output_outcome::<OutputOutcome>(outpoint, timeout, &self.context.decoders)
+            .await_output_outcome::<LightningOutputOutcome>(
+                outpoint,
+                timeout,
+                &self.context.decoders,
+            )
             .await?;
         let confirmed = ConfirmedInvoice {
             invoice,
@@ -1301,7 +1301,7 @@ impl Client<GatewayClientConfig> {
             signature: None,
         };
 
-        // TODO: protect against crashes, but the timout being hit eventually anyway
+        // TODO: protect against crashes, but the timeout being hit eventually anyway
         // makes this less of an issue
         self.context
             .api
@@ -1443,18 +1443,27 @@ impl Client<GatewayClientConfig> {
                 match self
                     .context
                     .api
-                    .await_output_outcome::<OutputOutcome>(
+                    .await_output_outcome::<LightningOutputOutcome>(
                         outpoint,
                         deadline.saturating_duration_since(Instant::now()),
                         &self.context.decoders,
                     )
                     .await
+                    .map(OutputOutcome::LN)
                 {
                     Ok(OutputOutcome::LN(o)) if !o.is_permanent() => {
                         info!(outcome = %o, "Retrying on temporary outcome");
                         sleep(Duration::from_secs(1)).await;
                     }
-                    Ok(t) => return t.try_into_variant(),
+                    Ok(t) => {
+                        return t.try_into_variant::<DecryptedPreimage>().and_then(|maybe_preimage| {
+                            return match maybe_preimage {
+                                DecryptedPreimage::Some(preimage) => Ok(preimage),
+                                DecryptedPreimage::Pending => panic!("Pending outcomes are temporary and covered by the previous match arm"),
+                                DecryptedPreimage::Invalid => Err(OutputOutcomeError::ResponseDeserialization(anyhow!("Federation says we submitted an invalid encrypted preimage, we disagree"))),
+                            }
+                        });
+                    }
                     Err(e) => {
                         return Err(e);
                     }
@@ -1481,7 +1490,7 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<OutputOutcome>(
+            .await_output_outcome::<MintOutputOutcome>(
                 outpoint,
                 Duration::from_secs(10),
                 &self.context.decoders,

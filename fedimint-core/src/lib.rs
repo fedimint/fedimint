@@ -22,6 +22,7 @@ pub use crate::core::server;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
+pub mod admin_client;
 pub mod api;
 pub mod bitcoin_rpc;
 pub mod cancellable;
@@ -379,14 +380,4 @@ impl Feerate {
 pub enum CoreError {
     #[error("Mismatching outcome variant: expected {0}, got {1}")]
     MismatchingVariant(&'static str, &'static str),
-    #[error("Pending preimage decryption")]
-    PendingPreimage,
-}
-
-impl CoreError {
-    /// Returns `true` if queried outpoint isn't ready yet but may become ready
-    /// later
-    pub fn is_retryable(&self) -> bool {
-        matches!(self, CoreError::PendingPreimage)
-    }
 }

@@ -13,7 +13,7 @@ use axum_macros::debug_handler;
 use bitcoin::Network;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
@@ -21,16 +21,17 @@ use fedimint_server::config::io::{
     create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
 use fedimint_server::config::{ServerConfig, ServerConfigConsensus, ServerConfigParams};
+use fedimint_server::net::peers::DelayCalculator;
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use serde::Deserialize;
 use tokio::select;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use url::Url;
 
-use crate::configure_modules;
+use crate::attach_default_module_gen_params;
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -56,7 +57,7 @@ struct RunTemplate {
 enum RunTemplateState {
     DkgNotStarted,
     DkgInProgress,
-    DkgDone(String),   // connnection string
+    DkgDone(String),   // connection string
     DkgFailed(String), // error
     LocalIoError(String),
 }
@@ -167,6 +168,14 @@ async fn post_guardians(
     let mut dkg_task_group = state.task_group.make_subgroup().await;
     state.dkg_task_group = Some(dkg_task_group.clone());
     let module_gens = state.module_gens.clone();
+    let mut module_gens_params = state.module_gens_params.clone();
+    attach_default_module_gen_params(
+        &mut module_gens_params,
+        max_denomination,
+        params.network,
+        params.finality_delay,
+    );
+
     let password = state.password.clone();
     state
         .task_group
@@ -181,13 +190,16 @@ async fn post_guardians(
                 params.federation_name,
                 connection_strings,
                 &password,
-                configure_modules(max_denomination, params.network, params.finality_delay),
+                module_gens_params,
             ) {
-                Ok(params) => {
-                    ServerConfig::distributed_gen(&params, module_gens.clone(), &mut dkg_task_group)
-                        .await
-                        .map_err(|e| format_err!("Failed {}", e))
-                }
+                Ok(params) => ServerConfig::distributed_gen(
+                    &params,
+                    module_gens.clone().legacy_init_modules(),
+                    DelayCalculator::default(),
+                    &mut dkg_task_group,
+                )
+                .await
+                .map_err(|e| format_err!("Failed {}", e)),
                 Err(err) => Err(err),
             };
 
@@ -375,6 +387,7 @@ struct State {
     task_group: TaskGroup,
     dkg_task_group: Option<TaskGroup>,
     module_gens: ServerModuleGenRegistry,
+    module_gens_params: ServerModuleGenParamsRegistry,
     dkg_state: Option<DkgState>,
 }
 type MutableState = Arc<Mutex<State>>;
@@ -400,6 +413,7 @@ pub async fn run_ui(
     password: String,
     task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
+    module_gens_params: ServerModuleGenParamsRegistry,
 ) {
     let state = Arc::new(Mutex::new(State {
         params: None,
@@ -409,6 +423,7 @@ pub async fn run_ui(
         task_group: task_group.clone(),
         dkg_task_group: None,
         module_gens,
+        module_gens_params,
         dkg_state: None,
     }));
 
@@ -425,7 +440,7 @@ pub async fn run_ui(
     let shutdown_future = task_group.make_handle().make_shutdown_rx().await;
     let server_future = axum::Server::bind(&bind_addr).serve(app.into_make_service());
 
-    debug!("Starting setup UI server");
+    info!("Setup UI is listening on {}", bind_addr);
     select! {
         _ = shutdown_future => {
             debug!("Setup UI server shutting down");

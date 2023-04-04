@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::fs::read_dir;
 use std::future::Future;
-use std::path::Path;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::{env, fs, io};
@@ -346,6 +348,31 @@ where
     first
 }
 
+/// Get the project root (relative to closest Cargo.lock file)
+/// ```rust
+/// match fedimint_testing::get_project_root() {
+///     Ok(p) => println!("Current project root is {:?}", p),
+///     Err(e) => println!("Error obtaining project root {:?}", e),
+/// };
+/// ```
+pub fn get_project_root() -> io::Result<PathBuf> {
+    let path = env::current_dir()?;
+    let path_ancestors = path.as_path().ancestors();
+
+    for p in path_ancestors {
+        let has_cargo = read_dir(p)?
+            .into_iter()
+            .any(|p| p.unwrap().file_name() == *"Cargo.lock");
+        if has_cargo {
+            return Ok(PathBuf::from(p));
+        }
+    }
+    Err(io::Error::new(
+        ErrorKind::NotFound,
+        "Ran out of places to find Cargo.toml",
+    ))
+}
+
 /// Creates the database backup directory by appending the `snapshot_name`
 /// to the `DB_MIGRATION_DIR`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
@@ -358,8 +385,8 @@ pub async fn prepare_snapshot<F>(
 ) where
     F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
 {
-    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
-    let snapshot_dir = Path::new(&parent_dir).join(snapshot_name);
+    let project_root = get_project_root().unwrap();
+    let snapshot_dir = project_root.join("db/migrations").join(snapshot_name);
     if !snapshot_dir.exists() {
         let db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
         let dbtx = db.begin_transaction().await;
@@ -390,10 +417,9 @@ pub async fn validate_migrations<F, Fut>(
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = ()>,
 {
-    let parent_dir = env::var("DB_MIGRATION_DIR").unwrap_or("../../db/migrations".to_string());
-    let db_dir = Path::new(&parent_dir);
-    let files_res = fs::read_dir(db_dir);
-    // If the DB_MIGRATION_DIR does not exist, just skip the validation.
+    let project_root = get_project_root().unwrap();
+    let snapshot_dirs = project_root.join("db/migrations");
+    let files_res = fs::read_dir(snapshot_dirs);
     if let Ok(files) = files_res {
         for file in files.flatten() {
             let name = file.file_name().into_string().unwrap();

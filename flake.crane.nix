@@ -15,7 +15,7 @@ let
         let
           relPath = lib.removePrefix basePath (toString path);
           includePath =
-            # traverse only into directories that somewhere in there contain `Cargo.toml` file, or were explicitily whitelisted
+            # traverse only into directories that somewhere in there contain `Cargo.toml` file, or were explicitly whitelisted
             (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
             lib.any
               (re: builtins.match re relPath != null)
@@ -44,7 +44,7 @@ let
   filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*/proto/.*" ] src;
 
   # Filter only files relevant to building the workspace
-  filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" ] src;
+  filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" ] src;
 
   # Like `filterWorkspaceFiles` but with `./scripts/` and `./misc/test/` included
   filterWorkspaceTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" "misc/test/.*" ] src;
@@ -85,6 +85,12 @@ rec {
     doCheck = false;
   };
 
+  commonEnvs = {
+    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+    ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+    PROTOC = "${pkgs.protobuf}/bin/protoc";
+    PROTOC_INCLUDE = "${pkgs.protobuf}/include";
+  };
   commonArgsBase = {
     pname = "fedimint-workspace";
 
@@ -135,13 +141,9 @@ rec {
     # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
     installCargoArtifactsMode = "use-zstd";
 
-    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-    ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
-    PROTOC = "${pkgs.protobuf}/bin/protoc";
-    PROTOC_INCLUDE = "${pkgs.protobuf}/include";
     CI = "true";
     HOME = "/tmp";
-  };
+  } // commonEnvs;
 
   commonArgs = commonArgsBase // {
     src = filterWorkspaceFiles ./.;
@@ -217,7 +219,7 @@ rec {
     doCheck = false;
   });
 
-  # version of `workspaceDocs` with some nighlty-only flags to publish
+  # version of `workspaceDocs` with some nightly-only flags to publish
   workspaceDocExport = craneLib.mkCargoDerivation (commonArgs // {
     version = "0.0.1";
     # no need for inheriting any artifacts, as we are using it as a one-off, and only care
@@ -324,7 +326,7 @@ rec {
 
   # Compile a group of packages together
   #
-  # This unifies their cargo features and avoids building common dependencies mulitple
+  # This unifies their cargo features and avoids building common dependencies multiple
   # times, but will produce a derivation with all listed packages.
   pkgsBuild = { name, pkgs, dirs, defaultBin ? null }:
     let
@@ -355,7 +357,7 @@ rec {
 
   # Cross-compile a group of packages together.
   #
-  # This unifies their cargo features and avoids building common dependencies mulitple
+  # This unifies their cargo features and avoids building common dependencies multiple
   # times, but will produce a derivation with all listed packages.
   pkgsCrossBuild = { name, pkgs, dirs, target }:
     if target == null then
@@ -411,6 +413,7 @@ rec {
       "crypto/hkdf"
       "crypto/tbs"
       "fedimintd"
+      "fedimint-bin-tests"
       "fedimint-bitcoind"
       "fedimint-build"
       "fedimint-client"
@@ -440,6 +443,7 @@ rec {
       "crypto/hkdf"
       "client/client-lib"
       "modules/fedimint-ln"
+      "fedimint-bin-tests"
       "fedimint-bitcoind"
       "fedimint-client"
       "fedimint-core"
@@ -470,6 +474,7 @@ rec {
       "crypto/derive-secret"
       "crypto/tbs"
       "crypto/hkdf"
+      "fedimint-bin-tests"
       "fedimint-bitcoind"
       "fedimint-client"
       "fedimint-core"

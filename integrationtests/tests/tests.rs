@@ -1,7 +1,7 @@
 //! Integration test suite
 //!
-//! This crate contains integration tests that work be creating
-//! per-test federation, ln-gatewa and driving bitcoind and lightning
+//! This crate contains integration tests that work by creating
+//! per-test federation, ln-gateway and driving bitcoind and lightning
 //! nodes to exercise certain behaviors on it.
 //!
 //! We run them in two modes:
@@ -17,13 +17,14 @@
 //! is thus undesirable.
 mod fixtures;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{msats, sats, TieredMulti};
 use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln_client::LightningConsensusItem;
@@ -46,7 +47,10 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use tracing::log::warn;
 use tracing::{debug, info, instrument};
 
-use crate::fixtures::{lightning_test, non_lightning_test, peers, unwrap_item, FederationTest};
+use crate::fixtures::{
+    create_lightning_adapter, lightning_test, non_lightning_test, peers, unwrap_item,
+    FederationTest,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
@@ -92,7 +96,11 @@ async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
                 ..
             }) if *txid == outcome_txid));
 
-        fed.broadcast_transactions().await;
+        // confirm we can broadcast at different times
+        fed.subset_peers(&[0]).await.broadcast_transactions().await;
+        bitcoin.mine_blocks(1).await;
+        fed.subset_peers(&[1]).await.broadcast_transactions().await;
+
         assert_eq!(
             bitcoin.mine_block_and_get_received(&peg_out_address).await,
             sats(peg_out_amount)
@@ -451,6 +459,8 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
         // Gateway buys offer, triggering preimage decryption
         let (_, contract_id) = gateway
             .actor
+            .read()
+            .await
             .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
             .await
             .unwrap();
@@ -591,6 +601,8 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         let claim_outpoint = {
             let buy_preimage = gateway
                 .actor
+                .read()
+                .await
                 .pay_invoice_buy_preimage(contract_id)
                 .await
                 .unwrap();
@@ -600,6 +612,8 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
 
             gateway
                 .actor
+                .read()
+                .await
                 .pay_invoice_buy_preimage_finalize_and_claim(contract_id, buy_preimage)
                 .await
                 .unwrap()
@@ -612,6 +626,8 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
 
         gateway
             .actor
+            .read()
+            .await
             .await_outgoing_contract_claimed(contract_id, claim_outpoint)
             .await
             .unwrap();
@@ -653,7 +669,7 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
         // but for some reason it's flaky
         let bitcoin = bitcoin.lock_exclusive().await;
 
-        let invoice = lightning.invoice(sats(1000), None).await;
+        let invoice = lightning.invoice(sats(1000), None).await.unwrap();
 
         fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
 
@@ -675,11 +691,19 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
             .await
             .unwrap();
 
-        let claim_outpoint = gateway.actor.pay_invoice(contract_id).await.unwrap();
+        let claim_outpoint = gateway
+            .actor
+            .read()
+            .await
+            .pay_invoice(contract_id)
+            .await
+            .unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway
             .actor
+            .read()
+            .await
             .await_outgoing_contract_claimed(contract_id, claim_outpoint)
             .await
             .unwrap();
@@ -750,6 +774,8 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         let response = {
             let buy_preimage = gateway
                 .actor
+                .read()
+                .await
                 .pay_invoice_buy_preimage(contract_id)
                 .await
                 .unwrap();
@@ -759,6 +785,8 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
 
             gateway
                 .actor
+                .read()
+                .await
                 .pay_invoice_buy_preimage_finalize_and_claim(contract_id, buy_preimage)
                 .await
         };
@@ -782,8 +810,8 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn set_lightning_invoice_expiry() -> Result<()> {
     lightning_test(2, |_, _, _, _, lightning| async move {
-        let invoice = lightning.invoice(sats(1000), 600.into());
-        assert_eq!(invoice.await.expiry_time(), Duration::from_secs(600));
+        let invoice = lightning.invoice(sats(1000), 600.into()).await.unwrap();
+        assert_eq!(invoice.expiry_time(), Duration::from_secs(600));
     })
     .await
 }
@@ -823,6 +851,8 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         let invoice_amount = preimage_price + sats(50);
         let (outpoint, contract_id) = gateway
             .actor
+            .read()
+            .await
             .buy_preimage_offer(invoice.invoice.payment_hash(), &invoice_amount, rng())
             .await
             .unwrap();
@@ -838,6 +868,8 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         // Gateway receives decrypted preimage
         let preimage = gateway
             .actor
+            .read()
+            .await
             .await_preimage_decryption(outpoint)
             .await
             .unwrap();
@@ -896,6 +928,8 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         // Gateway escrows ecash to trigger preimage decryption by the federation
         let (_, contract_id) = gateway
             .actor
+            .read()
+            .await
             .buy_preimage_offer(&payment_hash, &payment_amount, rng())
             .await
             .unwrap();
@@ -934,12 +968,12 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
     lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
-        let invoice = lightning.invoice(sats(1000), None);
+        let invoice = lightning.invoice(sats(1000), None).await.unwrap();
 
         fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
         let (contract_id, _) = user
             .client
-            .fund_outgoing_ln_contract(invoice.await, rng())
+            .fund_outgoing_ln_contract(invoice, rng())
             .await
             .unwrap();
         fed.run_consensus_epochs(1).await; // send notes to LN contract
@@ -963,12 +997,12 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() -> Result<()> {
     lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
-        let invoice = lightning.invoice(sats(1000), None);
+        let invoice = lightning.invoice(sats(1000), None).await.unwrap();
 
         fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
         let (contract_id, _) = user
             .client
-            .fund_outgoing_ln_contract(invoice.await, rng())
+            .fund_outgoing_ln_contract(invoice, rng())
             .await
             .unwrap();
         fed.run_consensus_epochs(1).await; // send notes to LN contract
@@ -1313,6 +1347,68 @@ async fn cannot_replay_transactions() -> Result<()> {
             .await
             .into_iter()
             .all(|s| matches!(s, Some(TransactionStatus::Accepted { .. }))));
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lightning_gateway_can_reconnect() -> Result<()> {
+    lightning_test(2, |fed, user, bitcoin, mut gateway, lightning| async move {
+        // TODO: in theory this test should work without this lock
+        // but for some reason it's flaky
+        let bitcoin = bitcoin.lock_exclusive().await;
+
+        let invoice = lightning.invoice(sats(1000), None).await.unwrap();
+
+        fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
+
+        let (contract_id, outpoint) = user
+            .client
+            .fund_outgoing_ln_contract(invoice, rng())
+            .await
+            .unwrap();
+
+        fed.run_consensus_epochs(1).await;
+
+        let ln_client = user.client.ln_client();
+        let contract_account = ln_client.get_contract_account(contract_id).await;
+
+        assert_eq!(contract_account.unwrap().amount, sats(1010)); // 1% LN fee
+
+        user.client
+            .await_outgoing_contract_acceptance(outpoint)
+            .await
+            .unwrap();
+
+        // Replace the gateway's lightning connection and verify that payments still
+        // succeed
+        let new_lnrpc = create_lightning_adapter(gateway.node, TaskGroup::new()).await;
+        gateway.adapter = Arc::new(RwLock::new(new_lnrpc));
+
+        let claim_outpoint = gateway
+            .actor
+            .read()
+            .await
+            .pay_invoice(contract_id)
+            .await
+            .unwrap();
+        fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
+
+        gateway
+            .actor
+            .read()
+            .await
+            .await_outgoing_contract_claimed(contract_id, claim_outpoint)
+            .await
+            .unwrap();
+        user.assert_total_notes(sats(2000 - 1010)).await;
+        gateway.user.assert_total_notes(sats(1010)).await;
+
+        tokio::time::sleep(Duration::from_millis(500)).await; // FIXME need to wait for listfunds to update
+        if !lightning.is_shared() {
+            assert_eq!(lightning.amount_sent().await, sats(1000));
+        }
+        assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
 }

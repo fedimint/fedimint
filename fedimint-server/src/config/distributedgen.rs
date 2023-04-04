@@ -478,7 +478,7 @@ mod tests {
 }
 
 // TODO: this trait is only needed to break the `DkgHandle` impl
-// from it's defintion that is still in `fedimint-core`
+// from it's definition that is still in `fedimint-core`
 #[async_trait]
 pub trait PeerHandleOps {
     async fn run_dkg_g1<T>(&self, v: T) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>>

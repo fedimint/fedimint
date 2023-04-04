@@ -83,7 +83,7 @@ function generate_bitcoind_container_def() {
 function generate_fedimintd_container_def() {
     echo "  server-$1:" >> $6
     echo "    image: $5" >> $6
-    echo "    command: fedimintd /var/fedimint" >> $6
+    echo "    command: fedimintd --data-dir /var/fedimint" >> $6
     echo "    ports:" >> $6
     echo "      - $2:$2" >> $6
     echo "      - $3:$3" >> $6

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{sleep, TaskGroup};
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
@@ -18,7 +19,7 @@ use tracing::{error, info, trace};
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -53,16 +54,30 @@ impl GatewayLndClient {
         macaroon: String,
         task_group: TaskGroup,
     ) -> crate::Result<Self> {
-        let client = connect(address, tls_cert, macaroon).await.map_err(|e| {
-            error!("Failed to connect to lnrpc server: {:?}", e);
-            GatewayError::Other(anyhow!("Failed to connect to lnrpc server"))
-        })?;
-
-        Ok(Self {
-            client,
+        let gw_rpc = GatewayLndClient {
+            client: Self::connect(address, tls_cert, macaroon).await?,
             outcomes: Arc::new(Mutex::new(HashMap::new())),
             task_group,
-        })
+        };
+        Ok(gw_rpc)
+    }
+
+    async fn connect(
+        address: String,
+        tls_cert: String,
+        macaroon: String,
+    ) -> crate::Result<LndClient> {
+        let client = loop {
+            match connect(address.clone(), tls_cert.clone(), macaroon.clone()).await {
+                Ok(client) => break client,
+                Err(_) => {
+                    tracing::warn!("Couldn't connect to LND, retrying in 5 seconds...");
+                    sleep(Duration::from_secs(5)).await;
+                }
+            }
+        };
+
+        Ok(client)
     }
 }
 
@@ -74,9 +89,8 @@ impl fmt::Debug for GatewayLndClient {
 
 #[async_trait]
 impl ILnRpcClient for GatewayLndClient {
-    async fn pubkey(&self) -> crate::Result<GetPubKeyResponse> {
+    async fn info(&self) -> crate::Result<GetNodeInfoResponse> {
         let mut client = self.client.clone();
-
         let info = client
             .lightning()
             .get_info(GetInfoRequest {})
@@ -95,11 +109,12 @@ impl ILnRpcClient for GatewayLndClient {
                 format!("LND error: {e:?}"),
             ))
         })?;
-        info!("fetched pubkey {:?}", pub_key);
+        info!("LND pubkey {:?} Alias: {}", pub_key, info.alias);
 
-        Ok(GetPubKeyResponse {
+        return Ok(GetNodeInfoResponse {
             pub_key: pub_key.serialize().to_vec(),
-        })
+            alias: info.alias,
+        });
     }
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
@@ -111,7 +126,6 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
         let mut client = self.client.clone();
-
         let send_response = client
             .lightning()
             .send_payment_sync(SendRequest {
@@ -130,9 +144,9 @@ impl ILnRpcClient for GatewayLndClient {
             )));
         };
 
-        Ok(PayInvoiceResponse {
+        return Ok(PayInvoiceResponse {
             preimage: send_response.payment_preimage,
-        })
+        });
     }
 
     async fn subscribe_htlcs<'a>(

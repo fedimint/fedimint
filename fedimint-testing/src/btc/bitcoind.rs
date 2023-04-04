@@ -64,14 +64,12 @@ impl IBitcoindRpc for FakeBitcoindRpc {
         Ok(self.state.lock().unwrap().fee_rate)
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
+    async fn submit_transaction(&self, transaction: Transaction) {
         self.state
             .lock()
             .unwrap()
             .transactions
             .push_back(transaction);
-
-        Ok(())
     }
 }
 

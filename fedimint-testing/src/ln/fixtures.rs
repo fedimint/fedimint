@@ -10,10 +10,11 @@ use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 use ln_gateway::gatewaylnrpc::{
-    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetPubKeyResponse, GetRouteHintsResponse,
+    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
+use ln_gateway::GatewayError;
 use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 
@@ -25,6 +26,7 @@ pub struct FakeLightningTest {
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: Arc<Mutex<u64>>,
+    is_connected: bool,
 }
 
 impl FakeLightningTest {
@@ -38,6 +40,7 @@ impl FakeLightningTest {
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
+            is_connected: true,
         }
     }
 }
@@ -50,10 +53,20 @@ impl Default for FakeLightningTest {
 
 #[async_trait]
 impl LightningTest for FakeLightningTest {
-    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
+    async fn invoice(
+        &self,
+        amount: Amount,
+        expiry_time: Option<u64>,
+    ) -> ln_gateway::Result<Invoice> {
+        if !self.is_connected {
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Error not connected to Lightning"
+            )));
+        }
+
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
-        InvoiceBuilder::new(Currency::Regtest)
+        Ok(InvoiceBuilder::new(Currency::Regtest)
             .description("".to_string())
             .payment_hash(sha256::Hash::hash(&self.preimage.0))
             .current_timestamp()
@@ -64,7 +77,7 @@ impl LightningTest for FakeLightningTest {
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
-            .unwrap()
+            .unwrap())
     }
 
     async fn amount_sent(&self) -> Amount {
@@ -78,19 +91,38 @@ impl LightningTest for FakeLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for FakeLightningTest {
-    async fn pubkey(&self) -> ln_gateway::Result<GetPubKeyResponse> {
-        Ok(GetPubKeyResponse {
+    async fn info(&self) -> ln_gateway::Result<GetNodeInfoResponse> {
+        if !self.is_connected {
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Error not connected to Lightning"
+            )));
+        }
+
+        Ok(GetNodeInfoResponse {
             pub_key: self.gateway_node_pub_key.serialize().to_vec(),
+            alias: "FakeLightningNode".to_string(),
         })
     }
 
     async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
+        if !self.is_connected {
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Error not connected to Lightning"
+            )));
+        }
+
         Ok(GetRouteHintsResponse {
             route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
         })
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
+        if !self.is_connected {
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Error not connected to Lightning"
+            )));
+        }
+
         let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
         *self.amount_sent.lock().unwrap() += Invoice::from_signed(signed)
             .unwrap()
@@ -106,6 +138,12 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         _subscription: SubscribeInterceptHtlcsRequest,
     ) -> ln_gateway::Result<HtlcStream<'a>> {
+        if !self.is_connected {
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Error not connected to Lightning"
+            )));
+        }
+
         Ok(Box::pin(stream::iter(vec![])))
     }
 
@@ -113,6 +151,12 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         _complete: CompleteHtlcsRequest,
     ) -> ln_gateway::Result<CompleteHtlcsResponse> {
+        if !self.is_connected {
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Error not connected to Lightning"
+            )));
+        }
+
         Ok(CompleteHtlcsResponse {})
     }
 }

@@ -8,15 +8,17 @@ use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
+use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
-    ApiEndpoint, ClientConfig, ConfigGenParams, ConfigResponse, DkgPeerMsg, FederationId,
-    JsonWithKind, ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry,
-    TypedServerModuleConfig,
+    ApiEndpoint, ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind,
+    ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::module::{ApiAuth, PeerHandle};
+use fedimint_core::core::{
+    ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
+};
+use fedimint_core::module::{ApiAuth, DynServerModuleGen, PeerHandle};
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::PeerId;
@@ -37,9 +39,10 @@ use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::{BitcoinHash, NumPeers};
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{parse_host_port, Connector, TlsConfig};
-use crate::net::peers::NetworkConfig;
+use crate::net::peers::{DelayCalculator, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
+pub mod api;
 pub mod distributedgen;
 pub mod io;
 
@@ -102,7 +105,7 @@ pub struct ServerConfigConsensus {
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
     /// Certs for TLS communication, required for peer authentication
-    #[serde(with = "serde_tls_cert")]
+    #[serde(with = "serde_tls_cert_map")]
     pub tls_certs: BTreeMap<PeerId, rustls::Certificate>,
     /// All configuration that needs to be the same for modules
     #[encodable_ignore]
@@ -151,7 +154,7 @@ pub struct ServerConfigParams {
     pub meta: BTreeMap<String, String>,
     /// Params for the modules we wish to configure, can contain custom
     /// parameters
-    pub modules: ConfigGenParams,
+    pub modules: ServerModuleGenParamsRegistry,
 }
 
 impl ServerConfigConsensus {
@@ -163,7 +166,7 @@ impl ServerConfigConsensus {
 
     /// encodes the fields into a sha256 hash for comparison
     /// TODO use the derive macro to automatically pick up new fields here
-    fn try_to_config_response(
+    pub fn try_to_config_response(
         &self,
         module_config_gens: &ServerModuleGenRegistry,
     ) -> anyhow::Result<ConfigResponse> {
@@ -361,7 +364,7 @@ impl ServerConfig {
 
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ServerConfigParams>,
-        registry: ServerModuleGenRegistry,
+        registry: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
     ) -> BTreeMap<PeerId, Self> {
         let mut rng = OsRng;
         let peer0 = &params[&PeerId::from(0)];
@@ -374,14 +377,18 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
+        let null_config_gen = ConfigGenParams::null();
+
         // We assume user wants one module instance for every module kind
         let module_configs: BTreeMap<_, _> = registry
-            .legacy_init_order_iter()
-            .enumerate()
-            .map(|(module_id, (_kind, gen))| {
+            .into_iter()
+            .map(|(module_id, (kind, gen))| {
                 (
-                    u16::try_from(module_id).expect("Can't fail"),
-                    gen.trusted_dealer_gen(peers, &peer0.modules),
+                    module_id,
+                    gen.trusted_dealer_gen(
+                        peers,
+                        peer0.modules.get(&kind).unwrap_or(&null_config_gen),
+                    ),
                 )
             })
             .collect();
@@ -417,10 +424,17 @@ impl ServerConfig {
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
         params: &ServerConfigParams,
-        registry: ServerModuleGenRegistry,
+        registry: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+        delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
-        let server_conn = connect(params.p2p_network.clone(), params.tls.clone(), task_group).await;
+        let server_conn = connect(
+            params.p2p_network.clone(),
+            params.tls.clone(),
+            delay_calculator,
+            task_group,
+        )
+        .await;
         let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
         let mut rng = OsRng;
 
@@ -457,13 +471,13 @@ impl ServerConfig {
         // of each module that was compiled in. This is how things were
         // initially, where we consider "module as a code" as "module as an instance at
         // runtime"
-        for (module_instance_id, (_kind, gen)) in registry.legacy_init_order_iter().enumerate() {
-            let module_instance_id = u16::try_from(module_instance_id)
-                .expect("64k module instances should be enough for everyone");
+        let null_config_gen = ConfigGenParams::null();
+        for (module_instance_id, (kind, gen)) in registry {
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(&dkg, &params.modules).await?,
+                gen.distributed_gen(&dkg, params.modules.get(&kind).unwrap_or(&null_config_gen))
+                    .await?,
             );
         }
 
@@ -475,7 +489,7 @@ impl ServerConfig {
         // if other peers received our message, just because we received theirs.
         // That's why we need to do a one last best effort sync.
         connections
-            .send(peers, MODULE_INSTANCE_ID_GLOBAL, DkgPeerMsg::Done)
+            .send(peers, MODULE_INSTANCE_ID_DKG_DONE, DkgPeerMsg::Done)
             .await?;
 
         info!(
@@ -486,7 +500,7 @@ impl ServerConfig {
             let mut done_peers = BTreeSet::from([*our_id]);
 
             while done_peers.len() < peers.len() {
-                match connections.receive(MODULE_INSTANCE_ID_GLOBAL).await {
+                match connections.receive(MODULE_INSTANCE_ID_DKG_DONE).await {
                     Ok((peer_id, DkgPeerMsg::Done)) => {
                         info!(
                             target: LOG_NET_PEER_DKG,
@@ -563,14 +577,6 @@ impl ServerConfig {
     }
 }
 
-#[derive(Clone)]
-pub struct PeerServerParams {
-    pub cert: rustls::Certificate,
-    pub p2p_url: Url,
-    pub api_url: Url,
-    pub name: String,
-}
-
 impl ServerConfigParams {
     pub fn peers(&self) -> BTreeMap<PeerId, ApiEndpoint> {
         self.p2p_network
@@ -612,7 +618,7 @@ impl ServerConfigParams {
         federation_name: String,
         certs: Vec<String>,
         password: &str,
-        module_params: ConfigGenParams,
+        module_params: ServerModuleGenParamsRegistry,
     ) -> anyhow::Result<Self> {
         let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
         for (idx, cert) in certs.into_iter().sorted().enumerate() {
@@ -654,7 +660,7 @@ impl ServerConfigParams {
         our_id: PeerId,
         peers: &BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
-        modules: ConfigGenParams,
+        modules: ServerModuleGenParamsRegistry,
     ) -> ServerConfigParams {
         let peer_certs: BTreeMap<PeerId, rustls::Certificate> = peers
             .iter()
@@ -708,7 +714,7 @@ impl ServerConfigParams {
         peers: &[PeerId],
         base_port: u16,
         federation_name: &str,
-        modules: ConfigGenParams,
+        modules: ServerModuleGenParamsRegistry,
     ) -> anyhow::Result<HashMap<PeerId, ServerConfigParams>> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
@@ -760,13 +766,14 @@ impl ServerConfigParams {
 pub async fn connect<T>(
     network: NetworkConfig,
     certs: TlsConfig,
+    delay_calculator: DelayCalculator,
     task_group: &mut TaskGroup,
 ) -> PeerConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    ReconnectPeerConnections::new(network, connector, task_group)
+    ReconnectPeerConnections::new(network, delay_calculator, connector, task_group)
         .await
         .into_dyn()
 }
@@ -793,7 +800,7 @@ pub fn gen_cert_and_key(
     ))
 }
 
-mod serde_tls_cert {
+mod serde_tls_cert_map {
     use std::borrow::Cow;
     use std::collections::BTreeMap;
 

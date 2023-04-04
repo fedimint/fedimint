@@ -1,50 +1,46 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
+use std::io::{Error, Read, Write};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::ModuleDatabaseTransaction;
-use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send_sync};
-use futures::future::BoxFuture;
+use fedimint_core::util::BoxFuture;
+use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send, maybe_add_send_sync};
 
-use crate::sm::{GlobalContext, OperationId};
+use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId};
 
 /// Implementors act as state machines that can be executed
-pub trait State<GC>:
-    Debug
-    + Clone
-    + Eq
-    + PartialEq
-    + Encodable
-    + Decodable
-    + IntoDynInstance<DynType = DynState<GC>>
-    + Send
-    + Sync
-    + 'static
+pub trait State:
+    Debug + Clone + Eq + PartialEq + Encodable + Decodable + MaybeSend + MaybeSync + 'static
 {
-    /// Additional resources made available in the state transitions
+    /// Additional resources made available in this module's state transitions
     type ModuleContext: Context;
+
+    /// Additional resources made available for all state transitions
+    type GlobalContext: GlobalContext;
 
     /// All possible transitions from the current state to other states. See
     /// [`StateTransition`] for details.
     fn transitions(
         &self,
         context: &Self::ModuleContext,
-        global_context: &GC,
+        global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>>;
 
+    // TODO: move out of this interface into wrapper struct (see OperationState)
     /// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     fn operation_id(&self) -> OperationId;
 }
 
 /// Object-safe version of [`State`]
-pub trait IState<GC>: Debug + DynEncodable + Send + Sync {
-    fn as_any(&self) -> &(dyn Any + Send + Sync);
+pub trait IState<GC>: Debug + DynEncodable + MaybeSend + MaybeSync {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
 
     /// All possible transitions from the state
     fn transitions(
@@ -92,16 +88,16 @@ where
     }
 }
 
-type TriggerFuture = Pin<Box<dyn Future<Output = serde_json::Value> + Send + 'static>>;
+type TriggerFuture = Pin<Box<maybe_add_send!(dyn Future<Output = serde_json::Value> + 'static)>>;
 // TODO: remove Arc, maybe make it a fn pointer?
 type StateTransitionFunction<S> = Arc<
-    dyn for<'a> Fn(
-            &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+    maybe_add_send_sync!(
+        dyn for<'a> Fn(
+            &'a mut ClientSMDatabaseTransaction<'_, '_>,
             serde_json::Value,
             S,
         ) -> BoxFuture<'a, S>
-        + Send
-        + Sync,
+    ),
 >;
 
 /// Represents one or multiple possible state transitions triggered in a common
@@ -142,17 +138,13 @@ impl<S> StateTransition<S> {
         transition: TransitionFn,
     ) -> StateTransition<S>
     where
-        S: Send + Sync + Clone + 'static,
+        S: MaybeSend + MaybeSync + Clone + 'static,
         V: serde::Serialize + serde::de::DeserializeOwned + Send,
-        Trigger: Future<Output = V> + Send + 'static,
-        TransitionFn: for<'a> Fn(
-                &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-                V,
-                S,
-            ) -> BoxFuture<'a, S>
-            + Send
-            + Sync
-            + Copy
+        Trigger: Future<Output = V> + MaybeSend + 'static,
+        TransitionFn: for<'a> Fn(&'a mut ClientSMDatabaseTransaction<'_, '_>, V, S) -> BoxFuture<'a, S>
+            + MaybeSend
+            + MaybeSync
+            + Clone
             + 'static,
     {
         StateTransition {
@@ -161,6 +153,7 @@ impl<S> StateTransition<S> {
                 serde_json::to_value(val).expect("Value could not be serialized")
             }),
             transition: Arc::new(move |dbtx, val, state| {
+                let transition = transition.clone();
                 Box::pin(async move {
                     let typed_val: V = serde_json::from_value(val)
                         .expect("Deserialize trigger return value failed");
@@ -174,9 +167,9 @@ impl<S> StateTransition<S> {
 impl<GC, T> IState<GC> for T
 where
     GC: GlobalContext,
-    T: State<GC>,
+    T: State<GlobalContext = GC>,
 {
-    fn as_any(&self) -> &(dyn Any + Send + Sync) {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
     }
 
@@ -185,7 +178,7 @@ where
         context: &DynContext,
         global_context: &GC,
     ) -> Vec<StateTransition<DynState<GC>>> {
-        <T as State<GC>>::transitions(
+        <T as State>::transitions(
             self,
             context.as_any().downcast_ref().expect("Wrong module"),
             global_context,
@@ -194,9 +187,7 @@ where
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                move |dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-                      val,
-                      state: DynState<GC>| {
+                move |dbtx: &mut ClientSMDatabaseTransaction<'_, '_>, val, state: DynState<GC>| {
                     let transition = st.transition.clone();
                     Box::pin(async move {
                         let new_state = transition(
@@ -218,7 +209,7 @@ where
     }
 
     fn operation_id(&self) -> OperationId {
-        <T as State<GC>>::operation_id(self)
+        <T as State>::operation_id(self)
     }
 
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynState<GC> {
@@ -238,12 +229,12 @@ where
 /// A type-erased state of a state machine belonging to a module instance, see
 /// [`State`]
 pub struct DynState<GC>(
-    Box<dyn IState<GC> + 'static + Send + Sync>,
+    Box<maybe_add_send_sync!(dyn IState<GC> + 'static)>,
     ModuleInstanceId,
 );
 
 impl<GC> std::ops::Deref for DynState<GC> {
-    type Target = dyn IState<GC> + 'static + Send + Sync;
+    type Target = maybe_add_send_sync!(dyn IState<GC> + 'static);
 
     fn deref(&self) -> &<Self as std::ops::Deref>::Target {
         &*self.0
@@ -251,19 +242,13 @@ impl<GC> std::ops::Deref for DynState<GC> {
 }
 
 impl<GC> DynState<GC> {
-    pub fn module_instance_id(&self) -> ::fedimint_core::core::ModuleInstanceId {
+    pub fn module_instance_id(&self) -> ModuleInstanceId {
         self.1
     }
 
-    pub fn from_typed<I>(
-        module_instance_id: ::fedimint_core::core::ModuleInstanceId,
-        typed: I,
-    ) -> Self
+    pub fn from_typed<I>(module_instance_id: ModuleInstanceId, typed: I) -> Self
     where
-        I: IState<GC>
-            + ::fedimint_core::task::MaybeSend
-            + ::fedimint_core::task::MaybeSync
-            + 'static,
+        I: IState<GC> + 'static,
     {
         Self(Box::new(typed), module_instance_id)
     }
@@ -320,5 +305,128 @@ impl<GC> DynState<GC> {
     /// `true` if this state allows no further transitions
     pub fn is_terminal(&self, context: &DynContext, global_context: &GC) -> bool {
         self.transitions(context, global_context).is_empty()
+    }
+}
+
+#[derive(Debug)]
+pub struct OperationState<S> {
+    pub operation_id: OperationId,
+    pub state: S,
+}
+
+/// Wrapper for states that don't want to carry around their operation id. `S`
+/// is allowed to panic when `operation_id` is called.
+impl<S> State for OperationState<S>
+where
+    S: State,
+{
+    type ModuleContext = S::ModuleContext;
+    type GlobalContext = S::GlobalContext;
+
+    fn transitions(
+        &self,
+        context: &Self::ModuleContext,
+        global_context: &Self::GlobalContext,
+    ) -> Vec<StateTransition<Self>> {
+        let transitions: Vec<StateTransition<OperationState<S>>> = self
+            .state
+            .transitions(context, global_context)
+            .into_iter()
+            .map(
+                |StateTransition {
+                     trigger,
+                     transition,
+                 }| {
+                    let op_transition: StateTransitionFunction<Self> =
+                        Arc::new(move |dbtx, value, op_state| {
+                            let transition = transition.clone();
+                            Box::pin(async move {
+                                let state = transition(dbtx, value, op_state.state).await;
+                                OperationState {
+                                    operation_id: op_state.operation_id,
+                                    state,
+                                }
+                            })
+                        });
+
+                    StateTransition {
+                        trigger,
+                        transition: op_transition,
+                    }
+                },
+            )
+            .collect();
+        transitions
+    }
+
+    fn operation_id(&self) -> OperationId {
+        self.operation_id
+    }
+}
+
+// TODO: can we get rid of `GC`? Maybe make it an associated type of `State`
+// instead?
+impl<S> IntoDynInstance for OperationState<S>
+where
+    S: State,
+{
+    type DynType = DynState<S::GlobalContext>;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        DynState::from_typed(instance_id, self)
+    }
+}
+
+impl<S> Encodable for OperationState<S>
+where
+    S: State,
+{
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += self.state.consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl<S> Decodable for OperationState<S>
+where
+    S: State,
+{
+    fn consensus_decode<R: Read>(
+        read: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let operation_id = OperationId::consensus_decode(read, modules)?;
+        let state = S::consensus_decode(read, modules)?;
+
+        Ok(OperationState {
+            operation_id,
+            state,
+        })
+    }
+}
+
+// TODO: derive after getting rid of `GC` type arg
+impl<S> PartialEq for OperationState<S>
+where
+    S: State,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.operation_id.eq(&other.operation_id) && self.state.eq(&other.state)
+    }
+}
+
+impl<S> Eq for OperationState<S> where S: State {}
+
+impl<S> Clone for OperationState<S>
+where
+    S: State,
+{
+    fn clone(&self) -> Self {
+        OperationState {
+            operation_id: self.operation_id,
+            state: self.state.clone(),
+        }
     }
 }

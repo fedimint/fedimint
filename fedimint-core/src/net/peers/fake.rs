@@ -53,7 +53,7 @@ where
 
 /// Create a fake link between `peer1` and `peer2` for test purposes
 ///
-/// `buf_size` controlls the size of the `tokio::mpsc::channel` used
+/// `buf_size` controls the size of the `tokio::mpsc::channel` used
 /// under the hood (both ways).
 pub fn make_fake_peer_connection<Msg>(
     peer1: PeerId,

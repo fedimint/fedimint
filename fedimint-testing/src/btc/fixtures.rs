@@ -100,7 +100,7 @@ impl BitcoinTest for FakeBitcoinTest {
     }
 
     async fn prepare_funding_wallet(&self) {
-        // In fake wallet this might not be technically neccessary,
+        // In fake wallet this might not be technically necessary,
         // but it makes it behave more like the `RealBitcoinTest`.
         let block_count = self.blocks.lock().unwrap().len() as u64;
         if block_count < 100 {
@@ -215,7 +215,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(None)
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) -> BitcoinRpcResult<()> {
+    async fn submit_transaction(&self, transaction: Transaction) {
         let mut pending = self.pending.lock().unwrap();
         pending.push(transaction);
 
@@ -232,8 +232,6 @@ impl IBitcoindRpc for FakeBitcoinTest {
         }
 
         *pending = filtered.into_values().collect();
-
-        Ok(())
     }
 }
 

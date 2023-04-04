@@ -28,7 +28,6 @@ use crate::modules::mint::config::MintClientConfig;
 use crate::modules::mint::{
     BlindNonce, MintInput, MintOutput, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note,
 };
-use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::{Input, Output, Transaction};
 use crate::utils::ClientContext;
 use crate::{ChildId, DerivableSecret, FuturesUnordered};
@@ -458,10 +457,9 @@ impl MintClient {
         let bsig = self
             .context
             .api
-            .fetch_output_outcome::<OutputOutcome>(outpoint, &self.context.decoders)
+            .fetch_output_outcome::<MintOutputOutcome>(outpoint, &self.context.decoders)
             .await?
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?
-            .try_into_variant::<MintOutputOutcome>()?
             .as_ref()
             .cloned()
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
@@ -743,13 +741,14 @@ mod tests {
             FakeFed::<Mint>::new(
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
-                &ConfigGenParams::new().attach(MintGenParams {
+                &ConfigGenParams::from_typed(MintGenParams {
                     mint_amounts: vec![
                         Amount::from_sats(1),
                         Amount::from_sats(10),
                         Amount::from_sats(20),
                     ],
-                }),
+                })
+                .expect("Invalid mint config"),
                 &MintGen,
                 module_id,
             )

@@ -50,26 +50,26 @@ jobs:
         continue-on-error: true
 
       - name: Build workspace
-        run: nix build -L .#debug.workspaceBuild
+        run: nix build -L .#ci.workspaceBuild
 
       - name: Clippy workspace
-        run: nix build -L .#debug.workspaceClippy
+        run: nix build -L .#ci.workspaceClippy
 
       - name: Run cargo doc
-        run: nix build -L .#debug.workspaceDoc
+        run: nix build -L .#ci.workspaceDoc
 
       - name: Run cargo audit
-        run: nix build -L .#debug.workspaceAudit
+        run: nix build -L .#ci.workspaceAudit
 
       # `ccov` job will run `cargo test`, so no need to spend time on it here
       # - name: Test workspace
       #   run: nix build -L .#workspaceTest
 
       - name: Test docs
-        run: nix build -L .#debug.workspaceTestDoc
+        run: nix build -L .#ci.workspaceTestDoc
 
       - name: Tests
-        run: nix build -L .#debug.cli-test.all
+        run: nix build -L .#ci.cli-test.all
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another
@@ -90,7 +90,7 @@ jobs:
         continue-on-error: true
 
       - name: Build and run tests with Code Coverage
-        run: nix build -L .#debug.workspaceCov
+        run: nix build -L .#ci.workspaceCov
 
       - name: Ensure lcov.info exists
         run: test -f result/lcov.info
@@ -155,7 +155,12 @@ jobs:
       - name: Build fedimint-cli container
         run: |
           nix build -L .#container.fedimint-cli
-          echo "mint_client_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+          echo "fedimint_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+
+      - name: Build gatewayd container
+        run: |
+          nix build -L .#container.gatewayd
+          echo "gatewayd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/kody-setup-rebase'
@@ -168,13 +173,15 @@ jobs:
         if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/kody-setup-rebase'
         run: |
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish master tag
         if: github.ref == 'refs/heads/master'
         run: |
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
     if: github.ref == 'refs/heads/master'
@@ -202,3 +209,17 @@ jobs:
 
       - name: Build ${{ matrix.build }}
         run: nix build -L .#${{ matrix.build }}
+
+  notifications:
+    # if: github.ref == 'refs/heads/master'
+    name: "Notifications"
+    timeout-minutes: 1
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Discord notifications on failure                                                         
+      if: failure()                              
+      # https://github.com/marketplace/actions/actions-status-discord
+      uses: sarisia/actions-status-discord@v1
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK }}

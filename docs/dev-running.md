@@ -1,25 +1,8 @@
-## Running Fedimint for dev testing
-
-Fedimint consists of three kinds of executables:
-
-* **Federation nodes** - servers who form the mint by running a consensus protocol
-* **Lightning gateways** - allows users send and receive over Lightning by bridging between the mint and an LN node
-* **User clients** - handles user communication with the mint and the gateway
-
 ### Prerequisites
 
-In order to run Fedimint you will need:
-- The [Rust toolchain](https://www.rust-lang.org/tools/install) to build and run the executables
-- The [Nix package manager](https://nixos.org/download.html) for managing build and test dependencies
+Fedimint's developer environment is build around the [Nix package manager](https://nixos.org). Once setup, you can execute one `nix develop` command to create a completely deterministic development, test and build environment with all required dependencies installed and pinned to exact versions. Detailed setup instructions are available in [dev-env.md](./dev-env.md).
 
-Clone and `cd` into the Fedimint repo:
-
-```shell
-git clone git@github.com:fedimint/fedimint.git
-cd fedimint
-```
-
-It's recommended to **start all the commands in "Nix dev shell"**, which can be started with `nix develop` command.
+Once you have cloned fedimint and can run `nix develop` as described in [dev-env.md](./dev-env.md), you're ready to setup a federation locally!
 
 ### Setting up the federation
 
@@ -115,10 +98,10 @@ $ fedimint-cli fetch
 
 ### Using the Gateway
 
-The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The tmuxinator setup scripts also give it some ecash. To check its balance, run `gateway-cli info`, copy the federation id and then:
+The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The tmuxinator setup scripts also give it some ecash. To check its balance, we use the [`gateway-cli`](../gateway/cli) utility. In the tmuxinator environment there are 2 lightning gateways -- one for Core Lightning and one for LND -- so we add `gateway-cln` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the Core Lightinng gateway, run `gateway-cln info`, copy the federation id and then:
 
 ```shell
-$ gateway-cli balance <FEDERATION-ID>
+$ gateway-cln balance <FEDERATION-ID>
 
 {
   "balance_msat": 30000000
@@ -190,7 +173,7 @@ There also exist some other, more experimental commands that can be explored usi
 ```shell
 $ fedimint-cli help
 
-Usage: fedimint-cli --workdir <WORKDIR> <COMMAND>
+Usage: fedimint-cli --data-dir <WORKDIR> <COMMAND>
 
 Commands:
   version-hash         Print the latest git commit hash this bin. was build with
@@ -215,10 +198,13 @@ Commands:
   switch-gateway       Switch active gateway
   backup               Upload the (encrypted) snapshot of mint notes to federation
   restore              Restore the previously created backup of mint notes (with `backup` command)
+  decode-transaction   Decode a transaction hex string and print it to stdout
+  signal-upgrade       Signal a consensus upgrade
+  epoch-count          Gets the current epoch count
   help                 Print this message or the help of the given subcommand(s)
 
 Options:
-      --workdir <WORKDIR>  The working directory of the client containing the config and db
+      --data-dir <WORKDIR>  The working directory of the client containing the config and db
   -h, --help               Print help
   -V, --version            Print version
 ```

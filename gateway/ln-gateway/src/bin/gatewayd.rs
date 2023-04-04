@@ -13,9 +13,7 @@ use fedimint_core::module::ModuleCommon;
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::lnd::GatewayLndClient;
-use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
-use ln_gateway::Gateway;
+use ln_gateway::{Gateway, Mode};
 use mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
 use mint_client::modules::mint::{MintClientGen, MintModuleTypes};
 use mint_client::modules::wallet::{WalletClientGen, WalletModuleTypes};
@@ -24,6 +22,9 @@ use url::Url;
 
 #[derive(Parser)]
 pub struct GatewayOpts {
+    #[clap(subcommand)]
+    mode: Mode,
+
     /// Path to folder containing gateway config and data files
     #[arg(long = "data-dir", env = "FM_GATEWAY_DATA_DIR")]
     pub data_dir: PathBuf,
@@ -39,23 +40,6 @@ pub struct GatewayOpts {
     /// Gateway webserver authentication password
     #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
     pub password: String,
-
-    /// Public URL to a Gateway Lightning rpc service
-    #[arg(long = "lnrpc-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
-    pub lnrpc_addr: Option<Url>,
-
-    // TODO: Issue #1955: Group clap args for configuring gatewayd with LND
-    /// LND RPC address
-    #[arg(long = "lnd-rpc-host", env = "FM_LND_RPC_ADDR")]
-    pub lnd_rpc_addr: Option<String>,
-
-    /// LND TLS cert file path
-    #[arg(long = "lnd-tls-cert", env = "FM_LND_TLS_CERT")]
-    pub lnd_tls_cert: Option<String>,
-
-    /// LND macaroon file path
-    #[arg(long = "lnd-macaroon", env = "FM_LND_MACAROON")]
-    pub lnd_macaroon: Option<String>,
 }
 
 // Fedimint Gateway Binary
@@ -78,14 +62,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Read configurations
     let GatewayOpts {
+        mode,
         data_dir,
         listen,
         api_addr,
         password,
-        lnrpc_addr,
-        lnd_rpc_addr,
-        lnd_tls_cert,
-        lnd_macaroon,
     } = GatewayOpts::parse();
 
     info!(
@@ -99,32 +80,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Create task group for controlled shutdown of the gateway
     let task_group = TaskGroup::new();
-
-    let lnrpc: DynLnRpcClient = if let Some(lnrpc_addr) = lnrpc_addr {
-        info!(
-            "Gateway configured to connect to remote LnRpcClient at \n lnrpc address: {:?} ",
-            lnrpc_addr
-        );
-        NetworkLnRpcClient::new(lnrpc_addr).await?.into()
-    } else if let (Some(lnd_rpc_addr), Some(lnd_tls_cert), Some(lnd_macaroon)) =
-        (lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
-    {
-        info!(
-            "Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} ",
-            lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
-        );
-        GatewayLndClient::new(
-            lnd_rpc_addr,
-            lnd_tls_cert,
-            lnd_macaroon,
-            task_group.make_subgroup().await,
-        )
-        .await?
-        .into()
-    } else {
-        error!("No lightning node provided. For CLN set FM_GATEWAY_LIGHTNING_ADDR for CLN. For LND set FM_LND_RPC_ADDR, FM_LND_TLS_CERT, and FM_LND_MACAROON");
-        exit(1);
-    };
 
     // Create module decoder registry
     let decoders = ModuleDecoderRegistry::from_iter([
@@ -151,13 +106,17 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Create gateway instance
     let gateway = Gateway::new(
-        lnrpc,
+        mode,
         client_builder,
         decoders,
         module_gens,
         task_group.make_subgroup().await,
     )
-    .await;
+    .await
+    .unwrap_or_else(|e| {
+        eprintln!("Failed to start gateway: {e:?}");
+        exit(1)
+    });
 
     if let Err(e) = gateway.run(listen, password).await {
         task_group.shutdown_join_all(None).await?;

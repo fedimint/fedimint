@@ -18,7 +18,7 @@ use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ServerModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -29,7 +29,7 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::{timeout, TaskGroup};
+use fedimint_core::task::{timeout, RwLock, TaskGroup};
 use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::{LightningClientGen, LightningGateway};
 use fedimint_ln_server::LightningGen;
@@ -43,9 +43,9 @@ use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
 use fedimint_server::db::GLOBAL_DATABASE_VERSION;
-use fedimint_server::net::connect::mock::MockNetwork;
+use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{Connector, TlsTcpConnector};
-use fedimint_server::net::peers::PeerConnector;
+use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
@@ -64,7 +64,7 @@ use itertools::Itertools;
 use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
-use ln_gateway::lnrpc_client::{DynLnRpcClient, NetworkLnRpcClient};
+use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
 use mint_client::mint::SpendableNote;
 use mint_client::transaction::legacy::Transaction;
@@ -207,12 +207,15 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let modules = fedimintd::configure_modules(
+    let mut module_gens_params = ServerModuleGenParamsRegistry::default();
+    fedimintd::attach_default_module_gen_params(
+        &mut module_gens_params,
         sats(100000),
         bitcoin::network::constants::Network::Regtest,
         10,
     );
-    let params = ServerConfigParams::gen_local(&peers, base_port, "test", modules).unwrap();
+    let params =
+        ServerConfigParams::gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
     let server_module_inits = ServerModuleGenRegistry::from(vec![
         DynServerModuleGen::from(WalletGen),
@@ -326,37 +329,15 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             ));
             user.client.await_consensus_block_height(0).await?;
 
-            // gateway
-            let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
-                .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
-                .parse::<Url>()
-                .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
-            let lnrpc_adapter = match gateway_node {
-                GatewayNode::Cln => {
-                    let lnrpc: DynLnRpcClient =
-                        NetworkLnRpcClient::new(lnrpc_addr).await.unwrap().into();
-                    LnRpcAdapter::new(lnrpc)
-                }
-                GatewayNode::Lnd => {
-                    let gateway_lnd_client = GatewayLndClient::new(
-                        lnd_rpc_addr.clone(),
-                        lnd_tls_cert.clone(),
-                        lnd_macaroon.clone(),
-                        task_group.make_subgroup().await,
-                    )
-                    .await
-                    .unwrap();
-                    let lnrpc = DynLnRpcClient::new(Arc::new(gateway_lnd_client));
-                    LnRpcAdapter::new(lnrpc)
-                }
-            };
             let gateway = GatewayTest::new(
-                lnrpc_adapter,
+                create_lightning_adapter(gateway_node.clone(), task_group.make_subgroup().await)
+                    .await,
                 client_config.clone(),
                 decoders,
                 client_module_inits.clone(),
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
+                gateway_node,
             )
             .await;
 
@@ -371,8 +352,10 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let server_config =
-                ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
+            let server_config = ServerConfig::trusted_dealer_gen(
+                &params,
+                server_module_inits.clone().legacy_init_modules(),
+            );
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
                 .to_config_response(&server_module_inits)
@@ -383,12 +366,16 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             let bitcoin_rpc_2: DynBitcoindRpc = bitcoin.clone().into();
 
             let lightning = FakeLightningTest::new();
-            let lnrpc_adapter = LnRpcAdapter::new(lightning.clone().into());
+            let ln_arc = Arc::new(RwLock::new(lightning.clone()));
+            let lnrpc_adapter = LnRpcAdapter::new(ln_arc.clone());
 
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen =
-                move |cfg: &ServerConfig| net_ref.connector(cfg.local.identity).into_dyn();
+            let connect_gen = move |cfg: &ServerConfig| {
+                net_ref
+                    .connector(cfg.local.identity, StreamReliability::INTEGRATION_TEST)
+                    .into_dyn()
+            };
 
             let fed_db = |decoders| Database::new(MemDatabase::new(), decoders);
             let fed = FederationTest::new(
@@ -447,6 +434,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 client_module_inits,
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
+                gateway_node.clone(),
             )
             .await;
 
@@ -471,6 +459,45 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     }
 
     Ok(fixtures)
+}
+
+pub async fn create_lightning_adapter(
+    gateway_node: GatewayNode,
+    task_group: TaskGroup,
+) -> LnRpcAdapter {
+    match env::var("FM_TEST_USE_REAL_DAEMONS") {
+        Ok(s) if s == "1" => {
+            let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
+                .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
+                .parse::<Url>()
+                .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
+            match gateway_node {
+                GatewayNode::Cln => {
+                    let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = Arc::new(RwLock::new(
+                        NetworkLnRpcClient::new(lnrpc_addr).await.unwrap(),
+                    ));
+                    LnRpcAdapter::new(lnrpc)
+                }
+                GatewayNode::Lnd => {
+                    let gateway_lnd_client = GatewayLndClient::new(
+                        env::var("FM_LND_RPC_ADDR").unwrap(),
+                        env::var("FM_LND_TLS_CERT").unwrap(),
+                        env::var("FM_LND_MACAROON").unwrap(),
+                        task_group.make_subgroup().await,
+                    )
+                    .await
+                    .unwrap();
+                    let lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
+                    LnRpcAdapter::new(lnrpc)
+                }
+            }
+        }
+        _ => {
+            let lightning = FakeLightningTest::new();
+            let ln_arc = Arc::new(RwLock::new(lightning));
+            LnRpcAdapter::new(ln_arc)
+        }
+    }
 }
 
 pub fn peers(peers: &[u16]) -> Vec<PeerId> {
@@ -517,7 +544,12 @@ async fn distributed_config(
         async move {
             let our_params = params[peer].clone();
 
-            let cfg = ServerConfig::distributed_gen(&our_params, registry, &mut task_group);
+            let cfg = ServerConfig::distributed_gen(
+                &our_params,
+                registry.legacy_init_modules(),
+                DelayCalculator::TEST_DEFAULT,
+                &mut task_group,
+            );
             (*peer, cfg.await.expect("generation failed"))
         }
     }))
@@ -546,11 +578,12 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
 }
 
 pub struct GatewayTest {
-    pub actor: Arc<GatewayActor>,
-    pub adapter: Arc<LnRpcAdapter>,
+    pub actor: Arc<RwLock<GatewayActor>>,
+    pub adapter: Arc<RwLock<LnRpcAdapter>>,
     pub keys: LightningGateway,
     pub user: UserTest<GatewayClientConfig>,
     pub client: Arc<GatewayClient>,
+    pub node: GatewayNode,
 }
 
 impl GatewayTest {
@@ -561,6 +594,7 @@ impl GatewayTest {
         module_gens: ClientModuleGenRegistry,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
+        node: GatewayNode,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -599,14 +633,15 @@ impl GatewayTest {
         )
         .into();
 
-        let gateway = Gateway::new(
-            adapter.clone().into(),
+        let gateway = Gateway::new_with_lightning_connection(
+            Arc::new(RwLock::new(adapter.clone())),
             client_builder.clone(),
             decoders.clone(),
             module_gens.clone(),
             TaskGroup::new(),
         )
-        .await;
+        .await
+        .unwrap();
 
         let client = Arc::new(
             client_builder
@@ -616,7 +651,7 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .connect_federation(client.clone(), vec![])
+            .load_actor(client.clone(), vec![])
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios
@@ -626,10 +661,11 @@ impl GatewayTest {
 
         GatewayTest {
             actor,
-            adapter: Arc::new(adapter),
+            adapter: Arc::new(RwLock::new(adapter)),
             keys,
             user,
             client,
+            node,
         }
     }
 }
@@ -1352,6 +1388,7 @@ impl FederationTest {
                 tx_receiver,
                 connect_gen(cfg),
                 decoders,
+                DelayCalculator::TEST_DEFAULT,
                 &mut task_group,
             )
             .await;

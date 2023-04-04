@@ -81,12 +81,47 @@ struct PeerConnectionStateMachine<M> {
     state: PeerConnectionState<M>,
 }
 
+/// Calculates delays for reconnecting to peers
+/// The default values are in the order of seconds
+#[derive(Debug, Clone, Copy)]
+pub struct DelayCalculator {
+    scaling_factor: f64,
+}
+
+impl DelayCalculator {
+    fn new() -> Self {
+        Self {
+            scaling_factor: 1.0,
+        }
+    }
+
+    /// This instance is tuned for tests and scales delays down to milliseconds.
+    /// This makes it feasible to run tests where errors
+    /// and disconnections are common.
+    pub const TEST_DEFAULT: Self = Self {
+        scaling_factor: 0.1e-3,
+    };
+
+    fn reconnection_delay(&self, disconnect_count: u64) -> Duration {
+        let scaling_factor = disconnect_count as f64 * self.scaling_factor;
+        let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor..4.0 * scaling_factor);
+        Duration::from_secs_f64(delay)
+    }
+}
+
+impl Default for DelayCalculator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 struct CommonPeerConnectionState<M> {
     resend_queue: MessageQueue<M>,
     incoming: Sender<M>,
     outgoing: Receiver<M>,
     peer: PeerId,
     peer_address: Url,
+    delay_calculator: DelayCalculator,
     connect: SharedAnyConnector<PeerMessage<M>>,
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
     last_received: Option<MessageId>,
@@ -117,6 +152,7 @@ where
     #[instrument(skip_all)]
     pub async fn new(
         cfg: NetworkConfig,
+        delay_calculator: DelayCalculator,
         connect: PeerConnector<T>,
         task_group: &mut TaskGroup,
     ) -> Self {
@@ -136,6 +172,7 @@ where
                         PeerConnection::new(
                             peer,
                             peer_address.clone(),
+                            delay_calculator,
                             shared_connector.clone(),
                             connection_receiver,
                             task_group,
@@ -350,7 +387,9 @@ where
         disconnect_count: u64,
     ) -> PeerConnectionState<M> {
         debug!(target: LOG_NET_PEER,
-            peer = ?self.peer, "Received incoming connection");
+            peer = ?self.peer, %disconnect_count,
+            resend_queue_len = self.resend_queue.queue.len(),
+            "Received incoming connection");
         match self.resend_buffer_contents(&mut new_connection).await {
             Ok(()) => PeerConnectionState::Connected(ConnectedPeerConnectionState {
                 connection: new_connection,
@@ -379,13 +418,16 @@ where
         disconnect_count += 1;
 
         let reconnect_at = {
-            let scaling_factor = disconnect_count as f64;
-            let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor..4.0 * scaling_factor);
+            let delay = self.delay_calculator.reconnection_delay(disconnect_count);
+            let delay_secs = delay.as_secs_f64();
             debug!(
                 target: LOG_NET_PEER,
-                delay, "Scheduling reopening of connection"
+                %disconnect_count,
+                peer = ?self.peer,
+                delay_secs,
+                "Scheduling reopening of connection"
             );
-            Instant::now() + Duration::from_secs_f64(delay)
+            Instant::now() + delay
         };
 
         PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
@@ -448,8 +490,7 @@ where
             .unwrap_or(msg.id);
 
         if msg.id < expected {
-            info!(
-                        target: LOG_NET_PEER,
+            info!(target: LOG_NET_PEER,
                 ?expected, received = ?msg.id, "Received old message");
             return Ok(());
         }
@@ -568,6 +609,7 @@ where
     fn new(
         id: PeerId,
         peer_address: Url,
+        delay_calculator: DelayCalculator,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_group: &mut TaskGroup,
@@ -583,6 +625,7 @@ where
                     outgoing_receiver,
                     id,
                     peer_address,
+                    delay_calculator,
                     connect,
                     incoming_connections,
                     &handle,
@@ -605,12 +648,14 @@ where
         self.incoming.recv().await.ok_or(Cancelled)
     }
 
+    #[allow(clippy::too_many_arguments)] // TODO: consider refactoring
     #[instrument(skip_all, fields(peer))]
     async fn run_io_thread(
         incoming: Sender<M>,
         outgoing: Receiver<M>,
         peer: PeerId,
         peer_address: Url,
+        delay_calculator: DelayCalculator,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_handle: &TaskHandle,
@@ -621,6 +666,7 @@ where
             outgoing,
             peer,
             peer_address,
+            delay_calculator,
             connect,
             incoming_connections,
             last_received: None,
@@ -645,7 +691,8 @@ mod tests {
     use fedimint_core::PeerId;
     use futures::Future;
 
-    use crate::net::connect::mock::MockNetwork;
+    use super::DelayCalculator;
+    use crate::net::connect::mock::{MockNetwork, StreamReliability};
     use crate::net::connect::Connector;
     use crate::net::peers::{IPeerConnections, NetworkConfig, ReconnectPeerConnections};
 
@@ -684,8 +731,16 @@ mod tests {
                     bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
-                let connect = net_ref.connector(cfg.identity).into_dyn();
-                ReconnectPeerConnections::<u64>::new(cfg, connect, &mut task_group).await
+                let connect = net_ref
+                    .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
+                    .into_dyn();
+                ReconnectPeerConnections::<u64>::new(
+                    cfg,
+                    DelayCalculator::TEST_DEFAULT,
+                    connect,
+                    &mut task_group,
+                )
+                .await
             };
 
             let mut peers_a = build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
@@ -706,5 +761,17 @@ mod tests {
 
         task_group.shutdown().await;
         task_group.join_all(None).await.unwrap();
+    }
+
+    #[test]
+    fn test_delay_calculator() {
+        // Test delays should be on the order of milliseconds, not seconds.
+        let c = DelayCalculator::TEST_DEFAULT;
+        assert!(c.reconnection_delay(1).as_millis() < 1);
+        assert!(c.reconnection_delay(100).as_millis() < 100);
+        // Default/prod delays should be on the order of seconds.
+        let c = DelayCalculator::default();
+        assert!((1..10).contains(&c.reconnection_delay(1).as_secs()));
+        assert!((100..1000).contains(&c.reconnection_delay(100).as_secs()));
     }
 }

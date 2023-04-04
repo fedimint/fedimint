@@ -7,10 +7,11 @@ pre_window:
   - alias lncli="\$FM_LNCLI"
   - alias bitcoin-cli="\$FM_BTC_CLIENT"
   - alias fedimint-cli="\$FM_MINT_CLIENT"
-  - alias gateway-cli="\$FM_GATEWAY_CLI"
+  - alias gateway-cln="\$FM_GWCLI_CLN"
+  - alias gateway-lnd="\$FM_GWCLI_LND"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
   - alias dbtool="\$FM_DB_TOOL"
-  - alias restart="./scripts/restart-tmux.sh"
+  # - alias restart="./scripts/restart-tmux.sh"
   - source scripts/lib.sh
 tmux_detached: false
 windows:
@@ -19,22 +20,21 @@ windows:
         - user:
             - source scripts/tmux-user-shell.sh
   - federation:
-      layout: 3ed7,272x74,0,0{119x74,0,0,54,152x74,120,0[152x17,120,0,55,152x17,120,18,56,152x17,120,36,57,152x20,120,54,58]}
       panes:
-        - user:
-          - # empty user shell
-        - bitcoind:
-          - start_bitcoind &
-          - fg
-        - cln:
-          - start_lightningd &
-          - fg
-        - lnd:
-          - start_lnd &
-          - fg
-        - gateway:
-          - start_gatewayd &
-          - fg
         - federation:
-          - run_dkg
-          - start_federation &
+          - tail -n +0 -F $FM_LOGS_DIR/fedimint-*.log
+  - lightning:
+      layout: tiled
+      panes:
+        - cln:
+          - tail -n +0 -F $FM_LOGS_DIR/lightningd.log
+        - lnd:
+          - tail -n +0 -F $FM_LOGS_DIR/lnd.log
+        - cln-gw:
+          - tail -n +0 -F $FM_LOGS_DIR/gatewayd-cln.log
+        - lnd-gw:
+          - tail -n +0 -F $FM_LOGS_DIR/gatewayd-lnd.log
+  - bitcoin:
+      panes:
+        - bitcoind:
+          - tail -n +0 -F $FM_LOGS_DIR/bitcoind.log

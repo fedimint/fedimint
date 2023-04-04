@@ -12,7 +12,7 @@ use tracing::instrument;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
+    GatewayRpcSender, InfoPayload, LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 use crate::GatewayError;
 
@@ -31,9 +31,10 @@ pub async fn run_webserver(
         .route("/address", post(address))
         .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
-        .route("/connect", post(connect))
+        .route("/connect-fed", post(connect_fed))
         .route("/backup", post(backup))
         .route("/restore", post(restore))
+        .route("/connect-ln", post(connect_ln))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -116,7 +117,7 @@ async fn pay_invoice(
 
 /// Connect a new federation
 #[instrument(skip_all, err)]
-async fn connect(
+async fn connect_fed(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<ConnectFedPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
@@ -139,6 +140,16 @@ async fn backup(
 async fn restore(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<RestorePayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    rpc.send(payload).await?;
+    Ok(())
+}
+
+// Reconnect to the lightning node
+#[instrument(skip_all, err)]
+async fn connect_ln(
+    Extension(rpc): Extension<GatewayRpcSender>,
+    Json(payload): Json<LightningReconnectPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())

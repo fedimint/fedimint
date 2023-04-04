@@ -1,5 +1,5 @@
 //! This module defines a binary encoding interface which is more suitable for
-//! consensus critical encoding thant e.g. `bincode`. Over time all structs that
+//! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
 
 mod btc;
@@ -540,7 +540,7 @@ where
     }
 }
 /// Wrappers for `T` that are `De-Serializable`, while we need them in
-/// `Encodable` contex
+/// `Encodable` context
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
 pub struct SerdeEncodable<T>(pub T);
 

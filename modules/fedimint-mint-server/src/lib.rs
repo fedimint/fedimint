@@ -62,9 +62,7 @@ pub struct MintGenParams {
     pub mint_amounts: Vec<Amount>,
 }
 
-impl ModuleGenParams for MintGenParams {
-    const MODULE_NAME: &'static str = "mint";
-}
+impl ModuleGenParams for MintGenParams {}
 
 #[derive(Debug, Clone)]
 pub struct MintGen;
@@ -96,7 +94,9 @@ impl ServerModuleGen for MintGen {
         peers: &[PeerId],
         params: &ConfigGenParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = params.get::<MintGenParams>().expect("Invalid mint params");
+        let params = params
+            .to_typed::<MintGenParams>()
+            .expect("Invalid mint params");
 
         let tbs_keys = params
             .mint_amounts
@@ -151,7 +151,9 @@ impl ServerModuleGen for MintGen {
         peers: &PeerHandle,
         params: &ConfigGenParams,
     ) -> DkgResult<ServerModuleConfig> {
-        let params = params.get::<MintGenParams>().expect("Invalid mint params");
+        let params = params
+            .to_typed::<MintGenParams>()
+            .expect("Invalid mint gen params");
 
         let g2 = peers.run_dkg_multi_g2(params.mint_amounts.to_vec()).await?;
 
@@ -645,7 +647,7 @@ impl ServerModule for Mint {
                 "/backup",
                 async |module: &Mint, context, request: SignedBackupRequest| -> () {
                     module
-                        .handle_backup_request(context.dbtx(), request).await?;
+                        .handle_backup_request(&mut context.dbtx(), request).await?;
                     Ok(())
                 }
             },
@@ -653,7 +655,7 @@ impl ServerModule for Mint {
                 "/recover",
                 async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
-                        .handle_recover_request(context.dbtx(), id).await)
+                        .handle_recover_request(&mut context.dbtx(), id).await)
                 }
             },
         ]
@@ -967,9 +969,10 @@ mod test {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
         let mint_cfg = MintGen.trusted_dealer_gen(
             &peers,
-            &ConfigGenParams::new().attach(MintGenParams {
+            &ConfigGenParams::from_typed(MintGenParams {
                 mint_amounts: vec![Amount::from_sats(1)],
-            }),
+            })
+            .unwrap(),
         );
         let client_cfg = mint_cfg[&PeerId::from(0)]
             .to_typed::<MintConfig>()

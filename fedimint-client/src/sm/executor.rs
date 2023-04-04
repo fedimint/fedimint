@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -7,20 +7,21 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database};
+use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use futures::future::select_all;
 use futures::stream::StreamExt;
 use tokio::select;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::sm::state::{DynContext, DynState};
-use crate::sm::{GlobalContext, State, StateTransition};
+use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
 
-/// After how many retries a DB transaction is aborted with an error
-const MAX_DB_RETRIES: Option<usize> = Some(100);
+/// After how many attempts a DB transaction is aborted with an error
+const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
 
 /// Wait time till checking the DB for new state machines when there are no
 /// active ones
@@ -41,13 +42,14 @@ enum ExecutorDbPrefixes {
 /// The executor is aware of the concept of Fedimint modules and can give state
 /// machines a different [execution context](super::state::Context) depending on
 /// the owning module, making it very flexible.
-pub struct Executor<GC> {
+#[derive(Clone, Debug)]
+pub struct Executor<GC: GlobalContext> {
     inner: Arc<ExecutorInner<GC>>,
 }
 
 struct ExecutorInner<GC> {
     db: Database,
-    context: GC,
+    context: Mutex<Option<GC>>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
 }
 
@@ -69,49 +71,76 @@ where
 
     /// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
+    ///
+    /// **Attention**: do not use before background task is started!
+    // TODO: remove warning once finality is an inherent state attribute
     pub async fn add_state_machines(&self, states: Vec<DynState<GC>>) -> anyhow::Result<()> {
-        self.inner.db
+        self.inner
+            .db
             .autocommit(
-                |dbtx| {
-                    let states = states.clone();
-                    Box::pin(async move {
-                        for state in states {
-                            if !self.inner.module_contexts.contains_key(&state.module_instance_id()) {
-                                bail!("Unknown module");
-                            }
-
-                            let is_active_state = dbtx
-                                .get_value(&ActiveStateKey::<GC>(state.clone()))
-                                .await
-                                .is_some();
-                            let is_inactive_state = dbtx
-                                .get_value(&InactiveStateKey::<GC>(state.clone()))
-                                .await
-                                .is_some();
-
-                            if is_active_state || is_inactive_state {
-                                bail!("State already exists in database!")
-                            }
-
-                            if state.is_terminal(self.inner.module_contexts.get(&state.module_instance_id()).expect("No such module"), &self.inner.context) {
-                                bail!("State is already terminal, adding it to the executor doesn't make sense.")
-                            }
-
-                            dbtx.insert_entry(&ActiveStateKey(state), &ActiveState::new()).await;
-                        }
-
-                        Ok(())
-                    })
-                },
-                MAX_DB_RETRIES,
+                |dbtx| Box::pin(self.add_state_machines_dbtx(dbtx, states.clone())),
+                MAX_DB_ATTEMPTS,
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed { last_error , retries } => {
-                    last_error.context(format!("Failed to commit after {retries} retries"))
-                }
-                AutocommitError::ClosureError { error, .. } => {error}
+                AutocommitError::CommitFailed {
+                    last_error,
+                    attempts,
+                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
+                AutocommitError::ClosureError { error, .. } => error,
             })?;
+
+        Ok(())
+    }
+
+    /// Adds a number of state machines to the executor atomically with other DB
+    /// changes is `dbtx`. See [`Executor::add_state_machines`] for more
+    /// details.
+    ///
+    /// ## Panics
+    /// If called before background task is started using
+    /// [`Executor::start_executor`]!
+    // TODO: remove warning once finality is an inherent state attribute
+    pub async fn add_state_machines_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState<GC>>,
+    ) -> anyhow::Result<()> {
+        for state in states {
+            if !self
+                .inner
+                .module_contexts
+                .contains_key(&state.module_instance_id())
+            {
+                bail!("Unknown module");
+            }
+
+            let is_active_state = dbtx
+                .get_value(&ActiveStateKey::<GC>(state.clone()))
+                .await
+                .is_some();
+            let is_inactive_state = dbtx
+                .get_value(&InactiveStateKey::<GC>(state.clone()))
+                .await
+                .is_some();
+
+            if is_active_state || is_inactive_state {
+                bail!("State already exists in database!")
+            }
+
+            if state.is_terminal(
+                self.inner
+                    .module_contexts
+                    .get(&state.module_instance_id())
+                    .expect("No such module"),
+                self.inner.context.lock().await.as_ref().expect(""),
+            ) {
+                bail!("State is already terminal, adding it to the executor doesn't make sense.")
+            }
+
+            dbtx.insert_entry(&ActiveStateKey(state), &ActiveState::new())
+                .await;
+        }
 
         Ok(())
     }
@@ -120,7 +149,7 @@ where
     ///
     /// Check if state exists in the database as part of an actively running
     /// state machine.
-    pub async fn contains_active_state<S: State<GC>>(
+    pub async fn contains_active_state<S: State<GlobalContext = GC>>(
         &self,
         instance: ModuleInstanceId,
         state: S,
@@ -140,7 +169,7 @@ where
     /// terminal it means the corresponding state machine finished its
     /// execution. If the state is non-terminal it means the state machine was
     /// in that state at some point but moved on since then.
-    pub async fn contains_inactive_state<S: State<GC>>(
+    pub async fn contains_inactive_state<S: State<GlobalContext = GC>>(
         &self,
         instance: ModuleInstanceId,
         state: S,
@@ -152,16 +181,60 @@ where
             .into_iter()
             .any(|(s, _)| s == state)
     }
+
+    pub async fn await_inactive_state(&self, state: DynState<GC>) -> InactiveState {
+        self.inner
+            .db
+            .wait_key_exists(&InactiveStateKey(state))
+            .await
+    }
+
+    pub async fn await_active_state(&self, state: DynState<GC>) -> ActiveState {
+        self.inner.db.wait_key_exists(&ActiveStateKey(state)).await
+    }
+
+    /// Starts the background thread that runs the state machines. This cannot
+    /// be done when building the executor since some global contexts in turn
+    /// may depend on the executor, forming a cyclic dependency.
+    ///
+    /// ## Panics
+    /// If called more than once.
+    pub async fn start_executor(&self, tg: &mut TaskGroup, context: GC) {
+        let replaced_old = self
+            .inner
+            .context
+            .lock()
+            .await
+            .replace(context.clone())
+            .is_some();
+        assert!(!replaced_old, "start_executor was called previously");
+
+        let task_runner_inner = self.inner.clone();
+        let _handle = tg
+            .spawn("state_machine_executor", move |handle| async move {
+                let shutdown_future = handle.make_shutdown_rx().await;
+                let executor_runner = task_runner_inner.run(&context);
+                select! {
+                    _ = shutdown_future => {
+                        info!("Shutting down state machine executor runner");
+                    },
+                    _ = executor_runner => {
+                        error!("State machine executor runner exited unexpectedly!");
+                    },
+                };
+            })
+            .await;
+    }
 }
 
 impl<GC> ExecutorInner<GC>
 where
     GC: GlobalContext,
 {
-    async fn run(&self) {
+    async fn run(&self, global_context: &GC) {
         info!("Starting state machine executor task");
         loop {
-            if let Err(err) = self.execute_next_state_transition().await {
+            if let Err(err) = self.execute_next_state_transition(global_context).await {
                 warn!(
                     %err,
                     "An unexpected error occurred during a state transition"
@@ -170,7 +243,7 @@ where
         }
     }
 
-    async fn execute_next_state_transition(&self) -> anyhow::Result<()> {
+    async fn execute_next_state_transition(&self, global_context: &GC) -> anyhow::Result<()> {
         let active_states = self.get_active_states().await;
 
         if active_states.is_empty() {
@@ -189,7 +262,7 @@ where
                     .get(&module_instance)
                     .expect("Unknown module");
                 state
-                    .transitions(context, &self.context)
+                    .transitions(context, global_context)
                     .into_iter()
                     .map(move |transition| {
                         Box::pin(async move {
@@ -221,7 +294,7 @@ where
                     let transition_outcome = transition_outcome.clone();
                     Box::pin(async move {
                         let new_state = transition_fn(
-                            &mut dbtx.with_module_prefix(state.module_instance_id()),
+                            &mut ClientSMDatabaseTransaction::new(dbtx, state.module_instance_id()),
                             transition_outcome,
                             state.clone(),
                         )
@@ -234,7 +307,6 @@ where
                             .module_contexts
                             .get(&state.module_instance_id())
                             .expect("Unknown module");
-                        let global_context = &self.context;
 
                         if new_state.is_terminal(context, global_context) {
                             // TODO: log state machine id or something
@@ -258,8 +330,8 @@ where
             .map_err(|e| match e {
                 AutocommitError::CommitFailed {
                     last_error,
-                    retries,
-                } => last_error.context(format!("Failed to commit after {retries} retries")),
+                    attempts,
+                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 
@@ -289,6 +361,22 @@ where
     }
 }
 
+impl<GC: GlobalContext> Debug for ExecutorInner<GC> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (active, inactive) = futures::executor::block_on(async {
+            let active_states = self.get_active_states().await;
+            let inactive_states = self.get_inactive_states().await;
+            (active_states, inactive_states)
+        });
+        writeln!(f, "ExecutorInner {{")?;
+        writeln!(f, "    active_states: {active:?}")?;
+        writeln!(f, "    inactive_states: {inactive:?}")?;
+        writeln!(f, "}}")?;
+
+        Ok(())
+    }
+}
+
 impl ExecutorBuilder {
     /// Allow executor being built to run state machines associated with the
     /// supplied module
@@ -296,9 +384,15 @@ impl ExecutorBuilder {
     where
         C: IntoDynInstance<DynType = DynContext>,
     {
+        self.with_module_dyn(context.into_dyn(instance_id));
+    }
+
+    /// Allow executor being built to run state machines associated with the
+    /// supplied module
+    pub fn with_module_dyn(&mut self, context: DynContext) {
         if self
             .module_contexts
-            .insert(instance_id, context.into_dyn(instance_id))
+            .insert(context.module_instance_id(), context)
             .is_some()
         {
             panic!("Tried to add two modules with the same instance id!");
@@ -308,31 +402,15 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build<GC>(self, tasks: &mut TaskGroup, db: Database, context: GC) -> Executor<GC>
+    pub async fn build<GC>(self, db: Database) -> Executor<GC>
     where
         GC: GlobalContext,
     {
         let inner = Arc::new(ExecutorInner {
             db,
-            context,
+            context: Mutex::new(None),
             module_contexts: self.module_contexts,
         });
-
-        let task_runner_inner = inner.clone();
-        let _handle = tasks
-            .spawn("state_machine_executor", move |handle| async move {
-                let shutdown_future = handle.make_shutdown_rx().await;
-                let executor_runner = task_runner_inner.run();
-                select! {
-                    _ = shutdown_future => {
-                        info!("Shutting down state machine executor runner");
-                    },
-                    _ = executor_runner => {
-                        error!("State machine executor runner exited unexpectedly!");
-                    },
-                };
-            })
-            .await;
 
         debug!(
             instances = ?inner.module_contexts.keys().copied().collect::<Vec<_>>(),
@@ -344,7 +422,7 @@ impl ExecutorBuilder {
 
 /// A state that is able to make progress eventually
 #[derive(Debug)]
-struct ActiveStateKey<GC>(DynState<GC>);
+pub struct ActiveStateKey<GC>(pub DynState<GC>);
 
 impl<GC> Encodable for ActiveStateKey<GC> {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
@@ -380,7 +458,7 @@ impl<GC> Encodable for ActiveStateKeyPrefix<GC> {
 }
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
-struct ActiveState {
+pub struct ActiveState {
     created_at: SystemTime,
 }
 
@@ -389,9 +467,13 @@ where
     GC: GlobalContext,
 {
     const DB_PREFIX: u8 = ExecutorDbPrefixes::ActiveStates as u8;
+    const NOTIFY_ON_MODIFY: bool = true;
     type Key = Self;
     type Value = ActiveState;
 }
+
+impl<GC> DatabaseKeyWithNotify for ActiveStateKey<GC> where GC: GlobalContext {}
+
 impl<GC> ::fedimint_core::db::DatabaseLookup for ActiveStateKeyPrefix<GC>
 where
     GC: GlobalContext,
@@ -415,7 +497,7 @@ impl ActiveState {
 
 /// A past or final state of a state machine
 #[derive(Debug, Clone)]
-struct InactiveStateKey<GC>(DynState<GC>);
+pub struct InactiveStateKey<GC>(pub DynState<GC>);
 
 impl<GC> Encodable for InactiveStateKey<GC>
 where
@@ -456,7 +538,7 @@ impl<GC> Encodable for InactiveStateKeyPrefix<GC> {
 }
 
 #[derive(Debug, Copy, Clone, Decodable, Encodable)]
-struct InactiveState {
+pub struct InactiveState {
     created_at: SystemTime,
     exited_at: SystemTime,
 }
@@ -466,9 +548,12 @@ where
     GC: GlobalContext,
 {
     const DB_PREFIX: u8 = ExecutorDbPrefixes::InactiveStates as u8;
+    const NOTIFY_ON_MODIFY: bool = true;
     type Key = Self;
     type Value = InactiveState;
 }
+
+impl<GC> DatabaseKeyWithNotify for InactiveStateKey<GC> where GC: GlobalContext {}
 
 impl<GC> ::fedimint_core::db::DatabaseLookup for InactiveStateKeyPrefix<GC>
 where
@@ -479,87 +564,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::{Debug, Display, Formatter};
+    use std::fmt::Debug;
     use std::time::Duration;
 
-    use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::ModuleCommon;
-    use fedimint_core::plugin_types_trait_impl_common;
     use fedimint_core::task::TaskGroup;
-    use impl_tools::autoimpl;
-    use serde::{Deserialize, Serialize};
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
-    use crate::module::ClientModule;
     use crate::sm::state::{Context, DynContext, DynState};
     use crate::sm::{Executor, OperationId, State, StateTransition};
-
-    #[derive(Debug)]
-    struct MockClientModule(tokio::sync::broadcast::Sender<u64>);
-
-    struct MockCommon;
-
-    #[autoimpl(Deref, DerefMut using self.0)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    struct MockInput(());
-
-    impl Display for MockInput {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            std::fmt::Debug::fmt(self, f)
-        }
-    }
-
-    #[autoimpl(Deref, DerefMut using self.0)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    struct MockOutput(());
-
-    impl Display for MockOutput {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            std::fmt::Debug::fmt(self, f)
-        }
-    }
-
-    #[autoimpl(Deref, DerefMut using self.0)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    struct MockOutputOutcome(());
-
-    impl Display for MockOutputOutcome {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            std::fmt::Debug::fmt(self, f)
-        }
-    }
-
-    #[autoimpl(Deref, DerefMut using self.0)]
-    #[derive(
-        Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-    )]
-    struct MockConsensusItem(());
-
-    impl Display for MockConsensusItem {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            std::fmt::Debug::fmt(self, f)
-        }
-    }
-
-    plugin_types_trait_impl_common!(MockInput, MockOutput, MockOutputOutcome, MockConsensusItem);
-
-    impl ModuleCommon for MockCommon {
-        type Input = MockInput;
-        type Output = MockOutput;
-        type OutputOutcome = MockOutputOutcome;
-        type ConsensusItem = MockConsensusItem;
-    }
 
     #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     enum MockStateMachine {
@@ -568,8 +586,9 @@ mod tests {
         Final,
     }
 
-    impl State<()> for MockStateMachine {
+    impl State for MockStateMachine {
         type ModuleContext = MockContext;
+        type GlobalContext = ();
 
         fn transitions(
             &self,
@@ -659,29 +678,25 @@ mod tests {
 
     impl Context for MockContext {}
 
-    impl ClientModule for MockClientModule {
-        type Common = MockCommon;
-        type ModuleStateMachineContext = MockContext;
-        type GlobalStateMachineContext = ();
-        type States = MockStateMachine;
-
-        fn context(&self) -> Self::ModuleStateMachineContext {
-            MockContext {
-                broadcast: self.0.clone(),
-            }
-        }
-    }
-
     async fn get_executor(tg: &mut TaskGroup) -> (Executor<()>, Sender<u64>, Database) {
         let (broadcast, _) = tokio::sync::broadcast::channel(10);
-        let module = MockClientModule(broadcast.clone());
 
-        let decoders = ModuleDecoderRegistry::new(vec![(42, MockClientModule::decoder())]);
+        let mut decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::<MockStateMachine>();
+        let decoder = decoder_builder.build();
+
+        let decoders = ModuleDecoderRegistry::new(vec![(42, decoder)]);
         let db = Database::new(MemDatabase::new(), decoders);
 
         let mut executor_builder = Executor::<()>::builder();
-        executor_builder.with_module(42, module.context());
-        let executor = executor_builder.build(tg, db.clone(), ()).await;
+        executor_builder.with_module(
+            42,
+            MockContext {
+                broadcast: broadcast.clone(),
+            },
+        );
+        let executor = executor_builder.build(db.clone()).await;
+        executor.start_executor(tg, ()).await;
 
         info!("Initialized test executor");
         (executor, broadcast, db)

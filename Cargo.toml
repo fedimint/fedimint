@@ -7,6 +7,7 @@ members = [
     "gateway/ln-gateway",
     "gateway/cli",
     "fedimintd",
+    "fedimint-bin-tests",
     "fedimint-bitcoind",
     "fedimint-core",
     "fedimint-client",
@@ -71,6 +72,12 @@ bls12_381 = { opt-level = 3 }
 subtle = { opt-level = 3 }
 ring = { opt-level = 3 }
 threshold_crypto = { opt-level = 3 }
+
+
+[profile.ci]
+inherits = "dev"
+split-debuginfo = "packed"
+debug = 1
 
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }

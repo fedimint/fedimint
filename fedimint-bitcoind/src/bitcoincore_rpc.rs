@@ -215,30 +215,24 @@ where
             self.0
                 .estimate_smart_fee(confirmation_target, Some(EstimateMode::Conservative))
                 .map_err(anyhow::Error::from)
-        })
-        .expect("Bitcoind returned an error") // TODO: implement retry logic in case bitcoind is temporarily unreachable
+        })?
         .fee_rate
         .map(|per_kb| Feerate {
             sats_per_kvb: per_kb.to_sat(),
         }))
     }
 
-    #[instrument(
-        skip(self),
-        name = "bitcoincore_rpc::submit_transaction",
-        level = "DEBUG",
-        ret,
-        err
-    )]
-    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
+    async fn submit_transaction(&self, transaction: Transaction) {
         fedimint_core::task::block_in_place(|| match self.0.send_raw_transaction(&transaction) {
             // for our purposes, this is not an error
             Err(::bitcoincore_rpc::Error::JsonRpc(JsonError::Rpc(RpcError {
                 code: RPC_VERIFY_ALREADY_IN_CHAIN,
                 ..
-            }))) => Ok(()),
-            Err(e) => Err(anyhow::Error::from(e)),
-            Ok(_) => Ok(()),
+            }))) => {}
+            Err(error) => {
+                info!(?error, "Error broadcasting transaction");
+            }
+            Ok(_) => {}
         })
     }
 }
@@ -313,15 +307,16 @@ impl IBitcoindRpc for ElectrumClient {
         })
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
+    async fn submit_transaction(&self, transaction: Transaction) {
         fedimint_core::task::block_in_place(|| {
             let mut bytes = vec![];
             transaction
                 .consensus_encode(&mut bytes)
                 .expect("can't fail");
-            let _txid = self.0.transaction_broadcast_raw(&bytes)?;
-            Ok(())
-        })
+            let _ = self.0.transaction_broadcast_raw(&bytes).map_err(|error| {
+                info!(?error, "Error broadcasting transaction");
+            });
+        });
     }
 
     async fn was_transaction_confirmed_in(
@@ -339,7 +334,7 @@ impl IBitcoindRpc for ElectrumClient {
             let output = transaction
                 .output
                 .first()
-                .expect("Transaction must contain at least one output");
+                .ok_or(format_err!("Transaction must contain at least one output"))?;
 
             // if transaction is confirmed, we're going to find the confirmation event in
             // the history of ifs first output
@@ -439,11 +434,9 @@ impl IBitcoindRpc for EsploraClient {
         }))
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
-        self.0
-            .broadcast(&transaction)
-            .await
-            .map_err(anyhow::Error::from)
-            .map_err(Into::into)
+    async fn submit_transaction(&self, transaction: Transaction) {
+        let _ = self.0.broadcast(&transaction).await.map_err(|error| {
+            info!(?error, "Error broadcasting transaction");
+        });
     }
 }

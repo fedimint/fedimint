@@ -7,8 +7,9 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    RestorePayload, WithdrawPayload,
+    LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
+use ln_gateway::Mode;
 use mint_client::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::from_hex;
 use url::Url;
@@ -63,6 +64,11 @@ pub enum Commands {
     Backup { federation_id: FederationId },
     /// Restore ecash from last available snapshot or from scratch
     Restore { federation_id: FederationId },
+    // Reconnect to the Lightning Node
+    Reconnect {
+        #[clap(subcommand)]
+        mode: Mode,
+    },
 }
 
 #[tokio::main]
@@ -77,10 +83,7 @@ async fn main() -> anyhow::Result<()> {
             println!("version: {}", env!("CODE_VERSION"));
         }
         Commands::Info => {
-            let response = client
-                .get_info(source_password(cli.rpcpassword))
-                .await
-                .expect("Failed to get info");
+            let response = client.get_info(source_password(cli.rpcpassword)).await?;
 
             print_response(response).await;
         }
@@ -90,8 +93,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     BalancePayload { federation_id },
                 )
-                .await
-                .expect("Failed to get balance");
+                .await?;
 
             print_response(response).await;
         }
@@ -101,8 +103,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     DepositAddressPayload { federation_id },
                 )
-                .await
-                .expect("Failed to get deposit address");
+                .await?;
 
             print_response(response).await;
         }
@@ -120,8 +121,7 @@ async fn main() -> anyhow::Result<()> {
                         transaction,
                     },
                 )
-                .await
-                .expect("Failed to deposit");
+                .await?;
 
             print_response(response).await;
         }
@@ -139,8 +139,7 @@ async fn main() -> anyhow::Result<()> {
                         address,
                     },
                 )
-                .await
-                .expect("Failed to withdraw");
+                .await?;
 
             print_response(response).await;
         }
@@ -150,8 +149,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     ConnectFedPayload { connect },
                 )
-                .await
-                .expect("Failed to connect federation");
+                .await?;
 
             print_response(response).await;
         }
@@ -161,8 +159,7 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     BackupPayload { federation_id },
                 )
-                .await
-                .expect("Failed to withdraw");
+                .await?;
 
             print_response(response).await;
         }
@@ -172,9 +169,30 @@ async fn main() -> anyhow::Result<()> {
                     source_password(cli.rpcpassword),
                     RestorePayload { federation_id },
                 )
-                .await
-                .expect("Failed to withdraw");
+                .await?;
 
+            print_response(response).await;
+        }
+        Commands::Reconnect { mode } => {
+            let payload = match mode {
+                Mode::Cln { cln_extension_addr } => LightningReconnectPayload {
+                    node_type: Some(Mode::Cln { cln_extension_addr }),
+                },
+                Mode::Lnd {
+                    lnd_rpc_addr,
+                    lnd_tls_cert,
+                    lnd_macaroon,
+                } => LightningReconnectPayload {
+                    node_type: Some(Mode::Lnd {
+                        lnd_rpc_addr,
+                        lnd_tls_cert,
+                        lnd_macaroon,
+                    }),
+                },
+            };
+            let response = client
+                .reconnect(source_password(cli.rpcpassword), payload)
+                .await?;
             print_response(response).await;
         }
     }
