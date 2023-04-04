@@ -196,7 +196,10 @@ impl Lnd {
         let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR")?;
         let lnd_macaroon = env::var("FM_LND_MACAROON")?;
         let lnd_tls_cert = env::var("FM_LND_TLS_CERT")?;
-        poll("lnd", || async { Ok(fs::try_exists(&lnd_tls_cert).await?) }).await?;
+        poll("lnd", || async {
+            Ok(fs::try_exists(&lnd_tls_cert).await? && fs::try_exists(&lnd_macaroon).await?)
+        })
+        .await?;
         let client = tonic_lnd::connect(
             lnd_rpc_addr.clone(),
             lnd_tls_cert.clone(),
