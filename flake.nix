@@ -51,174 +51,21 @@
 
           isArch64Darwin = stdenv.isAarch64 || stdenv.isDarwin;
 
-          # Env vars we need for wasm32 cross compilation
-          wasm32CrossEnvVars = ''
-            export CC_wasm32_unknown_unknown="${pkgs.llvmPackages_14.clang-unwrapped}/bin/clang-14"
-            export CFLAGS_wasm32_unknown_unknown="-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.6/include/"
-          '' + (if isArch64Darwin then
-            ''
-              export AR_wasm32_unknown_unknown="${pkgs.llvmPackages_14.llvm}/bin/llvm-ar"
-            '' else
-            ''
-          '');
+          toolchain = import ./flake.toolchain.nix
+            {
 
-          # The following hack makes fedimint compile on android:
-          #
-          # From https://github.com/rust-mobile/cargo-apk/commit/4956b87f56f2854e2b3452b83b65b00224757d41
-          # > Rust still searches for libgcc even though [85806] replaces internal use
-          # > with libunwind, especially now that the Android NDK (since r23-beta3)
-          # > doesn't ship with any of gcc anymore.  The apparent solution is to build
-          # > your application with nightly and compile std locally (`-Zbuild-std`),
-          # > but that is not desired for the majority of users.  [7339] suggests to
-          # > provide a local `libgcc.a` as linker script, which simply redirects
-          # > linking to `libunwind` instead - and that has proven to work fine so
-          # > far.
-          # >
-          # > Instead of shipping this file with the crate or writing it to an existing
-          # > link-search directory on the system, we write it to a new directory that
-          # > can be easily passed or removed to `rustc`, say in the event that a user
-          # > switches to an older NDK and builds without cleaning.  For this we need
-          # > to switch from `cargo build` to `cargo rustc`, but the existing
-          # > arguments and desired workflow remain identical.
-          # >
-          # > [85806]: rust-lang/rust#85806
-          # > [7339]: termux/termux-packages#7339 (comment)
+              inherit pkgs lib system stdenv fenix crane;
+            };
 
-          fake-libgcc-gen = arch: pkgs.stdenv.mkDerivation {
-            pname = "fake-libgcc";
-            version = "0.1.0";
-
-            dontUnpack = true;
-
-            installPhase = ''
-              mkdir -p $out/lib
-              ln -s ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk/24.0.8215888/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/14.0.1/lib/linux/${arch}/libunwind.a $out/lib/libgcc.a
-            '';
-          };
-
-          fake-libgcc-x86_64 = fake-libgcc-gen "x86_64";
-          fake-libgcc-aarch64 = fake-libgcc-gen "aarch64";
-          fake-libgcc-arm = fake-libgcc-gen "arm";
-          fake-libgcc-i386 = fake-libgcc-gen "i386";
-
-          # All the environment variables we need for all android cross compilation targets
-          androidCrossEnvVars = ''
-            # Note: rockdb seems to require uint128_t, which is not supported on 32-bit Android: https://stackoverflow.com/a/25819240/134409 (?)
-            export LLVM_CONFIG_PATH="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-config"
-
-            export CC_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-            export CXX_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-            export LD_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
-            export LDFLAGS_armv7_linux_androideabi="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/arm-linux-androideabi/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/ -L ${fake-libgcc-arm}/lib"
-
-            export CC_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-            export CXX_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-            export LD_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
-            export LDFLAGS_aarch64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/aarch64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/ -L ${fake-libgcc-aarch64}/lib"
-
-            export CC_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-            export CXX_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-            export LD_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
-            export LDFLAGS_x86_64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/x86_64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/ -L ${fake-libgcc-x86_64}/lib"
-
-            export CC_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-            export CXX_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
-            export LD_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/ld"
-            export LDFLAGS_i686_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/i686-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/ -L ${fake-libgcc-i386}/lib"
-          '';
-
-          # NDK we use for android cross compilation
-          androidComposition = pkgs.androidenv.composeAndroidPackages {
-            includeNDK = true;
-          };
-
-          # Definitions of all the cross-compilation targets we support.
-          # Later mapped over to conveniently loop over all possibilities.
-          crossTargets =
-            builtins.mapAttrs
-              (attr: target: { name = attr; extraEnvs = ""; } // target)
-              {
-                "wasm32-unknown-unknown" = {
-                  extraEnvs = wasm32CrossEnvVars;
-                };
-                "armv7-linux-androideabi" = {
-                  extraEnvs = androidCrossEnvVars;
-                };
-                "aarch64-linux-android" = {
-                  extraEnvs = androidCrossEnvVars;
-                };
-                "i686-linux-android" = {
-                  extraEnvs = androidCrossEnvVars;
-                };
-                "x86_64-linux-android" = {
-                  extraEnvs = androidCrossEnvVars;
-                };
-              };
-
-          fenixChannel = fenix.packages.${system}.stable;
-          fenixChannelNightly = fenix.packages.${system}.latest;
-
-          fenixToolchain = (fenixChannel.withComponents [
-            "rustc"
-            "cargo"
-            "clippy"
-            "rust-analysis"
-            "rust-src"
-            "llvm-tools-preview"
-          ]);
-
-          fenixToolchainRustfmt = (fenixChannelNightly.withComponents [
-            "rustfmt"
-          ]);
-
-          fenixToolchainCargoFmt = (fenixChannelNightly.withComponents [
-            "cargo"
-            "rustfmt"
-          ]);
-
-          fenixToolchainCrossAll = with fenix.packages.${system}; combine ([
-            stable.cargo
-            stable.rustc
-          ] ++ (lib.attrsets.mapAttrsToList
-            (attr: target: targets.${target.name}.stable.rust-std)
-            crossTargets));
-
-          fenixToolchainCrossWasm = with fenix.packages.${system}; combine ([
-            stable.cargo
-            stable.rustc
-            targets.wasm32-unknown-unknown.stable.rust-std
-          ]);
-
-          fenixToolchainCross = builtins.mapAttrs
-            (attr: target: with fenix.packages.${system}; combine [
-              stable.cargo
-              stable.rustc
-              targets.${target.name}.stable.rust-std
-            ])
-            crossTargets
-          ;
-
-          craneLibNative = crane.lib.${system}.overrideToolchain fenixToolchain;
-
-          # nightly toolchain for cargo docs with unstable features
-          craneLibNativeDocExport = crane.lib.${system}.overrideToolchain (fenixChannelNightly.withComponents [
-            "cargo"
-            "rustc"
-          ]);
-
-          craneLibCross = builtins.mapAttrs
-            (name: target: crane.lib.${system}.overrideToolchain fenixToolchainCross.${name})
-            crossTargets
-          ;
 
           craneBuild = import ./flake.crane.nix
             {
               inherit pkgs pkgs-kitman clightning-dev advisory-db lib moreutils-ts;
             };
 
-          craneBuildNative = craneBuild craneLibNative;
-          craneBuildNativeDocExport = craneBuild craneLibNativeDocExport;
-          craneBuildCross = target: craneBuild craneLibCross.${target};
+          craneBuildNative = craneBuild toolchain.craneLibNative;
+          craneBuildNativeDocExport = craneBuild toolchain.craneLibNativeDocExport;
+          craneBuildCross = target: craneBuild toolchain.craneLibCross.${target};
 
           # Replace placeholder git hash in a binary
           #
@@ -381,7 +228,7 @@
                 (name: target: {
                   client-pkgs = (craneBuildCross name).client-pkgs { inherit target; };
                 })
-                crossTargets;
+                toolchain.crossTargets;
 
 
               container =
@@ -455,7 +302,7 @@
                   buildInputs = commonArgs.buildInputs;
                   nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
                     fenix.packages.${system}.rust-analyzer
-                    fenixToolchainRustfmt
+                    toolchain.fenixToolchainRustfmt
                     cargo-llvm-cov
                     cargo-udeps
                     pkgs.parallel
@@ -483,7 +330,8 @@
                   ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                     pkgs.semgrep
                   ];
-                  RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
+
+                  RUST_SRC_PATH = "${toolchain.fenixChannel.rust-src}/lib/rustlib/src/rust/library";
 
                   shellHook = ''
                     # auto-install git hooks
@@ -528,8 +376,8 @@
                     >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipes"
                   '';
                 };
-              shellCommonNative = shellCommon craneLibNative;
-              shellCommonCross = shellCommon craneLibCross;
+              shellCommonNative = shellCommon toolchain.craneLibNative;
+              shellCommonCross = shellCommon toolchain.craneLibCross;
 
             in
             {
@@ -538,7 +386,7 @@
               # the settings and tools necessary to build and work with the codebase.
               default = pkgs.mkShell (shellCommonNative
                 // {
-                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ fenixToolchain ];
+                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ toolchain.fenixToolchain ];
               });
 
 
@@ -547,27 +395,27 @@
               # This will pull extra stuff so to save time and download time to most common developers,
               # was moved into another shell.
               cross = pkgs.mkShell (shellCommonCross // {
-                nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ fenixToolchainCrossAll ];
+                nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ toolchain.fenixToolchainCrossAll ];
 
                 shellHook = shellCommonCross.shellHook +
 
                   # Android NDK not available for Arm MacOS
-                  (if isArch64Darwin then "" else androidCrossEnvVars)
-                  + wasm32CrossEnvVars;
+                  (if isArch64Darwin then "" else toolchain.androidCrossEnvVars)
+                  + toolchain.wasm32CrossEnvVars;
               });
 
               # Like `cross` but only with wasm
               crossWasm = pkgs.mkShell (shellCommonCross // {
-                nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ fenixToolchainCrossWasm ];
+                nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ toolchain.fenixToolchainCrossWasm ];
 
-                shellHook = shellCommonCross.shellHook + wasm32CrossEnvVars;
+                shellHook = shellCommonCross.shellHook + toolchain.wasm32CrossEnvVars;
               });
 
               # this shell is used only in CI, so it should contain minimum amount
               # of stuff to avoid building and caching things we don't need
               lint = pkgs.mkShell {
                 nativeBuildInputs = with pkgs; [
-                  fenixToolchainCargoFmt
+                  toolchain.fenixToolchainCargoFmt
                   nixpkgs-fmt
                   shellcheck
                   git
