@@ -220,7 +220,8 @@ jobs:
 
     steps:
     - name: Discord notifications on failure                                                         
-      if: failure()                              
+      # https://stackoverflow.com/a/74562058/134409
+      if: ${{ always() && contains(needs.*.result, 'failure') }}
       # https://github.com/marketplace/actions/actions-status-discord
       uses: sarisia/actions-status-discord@v1
       with:
