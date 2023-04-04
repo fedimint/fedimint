@@ -155,7 +155,12 @@ jobs:
       - name: Build fedimint-cli container
         run: |
           nix build -L .#container.fedimint-cli
-          echo "mint_client_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+          echo "fedimint_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+
+      - name: Build gatewayd container
+        run: |
+          nix build -L .#container.gatewayd
+          echo "gatewayd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/kody-setup-rebase'
@@ -168,13 +173,15 @@ jobs:
         if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/kody-setup-rebase'
         run: |
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish master tag
         if: github.ref == 'refs/heads/master'
         run: |
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
     if: github.ref == 'refs/heads/master'
