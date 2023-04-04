@@ -418,6 +418,16 @@
                       ];
                     };
                   };
+
+                  gatewayd = pkgs.dockerTools.buildLayeredImage {
+                    name = "gatewayd";
+                    contents = [ craneBuildNative.gateway-pkgs pkgs.bash pkgs.coreutils ];
+                    config = {
+                      Cmd = [
+                        "${craneBuildNative.gateway-pkgs}/bin/gatewayd"
+                      ];
+                    };
+                  };
                 };
             };
 
