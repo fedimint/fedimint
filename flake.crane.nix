@@ -85,6 +85,12 @@ rec {
     doCheck = false;
   };
 
+  commonEnvs = {
+    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+    ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+    PROTOC = "${pkgs.protobuf}/bin/protoc";
+    PROTOC_INCLUDE = "${pkgs.protobuf}/include";
+  };
   commonArgsBase = {
     pname = "fedimint-workspace";
 
@@ -135,13 +141,9 @@ rec {
     # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
     installCargoArtifactsMode = "use-zstd";
 
-    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-    ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
-    PROTOC = "${pkgs.protobuf}/bin/protoc";
-    PROTOC_INCLUDE = "${pkgs.protobuf}/include";
     CI = "true";
     HOME = "/tmp";
-  };
+  } // commonEnvs;
 
   commonArgs = commonArgsBase // {
     src = filterWorkspaceFiles ./.;
