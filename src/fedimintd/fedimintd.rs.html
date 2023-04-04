@@ -293,16 +293,16 @@
     <span class="doccomment">/// Password to encrypt sensitive config files
     </span><span class="comment">// TODO: should probably never send password to the server directly, rather send the hash via
     // the API
-    </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
     </span><span class="kw">pub </span>password: String,
     <span class="doccomment">/// Port to run admin UI on
-    </span><span class="attr">#[arg(long = <span class="string">&quot;listen-ui&quot;</span>, env = <span class="string">&quot;FM_LISTEN_UI&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_LISTEN_UI&quot;</span>)]
     </span><span class="kw">pub </span>listen_ui: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
     <span class="doccomment">/// After an upgrade the epoch must be passed in
     </span><span class="attr">#[arg(env = <span class="string">&quot;FM_UPGRADE_EPOCH&quot;</span>)]
     </span><span class="kw">pub </span>upgrade_epoch: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="doccomment">/// Enable tokio console logging
-    </span><span class="attr">#[arg(long = <span class="string">&quot;tokio-console-bind&quot;</span>, env = <span class="string">&quot;FM_TOKIO_CONSOLE_BIND&quot;</span>)]
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_TOKIO_CONSOLE_BIND&quot;</span>)]
     </span><span class="kw">pub </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
     <span class="doccomment">/// Enable telemetry logging
     </span><span class="attr">#[arg(long, default_value = <span class="string">&quot;false&quot;</span>)]

@@ -544,17 +544,17 @@
 </span><span class="kw">enum </span>TweakSource {
     <span class="doccomment">/// Derive the wallet descriptor using a single tweak
     </span>Direct {
-        <span class="attr">#[arg(value_parser = tweak_parser)]
+        <span class="attr">#[arg(long, value_parser = tweak_parser)]
         </span>tweak: [u8; <span class="number">32</span>],
     },
     <span class="doccomment">/// Derive all wallet descriptors of confirmed UTXOs in the on-chain wallet.
     /// Note that unconfirmed change UTXOs will not appear here.
     </span>Utxos {
         <span class="doccomment">/// Extract UTXOs from a database without module partitioning
-        </span><span class="attr">#[arg(long = <span class="string">&quot;legacy&quot;</span>)]
+        </span><span class="attr">#[arg(long)]
         </span>legacy: bool,
         <span class="doccomment">/// Path to database
-        </span><span class="attr">#[arg(long = <span class="string">&quot;db&quot;</span>)]
+        </span><span class="attr">#[arg(long)]
         </span>db: PathBuf,
     },
     <span class="doccomment">/// Derive all wallet descriptors of tweaks that were ever used according to
@@ -562,7 +562,7 @@
     /// contain many empty descriptors.
     </span>Epochs {
         <span class="doccomment">/// Path to database
-        </span><span class="attr">#[arg(long = <span class="string">&quot;db&quot;</span>)]
+        </span><span class="attr">#[arg(long)]
         </span>db: PathBuf,
     },
 }
