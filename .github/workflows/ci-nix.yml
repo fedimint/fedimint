@@ -209,3 +209,17 @@ jobs:
 
       - name: Build ${{ matrix.build }}
         run: nix build -L .#${{ matrix.build }}
+
+  notifications:
+    # if: github.ref == 'refs/heads/master'
+    name: "Notifications"
+    timeout-minutes: 1
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Discord notifications on failure                                                         
+      if: failure()                              
+      # https://github.com/marketplace/actions/actions-status-discord
+      uses: sarisia/actions-status-discord@v1
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK }}
