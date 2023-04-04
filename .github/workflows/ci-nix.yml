@@ -212,6 +212,7 @@ jobs:
 
   notifications:
     # if: github.ref == 'refs/heads/master'
+    if: always()                              
     name: "Notifications"
     timeout-minutes: 1
     runs-on: ubuntu-22.04
