@@ -5,9 +5,7 @@ use tbs::dealer_keygen;
 
 #[derive(Parser)]
 struct Args {
-    #[clap(long)]
     number: usize,
-    #[clap(long)]
     threshold: usize,
 }
 

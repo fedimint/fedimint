@@ -70,17 +70,17 @@ struct RecoveryTool {
 enum TweakSource {
     /// Derive the wallet descriptor using a single tweak
     Direct {
-        #[arg(long, value_parser = tweak_parser)]
+        #[arg(value_parser = tweak_parser)]
         tweak: [u8; 32],
     },
     /// Derive all wallet descriptors of confirmed UTXOs in the on-chain wallet.
     /// Note that unconfirmed change UTXOs will not appear here.
     Utxos {
         /// Extract UTXOs from a database without module partitioning
-        #[arg(long)]
+        #[arg(long = "legacy")]
         legacy: bool,
         /// Path to database
-        #[arg(long)]
+        #[arg(long = "db")]
         db: PathBuf,
     },
     /// Derive all wallet descriptors of tweaks that were ever used according to
@@ -88,7 +88,7 @@ enum TweakSource {
     /// contain many empty descriptors.
     Epochs {
         /// Path to database
-        #[arg(long)]
+        #[arg(long = "db")]
         db: PathBuf,
     },
 }
