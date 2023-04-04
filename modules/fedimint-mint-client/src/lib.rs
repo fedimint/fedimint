@@ -1,6 +1,6 @@
 mod db;
-mod issuance;
-mod redemption;
+mod input;
+mod output;
 
 use std::iter::once;
 
@@ -26,11 +26,11 @@ use tbs::AggregatePublicKey;
 use tracing::debug;
 
 use crate::db::{NextECashNoteIndexKey, NoteKeyPrefix};
-use crate::issuance::{
-    MintIssuanceCommon, MintIssuanceStateMachine, MintIssuanceStates, MintIssuanceStatesCreated,
+use crate::input::MintInputStateMachine;
+use crate::output::{
+    MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
     MultiNoteIssuanceRequest, NoteIssuanceRequest,
 };
-use crate::redemption::MintRedemptionStateMachine;
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
@@ -144,17 +144,15 @@ impl MintClientModule {
             amount_requests.into_iter().unzip();
 
         let state_generator = Box::new(move |txid, out_idx| {
-            vec![MintClientStateMachines::Issuance(
-                MintIssuanceStateMachine {
-                    common: MintIssuanceCommon {
-                        operation_id,
-                        out_point: OutPoint { txid, out_idx },
-                    },
-                    state: MintIssuanceStates::Created(MintIssuanceStatesCreated {
-                        note_issuance: note_issuance.clone(),
-                    }),
+            vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                common: MintOutputCommon {
+                    operation_id,
+                    out_point: OutPoint { txid, out_idx },
                 },
-            )]
+                state: MintOutputStates::Created(MintOutputStatesCreated {
+                    note_issuance: note_issuance.clone(),
+                }),
+            })]
         });
 
         debug!(
@@ -237,8 +235,8 @@ impl MintClientModule {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum MintClientStateMachines {
-    Issuance(MintIssuanceStateMachine),
-    Redemption(MintRedemptionStateMachine),
+    Output(MintOutputStateMachine),
+    Input(MintInputStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -259,16 +257,16 @@ impl State for MintClientStateMachines {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self {
-            MintClientStateMachines::Issuance(issuance_state) => {
+            MintClientStateMachines::Output(issuance_state) => {
                 sm_enum_variant_translation!(
                     issuance_state.transitions(context, global_context),
-                    MintClientStateMachines::Issuance
+                    MintClientStateMachines::Output
                 )
             }
-            MintClientStateMachines::Redemption(redemption_state) => {
+            MintClientStateMachines::Input(redemption_state) => {
                 sm_enum_variant_translation!(
                     redemption_state.transitions(context, global_context),
-                    MintClientStateMachines::Redemption
+                    MintClientStateMachines::Input
                 )
             }
         }
@@ -276,10 +274,8 @@ impl State for MintClientStateMachines {
 
     fn operation_id(&self) -> OperationId {
         match self {
-            MintClientStateMachines::Issuance(issuance_state) => issuance_state.operation_id(),
-            MintClientStateMachines::Redemption(redemption_state) => {
-                redemption_state.operation_id()
-            }
+            MintClientStateMachines::Output(issuance_state) => issuance_state.operation_id(),
+            MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
         }
     }
 }

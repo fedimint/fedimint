@@ -37,35 +37,35 @@ const BLINDING_KEY_CHILD_ID: ChildId = ChildId(1);
 ///     end
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub enum MintIssuanceStates {
+pub enum MintOutputStates {
     /// Issuance request was created, we are waiting for blind signatures
-    Created(MintIssuanceStatesCreated),
+    Created(MintOutputStatesCreated),
     /// The transaction containing the issuance was rejected, we can stop
     /// looking for decryption shares
-    Aborted(MintIssuanceStatesAborted),
+    Aborted(MintOutputStatesAborted),
     // FIXME: handle offline federation failure mode more gracefully
     /// The transaction containing the issuance was accepted but an unexpected
     /// error occurred, this should never happen with a honest federation and
     /// bug-free code.
-    Failed(MintIssuanceStatesFailed),
+    Failed(MintOutputStatesFailed),
     /// The issuance was completed successfully and the e-cash notes added to
     /// our wallet
-    Succeeded(MintIssuanceStatesSucceeded),
+    Succeeded(MintOutputStatesSucceeded),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceCommon {
+pub struct MintOutputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) out_point: OutPoint,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStateMachine {
-    pub(crate) common: MintIssuanceCommon,
-    pub(crate) state: MintIssuanceStates,
+pub struct MintOutputStateMachine {
+    pub(crate) common: MintOutputCommon,
+    pub(crate) state: MintOutputStates,
 }
 
-impl State for MintIssuanceStateMachine {
+impl State for MintOutputStateMachine {
     type ModuleContext = MintClientContext;
     type GlobalContext = DynGlobalClientContext;
 
@@ -75,16 +75,16 @@ impl State for MintIssuanceStateMachine {
         global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
-            MintIssuanceStates::Created(created) => {
+            MintOutputStates::Created(created) => {
                 created.transitions(context, global_context, self.common)
             }
-            MintIssuanceStates::Aborted(_) => {
+            MintOutputStates::Aborted(_) => {
                 vec![]
             }
-            MintIssuanceStates::Failed(_) => {
+            MintOutputStates::Failed(_) => {
                 vec![]
             }
-            MintIssuanceStates::Succeeded(_) => {
+            MintOutputStates::Succeeded(_) => {
                 vec![]
             }
         }
@@ -95,20 +95,20 @@ impl State for MintIssuanceStateMachine {
     }
 }
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesCreated {
+pub struct MintOutputStatesCreated {
     pub(crate) note_issuance: MultiNoteIssuanceRequest,
 }
 
-impl MintIssuanceStatesCreated {
+impl MintOutputStatesCreated {
     fn transitions(
         &self,
         // TODO: make cheaper to clone (Arc?)
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
-        common: MintIssuanceCommon,
-    ) -> Vec<StateTransition<MintIssuanceStateMachine>> {
+        common: MintOutputCommon,
+    ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let mint_keys = context.mint_keys.clone();
         vec![
             // Check if transaction was rejected
@@ -132,26 +132,26 @@ impl MintIssuanceStatesCreated {
         ]
     }
 
-    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintIssuanceCommon) {
+    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
         global_context
             .await_tx_rejected(common.operation_id, common.out_point.txid)
             .await;
     }
 
     async fn transition_tx_rejected<'a>(
-        old_state: MintIssuanceStateMachine,
-    ) -> MintIssuanceStateMachine {
-        assert!(matches!(old_state.state, MintIssuanceStates::Created(_)));
+        old_state: MintOutputStateMachine,
+    ) -> MintOutputStateMachine {
+        assert!(matches!(old_state.state, MintOutputStates::Created(_)));
 
-        MintIssuanceStateMachine {
+        MintOutputStateMachine {
             common: old_state.common,
-            state: MintIssuanceStates::Aborted(MintIssuanceStatesAborted),
+            state: MintOutputStates::Aborted(MintOutputStatesAborted),
         }
     }
 
     async fn await_outcome_ready(
         global_context: DynGlobalClientContext,
-        common: MintIssuanceCommon,
+        common: MintOutputCommon,
         decoders: ModuleDecoderRegistry,
     ) -> Result<MintOutputBlindSignatures, String> {
         let outcome: MintOutputOutcome = global_context
@@ -168,11 +168,11 @@ impl MintIssuanceStatesCreated {
     async fn transition_outcome_ready(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         bsig_res: Result<MintOutputBlindSignatures, String>,
-        old_state: MintIssuanceStateMachine,
+        old_state: MintOutputStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,
-    ) -> MintIssuanceStateMachine {
+    ) -> MintOutputStateMachine {
         let issuance = match old_state.state {
-            MintIssuanceStates::Created(created) => created.note_issuance,
+            MintOutputStates::Created(created) => created.note_issuance,
             _ => panic!("Unexpected prior state"),
         };
         let notes_res = bsig_res.and_then(|bsigs| {
@@ -201,34 +201,34 @@ impl MintIssuanceStatesCreated {
                         )
                     }
                 }
-                MintIssuanceStateMachine {
+                MintOutputStateMachine {
                     common: old_state.common,
-                    state: MintIssuanceStates::Succeeded(MintIssuanceStatesSucceeded {
+                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
                         amount: notes.total_amount(),
                     }),
                 }
             }
-            Err(error) => MintIssuanceStateMachine {
+            Err(error) => MintOutputStateMachine {
                 common: old_state.common,
-                state: MintIssuanceStates::Failed(MintIssuanceStatesFailed { error }),
+                state: MintOutputStates::Failed(MintOutputStatesFailed { error }),
             },
         }
     }
 }
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesAborted;
+pub struct MintOutputStatesAborted;
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesFailed {
+pub struct MintOutputStatesFailed {
     error: String,
 }
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesSucceeded {
+pub struct MintOutputStatesSucceeded {
     amount: Amount,
 }
 
