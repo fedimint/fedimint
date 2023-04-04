@@ -113,16 +113,12 @@ impl MintIssuanceStatesCreated {
         vec![
             // Check if transaction was rejected
             StateTransition::new(
-                Self::trigger_tx_rejected(global_context.clone(), common),
+                Self::await_tx_rejected(global_context.clone(), common),
                 |_dbtx, (), state| Box::pin(Self::transition_tx_rejected(state)),
             ),
             // Check for output outcome
             StateTransition::new(
-                Self::trigger_outcome_ready(
-                    global_context.clone(),
-                    common,
-                    context.decoders.clone(),
-                ),
+                Self::await_outcome_ready(global_context.clone(), common, context.decoders.clone()),
                 move |dbtx, bsigs, old_state| {
                     Box::pin(Self::transition_outcome_ready(
                         dbtx,
@@ -136,10 +132,7 @@ impl MintIssuanceStatesCreated {
         ]
     }
 
-    async fn trigger_tx_rejected(
-        global_context: DynGlobalClientContext,
-        common: MintIssuanceCommon,
-    ) {
+    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintIssuanceCommon) {
         global_context
             .await_tx_rejected(common.operation_id, common.out_point.txid)
             .await;
@@ -156,7 +149,7 @@ impl MintIssuanceStatesCreated {
         }
     }
 
-    async fn trigger_outcome_ready(
+    async fn await_outcome_ready(
         global_context: DynGlobalClientContext,
         common: MintIssuanceCommon,
         decoders: ModuleDecoderRegistry,

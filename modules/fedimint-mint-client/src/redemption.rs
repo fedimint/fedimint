@@ -93,12 +93,12 @@ impl MintRedemptionStateCreated {
         vec![
             // Success case: containing transaction is accepted
             StateTransition::new(
-                Self::trigger_success(*common, global_context.clone()),
+                Self::await_success(*common, global_context.clone()),
                 |_dbtx, (), old_state| Box::pin(Self::transition_success(old_state)),
             ),
             // Transaction rejected: attempting to refund
             StateTransition::new(
-                Self::trigger_refund(*common, global_context.clone()),
+                Self::await_refund(*common, global_context.clone()),
                 move |dbtx, (), old_state| {
                     Box::pin(Self::transition_refund(
                         dbtx,
@@ -111,7 +111,7 @@ impl MintRedemptionStateCreated {
         ]
     }
 
-    async fn trigger_success(common: MintRedemptionCommon, global_context: DynGlobalClientContext) {
+    async fn await_success(common: MintRedemptionCommon, global_context: DynGlobalClientContext) {
         global_context
             .await_tx_accepted(common.operation_id, common.txid)
             .await;
@@ -128,7 +128,7 @@ impl MintRedemptionStateCreated {
         }
     }
 
-    async fn trigger_refund(common: MintRedemptionCommon, global_context: DynGlobalClientContext) {
+    async fn await_refund(common: MintRedemptionCommon, global_context: DynGlobalClientContext) {
         global_context
             .await_tx_rejected(common.operation_id, common.txid)
             .await;
@@ -201,18 +201,18 @@ impl MintRedemptionStateRefund {
         vec![
             // Refund successful
             StateTransition::new(
-                Self::trigger_refund_success(*common, global_context.clone(), self.refund_txid),
+                Self::await_refund_success(*common, global_context.clone(), self.refund_txid),
                 |_dbtx, (), old_state| Box::pin(Self::transition_refund_success(old_state)),
             ),
             // Refund failed
             StateTransition::new(
-                Self::trigger_refund_failed(*common, global_context.clone(), self.refund_txid),
+                Self::await_refund_failed(*common, global_context.clone(), self.refund_txid),
                 |_dbtx, (), old_state| Box::pin(Self::transition_refund_failed(old_state)),
             ),
         ]
     }
 
-    async fn trigger_refund_success(
+    async fn await_refund_success(
         common: MintRedemptionCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
@@ -237,7 +237,7 @@ impl MintRedemptionStateRefund {
             }),
         }
     }
-    async fn trigger_refund_failed(
+    async fn await_refund_failed(
         common: MintRedemptionCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
