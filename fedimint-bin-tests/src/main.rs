@@ -525,7 +525,6 @@ struct DevFed {
 
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    tokio::time::sleep(Duration::from_secs(5)).await;
     let (cln, lnd) = tokio::try_join!(
         Lightningd::new(process_mgr, bitcoind.clone()),
         Lnd::new(process_mgr, bitcoind.clone()),
