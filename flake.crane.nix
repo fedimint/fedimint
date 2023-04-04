@@ -441,6 +441,7 @@ rec {
       "crypto/hkdf"
       "client/client-lib"
       "modules/fedimint-ln"
+      "fedimint-bin-tests"
       "fedimint-bitcoind"
       "fedimint-client"
       "fedimint-core"
