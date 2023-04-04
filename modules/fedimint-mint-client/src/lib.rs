@@ -28,7 +28,7 @@ use tracing::debug;
 use crate::db::{NextECashNoteIndexKey, NoteKeyPrefix};
 use crate::issuance::{
     MintIssuanceCommon, MintIssuanceStateMachine, MintIssuanceStates, MintIssuanceStatesCreated,
-    NoteIssuanceRequest, NoteIssuanceRequests,
+    MultiNoteIssuanceRequest, NoteIssuanceRequest,
 };
 use crate::redemption::MintRedemptionStateMachine;
 
@@ -140,7 +140,7 @@ impl MintClientModule {
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
         }
-        let (note_issuance, sig_req): (NoteIssuanceRequests, MintOutput) =
+        let (note_issuance, sig_req): (MultiNoteIssuanceRequest, MintOutput) =
             amount_requests.into_iter().unzip();
 
         let state_generator = Box::new(move |txid, out_idx| {

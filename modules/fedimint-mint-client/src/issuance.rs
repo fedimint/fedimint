@@ -17,6 +17,12 @@ use tracing::error;
 use crate::db::NoteKey;
 use crate::{MintClientContext, SpendableNote};
 
+/// Child ID used to derive the spend key from a note's [`DerivableSecret`]
+const SPEND_KEY_CHILD_ID: ChildId = ChildId(0);
+
+/// Child ID used to derive the blinding key from a note's [`DerivableSecret`]
+const BLINDING_KEY_CHILD_ID: ChildId = ChildId(1);
+
 /// State machine managing the e-cash issuance process related to a mint output.
 ///
 /// ```mermaid
@@ -35,8 +41,9 @@ pub enum MintIssuanceStates {
     /// Issuance request was created, we are waiting for blind signatures
     Created(MintIssuanceStatesCreated),
     /// The transaction containing the issuance was rejected, we can stop
-    /// looking for preimages
+    /// looking for decryption shares
     Aborted(MintIssuanceStatesAborted),
+    // FIXME: handle offline federation failure mode more gracefully
     /// The transaction containing the issuance was accepted but an unexpected
     /// error occurred, this should never happen with a honest federation and
     /// bug-free code.
@@ -91,7 +98,7 @@ impl State for MintIssuanceStateMachine {
 /// See [`MintIssuanceStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintIssuanceStatesCreated {
-    pub(crate) note_issuance: NoteIssuanceRequests,
+    pub(crate) note_issuance: MultiNoteIssuanceRequest,
 }
 
 impl MintIssuanceStatesCreated {
@@ -256,9 +263,9 @@ impl NoteIssuanceRequest {
     where
         C: Signing,
     {
-        let spend_key = secret.child_key(ChildId(0)).to_secp_key(ctx);
+        let spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
         let nonce = Nonce(spend_key.x_only_public_key().0);
-        let blinding_key = BlindingKey(secret.child_key(ChildId(1)).to_bls12_381_key());
+        let blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
         let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
         let cr = NoteIssuanceRequest {
@@ -306,12 +313,12 @@ impl NoteIssuanceRequest {
 /// Keeps all the data to generate [`SpendableNote`]s once the
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
-pub struct NoteIssuanceRequests {
+pub struct MultiNoteIssuanceRequest {
     /// Finalization data for all note outputs in this request
     notes: TieredMulti<NoteIssuanceRequest>,
 }
 
-impl NoteIssuanceRequests {
+impl MultiNoteIssuanceRequest {
     /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from
     /// the mint containing the blind signatures for all notes in this
     /// `IssuanceRequest`. It also takes the mint's [`AggregatePublicKey`]
@@ -349,7 +356,7 @@ impl NoteIssuanceRequests {
     }
 }
 
-impl Extend<(Amount, NoteIssuanceRequest)> for NoteIssuanceRequests {
+impl Extend<(Amount, NoteIssuanceRequest)> for MultiNoteIssuanceRequest {
     fn extend<T: IntoIterator<Item = (Amount, NoteIssuanceRequest)>>(&mut self, iter: T) {
         self.notes.extend(iter)
     }

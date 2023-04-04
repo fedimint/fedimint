@@ -80,6 +80,7 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
         &self,
         cfg: ClientModuleConfig,
         db: Database,
+        // FIXME: don't make modules aware of their instance id
         instance_id: ModuleInstanceId,
     ) -> anyhow::Result<DynClientModule>;
 
