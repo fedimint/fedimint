@@ -121,8 +121,8 @@ async fn connect_fed(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<ConnectFedPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    rpc.send(payload).await?;
-    Ok(())
+    let fed = rpc.send(payload).await?;
+    Ok(Json(json!(fed)))
 }
 
 /// Backup a gateway actor state
