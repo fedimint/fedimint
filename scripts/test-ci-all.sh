@@ -27,8 +27,9 @@ function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
-  echo "### Starting reconnect test..."
+  echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/reconnect-test.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
 }
 export -f cli_test_reconnect
 
@@ -36,8 +37,9 @@ function cli_test_upgrade() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
-  echo "### Starting upgrade test..."
+  echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/upgrade-test.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
 }
 export -f cli_test_upgrade
 
@@ -45,8 +47,9 @@ function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
-  echo "### Starting latency test..."
+  echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/latency-test.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
 }
 export -f cli_test_latency
 
@@ -54,8 +57,9 @@ function cli_test_cli() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
-  echo "### Starting cli test..."
+  echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/cli-test.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
 }
 export -f cli_test_cli
 
@@ -63,31 +67,34 @@ function cli_test_rust_tests() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
-  echo "### Starting integration test..."
+  echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/rust-tests.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
 }
 export -f cli_test_rust_tests
 
-function cli_test_always_fail() {
+function cli_test_always_success() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
-  echo "### Starting always_fail test..."
+  echo "## START: ${FUNCNAME[0]}"
   # this must fail, so we know nix build is actually running tests
-  ! unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-fail-test.sh" 2>&1 | ts -s
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-success-test.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
 }
-export -f cli_test_always_fail
+export -f cli_test_always_success
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
 joblog="$tmpdir/joblog"
 
->&2 echo "### Starting all tests in parallel..."
+>&2 echo "## Starting all tests in parallel..."
 # --load to keep the load under-control, especially during target dir extraction
 # --delay to let nix start extracting and bump the load
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
-# NOTE: try to keep the slowest tests first
+# NOTE: try to keep the slowest tests first, except 'cli_test_always_success',
+# as it's used for failure test
 if parallel \
   --halt-on-error 1 \
   --joblog "$joblog" \
@@ -96,12 +103,12 @@ if parallel \
   --delay 5 \
   --memfree 512M \
   --nice 15 ::: \
+  cli_test_always_success \
   cli_test_rust_tests \
   cli_test_latency \
   cli_test_reconnect \
   cli_test_upgrade \
-  cli_test_cli \
-  cli_test_always_fail ; then
+  cli_test_cli ; then
   >&2 echo "All tests successful"
 else
   >&2 echo "Some tests failed. Full job log:"

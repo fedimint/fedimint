@@ -313,7 +313,17 @@ rec {
     pname = "${commonCliTestArgs.pname}-all";
     version = "0.0.1";
     cargoArtifacts = workspaceBuild;
-    buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/test-ci-all.sh";
+    # One normal run, then if succeeded, modify the "always success test" to fail,
+    # and make sure we detect it (happened too many times that we didn't).
+    # Thanks to early termination, this should be all very quick, as we actually
+    # won't start other tests.
+    buildPhaseCargoCommand = ''
+      patchShebangs ./scripts
+      ./scripts/test-ci-all.sh || exit 1
+      sed -i -e 's/exit 0/exit 1/g' scripts/always-success-test.sh
+      echo "Verifing failure detection..."
+      ./scripts/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
+    '';
   });
 
   cliTestAlwaysFail = craneLib.mkCargoDerivation (commonCliTestArgs // {
@@ -487,3 +497,4 @@ rec {
     ];
   };
 }
+
