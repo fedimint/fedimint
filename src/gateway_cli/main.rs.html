@@ -228,22 +228,6 @@
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
-<a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::process::exit;
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
@@ -280,35 +264,25 @@
     <span class="doccomment">/// Display high-level information about the Gateway
     </span>Info,
     <span class="doccomment">/// Check gateway balance
-    </span>Balance {
-        <span class="attr">#[clap(long)]
-        </span>federation_id: FederationId,
-    },
+    </span>Balance { federation_id: FederationId },
     <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed
-    </span>Address {
-        <span class="attr">#[clap(long)]
-        </span>federation_id: FederationId,
-    },
+    </span>Address { federation_id: FederationId },
     <span class="doccomment">/// Deposit funds into a gateway federation
     </span>Deposit {
-        <span class="attr">#[clap(long)]
-        </span>federation_id: FederationId,
+        federation_id: FederationId,
         <span class="doccomment">/// The TxOutProof which was created from sending BTC to the
         /// pegin-address
-        </span><span class="attr">#[clap(long, value_parser = from_hex::&lt;TxOutProof&gt;)]
+        </span><span class="attr">#[clap(value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
-        <span class="attr">#[clap(long, value_parser = from_hex::&lt;Transaction&gt;)]
+        <span class="attr">#[clap(value_parser = from_hex::&lt;Transaction&gt;)]
         </span>transaction: Transaction,
     },
     <span class="doccomment">/// Claim funds from a gateway federation
     </span>Withdraw {
-        <span class="attr">#[clap(long)]
-        </span>federation_id: FederationId,
+        federation_id: FederationId,
         <span class="doccomment">/// The amount to withdraw
-        </span><span class="attr">#[clap(long)]
         </span>amount: Amount,
         <span class="doccomment">/// The address to send the funds to
-        </span><span class="attr">#[clap(long)]
         </span>address: Address,
     },
     <span class="doccomment">/// Register federation with the gateway
@@ -317,15 +291,9 @@
         </span>connect: String,
     },
     <span class="doccomment">/// Make a backup of snapshot of all ecash
-    </span>Backup {
-        <span class="attr">#[clap(long)]
-        </span>federation_id: FederationId,
-    },
+    </span>Backup { federation_id: FederationId },
     <span class="doccomment">/// Restore ecash from last available snapshot or from scratch
-    </span>Restore {
-        <span class="attr">#[clap(long)]
-        </span>federation_id: FederationId,
-    },
+    </span>Restore { federation_id: FederationId },
     <span class="comment">// Reconnect to the Lightning Node
     </span>Reconnect {
         <span class="attr">#[clap(subcommand)]

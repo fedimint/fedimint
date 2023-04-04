@@ -135,8 +135,6 @@
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::PathBuf;
 
@@ -154,8 +152,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Parser)]
 </span><span class="kw">struct </span>Options {
-    <span class="attr">#[clap(long)]
-    </span>database: String,
+    database: String,
     <span class="attr">#[command(subcommand)]
     </span>command: DbCommand,
 }
@@ -166,20 +163,20 @@
 </span><span class="kw">enum </span>DbCommand {
     <span class="doccomment">/// List all key-value pairs where the key begins with `prefix`
     </span>List {
-        <span class="attr">#[arg(long, value_parser = hex_parser)]
+        <span class="attr">#[arg(value_parser = hex_parser)]
         </span>prefix: Bytes,
     },
     <span class="doccomment">/// Write a key-value pair to the database, overwriting the previous value
     /// if present
     </span>Write {
-        <span class="attr">#[arg(long, value_parser = hex_parser)]
+        <span class="attr">#[arg(value_parser = hex_parser)]
         </span>key: Bytes,
-        <span class="attr">#[arg(long, value_parser = hex_parser)]
+        <span class="attr">#[arg(value_parser = hex_parser)]
         </span>value: Bytes,
     },
     <span class="doccomment">/// Delete a single entry from the database identified by `key`
     </span>Delete {
-        <span class="attr">#[arg(long, value_parser = hex_parser)]
+        <span class="attr">#[arg(value_parser = hex_parser)]
         </span>key: Bytes,
     },
     <span class="doccomment">/// Dump a subset of the specified database and serialize the retrieved data
@@ -188,13 +185,12 @@
     /// configuration file. If dumping the client database, the password can
     /// be an arbitrary string.
     </span>Dump {
-        <span class="attr">#[arg(long)]
-        </span>cfg_dir: PathBuf,
-        <span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+        cfg_dir: PathBuf,
+        <span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
         </span>password: String,
-        <span class="attr">#[arg(long, required = <span class="bool-val">false</span>)]
+        <span class="attr">#[arg(required = <span class="bool-val">false</span>)]
         </span>modules: <span class="prelude-ty">Option</span>&lt;String&gt;,
-        <span class="attr">#[arg(long, required = <span class="bool-val">false</span>)]
+        <span class="attr">#[arg(required = <span class="bool-val">false</span>)]
         </span>prefixes: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
 }

@@ -970,18 +970,6 @@
 <a href="#970" id="970">970</a>
 <a href="#971" id="971">971</a>
 <a href="#972" id="972">972</a>
-<a href="#973" id="973">973</a>
-<a href="#974" id="974">974</a>
-<a href="#975" id="975">975</a>
-<a href="#976" id="976">976</a>
-<a href="#977" id="977">977</a>
-<a href="#978" id="978">978</a>
-<a href="#979" id="979">979</a>
-<a href="#980" id="980">980</a>
-<a href="#981" id="981">981</a>
-<a href="#982" id="982">982</a>
-<a href="#983" id="983">983</a>
-<a href="#984" id="984">984</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1342,8 +1330,7 @@
     <span class="doccomment">/// Send direct method call to the API, waiting for all peers to agree on a
     /// response
     </span>Api {
-        <span class="attr">#[clap(long)]
-        </span>method: String,
+        method: String,
         <span class="doccomment">/// JSON args that will be serialized and send with the request
         </span><span class="attr">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
         </span>arg: String,
@@ -1351,44 +1338,40 @@
 
     <span class="doccomment">/// Issue notes in exchange for a peg-in proof
     </span>PegIn {
-        <span class="attr">#[clap(long, value_parser = from_hex::&lt;TxOutProof&gt;)]
+        <span class="attr">#[clap(value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
-        <span class="attr">#[clap(long, value_parser = from_hex::&lt;Transaction&gt;)]
+        <span class="attr">#[clap(value_parser = from_hex::&lt;Transaction&gt;)]
         </span>transaction: Transaction,
     },
 
     <span class="doccomment">/// Reissue notes received from a third party to avoid double spends
     </span>Reissue {
-        <span class="attr">#[clap(long, value_parser = parse_ecash)]
+        <span class="attr">#[clap(value_parser = parse_ecash)]
         </span>notes: TieredMulti&lt;SpendableNote&gt;,
     },
 
     <span class="doccomment">/// Validate notes without claiming them (only checks if signatures valid,
     /// does not check if nonce unspent)
     </span>Validate {
-        <span class="attr">#[clap(long, value_parser = parse_ecash)]
+        <span class="attr">#[clap(value_parser = parse_ecash)]
         </span>notes: TieredMulti&lt;SpendableNote&gt;,
     },
 
     <span class="doccomment">/// Prepare notes to send to a third party as a payment
     </span>Spend {
-        <span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
+        <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
     },
 
     <span class="doccomment">/// Withdraw funds from the federation
     </span>PegOut {
-        <span class="attr">#[clap(long)]
-        </span>address: Address,
-        <span class="attr">#[clap(long, value_parser = parse_bitcoin_amount)]
+        address: Address,
+        <span class="attr">#[clap(value_parser = parse_bitcoin_amount)]
         </span>satoshis: bitcoin::Amount,
     },
 
     <span class="doccomment">/// Pay a lightning invoice via a gateway
-    </span>LnPay {
-        <span class="attr">#[clap(long)]
-        </span>bolt11: lightning_invoice::Invoice,
-    },
+    </span>LnPay { bolt11: lightning_invoice::Invoice },
 
     <span class="doccomment">/// Fetch (re-)issued notes and finalize issuance process
     </span>Fetch,
@@ -1398,19 +1381,15 @@
 
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
-        <span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
+        <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
-        <span class="attr">#[clap(long, default_value = <span class="string">&quot;&quot;</span>)]
+        <span class="attr">#[clap(default_value = <span class="string">&quot;&quot;</span>)]
         </span>description: String,
-        <span class="attr">#[clap(long)]
-        </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
 
     <span class="doccomment">/// Wait for incoming invoice to be paid
-    </span>WaitInvoice {
-        <span class="attr">#[clap(long)]
-        </span>invoice: lightning_invoice::Invoice,
-    },
+    </span>WaitInvoice { invoice: lightning_invoice::Invoice },
 
     <span class="doccomment">/// Wait for the fed to reach a consensus block height
     </span>WaitBlockHeight { height: u64 },
@@ -1420,9 +1399,9 @@
 
     <span class="doccomment">/// Encode connection info from its constituent parts
     </span>EncodeConnectInfo {
-        <span class="attr">#[clap(long, required = <span class="bool-val">true</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
+        <span class="attr">#[clap(long = <span class="string">&quot;urls&quot;</span>, required = <span class="bool-val">true</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
         </span>urls: Vec&lt;Url&gt;,
-        <span class="attr">#[clap(long)]
+        <span class="attr">#[clap(long = <span class="string">&quot;id&quot;</span>)]
         </span>id: FederationId,
     },
 
@@ -1438,7 +1417,7 @@
     <span class="doccomment">/// Switch active gateway
     </span>SwitchGateway {
         <span class="doccomment">/// node public key for a gateway
-        </span><span class="attr">#[clap(long, value_parser = parse_node_pub_key)]
+        </span><span class="attr">#[clap(value_parser = parse_node_pub_key)]
         </span>pubkey: secp256k1::PublicKey,
     },
 
@@ -1454,7 +1433,7 @@
         /// Larger values might make the restore initialization slower and
         /// memory usage slightly higher, but help restore all mint
         /// notes in some rare situations.
-        </span><span class="attr">#[clap(long, default_value = <span class="string">&quot;100&quot;</span>)]
+        </span><span class="attr">#[clap(long = <span class="string">&quot;gap-limit&quot;</span>, default_value = <span class="string">&quot;100&quot;</span>)]
         </span>gap_limit: usize,
     },
 
@@ -1468,13 +1447,12 @@
     <span class="doccomment">/// Signal a consensus upgrade
     </span>SignalUpgrade {
         <span class="doccomment">/// Location of the salt file
-        </span><span class="attr">#[clap(long)]
         </span>salt_path: PathBuf,
         <span class="doccomment">/// Peer id of the guardian
-        </span><span class="attr">#[arg(long, value_parser = parse_peer_id)]
+        </span><span class="attr">#[arg(value_parser = parse_peer_id)]
         </span>our_id: PeerId,
         <span class="doccomment">/// Guardian password for authentication
-        </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+        </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
         </span>password: String,
     },
 
@@ -1483,11 +1461,9 @@
 
     <span class="doccomment">/// Call module-specific commands
     </span>Module {
-        <span class="attr">#[clap(long)]
-        </span>id: ModuleSelector,
+        id: ModuleSelector,
 
         <span class="doccomment">/// Command with arguments to call the module with
-        </span><span class="attr">#[clap(long)]
         </span>arg: Vec&lt;ffi::OsString&gt;,
     },
 }
