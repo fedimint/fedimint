@@ -15,7 +15,6 @@ mod dump;
 
 #[derive(Debug, Clone, Parser)]
 struct Options {
-    #[clap(long)]
     database: String,
     #[command(subcommand)]
     command: DbCommand,
@@ -27,20 +26,20 @@ struct Options {
 enum DbCommand {
     /// List all key-value pairs where the key begins with `prefix`
     List {
-        #[arg(long, value_parser = hex_parser)]
+        #[arg(value_parser = hex_parser)]
         prefix: Bytes,
     },
     /// Write a key-value pair to the database, overwriting the previous value
     /// if present
     Write {
-        #[arg(long, value_parser = hex_parser)]
+        #[arg(value_parser = hex_parser)]
         key: Bytes,
-        #[arg(long, value_parser = hex_parser)]
+        #[arg(value_parser = hex_parser)]
         value: Bytes,
     },
     /// Delete a single entry from the database identified by `key`
     Delete {
-        #[arg(long, value_parser = hex_parser)]
+        #[arg(value_parser = hex_parser)]
         key: Bytes,
     },
     /// Dump a subset of the specified database and serialize the retrieved data
@@ -49,13 +48,12 @@ enum DbCommand {
     /// configuration file. If dumping the client database, the password can
     /// be an arbitrary string.
     Dump {
-        #[arg(long)]
         cfg_dir: PathBuf,
-        #[arg(long, env = "FM_PASSWORD")]
+        #[arg(env = "FM_PASSWORD")]
         password: String,
-        #[arg(long, required = false)]
+        #[arg(required = false)]
         modules: Option<String>,
-        #[arg(long, required = false)]
+        #[arg(required = false)]
         prefixes: Option<String>,
     },
 }

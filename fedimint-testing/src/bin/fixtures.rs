@@ -54,24 +54,10 @@ enum Cmd {
     Electrs,
     Esplora,
     AllDaemons,
-    Dkg {
-        #[clap(long)]
-        servers: usize,
-    },
-    Fedimintd {
-        #[clap(long)]
-        id: usize,
-    },
-    Gatewayd {
-        #[clap(long)]
-        node: GatewayNode,
-    },
-    Federation {
-        #[clap(long)]
-        start_id: usize,
-        #[clap(long)]
-        stop_id: usize,
-    },
+    Dkg { servers: usize },
+    Fedimintd { id: usize },
+    Gatewayd { node: GatewayNode },
+    Federation { start_id: usize, stop_id: usize },
 
     // commands
     AwaitFedimintBlockSync,

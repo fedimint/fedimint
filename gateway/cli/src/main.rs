@@ -34,35 +34,25 @@ pub enum Commands {
     /// Display high-level information about the Gateway
     Info,
     /// Check gateway balance
-    Balance {
-        #[clap(long)]
-        federation_id: FederationId,
-    },
+    Balance { federation_id: FederationId },
     /// Generate a new peg-in address, funds sent to it can later be claimed
-    Address {
-        #[clap(long)]
-        federation_id: FederationId,
-    },
+    Address { federation_id: FederationId },
     /// Deposit funds into a gateway federation
     Deposit {
-        #[clap(long)]
         federation_id: FederationId,
         /// The TxOutProof which was created from sending BTC to the
         /// pegin-address
-        #[clap(long, value_parser = from_hex::<TxOutProof>)]
+        #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
-        #[clap(long, value_parser = from_hex::<Transaction>)]
+        #[clap(value_parser = from_hex::<Transaction>)]
         transaction: Transaction,
     },
     /// Claim funds from a gateway federation
     Withdraw {
-        #[clap(long)]
         federation_id: FederationId,
         /// The amount to withdraw
-        #[clap(long)]
         amount: Amount,
         /// The address to send the funds to
-        #[clap(long)]
         address: Address,
     },
     /// Register federation with the gateway
@@ -71,15 +61,9 @@ pub enum Commands {
         connect: String,
     },
     /// Make a backup of snapshot of all ecash
-    Backup {
-        #[clap(long)]
-        federation_id: FederationId,
-    },
+    Backup { federation_id: FederationId },
     /// Restore ecash from last available snapshot or from scratch
-    Restore {
-        #[clap(long)]
-        federation_id: FederationId,
-    },
+    Restore { federation_id: FederationId },
     // Reconnect to the Lightning Node
     Reconnect {
         #[clap(subcommand)]

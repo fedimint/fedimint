@@ -358,7 +358,6 @@ enum Command {
     /// Send direct method call to the API, waiting for all peers to agree on a
     /// response
     Api {
-        #[clap(long)]
         method: String,
         /// JSON args that will be serialized and send with the request
         #[clap(default_value = "null")]
@@ -367,44 +366,40 @@ enum Command {
 
     /// Issue notes in exchange for a peg-in proof
     PegIn {
-        #[clap(long, value_parser = from_hex::<TxOutProof>)]
+        #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
-        #[clap(long, value_parser = from_hex::<Transaction>)]
+        #[clap(value_parser = from_hex::<Transaction>)]
         transaction: Transaction,
     },
 
     /// Reissue notes received from a third party to avoid double spends
     Reissue {
-        #[clap(long, value_parser = parse_ecash)]
+        #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
     },
 
     /// Validate notes without claiming them (only checks if signatures valid,
     /// does not check if nonce unspent)
     Validate {
-        #[clap(long, value_parser = parse_ecash)]
+        #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
     },
 
     /// Prepare notes to send to a third party as a payment
     Spend {
-        #[clap(long, value_parser = parse_fedimint_amount)]
+        #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
     },
 
     /// Withdraw funds from the federation
     PegOut {
-        #[clap(long)]
         address: Address,
-        #[clap(long, value_parser = parse_bitcoin_amount)]
+        #[clap(value_parser = parse_bitcoin_amount)]
         satoshis: bitcoin::Amount,
     },
 
     /// Pay a lightning invoice via a gateway
-    LnPay {
-        #[clap(long)]
-        bolt11: lightning_invoice::Invoice,
-    },
+    LnPay { bolt11: lightning_invoice::Invoice },
 
     /// Fetch (re-)issued notes and finalize issuance process
     Fetch,
@@ -414,19 +409,15 @@ enum Command {
 
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
-        #[clap(long, value_parser = parse_fedimint_amount)]
+        #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
-        #[clap(long, default_value = "")]
+        #[clap(default_value = "")]
         description: String,
-        #[clap(long)]
         expiry_time: Option<u64>,
     },
 
     /// Wait for incoming invoice to be paid
-    WaitInvoice {
-        #[clap(long)]
-        invoice: lightning_invoice::Invoice,
-    },
+    WaitInvoice { invoice: lightning_invoice::Invoice },
 
     /// Wait for the fed to reach a consensus block height
     WaitBlockHeight { height: u64 },
@@ -436,9 +427,9 @@ enum Command {
 
     /// Encode connection info from its constituent parts
     EncodeConnectInfo {
-        #[clap(long, required = true, value_delimiter = ',')]
+        #[clap(long = "urls", required = true, value_delimiter = ',')]
         urls: Vec<Url>,
-        #[clap(long)]
+        #[clap(long = "id")]
         id: FederationId,
     },
 
@@ -454,7 +445,7 @@ enum Command {
     /// Switch active gateway
     SwitchGateway {
         /// node public key for a gateway
-        #[clap(long, value_parser = parse_node_pub_key)]
+        #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
 
@@ -470,7 +461,7 @@ enum Command {
         /// Larger values might make the restore initialization slower and
         /// memory usage slightly higher, but help restore all mint
         /// notes in some rare situations.
-        #[clap(long, default_value = "100")]
+        #[clap(long = "gap-limit", default_value = "100")]
         gap_limit: usize,
     },
 
@@ -484,13 +475,12 @@ enum Command {
     /// Signal a consensus upgrade
     SignalUpgrade {
         /// Location of the salt file
-        #[clap(long)]
         salt_path: PathBuf,
         /// Peer id of the guardian
-        #[arg(long, value_parser = parse_peer_id)]
+        #[arg(value_parser = parse_peer_id)]
         our_id: PeerId,
         /// Guardian password for authentication
-        #[arg(long, env = "FM_PASSWORD")]
+        #[arg(env = "FM_PASSWORD")]
         password: String,
     },
 
@@ -499,11 +489,9 @@ enum Command {
 
     /// Call module-specific commands
     Module {
-        #[clap(long)]
         id: ModuleSelector,
 
         /// Command with arguments to call the module with
-        #[clap(long)]
         arg: Vec<ffi::OsString>,
     },
 }
