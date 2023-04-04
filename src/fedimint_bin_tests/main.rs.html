@@ -598,6 +598,8 @@
 <a href="#598" id="598">598</a>
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::future::Future;
@@ -796,7 +798,10 @@
         <span class="kw">let </span>lnd_rpc_addr = env::var(<span class="string">&quot;FM_LND_RPC_ADDR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_macaroon = env::var(<span class="string">&quot;FM_LND_MACAROON&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_tls_cert = env::var(<span class="string">&quot;FM_LND_TLS_CERT&quot;</span>)<span class="question-mark">?</span>;
-        poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(fs::try_exists(<span class="kw-2">&amp;</span>lnd_tls_cert).<span class="kw">await</span><span class="question-mark">?</span>) }).<span class="kw">await</span><span class="question-mark">?</span>;
+        poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{
+            <span class="prelude-val">Ok</span>(fs::try_exists(<span class="kw-2">&amp;</span>lnd_tls_cert).<span class="kw">await</span><span class="question-mark">? </span>&amp;&amp; fs::try_exists(<span class="kw-2">&amp;</span>lnd_macaroon).<span class="kw">await</span><span class="question-mark">?</span>)
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>client = tonic_lnd::connect(
             lnd_rpc_addr.clone(),
             lnd_tls_cert.clone(),
@@ -1122,7 +1127,6 @@
 
 <span class="kw">async fn </span>dev_fed(task_group: <span class="kw-2">&amp;</span>TaskGroup, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
     <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-    tokio::time::sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
     <span class="kw">let </span>(cln, lnd) = <span class="macro">tokio::try_join!</span>(
         Lightningd::new(process_mgr, bitcoind.clone()),
         Lnd::new(process_mgr, bitcoind.clone()),
