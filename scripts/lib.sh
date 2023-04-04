@@ -60,7 +60,10 @@ function await_lightning_node_block_processing() {
 function kill_fedimint_processes {
   echo "Killing fedimint processes"
   PIDS=$(cat $FM_PID_FILE | sed '1!G;h;$!d') # sed reverses order
-  kill $PIDS 2>/dev/null
+  if [ -n "$PIDS" ]
+  then
+    kill $PIDS 2>/dev/null
+  fi
   rm -f $FM_PID_FILE
 }
 
