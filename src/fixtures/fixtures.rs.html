@@ -835,12 +835,12 @@
     </span>await_bitcoind_ready(<span class="string">&quot;esplora&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>daemon_dir = env::var(<span class="string">&quot;FM_BTC_DIR&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>test_dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>esplora_dir = env::var(<span class="string">&quot;FM_ESPLORA_DIR&quot;</span>)<span class="question-mark">?</span>;
 
     <span class="comment">// spawn esplora
     </span><span class="kw">let </span><span class="kw-2">mut </span>esplora = Command::new(<span class="string">&quot;esplora&quot;</span>)
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--daemon-dir={daemon_dir}&quot;</span>))
-        .arg(<span class="macro">format!</span>(<span class="string">&quot;--db-dir={test_dir}/esplora&quot;</span>))
+        .arg(<span class="macro">format!</span>(<span class="string">&quot;--db-dir={esplora_dir}&quot;</span>))
         .arg(<span class="string">&quot;--cookie=bitcoin:bitcoin&quot;</span>)
         .arg(<span class="string">&quot;--network=regtest&quot;</span>)
         .arg(<span class="string">&quot;--daemon-rpc-addr=127.0.0.1:18443&quot;</span>)
