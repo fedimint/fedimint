@@ -527,9 +527,10 @@ struct DevFed {
 
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let (cln, lnd) = tokio::try_join!(
+    let (cln, lnd, electrs) = tokio::try_join!(
         Lightningd::new(process_mgr, bitcoind.clone()),
         Lnd::new(process_mgr, bitcoind.clone()),
+        Electrs::new(process_mgr, bitcoind.clone()),
     )?;
     info!("lightning and bitcoind started");
     run_dkg(task_group, 4).await?;
@@ -546,7 +547,6 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
     fed.await_gateways_registered().await?;
     info!("gateways registered");
     fed.use_gateway(&gw_cln).await?;
-    let electrs = Electrs::new(bitcoind.clone()).await?;
     Ok(DevFed {
         bitcoind,
         cln,
@@ -580,7 +580,7 @@ pub struct Electrs {
 }
 
 impl Electrs {
-    pub async fn new(bitcoind: Bitcoind) -> Result<Self> {
+    pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
         let electrs_dir = env::var("FM_ELECTRS_DIR")?;
 
         let cmd = cmd!(
