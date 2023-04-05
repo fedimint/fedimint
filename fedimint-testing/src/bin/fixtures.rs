@@ -8,7 +8,7 @@ use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use bitcoincore_rpc::{Client as BitcoinClient, RpcApi};
 use clap::{Parser, Subcommand, ValueEnum};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -151,12 +151,15 @@ async fn await_fedimint_block_sync() -> anyhow::Result<()> {
 }
 
 async fn run_bitcoind() -> anyhow::Result<()> {
+    let project_root: PathBuf = env::var("FM_SRC_DIR")?.parse()?;
     let btc_dir = env::var("FM_BTC_DIR")?;
-
-    // spawn bitcoind
+    let conf_path = project_root.join("misc/test/bitcoin.conf");
+    let conf_path_string = conf_path.to_str().context("path must be valid UTF-8")?;
+    // Spawn bitcoind
     let mut bitcoind = Command::new("bitcoind")
-        .arg(format!("-datadir={btc_dir}"))
-        .spawn()?;
+    .arg(format!("-datadir={btc_dir}"))
+    .arg(format!("-conf={conf_path_string}"))
+    .spawn()?;
     kill_on_exit(&bitcoind).await?;
     info!("bitcoind started");
 

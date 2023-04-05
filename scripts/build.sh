@@ -24,14 +24,15 @@ export FM_POLL_INTERVAL=1
 echo "Setting up env variables in $FM_TMP_DIR"
 
 # Builds the rust executables and sets environment variables
-SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
-cd $SRC_DIR || exit 1
+FM_SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+cd $FM_SRC_DIR || exit 1
+export FM_SRC_DIR
 # Note: Respect 'CARGO_PROFILE' that crane uses
 cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 
 # Define temporary directories to not overwrite manually created config if run locally
 export FM_TEST_DIR=$FM_TMP_DIR
-export FM_BIN_DIR="$SRC_DIR/target/${CARGO_PROFILE:-debug}"
+export FM_BIN_DIR="$FM_SRC_DIR/target/${CARGO_PROFILE:-debug}"
 export FM_PID_FILE="$FM_TMP_DIR/.pid"
 export FM_LOGS_DIR="$FM_TEST_DIR/logs"
 export FM_CLN_DIR="$FM_TEST_DIR/cln"
