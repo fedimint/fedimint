@@ -226,3 +226,5 @@ jobs:
       uses: sarisia/actions-status-discord@v1
       with:
         webhook: ${{ secrets.DISCORD_WEBHOOK }}
+        # current job is a success, but that's not what we're interested in
+        status: failure
