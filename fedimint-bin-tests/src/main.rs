@@ -521,6 +521,7 @@ struct DevFed {
     fed: Federation,
     gw_cln: Gatewayd,
     gw_lnd: Gatewayd,
+    electrs: Electrs,
 }
 
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
@@ -544,6 +545,7 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
     fed.await_gateways_registered().await?;
     info!("gateways registered");
     fed.use_gateway(&gw_cln).await?;
+    let electrs = Electrs::new(bitcoind.clone()).await?;
     Ok(DevFed {
         bitcoind,
         cln,
@@ -551,6 +553,7 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
         fed,
         gw_cln,
         gw_lnd,
+        electrs,
     })
 }
 
@@ -566,6 +569,31 @@ async fn tmuxinator(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Res
             fs::write(ready_file, "ERROR").await?;
             Err(e)
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct Electrs {
+    _process: ProcessHandle,
+    _bitcoind: Bitcoind,
+}
+
+impl Electrs {
+    pub async fn new(bitcoind: Bitcoind) -> Result<Self> {
+        let electrs_dir = env::var("FM_ELECTRS_DIR")?;
+
+        let cmd = cmd!(
+            "electrs",
+            "--conf-dir={electrs_dir}",
+            "--db-dir={electrs_dir}",
+        );
+        let process = process_mgr.spawn_daemon("electrs", cmd).await?;
+        info!("electrs started");
+
+        Ok(Self {
+            _bitcoind: bitcoind,
+            _process: process,
+        })
     }
 }
 
