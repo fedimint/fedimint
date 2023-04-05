@@ -423,6 +423,7 @@ async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        electrs,
     } = dev_fed;
 
     fed.pegin(10_000_000).await?;
