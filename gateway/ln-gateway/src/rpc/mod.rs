@@ -165,7 +165,11 @@ macro_rules! impl_gateway_request_trait {
 }
 
 impl_gateway_request_trait!(InfoPayload, GatewayInfo, GatewayRequest::Info);
-impl_gateway_request_trait!(ConnectFedPayload, (), GatewayRequest::ConnectFederation);
+impl_gateway_request_trait!(
+    ConnectFedPayload,
+    FederationInfo,
+    GatewayRequest::ConnectFederation
+);
 impl_gateway_request_trait!(PayInvoicePayload, (), GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
 impl_gateway_request_trait!(
