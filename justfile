@@ -81,3 +81,7 @@ format:
 # start tmuxinator with a dev federation setup
 tmuxinator:
   ./scripts/tmuxinator.sh
+
+# exit tmuxinator session
+exit-tmuxinator:
+  tmux kill-session -t fedimint-dev
