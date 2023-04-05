@@ -49,7 +49,6 @@ mkdir -p $FM_ELECTRS_DIR
 touch $FM_PID_FILE
 
 # Copy configs to data directories
-cp misc/test/bitcoin.conf $FM_BTC_DIR
 cp misc/test/lnd.conf $FM_LND_DIR
 cp misc/test/lightningd.conf $FM_CLN_DIR/config
 cp misc/test/electrs.toml $FM_ELECTRS_DIR
