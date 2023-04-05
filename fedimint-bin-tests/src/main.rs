@@ -611,13 +611,13 @@ pub struct Esplora {
 impl Esplora {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
         let daemon_dir = env::var("FM_BTC_DIR")?;
-        let test_dir = env::var("FM_TEST_DIR")?;
+        let esplora_dir = env::var("FM_ESPLORA_DIR")?;
 
         // spawn esplora
         let cmd = cmd!(
             "esplora",
             "--daemon-dir={daemon_dir}",
-            "--db-dir={test_dir}/esplora",
+            "--db-dir={esplora_dir}",
             "--cookie=bitcoin:bitcoin",
             "--network=regtest",
             "--daemon-rpc-addr=127.0.0.1:18443",
