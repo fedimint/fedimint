@@ -474,9 +474,16 @@ async fn latency_tests(dev_fed: DevFed) -> Result<()> {
 
     let start_time = Instant::now();
     for _ in 0..iterations {
-        let invoice = cmd!(fed, "ln-invoice", "100000msat", "incoming-over-lnd-gw")
-            .out_json()
-            .await?["invoice"]
+        let invoice = cmd!(
+            fed,
+            "ln-invoice",
+            "--amount",
+            "100000msat",
+            "--description",
+            "incoming-over-lnd-gw"
+        )
+        .out_json()
+        .await?["invoice"]
             .as_str()
             .context("invoice must be string")?
             .to_owned();

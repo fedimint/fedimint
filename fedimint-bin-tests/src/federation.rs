@@ -100,7 +100,16 @@ impl Federation {
             self.bitcoind.get_txout_proof(&txid),
             self.bitcoind.get_raw_transaction(&txid),
         )?;
-        cmd!(self, "peg-in", txout_proof, raw_tx).run().await?;
+        cmd!(
+            self,
+            "peg-in",
+            "--txout-proof",
+            txout_proof,
+            "--transaction",
+            raw_tx
+        )
+        .run()
+        .await?;
         cmd!(self, "fetch").run().await?;
         Ok(())
     }

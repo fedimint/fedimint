@@ -27,4 +27,4 @@ if [ -z "$FM_LISTEN_UI" ]; then
 fi
 
 1>&2 echo 'Starting fedimintd'
-fedimintd "$FM_DATA_DIR/"
+fedimintd --data-dir "$FM_DATA_DIR/"

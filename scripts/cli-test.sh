@@ -45,7 +45,7 @@ $FM_MINT_CLIENT fetch
 
 # peg out
 PEG_OUT_ADDR="$($FM_BTC_CLIENT getnewaddress)"
-$FM_MINT_CLIENT peg-out $PEG_OUT_ADDR 500
+$FM_MINT_CLIENT peg-out --address $PEG_OUT_ADDR --amount 500sat
 until [ "$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00000500" ]; do
   sleep $FM_POLL_INTERVAL
 done
@@ -66,13 +66,13 @@ PAYMENT_HASH="$(echo $ADD_INVOICE| jq -e -r '.r_hash')"
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
-# LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance $FED_ID | jq -e -r '.balance_msat')"
+# LN_GATEWAY_BALANCE="$($FM_GATEWAY_CLI balance --federation-id $FED_ID | jq -e -r '.balance_msat')"
 # [[ "$LN_GATEWAY_BALANCE" = "100100000" ]]
 INVOICE_STATUS="$($FM_LNCLI lookupinvoice $PAYMENT_HASH | jq -e -r '.state')"
 [[ "$INVOICE_STATUS" = "SETTLED" ]]
 
 # INCOMING: fedimint-cli receives from LND via CLN gateway
-INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'incoming-over-lnd-gw' | jq -e -r '.invoice')"
+INVOICE="$($FM_MINT_CLIENT ln-invoice --amount '100000msat' --description 'incoming-over-lnd-gw' | jq -e -r '.invoice')"
 PAYMENT="$($FM_LNCLI payinvoice --force $INVOICE)"
 PAYMENT_HASH="$(echo $PAYMENT | awk '{ print $30 }')"
 LND_PAYMENTS="$($FM_LNCLI listpayments --include_incomplete)"
@@ -92,7 +92,7 @@ INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
 # INCOMING: fedimint-cli receives from CLN via LND gateway
-INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -e -r '.invoice')"
+INVOICE="$($FM_MINT_CLIENT ln-invoice --amount '100000msat' --description 'integration test' | jq -e -r '.invoice')"
 INVOICE_RESULT=$($FM_LIGHTNING_CLI pay $INVOICE)
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -e -r '.status')"
 [[ "$INVOICE_STATUS" = "complete" ]]

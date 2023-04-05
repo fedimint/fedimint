@@ -370,9 +370,9 @@ enum Command {
 
     /// Issue notes in exchange for a peg-in proof
     PegIn {
-        #[clap(value_parser = from_hex::<TxOutProof>)]
+        #[clap(long, value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
-        #[clap(value_parser = from_hex::<Transaction>)]
+        #[clap(long, value_parser = from_hex::<Transaction>)]
         transaction: Transaction,
     },
 
@@ -397,9 +397,10 @@ enum Command {
 
     /// Withdraw funds from the federation
     PegOut {
+        #[clap(long)]
         address: Address,
-        #[clap(value_parser = parse_bitcoin_amount)]
-        satoshis: bitcoin::Amount,
+        #[clap(long, value_parser = parse_bitcoin_amount)]
+        amount: bitcoin::Amount,
     },
 
     /// Pay a lightning invoice via a gateway
@@ -413,10 +414,11 @@ enum Command {
 
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
-        #[clap(value_parser = parse_fedimint_amount)]
+        #[clap(long, value_parser = parse_fedimint_amount)]
         amount: Amount,
-        #[clap(default_value = "")]
+        #[clap(long, default_value = "")]
         description: String,
+        #[clap(long)]
         expiry_time: Option<u64>,
     },
 
@@ -431,9 +433,9 @@ enum Command {
 
     /// Encode connection info from its constituent parts
     EncodeConnectInfo {
-        #[clap(long = "urls", required = true, value_delimiter = ',')]
+        #[clap(long, required = true, value_delimiter = ',')]
         urls: Vec<Url>,
-        #[clap(long = "id")]
+        #[clap(long)]
         id: FederationId,
     },
 
@@ -465,7 +467,7 @@ enum Command {
         /// Larger values might make the restore initialization slower and
         /// memory usage slightly higher, but help restore all mint
         /// notes in some rare situations.
-        #[clap(long = "gap-limit", default_value = "100")]
+        #[clap(long, default_value = "100")]
         gap_limit: usize,
     },
 
@@ -479,12 +481,13 @@ enum Command {
     /// Signal a consensus upgrade
     SignalUpgrade {
         /// Location of the salt file
+        #[clap(long)]
         salt_path: PathBuf,
         /// Peer id of the guardian
-        #[arg(value_parser = parse_peer_id)]
+        #[arg(long, value_parser = parse_peer_id)]
         our_id: PeerId,
         /// Guardian password for authentication
-        #[arg(env = "FM_PASSWORD")]
+        #[arg(long, env = "FM_PASSWORD")]
         password: String,
     },
 
@@ -493,9 +496,11 @@ enum Command {
 
     /// Call module-specific commands
     Module {
+        #[clap(long)]
         id: ModuleSelector,
 
         /// Command with arguments to call the module with
+        #[clap(long)]
         arg: Vec<ffi::OsString>,
     },
 }
@@ -730,10 +735,10 @@ impl FedimintCli {
                     details: (details_vec),
                 })
             }
-            Command::PegOut { address, satoshis } => {
+            Command::PegOut { address, amount } => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let peg_out = client
-                    .new_peg_out_with_fees(satoshis, address)
+                    .new_peg_out_with_fees(amount, address)
                     .await
                     .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
