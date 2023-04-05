@@ -13,34 +13,44 @@ pre_window:
   - alias dbtool="\$FM_DB_TOOL"
   # - alias restart="./scripts/restart-tmux.sh"
   - source scripts/lib.sh
+  - tmux_pane_title_setup
 tmux_detached: false
 windows:
-  - main:
+  - shell:
       panes:
-        - user:
-            - source scripts/tmux-user-shell.sh
+        - shell:
+          - tmux_pane_title shell 0 shell
+          - source scripts/tmux-user-shell.sh
   - federation:
       panes:
-        - fedimint0:
+        - fedimintd-0:
+          - tmux_pane_title federation 0 fedimintd-0
           - tail -n +0 -F $FM_LOGS_DIR/fedimintd-0.log
-        - fedimint1:
+        - fedimintd-1:
+          - tmux_pane_title federation 1 fedimintd-1
           - tail -n +0 -F $FM_LOGS_DIR/fedimintd-1.log
-        - fedimint2:
+        - fedimintd-2:
+          - tmux_pane_title federation 2 fedimintd-2
           - tail -n +0 -F $FM_LOGS_DIR/fedimintd-2.log
-        - fedimint3:
+        - fedimintd-3:
+          - tmux_pane_title federation 3 fedimintd-3
           - tail -n +0 -F $FM_LOGS_DIR/fedimintd-3.log
   - lightning:
-      layout: tiled
       panes:
         - cln:
+          - tmux_pane_title lightning 0 cln
           - tail -n +0 -F $FM_LOGS_DIR/lightningd.log
         - lnd:
+          - tmux_pane_title lightning 1 lnd
           - tail -n +0 -F $FM_LOGS_DIR/lnd.log
         - cln-gw:
+          - tmux_pane_title lightning 2 cln-gw
           - tail -n +0 -F $FM_LOGS_DIR/gatewayd-cln.log
         - lnd-gw:
+          - tmux_pane_title lightning 3 lnd-gw
           - tail -n +0 -F $FM_LOGS_DIR/gatewayd-lnd.log
   - bitcoin:
       panes:
         - bitcoind:
+          - tmux_pane_title bitcoin 0 bitcoind
           - tail -n +0 -F $FM_LOGS_DIR/bitcoind.log

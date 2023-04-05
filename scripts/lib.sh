@@ -2,6 +2,21 @@
 
 export LEGACY_HARDCODED_INSTANCE_ID_WALLET="2"
 
+# globally enable tmux pane titles
+# FIXME: can we just set this in the current pay with -p flag?
+function tmux_pane_title_setup() {
+  tmux set-option -g allow-rename off
+  tmux set -g pane-border-status top
+  tmux set -g pane-border-format "  #{pane_title}  "
+}
+
+function tmux_pane_title() {
+  WINDOW=$1
+  PANE_NUMBER=$2
+  TITLE=$3
+  tmux select-pane -T $TITLE -t $WINDOW.$PANE_NUMBER
+}
+
 function mine_blocks() {
     PEG_IN_ADDR="$($FM_BTC_CLIENT getnewaddress)"
     $FM_BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR
