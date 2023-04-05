@@ -22,7 +22,7 @@ echo "Running in temporary directory $FM_TEST_DIR"
 export FM_READY_FILE=$FM_TMP_DIR/ready
 mkfifo $FM_READY_FILE
 
-$FM_BIN_DIR/fedimint-bin-tests tmuxinator 2>$FM_LOGS_DIR/fedimint-dev.log >$FM_LOGS_DIR/fedimint-dev.log &
+$FM_BIN_DIR/fedimint-bin-tests tmuxinator &>$FM_LOGS_DIR/fedimint-dev.log &
 echo $! >> $FM_PID_FILE
 
 env | sed -En 's/^(FM_[^=]*).*/\1/gp' | while read var; do printf 'export %s=%q\n' "$var" "${!var}"; done > .tmpenv
