@@ -40,12 +40,14 @@ export FM_LND_DIR="$FM_TEST_DIR/lnd"
 export FM_BTC_DIR="$FM_TEST_DIR/bitcoin"
 export FM_CFG_DIR="$FM_TEST_DIR/cfg"
 export FM_ELECTRS_DIR="$FM_TEST_DIR/electrs"
+export FM_ESPLORA_DIR="$FM_TEST_DIR/esplora"
 mkdir -p $FM_LOGS_DIR
 mkdir -p $FM_CLN_DIR
 mkdir -p $FM_LND_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
 mkdir -p $FM_ELECTRS_DIR
+mkdir -p $FM_ESPLORA_DIR
 touch $FM_PID_FILE
 
 # Copy configs to data directories
