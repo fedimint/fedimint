@@ -157,9 +157,9 @@ async fn run_bitcoind() -> anyhow::Result<()> {
     let conf_path_string = conf_path.to_str().context("path must be valid UTF-8")?;
     // Spawn bitcoind
     let mut bitcoind = Command::new("bitcoind")
-    .arg(format!("-datadir={btc_dir}"))
-    .arg(format!("-conf={conf_path_string}"))
-    .spawn()?;
+        .arg(format!("-datadir={btc_dir}"))
+        .arg(format!("-conf={conf_path_string}"))
+        .spawn()?;
     kill_on_exit(&bitcoind).await?;
     info!("bitcoind started");
 
