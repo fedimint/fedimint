@@ -424,6 +424,7 @@ async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         gw_cln,
         gw_lnd,
         electrs,
+        esplora,
     } = dev_fed;
 
     fed.pegin(10_000_000).await?;
@@ -523,14 +524,16 @@ struct DevFed {
     gw_cln: Gatewayd,
     gw_lnd: Gatewayd,
     electrs: Electrs,
+    esplora: Esplora,
 }
 
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let (cln, lnd, electrs) = tokio::try_join!(
+    let (cln, lnd, electrs, esplora) = tokio::try_join!(
         Lightningd::new(process_mgr, bitcoind.clone()),
         Lnd::new(process_mgr, bitcoind.clone()),
         Electrs::new(process_mgr, bitcoind.clone()),
+        Esplora::new(process_mgr, bitcoind.clone()),
     )?;
     info!("lightning and bitcoind started");
     run_dkg(task_group, 4).await?;
@@ -555,6 +558,7 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
         gw_cln,
         gw_lnd,
         electrs,
+        esplora,
     })
 }
 
@@ -590,6 +594,38 @@ impl Electrs {
         );
         let process = process_mgr.spawn_daemon("electrs", cmd).await?;
         info!("electrs started");
+
+        Ok(Self {
+            _bitcoind: bitcoind,
+            _process: process,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct Esplora {
+    _process: ProcessHandle,
+    _bitcoind: Bitcoind,
+}
+
+impl Esplora {
+    pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        let daemon_dir = env::var("FM_BTC_DIR")?;
+        let test_dir = env::var("FM_TEST_DIR")?;
+
+        // spawn esplora
+        let cmd = cmd!(
+            "esplora",
+            "--daemon-dir={daemon_dir}",
+            "--db-dir={test_dir}/esplora",
+            "--cookie=bitcoin:bitcoin",
+            "--network=regtest",
+            "--daemon-rpc-addr=127.0.0.1:18443",
+            "--http-addr=127.0.0.1:50002",
+            "--monitoring-addr=127.0.0.1:50003",
+        );
+        let process = process_mgr.spawn_daemon("esplora", cmd).await?;
+        info!("esplora started");
 
         Ok(Self {
             _bitcoind: bitcoind,
