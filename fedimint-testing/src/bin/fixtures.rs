@@ -245,12 +245,12 @@ async fn run_esplora() -> anyhow::Result<()> {
     await_bitcoind_ready("esplora").await?;
 
     let daemon_dir = env::var("FM_BTC_DIR")?;
-    let test_dir = env::var("FM_TEST_DIR")?;
+    let esplora_dir = env::var("FM_ESPLORA_DIR")?;
 
     // spawn esplora
     let mut esplora = Command::new("esplora")
         .arg(format!("--daemon-dir={daemon_dir}"))
-        .arg(format!("--db-dir={test_dir}/esplora"))
+        .arg(format!("--db-dir={esplora_dir}"))
         .arg("--cookie=bitcoin:bitcoin")
         .arg("--network=regtest")
         .arg("--daemon-rpc-addr=127.0.0.1:18443")
