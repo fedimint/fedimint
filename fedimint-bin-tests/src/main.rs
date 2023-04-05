@@ -42,7 +42,10 @@ impl Bitcoind {
         let conf_path = project_root.join("misc/test/bitcoin.conf");
         let conf_path_string = conf_path.to_str().context("path must be valid UTF-8")?;
         let process = processmgr
-            .spawn_daemon("bitcoind", cmd!("bitcoind", "-datadir={btc_dir}", "-conf={conf_path_string}"))
+            .spawn_daemon(
+                "bitcoind",
+                cmd!("bitcoind", "-datadir={btc_dir}", "-conf={conf_path_string}"),
+            )
             .await?;
 
         let url = env::var("FM_TEST_BITCOIND_RPC")?.parse()?;
