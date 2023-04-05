@@ -151,7 +151,8 @@ async fn await_fedimint_block_sync() -> anyhow::Result<()> {
 }
 
 async fn run_bitcoind() -> anyhow::Result<()> {
-    let project_root: PathBuf = env::var("FM_SRC_DIR")?.parse()?;
+    //let project_root: PathBuf = env::var("FM_SRC_DIR")?.parse()?; 
+    let project_root = fedimint_testing::get_project_root()?;
     let btc_dir = env::var("FM_BTC_DIR")?;
     let conf_path = project_root.join("misc/test/bitcoin.conf");
     let conf_path_string = conf_path.to_str().context("path must be valid UTF-8")?;

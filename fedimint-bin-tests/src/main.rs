@@ -38,8 +38,11 @@ pub struct Bitcoind {
 impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager) -> Result<Self> {
         let btc_dir = env::var("FM_BTC_DIR")?;
+        let project_root: PathBuf = env::var("FM_SRC_DIR")?.parse()?;
+        let conf_path = project_root.join("misc/test/bitcoin.conf");
+        let conf_path_string = conf_path.to_str().context("path must be valid UTF-8")?;
         let process = processmgr
-            .spawn_daemon("bitcoind", cmd!("bitcoind", "-datadir={btc_dir}"))
+            .spawn_daemon("bitcoind", cmd!("bitcoind", "-datadir={btc_dir}", "-conf={conf_path_string}"))
             .await?;
 
         let url = env::var("FM_TEST_BITCOIND_RPC")?.parse()?;
