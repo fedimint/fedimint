@@ -613,6 +613,15 @@
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -658,6 +667,15 @@
 
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args();
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>arg) = args.nth(<span class="number">1</span>) {
+        <span class="kw">if </span>arg.as_str() == <span class="string">&quot;version-hash&quot; </span>{
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+    }
+
     <span class="kw">let </span>(service, listen, plugin) = ClnRpcService::new()
         .<span class="kw">await
         </span>.expect(<span class="string">&quot;Failed to create cln rpc service&quot;</span>);
