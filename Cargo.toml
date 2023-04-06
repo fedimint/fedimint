@@ -18,7 +18,7 @@ members = [
     "fedimint-testing",
     "fedimint-server",
     "fedimint-sqlite",
-    "client/cli",
+    "fedimint-cli",
     "client/client-lib",
     "modules/fedimint-dummy-common",
     "modules/fedimint-dummy-client",

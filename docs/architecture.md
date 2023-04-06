@@ -21,7 +21,7 @@ The [Fedimint federation](#Federation-Nodes) consists of nodes that are primaril
 
 The [user client](#User-Client):
 * `client/client-lib` - provides a library for sending transactions to the federation
-* `client/cli` - cli wrapper around the client library
+* `fedimint-cli` - cli wrapper around the client library
 
 The [LN gateway](#LN-Gateway):
 * `gateway/ln-gateway` - allows a Lightning node operator to receive or pay Lightning invoices on behalf of users

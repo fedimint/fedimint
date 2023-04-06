@@ -417,7 +417,6 @@ rec {
     defaultBin = "fedimintd";
     dirs = [
       "client/client-lib"
-      "client/cli"
       "crypto/aead"
       "crypto/derive-secret"
       "crypto/hkdf"
@@ -426,6 +425,7 @@ rec {
       "fedimint-bin-tests"
       "fedimint-bitcoind"
       "fedimint-build"
+      "fedimint-cli"
       "fedimint-client"
       "fedimint-core"
       "fedimint-derive"
