@@ -38,7 +38,7 @@ use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
 use fedimint_mint_server::MintGen;
-use fedimint_server::config::{ServerConfig, ServerConfigParams};
+use fedimint_server::config::{ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::{
     ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
 };
@@ -214,8 +214,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
         bitcoin::network::constants::Network::Regtest,
         10,
     );
-    let params =
-        ServerConfigParams::gen_local(&peers, base_port, "test", module_gens_params).unwrap();
+    let params = ConfigGenParams::gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
     let server_module_inits = ServerModuleGenRegistry::from(vec![
         DynServerModuleGen::from(WalletGen),
@@ -531,7 +530,7 @@ pub async fn create_user_client(
 
 async fn distributed_config(
     peers: &[PeerId],
-    params: HashMap<PeerId, ServerConfigParams>,
+    params: HashMap<PeerId, ConfigGenParams>,
     registry: ServerModuleGenRegistry,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {

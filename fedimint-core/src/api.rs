@@ -14,7 +14,7 @@ use bech32::{FromBase32, ToBase32};
 use bitcoin::consensus::ReadExt;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{
-    ApiEndpoint, ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId,
+    ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId, PeerUrl,
 };
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -575,7 +575,7 @@ pub struct WsClientConnectInfo {
 }
 
 impl WsClientConnectInfo {
-    pub fn new(id: &FederationId, api: &BTreeMap<PeerId, ApiEndpoint>) -> Self {
+    pub fn new(id: &FederationId, api: &BTreeMap<PeerId, PeerUrl>) -> Self {
         Self {
             urls: api
                 .iter()

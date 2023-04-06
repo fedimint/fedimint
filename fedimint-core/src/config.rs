@@ -94,11 +94,10 @@ impl JsonWithKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
-pub struct ApiEndpoint {
-    /// The peer's API websocket network address and port (e.g.
-    /// `ws://10.42.0.10:5000`)
+pub struct PeerUrl {
+    /// The peer's public URL (e.g. `wss://fedimint-server-1:5000`)
     pub url: Url,
-    /// human-readable name
+    /// The peer's name
     pub name: String,
 }
 
@@ -110,7 +109,7 @@ pub struct ClientConfig {
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
-    pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
+    pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules

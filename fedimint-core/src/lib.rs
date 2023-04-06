@@ -10,7 +10,7 @@ use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_core::config::ApiEndpoint;
+use fedimint_core::config::PeerUrl;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
 use serde::{Deserialize, Serialize};
@@ -167,7 +167,7 @@ impl NumPeers for Vec<PeerId> {
     }
 }
 
-impl NumPeers for Vec<ApiEndpoint> {
+impl NumPeers for Vec<PeerUrl> {
     fn total(&self) -> usize {
         self.len()
     }
