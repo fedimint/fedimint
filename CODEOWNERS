@@ -1,0 +1,13 @@
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-syntax
+#
+# TLDR:
+#
+# * last matching line wins (so order from most general to most specific)
+# * multiple elements on the same line means "OR"
+
+# default: unless more specific rule is found, these will be the reviewers assigned; should be a broad group
+* @fedimint/Reviewers
+
+# TODO: replace with @fedimint/infra or smth
+*.nix     @dpc
+*.github/ @dpc
