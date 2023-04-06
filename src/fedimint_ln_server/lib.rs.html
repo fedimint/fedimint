@@ -1145,8 +1145,8 @@
 
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
@@ -1219,7 +1219,7 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>pks = sks.public_keys();
@@ -1251,7 +1251,7 @@
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
-        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
         <span class="kw">let </span>g1 = peers.run_dkg_g1(()).<span class="kw">await</span><span class="question-mark">?</span>;
 

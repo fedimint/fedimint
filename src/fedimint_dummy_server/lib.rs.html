@@ -260,8 +260,8 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
@@ -323,7 +323,7 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>mint_cfg: BTreeMap&lt;<span class="kw">_</span>, DummyConfig&gt; = peers
             .iter()
@@ -347,7 +347,7 @@
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _peers: <span class="kw-2">&amp;</span>PeerHandle,
-        _params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
         <span class="kw">let </span>server = DummyConfig {
             private: DummyConfigPrivate {

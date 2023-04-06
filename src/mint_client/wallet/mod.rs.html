@@ -609,7 +609,7 @@
     <span class="kw">use </span>bitcoin::hashes::sha256;
     <span class="kw">use </span>bitcoin::{Address, Txid};
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_core::config::ConfigGenParams;
+    <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
@@ -705,7 +705,7 @@
                         .<span class="kw">await</span><span class="question-mark">?</span>)
                     }
                 },
-                <span class="kw-2">&amp;</span>ConfigGenParams::from_typed(WalletGenParams {
+                <span class="kw-2">&amp;</span>ConfigGenModuleParams::from_typed(WalletGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
                     finality_delay: <span class="number">10</span>,
                 })

@@ -898,7 +898,7 @@
     <span class="kw">use </span>std::sync::Arc;
 
     <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
-    <span class="kw">use </span>fedimint_core::config::ConfigGenParams;
+    <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     };
@@ -1003,7 +1003,7 @@
             FakeFed::&lt;Lightning&gt;::new(
                 <span class="number">4</span>,
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>)) },
-                <span class="kw-2">&amp;</span>ConfigGenParams::null(),
+                <span class="kw-2">&amp;</span>ConfigGenModuleParams::null(),
                 <span class="kw-2">&amp;</span>LightningGen,
                 module_id,
             )

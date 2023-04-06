@@ -1651,7 +1651,7 @@
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>fedimint_core::api::WsFederationApi;
-    <span class="kw">use </span>fedimint_core::config::ConfigGenParams;
+    <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     };
@@ -1738,7 +1738,7 @@
             FakeFed::&lt;Mint&gt;::new(
                 <span class="number">4</span>,
                 |cfg, _db| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(Mint::new(cfg.to_typed().unwrap())) },
-                <span class="kw-2">&amp;</span>ConfigGenParams::from_typed(MintGenParams {
+                <span class="kw-2">&amp;</span>ConfigGenModuleParams::from_typed(MintGenParams {
                     mint_amounts: <span class="macro">vec!</span>[
                         Amount::from_sats(<span class="number">1</span>),
                         Amount::from_sats(<span class="number">10</span>),

@@ -855,6 +855,7 @@
 <a href="#855" id="855">855</a>
 <a href="#856" id="856">856</a>
 <a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -951,11 +952,10 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
-</span><span class="kw">pub struct </span>ApiEndpoint {
-    <span class="doccomment">/// The peer&#39;s API websocket network address and port (e.g.
-    /// `ws://10.42.0.10:5000`)
+</span><span class="kw">pub struct </span>PeerUrl {
+    <span class="doccomment">/// The peer&#39;s public URL (e.g. `wss://fedimint-server-1:5000`)
     </span><span class="kw">pub </span>url: Url,
-    <span class="doccomment">/// human-readable name
+    <span class="doccomment">/// The peer&#39;s name
     </span><span class="kw">pub </span>name: String,
 }
 
@@ -967,7 +967,7 @@
     <span class="comment">// Stable and unique id and threshold pubkey of the federation for authenticating configs
     </span><span class="kw">pub </span>federation_id: FederationId,
     <span class="doccomment">/// API endpoints for each federation member
-    </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, ApiEndpoint&gt;,
+    </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
     <span class="doccomment">/// Threshold pubkey for authenticating epoch history
     </span><span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
     <span class="doccomment">/// Configs from other client modules
@@ -1127,7 +1127,7 @@
 <span class="doccomment">/// Module **generation** (so passed to dkg, not to the module itself) config
 /// parameters
 </span><span class="attr">#[derive(Debug, Clone, Default, Eq, PartialEq)]
-</span><span class="kw">pub struct </span>ConfigGenParams(serde_json::Value);
+</span><span class="kw">pub struct </span>ConfigGenModuleParams(serde_json::Value);
 
 <span class="kw">pub type </span>ServerModuleGenRegistry = ModuleGenRegistry&lt;DynServerModuleGen&gt;;
 
@@ -1142,7 +1142,7 @@
     }
 }
 
-<span class="kw">impl </span>ConfigGenParams {
+<span class="kw">impl </span>ConfigGenModuleParams {
     <span class="doccomment">/// Null value, used as a config gen parameters for module gens that don&#39;t
     /// need any parameters
     </span><span class="kw">pub fn </span>null() -&gt; <span class="self">Self </span>{
@@ -1166,7 +1166,7 @@
 /// Note: in the future, we should make this one a
 /// `ModuleRegistry&lt;ConfigGenParams&gt;`, as each module **instance** will need a
 /// distinct config for dkg.
-</span><span class="kw">pub type </span>ServerModuleGenParamsRegistry = ModuleGenRegistry&lt;ConfigGenParams&gt;;
+</span><span class="kw">pub type </span>ServerModuleGenParamsRegistry = ModuleGenRegistry&lt;ConfigGenModuleParams&gt;;
 
 <span class="kw">impl </span>Eq <span class="kw">for </span>ServerModuleGenParamsRegistry {}
 
@@ -1196,7 +1196,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>params = BTreeMap::new();
 
         <span class="kw">for </span>(key, value) <span class="kw">in </span>json {
-            params.insert(key, ConfigGenParams(value));
+            params.insert(key, ConfigGenModuleParams(value));
         }
         <span class="prelude-val">Ok</span>(ModuleGenRegistry(params))
     }
@@ -1266,7 +1266,7 @@
     }
 }
 
-<span class="kw">impl </span>ModuleGenRegistry&lt;ConfigGenParams&gt; {
+<span class="kw">impl </span>ModuleGenRegistry&lt;ConfigGenModuleParams&gt; {
     <span class="kw">pub fn </span>attach_config_gen_params&lt;T&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, kind: ModuleKind, gen: T) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self
     </span><span class="kw">where
         </span>T: ModuleGenParams,
@@ -1275,7 +1275,8 @@
             </span>.<span class="number">0
             </span>.insert(
                 kind.clone(),
-                ConfigGenParams::from_typed(gen).expect(<span class="string">&quot;Invalid config gen params for {kind}&quot;</span>),
+                ConfigGenModuleParams::from_typed(gen)
+                    .expect(<span class="string">&quot;Invalid config gen params for {kind}&quot;</span>),
             )
             .is_some()
         {
@@ -1292,7 +1293,8 @@
             </span>.<span class="number">0
             </span>.insert(
                 kind.clone(),
-                ConfigGenParams::from_typed(gen).expect(<span class="string">&quot;Invalid config gen params for {kind}&quot;</span>),
+                ConfigGenModuleParams::from_typed(gen)
+                    .expect(<span class="string">&quot;Invalid config gen params for {kind}&quot;</span>),
             )
             .is_some()
         {

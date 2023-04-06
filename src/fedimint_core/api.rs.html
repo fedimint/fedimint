@@ -1125,7 +1125,7 @@
 <span class="kw">use </span>bitcoin::consensus::ReadExt;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{
-    ApiEndpoint, ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId,
+    ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId, PeerUrl,
 };
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1686,7 +1686,7 @@
 }
 
 <span class="kw">impl </span>WsClientConnectInfo {
-    <span class="kw">pub fn </span>new(id: <span class="kw-2">&amp;</span>FederationId, api: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, ApiEndpoint&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(id: <span class="kw-2">&amp;</span>FederationId, api: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerUrl&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             urls: api
                 .iter()

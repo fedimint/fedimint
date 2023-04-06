@@ -1402,13 +1402,14 @@
 <a href="#1402" id="1402">1402</a>
 <a href="#1403" id="1403">1403</a>
 <a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::ops::Sub;
 
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -1496,7 +1497,7 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>params = params
             .to_typed::&lt;MintGenParams&gt;()
@@ -1553,7 +1554,7 @@
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
         <span class="kw">let </span>params = params
             .to_typed::&lt;MintGenParams&gt;()
@@ -2354,7 +2355,8 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span>fedimint_core::config::{
-        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
+        ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig,
+        TypedServerModuleConsensusConfig,
     };
     <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
     <span class="kw">use </span>fedimint_core::{Amount, PeerId, TieredMulti};
@@ -2373,7 +2375,7 @@
         <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>mint_cfg = MintGen.trusted_dealer_gen(
             <span class="kw-2">&amp;</span>peers,
-            <span class="kw-2">&amp;</span>ConfigGenParams::from_typed(MintGenParams {
+            <span class="kw-2">&amp;</span>ConfigGenModuleParams::from_typed(MintGenParams {
                 mint_amounts: <span class="macro">vec!</span>[Amount::from_sats(<span class="number">1</span>)],
             })
             .unwrap(),

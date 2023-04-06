@@ -473,7 +473,7 @@
 <span class="kw">use </span>fedimint_server::config::io::{
     create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
-<span class="kw">use </span>fedimint_server::config::{ServerConfig, ServerConfigConsensus, ServerConfigParams};
+<span class="kw">use </span>fedimint_server::config::{ConfigGenParams, ServerConfig, ServerConfigConsensus};
 <span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
@@ -636,7 +636,7 @@
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Running DKG&quot;</span>);
 
             state_copy.lock().<span class="kw">await</span>.dkg_state = <span class="prelude-val">Some</span>(DkgState::Running);
-            <span class="kw">let </span>maybe_config = <span class="kw">match </span>ServerConfigParams::parse_from_connect_strings(
+            <span class="kw">let </span>maybe_config = <span class="kw">match </span>ConfigGenParams::parse_from_connect_strings(
                 params.bind_p2p,
                 params.bind_api,
                 <span class="kw-2">&amp;</span>dir_out_path,

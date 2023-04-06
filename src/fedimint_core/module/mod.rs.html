@@ -1022,7 +1022,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::instrument;
 
-<span class="kw">use </span><span class="kw">crate</span>::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
+<span class="kw">use </span><span class="kw">crate</span>::config::{ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig};
 <span class="kw">use </span><span class="kw">crate</span>::core::{
     Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
     OutputOutcome,
@@ -1434,13 +1434,13 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt;;
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
 
     <span class="kw">fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value)
@@ -1617,13 +1617,13 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt;;
 
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peer: <span class="kw-2">&amp;</span>PeerHandle,
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
 
     <span class="kw">fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value)
@@ -1668,7 +1668,7 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::trusted_dealer_gen(<span class="self">self</span>, peers, params)
     }
@@ -1676,7 +1676,7 @@
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::distributed_gen(<span class="self">self</span>, peers, params).<span class="kw">await
     </span>}

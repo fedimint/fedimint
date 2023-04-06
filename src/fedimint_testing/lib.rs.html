@@ -515,7 +515,7 @@
 <span class="kw">use </span>std::{env, fs, io};
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+<span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
@@ -555,7 +555,7 @@
     <span class="kw">pub async fn </span>new&lt;ConfGen, F, FF&gt;(
         members: usize,
         constructor: F,
-        params: <span class="kw-2">&amp;</span>ConfigGenParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
         conf_gen: <span class="kw-2">&amp;</span>ConfGen,
         module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;FakeFed&lt;Module&gt;&gt;

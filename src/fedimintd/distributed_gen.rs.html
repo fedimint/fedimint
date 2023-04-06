@@ -279,7 +279,7 @@
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
 <span class="kw">use </span>fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
-<span class="kw">use </span>fedimint_server::config::{ServerConfig, ServerConfigParams};
+<span class="kw">use </span>fedimint_server::config::{ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
 <span class="kw">use </span>tracing::info;
@@ -463,7 +463,7 @@
                     network,
                     finality_delay,
                 );
-                <span class="kw">let </span>params = ServerConfigParams::parse_from_connect_strings(
+                <span class="kw">let </span>params = ConfigGenParams::parse_from_connect_strings(
                     bind_p2p,
                     bind_api,
                     <span class="kw-2">&amp;</span>dir_out_path,

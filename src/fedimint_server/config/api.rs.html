@@ -893,65 +893,6 @@
 <a href="#893" id="893">893</a>
 <a href="#894" id="894">894</a>
 <a href="#895" id="895">895</a>
-<a href="#896" id="896">896</a>
-<a href="#897" id="897">897</a>
-<a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
-<a href="#900" id="900">900</a>
-<a href="#901" id="901">901</a>
-<a href="#902" id="902">902</a>
-<a href="#903" id="903">903</a>
-<a href="#904" id="904">904</a>
-<a href="#905" id="905">905</a>
-<a href="#906" id="906">906</a>
-<a href="#907" id="907">907</a>
-<a href="#908" id="908">908</a>
-<a href="#909" id="909">909</a>
-<a href="#910" id="910">910</a>
-<a href="#911" id="911">911</a>
-<a href="#912" id="912">912</a>
-<a href="#913" id="913">913</a>
-<a href="#914" id="914">914</a>
-<a href="#915" id="915">915</a>
-<a href="#916" id="916">916</a>
-<a href="#917" id="917">917</a>
-<a href="#918" id="918">918</a>
-<a href="#919" id="919">919</a>
-<a href="#920" id="920">920</a>
-<a href="#921" id="921">921</a>
-<a href="#922" id="922">922</a>
-<a href="#923" id="923">923</a>
-<a href="#924" id="924">924</a>
-<a href="#925" id="925">925</a>
-<a href="#926" id="926">926</a>
-<a href="#927" id="927">927</a>
-<a href="#928" id="928">928</a>
-<a href="#929" id="929">929</a>
-<a href="#930" id="930">930</a>
-<a href="#931" id="931">931</a>
-<a href="#932" id="932">932</a>
-<a href="#933" id="933">933</a>
-<a href="#934" id="934">934</a>
-<a href="#935" id="935">935</a>
-<a href="#936" id="936">936</a>
-<a href="#937" id="937">937</a>
-<a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
-<a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a>
-<a href="#949" id="949">949</a>
-<a href="#950" id="950">950</a>
-<a href="#951" id="951">951</a>
-<a href="#952" id="952">952</a>
-<a href="#953" id="953">953</a>
-<a href="#954" id="954">954</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::iter::once;
@@ -988,10 +929,9 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, write_server_config, SALT_FILE};
-<span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ServerConfig, ServerConfigConsensus, ServerConfigParams};
+<span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, NetworkConfig};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
 <span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
 
 <span class="kw">pub type </span>ApiResult&lt;T&gt; = std::result::Result&lt;T, ApiError&gt;;
@@ -1199,7 +1139,7 @@
         <span class="kw">let </span>module_gens = <span class="self">self</span>.settings.module_gens.clone();
 
         <span class="kw">let </span>config = ServerConfig::distributed_gen(
-            <span class="kw-2">&amp;</span>params.to_server_params(),
+            <span class="kw-2">&amp;</span>params,
             module_gens,
             DelayCalculator::default(),
             <span class="kw-2">&amp;mut </span>subgroup,
@@ -1356,64 +1296,6 @@
         <span class="kw-2">*</span>state = ConfigApiState::VerifyConfigParams(auth, params);
 
         <span class="prelude-val">Ok</span>(())
-    }
-}
-
-<span class="attr">#[derive(Debug, Clone)]
-</span><span class="doccomment">/// All the parameters necessary for generating the `ServerConfig` during setup
-///
-/// * Guardians can create the parameters using a setup UI or CLI tool
-/// * Used for distributed or trusted config generation
-</span><span class="comment">// TODO: Replace `ServerConfigParams` with this
-</span><span class="kw">pub struct </span>ConfigGenParams {
-    <span class="kw">pub </span>local: ConfigGenParamsLocal,
-    <span class="kw">pub </span>consensus: ConfigGenParamsConsensus,
-}
-
-<span class="kw">impl </span>ConfigGenParams {
-    <span class="kw">pub fn </span>to_server_params(<span class="self">self</span>) -&gt; ServerConfigParams {
-        ServerConfigParams {
-            our_id: <span class="self">self</span>.local.our_id,
-            peer_ids: <span class="self">self</span>.consensus.peers.keys().copied().collect(),
-            api_auth: <span class="self">self</span>.local.api_auth,
-            tls: TlsConfig {
-                our_private_key: <span class="self">self</span>.local.our_private_key,
-                peer_certs: <span class="self">self
-                    </span>.consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.cert.clone()))
-                    .collect(),
-                peer_names: <span class="self">self
-                    </span>.consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.name.clone()))
-                    .collect(),
-            },
-            p2p_network: NetworkConfig {
-                identity: <span class="self">self</span>.local.our_id,
-                bind_addr: <span class="self">self</span>.local.p2p_bind,
-                peers: <span class="self">self
-                    </span>.consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.p2p_url.clone()))
-                    .collect(),
-            },
-            api_network: NetworkConfig {
-                identity: <span class="self">self</span>.local.our_id,
-                bind_addr: <span class="self">self</span>.local.api_bind,
-                peers: <span class="self">self
-                    </span>.consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.api_url.clone()))
-                    .collect(),
-            },
-            meta: <span class="self">self</span>.consensus.requested.meta,
-            modules: <span class="self">self</span>.consensus.requested.modules,
-        }
     }
 }
 
