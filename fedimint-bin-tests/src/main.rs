@@ -521,6 +521,72 @@ async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+async fn cli_tests(dev_fed: DevFed) -> Result<()> {
+    let bin_dir = env::var("FM_BIN_DIR")?;
+    let data_dir = env::var("FM_DATA_DIR")?;
+
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    cmd!(
+        "{bin_dir}/distributedgen",
+        "config-decrypt",
+        "--in-file={data_dir}/server-0/private.encrypt",
+        "--out-file={data_dir}/server-0/config-plaintext.json"
+    )
+    .env("FM_PASSWORD", "pass0");
+
+    cmd!(
+        "{bin_dir}/distributedgen",
+        "config-encrypt",
+        "--in-file={data_dir}/server-0/config-plaintext.json",
+        "--out-file={data_dir}/server-0/config-2"
+    )
+    .env("FM_PASSWORD", "pass-foo");
+
+    cmd!(
+        "{bin_dir}/distributedgen",
+        "config-decrypt",
+        "--in-file={data_dir}/server-0/config-2",
+        "--out-file={data_dir}/server-0/config-plaintext-2.json"
+    )
+    .env("FM_PASSWORD", "pass-foo");
+
+    cmd!(
+        "cmp",
+        "--silent",
+        "{data_dir}/server-0/config-plaintext.json",
+        "{data_dir}/server-0/config-plaintext-2.json",
+    );
+
+    fed.pegin(10_000).await?;
+    // fed.pegin_gateway(99_999).await?;
+
+    let connect_string = fs::read_to_string(format!("{data_dir}/client-connect")).await?;
+    fs::remove_file(format!("{data_dir}/client.json"));
+    cmd!(fed, "join-federation", connect_string.clone());
+
+    let fed_id = fed.federation_id().await;
+    assert_eq!(
+        cmd!(fed, "decode-connect-info", connect_string)
+            .out_json()
+            .await?["id"]
+            .as_str(),
+        Some(&*fed_id),
+    );
+
+    Ok(())
+}
+
 async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     #[allow(unused_variables)]
     let DevFed {

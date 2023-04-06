@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsStr;
 
 use anyhow::{anyhow, bail};
 use tokio::fs::OpenOptions;
@@ -93,7 +94,21 @@ impl Command {
         self
     }
 
-    pub fn envs(mut self, env: HashMap<String, String>) -> Self {
+    pub fn env<K, V>(mut self, key: K, val: V) -> Self
+    where
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
+        self.cmd.env(key, val);
+        self
+    }
+
+    pub fn envs<I, K, V>(mut self, env: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
         self.cmd.envs(env);
         self
     }
