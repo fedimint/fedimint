@@ -340,6 +340,8 @@
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::sync::Arc;
@@ -545,7 +547,7 @@
             <span class="kw">while let </span><span class="prelude-val">Some</span>(htlc) = <span class="kw">match </span>htlc_stream.message().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(htlc) =&gt; htlc,
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;Error received over HTLC subscriprion: {:?}&quot;</span>, e);
+                    <span class="macro">error!</span>(<span class="string">&quot;Error received over HTLC subscription: {:?}&quot;</span>, e);
                     a_tx.send(<span class="prelude-val">Err</span>(tonic::Status::new(
                         tonic::Code::Internal,
                         e.to_string(),
@@ -648,7 +650,9 @@
                     failure_message: <span class="macro">vec!</span>[],
                     failure_code: FailureCode::TemporaryChannelFailure.into(),
                 },
-                <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; cancel_intercepted_htlc(<span class="prelude-val">None</span>),
+                <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
+                    cancel_intercepted_htlc(incoming_circuit_key)
+                }
                 <span class="prelude-val">None </span>=&gt; {
                     <span class="macro">error!</span>(<span class="string">&quot;No action specified for intercepted htlc id: {:?}&quot;</span>, hash);
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::LnRpcError(tonic::Status::internal(
