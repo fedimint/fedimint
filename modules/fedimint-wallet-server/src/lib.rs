@@ -29,7 +29,7 @@ use fedimint_core::bitcoin_rpc::{
     FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
 };
 use fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -113,7 +113,7 @@ impl ServerModuleGen for WalletGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
             .to_typed::<WalletGenParams>()
@@ -152,7 +152,7 @@ impl ServerModuleGen for WalletGen {
     async fn distributed_gen(
         &self,
         peers: &PeerHandle,
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = params
             .to_typed::<WalletGenParams>()

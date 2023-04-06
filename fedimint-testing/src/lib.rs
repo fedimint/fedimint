@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::{env, fs, io};
 
 use async_trait::async_trait;
-use fedimint_core::config::{ClientModuleConfig, ConfigGenParams, ServerModuleConfig};
+use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
 use fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
@@ -49,7 +49,7 @@ where
     pub async fn new<ConfGen, F, FF>(
         members: usize,
         constructor: F,
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
         conf_gen: &ConfGen,
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<FakeFed<Module>>

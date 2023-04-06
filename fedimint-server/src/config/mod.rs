@@ -377,7 +377,7 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
-        let null_config_gen = ConfigGenParams::null();
+        let null_config_gen = ConfigGenModuleParams::null();
 
         // We assume user wants one module instance for every module kind
         let module_configs: BTreeMap<_, _> = registry
@@ -471,7 +471,7 @@ impl ServerConfig {
         // of each module that was compiled in. This is how things were
         // initially, where we consider "module as a code" as "module as an instance at
         // runtime"
-        let null_config_gen = ConfigGenParams::null();
+        let null_config_gen = ConfigGenModuleParams::null();
         for (module_instance_id, (kind, gen)) in registry {
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             module_cfgs.insert(

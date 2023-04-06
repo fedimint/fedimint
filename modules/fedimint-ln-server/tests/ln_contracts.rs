@@ -1,5 +1,5 @@
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
-use fedimint_core::config::ConfigGenParams;
+use fedimint_core::config::ConfigGenModuleParams;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_ln_common::config::LightningClientConfig;
@@ -23,7 +23,7 @@ async fn test_outgoing() {
     let mut fed = FakeFed::<Lightning>::new(
         4,
         |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
-        &ConfigGenParams::null(),
+        &ConfigGenModuleParams::null(),
         &LightningGen,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )
@@ -123,7 +123,7 @@ async fn test_incoming() {
     let mut fed = FakeFed::<Lightning>::new(
         4,
         |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
-        &ConfigGenParams::null(),
+        &ConfigGenModuleParams::null(),
         &LightningGen,
         LEGACY_HARDCODED_INSTANCE_ID_LN,
     )

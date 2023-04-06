@@ -18,7 +18,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::config::{ConfigGenParams, DkgPeerMsg, ServerModuleConfig};
+use crate::config::{ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig};
 use crate::core::{
     Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
     OutputOutcome,
@@ -430,13 +430,13 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peers: &PeerHandle,
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig>;
 
     fn to_config_response(&self, config: serde_json::Value)
@@ -613,13 +613,13 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peer: &PeerHandle,
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig>;
 
     fn to_config_response(&self, config: serde_json::Value)
@@ -664,7 +664,7 @@ where
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         <Self as ServerModuleGen>::trusted_dealer_gen(self, peers, params)
     }
@@ -672,7 +672,7 @@ where
     async fn distributed_gen(
         &self,
         peers: &PeerHandle,
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         <Self as ServerModuleGen>::distributed_gen(self, peers, params).await
     }
