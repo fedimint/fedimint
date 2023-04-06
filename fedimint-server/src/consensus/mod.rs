@@ -617,7 +617,7 @@ impl FedimintConsensus {
 
     pub async fn get_config_with_sig(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConfigResponse {
         let mut client = self.client_cfg.clone();
         let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;

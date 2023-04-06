@@ -58,15 +58,12 @@ pub trait IServerModule: Debug {
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-    );
+    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>);
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> ConsensusProposal<DynModuleConsensusItem>;
 
@@ -77,7 +74,7 @@ pub trait IServerModule: Debug {
     /// results are available when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
     );
 
@@ -96,7 +93,7 @@ pub trait IServerModule: Debug {
     async fn validate_input<'a>(
         &self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
         input: &DynInput,
     ) -> Result<InputMeta, ModuleError>;
@@ -112,7 +109,7 @@ pub trait IServerModule: Debug {
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut ModuleDatabaseTransaction<'c, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DynInput,
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError>;
@@ -124,7 +121,7 @@ pub trait IServerModule: Debug {
     /// them and merely generate a warning.
     async fn validate_output(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         output: &DynOutput,
     ) -> Result<TransactionItemAmount, ModuleError>;
 
@@ -142,7 +139,7 @@ pub trait IServerModule: Debug {
     /// once all transactions have been processed.
     async fn apply_output<'a>(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
@@ -156,7 +153,7 @@ pub trait IServerModule: Debug {
     async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a>,
     ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this
@@ -165,7 +162,7 @@ pub trait IServerModule: Debug {
     /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome>;
@@ -175,11 +172,7 @@ pub trait IServerModule: Debug {
     ///
     /// Summing over all modules, if liabilities > assets then an error has
     /// occurred in the database and consensus should halt.
-    async fn audit(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-        audit: &mut Audit,
-    );
+    async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit);
 
     /// Returns a list of custom API endpoints defined by the module. These are
     /// made available both to users as well as to other modules. They thus
@@ -211,17 +204,14 @@ where
     }
 
     /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-    ) {
+    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         <Self as ServerModule>::await_consensus_proposal(self, dbtx).await
     }
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> ConsensusProposal<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
@@ -236,7 +226,7 @@ where
     /// results are available when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
     ) {
         <Self as ServerModule>::begin_consensus_epoch(
@@ -285,7 +275,7 @@ where
     async fn validate_input<'a>(
         &self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
         input: &DynInput,
     ) -> Result<InputMeta, ModuleError> {
@@ -317,7 +307,7 @@ where
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut ModuleDatabaseTransaction<'c, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DynInput,
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError> {
@@ -345,7 +335,7 @@ where
     /// them and merely generate a warning.
     async fn validate_output(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         output: &DynOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         <Self as ServerModule>::validate_output(
@@ -373,7 +363,7 @@ where
     /// once all transactions have been processed.
     async fn apply_output<'a>(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -398,7 +388,7 @@ where
     async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut ModuleDatabaseTransaction<'a, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'a>,
     ) -> Vec<PeerId> {
         <Self as ServerModule>::end_consensus_epoch(self, consensus_peers, dbtx).await
     }
@@ -409,7 +399,7 @@ where
     /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome> {
@@ -423,11 +413,7 @@ where
     ///
     /// Summing over all modules, if liabilities > assets then an error has
     /// occurred in the database and consensus should halt.
-    async fn audit(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-        audit: &mut Audit,
-    ) {
+    async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
         <Self as ServerModule>::audit(self, dbtx, audit).await
     }
 

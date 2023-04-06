@@ -97,7 +97,7 @@ where
 
         async fn member_validate<M: ServerModule>(
             member: &M,
-            dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+            dbtx: &mut ModuleDatabaseTransaction<'_>,
             fake_ic: &FakeInterconnect,
             input: &<M::Common as ModuleCommon>::Input,
         ) -> Result<TestInputMeta, ModuleError> {
