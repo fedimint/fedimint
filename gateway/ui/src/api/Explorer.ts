@@ -1,11 +1,11 @@
 export interface Explorer {
 	// Try get transaction status for a tx with given address
-	watchAddessForTransaction: (
+	watchAddressForTransaction: (
 		address: string
 	) => Promise<TransactionStatus | null>;
 
 	// Try get transaction status for a tx with given address and transaction id.
-	// Since we know the transaction id, this should be more efficient than watchAddessForTransaction
+	// Since we know the transaction id, this should be more efficient than watchAddressForTransaction
 	watchTransactionStatus: (
 		address: string,
 		txid: string
@@ -54,7 +54,7 @@ export class BlockstreamExplorer implements Explorer {
 		this.baseUrl = baseUrl;
 	}
 
-	watchAddessForTransaction = async (
+	watchAddressForTransaction = async (
 		address: string
 	): Promise<TransactionStatus> => {
 		try {
