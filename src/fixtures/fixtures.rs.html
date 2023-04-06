@@ -669,7 +669,7 @@
 }
 
 <span class="kw">async fn </span>fedimint_client() -&gt; anyhow::Result&lt;UserClient&gt; {
-    <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_CFG_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+    <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
     <span class="kw">let </span>cfg_path = workdir.join(<span class="string">&quot;client.json&quot;</span>);
     <span class="kw">let </span>db_path = workdir.join(<span class="string">&quot;client.db&quot;</span>);
     <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path)<span class="question-mark">?</span>;
@@ -934,7 +934,7 @@
     <span class="kw">let </span>p2p_port = base_port + (id * <span class="number">10</span>);
     <span class="kw">let </span>api_port = base_port + (id * <span class="number">10</span>) + <span class="number">1</span>;
     <span class="kw">let </span>ui_port = base_port + (id * <span class="number">10</span>) + <span class="number">2</span>;
-    <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_CFG_DIR&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(HashMap::from_iter([
         (<span class="string">&quot;FM_BIND_P2P&quot;</span>.into(), <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{p2p_port}&quot;</span>)),
         (
@@ -1000,7 +1000,7 @@
 <span class="kw">async fn </span>run_distributedgen(id: usize, certs: Vec&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>certs = certs.join(<span class="string">&quot;,&quot;</span>);
     <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_CFG_DIR&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server-{id}&quot;</span>);
 
     <span class="kw">let </span>env_vars = fedimint_env(id)<span class="question-mark">?</span>;
