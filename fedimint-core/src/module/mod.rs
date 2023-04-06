@@ -146,28 +146,18 @@ impl ApiError {
 pub struct ApiEndpointContext<'a> {
     dbtx: DatabaseTransaction<'a>,
     has_auth: bool,
-    module_id: Option<ModuleInstanceId>,
 }
 
 impl<'a> ApiEndpointContext<'a> {
-    pub fn new(
-        has_auth: bool,
-        dbtx: DatabaseTransaction<'a>,
-        module_id: Option<ModuleInstanceId>,
-    ) -> Self {
-        Self {
-            has_auth,
-            dbtx,
-            module_id,
-        }
+    /// `dbtx` should be isolated.
+    pub fn new(dbtx: DatabaseTransaction<'a>, has_auth: bool) -> Self {
+        Self { dbtx, has_auth }
     }
 
     /// Database tx handle, will be committed
     pub fn dbtx(&mut self) -> ModuleDatabaseTransaction<'_> {
-        match self.module_id {
-            None => self.dbtx.get_isolated(),
-            Some(id) => self.dbtx.with_module_prefix(id),
-        }
+        // dbtx is already isolated.
+        self.dbtx.get_isolated()
     }
 
     /// Whether the request was authenticated as the guardian who controls this
