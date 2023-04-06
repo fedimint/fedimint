@@ -35,6 +35,7 @@ impl_db_record!(
     key = ContractKey,
     value = ContractAccount,
     db_prefix = DbKeyPrefix::Contract,
+    notify_on_modify = true,
 );
 impl_db_lookup!(key = ContractKey, query_prefix = ContractKeyPrefix);
 
@@ -64,6 +65,7 @@ impl_db_record!(
     key = OfferKey,
     value = IncomingContractOffer,
     db_prefix = DbKeyPrefix::Offer,
+    notify_on_modify = true,
 );
 impl_db_lookup!(key = OfferKey, query_prefix = OfferKeyPrefix);
 

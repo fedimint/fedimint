@@ -13,7 +13,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, ConsensusProposal,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiRequestErased, ApiVersion, ConsensusProposal,
     CoreConsensusVersion, ExtendsCommonModuleGen, InputMeta, IntoModuleError,
     ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
@@ -748,23 +748,34 @@ impl ServerModule for Lightning {
         vec![
             api_endpoint! {
                 "/account",
-                async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
-                    module
+                async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
+                    Ok(module
                         .get_contract_account(&mut context.dbtx(), contract_id)
-                        .await
-                        .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
+                        .await)
+                }
+            },
+            api_endpoint! {
+                "/wait_account",
+                async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
+                    Ok(module
+                        .wait_contract_account(context, contract_id)
+                        .await)
                 }
             },
             api_endpoint! {
                 "/offer",
-                async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
-                    let offer = module
+                async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
+                    Ok(module
                         .get_offer(&mut context.dbtx(), payment_hash)
-                        .await
-                        .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
-
-                    debug!(%payment_hash, "Sending offer info");
-                    Ok(offer)
+                        .await)
+               }
+            },
+            api_endpoint! {
+                "/wait_offer",
+                async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
+                    Ok(module
+                        .wait_offer(context, payment_hash)
+                        .await)
                 }
             },
             api_endpoint! {
@@ -809,6 +820,15 @@ impl Lightning {
         dbtx.get_value(&OfferKey(payment_hash)).await
     }
 
+    pub async fn wait_offer(
+        &self,
+        context: &mut ApiEndpointContext<'_>,
+        payment_hash: bitcoin_hashes::sha256::Hash,
+    ) -> IncomingContractOffer {
+        let future = context.wait_key_exists(OfferKey(payment_hash));
+        future.await
+    }
+
     pub async fn get_offers(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
@@ -826,6 +846,16 @@ impl Lightning {
         contract_id: ContractId,
     ) -> Option<ContractAccount> {
         dbtx.get_value(&ContractKey(contract_id)).await
+    }
+
+    pub async fn wait_contract_account(
+        &self,
+        context: &mut ApiEndpointContext<'_>,
+        contract_id: ContractId,
+    ) -> ContractAccount {
+        // not using a variable here leads to a !Send error
+        let future = context.wait_key_exists(ContractKey(contract_id));
+        future.await
     }
 
     pub async fn list_gateways(
