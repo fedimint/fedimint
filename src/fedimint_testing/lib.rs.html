@@ -603,7 +603,7 @@
 
         <span class="kw">async fn </span>member_validate&lt;M: ServerModule&gt;(
             member: <span class="kw-2">&amp;</span>M,
-            dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+            dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
             fake_ic: <span class="kw-2">&amp;</span>FakeInterconnect,
             input: <span class="kw-2">&amp;</span>&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;TestInputMeta, ModuleError&gt; {

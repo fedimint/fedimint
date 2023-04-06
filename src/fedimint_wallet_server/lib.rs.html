@@ -2016,17 +2016,6 @@
 <a href="#2016" id="2016">2016</a>
 <a href="#2017" id="2017">2017</a>
 <a href="#2018" id="2018">2018</a>
-<a href="#2019" id="2019">2019</a>
-<a href="#2020" id="2020">2020</a>
-<a href="#2021" id="2021">2021</a>
-<a href="#2022" id="2022">2022</a>
-<a href="#2023" id="2023">2023</a>
-<a href="#2024" id="2024">2024</a>
-<a href="#2025" id="2025">2025</a>
-<a href="#2026" id="2026">2026</a>
-<a href="#2027" id="2027">2027</a>
-<a href="#2028" id="2028">2028</a>
-<a href="#2029" id="2029">2029</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -2061,7 +2050,6 @@
     ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
@@ -2225,7 +2213,7 @@
     }
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>wallet: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; = BTreeMap::new();
@@ -2313,10 +2301,7 @@
         )
     }
 
-    <span class="kw">async fn </span>await_consensus_proposal(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
-    ) {
+    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">while </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
             <span class="comment">// FIXME: remove after modularization finishes
             </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2326,7 +2311,7 @@
 
     <span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConsensusProposal&lt;WalletConsensusItem&gt; {
         <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable
         </span><span class="kw">let </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
@@ -2383,7 +2368,7 @@
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_items: Vec&lt;(PeerId, WalletConsensusItem)&gt;,
     ) {
         <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_items, <span class="string">&quot;Received consensus proposals&quot;</span>);
@@ -2418,7 +2403,7 @@
     <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>WalletInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
@@ -2447,7 +2432,7 @@
     <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>WalletInput,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
@@ -2470,7 +2455,7 @@
 
     <span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>WalletOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">let </span>fee_rate = <span class="self">self</span>.current_round_consensus(dbtx).<span class="kw">await</span>.unwrap().fee_rate;
@@ -2491,7 +2476,7 @@
 
     <span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>WalletOutput,
         out_point: fedimint_core::OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
@@ -2554,7 +2539,7 @@
     <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
         <span class="comment">// Sign and finalize any unsigned transactions that have signatures
         </span><span class="kw">let </span>unsigned_txs = dbtx
@@ -2609,17 +2594,13 @@
 
     <span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;WalletOutputOutcome&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point)).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>audit(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
-        audit: <span class="kw-2">&amp;mut </span>Audit,
-    ) {
+    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
         audit
             .add_items(dbtx, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| v.amount.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>)
             .<span class="kw">await</span>;
@@ -2762,7 +2743,7 @@
 
     <span class="kw">async fn </span>save_peg_out_signatures&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>cache: BTreeMap&lt;Txid, UnsignedTransaction&gt; = dbtx
@@ -2940,7 +2921,7 @@
 
     <span class="kw">pub async fn </span>current_round_consensus(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;RoundConsensus&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>RoundConsensusKey).<span class="kw">await
     </span>}
@@ -2954,10 +2935,7 @@
         our_network_height.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay)
     }
 
-    <span class="kw">pub async fn </span>consensus_height(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
+    <span class="kw">pub async fn </span>consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
         <span class="self">self</span>.current_round_consensus(dbtx)
             .<span class="kw">await
             </span>.map(|rc| rc.block_height)
@@ -2965,7 +2943,7 @@
 
     <span class="kw">async fn </span>sync_up_to_consensus_height&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         new_height: u32,
     ) {
         <span class="kw">let </span>old_height = <span class="self">self
@@ -3053,7 +3031,7 @@
     /// in a block that we got consensus on.
     </span><span class="kw">async fn </span>recognize_change_utxo&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         pending_tx: <span class="kw-2">&amp;</span>PendingTransaction,
     ) {
         <span class="self">self</span>.remove_rbf_transactions(dbtx, pending_tx).<span class="kw">await</span>;
@@ -3084,7 +3062,7 @@
     <span class="doccomment">/// Removes the `PendingTransaction` and any transactions tied to it via RBF
     </span><span class="kw">async fn </span>remove_rbf_transactions&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         pending_tx: <span class="kw-2">&amp;</span>PendingTransaction,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>all_transactions: BTreeMap&lt;Txid, PendingTransaction&gt; = dbtx
@@ -3122,7 +3100,7 @@
 
     <span class="kw">async fn </span>block_is_known(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         block_hash: BlockHash,
     ) -&gt; bool {
         dbtx.get_value(<span class="kw-2">&amp;</span>BlockHashKey(block_hash)).<span class="kw">await</span>.is_some()
@@ -3130,7 +3108,7 @@
 
     <span class="kw">async fn </span>create_peg_out_tx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>WalletOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletError&gt; {
         <span class="kw">let </span>change_tweak = <span class="self">self
@@ -3170,7 +3148,7 @@
 
     <span class="kw">async fn </span>available_utxos(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;(UTXOKey, SpendableUTXO)&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>UTXOPrefixKey)
             .<span class="kw">await
@@ -3180,7 +3158,7 @@
 
     <span class="kw">pub async fn </span>get_wallet_value(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; bitcoin::Amount {
         <span class="kw">let </span>sat_sum = <span class="self">self
             </span>.available_utxos(dbtx)

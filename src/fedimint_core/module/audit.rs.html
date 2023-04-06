@@ -67,12 +67,10 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 
 <span class="kw">use </span>futures::StreamExt;
 
-<span class="kw">use </span><span class="kw">crate</span>::core::ModuleInstanceId;
 <span class="kw">use </span><span class="kw">crate</span>::db::{DatabaseKey, DatabaseLookup, DatabaseRecord, ModuleDatabaseTransaction};
 
 <span class="attr">#[derive(Default)]
@@ -95,7 +93,7 @@
 
     <span class="kw">pub async fn </span>add_items&lt;KP, F&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         key_prefix: <span class="kw-2">&amp;</span>KP,
         to_milli_sat: F,
     ) <span class="kw">where

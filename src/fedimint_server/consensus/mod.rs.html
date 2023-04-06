@@ -1615,7 +1615,7 @@
 
     <span class="kw">pub async fn </span>get_config_with_sig(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, ModuleInstanceId&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConfigResponse {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client_cfg.clone();
         <span class="kw">let </span>maybe_sig = dbtx.get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey).<span class="kw">await</span>;
