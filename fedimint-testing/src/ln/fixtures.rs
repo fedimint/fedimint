@@ -11,12 +11,13 @@ use futures::stream;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
 use ln_gateway::gatewaylnrpc::{
-    self, CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    self, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
+    RouteHtlcRequest,
 };
-use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
+use ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use ln_gateway::GatewayError;
 use rand::rngs::OsRng;
+use tokio_stream::wrappers::ReceiverStream;
 
 use super::LightningTest;
 
@@ -26,7 +27,6 @@ pub struct FakeLightningTest {
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: Arc<Mutex<u64>>,
-    is_connected: bool,
 }
 
 impl FakeLightningTest {
@@ -40,7 +40,6 @@ impl FakeLightningTest {
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
-            is_connected: true,
         }
     }
 }
@@ -58,12 +57,6 @@ impl LightningTest for FakeLightningTest {
         amount: Amount,
         expiry_time: Option<u64>,
     ) -> ln_gateway::Result<Invoice> {
-        if !self.is_connected {
-            return Err(GatewayError::Other(anyhow::anyhow!(
-                "Error not connected to Lightning"
-            )));
-        }
-
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
@@ -92,12 +85,6 @@ impl LightningTest for FakeLightningTest {
 #[async_trait]
 impl ILnRpcClient for FakeLightningTest {
     async fn info(&self) -> ln_gateway::Result<GetNodeInfoResponse> {
-        if !self.is_connected {
-            return Err(GatewayError::Other(anyhow::anyhow!(
-                "Error not connected to Lightning"
-            )));
-        }
-
         Ok(GetNodeInfoResponse {
             pub_key: self.gateway_node_pub_key.serialize().to_vec(),
             alias: "FakeLightningNode".to_string(),
@@ -105,24 +92,12 @@ impl ILnRpcClient for FakeLightningTest {
     }
 
     async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
-        if !self.is_connected {
-            return Err(GatewayError::Other(anyhow::anyhow!(
-                "Error not connected to Lightning"
-            )));
-        }
-
         Ok(GetRouteHintsResponse {
             route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
         })
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
-        if !self.is_connected {
-            return Err(GatewayError::Other(anyhow::anyhow!(
-                "Error not connected to Lightning"
-            )));
-        }
-
         let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
         *self.amount_sent.lock().unwrap() += Invoice::from_signed(signed)
             .unwrap()
@@ -134,29 +109,10 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn subscribe_htlcs<'a>(
+    async fn route_htlc<'a>(
         &self,
-        _subscription: SubscribeInterceptHtlcsRequest,
-    ) -> ln_gateway::Result<HtlcStream<'a>> {
-        if !self.is_connected {
-            return Err(GatewayError::Other(anyhow::anyhow!(
-                "Error not connected to Lightning"
-            )));
-        }
-
+        _events: ReceiverStream<RouteHtlcRequest>,
+    ) -> Result<RouteHtlcStream<'a>, GatewayError> {
         Ok(Box::pin(stream::iter(vec![])))
-    }
-
-    async fn complete_htlc(
-        &self,
-        _complete: CompleteHtlcsRequest,
-    ) -> ln_gateway::Result<CompleteHtlcsResponse> {
-        if !self.is_connected {
-            return Err(GatewayError::Other(anyhow::anyhow!(
-                "Error not connected to Lightning"
-            )));
-        }
-
-        Ok(CompleteHtlcsResponse {})
     }
 }

@@ -5,12 +5,13 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_core::task::RwLock;
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
+    RouteHtlcRequest,
 };
-use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
+use ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use ln_gateway::GatewayError;
 use tokio::sync::Mutex;
+use tokio_stream::wrappers::ReceiverStream;
 
 /// A proxy for the underlying LnRpc which can be used to add behavior to it
 /// using the "Decorator pattern"
@@ -71,17 +72,10 @@ impl ILnRpcClient for LnRpcAdapter {
         self.client.read().await.pay(invoice).await
     }
 
-    async fn subscribe_htlcs<'a>(
+    async fn route_htlc<'a>(
         &self,
-        subscription: SubscribeInterceptHtlcsRequest,
-    ) -> ln_gateway::Result<HtlcStream<'a>> {
-        self.client.read().await.subscribe_htlcs(subscription).await
-    }
-
-    async fn complete_htlc(
-        &self,
-        complete: CompleteHtlcsRequest,
-    ) -> ln_gateway::Result<CompleteHtlcsResponse> {
-        self.client.read().await.complete_htlc(complete).await
+        events: ReceiverStream<RouteHtlcRequest>,
+    ) -> Result<RouteHtlcStream<'a>, GatewayError> {
+        self.client.read().await.route_htlc(events).await
     }
 }

@@ -504,7 +504,7 @@ impl Gateway {
         // Restart the subscription of HTLCs for each actor
         tracing::info!("Restarting HTLC subscription threads.");
         for actor in actors.values() {
-            actor.write().await.subscribe_htlcs().await?;
+            actor.write().await.route_htlcs().await?;
         }
 
         Ok(())

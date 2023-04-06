@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_core::task::sleep;
 use futures::stream::BoxStream;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::error;
@@ -12,14 +13,15 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetNodeInfoResponse,
-    GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
-    SubscribeInterceptHtlcsResponse,
+    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest,
+    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse, SubscribeInterceptHtlcsResponse,
 };
 use crate::{GatewayError, Result};
 
 pub type HtlcStream<'a> =
     BoxStream<'a, std::result::Result<SubscribeInterceptHtlcsResponse, tonic::Status>>;
+
+pub type RouteHtlcStream<'a> = BoxStream<'a, std::result::Result<RouteHtlcResponse, tonic::Status>>;
 
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
@@ -32,16 +34,10 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
-    /// Subscribe to intercept htlcs that belong to a specific mint identified
-    /// by `short_channel_id`
-    async fn subscribe_htlcs<'a>(
+    async fn route_htlc<'a>(
         &self,
-        subscription: SubscribeInterceptHtlcsRequest,
-    ) -> Result<HtlcStream<'a>>;
-
-    /// Request completion of an intercepted htlc after processing and
-    /// determining an outcome
-    async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse>;
+        events: ReceiverStream<RouteHtlcRequest>,
+    ) -> Result<RouteHtlcStream<'a>>;
 }
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -104,20 +100,12 @@ impl ILnRpcClient for NetworkLnRpcClient {
         return Ok(res.into_inner());
     }
 
-    async fn subscribe_htlcs<'a>(
+    async fn route_htlc<'a>(
         &self,
-        subscription: SubscribeInterceptHtlcsRequest,
-    ) -> Result<HtlcStream<'a>> {
-        let req = Request::new(subscription);
+        events: ReceiverStream<RouteHtlcRequest>,
+    ) -> Result<RouteHtlcStream<'a>> {
         let mut client = self.client.clone();
-        let res = client.subscribe_intercept_htlcs(req).await?;
+        let res = client.route_htlcs(events).await?;
         return Ok(Box::pin(res.into_inner()));
-    }
-
-    async fn complete_htlc(&self, outcome: CompleteHtlcsRequest) -> Result<CompleteHtlcsResponse> {
-        let req = Request::new(outcome);
-        let mut client = self.client.clone();
-        let res = client.complete_htlc(req).await?;
-        return Ok(res.into_inner());
     }
 }
