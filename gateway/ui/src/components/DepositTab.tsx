@@ -46,7 +46,7 @@ export const DepositTab = React.memo(function DepositTab(): JSX.Element {
 
 		const observeMempool = async (timer?: NodeJS.Timer) => {
 			try {
-				const txStatus = await explorer.watchAddessForTransaction(address);
+				const txStatus = await explorer.watchAddressForTransaction(address);
 
 				if (txStatus) {
 					setTxStatus(txStatus);
