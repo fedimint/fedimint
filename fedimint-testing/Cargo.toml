@@ -18,7 +18,7 @@ async-trait = "*"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
-mint-client = { path = "../client/client-lib" }
+mint-client = { path = "../fedimint-client-legacy" }
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }

@@ -44,7 +44,7 @@ fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 futures = "0.3.24"
 lightning-invoice = "0.21.0"
-mint-client = { path = "../../client/client-lib" }
+mint-client = { path = "../../fedimint-client-legacy" }
 prost = "0.11"
 rand = "0.8"
 reqwest = { version = "0.11.14", features = [ "json" ], default-features = false }

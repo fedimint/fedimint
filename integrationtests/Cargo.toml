@@ -38,7 +38,7 @@ fedimint-testing = { path = "../fedimint-testing" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimintd = { path = "../fedimintd" }
-mint-client = { path = "../client/client-lib" }
+mint-client = { path = "../fedimint-client-legacy" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 tokio = { version = "1.26.0", features = ["full"] }

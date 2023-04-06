@@ -20,7 +20,8 @@ The [Fedimint federation](#Federation-Nodes) consists of nodes that are primaril
 * `fedimint-core` - common code used by both client and server
 
 The [user client](#User-Client):
-* `client/client-lib` - provides a library for sending transactions to the federation
+* `fedimint-client-legacy` - provides a library for sending transactions to the federation which is being phased out
+* `fedimint-client` - provides a library for sending transactions to the federation which is still being developed and will replace `fedimint-client-legacy` 
 * `fedimint-cli` - cli wrapper around the client library
 
 The [LN gateway](#LN-Gateway):
