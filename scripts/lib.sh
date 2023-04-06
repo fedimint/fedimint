@@ -107,7 +107,7 @@ function connect_lnd_gateway() {
 }
 
 function get_finality_delay() {
-    cat $FM_CFG_DIR/client.json | jq -e -r ".modules.\"${LEGACY_HARDCODED_INSTANCE_ID_WALLET}\".config.finality_delay"
+    cat $FM_DATA_DIR/client.json | jq -e -r ".modules.\"${LEGACY_HARDCODED_INSTANCE_ID_WALLET}\".config.finality_delay"
 }
 
 function sat_to_btc() {
@@ -145,7 +145,7 @@ function get_raw_transaction() {
 }
 
 function get_federation_id() {
-    cat $FM_CFG_DIR/client.json | jq -e -r '.federation_id'
+    cat $FM_DATA_DIR/client.json | jq -e -r '.federation_id'
 }
 
 function show_verbose_output()
