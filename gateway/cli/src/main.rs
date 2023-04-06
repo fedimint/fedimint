@@ -2,6 +2,8 @@ use std::process::exit;
 
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
+use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
+use fedimint_client_legacy::utils::from_hex;
 use fedimint_core::config::FederationId;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::RpcClient;
@@ -10,8 +12,6 @@ use ln_gateway::rpc::{
     LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 use ln_gateway::Mode;
-use mint_client::modules::wallet::txoproof::TxOutProof;
-use mint_client::utils::from_hex;
 use url::Url;
 
 #[derive(Parser)]

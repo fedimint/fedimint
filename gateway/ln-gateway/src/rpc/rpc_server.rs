@@ -4,7 +4,7 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
-use mint_client::ln::PayInvoicePayload;
+use fedimint_client_legacy::ln::PayInvoicePayload;
 use serde_json::json;
 use tower_http::auth::RequireAuthorizationLayer;
 use tower_http::cors::CorsLayer;

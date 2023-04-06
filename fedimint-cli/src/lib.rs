@@ -14,6 +14,15 @@ use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
+use fedimint_client_legacy::mint::SpendableNote;
+use fedimint_client_legacy::modules::ln::contracts::ContractId;
+use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
+use fedimint_client_legacy::modules::wallet::WalletClientGen;
+use fedimint_client_legacy::utils::{
+    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
+    parse_peer_id, serialize_ecash,
+};
+use fedimint_client_legacy::{Client, UserClientConfig};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsClientConnectInfo,
@@ -30,15 +39,6 @@ use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintClientGen;
-use mint_client::mint::SpendableNote;
-use mint_client::modules::ln::contracts::ContractId;
-use mint_client::modules::wallet::txoproof::TxOutProof;
-use mint_client::modules::wallet::WalletClientGen;
-use mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
-    parse_peer_id, serialize_ecash,
-};
-use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;

@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+use fedimint_client_legacy::module_decode_stubs;
+use fedimint_client_legacy::modules::wallet::WalletClientGen;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
@@ -15,8 +17,6 @@ use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::RpcClient;
 use ln_gateway::Gateway;
-use mint_client::module_decode_stubs;
-use mint_client::modules::wallet::WalletClientGen;
 use url::Url;
 
 pub mod client;

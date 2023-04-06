@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, ClientModuleGenRegistryExt};
+use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
 use fedimint_core::api::{
     DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
@@ -13,7 +14,6 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::dyn_newtype_define;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use mint_client::{module_decode_stubs, Client, GatewayClientConfig};
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
 use url::Url;

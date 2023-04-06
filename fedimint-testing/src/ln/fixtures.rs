@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
+use fedimint_client_legacy::modules::ln::contracts::Preimage;
 use fedimint_core::Amount;
 use futures::stream;
 use lightning::ln::PaymentSecret;
@@ -15,7 +16,6 @@ use ln_gateway::gatewaylnrpc::{
 };
 use ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
 use ln_gateway::GatewayError;
-use mint_client::modules::ln::contracts::Preimage;
 use rand::rngs::OsRng;
 
 use super::LightningTest;

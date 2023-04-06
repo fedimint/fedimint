@@ -3,10 +3,9 @@ name = "fedimint-client"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "fedimint-client-legacy provides a library for sending transactions to the federation."
+description = "fedimint-client provides a library for sending transactions to the federation. It replaces fedimint-client-legacy."
 license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "fedimint_client"
 path = "src/lib.rs"

@@ -53,7 +53,7 @@ final-check: lint
   just test
 
 check-wasm:
-  nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package mint-client
+  nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package fedimint-client-legacy
 
 [no-exit-message]
 typos:

@@ -7,7 +7,7 @@ description = "fedimint-client-legacy provides a library for sending transaction
 license = "MIT"
 
 [lib]
-name = "mint_client"
+name = "fedimint_client_legacy"
 path = "src/lib.rs"
 
 
