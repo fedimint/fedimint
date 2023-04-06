@@ -9,11 +9,11 @@ source ./scripts/setup-tests.sh
 
 # Test config en/decryption tool
 export FM_PASSWORD=pass0
-$FM_DISTRIBUTEDGEN config-decrypt --in-file $FM_CFG_DIR/server-0/private.encrypt --out-file $FM_CFG_DIR/server-0/config-plaintext.json
+$FM_DISTRIBUTEDGEN config-decrypt --in-file $FM_DATA_DIR/server-0/private.encrypt --out-file $FM_DATA_DIR/server-0/config-plaintext.json
 export FM_PASSWORD=pass-foo
-$FM_DISTRIBUTEDGEN config-encrypt --in-file $FM_CFG_DIR/server-0/config-plaintext.json --out-file $FM_CFG_DIR/server-0/config-2
-$FM_DISTRIBUTEDGEN config-decrypt --in-file $FM_CFG_DIR/server-0/config-2 --out-file $FM_CFG_DIR/server-0/config-plaintext-2.json
-cmp --silent $FM_CFG_DIR/server-0/config-plaintext.json $FM_CFG_DIR/server-0/config-plaintext-2.json
+$FM_DISTRIBUTEDGEN config-encrypt --in-file $FM_DATA_DIR/server-0/config-plaintext.json --out-file $FM_DATA_DIR/server-0/config-2
+$FM_DISTRIBUTEDGEN config-decrypt --in-file $FM_DATA_DIR/server-0/config-2 --out-file $FM_DATA_DIR/server-0/config-plaintext-2.json
+cmp --silent $FM_DATA_DIR/server-0/config-plaintext.json $FM_DATA_DIR/server-0/config-plaintext-2.json
 
 ./scripts/pegin.sh # peg in user
 
@@ -24,15 +24,15 @@ start_gateways
 #### BEGIN TESTS ####
 
 # test the fetching of client configs
-CONNECT_STRING=$(cat $FM_CFG_DIR/client-connect)
-rm $FM_CFG_DIR/client.json
+CONNECT_STRING=$(cat $FM_DATA_DIR/client-connect)
+rm $FM_DATA_DIR/client.json
 $FM_MINT_CLIENT join-federation "$CONNECT_STRING"
 
 FED_ID="$(get_federation_id)"
 [[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.id')" = "${FED_ID}" ]]
 # Number required for one honest is ceil(($FM_FED_SIZE-1)/3+1)
 ONE_HONEST=2
-ONE_HONEST_URLS=$(cat $FM_CFG_DIR/client.json | jq --argjson one_honest $ONE_HONEST -e -r '.api_endpoints | to_entries[:$one_honest] | map(.value.url) | join(",")')
+ONE_HONEST_URLS=$(cat $FM_DATA_DIR/client.json | jq --argjson one_honest $ONE_HONEST -e -r '.api_endpoints | to_entries[:$one_honest] | map(.value.url) | join(",")')
 [[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.urls | join(",")')" = "$ONE_HONEST_URLS" ]]
 [[ "$($FM_MINT_CLIENT encode-connect-info --urls $ONE_HONEST_URLS --id $FED_ID | jq -e -r '.connect_info')" = "$CONNECT_STRING" ]]
 

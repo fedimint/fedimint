@@ -328,6 +328,16 @@
                 pkg = rustPackageOutputsFinal.fedimint-pkgs;
                 bin = "distributedgen";
               };
+            gatewayd = pickBinary
+              {
+                pkg = rustPackageOutputsFinal.gateway-pkgs;
+                bin = "gatewayd";
+              };
+            gateway-cli = pickBinary
+              {
+                pkg = rustPackageOutputsFinal.gateway-pkgs;
+                bin = "gateway-cli";
+              };
           };
 
           # Technically nested sets are not allowed in `packages`, so we can
@@ -450,7 +460,7 @@
                     cargo-udeps
                     pkgs.parallel
                     pkgs.just
-                    cargo-spellcheck
+                    typos
 
                     (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
 
@@ -581,6 +591,11 @@
                   cachix
                 ];
               };
+
+              gateway-ui = pkgs.mkShell (shellCommonNative
+                // {
+                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ pkgs.yarn ];
+              });
             };
         in
         {

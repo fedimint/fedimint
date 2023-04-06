@@ -24,7 +24,7 @@ fn fedimint_env(peer_id: usize) -> anyhow::Result<HashMap<String, String>> {
     let p2p_port = base_port + (peer_id * 10);
     let api_port = base_port + (peer_id * 10) + 1;
     let ui_port = base_port + (peer_id * 10) + 2;
-    let cfg_dir = env::var("FM_CFG_DIR")?;
+    let cfg_dir = env::var("FM_DATA_DIR")?;
     Ok(HashMap::from_iter([
         ("FM_BIND_P2P".into(), format!("127.0.0.1:{p2p_port}")),
         (
@@ -60,7 +60,7 @@ impl Federation {
             members.push(Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
         }
 
-        let workdir: PathBuf = env::var("FM_CFG_DIR")?.parse()?;
+        let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
         let cfg_path = workdir.join("client.json");
         let cfg: UserClientConfig = load_from_file(&cfg_path)?;
         let decoders = module_decode_stubs();
@@ -84,7 +84,7 @@ impl Federation {
 
     pub async fn cmd(&self) -> Command {
         let bin_dir = env::var("FM_BIN_DIR").unwrap();
-        let cfg_dir = env::var("FM_CFG_DIR").unwrap();
+        let cfg_dir = env::var("FM_DATA_DIR").unwrap();
         cmd!("{bin_dir}/fedimint-cli", "--data-dir", cfg_dir)
     }
 
@@ -154,7 +154,7 @@ impl Fedimintd {
         peer_id: usize,
     ) -> Result<Self> {
         let bin_dir = env::var("FM_BIN_DIR")?;
-        let cfg_dir = env::var("FM_CFG_DIR")?;
+        let cfg_dir = env::var("FM_DATA_DIR")?;
         let env_vars = fedimint_env(peer_id)?;
         let data_dir = env_vars
             .get("FM_FEDIMINT_DATA_DIR")
@@ -228,7 +228,7 @@ pub async fn run_dkg(root_task_group: &TaskGroup, servers: usize) -> anyhow::Res
     async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()> {
         let certs = certs.join(",");
         let bin_dir = env::var("FM_BIN_DIR")?;
-        let cfg_dir = env::var("FM_CFG_DIR")?;
+        let cfg_dir = env::var("FM_DATA_DIR")?;
         let server_name = format!("Server-{id}");
 
         let env_vars = fedimint_env(id)?;

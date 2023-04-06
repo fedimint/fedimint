@@ -151,6 +151,17 @@ function check_cargo_lock() {
 }
 export -f check_cargo_lock
 
+function check_ui_lint() {
+  set -eo pipefail
+
+  if ! command -v npx > /dev/null ; then
+    >&2 echo "Skipping npx check"
+    return 0
+  fi
+
+  npx lint-staged
+}
+export -f check_ui_lint
 
 parallel ::: \
   check_nix \
@@ -160,4 +171,5 @@ parallel ::: \
   check_shellcheck \
   check_eof \
   check_forbidden_dependencies \
-  check_cargo_lock
+  check_cargo_lock \
+  check_ui_lint

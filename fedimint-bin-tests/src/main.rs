@@ -196,7 +196,10 @@ impl Lnd {
         let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR")?;
         let lnd_macaroon = env::var("FM_LND_MACAROON")?;
         let lnd_tls_cert = env::var("FM_LND_TLS_CERT")?;
-        poll("lnd", || async { Ok(fs::try_exists(&lnd_tls_cert).await?) }).await?;
+        poll("lnd", || async {
+            Ok(fs::try_exists(&lnd_tls_cert).await? && fs::try_exists(&lnd_macaroon).await?)
+        })
+        .await?;
         let client = tonic_lnd::connect(
             lnd_rpc_addr.clone(),
             lnd_tls_cert.clone(),
@@ -420,6 +423,8 @@ async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        electrs,
+        esplora,
     } = dev_fed;
 
     fed.pegin(10_000_000).await?;
@@ -518,14 +523,17 @@ struct DevFed {
     fed: Federation,
     gw_cln: Gatewayd,
     gw_lnd: Gatewayd,
+    electrs: Electrs,
+    esplora: Esplora,
 }
 
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    let (cln, lnd) = tokio::try_join!(
+    let (cln, lnd, electrs, esplora) = tokio::try_join!(
         Lightningd::new(process_mgr, bitcoind.clone()),
         Lnd::new(process_mgr, bitcoind.clone()),
+        Electrs::new(process_mgr, bitcoind.clone()),
+        Esplora::new(process_mgr, bitcoind.clone()),
     )?;
     info!("lightning and bitcoind started");
     run_dkg(task_group, 4).await?;
@@ -549,6 +557,8 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
         fed,
         gw_cln,
         gw_lnd,
+        electrs,
+        esplora,
     })
 }
 
@@ -564,6 +574,63 @@ async fn tmuxinator(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Res
             fs::write(ready_file, "ERROR").await?;
             Err(e)
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct Electrs {
+    _process: ProcessHandle,
+    _bitcoind: Bitcoind,
+}
+
+impl Electrs {
+    pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        let electrs_dir = env::var("FM_ELECTRS_DIR")?;
+
+        let cmd = cmd!(
+            "electrs",
+            "--conf-dir={electrs_dir}",
+            "--db-dir={electrs_dir}",
+        );
+        let process = process_mgr.spawn_daemon("electrs", cmd).await?;
+        info!("electrs started");
+
+        Ok(Self {
+            _bitcoind: bitcoind,
+            _process: process,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct Esplora {
+    _process: ProcessHandle,
+    _bitcoind: Bitcoind,
+}
+
+impl Esplora {
+    pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        let daemon_dir = env::var("FM_BTC_DIR")?;
+        let esplora_dir = env::var("FM_ESPLORA_DIR")?;
+
+        // spawn esplora
+        let cmd = cmd!(
+            "esplora",
+            "--daemon-dir={daemon_dir}",
+            "--db-dir={esplora_dir}",
+            "--cookie=bitcoin:bitcoin",
+            "--network=regtest",
+            "--daemon-rpc-addr=127.0.0.1:18443",
+            "--http-addr=127.0.0.1:50002",
+            "--monitoring-addr=127.0.0.1:50003",
+        );
+        let process = process_mgr.spawn_daemon("esplora", cmd).await?;
+        info!("esplora started");
+
+        Ok(Self {
+            _bitcoind: bitcoind,
+            _process: process,
+        })
     }
 }
 

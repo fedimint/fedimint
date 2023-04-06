@@ -55,23 +55,17 @@ final-check: lint
 check-wasm:
   nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package mint-client
 
-# check files you've touched for spelling errors
-spell:
+[no-exit-message]
+typos:
   #!/usr/bin/env bash
-  >&2 echo '💡 Valid new words can be added to dictionary in `.config/spellcheck.dic`'
-  ref_branch=master
-  if git rev-parse --verify upstream/master >/dev/null 2>/dev/null ; then
-    ref_branch=upstream/master
-  elif  git rev-parse --verify upstream/master >/dev/null 2>/dev/null ; then
-    ref_branch=u/master
-  fi
-  cargo spellcheck fix $(git diff $ref_branch..HEAD --name-only)
+  >&2 echo '💡 Valid new words can be added to `_typos.toml`'
+  typos
 
-# try to fix spelling in all files
-spell-fix-all:
-   @>&2 echo '❗ `cargo spellcheck fix` seems buggy. Quit and verify your changes often.'
-   @>&2 echo '💡 Valid new words can be added to dictionary in `.config/spellcheck.dic`'
-   cargo spellcheck fix
+[no-exit-message]
+typos-fix-all:
+  #!/usr/bin/env bash
+  >&2 echo '💡 Valid new words can be added to `_typos.toml`'
+  typos --write-changes
 
 # run code formatters
 format:
@@ -81,3 +75,7 @@ format:
 # start tmuxinator with a dev federation setup
 tmuxinator:
   ./scripts/tmuxinator.sh
+
+# exit tmuxinator session
+exit-tmuxinator:
+  tmux kill-session -t fedimint-dev

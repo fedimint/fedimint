@@ -33,17 +33,17 @@ anyhow = "1.0.66"
 async-trait = "0.1.64"
 axum = "0.6.4"
 axum-macros = "0.3.1"
-bitcoin_hashes = "0.11.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
+bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
-cln-rpc = "0.1.1"
 cln-plugin = { git = "https://github.com/fedimint/lightning", rev = "2db131d5" }
+cln-rpc = "0.1.1"
+fedimint-client = { path = "../../fedimint-client" }
+fedimint-core = { path = "../../fedimint-core" }
+fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 futures = "0.3.24"
 lightning-invoice = "0.21.0"
-fedimint-client = { path = "../../fedimint-client" }
-fedimint-core ={ path = "../../fedimint-core" }
-fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
-fedimint-logging = { path = "../../fedimint-logging" }
 mint-client = { path = "../../client/client-lib" }
 prost = "0.11"
 rand = "0.8"
@@ -52,18 +52,18 @@ secp256k1 = "0.24.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.91"
 thiserror = "1.0.39"
-tracing = { version = "0.1.37", default-features = false, features= ["log", "attributes", "std"] }
 tokio = { version = "1.26", features = ["full"] }
 tokio-stream = "0.1.11"
 tonic = { version = "0.8", features = ["transport", "tls"] }
 tonic_lnd = { git = "https://github.com/fedimint/tonic_lnd", branch="lnd-client-features", features = ["lightningrpc", "routerrpc"] }
 tower-http = { version = "0.3.5", features = ["cors", "auth"] }
+tracing = { version = "0.1.37", default-features = false, features= ["log", "attributes", "std"] }
 url = { version = "2.3.1", features = ["serde"] }
 
 [dev-dependencies]
 fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
-fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
+fedimint-testing = { path = "../../fedimint-testing" }
 portpicker = "0.1.1"
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 

@@ -68,25 +68,25 @@ First, start a tmux so that there is a running federation
 
 Dump the entire database of server-0
 ```shell
-dbtool $FM_CFG_DIR/server-0/database dump -- $FM_CFG_DIR/server-0 pass0
+dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass0
 ```
 
 Dump the consensus db entries of server-0
 ```shell
-dbtool $FM_CFG_DIR/server-0/database dump -- $FM_CFG_DIR/server-0 pass0 consensus
+dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass0 consensus
 ```
 
 Dump the blocks from the wallet module of server-1
 ```shell
-dbtool $FM_CFG_DIR/server-1/database dump -- $FM_CFG_DIR/server-1 pass1 consensus blockhash
+dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass1 consensus blockhash
 ```
 
 Dump the used notes from the mint module and the accepted transactions from consensus
 ```shell
-dbtool $FM_CFG_DIR/server-1/database dump -- $FM_CFG_DIR/server-1 pass1 consensus,mint notenonce,acceptedtransaction
+dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass1 consensus,mint notenonce,acceptedtransaction
 ```
 
 Dump the entire client database (client password can be anything since it doesn't require decryption)
 ```shell
-dbtool $FM_CFG_DIR/client.db dump $FM_CFG_DIR clientpass client
+dbtool $FM_DATA_DIR/client.db dump $FM_DATA_DIR clientpass client
 ```

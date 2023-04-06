@@ -315,7 +315,7 @@ impl Gateway {
         &self,
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
-    ) -> Result<()> {
+    ) -> Result<FederationInfo> {
         let connect = WsClientConnectInfo::from_str(&payload.connect).map_err(|e| {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
@@ -345,9 +345,12 @@ impl Gateway {
                 .expect("Failed to build gateway client"),
         );
 
-        if let Err(e) = self.load_actor(client.clone(), route_hints).await {
-            error!("Failed to connect federation: {}", e);
-        }
+        let actor = self
+            .load_actor(client.clone(), route_hints)
+            .await
+            .map_err(|e| {
+                GatewayError::Other(anyhow::anyhow!("Failed to connect federation {}", e))
+            })?;
 
         if let Err(e) = self.client_builder.save_config(client.config()) {
             warn!(
@@ -356,7 +359,9 @@ impl Gateway {
             );
         }
 
-        Ok(())
+        let federation_info = actor.read().await.get_info()?;
+
+        Ok(federation_info)
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {

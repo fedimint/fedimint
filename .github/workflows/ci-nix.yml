@@ -212,14 +212,19 @@ jobs:
 
   notifications:
     # if: github.ref == 'refs/heads/master'
+    if: always()                              
     name: "Notifications"
     timeout-minutes: 1
     runs-on: ubuntu-22.04
+    needs: [ build, cross, ccov, containers, pkgs ]
 
     steps:
     - name: Discord notifications on failure                                                         
-      if: failure()                              
+      # https://stackoverflow.com/a/74562058/134409
+      if: ${{ always() && contains(needs.*.result, 'failure') }}
       # https://github.com/marketplace/actions/actions-status-discord
       uses: sarisia/actions-status-discord@v1
       with:
         webhook: ${{ secrets.DISCORD_WEBHOOK }}
+        # current job is a success, but that's not what we're interested in
+        status: failure
