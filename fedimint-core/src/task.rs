@@ -342,7 +342,7 @@ impl TaskHandle {
 
     /// Run `f` on shutdown.
     ///
-    /// If TaskGroup is already shuting down, run the function immediately.
+    /// If TaskGroup is already shutting down, run the function immediately.
     pub async fn on_shutdown(
         &self,
         // f: FnOnce() -> BoxFuture<'static, ()> + Send + 'static

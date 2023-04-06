@@ -20,7 +20,7 @@
 //! The set of all consensus versions of each component is a part of consensus
 //! config that is identical for all peers.
 //!
-//! The code implementing given component can however suport multiple consensus
+//! The code implementing given component can however support multiple consensus
 //! versions at the same time, making it possible to use the same code for
 //! diverse set of Federations created at different times. The consensus
 //! version to run with is passed to the code during initialization.
@@ -37,7 +37,7 @@
 //! Federation, both server and client side components can advertise simultanous
 //! support for multiple API versions. This is the main mechanism to ensure
 //! interoperability in the face of hard to control and predict software changes
-//! accross all the involved software.
+//! across all the involved software.
 //!
 //! Each peer in the Federation and each client can update the Fedimint software
 //! at their own pace without cordinating API changes.
