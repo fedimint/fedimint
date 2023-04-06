@@ -330,7 +330,7 @@ mod tests {
     use std::sync::Arc;
 
     use bitcoin::hashes::{sha256, Hash};
-    use fedimint_core::config::ConfigGenParams;
+    use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     };
@@ -435,7 +435,7 @@ mod tests {
             FakeFed::<Lightning>::new(
                 4,
                 |cfg, _db| async move { Ok(Lightning::new(cfg.to_typed()?)) },
-                &ConfigGenParams::null(),
+                &ConfigGenModuleParams::null(),
                 &LightningGen,
                 module_id,
             )

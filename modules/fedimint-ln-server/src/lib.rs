@@ -4,8 +4,8 @@ use std::ops::Sub;
 
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
@@ -78,7 +78,7 @@ impl ServerModuleGen for LightningGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        _params: &ConfigGenParams,
+        _params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);
         let pks = sks.public_keys();
@@ -110,7 +110,7 @@ impl ServerModuleGen for LightningGen {
     async fn distributed_gen(
         &self,
         peers: &PeerHandle,
-        _params: &ConfigGenParams,
+        _params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let g1 = peers.run_dkg_g1(()).await?;
 

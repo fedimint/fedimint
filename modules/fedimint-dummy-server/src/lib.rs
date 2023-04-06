@@ -3,8 +3,8 @@ use std::ffi::OsString;
 
 use async_trait::async_trait;
 use fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
@@ -66,7 +66,7 @@ impl ServerModuleGen for DummyServerGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        _params: &ConfigGenParams,
+        _params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let mint_cfg: BTreeMap<_, DummyConfig> = peers
             .iter()
@@ -90,7 +90,7 @@ impl ServerModuleGen for DummyServerGen {
     async fn distributed_gen(
         &self,
         _peers: &PeerHandle,
-        _params: &ConfigGenParams,
+        _params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let server = DummyConfig {
             private: DummyConfigPrivate {

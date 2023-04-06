@@ -193,7 +193,7 @@ mod tests {
     use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
     use bitcoin_hashes::Hash;
-    use fedimint_core::config::ConfigGenParams;
+    use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
@@ -289,7 +289,7 @@ mod tests {
                         .await?)
                     }
                 },
-                &ConfigGenParams::from_typed(WalletGenParams {
+                &ConfigGenModuleParams::from_typed(WalletGenParams {
                     network: bitcoin::network::constants::Network::Regtest,
                     finality_delay: 10,
                 })

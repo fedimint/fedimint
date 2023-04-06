@@ -4,7 +4,7 @@ use std::iter::FromIterator;
 use std::ops::Sub;
 
 use fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -92,7 +92,7 @@ impl ServerModuleGen for MintGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = params
             .to_typed::<MintGenParams>()
@@ -149,7 +149,7 @@ impl ServerModuleGen for MintGen {
     async fn distributed_gen(
         &self,
         peers: &PeerHandle,
-        params: &ConfigGenParams,
+        params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let params = params
             .to_typed::<MintGenParams>()
@@ -950,7 +950,8 @@ impl Mint {
 #[cfg(test)]
 mod test {
     use fedimint_core::config::{
-        ClientModuleConfig, ConfigGenParams, ServerModuleConfig, TypedServerModuleConsensusConfig,
+        ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig,
+        TypedServerModuleConsensusConfig,
     };
     use fedimint_core::module::ServerModuleGen;
     use fedimint_core::{Amount, PeerId, TieredMulti};
@@ -969,7 +970,7 @@ mod test {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
         let mint_cfg = MintGen.trusted_dealer_gen(
             &peers,
-            &ConfigGenParams::from_typed(MintGenParams {
+            &ConfigGenModuleParams::from_typed(MintGenParams {
                 mint_amounts: vec![Amount::from_sats(1)],
             })
             .unwrap(),

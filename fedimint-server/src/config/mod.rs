@@ -4,16 +4,18 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{bail, format_err};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
-use fedimint_core::admin_client::PeerServerParams;
+use fedimint_core::admin_client::{
+    ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
+};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
-    ApiEndpoint, ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind,
-    ModuleConfigResponse, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
+    ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, ModuleConfigResponse,
+    PeerUrl, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
@@ -31,14 +33,14 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
 use tracing::{error, info};
-use url::Url;
 
+use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
 use crate::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TLS_PK};
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::{BitcoinHash, NumPeers};
 use crate::multiplexed::PeerConnectionMultiplexer;
-use crate::net::connect::{parse_host_port, Connector, TlsConfig};
+use crate::net::connect::{Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
@@ -103,7 +105,7 @@ pub struct ServerConfigConsensus {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
     /// Network addresses and names for all peer APIs
-    pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
+    pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Certs for TLS communication, required for peer authentication
     #[serde(with = "serde_tls_cert_map")]
     pub tls_certs: BTreeMap<PeerId, rustls::Certificate>,
@@ -117,7 +119,7 @@ pub struct ServerConfigConsensus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
     /// Network addresses and names for all p2p connections
-    pub p2p_endpoints: BTreeMap<PeerId, ApiEndpoint>,
+    pub p2p_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Our peer id (generally should not change)
     pub identity: PeerId,
     /// Our bind address for communicating with peers
@@ -135,26 +137,9 @@ pub struct ServerConfigLocal {
 ///
 /// * Guardians can create the parameters using a setup UI or CLI tool
 /// * Used for distributed or trusted config generation
-pub struct ServerConfigParams {
-    /// Id of this server
-    pub our_id: PeerId,
-    /// Id of all servers
-    pub peer_ids: Vec<PeerId>,
-    /// Secret API auth string
-    pub api_auth: ApiAuth,
-    /// How we authenticate our communication with peers during DKG
-    pub tls: TlsConfig,
-    /// Endpoints for P2P communication
-    pub p2p_network: NetworkConfig,
-    /// Endpoints for client API communication
-    pub api_network: NetworkConfig,
-    /// Guardian-defined key-value pairs that will be passed to the client.
-    /// These should be the same for all guardians since they become part of
-    /// the consensus config.
-    pub meta: BTreeMap<String, String>,
-    /// Params for the modules we wish to configure, can contain custom
-    /// parameters
-    pub modules: ServerModuleGenParamsRegistry,
+pub struct ConfigGenParams {
+    pub local: ConfigGenParamsLocal,
+    pub consensus: ConfigGenParamsConsensus,
 }
 
 impl ServerConfigConsensus {
@@ -221,7 +206,7 @@ impl ServerConfig {
     /// Creates a new config from the results of a trusted or distributed key
     /// setup
     pub fn from(
-        params: ServerConfigParams,
+        params: ConfigGenParams,
         identity: PeerId,
         auth_keys: ThresholdKeys,
         epoch_keys: ThresholdKeys,
@@ -229,18 +214,18 @@ impl ServerConfig {
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
     ) -> Self {
         let private = ServerConfigPrivate {
-            api_auth: params.api_auth.clone(),
-            tls_key: params.tls.our_private_key.clone(),
+            api_auth: params.local.api_auth.clone(),
+            tls_key: params.local.our_private_key.clone(),
             auth_sks: auth_keys.secret_key_share,
             hbbft_sks: hbbft_keys.secret_key_share,
             epoch_sks: epoch_keys.secret_key_share,
             modules: Default::default(),
         };
         let local = ServerConfigLocal {
-            p2p_endpoints: params.peers(),
+            p2p_endpoints: params.p2p_urls(),
             identity,
-            fed_bind: params.p2p_network.bind_addr,
-            api_bind: params.api_network.bind_addr,
+            fed_bind: params.local.p2p_bind,
+            api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
         };
@@ -249,10 +234,10 @@ impl ServerConfig {
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
-            api_endpoints: params.api_nodes(),
-            tls_certs: params.tls.peer_certs.clone(),
+            api_endpoints: params.api_urls(),
+            tls_certs: params.tls_certs(),
             modules: Default::default(),
-            meta: params.meta,
+            meta: params.consensus.requested.meta,
         };
         let mut cfg = Self {
             consensus,
@@ -363,21 +348,20 @@ impl ServerConfig {
     }
 
     pub fn trusted_dealer_gen(
-        params: &HashMap<PeerId, ServerConfigParams>,
+        params: &HashMap<PeerId, ConfigGenParams>,
         registry: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
     ) -> BTreeMap<PeerId, Self> {
         let mut rng = OsRng;
         let peer0 = &params[&PeerId::from(0)];
-        let peers = &peer0.peer_ids;
 
-        let netinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+        let netinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
-        let epochinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+        let epochinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
-        let authinfo = NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+        let authinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
-        let null_config_gen = ConfigGenParams::null();
+        let null_config_gen = ConfigGenModuleParams::null();
 
         // We assume user wants one module instance for every module kind
         let module_configs: BTreeMap<_, _> = registry
@@ -386,8 +370,13 @@ impl ServerConfig {
                 (
                     module_id,
                     gen.trusted_dealer_gen(
-                        peers,
-                        peer0.modules.get(&kind).unwrap_or(&null_config_gen),
+                        &peer0.peer_ids(),
+                        peer0
+                            .consensus
+                            .requested
+                            .modules
+                            .get(&kind)
+                            .unwrap_or(&null_config_gen),
                     ),
                 )
             })
@@ -423,14 +412,14 @@ impl ServerConfig {
 
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
-        params: &ServerConfigParams,
+        params: &ConfigGenParams,
         registry: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
         let server_conn = connect(
-            params.p2p_network.clone(),
-            params.tls.clone(),
+            params.p2p_network(),
+            params.tls_config(),
             delay_calculator,
             task_group,
         )
@@ -438,8 +427,8 @@ impl ServerConfig {
         let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
         let mut rng = OsRng;
 
-        let peers = &params.peer_ids;
-        let our_id = &params.our_id;
+        let peers = &params.peer_ids();
+        let our_id = &params.local.our_id;
         // in case we are running by ourselves, avoid DKG
         if peers.len() == 1 {
             let server =
@@ -471,13 +460,21 @@ impl ServerConfig {
         // of each module that was compiled in. This is how things were
         // initially, where we consider "module as a code" as "module as an instance at
         // runtime"
-        let null_config_gen = ConfigGenParams::null();
+        let null_config_gen = ConfigGenModuleParams::null();
         for (module_instance_id, (kind, gen)) in registry {
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(&dkg, params.modules.get(&kind).unwrap_or(&null_config_gen))
-                    .await?,
+                gen.distributed_gen(
+                    &dkg,
+                    params
+                        .consensus
+                        .requested
+                        .modules
+                        .get(&kind)
+                        .unwrap_or(&null_config_gen),
+                )
+                .await?,
             );
         }
 
@@ -577,33 +574,69 @@ impl ServerConfig {
     }
 }
 
-impl ServerConfigParams {
-    pub fn peers(&self) -> BTreeMap<PeerId, ApiEndpoint> {
-        self.p2p_network
+impl ConfigGenParams {
+    pub fn peer_ids(&self) -> Vec<PeerId> {
+        self.consensus.peers.keys().cloned().collect()
+    }
+
+    pub fn p2p_network(&self) -> NetworkConfig {
+        NetworkConfig {
+            identity: self.local.our_id,
+            bind_addr: self.local.p2p_bind,
+            peers: self
+                .p2p_urls()
+                .into_iter()
+                .map(|(id, peer)| (id, peer.url))
+                .collect(),
+        }
+    }
+
+    pub fn tls_config(&self) -> TlsConfig {
+        TlsConfig {
+            our_private_key: self.local.our_private_key.clone(),
+            peer_certs: self.tls_certs(),
+            peer_names: self
+                .p2p_urls()
+                .into_iter()
+                .map(|(id, peer)| (id, peer.name))
+                .collect(),
+        }
+    }
+
+    pub fn tls_certs(&self) -> BTreeMap<PeerId, rustls::Certificate> {
+        self.consensus
             .peers
             .iter()
-            .map(|(id, url)| {
+            .map(|(id, peer)| (*id, peer.cert.clone()))
+            .collect::<BTreeMap<_, _>>()
+    }
+
+    pub fn p2p_urls(&self) -> BTreeMap<PeerId, PeerUrl> {
+        self.consensus
+            .peers
+            .iter()
+            .map(|(id, peer)| {
                 (
                     *id,
-                    ApiEndpoint {
-                        url: url.clone(),
-                        name: self.tls.peer_names.get(id).expect("exists").clone(),
+                    PeerUrl {
+                        name: peer.name.clone(),
+                        url: peer.p2p_url.clone(),
                     },
                 )
             })
             .collect::<BTreeMap<_, _>>()
     }
 
-    pub fn api_nodes(&self) -> BTreeMap<PeerId, ApiEndpoint> {
-        self.p2p_network
+    pub fn api_urls(&self) -> BTreeMap<PeerId, PeerUrl> {
+        self.consensus
             .peers
-            .keys()
-            .map(|peer| {
+            .iter()
+            .map(|(id, peer)| {
                 (
-                    *peer,
-                    ApiEndpoint {
-                        name: self.tls.peer_names[peer].clone(),
-                        url: self.api_network.peers[peer].clone(),
+                    *id,
+                    PeerUrl {
+                        name: peer.name.clone(),
+                        url: peer.api_url.clone(),
                     },
                 )
             })
@@ -638,13 +671,13 @@ impl ServerConfigParams {
             .map(|(peer, _)| *peer)
             .ok_or_else(|| anyhow::Error::msg("Our id not found"))?;
 
-        Ok(ServerConfigParams::gen_params(
+        Ok(ConfigGenParams::new(
             ApiAuth(api_auth),
             bind_p2p,
             bind_api,
             rustls::PrivateKey(tls_pk),
             our_id,
-            &peers,
+            peers,
             federation_name,
             module_params,
         ))
@@ -652,114 +685,32 @@ impl ServerConfigParams {
 
     /// Generates the parameters necessary for running server config generation
     #[allow(clippy::too_many_arguments)]
-    pub fn gen_params(
+    pub fn new(
         api_auth: ApiAuth,
-        bind_p2p: SocketAddr,
-        bind_api: SocketAddr,
-        key: rustls::PrivateKey,
+        p2p_bind: SocketAddr,
+        api_bind: SocketAddr,
+        our_private_key: rustls::PrivateKey,
         our_id: PeerId,
-        peers: &BTreeMap<PeerId, PeerServerParams>,
+        peers: BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
         modules: ServerModuleGenParamsRegistry,
-    ) -> ServerConfigParams {
-        let peer_certs: BTreeMap<PeerId, rustls::Certificate> = peers
-            .iter()
-            .map(|(peer, params)| (*peer, params.cert.clone()))
-            .collect::<BTreeMap<_, _>>();
-
-        let peer_names: BTreeMap<PeerId, String> = peers
-            .iter()
-            .map(|(peer, params)| (*peer, params.name.to_string()))
-            .collect::<BTreeMap<_, _>>();
-
-        let tls = TlsConfig {
-            our_private_key: key,
-            peer_certs,
-            peer_names,
-        };
-
-        ServerConfigParams {
-            our_id,
-            peer_ids: peers.keys().cloned().collect(),
-            api_auth,
-            tls,
-            p2p_network: Self::gen_network(&bind_p2p, &our_id, peers, |params| params.p2p_url),
-            api_network: Self::gen_network(&bind_api, &our_id, peers, |params| params.api_url),
-            meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
-            modules,
+    ) -> ConfigGenParams {
+        ConfigGenParams {
+            local: ConfigGenParamsLocal {
+                our_id,
+                our_private_key,
+                api_auth,
+                p2p_bind,
+                api_bind,
+            },
+            consensus: ConfigGenParamsConsensus {
+                peers,
+                requested: ConfigGenParamsRequest {
+                    meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
+                    modules,
+                },
+            },
         }
-    }
-
-    fn gen_network(
-        bind_address: &SocketAddr,
-        our_id: &PeerId,
-        peers: &BTreeMap<PeerId, PeerServerParams>,
-        extract_url: impl Fn(PeerServerParams) -> Url,
-    ) -> NetworkConfig {
-        NetworkConfig {
-            identity: *our_id,
-            bind_addr: *bind_address,
-            peers: peers
-                .iter()
-                .map(|(peer, params)| {
-                    let url = extract_url(params.clone());
-                    (*peer, url)
-                })
-                .collect(),
-        }
-    }
-
-    /// config for servers running on different ports on a local network
-    pub fn gen_local(
-        peers: &[PeerId],
-        base_port: u16,
-        federation_name: &str,
-        modules: ServerModuleGenParamsRegistry,
-    ) -> anyhow::Result<HashMap<PeerId, ServerConfigParams>> {
-        let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
-            .iter()
-            .map(|peer| {
-                let (cert, key) = gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap();
-                (*peer, (cert, key))
-            })
-            .collect::<HashMap<_, _>>();
-
-        let peer_params: BTreeMap<PeerId, PeerServerParams> = peers
-            .iter()
-            .map(|peer| {
-                let peer_port = base_port + u16::from(*peer) * 10;
-                let p2p_url = format!("ws://127.0.0.1:{peer_port}");
-                let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
-
-                let params: PeerServerParams = PeerServerParams {
-                    cert: keys[peer].0.clone(),
-                    p2p_url: p2p_url.parse().expect("Should parse"),
-                    api_url: api_url.parse().expect("Should parse"),
-                    name: format!("peer-{}", peer.to_usize()),
-                };
-                (*peer, params)
-            })
-            .collect();
-
-        peers
-            .iter()
-            .map(|peer| {
-                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url)?;
-                let bind_api = parse_host_port(peer_params[peer].clone().api_url)?;
-
-                let params: ServerConfigParams = Self::gen_params(
-                    ApiAuth("dummy_password".to_string()),
-                    bind_p2p.parse().context("when parsing bind_p2p")?,
-                    bind_api.parse().context("when parsing bind_api")?,
-                    keys[peer].1.clone(),
-                    *peer,
-                    &peer_params,
-                    federation_name.to_string(),
-                    modules.clone(),
-                );
-                Ok((*peer, params))
-            })
-            .collect::<anyhow::Result<HashMap<_, _>>>()
     }
 }
 

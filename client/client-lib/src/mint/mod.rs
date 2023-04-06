@@ -654,7 +654,7 @@ mod tests {
 
     use bitcoin::hashes::Hash;
     use fedimint_core::api::WsFederationApi;
-    use fedimint_core::config::ConfigGenParams;
+    use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::core::{
         DynOutputOutcome, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     };
@@ -741,7 +741,7 @@ mod tests {
             FakeFed::<Mint>::new(
                 4,
                 |cfg, _db| async move { Ok(Mint::new(cfg.to_typed().unwrap())) },
-                &ConfigGenParams::from_typed(MintGenParams {
+                &ConfigGenModuleParams::from_typed(MintGenParams {
                     mint_amounts: vec![
                         Amount::from_sats(1),
                         Amount::from_sats(10),

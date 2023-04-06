@@ -20,7 +20,7 @@ use fedimint_core::Amount;
 use fedimint_server::config::io::{
     create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
 };
-use fedimint_server::config::{ServerConfig, ServerConfigConsensus, ServerConfigParams};
+use fedimint_server::config::{ConfigGenParams, ServerConfig, ServerConfigConsensus};
 use fedimint_server::net::peers::DelayCalculator;
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
@@ -183,7 +183,7 @@ async fn post_guardians(
             tracing::info!("Running DKG");
 
             state_copy.lock().await.dkg_state = Some(DkgState::Running);
-            let maybe_config = match ServerConfigParams::parse_from_connect_strings(
+            let maybe_config = match ConfigGenParams::parse_from_connect_strings(
                 params.bind_p2p,
                 params.bind_api,
                 &dir_out_path,
