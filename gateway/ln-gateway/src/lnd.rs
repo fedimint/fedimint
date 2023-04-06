@@ -203,7 +203,7 @@ impl ILnRpcClient for GatewayLndClient {
             while let Some(htlc) = match htlc_stream.message().await {
                 Ok(htlc) => htlc,
                 Err(e) => {
-                    error!("Error received over HTLC subscriprion: {:?}", e);
+                    error!("Error received over HTLC subscription: {:?}", e);
                     a_tx.send(Err(tonic::Status::new(
                         tonic::Code::Internal,
                         e.to_string(),
@@ -306,7 +306,9 @@ impl ILnRpcClient for GatewayLndClient {
                     failure_message: vec![],
                     failure_code: FailureCode::TemporaryChannelFailure.into(),
                 },
-                Some(Action::Cancel(Cancel { reason: _ })) => cancel_intercepted_htlc(None),
+                Some(Action::Cancel(Cancel { reason: _ })) => {
+                    cancel_intercepted_htlc(incoming_circuit_key)
+                }
                 None => {
                     error!("No action specified for intercepted htlc id: {:?}", hash);
                     return Err(GatewayError::LnRpcError(tonic::Status::internal(
