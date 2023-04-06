@@ -17,8 +17,10 @@ scripts/pegin.sh 10000.0 | show_verbose_output
 
 use_cln_gw
 
-echo Funding gateway e-cash wallet ...
+echo Funding CLN gateway e-cash wallet ...
 scripts/pegin.sh 20000.0 1 | show_verbose_output
+echo Funding LND gateway e-cash wallet ...
+scripts/pegin.sh 20000.0 1 "LND" | show_verbose_output
 
 echo Done!
 echo
