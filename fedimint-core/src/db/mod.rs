@@ -905,7 +905,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     pub fn with_module_prefix(
         &mut self,
         module_instance_id: ModuleInstanceId,
-    ) -> ModuleDatabaseTransaction<'_, ModuleInstanceId> {
+    ) -> ModuleDatabaseTransaction<'_> {
         ModuleDatabaseTransaction::new(
             self.tx.as_mut(),
             Some(module_instance_id),
@@ -914,7 +914,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         )
     }
 
-    pub fn get_isolated(&mut self) -> ModuleDatabaseTransaction<'_, ModuleInstanceId> {
+    pub fn get_isolated(&mut self) -> ModuleDatabaseTransaction<'_> {
         ModuleDatabaseTransaction::new(
             self.tx.as_mut(),
             None,
