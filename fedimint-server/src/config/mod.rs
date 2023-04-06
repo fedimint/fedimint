@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{bail, format_err};
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::HashEngine;
 use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
@@ -40,7 +40,7 @@ use crate::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TL
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::{BitcoinHash, NumPeers};
 use crate::multiplexed::PeerConnectionMultiplexer;
-use crate::net::connect::{parse_host_port, Connector, TlsConfig};
+use crate::net::connect::{Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
@@ -671,7 +671,7 @@ impl ConfigGenParams {
             .map(|(peer, _)| *peer)
             .ok_or_else(|| anyhow::Error::msg("Our id not found"))?;
 
-        Ok(ConfigGenParams::gen_params(
+        Ok(ConfigGenParams::new(
             ApiAuth(api_auth),
             bind_p2p,
             bind_api,
@@ -685,7 +685,7 @@ impl ConfigGenParams {
 
     /// Generates the parameters necessary for running server config generation
     #[allow(clippy::too_many_arguments)]
-    pub fn gen_params(
+    pub fn new(
         api_auth: ApiAuth,
         p2p_bind: SocketAddr,
         api_bind: SocketAddr,
@@ -711,59 +711,6 @@ impl ConfigGenParams {
                 },
             },
         }
-    }
-
-    /// config for servers running on different ports on a local network
-    pub fn gen_local(
-        peers: &[PeerId],
-        base_port: u16,
-        federation_name: &str,
-        modules: ServerModuleGenParamsRegistry,
-    ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
-        let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
-            .iter()
-            .map(|peer| {
-                let (cert, key) = gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap();
-                (*peer, (cert, key))
-            })
-            .collect::<HashMap<_, _>>();
-
-        let peer_params: BTreeMap<PeerId, PeerServerParams> = peers
-            .iter()
-            .map(|peer| {
-                let peer_port = base_port + u16::from(*peer) * 10;
-                let p2p_url = format!("ws://127.0.0.1:{peer_port}");
-                let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
-
-                let params: PeerServerParams = PeerServerParams {
-                    cert: keys[peer].0.clone(),
-                    p2p_url: p2p_url.parse().expect("Should parse"),
-                    api_url: api_url.parse().expect("Should parse"),
-                    name: format!("peer-{}", peer.to_usize()),
-                };
-                (*peer, params)
-            })
-            .collect();
-
-        peers
-            .iter()
-            .map(|peer| {
-                let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url)?;
-                let bind_api = parse_host_port(peer_params[peer].clone().api_url)?;
-
-                let params: ConfigGenParams = Self::gen_params(
-                    ApiAuth("dummy_password".to_string()),
-                    bind_p2p.parse().context("when parsing bind_p2p")?,
-                    bind_api.parse().context("when parsing bind_api")?,
-                    keys[peer].1.clone(),
-                    *peer,
-                    peer_params.clone(),
-                    federation_name.to_string(),
-                    modules.clone(),
-                );
-                Ok((*peer, params))
-            })
-            .collect::<anyhow::Result<HashMap<_, _>>>()
     }
 }
 
