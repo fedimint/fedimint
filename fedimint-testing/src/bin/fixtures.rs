@@ -79,7 +79,7 @@ fn bitcoin_rpc() -> anyhow::Result<Arc<BitcoinClient>> {
 }
 
 async fn fedimint_client() -> anyhow::Result<UserClient> {
-    let workdir: PathBuf = env::var("FM_CFG_DIR")?.parse()?;
+    let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
     let cfg_path = workdir.join("client.json");
     let db_path = workdir.join("client.db");
     let cfg: UserClientConfig = load_from_file(&cfg_path)?;
@@ -344,7 +344,7 @@ fn fedimint_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
     let p2p_port = base_port + (id * 10);
     let api_port = base_port + (id * 10) + 1;
     let ui_port = base_port + (id * 10) + 2;
-    let cfg_dir = env::var("FM_CFG_DIR")?;
+    let cfg_dir = env::var("FM_DATA_DIR")?;
     Ok(HashMap::from_iter([
         ("FM_BIND_P2P".into(), format!("127.0.0.1:{p2p_port}")),
         (
@@ -410,7 +410,7 @@ async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
 async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()> {
     let certs = certs.join(",");
     let bin_dir = env::var("FM_BIN_DIR")?;
-    let cfg_dir = env::var("FM_CFG_DIR")?;
+    let cfg_dir = env::var("FM_DATA_DIR")?;
     let server_name = format!("Server-{id}");
 
     let env_vars = fedimint_env(id)?;
