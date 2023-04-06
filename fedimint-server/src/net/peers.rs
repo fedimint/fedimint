@@ -258,6 +258,7 @@ where
 {
     #[must_use]
     async fn send(&mut self, peers: &[PeerId], msg: T) -> Cancellable<()> {
+        trace!(target: LOG_NET_PEER, ?peers, "sending message to list of");
         for peer_id in peers {
             trace!(target: LOG_NET_PEER, ?peer_id, "Sending message to");
             if let Some(peer) = self.connections.get_mut(peer_id) {
@@ -297,6 +298,11 @@ where
 {
     async fn run(mut self, task_handle: &TaskHandle) {
         let peer = self.common.peer;
+        trace!(
+            target: LOG_NET_PEER,
+            ?peer,
+            "Running peer connection state machine with"
+        );
 
         // Note: `state_transition` internally uses channel operations (`send` and
         // `recv`) which will disconnect when other tasks are shutting down
@@ -614,6 +620,7 @@ where
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_group: &mut TaskGroup,
     ) -> PeerConnection<M> {
+        trace!(target: LOG_NET_PEER, ?id, "Creating new PeerConnection");
         let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
 
@@ -660,6 +667,8 @@ where
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         task_handle: &TaskHandle,
     ) {
+        trace!(target: LOG_NET_PEER, ?peer, "Started running io thread for");
+
         let common = CommonPeerConnectionState {
             resend_queue: Default::default(),
             incoming,
