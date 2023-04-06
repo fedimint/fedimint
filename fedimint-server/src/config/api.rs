@@ -521,8 +521,10 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
     ) -> (&ConfigGenApi, ApiEndpointContext<'_>) {
+        let mut db = self.db.clone();
         let mut dbtx = self.db.begin_transaction().await;
         if let Some(id) = id {
+            db = self.db.new_isolated(id);
             dbtx = dbtx.new_module_tx(id)
         }
         let state = self.state.lock().expect("locks");
@@ -539,7 +541,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             ConfigApiState::RunningConsensus(cfg) => Some(&cfg.private.api_auth) == auth,
         };
 
-        (self, ApiEndpointContext::new(dbtx, has_auth))
+        (self, ApiEndpointContext::new(db, dbtx, has_auth))
     }
 }
 

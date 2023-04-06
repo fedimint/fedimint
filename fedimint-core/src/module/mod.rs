@@ -24,7 +24,8 @@ use crate::core::{
     OutputOutcome,
 };
 use crate::db::{
-    Database, DatabaseTransaction, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
+    Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -144,14 +145,15 @@ impl ApiError {
 
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'a> {
+    db: Database,
     dbtx: DatabaseTransaction<'a>,
     has_auth: bool,
 }
 
 impl<'a> ApiEndpointContext<'a> {
-    /// `dbtx` should be isolated.
-    pub fn new(dbtx: DatabaseTransaction<'a>, has_auth: bool) -> Self {
-        Self { dbtx, has_auth }
+    /// `db` and `dbtx` should be isolated.
+    pub fn new(db: Database, dbtx: DatabaseTransaction<'a>, has_auth: bool) -> Self {
+        Self { db, dbtx, has_auth }
     }
 
     /// Database tx handle, will be committed
@@ -164,6 +166,17 @@ impl<'a> ApiEndpointContext<'a> {
     /// fedimint server
     pub fn has_auth(&self) -> bool {
         self.has_auth
+    }
+
+    /// Waits for key to be present in database.
+    pub fn wait_key_exists<K>(&self, key: K) -> impl Future<Output = K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        let db = self.db.clone();
+        // self contains dbtx which is !Send
+        // try removing this and see the error.
+        async move { db.wait_key_exists(&key).await }
     }
 
     /// Attempts to commit the dbtx or returns an ApiError

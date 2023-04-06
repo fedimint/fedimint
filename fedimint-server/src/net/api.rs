@@ -60,14 +60,16 @@ impl HasApiContext<FedimintConsensus> for FedimintConsensus {
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
     ) -> (&FedimintConsensus, ApiEndpointContext<'_>) {
+        let mut db = self.db.clone();
         let mut dbtx = self.db.begin_transaction().await;
         if let Some(id) = id {
+            db = self.db.new_isolated(id);
             dbtx = dbtx.new_module_tx(id)
         }
-
         (
             self,
             ApiEndpointContext::new(
+                db,
                 dbtx,
                 request.auth == Some(self.cfg.private.api_auth.clone()),
             ),
