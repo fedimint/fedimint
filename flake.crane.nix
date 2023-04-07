@@ -242,7 +242,7 @@ rec {
     # about the docs
     cargoArtifacts = null;
     nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-    buildPhaseCargoCommand = "cargo udeps";
+    buildPhaseCargoCommand = "cargo udeps --all-targets --workspace";
     doInstallCargoArtifacts = false;
     doCheck = false;
   });
