@@ -352,7 +352,7 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, WalletConsensusItem)>,
-        _consensus_peers: &BTreeSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
         trace!(?consensus_items, "Received consensus proposals");
 
@@ -361,20 +361,25 @@ impl ServerModule for Wallet {
         // need to be available at once.
         let UnzipWalletConsensusItem {
             peg_out_signature: peg_out_signatures,
-            round_consensus,
+            round_consensus: round_items,
         } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         // Save signatures to the database
         self.save_peg_out_signatures(dbtx, peg_out_signatures).await;
 
         let last_height = self.consensus_height(dbtx).await.unwrap_or(0);
-        let round_consensus = Self::process_round_consensus(last_height, round_consensus);
-        self.sync_up_to_consensus_height(dbtx, round_consensus.block_height)
-            .await;
 
-        dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
-            .await;
-        vec![]
+        match Self::round_consensus(last_height, round_items, consensus_peers) {
+            Ok(round_consensus) => {
+                self.sync_up_to_consensus_height(dbtx, round_consensus.block_height)
+                    .await;
+
+                dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
+                    .await;
+                vec![]
+            }
+            Err(dropped_peers) => dropped_peers,
+        }
     }
 
     fn build_verification_cache<'a>(
@@ -855,29 +860,43 @@ impl Wallet {
         })
     }
 
-    fn process_round_consensus(
+    /// Calculates all the round items from peers, returning the same consensus
+    /// for all peers or peers that should be banned for misbehaving
+    fn round_consensus(
         last_height: u32,
         items: Vec<(PeerId, RoundConsensusItem)>,
-    ) -> RoundConsensus {
+        consensus_peers: &BTreeSet<PeerId>,
+    ) -> Result<RoundConsensus, Vec<PeerId>> {
         fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
             lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
             lhs
         }
 
-        // FIXME: also warn on less than 1/3, that should never happen
-        // FIXME: ban peers instead of panicking
-        // Make sure we have enough contributions to continue
-        if items.is_empty() {
-            panic!("No proposals were submitted this round");
-        }
+        let mut banned_peers = vec![];
 
         let mut dedup = BTreeMap::new();
         for (peer, item) in items.into_iter() {
             if dedup.insert(peer, item).is_some() {
-                // FIXME: ban peers instead of warning
-                warn!("Peer {} submitted multiple RoundConsensusItem", peer);
+                warn!("Banning peer {} for multiple RoundConsensusItem", peer);
+                banned_peers.push(peer);
             }
         }
+
+        for peer in consensus_peers {
+            if dedup.get(peer).is_none() {
+                warn!(
+                    "Banning peer {} for not submitting a RoundConsensusItem",
+                    peer
+                );
+                banned_peers.push(*peer);
+            }
+        }
+
+        // If peers misbehaved, we cannot determine this consensus round
+        if !banned_peers.is_empty() {
+            return Err(banned_peers);
+        }
+
         let items: Vec<_> = dedup.values().into_iter().collect();
 
         let mut fees: Vec<_> = items.iter().map(|item| item.fee_rate).collect();
@@ -896,11 +915,11 @@ impl Wallet {
         let randoms: Vec<_> = items.iter().map(|item| item.randomness).collect();
         let randomness_beacon = randoms.into_iter().fold([0; 32], xor);
 
-        RoundConsensus {
+        Ok(RoundConsensus {
             block_height,
             fee_rate,
             randomness_beacon,
-        }
+        })
     }
 
     pub async fn current_round_consensus(
@@ -1545,6 +1564,7 @@ impl<'a> StatelessWallet<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::str::FromStr;
 
     use bitcoin::Network::{Bitcoin, Testnet};
@@ -1582,27 +1602,31 @@ mod tests {
 
     #[test]
     fn processes_round_consensus_items() {
+        let peers = &BTreeSet::from([PeerId::from(0), PeerId::from(1), PeerId::from(2)]);
+
         // properly selects median fees / height and xor randomness
-        let consensus = Wallet::process_round_consensus(
+        let consensus = Wallet::round_consensus(
             0,
             vec![
                 (PeerId::from(0), round_item(1, 4, 7)),
                 (PeerId::from(1), round_item(2, 5, 8)),
                 (PeerId::from(2), round_item(3, 6, 9)),
             ],
+            peers,
         );
-        assert_eq!(consensus, round_consensus(2, 5, 7 ^ 8 ^ 9));
+        assert_eq!(consensus, Ok(round_consensus(2, 5, 7 ^ 8 ^ 9)));
 
-        // removes duplicate entries for a given peer, keeping last entry
-        let consensus = Wallet::process_round_consensus(
+        // drops peers that submit duplicate items or don't submit any
+        let consensus = Wallet::round_consensus(
             0,
             vec![
                 (PeerId::from(0), round_item(1, 4, 7)),
                 (PeerId::from(1), round_item(2, 5, 8)),
                 (PeerId::from(1), round_item(3, 6, 9)),
             ],
+            peers,
         );
-        assert_eq!(consensus, round_consensus(3, 6, 7 ^ 9));
+        assert_eq!(consensus, Err(vec![PeerId::from(1), PeerId::from(2)]));
     }
 
     #[test]

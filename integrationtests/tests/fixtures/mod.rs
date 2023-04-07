@@ -28,11 +28,13 @@ use fedimint_core::core::{
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_core::module::{ApiAuth, DynServerModuleGen};
+use fedimint_core::module::{ApiAuth, DynServerModuleGen, ModuleCommon};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, RwLock, TaskGroup};
-use fedimint_core::{core, sats, Amount, OutPoint, PeerId, TieredMulti, TransactionId};
+use fedimint_core::{
+    core, sats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
+};
 use fedimint_ln_client::{LightningClientGen, LightningGateway};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
@@ -53,7 +55,7 @@ use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::fixtures::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;
-use fedimint_wallet_client::WalletClientGen;
+use fedimint_wallet_client::{WalletClientGen, WalletConsensusItem};
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
 use fedimint_wallet_server::common::{PegOutFees, SpendableUTXO};
@@ -851,7 +853,9 @@ impl FederationTest {
     }
 
     /// Sends a custom proposal, ignoring whatever is in FedimintConsensus
+    ///
     /// Useful for simulating malicious federation nodes
+    /// Keeps round consensus and signature shares
     pub async fn override_proposal(&self, items: Vec<ConsensusItem>) {
         for server in &self.servers {
             let mut epoch_sig = server
@@ -863,7 +867,17 @@ impl FederationTest {
                 .await
                 .items
                 .into_iter()
-                .filter(|item| matches!(item, ConsensusItem::EpochOutcomeSignatureShare(_)))
+                .filter(|item| match item {
+                    ConsensusItem::EpochOutcomeSignatureShare(_) => true,
+                    ConsensusItem::Module(module) if module.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
+                        let wallet_item = module.as_any().downcast_ref::<<<Wallet as ServerModule>::Common as ModuleCommon>::ConsensusItem>().expect("test should use fixed module instances");
+                        match wallet_item {
+                            WalletConsensusItem::RoundConsensus(_) => true,
+                            WalletConsensusItem::PegOutSignature(_) => false
+                        }
+                    },
+                    _ => false
+                })
                 .collect();
 
             let mut items = items.clone();
