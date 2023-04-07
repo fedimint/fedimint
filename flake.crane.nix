@@ -321,7 +321,7 @@ rec {
       patchShebangs ./scripts
       ./scripts/test-ci-all.sh || exit 1
       sed -i -e 's/exit 0/exit 1/g' scripts/always-success-test.sh
-      echo "Verifing failure detection..."
+      echo "Verifying failure detection..."
       ./scripts/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
     '';
   });
