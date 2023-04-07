@@ -89,6 +89,9 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
+      - name: Validate codecov.yaml configuration
+        run: nix run nixpkgs#curl -- --fail-with-body -X POST --data-binary @.codecov.yml https://codecov.io/validate
+
       - name: Build and run tests with Code Coverage
         run: nix build -L .#ci.workspaceCov
 
