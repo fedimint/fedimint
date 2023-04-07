@@ -1,0 +1,21 @@
+procs:
+  user:
+    shell: source scripts/tmux-user-shell.sh
+  fedimint0:
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-0.log
+  fedimint1:
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-1.log
+  fedimint2:
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-2.log
+  fedimint3:
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-3.log
+  cln-gw:
+    shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-cln.log
+  lnd-gw:
+    shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-lnd.log
+  cln:
+    shell: tail -n +0 -F $FM_LOGS_DIR/lightningd.log
+  lnd:
+    shell: tail -n +0 -F $FM_LOGS_DIR/lnd.log
+  bitcoind:
+    shell: tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
