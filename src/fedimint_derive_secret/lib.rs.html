@@ -113,6 +113,8 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Scheme for deriving deterministic secret keys
 
 </span><span class="kw">use </span>std::fmt::Formatter;
@@ -213,7 +215,9 @@
 <span class="kw">fn </span>tagged_derive(tag: <span class="kw-2">&amp;</span>[u8; <span class="number">8</span>], derivation: ChildId) -&gt; [u8; <span class="number">16</span>] {
     <span class="kw">let </span><span class="kw-2">mut </span>derivation_info = [<span class="number">0u8</span>; <span class="number">16</span>];
     derivation_info[<span class="number">0</span>..<span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>tag[..]);
-    derivation_info[<span class="number">8</span>..<span class="number">16</span>].copy_from_slice(<span class="kw-2">&amp;</span>derivation.<span class="number">0</span>.to_le_bytes()[..]);
+    <span class="comment">// The endianness isn&#39;t important here because we just need some bytes, but
+    // let&#39;s use the default for this project (big endian)
+    </span>derivation_info[<span class="number">8</span>..<span class="number">16</span>].copy_from_slice(<span class="kw-2">&amp;</span>derivation.<span class="number">0</span>.to_be_bytes()[..]);
     derivation_info
 }
 

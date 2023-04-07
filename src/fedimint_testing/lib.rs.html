@@ -503,7 +503,6 @@
 <a href="#503" id="503">503</a>
 <a href="#504" id="504">504</a>
 <a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::fs::read_dir;
@@ -880,10 +879,10 @@
 }
 
 <span class="doccomment">/// Creates the database backup directory by appending the `snapshot_name`
-/// to the `DB_MIGRATION_DIR`. Then this function will execute the provided
+/// to `db/migrations`. Then this function will execute the provided
 /// `prepare_fn` which is expected to populate the database with the appropriate
-/// data for testing a migration. If `DB_MIGRATION_DIR` is not set, this
-/// function doesn&#39;t do anything.
+/// data for testing a migration. If the snapshot directory already exists,
+/// this function will do nothing.
 </span><span class="kw">pub async fn </span>prepare_snapshot&lt;F&gt;(
     snapshot_name: <span class="kw-2">&amp;</span>str,
     prepare_fn: F,
@@ -908,8 +907,7 @@
 ];
 
 <span class="doccomment">/// Iterates over all of the databases supplied in the database backup
-/// directory, which is specified by `DB_MIGRATION_DIR` environment
-/// variable. First, a temporary database will be created and the contents will
+/// directory. First, a temporary database will be created and the contents will
 /// be populated from the database backup directory. Next, this function will
 /// execute the provided `validate` closure. The `validate` closure is expected
 /// to do any validation necessary on the temporary database, such as applying

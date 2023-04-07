@@ -1109,6 +1109,7 @@
 <a href="#1109" id="1109">1109</a>
 <a href="#1110" id="1110">1110</a>
 <a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1122,7 +1123,6 @@
 <span class="kw">use </span>anyhow::{anyhow, ensure};
 <span class="kw">use </span>bech32::Variant::Bech32m;
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
-<span class="kw">use </span>bitcoin::consensus::ReadExt;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId, PeerUrl,
@@ -1735,8 +1735,10 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>urls = <span class="macro">vec!</span>[];
         <span class="kw">while </span>cursor.position() &lt; total_len {
-            <span class="kw">let </span>len = cursor.read_u16()<span class="question-mark">? </span><span class="kw">as </span>usize;
-            <span class="kw">let </span><span class="kw-2">mut </span>url_bytes = <span class="macro">vec!</span>[<span class="number">0</span>; len];
+            <span class="kw">let </span><span class="kw-2">mut </span>url_len = [<span class="number">0</span>; <span class="number">2</span>];
+            cursor.read_exact(<span class="kw-2">&amp;mut </span>url_len)<span class="question-mark">?</span>;
+            <span class="kw">let </span>url_len = u16::from_be_bytes(url_len).into();
+            <span class="kw">let </span><span class="kw-2">mut </span>url_bytes = <span class="macro">vec!</span>[<span class="number">0</span>; url_len];
             cursor.read_exact(<span class="kw-2">&amp;mut </span>url_bytes)<span class="question-mark">?</span>;
 
             <span class="kw">let </span>url = std::str::from_utf8(<span class="kw-2">&amp;</span>url_bytes)<span class="question-mark">?</span>;
@@ -1757,7 +1759,7 @@
         data.extend(<span class="self">self</span>.id.<span class="number">0</span>.to_bytes());
         <span class="kw">for </span>url <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.urls {
             <span class="kw">let </span>url_bytes = url.as_str().as_bytes();
-            data.extend((url_bytes.len() <span class="kw">as </span>u16).to_le_bytes());
+            data.extend((url_bytes.len() <span class="kw">as </span>u16).to_be_bytes());
             data.extend(url.as_str().as_bytes());
         }
         <span class="kw">let </span>encode =

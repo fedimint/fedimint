@@ -717,6 +717,113 @@
 <a href="#717" id="717">717</a>
 <a href="#718" id="718">718</a>
 <a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -848,7 +955,7 @@
     (<span class="macro-nonterminal">$num_type</span>:ty) =&gt; {
         <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-                <span class="kw">let </span>bytes = <span class="self">self</span>.to_le_bytes();
+                <span class="kw">let </span>bytes = <span class="self">self</span>.to_be_bytes();
                 writer.write_all(<span class="kw-2">&amp;</span>bytes[..])<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(bytes.len())
             }
@@ -861,7 +968,7 @@
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; (&lt;<span class="macro-nonterminal">$num_type</span>&gt;::BITS / <span class="number">8</span>) <span class="kw">as </span>usize];
                 d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>(&lt;<span class="macro-nonterminal">$num_type</span>&gt;::from_le_bytes(bytes))
+                <span class="prelude-val">Ok</span>(&lt;<span class="macro-nonterminal">$num_type</span>&gt;::from_be_bytes(bytes))
             }
         }
     };
@@ -1294,7 +1401,10 @@
     <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::io::Cursor;
 
+    <span class="kw">use </span>bitcoin_hashes::hex::FromHex;
+
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseValue;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
     <span class="kw">use </span><span class="kw">crate</span>::ModuleDecoderRegistry;
 
@@ -1339,7 +1449,7 @@
             vec: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
             num: <span class="number">42</span>,
         };
-        <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>];
+        <span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">42</span>];
 
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
@@ -1350,7 +1460,7 @@
         </span><span class="kw">struct </span>TestStruct(Vec&lt;u8&gt;, u32);
 
         <span class="kw">let </span>reference = TestStruct(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], <span class="number">42</span>);
-        <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>];
+        <span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">42</span>];
 
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
@@ -1366,14 +1476,14 @@
         <span class="kw">let </span>test_cases = [
             (
                 TestEnum::Foo(<span class="prelude-val">Some</span>(<span class="number">42</span>)),
-                <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">42</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>],
+                <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">42</span>],
             ),
             (TestEnum::Foo(<span class="prelude-val">None</span>), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]),
             (
                 TestEnum::Bar {
                     bazz: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
                 },
-                <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
+                <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
             ),
         ];
 
@@ -1433,6 +1543,110 @@
         <span class="macro">assert!</span>(
             NotConstructable::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
                 .is_err()
+        );
+    }
+
+    <span class="kw">fn </span>encode_value&lt;T: Encodable&gt;(value: <span class="kw-2">&amp;</span>T) -&gt; Vec&lt;u8&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>writer = Vec::new();
+        value.consensus_encode(<span class="kw-2">&amp;mut </span>writer).unwrap();
+        writer
+    }
+
+    <span class="kw">fn </span>decode_value&lt;T: Decodable&gt;(bytes: <span class="kw-2">&amp;</span>Vec&lt;u8&gt;) -&gt; T {
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap()
+    }
+
+    <span class="kw">fn </span>keeps_ordering_after_serialization&lt;T: Ord + Encodable + Decodable + Debug&gt;(<span class="kw-2">mut </span>vec: Vec&lt;T&gt;) {
+        vec.sort();
+        <span class="kw">let </span><span class="kw-2">mut </span>encoded = vec.iter().map(encode_value).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        encoded.sort();
+        <span class="kw">let </span>decoded = encoded.iter().map(decode_value).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">for </span>(i, (a, b)) <span class="kw">in </span>vec.iter().zip(decoded.iter()).enumerate() {
+            <span class="macro">assert_eq!</span>(a, b, <span class="string">&quot;difference at index {i}&quot;</span>);
+        }
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_lexicographical_sorting() {
+        <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        </span><span class="kw">struct </span>TestAmount(u64);
+        <span class="kw">let </span>amounts = (<span class="number">0</span>..<span class="number">20000</span>).map(TestAmount).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        keeps_ordering_after_serialization(amounts);
+
+        <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        </span><span class="kw">struct </span>TestComplexAmount(u16, u32, u64);
+        <span class="kw">let </span>complex_amounts = (<span class="number">10</span>..<span class="number">20000</span>)
+            .flat_map(|i| {
+                (i - <span class="number">1</span>..=i + <span class="number">1</span>).flat_map(<span class="kw">move </span>|j| {
+                    (i - <span class="number">1</span>..=i + <span class="number">1</span>).map(<span class="kw">move </span>|k| TestComplexAmount(i <span class="kw">as </span>u16, j <span class="kw">as </span>u32, k <span class="kw">as </span>u64))
+                })
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        keeps_ordering_after_serialization(complex_amounts);
+
+        <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        </span><span class="kw">struct </span>Text(String);
+        <span class="kw">let </span>texts = (<span class="string">&#39; &#39;</span>..<span class="string">&#39;~&#39;</span>)
+            .flat_map(|i| {
+                (<span class="string">&#39; &#39;</span>..<span class="string">&#39;~&#39;</span>)
+                    .map(|j| Text(<span class="macro">format!</span>(<span class="string">&quot;{i}{j}&quot;</span>)))
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        keeps_ordering_after_serialization(texts);
+
+        <span class="comment">// bitcoin structures are not lexicographically sortable so we cannot
+        // test them here. in future we may crate a wrapper type that is
+        // lexicographically sortable to use when needed
+    </span>}
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_bitcoin_consensus_encoding() {
+        <span class="comment">// encodings should follow the bitcoin consensus encoding
+        </span><span class="kw">let </span>txid = bitcoin::Txid::from_hex(
+            <span class="string">&quot;51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a&quot;</span>,
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            txid,
+            <span class="kw-2">&amp;</span>[
+                <span class="number">154</span>, <span class="number">192</span>, <span class="number">239</span>, <span class="number">210</span>, <span class="number">168</span>, <span class="number">79</span>, <span class="number">183</span>, <span class="number">215</span>, <span class="number">157</span>, <span class="number">7</span>, <span class="number">201</span>, <span class="number">237</span>, <span class="number">22</span>, <span class="number">132</span>, <span class="number">133</span>, <span class="number">30</span>, <span class="number">74</span>, <span class="number">48</span>,
+                <span class="number">206</span>, <span class="number">233</span>, <span class="number">21</span>, <span class="number">231</span>, <span class="number">57</span>, <span class="number">225</span>, <span class="number">198</span>, <span class="number">140</span>, <span class="number">229</span>, <span class="number">35</span>, <span class="number">47</span>, <span class="number">237</span>, <span class="number">247</span>, <span class="number">81</span>,
+            ],
+        );
+        <span class="kw">let </span>transaction: Vec&lt;u8&gt; = FromHex::from_hex(
+            <span class="string">&quot;02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000&quot;
+        </span>).unwrap();
+        <span class="kw">let </span>transaction =
+            bitcoin::Transaction::from_bytes(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
+                .unwrap();
+        test_roundtrip_expected(
+            transaction,
+            <span class="kw-2">&amp;</span>[
+                <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">211</span>, <span class="number">91</span>, <span class="number">102</span>, <span class="number">197</span>, <span class="number">76</span>, <span class="number">246</span>, <span class="number">192</span>, <span class="number">155</span>, <span class="number">129</span>, <span class="number">168</span>, <span class="number">217</span>, <span class="number">76</span>, <span class="number">213</span>,
+                <span class="number">209</span>, <span class="number">121</span>, <span class="number">113</span>, <span class="number">156</span>, <span class="number">215</span>, <span class="number">89</span>, <span class="number">92</span>, <span class="number">37</span>, <span class="number">132</span>, <span class="number">73</span>, <span class="number">69</span>, <span class="number">42</span>, <span class="number">147</span>, <span class="number">5</span>, <span class="number">171</span>, <span class="number">155</span>, <span class="number">18</span>, <span class="number">223</span>,
+                <span class="number">37</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">253</span>, <span class="number">255</span>, <span class="number">255</span>, <span class="number">255</span>, <span class="number">2</span>, <span class="number">12</span>, <span class="number">213</span>, <span class="number">10</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">22</span>, <span class="number">0</span>, <span class="number">20</span>,
+                <span class="number">174</span>, <span class="number">93</span>, <span class="number">69</span>, <span class="number">11</span>, <span class="number">113</span>, <span class="number">192</span>, <span class="number">66</span>, <span class="number">24</span>, <span class="number">230</span>, <span class="number">232</span>, <span class="number">28</span>, <span class="number">134</span>, <span class="number">252</span>, <span class="number">194</span>, <span class="number">37</span>, <span class="number">136</span>, <span class="number">45</span>, <span class="number">123</span>,
+                <span class="number">124</span>, <span class="number">170</span>, <span class="number">230</span>, <span class="number">149</span>, <span class="number">178</span>, <span class="number">33</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">22</span>, <span class="number">0</span>, <span class="number">20</span>, <span class="number">246</span>, <span class="number">8</span>, <span class="number">52</span>, <span class="number">239</span>, <span class="number">22</span>, <span class="number">82</span>, <span class="number">83</span>,
+                <span class="number">197</span>, <span class="number">113</span>, <span class="number">177</span>, <span class="number">28</span>, <span class="number">233</span>, <span class="number">250</span>, <span class="number">116</span>, <span class="number">228</span>, <span class="number">102</span>, <span class="number">146</span>, <span class="number">252</span>, <span class="number">94</span>, <span class="number">193</span>, <span class="number">2</span>, <span class="number">72</span>, <span class="number">48</span>, <span class="number">69</span>, <span class="number">2</span>,
+                <span class="number">33</span>, <span class="number">0</span>, <span class="number">146</span>, <span class="number">6</span>, <span class="number">44</span>, <span class="number">96</span>, <span class="number">159</span>, <span class="number">76</span>, <span class="number">141</span>, <span class="number">199</span>, <span class="number">76</span>, <span class="number">215</span>, <span class="number">212</span>, <span class="number">89</span>, <span class="number">110</span>, <span class="number">206</span>, <span class="number">220</span>, <span class="number">16</span>, <span class="number">147</span>,
+                <span class="number">20</span>, <span class="number">13</span>, <span class="number">144</span>, <span class="number">179</span>, <span class="number">253</span>, <span class="number">148</span>, <span class="number">180</span>, <span class="number">189</span>, <span class="number">217</span>, <span class="number">173</span>, <span class="number">62</span>, <span class="number">16</span>, <span class="number">44</span>, <span class="number">227</span>, <span class="number">188</span>, <span class="number">2</span>, <span class="number">32</span>, <span class="number">107</span>,
+                <span class="number">181</span>, <span class="number">166</span>, <span class="number">175</span>, <span class="number">198</span>, <span class="number">141</span>, <span class="number">88</span>, <span class="number">61</span>, <span class="number">119</span>, <span class="number">213</span>, <span class="number">217</span>, <span class="number">188</span>, <span class="number">251</span>, <span class="number">98</span>, <span class="number">82</span>, <span class="number">163</span>, <span class="number">100</span>, <span class="number">209</span>,
+                <span class="number">26</span>, <span class="number">48</span>, <span class="number">127</span>, <span class="number">52</span>, <span class="number">24</span>, <span class="number">190</span>, <span class="number">26</span>, <span class="number">249</span>, <span class="number">244</span>, <span class="number">127</span>, <span class="number">123</span>, <span class="number">27</span>, <span class="number">61</span>, <span class="number">120</span>, <span class="number">1</span>, <span class="number">33</span>, <span class="number">2</span>, <span class="number">110</span>, <span class="number">86</span>,
+                <span class="number">40</span>, <span class="number">80</span>, <span class="number">110</span>, <span class="number">205</span>, <span class="number">51</span>, <span class="number">36</span>, <span class="number">46</span>, <span class="number">92</span>, <span class="number">235</span>, <span class="number">95</span>, <span class="number">218</span>, <span class="number">254</span>, <span class="number">77</span>, <span class="number">48</span>, <span class="number">102</span>, <span class="number">181</span>, <span class="number">192</span>, <span class="number">241</span>,
+                <span class="number">89</span>, <span class="number">179</span>, <span class="number">192</span>, <span class="number">90</span>, <span class="number">98</span>, <span class="number">30</span>, <span class="number">246</span>, <span class="number">95</span>, <span class="number">23</span>, <span class="number">126</span>, <span class="number">162</span>, <span class="number">134</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+            ],
+        );
+        <span class="kw">let </span>blockhash = bitcoin::BlockHash::from_hex(
+            <span class="string">&quot;0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2&quot;</span>,
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            blockhash,
+            <span class="kw-2">&amp;</span>[
+                <span class="number">242</span>, <span class="number">96</span>, <span class="number">118</span>, <span class="number">76</span>, <span class="number">42</span>, <span class="number">229</span>, <span class="number">64</span>, <span class="number">214</span>, <span class="number">67</span>, <span class="number">122</span>, <span class="number">136</span>, <span class="number">166</span>, <span class="number">217</span>, <span class="number">0</span>, <span class="number">30</span>, <span class="number">46</span>, <span class="number">143</span>, <span class="number">168</span>,
+                <span class="number">248</span>, <span class="number">168</span>, <span class="number">189</span>, <span class="number">101</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+            ],
         );
     }
 }

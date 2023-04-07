@@ -520,7 +520,7 @@
         // written
         </span><span class="kw">let </span>new_len = dst.len();
         <span class="kw">let </span>encoded_len = new_len - old_len - <span class="number">8</span>;
-        dst[old_len..old_len + <span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>encoded_len.to_le_bytes()[..]);
+        dst[old_len..old_len + <span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>encoded_len.to_be_bytes()[..]);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -538,7 +538,7 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
         }
 
-        <span class="kw">let </span>length = u64::from_le_bytes(src[<span class="number">0</span>..<span class="number">8</span>].try_into().expect(<span class="string">&quot;correct length&quot;</span>));
+        <span class="kw">let </span>length = u64::from_be_bytes(src[<span class="number">0</span>..<span class="number">8</span>].try_into().expect(<span class="string">&quot;correct length&quot;</span>));
         <span class="kw">if </span>src.len() &lt; (length <span class="kw">as </span>usize) + <span class="number">8 </span>{
             <span class="macro">trace!</span>(length, buffern_len = src.len(), <span class="string">&quot;Received partial message&quot;</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);

@@ -438,8 +438,6 @@
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::fmt;
 
@@ -447,7 +445,6 @@
 <span class="kw">use </span>::bitcoincore_rpc::jsonrpc::error::RpcError;
 <span class="kw">use </span>::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
-<span class="kw">use </span>bitcoin::consensus::Encodable;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>electrum_client::ElectrumApi;
 <span class="kw">use </span>fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
@@ -752,8 +749,7 @@
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
         fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-            transaction
-                .consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
+            bitcoin::consensus::Encodable::consensus_encode(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;mut </span>bytes)
                 .expect(<span class="string">&quot;can&#39;t fail&quot;</span>);
             <span class="kw">let _ </span>= <span class="self">self</span>.<span class="number">0</span>.transaction_broadcast_raw(<span class="kw-2">&amp;</span>bytes).map_err(|error| {
                 <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Error broadcasting transaction&quot;</span>);
