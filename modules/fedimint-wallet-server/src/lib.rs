@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{Infallible, TryInto};
 use std::ffi::{OsStr, OsString};
 use std::ops::Sub;
@@ -352,7 +352,8 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, WalletConsensusItem)>,
-    ) {
+        _consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId> {
         trace!(?consensus_items, "Received consensus proposals");
 
         // Separate round consensus items from signatures for peg-out tx. While
@@ -373,6 +374,7 @@ impl ServerModule for Wallet {
 
         dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
             .await;
+        vec![]
     }
 
     fn build_verification_cache<'a>(
@@ -520,7 +522,7 @@ impl ServerModule for Wallet {
 
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Sign and finalize any unsigned transactions that have signatures
@@ -536,7 +538,7 @@ impl ServerModule for Wallet {
 
         let mut drop_peers = Vec::<PeerId>::new();
         for (key, mut unsigned) in unsigned_txs {
-            let signers: HashSet<PeerId> = unsigned
+            let signers: BTreeSet<PeerId> = unsigned
                 .signatures
                 .iter()
                 .filter_map(|(peer, sig)| {

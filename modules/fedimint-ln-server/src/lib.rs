@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::ops::Sub;
 
@@ -292,7 +292,8 @@ impl ServerModule for Lightning {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, LightningConsensusItem)>,
-    ) {
+        _consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId> {
         for (peer, decryption_share) in consensus_items.into_iter() {
             let span = info_span!("process decryption share", %peer);
             let _guard = span.enter();
@@ -303,6 +304,7 @@ impl ServerModule for Lightning {
             )
             .await;
         }
+        vec![]
     }
 
     fn build_verification_cache<'a>(
@@ -572,7 +574,7 @@ impl ServerModule for Lightning {
     #[instrument(skip_all)]
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         // Decrypt preimages

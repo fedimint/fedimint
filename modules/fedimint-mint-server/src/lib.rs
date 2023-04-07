@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::ops::Sub;
@@ -325,7 +325,8 @@ impl ServerModule for Mint {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, MintConsensusItem)>,
-    ) {
+        _consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId> {
         for (peer, consensus_item) in consensus_items {
             self.process_partial_signature(
                 dbtx,
@@ -335,6 +336,7 @@ impl ServerModule for Mint {
             )
             .await
         }
+        vec![]
     }
 
     fn build_verification_cache<'a>(
@@ -476,7 +478,7 @@ impl ServerModule for Mint {
 
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         struct IssuanceData {
@@ -553,7 +555,7 @@ impl ServerModule for Mint {
                         .await;
                 }
                 Err(CombineError::TooFewShares(got, _)) => {
-                    for peer in consensus_peers.sub(&HashSet::from_iter(got)) {
+                    for peer in consensus_peers.sub(&BTreeSet::from_iter(got)) {
                         error!("Dropping {:?} for not contributing shares", peer);
                         drop_peers.insert(peer);
                     }
