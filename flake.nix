@@ -315,7 +315,7 @@
                     # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
                     (hiPrio pkgs.bashInteractive)
                     tmux
-                    tmuxinator
+                    mprocs
                     docker-compose
                     pkgs.tokio-console
                     moreutils-ts
