@@ -5,14 +5,14 @@ use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
+use fedimint_client_legacy::modules::ln::route_hints::RouteHint;
+use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
+use fedimint_client_legacy::{GatewayClient, PaymentParameters};
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use futures::stream::StreamExt;
 use futures::Stream;
-use mint_client::modules::ln::contracts::{ContractId, Preimage};
-use mint_client::modules::ln::route_hints::RouteHint;
-use mint_client::modules::wallet::txoproof::TxOutProof;
-use mint_client::{GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tonic::Status;

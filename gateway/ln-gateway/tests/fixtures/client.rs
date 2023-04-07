@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClient, GatewayClientConfig};
 use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
@@ -12,7 +13,6 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::PeerId;
 use ln_gateway::client::{DynDbFactory, IGatewayClientBuilder};
 use ln_gateway::GatewayError;
-use mint_client::{module_decode_stubs, Client, GatewayClient, GatewayClientConfig};
 use secp256k1::{PublicKey, Secp256k1};
 use url::Url;
 

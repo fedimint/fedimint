@@ -13,7 +13,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::io::{create_cert, write_server_config, CODE_VERSION, SALT_FILE};
-use fedimint_server::config::{ServerConfig, ServerConfigParams};
+use fedimint_server::config::{ConfigGenParams, ServerConfig};
 use fedimint_server::net::peers::DelayCalculator;
 use fedimint_wallet_server::WalletGen;
 use tracing::info;
@@ -197,7 +197,7 @@ impl DistributedGen {
                     network,
                     finality_delay,
                 );
-                let params = ServerConfigParams::parse_from_connect_strings(
+                let params = ConfigGenParams::parse_from_connect_strings(
                     bind_p2p,
                     bind_api,
                     &dir_out_path,

@@ -23,7 +23,7 @@ pub enum Input {
 
 # Transaction Creation
 
-- [One client module for each federation module](https://github.com/fedimint/fedimint/tree/master/client/client-lib/src)
+- [One client module for each federation module](https://github.com/fedimint/fedimint/tree/master/fedimint-client-legacy/src)
 - There are specialized user and gateway clients that use these to construct transactions
 - [E.g. deposit](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/client/client-lib/src/lib.rs#L190)
 

@@ -14,6 +14,15 @@ use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
+use fedimint_client_legacy::mint::SpendableNote;
+use fedimint_client_legacy::modules::ln::contracts::ContractId;
+use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
+use fedimint_client_legacy::modules::wallet::WalletClientGen;
+use fedimint_client_legacy::utils::{
+    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
+    parse_peer_id, serialize_ecash,
+};
+use fedimint_client_legacy::{Client, UserClientConfig};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsClientConnectInfo,
@@ -30,15 +39,6 @@ use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintClientGen;
-use mint_client::mint::SpendableNote;
-use mint_client::modules::ln::contracts::ContractId;
-use mint_client::modules::wallet::txoproof::TxOutProof;
-use mint_client::modules::wallet::WalletClientGen;
-use mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
-    parse_peer_id, serialize_ecash,
-};
-use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -355,13 +355,17 @@ enum Command {
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
 
-    /// Send direct method call to the API, waiting for all peers to agree on a
-    /// response
+    /// Send direct method call to the API. If you specify --peer-id, it will
+    /// just ask one server, otherwise it will get consensus from all servers
     Api {
+        /// JSON-RPC method to call
         method: String,
-        /// JSON args that will be serialized and send with the request
+        /// JSON-RPC parameters for the request
         #[clap(default_value = "null")]
-        arg: String,
+        params: String,
+        /// Which server to send requst to
+        #[clap(long = "peer-id")]
+        peer_id: Option<u16>,
     },
 
     /// Issue notes in exchange for a peg-in proof
@@ -599,20 +603,32 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::IOError, "couldn't write config")?;
                 Ok(CliOutput::JoinFederation { joined: connect })
             }
-            Command::Api { method, arg } => {
-                let arg: Value = serde_json::from_str(&arg).unwrap();
+            Command::Api {
+                method,
+                params,
+                peer_id,
+            } => {
+                let params: Value = serde_json::from_str(&params)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
+                let params = ApiRequestErased::new(params);
                 let ws_api: Arc<_> = WsFederationApi::from_config(
                     cli.build_client(&self.module_gens).await?.config().as_ref(),
                 )
                 .into();
-                let response: Value = ws_api
-                    .request_with_strategy(
-                        EventuallyConsistent::new(ws_api.peers().len()),
-                        method,
-                        ApiRequestErased::new(arg),
-                    )
-                    .await
-                    .unwrap();
+                let response: Value = match peer_id {
+                    Some(peer_id) => ws_api
+                        .request_raw(peer_id.into(), &method, &[params.to_json()])
+                        .await
+                        .map_err_cli_general()?,
+                    None => ws_api
+                        .request_with_strategy(
+                            EventuallyConsistent::new(ws_api.peers().len()),
+                            method,
+                            params,
+                        )
+                        .await
+                        .map_err_cli_general()?,
+                };
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
             }

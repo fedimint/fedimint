@@ -5,7 +5,6 @@ use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
 use ::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
 use anyhow::{bail, format_err, Context};
-use bitcoin::consensus::Encodable;
 use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
 use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
@@ -310,8 +309,7 @@ impl IBitcoindRpc for ElectrumClient {
     async fn submit_transaction(&self, transaction: Transaction) {
         fedimint_core::task::block_in_place(|| {
             let mut bytes = vec![];
-            transaction
-                .consensus_encode(&mut bytes)
+            bitcoin::consensus::Encodable::consensus_encode(&transaction, &mut bytes)
                 .expect("can't fail");
             let _ = self.0.transaction_broadcast_raw(&bytes).map_err(|error| {
                 info!(?error, "Error broadcasting transaction");

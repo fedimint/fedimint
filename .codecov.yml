@@ -4,6 +4,8 @@ github_checks:
 
 codecov:
   require_ci_to_pass: true
+  notify:
+    wait_for_ci: no
 
 coverage:
   precision: 2
@@ -14,5 +16,3 @@ coverage:
       default:
         target: auto
         threshold: 1%
-  notify:
-    wait_for_ci: no

@@ -239,10 +239,10 @@ impl MintRedemptionStateRefund {
     }
     async fn trigger_refund_failed(
         common: MintRedemptionCommon,
-        global_contex: DynGlobalClientContext,
+        global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) {
-        global_contex
+        global_context
             .await_tx_rejected(common.operation_id, refund_txid)
             .await;
     }

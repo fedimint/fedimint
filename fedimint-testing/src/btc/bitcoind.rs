@@ -125,6 +125,7 @@ impl FakeBitcoindRpcController {
 
 fn height_hash(height: u64) -> BlockHash {
     let mut bytes = [0u8; 32];
+    // Exceptionally use little endian to match bitcoin consensus encoding
     bytes[..8].copy_from_slice(&height.to_le_bytes()[..]);
     BlockHash::from_inner(bytes)
 }

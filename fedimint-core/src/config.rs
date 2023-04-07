@@ -94,11 +94,10 @@ impl JsonWithKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
-pub struct ApiEndpoint {
-    /// The peer's API websocket network address and port (e.g.
-    /// `ws://10.42.0.10:5000`)
+pub struct PeerUrl {
+    /// The peer's public URL (e.g. `wss://fedimint-server-1:5000`)
     pub url: Url,
-    /// human-readable name
+    /// The peer's name
     pub name: String,
 }
 
@@ -110,7 +109,7 @@ pub struct ClientConfig {
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
-    pub api_endpoints: BTreeMap<PeerId, ApiEndpoint>,
+    pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules
@@ -270,7 +269,7 @@ impl<M> Default for ModuleGenRegistry<M> {
 /// Module **generation** (so passed to dkg, not to the module itself) config
 /// parameters
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub struct ConfigGenParams(serde_json::Value);
+pub struct ConfigGenModuleParams(serde_json::Value);
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
@@ -285,7 +284,7 @@ impl ServerModuleGenRegistry {
     }
 }
 
-impl ConfigGenParams {
+impl ConfigGenModuleParams {
     /// Null value, used as a config gen parameters for module gens that don't
     /// need any parameters
     pub fn null() -> Self {
@@ -309,7 +308,7 @@ pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
 /// Note: in the future, we should make this one a
 /// `ModuleRegistry<ConfigGenParams>`, as each module **instance** will need a
 /// distinct config for dkg.
-pub type ServerModuleGenParamsRegistry = ModuleGenRegistry<ConfigGenParams>;
+pub type ServerModuleGenParamsRegistry = ModuleGenRegistry<ConfigGenModuleParams>;
 
 impl Eq for ServerModuleGenParamsRegistry {}
 
@@ -339,7 +338,7 @@ impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
         let mut params = BTreeMap::new();
 
         for (key, value) in json {
-            params.insert(key, ConfigGenParams(value));
+            params.insert(key, ConfigGenModuleParams(value));
         }
         Ok(ModuleGenRegistry(params))
     }
@@ -409,7 +408,7 @@ impl<M> ModuleGenRegistry<M> {
     }
 }
 
-impl ModuleGenRegistry<ConfigGenParams> {
+impl ModuleGenRegistry<ConfigGenModuleParams> {
     pub fn attach_config_gen_params<T>(&mut self, kind: ModuleKind, gen: T) -> &mut Self
     where
         T: ModuleGenParams,
@@ -418,7 +417,8 @@ impl ModuleGenRegistry<ConfigGenParams> {
             .0
             .insert(
                 kind.clone(),
-                ConfigGenParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+                ConfigGenModuleParams::from_typed(gen)
+                    .expect("Invalid config gen params for {kind}"),
             )
             .is_some()
         {
@@ -435,7 +435,8 @@ impl ModuleGenRegistry<ConfigGenParams> {
             .0
             .insert(
                 kind.clone(),
-                ConfigGenParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+                ConfigGenModuleParams::from_typed(gen)
+                    .expect("Invalid config gen params for {kind}"),
             )
             .is_some()
         {

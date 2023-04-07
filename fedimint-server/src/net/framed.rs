@@ -204,7 +204,7 @@ where
         // written
         let new_len = dst.len();
         let encoded_len = new_len - old_len - 8;
-        dst[old_len..old_len + 8].copy_from_slice(&encoded_len.to_le_bytes()[..]);
+        dst[old_len..old_len + 8].copy_from_slice(&encoded_len.to_be_bytes()[..]);
 
         Ok(())
     }
@@ -222,7 +222,7 @@ where
             return Ok(None);
         }
 
-        let length = u64::from_le_bytes(src[0..8].try_into().expect("correct length"));
+        let length = u64::from_be_bytes(src[0..8].try_into().expect("correct length"));
         if src.len() < (length as usize) + 8 {
             trace!(length, buffern_len = src.len(), "Received partial message");
             return Ok(None);

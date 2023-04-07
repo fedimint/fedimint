@@ -98,7 +98,9 @@ impl DerivableSecret {
 fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
     let mut derivation_info = [0u8; 16];
     derivation_info[0..8].copy_from_slice(&tag[..]);
-    derivation_info[8..16].copy_from_slice(&derivation.0.to_le_bytes()[..]);
+    // The endianness isn't important here because we just need some bytes, but
+    // let's use the default for this project (big endian)
+    derivation_info[8..16].copy_from_slice(&derivation.0.to_be_bytes()[..]);
     derivation_info
 }
 

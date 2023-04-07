@@ -34,10 +34,9 @@ use tracing::error;
 use url::Url;
 
 use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
-use crate::config::{gen_cert_and_key, ServerConfig, ServerConfigConsensus, ServerConfigParams};
+use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
 use crate::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
-use crate::net::connect::TlsConfig;
-use crate::net::peers::{DelayCalculator, NetworkConfig};
+use crate::net::peers::DelayCalculator;
 use crate::FedimintServer;
 
 pub type ApiResult<T> = std::result::Result<T, ApiError>;
@@ -245,7 +244,7 @@ impl ConfigGenApi {
         let module_gens = self.settings.module_gens.clone();
 
         let config = ServerConfig::distributed_gen(
-            &params.to_server_params(),
+            &params,
             module_gens,
             DelayCalculator::default(),
             &mut subgroup,
@@ -402,64 +401,6 @@ impl ConfigGenApi {
         *state = ConfigApiState::VerifyConfigParams(auth, params);
 
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-/// All the parameters necessary for generating the `ServerConfig` during setup
-///
-/// * Guardians can create the parameters using a setup UI or CLI tool
-/// * Used for distributed or trusted config generation
-// TODO: Replace `ServerConfigParams` with this
-pub struct ConfigGenParams {
-    pub local: ConfigGenParamsLocal,
-    pub consensus: ConfigGenParamsConsensus,
-}
-
-impl ConfigGenParams {
-    pub fn to_server_params(self) -> ServerConfigParams {
-        ServerConfigParams {
-            our_id: self.local.our_id,
-            peer_ids: self.consensus.peers.keys().copied().collect(),
-            api_auth: self.local.api_auth,
-            tls: TlsConfig {
-                our_private_key: self.local.our_private_key,
-                peer_certs: self
-                    .consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (*id, peer.cert.clone()))
-                    .collect(),
-                peer_names: self
-                    .consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (*id, peer.name.clone()))
-                    .collect(),
-            },
-            p2p_network: NetworkConfig {
-                identity: self.local.our_id,
-                bind_addr: self.local.p2p_bind,
-                peers: self
-                    .consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (*id, peer.p2p_url.clone()))
-                    .collect(),
-            },
-            api_network: NetworkConfig {
-                identity: self.local.our_id,
-                bind_addr: self.local.api_bind,
-                peers: self
-                    .consensus
-                    .peers
-                    .iter()
-                    .map(|(id, peer)| (*id, peer.api_url.clone()))
-                    .collect(),
-            },
-            meta: self.consensus.requested.meta,
-            modules: self.consensus.requested.modules,
-        }
     }
 }
 

@@ -3,10 +3,9 @@ use std::ffi::OsString;
 
 use async_trait::async_trait;
 use fedimint_core::config::{
-    ConfigGenParams, DkgResult, ModuleConfigResponse, ServerModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::__reexports::serde_json;
@@ -66,7 +65,7 @@ impl ServerModuleGen for DummyServerGen {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        _params: &ConfigGenParams,
+        _params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let mint_cfg: BTreeMap<_, DummyConfig> = peers
             .iter()
@@ -90,7 +89,7 @@ impl ServerModuleGen for DummyServerGen {
     async fn distributed_gen(
         &self,
         _peers: &PeerHandle,
-        _params: &ConfigGenParams,
+        _params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         let server = DummyConfig {
             private: DummyConfigPrivate {
@@ -120,7 +119,7 @@ impl ServerModuleGen for DummyServerGen {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         Box::new(BTreeMap::new().into_iter())
@@ -146,23 +145,20 @@ impl ServerModule for Dummy {
         )
     }
 
-    async fn await_consensus_proposal(
-        &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-    ) {
+    async fn await_consensus_proposal(&self, _dbtx: &mut ModuleDatabaseTransaction<'_>) {
         std::future::pending().await
     }
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<DummyConsensusItem> {
         ConsensusProposal::empty()
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        _dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'b>,
         _consensus_items: Vec<(PeerId, DummyConsensusItem)>,
     ) {
     }
@@ -177,7 +173,7 @@ impl ServerModule for Dummy {
     async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        _dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         _input: &'a DummyInput,
     ) -> Result<InputMeta, ModuleError> {
@@ -187,7 +183,7 @@ impl ServerModule for Dummy {
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         _interconnect: &'a dyn ModuleInterconect,
-        _dbtx: &mut ModuleDatabaseTransaction<'c, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'c>,
         _input: &'b DummyInput,
         _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
@@ -196,7 +192,7 @@ impl ServerModule for Dummy {
 
     async fn validate_output(
         &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _output: &DummyOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         unimplemented!()
@@ -204,7 +200,7 @@ impl ServerModule for Dummy {
 
     async fn apply_output<'a, 'b>(
         &'a self,
-        _dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'b>,
         _output: &'a DummyOutput,
         _out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -214,25 +210,20 @@ impl ServerModule for Dummy {
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         _consensus_peers: &HashSet<PeerId>,
-        _dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         vec![]
     }
 
     async fn output_status(
         &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _out_point: OutPoint,
     ) -> Option<DummyOutputOutcome> {
         None
     }
 
-    async fn audit(
-        &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
-        _audit: &mut Audit,
-    ) {
-    }
+    async fn audit(&self, _dbtx: &mut ModuleDatabaseTransaction<'_>, _audit: &mut Audit) {}
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![api_endpoint! {
