@@ -12,15 +12,15 @@ use anyhow::{anyhow, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin_hashes::sha256;
-use fedimint_core::config::{
-    ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId, PeerUrl,
-};
+use fedimint_core::config::{ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
+use fedimint_derive::Decodable;
 use fedimint_logging::LOG_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
@@ -565,37 +565,22 @@ struct FederationMember<C> {
 /// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
 pub struct WsClientConnectInfo {
-    /// Urls that support the federation API (expected to be in PeerId order)
-    pub urls: Vec<Url>,
+    /// Url to reach an API that we can download configs from
+    pub url: Url,
+    /// Config download token (might only be used a certain number of times)
+    pub download_token: ClientConfigDownloadToken,
     /// Authentication id for the federation
     pub id: FederationId,
 }
 
-impl WsClientConnectInfo {
-    pub fn new(id: &FederationId, api: &BTreeMap<PeerId, PeerUrl>) -> Self {
-        Self {
-            urls: api
-                .iter()
-                .map(|(_, endpoint)| endpoint.url.clone())
-                .collect(),
-            id: id.clone(),
-        }
-    }
+/// Size of a download token
+const CONFIG_DOWNLOAD_TOKEN_BYTES: usize = 12;
 
-    /// Construct from a config using only a number of peers where one is
-    /// expected to be honest
-    ///
-    /// Minimizes the serialized size of the connect info
-    pub fn from_honest_peers(config: &ClientConfig) -> Self {
-        let all = config.api_endpoints.clone();
-        let num_honest = all.one_honest();
-        let honest: BTreeMap<_, _> = all.into_iter().take(num_honest).collect();
-
-        WsClientConnectInfo::new(&config.federation_id, &honest)
-    }
-}
+/// Allows a client to download the config
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ClientConfigDownloadToken(pub [u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
 
 /// We can represent client connect info as a bech32 string for compactness and
 /// error-checking
@@ -616,25 +601,23 @@ impl FromStr for WsClientConnectInfo {
         ensure!(variant == Bech32m, "Expected Bech32m encoding");
 
         let bytes: Vec<u8> = Vec::<u8>::from_base32(&data)?;
-        let total_len = bytes.len() as u64;
         let mut cursor = Cursor::new(bytes);
         let mut id_bytes = [0; PK_SIZE];
         cursor.read_exact(&mut id_bytes)?;
 
-        let mut urls = vec![];
-        while cursor.position() < total_len {
-            let mut url_len = [0; 2];
-            cursor.read_exact(&mut url_len)?;
-            let url_len = u16::from_be_bytes(url_len).into();
-            let mut url_bytes = vec![0; url_len];
-            cursor.read_exact(&mut url_bytes)?;
+        let mut url_len = [0; 2];
+        cursor.read_exact(&mut url_len)?;
+        let url_len = u16::from_be_bytes(url_len).into();
+        let mut url_bytes = vec![0; url_len];
+        cursor.read_exact(&mut url_bytes)?;
+        let mut download_token = [0; CONFIG_DOWNLOAD_TOKEN_BYTES];
+        cursor.read_exact(&mut download_token)?;
 
-            let url = std::str::from_utf8(&url_bytes)?;
-            urls.push(url.parse()?);
-        }
+        let url = std::str::from_utf8(&url_bytes)?;
 
         Ok(Self {
-            urls,
+            url: url.parse()?,
+            download_token: ClientConfigDownloadToken(download_token),
             id: FederationId(PublicKey::from_bytes(id_bytes)?),
         })
     }
@@ -645,11 +628,10 @@ impl Display for WsClientConnectInfo {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let mut data = vec![];
         data.extend(self.id.0.to_bytes());
-        for url in &self.urls {
-            let url_bytes = url.as_str().as_bytes();
-            data.extend((url_bytes.len() as u16).to_be_bytes());
-            data.extend(url.as_str().as_bytes());
-        }
+        let url_bytes = self.url.as_str().as_bytes();
+        data.extend((url_bytes.len() as u16).to_be_bytes());
+        data.extend(url_bytes);
+        data.extend(&self.download_token.0);
         let encode =
             bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
 
@@ -673,12 +655,6 @@ impl<'de> Deserialize<'de> for WsClientConnectInfo {
     {
         let string = Cow::<str>::deserialize(deserializer)?;
         Self::from_str(&string).map_err(serde::de::Error::custom)
-    }
-}
-
-impl From<&ClientConfig> for WsClientConnectInfo {
-    fn from(config: &ClientConfig) -> Self {
-        WsClientConnectInfo::new(&config.federation_id, &config.api_endpoints)
     }
 }
 
@@ -738,22 +714,22 @@ impl WsFederationApi<WsClient> {
 
     /// Creates a new API client from a client config
     pub fn from_config(config: &ClientConfig) -> Self {
-        Self::from_urls(&config.into())
+        Self::new(
+            config
+                .api_endpoints
+                .iter()
+                .map(|(id, peer)| (*id, peer.url.clone()))
+                .collect(),
+        )
     }
 
-    /// Creates a new API client from connection info
-    pub fn from_urls(connection: &WsClientConnectInfo) -> Self {
+    /// Creates a new API client from a connect info, assumes they are in peer
+    /// id order
+    pub fn from_connect_info(info: &[WsClientConnectInfo]) -> Self {
         Self::new(
-            connection
-                .urls
-                .iter()
+            info.iter()
                 .enumerate()
-                .map(|(id, url)| {
-                    // FIXME: potentially wrong could download actual PeerId later, but doesn't
-                    // matter in practice
-                    let peer_id = PeerId::from(id as u16);
-                    (peer_id, url.clone())
-                })
+                .map(|(id, connect)| (PeerId::from(id as u16), connect.url.clone()))
                 .collect(),
         )
     }
@@ -879,6 +855,8 @@ mod tests {
     use jsonrpsee_core::params::BatchRequestBuilder;
     use jsonrpsee_core::traits::ToRpcParams;
     use once_cell::sync::Lazy;
+    use rand::rngs::OsRng;
+    use rand::Rng;
     use serde::de::DeserializeOwned;
     use tracing::error;
 
@@ -1095,8 +1073,9 @@ mod tests {
     #[test]
     fn converts_connect_string() {
         let connect = WsClientConnectInfo {
-            urls: vec!["ws://test1".parse().unwrap(), "ws://test2".parse().unwrap()],
+            url: "ws://test1".parse().unwrap(),
             id: FederationId::dummy(),
+            download_token: ClientConfigDownloadToken(OsRng::default().gen()),
         };
 
         let bech32 = connect.to_string();

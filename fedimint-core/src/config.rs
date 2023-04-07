@@ -26,6 +26,7 @@ use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
+use crate::api::WsClientConnectInfo;
 use crate::module::{DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen};
 use crate::task::{MaybeSend, MaybeSync};
 use crate::{maybe_add_send_sync, PeerId};
@@ -118,6 +119,8 @@ pub struct ClientConfig {
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+    /// The connection info that allowed us to download the config
+    pub connection_info: Option<WsClientConnectInfo>,
 }
 
 /// The API response for configuration requests

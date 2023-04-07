@@ -19,14 +19,14 @@ use fedimint_client_legacy::modules::ln::contracts::ContractId;
 use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
 use fedimint_client_legacy::modules::wallet::WalletClientGen;
 use fedimint_client_legacy::utils::{
-    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
-    parse_peer_id, serialize_ecash,
+    from_hex, parse_bitcoin_amount, parse_download_token, parse_ecash, parse_fedimint_amount,
+    parse_node_pub_key, parse_peer_id, serialize_ecash,
 };
 use fedimint_client_legacy::{Client, UserClientConfig};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
-    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsClientConnectInfo,
-    WsFederationApi,
+    ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
+    IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -117,7 +117,8 @@ enum CliOutput {
     },
 
     DecodeConnectInfo {
-        urls: Vec<Url>,
+        url: Url,
+        download_token: ClientConfigDownloadToken,
         id: FederationId,
     },
 
@@ -433,9 +434,10 @@ enum Command {
 
     /// Encode connection info from its constituent parts
     EncodeConnectInfo {
-        #[clap(long, required = true, value_delimiter = ',')]
-        urls: Vec<Url>,
-        #[clap(long)]
+        url: Url,
+        #[clap(value_parser = parse_download_token)]
+        download_token: ClientConfigDownloadToken,
+        #[clap(long = "id")]
         id: FederationId,
     },
 
@@ -590,7 +592,7 @@ impl FedimintCli {
             Command::JoinFederation { connect } => {
                 let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid connect info")?;
-                let api = Arc::new(WsFederationApi::from_urls(&connect_obj))
+                let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]))
                     as Arc<dyn IFederationApi + Send + Sync + 'static>;
                 let cfg: ClientConfig = api
                     .download_client_config(&connect_obj.id, self.module_gens.to_common())
@@ -816,17 +818,37 @@ impl FedimintCli {
                 .await
                 .map(|_| CliOutput::WaitBlockHeight { reached: (height) })
                 .map_err_cli_msg(CliErrorKind::Timeout, "timeout reached"),
-            Command::ConnectInfo => Ok(CliOutput::ConnectInfo {
-                connect_info: WsClientConnectInfo::from_honest_peers(
-                    cli.build_client(&self.module_gens).await?.config().as_ref(),
-                ),
-            }),
+            Command::ConnectInfo => {
+                let connect_info = cli
+                    .build_client(&self.module_gens)
+                    .await?
+                    .config()
+                    .as_ref()
+                    .connection_info
+                    .clone()
+                    .ok_or(CliError {
+                        kind: CliErrorKind::GeneralFederationError,
+                        message: "no connect info in config".into(),
+                        raw_error: None,
+                    })?;
+
+                Ok(CliOutput::ConnectInfo { connect_info })
+            }
             Command::DecodeConnectInfo { connect_info } => Ok(CliOutput::DecodeConnectInfo {
-                urls: connect_info.urls,
+                url: connect_info.url,
+                download_token: connect_info.download_token,
                 id: connect_info.id,
             }),
-            Command::EncodeConnectInfo { urls, id } => Ok(CliOutput::ConnectInfo {
-                connect_info: WsClientConnectInfo { urls, id },
+            Command::EncodeConnectInfo {
+                url,
+                download_token,
+                id,
+            } => Ok(CliOutput::ConnectInfo {
+                connect_info: WsClientConnectInfo {
+                    url,
+                    download_token,
+                    id,
+                },
             }),
             Command::ListGateways {} => {
                 let client = cli.build_client(&self.module_gens).await?;

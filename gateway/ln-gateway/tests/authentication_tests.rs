@@ -15,7 +15,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::{Error, Response};
@@ -23,6 +23,8 @@ use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
 use ln_gateway::utils::retry;
+use rand::rngs::OsRng;
+use rand::Rng;
 use url::Url;
 
 use crate::fixtures::test;
@@ -52,7 +54,8 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
             // * `connect_federation` with incorrect password fails
             let payload = ConnectFedPayload {
                 connect: serde_json::to_string(&WsClientConnectInfo {
-                    urls: vec![],
+                    url: "ws://dummy".parse().unwrap(),
+                    download_token: ClientConfigDownloadToken(OsRng::default().gen()),
                     id: federation_id.clone(),
                 })
                 .unwrap(),
