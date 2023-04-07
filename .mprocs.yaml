@@ -1,6 +1,6 @@
 procs:
   user:
-    shell: source scripts/tmux-user-shell.sh
+    shell: bash
   fedimint0:
     shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-0.log
   fedimint1:
