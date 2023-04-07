@@ -87,6 +87,8 @@ export -f cli_test_always_success
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
 joblog="$tmpdir/joblog"
+trap 'if [ "$?" -ne 0 ]; then echo "##Client Database"; dbtool client list; echo "##Server Database"; dbtool server-0 list; fi' EXIT
+
 
 >&2 echo "## Starting all tests in parallel..."
 # --load to keep the load under-control, especially during target dir extraction
