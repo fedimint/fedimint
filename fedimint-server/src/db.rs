@@ -372,12 +372,11 @@ mod fedimint_migration_tests {
                                     .await
                                     .collect::<Vec<_>>()
                                     .await;
-                                let _downloads_len = downloads.len();
-                                // FIXME: Why does this fail?
-                                // assert!(
-                                //     downloads_len > 0,
-                                //     "validate_migrations was not able to read any ClientConfigDownloadKey"
-                                // );
+                                let downloads_len = downloads.len();
+                                assert!(
+                                    downloads_len > 0,
+                                    "validate_migrations was not able to read any ClientConfigDownloadKey"
+                                );
                             }
                             // Module prefix is reserved for modules, no migration testing is needed
                             DbKeyPrefix::Module => {}
