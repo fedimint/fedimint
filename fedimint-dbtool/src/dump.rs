@@ -233,6 +233,16 @@ impl<'a> DatabaseDump<'a> {
                         consensus.insert("ConsensusUpgrade".to_string(), Box::new(upgrade));
                     }
                 }
+                ConsensusRange::DbKeyPrefix::ClientConfigDownload => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ConsensusRange::ClientConfigDownloadKeyPrefix,
+                        ConsensusRange::ClientConfigDownloadKey,
+                        u64,
+                        consensus,
+                        "Client Config Download"
+                    );
+                }
                 // Module is a global prefix for all module data
                 ConsensusRange::DbKeyPrefix::Module => {}
             }

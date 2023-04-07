@@ -19,8 +19,8 @@ use fedimint_client_legacy::modules::ln::contracts::ContractId;
 use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
 use fedimint_client_legacy::modules::wallet::WalletClientGen;
 use fedimint_client_legacy::utils::{
-    from_hex, parse_bitcoin_amount, parse_download_token, parse_ecash, parse_fedimint_amount,
-    parse_node_pub_key, parse_peer_id, serialize_ecash,
+    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
+    parse_peer_id, serialize_ecash,
 };
 use fedimint_client_legacy::{Client, UserClientConfig};
 use fedimint_core::admin_client::WsAdminClient;
@@ -31,6 +31,7 @@ use fedimint_core::api::{
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseValue};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
@@ -118,7 +119,7 @@ enum CliOutput {
 
     DecodeConnectInfo {
         url: Url,
-        download_token: ClientConfigDownloadToken,
+        download_token: String,
         id: FederationId,
     },
 
@@ -434,8 +435,9 @@ enum Command {
 
     /// Encode connection info from its constituent parts
     EncodeConnectInfo {
+        #[clap(long = "url")]
         url: Url,
-        #[clap(value_parser = parse_download_token)]
+        #[clap(long = "download-token", value_parser = from_hex::<ClientConfigDownloadToken>)]
         download_token: ClientConfigDownloadToken,
         #[clap(long = "id")]
         id: FederationId,
@@ -595,7 +597,7 @@ impl FedimintCli {
                 let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]))
                     as Arc<dyn IFederationApi + Send + Sync + 'static>;
                 let cfg: ClientConfig = api
-                    .download_client_config(&connect_obj.id, self.module_gens.to_common())
+                    .download_client_config(&connect_obj, self.module_gens.to_common())
                     .await
                     .map_err_cli_msg(
                         CliErrorKind::NetworkError,
@@ -819,24 +821,25 @@ impl FedimintCli {
                 .map(|_| CliOutput::WaitBlockHeight { reached: (height) })
                 .map_err_cli_msg(CliErrorKind::Timeout, "timeout reached"),
             Command::ConnectInfo => {
-                let connect_info = cli
-                    .build_client(&self.module_gens)
-                    .await?
-                    .config()
-                    .as_ref()
-                    .connection_info
-                    .clone()
-                    .ok_or(CliError {
-                        kind: CliErrorKind::GeneralFederationError,
-                        message: "no connect info in config".into(),
-                        raw_error: None,
-                    })?;
+                let path = cli.workdir()?.join("client-connect");
+                let string = fs::read_to_string(path).map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "cannot read connect string",
+                )?;
+
+                let connect_info = WsClientConnectInfo::from_str(&string).map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "cannot parse connect string",
+                )?;
 
                 Ok(CliOutput::ConnectInfo { connect_info })
             }
             Command::DecodeConnectInfo { connect_info } => Ok(CliOutput::DecodeConnectInfo {
                 url: connect_info.url,
-                download_token: connect_info.download_token,
+                download_token: connect_info
+                    .download_token
+                    .consensus_encode_to_hex()
+                    .expect("encodes"),
                 id: connect_info.id,
             }),
             Command::EncodeConnectInfo {

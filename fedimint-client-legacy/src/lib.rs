@@ -24,12 +24,12 @@ use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::module::gen::{ClientModuleGenRegistry, ClientModuleGenRegistryExt};
+use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::api::{
     DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
     WsFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -263,34 +263,6 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
 
     pub fn config(&self) -> T {
         self.config.clone()
-    }
-
-    /// Verifies the config using the federation id
-    pub async fn verify_config(&self, id: &FederationId) -> Result<()> {
-        let config = self
-            .context
-            .api
-            .download_client_config(id, self.context.module_gens.to_common())
-            .await
-            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::InvalidSignature))?;
-
-        let api_hash = config
-            .consensus_hash(&self.context.module_gens.to_common())
-            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
-
-        let self_hash = self
-            .config
-            .as_ref()
-            .consensus_hash(&self.context.module_gens.to_common())
-            .map_err(|_| ClientError::ConfigVerify(ConfigVerifyError::CannotHash))?;
-
-        if api_hash != self_hash {
-            Err(ClientError::ConfigVerify(
-                ConfigVerifyError::MismatchingConfigs,
-            ))
-        } else {
-            Ok(())
-        }
     }
 
     pub async fn new(

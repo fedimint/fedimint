@@ -4,7 +4,7 @@ use std::str::FromStr;
 use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex::FromHex;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
-use fedimint_core::api::{ClientConfigDownloadToken, DynFederationApi};
+use fedimint_core::api::DynFederationApi;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -14,14 +14,6 @@ use lightning_invoice::Currency;
 use crate::mint::SpendableNote;
 
 pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
-    let bytes = base64::decode(s)?;
-    Ok(Decodable::consensus_decode(
-        &mut std::io::Cursor::new(bytes),
-        &ModuleDecoderRegistry::default(),
-    )?)
-}
-
-pub fn parse_download_token(s: &str) -> anyhow::Result<ClientConfigDownloadToken> {
     let bytes = base64::decode(s)?;
     Ok(Decodable::consensus_decode(
         &mut std::io::Cursor::new(bytes),

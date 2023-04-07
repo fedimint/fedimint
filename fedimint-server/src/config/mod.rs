@@ -54,7 +54,7 @@ pub mod io;
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 
 /// How many times a config download token can be used by a client
-const DEFAULT_CONFIG_DOWNLOAD_LIMIT: usize = 100;
+const DEFAULT_CONFIG_DOWNLOAD_LIMIT: u64 = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
@@ -137,9 +137,8 @@ pub struct ServerConfigLocal {
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
     /// Required to download the client config
     pub download_token: ClientConfigDownloadToken,
-    /// Optional limit on the number of times a config download token can be
-    /// used
-    pub download_token_limit: Option<usize>,
+    /// Limit on the number of times a config download token can be used
+    pub download_token_limit: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -194,7 +193,6 @@ impl ServerConfigConsensus {
             api_endpoints: self.api_endpoints.clone(),
             modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
             meta: self.meta.clone(),
-            connection_info: None,
         };
 
         Ok(ConfigResponse {
@@ -240,7 +238,7 @@ impl ServerConfig {
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
             download_token: ClientConfigDownloadToken(OsRng.gen()),
-            download_token_limit: Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
+            download_token_limit: params.local.download_token_limit,
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
@@ -706,6 +704,7 @@ impl ConfigGenParams {
             our_id,
             peers,
             federation_name,
+            Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
             module_params,
         ))
     }
@@ -720,6 +719,7 @@ impl ConfigGenParams {
         our_id: PeerId,
         peers: BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
+        download_token_limit: Option<u64>,
         modules: ServerModuleGenParamsRegistry,
     ) -> ConfigGenParams {
         ConfigGenParams {
@@ -729,6 +729,7 @@ impl ConfigGenParams {
                 api_auth,
                 p2p_bind,
                 api_bind,
+                download_token_limit,
             },
             consensus: ConfigGenParamsConsensus {
                 peers,

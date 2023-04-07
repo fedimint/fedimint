@@ -147,7 +147,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         let api: DynFederationApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
 
         let client_config = api
-            .download_client_config(&connect.id, module_gens.to_common())
+            .download_client_config(&connect, module_gens.to_common())
             .await?;
 
         let mut rng = rand::rngs::OsRng;

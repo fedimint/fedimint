@@ -26,7 +26,9 @@ use bitcoin::{Amount, KeyPair};
 use fedimint_client_legacy::mint::MintClient;
 use fedimint_client_legacy::transaction::legacy::Output;
 use fedimint_client_legacy::transaction::TransactionBuilder;
-use fedimint_client_legacy::{ClientError, ConfigVerifyError};
+use fedimint_client_legacy::{ClientError, UserClientConfig};
+use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
+use fedimint_core::config::CommonModuleGenRegistry;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{msats, sats, TieredMulti};
@@ -49,7 +51,7 @@ use tracing::{debug, info, instrument};
 
 use crate::fixtures::{
     create_lightning_adapter, lightning_test, non_lightning_test, peers, unwrap_item,
-    FederationTest,
+    FederationTest, UserTest,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1288,22 +1290,34 @@ async fn ecash_can_be_recovered() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn verifies_client_configs() -> Result<()> {
-    non_lightning_test(2, |fed, user, _bitcoin, _, _| async move {
-        // fed needs to run an epoch to combine shares
-        let id = user.client.config().0.federation_id.clone();
-        let res = user.client.verify_config(&id).await;
-        assert_matches!(
-            res,
-            Err(ClientError::ConfigVerify(
-                ConfigVerifyError::InvalidSignature
-            ))
-        );
+async fn limits_client_config_downloads() -> Result<()> {
+    non_lightning_test(
+        2,
+        |fed: FederationTest, user: UserTest<UserClientConfig>, _, _, _| async move {
+            let connect = &fed.connect_info.clone();
+            let api = WsFederationApi::from_connect_info(&[connect.clone()]);
+            let reg = CommonModuleGenRegistry::default();
 
-        fed.run_consensus_epochs(1).await;
-        let res = user.client.verify_config(&id).await;
-        assert!(res.is_ok());
-    })
+            // consensus hash should be the same amoung all peers
+            let res = user.client.context().api.consensus_config_hash().await;
+            assert!(res.is_ok());
+
+            // fed needs to run an epoch to combine shares and verify sig
+            let res = api.download_client_config(connect, reg.clone()).await;
+            assert_matches!(res, Err(_));
+
+            fed.run_consensus_epochs(1).await;
+            let cfg = api
+                .download_client_config(connect, reg.clone())
+                .await
+                .unwrap();
+            assert_eq!(cfg, user.config.0);
+
+            // cannot download more than once with test settings
+            let res = api.download_client_config(connect, reg.clone()).await;
+            assert_matches!(res, Err(_));
+        },
+    )
     .await
 }
 

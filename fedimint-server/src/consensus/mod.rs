@@ -9,6 +9,7 @@ use std::os::unix::prelude::OsStrExt;
 use std::sync::Mutex;
 
 use anyhow::format_err;
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
@@ -20,7 +21,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
 };
-use fedimint_core::module::{ModuleError, TransactionItemAmount};
+use fedimint_core::module::{ApiError, ModuleError, TransactionItemAmount};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::{DynServerModule, DynVerificationCache};
 use fedimint_core::task::TaskGroup;
@@ -36,13 +37,14 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
+use crate::config::api::ApiResult;
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
-    get_global_database_migrations, AcceptedTransactionKey, ClientConfigSignatureKey,
-    ConsensusUpgradeKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
-    RejectedTransactionKey, GLOBAL_DATABASE_VERSION,
+    get_global_database_migrations, AcceptedTransactionKey, ClientConfigDownloadKey,
+    ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey,
+    LastEpochKey, RejectedTransactionKey, GLOBAL_DATABASE_VERSION,
 };
 use crate::transaction::{Transaction, TransactionError};
 
@@ -615,6 +617,39 @@ impl FedimintConsensus {
         }
     }
 
+    pub async fn download_config_with_token(
+        &self,
+        info: WsClientConnectInfo,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> ApiResult<ConfigResponse> {
+        let token = self.cfg.local.download_token.clone();
+
+        if info.download_token != token {
+            return Err(ApiError::bad_request(
+                "Download token not found".to_string(),
+            ));
+        }
+
+        let times_used = dbtx
+            .get_value(&ClientConfigDownloadKey(token.clone()))
+            .await
+            .unwrap_or_default();
+
+        dbtx.insert_entry(&ClientConfigDownloadKey(token), &(times_used + 1))
+            .await;
+
+        if let Some(limit) = self.cfg.local.download_token_limit {
+            if times_used > limit {
+                return Err(ApiError::bad_request(
+                    "Download token used too many times".to_string(),
+                ));
+            }
+        }
+
+        Ok(self.get_config_with_sig(dbtx).await)
+    }
+
+    /// Returns the client config signed by all federation members
     pub async fn get_config_with_sig(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,

@@ -352,7 +352,7 @@ pub trait GlobalFederationApi {
     /// Fetch client configuration info only if verified against a federation id
     async fn download_client_config(
         &self,
-        id: &FederationId,
+        info: &WsClientConnectInfo,
         module_gens: CommonModuleGenRegistry,
     ) -> FederationResult<ClientConfig>;
 
@@ -516,10 +516,10 @@ where
 
     async fn download_client_config(
         &self,
-        id: &FederationId,
+        info: &WsClientConnectInfo,
         module_gens: CommonModuleGenRegistry,
     ) -> FederationResult<ClientConfig> {
-        let id = id.clone();
+        let id = info.id.clone();
         let qs = VerifiableResponse::new(
             self.all_members().total(),
             false,
@@ -534,15 +534,18 @@ where
             },
         );
 
-        self.request_with_strategy(qs, "/config".to_owned(), ApiRequestErased::default())
-            .await
-            .map(|cfg| cfg.client)
+        self.request_with_strategy(
+            qs,
+            "/config".to_owned(),
+            ApiRequestErased::new(info.clone()),
+        )
+        .await
+        .map(|cfg: ConfigResponse| cfg.client)
     }
 
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
-        self.request_current_consensus("/config".to_owned(), ApiRequestErased::default())
+        self.request_current_consensus("/config_hash".to_owned(), ApiRequestErased::default())
             .await
-            .map(|cfg: ConfigResponse| cfg.consensus_hash)
     }
 }
 

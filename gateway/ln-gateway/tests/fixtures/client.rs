@@ -84,7 +84,6 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
             api_endpoints: [].into(),
             modules: [].into(),
             meta: Default::default(),
-            connection_info: None,
         };
 
         let mut rng = rand::rngs::OsRng;
