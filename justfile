@@ -75,3 +75,7 @@ format:
 # start mprocs with a dev federation setup
 fed-shell:
   ./scripts/fed-shell.sh
+
+# exit fed-shell session
+exit fed-shell:
+  mprocs --ctl '{c: quit}'
