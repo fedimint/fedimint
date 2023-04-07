@@ -185,7 +185,7 @@ pub async fn run_dkg(root_task_group: &TaskGroup, servers: usize) -> anyhow::Res
     async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
         // set env vars
         let bin_dir = env::var("FM_BIN_DIR")?;
-        let server_name = format!("Server-{id}");
+        let server_name = format!("Server {id}!");
         let env_vars = fedimint_env(id)?;
         let p2p_url = env_vars.get("FM_P2P_URL").context("FM_P2P_URL not found")?;
         let api_url = env_vars.get("FM_API_URL").context("FM_API_URL not found")?;
