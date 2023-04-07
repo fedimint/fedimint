@@ -72,10 +72,10 @@ impl ILnRpcClient for LnRpcAdapter {
         self.client.read().await.pay(invoice).await
     }
 
-    async fn route_htlc<'a>(
-        &self,
+    async fn route_htlcs<'a>(
+        &mut self,
         events: ReceiverStream<RouteHtlcRequest>,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.client.read().await.route_htlc(events).await
+        self.client.write().await.route_htlcs(events).await
     }
 }

@@ -6,6 +6,7 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_client_legacy::modules::ln::contracts::Preimage;
+use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use futures::stream;
 use lightning::ln::PaymentSecret;
@@ -27,6 +28,7 @@ pub struct FakeLightningTest {
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: Arc<Mutex<u64>>,
+    task_group: TaskGroup,
 }
 
 impl FakeLightningTest {
@@ -40,6 +42,7 @@ impl FakeLightningTest {
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
+            task_group: TaskGroup::new(),
         }
     }
 }
@@ -109,10 +112,22 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn route_htlc<'a>(
-        &self,
-        _events: ReceiverStream<RouteHtlcRequest>,
+    async fn route_htlcs<'a>(
+        &mut self,
+        events: ReceiverStream<RouteHtlcRequest>,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
+        self.task_group
+            .spawn("FakeRoutingThread", |handle| async move {
+                let mut stream = events.into_inner();
+                while let Some(_route_htlc) = stream.recv().await {
+                    if handle.is_shutting_down() {
+                        break;
+                    }
+                    tracing::info!("FakeLightningTest received HTLC message");
+                }
+            })
+            .await;
+
         Ok(Box::pin(stream::iter(vec![])))
     }
 }

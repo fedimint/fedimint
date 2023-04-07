@@ -34,8 +34,8 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
-    async fn route_htlc<'a>(
-        &self,
+    async fn route_htlcs<'a>(
+        &mut self,
         events: ReceiverStream<RouteHtlcRequest>,
     ) -> Result<RouteHtlcStream<'a>>;
 }
@@ -100,8 +100,8 @@ impl ILnRpcClient for NetworkLnRpcClient {
         return Ok(res.into_inner());
     }
 
-    async fn route_htlc<'a>(
-        &self,
+    async fn route_htlcs<'a>(
+        &mut self,
         events: ReceiverStream<RouteHtlcRequest>,
     ) -> Result<RouteHtlcStream<'a>> {
         let mut client = self.client.clone();

@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,8 +10,7 @@ use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
 use fedimint_client_legacy::{GatewayClient, PaymentParameters};
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{Amount, OutPoint, TransactionId};
-use futures::stream::StreamExt;
-use futures::Stream;
+use futures::stream::{BoxStream, StreamExt};
 use rand::{CryptoRng, RngCore};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tonic::Status;
@@ -47,8 +45,7 @@ pub enum BuyPreimage {
     External(Preimage),
 }
 
-type RouteHTLCStream =
-    Pin<Box<dyn Stream<Item = std::result::Result<RouteHtlcResponse, Status>> + Send + 'static>>;
+type RouteHTLCStream = BoxStream<'static, std::result::Result<RouteHtlcResponse, Status>>;
 
 impl GatewayActor {
     pub async fn new(
@@ -167,10 +164,7 @@ impl GatewayActor {
             .await
             .map_err(|_| GatewayError::Other(anyhow::anyhow!("Failed to subscribe to HTLCs")));
 
-        info!(
-            "Subscribed to HTLCs with short channel ID {:?}",
-            short_channel_id
-        );
+        info!(?short_channel_id, "Subscribed to HTLCs",);
 
         res
     }
@@ -306,9 +300,9 @@ impl GatewayActor {
 
         let mut stream = self
             .lnrpc
-            .read()
+            .write()
             .await
-            .route_htlc(ln_receiver.into())
+            .route_htlcs(ln_receiver.into())
             .await?;
 
         self.subscribe_to_htlcs(ln_sender.clone(), short_channel_id)

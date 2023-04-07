@@ -253,7 +253,7 @@ impl ClnRpcService {
             }
         };
 
-        info!("Completing htlc with reference, {:?}", hash);
+        info!(?hash, "Completing HTLC");
 
         if let Some(outcome) = interceptors.outcomes.lock().await.remove(&hash) {
             // Translate action request into a cln rpc response for
@@ -286,14 +286,16 @@ impl ClnRpcService {
             match outcome.send(htlca_res) {
                 Ok(_) => {
                     info!("Successfully sent HTLC response back to thread that will complete it.");
-                    sender
+                    let _ = sender
                         .send(Ok(RouteHtlcResponse {
                             action: Some(route_htlc_response::Action::CompleteResponse(
                                 CompleteHtlcsResponse {},
                             )),
                         }))
                         .await
-                        .expect("Failed to send CompleteHtlcsResponse");
+                        .map_err(|e| {
+                            error!("Failed to send CompleteResponse to gatewayd: {:?}", e);
+                        });
                 }
                 Err(e) => {
                     error!(
@@ -486,7 +488,8 @@ impl GatewayLightning for ClnRpcService {
         let mut stream = request.into_inner();
 
         // First create new channel that we will use to send responses back to gatewayd
-        let (sender, receiver) = mpsc::channel::<Result<RouteHtlcResponse, Status>>(100);
+        let (gatewayd_sender, gatewayd_receiver) =
+            mpsc::channel::<Result<RouteHtlcResponse, Status>>(100);
 
         // Spawn new thread that listens for events from the input stream
         let interceptors = self.interceptor.clone();
@@ -495,20 +498,21 @@ impl GatewayLightning for ClnRpcService {
                 if let Ok(route_request) = res {
                     match route_request.action {
                         Some(route_htlc_request::Action::SubscribeRequest(subscribe_request)) => {
-                            interceptors
-                                .subscriptions
-                                .lock()
-                                .await
-                                .insert(subscribe_request.short_channel_id, sender.clone());
+                            interceptors.subscriptions.lock().await.insert(
+                                subscribe_request.short_channel_id,
+                                gatewayd_sender.clone(),
+                            );
                         }
                         Some(route_htlc_request::Action::CompleteRequest(complete_request)) => {
-                            Self::complete_htlc(
+                            let _ = Self::complete_htlc(
                                 complete_request,
                                 interceptors.clone(),
-                                sender.clone(),
+                                gatewayd_sender.clone(),
                             )
                             .await
-                            .expect("CLN Extension failed to complete HTLC");
+                            .map_err(|e| {
+                                error!("CLN extension failed to complete HTLC: {:?}", e);
+                            });
                         }
                         None => {
                             error!("No action was sent as part of RouteHtlcRequest");
@@ -518,7 +522,7 @@ impl GatewayLightning for ClnRpcService {
             }
         });
 
-        Ok(tonic::Response::new(ReceiverStream::new(receiver)))
+        Ok(tonic::Response::new(ReceiverStream::new(gatewayd_receiver)))
     }
 }
 
