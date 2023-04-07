@@ -5,9 +5,37 @@
 # * last matching line wins (so order from most general to most specific)
 # * multiple elements on the same line means "OR"
 
-# default: unless more specific rule is found, these will be the reviewers assigned; should be a broad group
-* @fedimint/Reviewers
+# default: unless more specific rule is found, these will be the reviewers assigned
+# this will be a chore for people here, but guarantees that *someone* gets to look
+# at every PR (they can unassign and unsubscribe themselves after taking an initial look)
+* @fedimint/firehose
 
-# TODO: replace with @fedimint/infra or smth
-*.nix     @dpc
-*.github/ @dpc
+
+*.nix     @fedimint/infra
+*.sh      @fedimint/infra
+.github/  @fedimint/infra
+misc/     @fedimint/infra
+scripts/  @fedimint/infra
+
+
+gateway/ @fedimint/lightning
+
+
+fedimint-rocksdb/    @fedimint/database
+fedimint-dbtool/     @fedimint/database
+fedimint-sqlite/     @fedimint/database
+fedimint-core/src/db @fedimint/database
+db/                  @fedimint/database
+**/db.rs             @fedimint/database
+**/db/               @fedimint/database
+
+fedimint-server/src/consensus @fedimint/consensus
+fedimint-server/src/config    @fedimint/consensus
+./fedimint-core/src/config.rs @fedimint/consensus
+
+
+gateway/ui/         @fedimint/lightning @fedimint/ui
+fedimintd/src/ui.rs @fedimint/ui
+
+
+crypto/             @fedimint/crypto
