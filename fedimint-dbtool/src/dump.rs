@@ -2,6 +2,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use erased_serde::Serialize;
+use fedimint_client_legacy::db as ClientRange;
+use fedimint_client_legacy::ln::db as ClientLightningRange;
+use fedimint_client_legacy::mint::db as ClientMintRange;
+use fedimint_client_legacy::wallet::db as ClientWalletRange;
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::notifications::Notifications;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
@@ -18,10 +22,6 @@ use fedimint_server::config::ServerConfig;
 use fedimint_server::db as ConsensusRange;
 use fedimint_wallet_server::WalletGen;
 use futures::StreamExt;
-use mint_client::db as ClientRange;
-use mint_client::ln::db as ClientLightningRange;
-use mint_client::mint::db as ClientMintRange;
-use mint_client::wallet::db as ClientWalletRange;
 use strum::IntoEnumIterator;
 
 #[derive(Debug, serde::Serialize)]
@@ -258,7 +258,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientLightningRange::ConfirmedInvoiceKeyPrefix,
                         ClientLightningRange::ConfirmedInvoiceKey,
-                        mint_client::ln::incoming::ConfirmedInvoice,
+                        fedimint_client_legacy::ln::incoming::ConfirmedInvoice,
                         ln_client,
                         "Confirmed Invoices"
                     );
@@ -278,7 +278,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientLightningRange::OutgoingContractAccountKeyPrefix,
                         ClientLightningRange::OutgoingContractAccountKey,
-                        mint_client::ln::outgoing::OutgoingContractAccount,
+                        fedimint_client_legacy::ln::outgoing::OutgoingContractAccount,
                         ln_client,
                         "Outgoing Contract Accounts"
                     );
@@ -288,7 +288,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientLightningRange::OutgoingPaymentKeyPrefix,
                         ClientLightningRange::OutgoingPaymentKey,
-                        mint_client::ln::outgoing::OutgoingContractData,
+                        fedimint_client_legacy::ln::outgoing::OutgoingContractData,
                         ln_client,
                         "Outgoing Payments"
                     );
@@ -325,7 +325,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientMintRange::NoteKeyPrefix,
                         ClientMintRange::NoteKey,
-                        mint_client::mint::SpendableNote,
+                        fedimint_client_legacy::mint::SpendableNote,
                         mint_client,
                         "Notes"
                     );
@@ -335,7 +335,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientMintRange::OutputFinalizationKeyPrefix,
                         ClientMintRange::OutputFinalizationKey,
-                        mint_client::mint::NoteIssuanceRequests,
+                        fedimint_client_legacy::mint::NoteIssuanceRequests,
                         mint_client,
                         "Output Finalization"
                     );
@@ -345,7 +345,7 @@ impl<'a> DatabaseDump<'a> {
                         dbtx,
                         ClientMintRange::PendingNotesKeyPrefix,
                         ClientMintRange::PendingNotesKey,
-                        fedimint_core::TieredMulti<mint_client::mint::SpendableNote>,
+                        fedimint_core::TieredMulti<fedimint_client_legacy::mint::SpendableNote>,
                         mint_client,
                         "Pending Notes"
                     );

@@ -17,7 +17,7 @@ axum-macros = "0.3.1"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 ln-gateway = { path= "../ln-gateway" }
-mint-client = { path = "../../client/client-lib" }
+fedimint-client-legacy = { path = "../../fedimint-client-legacy" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-logging = { path = "../../fedimint-logging" }
 reqwest = { version = "0.11.14", features = [ "json" ], default-features = false }

@@ -416,7 +416,6 @@ rec {
 
     defaultBin = "fedimintd";
     dirs = [
-      "client/client-lib"
       "crypto/aead"
       "crypto/derive-secret"
       "crypto/hkdf"
@@ -427,6 +426,7 @@ rec {
       "fedimint-build"
       "fedimint-cli"
       "fedimint-client"
+      "fedimint-client-legacy"
       "fedimint-core"
       "fedimint-derive"
       "fedimint-dbtool"
@@ -451,11 +451,11 @@ rec {
       "crypto/derive-secret"
       "crypto/tbs"
       "crypto/hkdf"
-      "client/client-lib"
       "modules/fedimint-ln"
       "fedimint-bin-tests"
       "fedimint-bitcoind"
       "fedimint-client"
+      "fedimint-client-legacy"
       "fedimint-core"
       "fedimint-derive"
       "fedimint-dbtool"
@@ -473,13 +473,12 @@ rec {
     inherit target;
 
     pkgs = {
-      mint-client = { };
+      fedimint-client-legacy = { };
     } // lib.optionalAttrs (target == null || target.name != "wasm32-unknown-unknown") {
       # broken on wasm32
       fedimint-sqlite = { };
     };
     dirs = [
-      "client/client-lib"
       "crypto/aead"
       "crypto/derive-secret"
       "crypto/tbs"
@@ -487,6 +486,7 @@ rec {
       "fedimint-bin-tests"
       "fedimint-bitcoind"
       "fedimint-client"
+      "fedimint-client-legacy"
       "fedimint-core"
       "fedimint-derive"
       "fedimint-dbtool"

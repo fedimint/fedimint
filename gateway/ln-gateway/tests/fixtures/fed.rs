@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use fedimint_client_legacy::api::fake::FederationApiFaker;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::PeerId;
 use fedimint_ln_client::LightningGateway;
-use mint_client::api::fake::FederationApiFaker;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Default)]

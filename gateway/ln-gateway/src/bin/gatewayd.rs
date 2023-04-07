@@ -4,6 +4,9 @@ use std::process::exit;
 
 use clap::Parser;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+use fedimint_client_legacy::modules::ln::{LightningClientGen, LightningModuleTypes};
+use fedimint_client_legacy::modules::mint::{MintClientGen, MintModuleTypes};
+use fedimint_client_legacy::modules::wallet::{WalletClientGen, WalletModuleTypes};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -14,9 +17,6 @@ use fedimint_core::task::TaskGroup;
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::{Gateway, Mode};
-use mint_client::modules::ln::{LightningClientGen, LightningModuleTypes};
-use mint_client::modules::mint::{MintClientGen, MintModuleTypes};
-use mint_client::modules::wallet::{WalletClientGen, WalletModuleTypes};
 use tracing::{error, info};
 use url::Url;
 

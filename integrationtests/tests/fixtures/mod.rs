@@ -16,6 +16,12 @@ use cln_rpc::ClnRpc;
 use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+use fedimint_client_legacy::mint::SpendableNote;
+use fedimint_client_legacy::transaction::legacy::Transaction;
+use fedimint_client_legacy::transaction::TransactionBuilder;
+use fedimint_client_legacy::{
+    module_decode_stubs, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
+};
 use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
@@ -68,12 +74,6 @@ use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayC
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
-use mint_client::mint::SpendableNote;
-use mint_client::transaction::legacy::Transaction;
-use mint_client::transaction::TransactionBuilder;
-use mint_client::{
-    module_decode_stubs, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
-};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
