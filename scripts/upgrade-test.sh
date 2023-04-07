@@ -21,8 +21,8 @@ function wait_server_shutdown() {
 await_fedimint_block_sync
 
 # test a consensus upgrade
-FM_PASSWORD="pass0" $FM_MINT_CLIENT signal-upgrade --salt-path $FM_CFG_DIR/server-0/private.salt --our-id 0
-FM_PASSWORD="pass1" $FM_MINT_CLIENT signal-upgrade --salt-path $FM_CFG_DIR/server-1/private.salt --our-id 1
+FM_PASSWORD="pass0" $FM_MINT_CLIENT signal-upgrade --salt-path $FM_DATA_DIR/server-0/private.salt --our-id 0
+FM_PASSWORD="pass1" $FM_MINT_CLIENT signal-upgrade --salt-path $FM_DATA_DIR/server-1/private.salt --our-id 1
 
 mine_blocks 1
 await_fedimint_block_sync
@@ -30,7 +30,7 @@ await_fedimint_block_sync
 EPOCH=$($FM_MINT_CLIENT epoch-count | jq -e -r '.count')
 FM_UPGRADE_EPOCH=$(echo "$EPOCH + 1" | bc -l)
 export FM_UPGRADE_EPOCH
-FM_PASSWORD="pass2" $FM_MINT_CLIENT signal-upgrade --salt-path $FM_CFG_DIR/server-2/private.salt --our-id  2
+FM_PASSWORD="pass2" $FM_MINT_CLIENT signal-upgrade --salt-path $FM_DATA_DIR/server-2/private.salt --our-id 2
 
 wait_server_shutdown "$server1"
 wait_server_shutdown "$server2"
