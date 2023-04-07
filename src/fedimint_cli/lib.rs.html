@@ -970,6 +970,22 @@
 <a href="#970" id="970">970</a>
 <a href="#971" id="971">971</a>
 <a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1327,13 +1343,17 @@
     <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed
     </span>PegInAddress,
 
-    <span class="doccomment">/// Send direct method call to the API, waiting for all peers to agree on a
-    /// response
+    <span class="doccomment">/// Send direct method call to the API. If you specify --peer-id, it will
+    /// just ask one server, otherwise it will get consensus from all servers
     </span>Api {
-        method: String,
-        <span class="doccomment">/// JSON args that will be serialized and send with the request
+        <span class="doccomment">/// JSON-RPC method to call
+        </span>method: String,
+        <span class="doccomment">/// JSON-RPC parameters for the request
         </span><span class="attr">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
-        </span>arg: String,
+        </span>params: String,
+        <span class="doccomment">/// Which server to send requst to
+        </span><span class="attr">#[clap(long = <span class="string">&quot;peer-id&quot;</span>)]
+        </span>peer_id: <span class="prelude-ty">Option</span>&lt;u16&gt;,
     },
 
     <span class="doccomment">/// Issue notes in exchange for a peg-in proof
@@ -1571,20 +1591,32 @@
                     .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t write config&quot;</span>)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::JoinFederation { joined: connect })
             }
-            Command::Api { method, arg } =&gt; {
-                <span class="kw">let </span>arg: Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
+            Command::Api {
+                method,
+                params,
+                peer_id,
+            } =&gt; {
+                <span class="kw">let </span>params: Value = serde_json::from_str(<span class="kw-2">&amp;</span>params)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;Invalid JSON-RPC parameters&quot;</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>params = ApiRequestErased::new(params);
                 <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(
                     cli.build_client(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>.config().as_ref(),
                 )
                 .into();
-                <span class="kw">let </span>response: Value = ws_api
-                    .request_with_strategy(
-                        EventuallyConsistent::new(ws_api.peers().len()),
-                        method,
-                        ApiRequestErased::new(arg),
-                    )
-                    .<span class="kw">await
-                    </span>.unwrap();
+                <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {
+                    <span class="prelude-val">Some</span>(peer_id) =&gt; ws_api
+                        .request_raw(peer_id.into(), <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
+                        .<span class="kw">await
+                        </span>.map_err_cli_general()<span class="question-mark">?</span>,
+                    <span class="prelude-val">None </span>=&gt; ws_api
+                        .request_with_strategy(
+                            EventuallyConsistent::new(ws_api.peers().len()),
+                            method,
+                            params,
+                        )
+                        .<span class="kw">await
+                        </span>.map_err_cli_general()<span class="question-mark">?</span>,
+                };
 
                 <span class="prelude-val">Ok</span>(CliOutput::UntypedApiOutput { value: response })
             }
