@@ -653,6 +653,9 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client_legacy::ln::PayInvoicePayload;
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::route_hints::RouteHint;
+<span class="kw">use </span>fedimint_client_legacy::{ClientError, GatewayClient};
 <span class="kw">use </span>fedimint_core::api::{FederationError, WsClientConnectInfo};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -660,9 +663,6 @@
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>gatewaylnrpc::GetNodeInfoResponse;
 <span class="kw">use </span>lnrpc_client::ILnRpcClient;
-<span class="kw">use </span>mint_client::ln::PayInvoicePayload;
-<span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
-<span class="kw">use </span>mint_client::{ClientError, GatewayClient};
 <span class="kw">use </span>rpc::{FederationInfo, LightningReconnectPayload};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};

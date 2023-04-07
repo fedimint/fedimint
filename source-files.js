@@ -7,6 +7,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
 "fedimint_client":["",[["module",[],["gen.rs","mod.rs"]],["sm",[],["dbtx.rs","executor.rs","mod.rs","state.rs","util.rs"]],["transaction",[],["builder.rs","mod.rs","sm.rs"]]],["lib.rs"]],\
+"fedimint_client_legacy":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","outcome.rs","transaction.rs","utils.rs"]],\
 "fedimint_core":["",[["core",[],["client.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","registry.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]]],["admin_client.rs","api.rs","bitcoin_rpc.rs","cancellable.rs","config.rs","core.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","outcome.rs","query.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","transaction.rs","util.rs"]],\
 "fedimint_derive":["",[],["lib.rs"]],\
 "fedimint_derive_secret":["",[],["lib.rs"]],\
@@ -34,7 +35,6 @@ var sourcesIndex = JSON.parse('{\
 "gatewayd":["",[],["gatewayd.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
 "ln_gateway":["",[["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","lib.rs","lnd.rs","lnrpc_client.rs","types.rs","utils.rs"]],\
-"mint_client":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","outcome.rs","transaction.rs","utils.rs"]],\
 "recoverytool":["",[],["main.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
 }');

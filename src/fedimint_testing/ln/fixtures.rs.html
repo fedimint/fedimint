@@ -167,6 +167,7 @@
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>bitcoin::secp256k1::{PublicKey, SecretKey};
 <span class="kw">use </span>bitcoin::{secp256k1, KeyPair};
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::Preimage;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>futures::stream;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
@@ -177,7 +178,6 @@
 };
 <span class="kw">use </span>ln_gateway::lnrpc_client::{HtlcStream, ILnRpcClient};
 <span class="kw">use </span>ln_gateway::GatewayError;
-<span class="kw">use </span>mint_client::modules::ln::contracts::Preimage;
 <span class="kw">use </span>rand::rngs::OsRng;
 
 <span class="kw">use </span><span class="kw">super</span>::LightningTest;

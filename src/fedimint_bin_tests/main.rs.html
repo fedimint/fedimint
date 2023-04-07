@@ -679,14 +679,14 @@
 <span class="kw">use </span>cln_rpc::ClnRpc;
 <span class="kw">use </span>federation::{run_dkg, Federation};
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+<span class="kw">use </span>fedimint_client_legacy::modules::mint::MintClientGen;
+<span class="kw">use </span>fedimint_client_legacy::{module_decode_stubs, UserClient, UserClientConfig};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
-<span class="kw">use </span>mint_client::modules::mint::MintClientGen;
-<span class="kw">use </span>mint_client::{module_decode_stubs, UserClient, UserClientConfig};
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 <span class="kw">use </span>tokio::time::sleep;

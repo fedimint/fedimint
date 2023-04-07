@@ -584,14 +584,14 @@
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::route_hints::RouteHint;
+<span class="kw">use </span>fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_client_legacy::{GatewayClient, PaymentParameters};
 <span class="kw">use </span>fedimint_core::task::{RwLock, TaskGroup};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>futures::Stream;
-<span class="kw">use </span>mint_client::modules::ln::contracts::{ContractId, Preimage};
-<span class="kw">use </span>mint_client::modules::ln::route_hints::RouteHint;
-<span class="kw">use </span>mint_client::modules::wallet::txoproof::TxOutProof;
-<span class="kw">use </span>mint_client::{GatewayClient, PaymentParameters};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
 <span class="kw">use </span>tonic::Status;

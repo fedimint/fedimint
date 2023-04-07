@@ -1002,6 +1002,15 @@
 <span class="kw">use </span>fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
+<span class="kw">use </span>fedimint_client_legacy::mint::SpendableNote;
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::ContractId;
+<span class="kw">use </span>fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_client_legacy::modules::wallet::WalletClientGen;
+<span class="kw">use </span>fedimint_client_legacy::utils::{
+    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
+    parse_peer_id, serialize_ecash,
+};
+<span class="kw">use </span>fedimint_client_legacy::{Client, UserClientConfig};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
     FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, WsClientConnectInfo,
@@ -1018,15 +1027,6 @@
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_client::MintClientGen;
-<span class="kw">use </span>mint_client::mint::SpendableNote;
-<span class="kw">use </span>mint_client::modules::ln::contracts::ContractId;
-<span class="kw">use </span>mint_client::modules::wallet::txoproof::TxOutProof;
-<span class="kw">use </span>mint_client::modules::wallet::WalletClientGen;
-<span class="kw">use </span>mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
-    parse_peer_id, serialize_ecash,
-};
-<span class="kw">use </span>mint_client::{Client, UserClientConfig};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>thiserror::Error;

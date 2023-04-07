@@ -244,11 +244,11 @@
 <span class="kw">use </span>anyhow::{anyhow, Error};
 <span class="kw">use </span>bitcoin::{Address, Transaction, XOnlyPublicKey};
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
+<span class="kw">use </span>fedimint_client_legacy::ln::PayInvoicePayload;
+<span class="kw">use </span>fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>futures::Future;
-<span class="kw">use </span>mint_client::ln::PayInvoicePayload;
-<span class="kw">use </span>mint_client::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot};
 <span class="kw">use </span>tracing::error;

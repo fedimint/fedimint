@@ -602,6 +602,8 @@
 <span class="kw">use </span>bitcoincore_rpc::{Client <span class="kw">as </span>BitcoinClient, RpcApi};
 <span class="kw">use </span>clap::{Parser, Subcommand, ValueEnum};
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+<span class="kw">use </span>fedimint_client_legacy::modules::mint::MintClientGen;
+<span class="kw">use </span>fedimint_client_legacy::{module_decode_stubs, Client, UserClient, UserClientConfig};
 <span class="kw">use </span>fedimint_core::config::load_from_file;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -610,8 +612,6 @@
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
-<span class="kw">use </span>mint_client::modules::mint::MintClientGen;
-<span class="kw">use </span>mint_client::{module_decode_stubs, Client, UserClient, UserClientConfig};
 <span class="kw">use </span>tokio::fs::{<span class="self">self</span>, OpenOptions};
 <span class="kw">use </span>tokio::io::AsyncWriteExt;
 <span class="kw">use </span>tokio::process::{Child, Command};
