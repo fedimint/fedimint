@@ -33,7 +33,7 @@ PRK:
 
 ```python
 def derive(secret, tag, index):
-    info = bytes(tag) + to_le_bytes_64(index)
+    info = bytes(tag) + to_be_bytes_64(index)
     return HKDF-expand(prk = secret, info = info, length = 64)
 ```
 

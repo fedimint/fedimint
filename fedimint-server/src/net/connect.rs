@@ -640,12 +640,12 @@ pub mod mock {
     {
         // Send our id
         let our_id = our_id.to_usize() as u16;
-        stream.write_all(&our_id.to_le_bytes()[..]).await?;
+        stream.write_all(&our_id.to_be_bytes()[..]).await?;
 
         // Receive peer id
         let mut peer_id = [0u8; 2];
         stream.read_exact(&mut peer_id[..]).await?;
-        Ok(PeerId::from(u16::from_le_bytes(peer_id)))
+        Ok(PeerId::from(u16::from_be_bytes(peer_id)))
     }
 
     #[tokio::test]

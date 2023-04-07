@@ -129,7 +129,7 @@ macro_rules! impl_encode_decode_num {
     ($num_type:ty) => {
         impl Encodable for $num_type {
             fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-                let bytes = self.to_le_bytes();
+                let bytes = self.to_be_bytes();
                 writer.write_all(&bytes[..])?;
                 Ok(bytes.len())
             }
@@ -142,7 +142,7 @@ macro_rules! impl_encode_decode_num {
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; (<$num_type>::BITS / 8) as usize];
                 d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-                Ok(<$num_type>::from_le_bytes(bytes))
+                Ok(<$num_type>::from_be_bytes(bytes))
             }
         }
     };
@@ -575,7 +575,10 @@ mod tests {
     use std::fmt::Debug;
     use std::io::Cursor;
 
+    use bitcoin_hashes::hex::FromHex;
+
     use super::*;
+    use crate::db::DatabaseValue;
     use crate::encoding::{Decodable, Encodable};
     use crate::ModuleDecoderRegistry;
 
@@ -620,7 +623,7 @@ mod tests {
             vec: vec![1, 2, 3],
             num: 42,
         };
-        let bytes = [3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 42, 0, 0, 0];
+        let bytes = [0, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 0, 0, 0, 42];
 
         test_roundtrip_expected(reference, &bytes);
     }
@@ -631,7 +634,7 @@ mod tests {
         struct TestStruct(Vec<u8>, u32);
 
         let reference = TestStruct(vec![1, 2, 3], 42);
-        let bytes = [3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 42, 0, 0, 0];
+        let bytes = [0, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 0, 0, 0, 42];
 
         test_roundtrip_expected(reference, &bytes);
     }
@@ -647,14 +650,14 @@ mod tests {
         let test_cases = [
             (
                 TestEnum::Foo(Some(42)),
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 42, 0, 0, 0, 0, 0, 0, 0],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 42],
             ),
             (TestEnum::Foo(None), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]),
             (
                 TestEnum::Bar {
                     bazz: vec![1, 2, 3],
                 },
-                vec![1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3],
+                vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3],
             ),
         ];
 
@@ -714,6 +717,110 @@ mod tests {
         assert!(
             NotConstructable::consensus_decode(&mut cursor, &ModuleDecoderRegistry::default())
                 .is_err()
+        );
+    }
+
+    fn encode_value<T: Encodable>(value: &T) -> Vec<u8> {
+        let mut writer = Vec::new();
+        value.consensus_encode(&mut writer).unwrap();
+        writer
+    }
+
+    fn decode_value<T: Decodable>(bytes: &Vec<u8>) -> T {
+        T::consensus_decode(&mut Cursor::new(bytes), &ModuleDecoderRegistry::default()).unwrap()
+    }
+
+    fn keeps_ordering_after_serialization<T: Ord + Encodable + Decodable + Debug>(mut vec: Vec<T>) {
+        vec.sort();
+        let mut encoded = vec.iter().map(encode_value).collect::<Vec<_>>();
+        encoded.sort();
+        let decoded = encoded.iter().map(decode_value).collect::<Vec<_>>();
+        for (i, (a, b)) in vec.iter().zip(decoded.iter()).enumerate() {
+            assert_eq!(a, b, "difference at index {i}");
+        }
+    }
+
+    #[test]
+    fn test_lexicographical_sorting() {
+        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        struct TestAmount(u64);
+        let amounts = (0..20000).map(TestAmount).collect::<Vec<_>>();
+        keeps_ordering_after_serialization(amounts);
+
+        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        struct TestComplexAmount(u16, u32, u64);
+        let complex_amounts = (10..20000)
+            .flat_map(|i| {
+                (i - 1..=i + 1).flat_map(move |j| {
+                    (i - 1..=i + 1).map(move |k| TestComplexAmount(i as u16, j as u32, k as u64))
+                })
+            })
+            .collect::<Vec<_>>();
+        keeps_ordering_after_serialization(complex_amounts);
+
+        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        struct Text(String);
+        let texts = (' '..'~')
+            .flat_map(|i| {
+                (' '..'~')
+                    .map(|j| Text(format!("{i}{j}")))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        keeps_ordering_after_serialization(texts);
+
+        // bitcoin structures are not lexicographically sortable so we cannot
+        // test them here. in future we may crate a wrapper type that is
+        // lexicographically sortable to use when needed
+    }
+
+    #[test]
+    fn test_bitcoin_consensus_encoding() {
+        // encodings should follow the bitcoin consensus encoding
+        let txid = bitcoin::Txid::from_hex(
+            "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            txid,
+            &[
+                154, 192, 239, 210, 168, 79, 183, 215, 157, 7, 201, 237, 22, 132, 133, 30, 74, 48,
+                206, 233, 21, 231, 57, 225, 198, 140, 229, 35, 47, 237, 247, 81,
+            ],
+        );
+        let transaction: Vec<u8> = FromHex::from_hex(
+            "02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000"
+        ).unwrap();
+        let transaction =
+            bitcoin::Transaction::from_bytes(&transaction, &ModuleDecoderRegistry::default())
+                .unwrap();
+        test_roundtrip_expected(
+            transaction,
+            &[
+                2, 0, 0, 0, 0, 1, 1, 211, 91, 102, 197, 76, 246, 192, 155, 129, 168, 217, 76, 213,
+                209, 121, 113, 156, 215, 89, 92, 37, 132, 73, 69, 42, 147, 5, 171, 155, 18, 223,
+                37, 2, 0, 0, 0, 0, 253, 255, 255, 255, 2, 12, 213, 10, 0, 0, 0, 0, 0, 22, 0, 20,
+                174, 93, 69, 11, 113, 192, 66, 24, 230, 232, 28, 134, 252, 194, 37, 136, 45, 123,
+                124, 170, 230, 149, 178, 33, 0, 0, 0, 0, 22, 0, 20, 246, 8, 52, 239, 22, 82, 83,
+                197, 113, 177, 28, 233, 250, 116, 228, 102, 146, 252, 94, 193, 2, 72, 48, 69, 2,
+                33, 0, 146, 6, 44, 96, 159, 76, 141, 199, 76, 215, 212, 89, 110, 206, 220, 16, 147,
+                20, 13, 144, 179, 253, 148, 180, 189, 217, 173, 62, 16, 44, 227, 188, 2, 32, 107,
+                181, 166, 175, 198, 141, 88, 61, 119, 213, 217, 188, 251, 98, 82, 163, 100, 209,
+                26, 48, 127, 52, 24, 190, 26, 249, 244, 127, 123, 27, 61, 120, 1, 33, 2, 110, 86,
+                40, 80, 110, 205, 51, 36, 46, 92, 235, 95, 218, 254, 77, 48, 102, 181, 192, 241,
+                89, 179, 192, 90, 98, 30, 246, 95, 23, 126, 162, 134, 0, 0, 0, 0,
+            ],
+        );
+        let blockhash = bitcoin::BlockHash::from_hex(
+            "0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2",
+        )
+        .unwrap();
+        test_roundtrip_expected(
+            blockhash,
+            &[
+                242, 96, 118, 76, 42, 229, 64, 214, 67, 122, 136, 166, 217, 0, 30, 46, 143, 168,
+                248, 168, 189, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
         );
     }
 }
