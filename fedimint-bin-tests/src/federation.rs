@@ -85,7 +85,7 @@ impl Federation {
     pub async fn cmd(&self) -> Command {
         let bin_dir = env::var("FM_BIN_DIR").unwrap();
         let cfg_dir = env::var("FM_DATA_DIR").unwrap();
-        cmd!("{bin_dir}/fedimint-cli", "--data-dir", cfg_dir)
+        cmd!("{bin_dir}/fedimint-cli", "--data-dir={cfg_dir}")
     }
 
     pub async fn pegin(&self, amt: u64) -> Result<()> {
@@ -100,7 +100,14 @@ impl Federation {
             self.bitcoind.get_txout_proof(&txid),
             self.bitcoind.get_raw_transaction(&txid),
         )?;
-        cmd!(self, "peg-in", txout_proof, raw_tx).run().await?;
+        cmd!(
+            self,
+            "peg-in",
+            "--txout-proof={txout_proof}",
+            "--transaction={raw_tx}",
+        )
+        .run()
+        .await?;
         cmd!(self, "fetch").run().await?;
         Ok(())
     }

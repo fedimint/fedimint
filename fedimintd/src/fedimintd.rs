@@ -35,16 +35,16 @@ pub struct ServerOpts {
     /// Password to encrypt sensitive config files
     // TODO: should probably never send password to the server directly, rather send the hash via
     // the API
-    #[arg(env = "FM_PASSWORD")]
+    #[arg(long, env = "FM_PASSWORD")]
     pub password: String,
     /// Port to run admin UI on
-    #[arg(long = "listen-ui", env = "FM_LISTEN_UI")]
+    #[arg(long, env = "FM_LISTEN_UI")]
     pub listen_ui: Option<SocketAddr>,
     /// After an upgrade the epoch must be passed in
-    #[arg(env = "FM_UPGRADE_EPOCH")]
+    #[arg(long, env = "FM_UPGRADE_EPOCH")]
     pub upgrade_epoch: Option<u64>,
     /// Enable tokio console logging
-    #[arg(long = "tokio-console-bind", env = "FM_TOKIO_CONSOLE_BIND")]
+    #[arg(long, env = "FM_TOKIO_CONSOLE_BIND")]
     pub tokio_console_bind: Option<SocketAddr>,
     /// Enable telemetry logging
     #[arg(long, default_value = "false")]
