@@ -23,9 +23,13 @@ fi
 # Note: Respect 'CARGO_PROFILE' that crane uses
 cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --all --all-targets
 
+function dump_db_content_on_termination() {
+  trap 'if [ "$?" -ne 0 ]; then echo "##Client Database"; dbtool $FM_DATA_DIR/client.db dump $FM_DATA_DIR clientpass client; echo "##Server Database"; dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass0; fi' EXIT
+}
+
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/reconnect-test.sh" 2>&1 | ts -s
@@ -35,7 +39,7 @@ export -f cli_test_reconnect
 
 function cli_test_upgrade() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/upgrade-test.sh" 2>&1 | ts -s
@@ -45,7 +49,7 @@ export -f cli_test_upgrade
 
 function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/latency-test.sh" 2>&1 | ts -s
@@ -55,7 +59,7 @@ export -f cli_test_latency
 
 function cli_test_cli() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/cli-test.sh" 2>&1 | ts -s
@@ -65,7 +69,7 @@ export -f cli_test_cli
 
 function cli_test_rust_tests() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/rust-tests.sh" 2>&1 | ts -s
@@ -75,7 +79,7 @@ export -f cli_test_rust_tests
 
 function cli_test_always_success() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
   echo "## START: ${FUNCNAME[0]}"
   # this must fail, so we know nix build is actually running tests
@@ -87,8 +91,6 @@ export -f cli_test_always_success
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
 joblog="$tmpdir/joblog"
-trap 'if [ "$?" -ne 0 ]; then echo "##Client Database"; dbtool client list; echo "##Server Database"; dbtool server-0 list; fi' EXIT
-
 
 >&2 echo "## Starting all tests in parallel..."
 # --load to keep the load under-control, especially during target dir extraction
