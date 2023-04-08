@@ -950,6 +950,8 @@
 <a href="#950" id="950">950</a>
 <a href="#951" id="951">951</a>
 <a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
@@ -1122,8 +1124,10 @@
             )
             .expect(<span class="string">&quot;Failed to create TLS config&quot;</span>);
 
-        <span class="kw">let </span>fake_domain = rustls::ServerName::try_from(<span class="self">self</span>.peer_names[<span class="kw-2">&amp;</span>peer].as_str())
-            .expect(<span class="string">&quot;Always a valid DNS name&quot;</span>);
+        <span class="kw">let </span>sanitized_name =
+            <span class="self">self</span>.peer_names[<span class="kw-2">&amp;</span>peer].replace(|c: char| !c.is_ascii_alphanumeric(), <span class="string">&quot;_&quot;</span>);
+        <span class="kw">let </span>fake_domain =
+            rustls::ServerName::try_from(sanitized_name.as_str()).expect(<span class="string">&quot;Always a valid DNS name&quot;</span>);
 
         <span class="kw">let </span>connector = TlsConnector::from(Arc::new(cfg));
         <span class="kw">let </span>tls_conn = connector

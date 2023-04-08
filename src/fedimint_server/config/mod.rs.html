@@ -819,6 +819,7 @@
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1555,14 +1556,15 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(rustls::Certificate, rustls::PrivateKey), anyhow::Error&gt; {
     <span class="kw">let </span>keypair = rcgen::KeyPair::generate(<span class="kw-2">&amp;</span>rcgen::PKCS_ECDSA_P256_SHA256)<span class="question-mark">?</span>;
     <span class="kw">let </span>keypair_ser = keypair.serialize_der();
-    <span class="kw">let </span><span class="kw-2">mut </span>params = rcgen::CertificateParams::new(<span class="macro">vec!</span>[name.to_owned()]);
+    <span class="kw">let </span>sanitized_name = name.replace(|c: char| !c.is_ascii_alphanumeric(), <span class="string">&quot;_&quot;</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>params = rcgen::CertificateParams::new(<span class="macro">vec!</span>[sanitized_name.to_owned()]);
 
     params.key_pair = <span class="prelude-val">Some</span>(keypair);
     params.alg = <span class="kw-2">&amp;</span>rcgen::PKCS_ECDSA_P256_SHA256;
     params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
-        .push(rcgen::DnType::CommonName, name);
+        .push(rcgen::DnType::CommonName, sanitized_name);
 
     <span class="kw">let </span>cert = rcgen::Certificate::from_params(params)<span class="question-mark">?</span>;
 

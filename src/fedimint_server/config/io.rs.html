@@ -175,7 +175,6 @@
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
@@ -267,7 +266,6 @@
     <span class="kw">let </span>(cert, pk) = gen_cert_and_key(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>;
     encrypted_write(pk.<span class="number">0</span>, key, dir_out_path.join(TLS_PK))<span class="question-mark">?</span>;
 
-    rustls::ServerName::try_from(name.as_str())<span class="question-mark">?</span>;
     <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string
     </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}@{}@{}@{}&quot;</span>, p2p_url, api_url, name, cert.<span class="number">0</span>.to_hex());
     fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url)<span class="question-mark">?</span>;

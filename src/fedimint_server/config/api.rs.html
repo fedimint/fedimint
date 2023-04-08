@@ -888,11 +888,6 @@
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
 <a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
-<a href="#893" id="893">893</a>
-<a href="#894" id="894">894</a>
-<a href="#895" id="895">895</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::iter::once;
@@ -986,11 +981,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: ConfigGenConnectionsRequest,
     ) -&gt; ApiResult&lt;()&gt; {
-        <span class="comment">// TODO: should probably just replace bad chars with &#39;_&#39; in `TlsTcpConnector`
-        </span><span class="kw">if </span>rustls::ServerName::try_from(request.our_name.as_str()).is_err() {
-            <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;Name must be a valid domain string&quot;</span>);
-        }
-
         <span class="kw">let </span>connection = {
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
 

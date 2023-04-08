@@ -955,7 +955,7 @@
 <span class="kw">async fn </span>create_tls(id: usize, sender: Sender&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
     <span class="comment">// set env vars
     </span><span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server-{id}&quot;</span>);
+    <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server {id}!&quot;</span>);
     <span class="kw">let </span>env_vars = fedimint_env(id)<span class="question-mark">?</span>;
     <span class="kw">let </span>p2p_url = env_vars
         .get(<span class="string">&quot;FM_P2P_URL&quot;</span>)
