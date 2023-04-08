@@ -986,6 +986,11 @@
 <a href="#986" id="986">986</a>
 <a href="#987" id="987">987</a>
 <a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1358,9 +1363,9 @@
 
     <span class="doccomment">/// Issue notes in exchange for a peg-in proof
     </span>PegIn {
-        <span class="attr">#[clap(value_parser = from_hex::&lt;TxOutProof&gt;)]
+        <span class="attr">#[clap(long, value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
-        <span class="attr">#[clap(value_parser = from_hex::&lt;Transaction&gt;)]
+        <span class="attr">#[clap(long, value_parser = from_hex::&lt;Transaction&gt;)]
         </span>transaction: Transaction,
     },
 
@@ -1385,9 +1390,10 @@
 
     <span class="doccomment">/// Withdraw funds from the federation
     </span>PegOut {
-        address: Address,
-        <span class="attr">#[clap(value_parser = parse_bitcoin_amount)]
-        </span>satoshis: bitcoin::Amount,
+        <span class="attr">#[clap(long)]
+        </span>address: Address,
+        <span class="attr">#[clap(long, value_parser = parse_bitcoin_amount)]
+        </span>amount: bitcoin::Amount,
     },
 
     <span class="doccomment">/// Pay a lightning invoice via a gateway
@@ -1401,11 +1407,12 @@
 
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
-        <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
+        <span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
-        <span class="attr">#[clap(default_value = <span class="string">&quot;&quot;</span>)]
+        <span class="attr">#[clap(long, default_value = <span class="string">&quot;&quot;</span>)]
         </span>description: String,
-        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+        <span class="attr">#[clap(long)]
+        </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
 
     <span class="doccomment">/// Wait for incoming invoice to be paid
@@ -1419,9 +1426,9 @@
 
     <span class="doccomment">/// Encode connection info from its constituent parts
     </span>EncodeConnectInfo {
-        <span class="attr">#[clap(long = <span class="string">&quot;urls&quot;</span>, required = <span class="bool-val">true</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
+        <span class="attr">#[clap(long, required = <span class="bool-val">true</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
         </span>urls: Vec&lt;Url&gt;,
-        <span class="attr">#[clap(long = <span class="string">&quot;id&quot;</span>)]
+        <span class="attr">#[clap(long)]
         </span>id: FederationId,
     },
 
@@ -1453,7 +1460,7 @@
         /// Larger values might make the restore initialization slower and
         /// memory usage slightly higher, but help restore all mint
         /// notes in some rare situations.
-        </span><span class="attr">#[clap(long = <span class="string">&quot;gap-limit&quot;</span>, default_value = <span class="string">&quot;100&quot;</span>)]
+        </span><span class="attr">#[clap(long, default_value = <span class="string">&quot;100&quot;</span>)]
         </span>gap_limit: usize,
     },
 
@@ -1467,12 +1474,13 @@
     <span class="doccomment">/// Signal a consensus upgrade
     </span>SignalUpgrade {
         <span class="doccomment">/// Location of the salt file
+        </span><span class="attr">#[clap(long)]
         </span>salt_path: PathBuf,
         <span class="doccomment">/// Peer id of the guardian
-        </span><span class="attr">#[arg(value_parser = parse_peer_id)]
+        </span><span class="attr">#[arg(long, value_parser = parse_peer_id)]
         </span>our_id: PeerId,
         <span class="doccomment">/// Guardian password for authentication
-        </span><span class="attr">#[arg(env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
+        </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
         </span>password: String,
     },
 
@@ -1481,9 +1489,11 @@
 
     <span class="doccomment">/// Call module-specific commands
     </span>Module {
-        id: ModuleSelector,
+        <span class="attr">#[clap(long)]
+        </span>id: ModuleSelector,
 
         <span class="doccomment">/// Command with arguments to call the module with
+        </span><span class="attr">#[clap(long)]
         </span>arg: Vec&lt;ffi::OsString&gt;,
     },
 }
@@ -1718,10 +1728,10 @@
                     details: (details_vec),
                 })
             }
-            Command::PegOut { address, satoshis } =&gt; {
+            Command::PegOut { address, amount } =&gt; {
                 <span class="kw">let </span>client = cli.build_client(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>peg_out = client
-                    .new_peg_out_with_fees(satoshis, address)
+                    .new_peg_out_with_fees(amount, address)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,

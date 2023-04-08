@@ -329,6 +329,13 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::Range;
 
@@ -416,7 +423,7 @@
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>).unwrap();
         <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>).unwrap();
-        <span class="macro">cmd!</span>(<span class="string">&quot;{bin_dir}/fedimint-cli&quot;</span>, <span class="string">&quot;--data-dir&quot;</span>, cfg_dir)
+        <span class="macro">cmd!</span>(<span class="string">&quot;{bin_dir}/fedimint-cli&quot;</span>, <span class="string">&quot;--data-dir={cfg_dir}&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -431,7 +438,14 @@
             <span class="self">self</span>.bitcoind.get_txout_proof(<span class="kw-2">&amp;</span>txid),
             <span class="self">self</span>.bitcoind.get_raw_transaction(<span class="kw-2">&amp;</span>txid),
         )<span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;peg-in&quot;</span>, txout_proof, raw_tx).run().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(
+            <span class="self">self</span>,
+            <span class="string">&quot;peg-in&quot;</span>,
+            <span class="string">&quot;--txout-proof={txout_proof}&quot;</span>,
+            <span class="string">&quot;--transaction={raw_tx}&quot;</span>,
+        )
+        .run()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;fetch&quot;</span>).run().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
