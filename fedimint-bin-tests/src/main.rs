@@ -477,10 +477,8 @@ async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         let invoice = cmd!(
             fed,
             "ln-invoice",
-            "--amount",
-            "100000msat",
-            "--description",
-            "incoming-over-lnd-gw"
+            "--amount=100000msat",
+            "--description=incoming-over-lnd-gw"
         )
         .out_json()
         .await?["invoice"]
