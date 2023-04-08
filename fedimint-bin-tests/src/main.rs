@@ -12,14 +12,14 @@ use bitcoincore_rpc::{bitcoin, RpcApi};
 use cln_rpc::ClnRpc;
 use federation::{run_dkg, Federation};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+use fedimint_client_legacy::modules::mint::MintClientGen;
+use fedimint_client_legacy::{module_decode_stubs, UserClient, UserClientConfig};
 use fedimint_core::config::load_from_file;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_wallet_client::WalletClientGen;
-use mint_client::modules::mint::MintClientGen;
-use mint_client::{module_decode_stubs, UserClient, UserClientConfig};
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::sleep;
@@ -527,17 +527,40 @@ struct DevFed {
     esplora: Esplora,
 }
 
+fn env_var(var: String) -> Result<Option<String>, std::env::VarError> {
+    match env::var_os(&var) {
+        None => Ok(None),
+        Some(value) => match value.clone().into_string() {
+            Ok(s) => Ok(Some(s)),
+            Err(_) => Err(std::env::VarError::NotUnicode(value)),
+        },
+    }
+}
+
+macro_rules! env {
+    ($name:ident { $( $var:ident = $value:expr ),* $(,)? }) => {
+        struct $name {
+            $( $var: String, )*
+        }
+
+        impl $name {
+            fn init() -> Result<Self, std::env::VarError> {
+                Ok(Self {
+                    $( $var: env_var(stringify!($var).to_owned())?.unwrap_or_else(|| $value.to_owned()), )*
+                })
+            }
+
+            fn set_global(&self) -> Result<(), std::env::VarError> {
+                $( env::set_var(stringify!($var), &self.$var); )*
+                Ok(())
+            }
+        }
+    };
+}
+
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
-    std::env::set_var("FM_FED_SIZE", "4");
-    std::env::set_var("FM_TMP_DIR", "/tmp/fm-XXXXX");
-    std::env::set_var("FM_TEST_FAST_WEAK_CRYPTO", "1");
-    std::env::set_var("FM_POLL_INTERVAL", "1");
 
     let tmp_dir = "/tmp/fm-XXXXX";
-    std::env::set_var("FM_TMP_DIR", "/tmp/fm-XXXXX");
-    std::env::set_var("FM_TEST_FAST_WEAK_CRYPTO", "1");
-    std::env::set_var("FM_POLL_INTERVAL", "1");
-
     let test_dir = tmp_dir.to_string();
     let bin_dir = tmp_dir.to_string() + "/target/debug";
     let pid_file = tmp_dir.to_string() + "/.pid";
@@ -548,15 +571,13 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
     let cfg_dir = test_dir.to_string() + "/cfg";
     let electrs_dir = test_dir.to_string() + "/electrs";
 
-    std::env::set_var("FM_TEST_DIR", test_dir);
-    std::env::set_var("FM_BIN_DIR", bin_dir.clone());
-    std::env::set_var("FM_PID_FILE", pid_file.clone());
-    std::env::set_var("FM_LOGS_DIR", logs_dir.clone());
-    std::env::set_var("FM_CLN_DIR", cln_dir.clone());
-    std::env::set_var("FM_LND_DIR", lnd_dir.clone());
-    std::env::set_var("FM_BTC_DIR", btc_dir.clone());
-    std::env::set_var("FM_CFG_DIR", cfg_dir.clone());
-    std::env::set_var("FM_ELECTRS_DIR", electrs_dir.clone());
+    let _ = std::fs::create_dir_all(&logs_dir);
+    let _ = std::fs::create_dir_all(&cln_dir);
+    let _ = std::fs::create_dir_all(&lnd_dir);
+    let _ = std::fs::create_dir_all(&btc_dir);
+    let _ = std::fs::create_dir_all(&cfg_dir);
+    let _ = std::fs::create_dir_all(&electrs_dir);
+    let _ = std::fs::File::create(&pid_file);
 
     let _ = std::fs::create_dir_all(&logs_dir);
     let _ = std::fs::create_dir_all(&cln_dir);
@@ -571,20 +592,73 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
     fs::copy("misc/test/lightningd.conf", format!("{}/lightningd.conf", &cln_dir)).await?;
     fs::copy("misc/test/electrs.conf", format!("{}/electrs.conf", &electrs_dir)).await?;
 
-    std::env::set_var("FM_LND_RPC_ADDR", "http://localhost:11009");
-    std::env::set_var("FM_LND_TLS_CERT", format!("{}/tls.cert", &lnd_dir));
-    std::env::set_var("FM_LND_MACAROON", format!("{}/data/chain/bitcoin/regtest/admin.macaroon", &lnd_dir));
+    env!(MyEnv {
+        FM_FED_SIZE = "4",
+        FM_TMP_DIR = "/tmp/fm-XXXXX",
+        FM_TEST_FAST_WEAK_CRYPTO = "1",
+        FM_POLL_INTERVAL = "1",
+        FM_TEST_DIR = "/tmp/fm-XXXXX",
+        FM_BIN_DIR = "/tmp/fm-XXXXX/target/debug",
+        FM_PID_FILE = "/tmp/fm-XXXXX/.pid",
+        FM_LOGS_DIR = "/tmp/fm-XXXXX/logs",
+        FM_CLN_DIR = "/tmp/fm-XXXXX/cln",
+        FM_LND_DIR = "/tmp/fm-XXXXX/lnd",
+        FM_BTC_DIR = "/tmp/fm-XXXXX/bitcoin",
+        FM_CFG_DIR = "/tmp/fm-XXXXX/cfg",
+        FM_ELECTRS_DIR = "/tmp/fm-XXXXX/electrs",
+        FM_LND_RPC_ADDR = "http://localhost:11009",
+        FM_LND_TLS_CERT = "/tmp/fm-XXXXX/lnd/tls.cert",
+        FM_LND_MACAROON = "/tmp/fm-XXXXX/lnd/data/chain/bitcoin/regtest/admin.macaroon",
+        FM_GATEWAY_DATA_DIR = "/tmp/fm-XXXXX/cfg/gateway",
+        FM_GATEWAY_LISTEN_ADDR = "127.0.0.1:8175",
+        FM_GATEWAY_API_ADDR = "http://127.0.0.1:8175",
+        FM_GATEWAY_PASSWORD = "theresnosecondbest",
+        FM_CLN_EXTENSION_LISTEN_ADDRESS = "0.0.0.0:8177",
+        FM_GATEWAY_LIGHTNING_ADDR = "http://localhost:8177",
 
-    std::env::set_var("FM_GATEWAY_DATA_DIR", format!("{}/gateway", &cfg_dir));
-    std::env::set_var("FM_GATEWAY_LISTEN_ADDR", "127.0.0.1:8175");
-    std::env::set_var("FM_GATEWAY_API_ADDR", "http://127.0.0.1:8175");
-    std::env::set_var("FM_GATEWAY_PASSWORD", "theresnosecondbest");
+    });
+    let my_env = MyEnv::init().unwrap();
+    my_env.set_global().unwrap();
 
-    std::env::set_var("FM_CLN_EXTENSION_LISTEN_ADDRESS", "0.0.0.0:8177");
-    std::env::set_var("FM_GATEWAY_LIGHTNING_ADDR", "http://localhost:8177");
+    // std::env::set_var("FM_FED_SIZE", "4");
+    // std::env::set_var("FM_TMP_DIR", "/tmp/fm-XXXXX");
+    // std::env::set_var("FM_TEST_FAST_WEAK_CRYPTO", "1");
+    // std::env::set_var("FM_POLL_INTERVAL", "1");
 
-    let gateway_dir = format!("{}/gateway", &cfg_dir);
-    let _ = std::fs::create_dir_all(&gateway_dir);
+    // let test_dir = tmp_dir.to_string();
+    // let bin_dir = tmp_dir.to_string() + "/target/debug";
+    // let pid_file = tmp_dir.to_string() + "/.pid";
+    // let logs_dir = test_dir.to_string() + "/logs";
+    // let cln_dir = test_dir.to_string() + "/cln";
+    // let lnd_dir = test_dir.to_string() + "/lnd";
+    // let btc_dir = test_dir.to_string() + "/bitcoin";
+    // let cfg_dir = test_dir.to_string() + "/cfg";
+    // let electrs_dir = test_dir.to_string() + "/electrs";
+
+    // std::env::set_var("FM_TEST_DIR", test_dir);
+    // std::env::set_var("FM_BIN_DIR", bin_dir.clone());
+    // std::env::set_var("FM_PID_FILE", pid_file.clone());
+    // std::env::set_var("FM_LOGS_DIR", logs_dir.clone());
+    // std::env::set_var("FM_CLN_DIR", cln_dir.clone());
+    // std::env::set_var("FM_LND_DIR", lnd_dir.clone());
+    // std::env::set_var("FM_BTC_DIR", btc_dir.clone());
+    // std::env::set_var("FM_CFG_DIR", cfg_dir.clone());
+    // std::env::set_var("FM_ELECTRS_DIR", electrs_dir.clone());
+
+    // std::env::set_var("FM_LND_RPC_ADDR", "http://localhost:11009");
+    // std::env::set_var("FM_LND_TLS_CERT", format!("{}/tls.cert", &lnd_dir));
+    // std::env::set_var("FM_LND_MACAROON", format!("{}/data/chain/bitcoin/regtest/admin.macaroon", &lnd_dir));
+
+    // std::env::set_var("FM_GATEWAY_DATA_DIR", format!("{}/gateway", &cfg_dir));
+    // std::env::set_var("FM_GATEWAY_LISTEN_ADDR", "127.0.0.1:8175");
+    // std::env::set_var("FM_GATEWAY_API_ADDR", "http://127.0.0.1:8175");
+    // std::env::set_var("FM_GATEWAY_PASSWORD", "theresnosecondbest");
+
+    // std::env::set_var("FM_CLN_EXTENSION_LISTEN_ADDRESS", "0.0.0.0:8177");
+    // std::env::set_var("FM_GATEWAY_LIGHTNING_ADDR", "http://localhost:8177");
+
+    // let gateway_dir = format!("{}/gateway", &cfg_dir);
+    // let _ = std::fs::create_dir_all(&gateway_dir);
 
     // export FM_LIGHTNING_CLI="lightning-cli --network regtest --lightning-dir=$FM_CLN_DIR"
     // export FM_LNCLI="lncli -n regtest --lnddir=$FM_LND_DIR --rpcserver=localhost:11009"
