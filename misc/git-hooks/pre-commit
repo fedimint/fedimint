@@ -143,6 +143,20 @@ function check_eof() {
 }
 export -f check_eof
 
+function trailing_space_check(){
+  set -eo pipefail
+
+  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png|log)' | grep -v -E '^db/'); do
+
+    if git diff --check --cached; then
+      echo "Trailing whitespace detected. Please remove them before committing."
+      return 1
+    fi
+  done
+
+}
+export -f trailing_space_check
+
 function check_cargo_lock() {
   set -eo pipefail
 
