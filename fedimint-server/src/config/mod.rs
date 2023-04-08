@@ -734,14 +734,15 @@ pub fn gen_cert_and_key(
 ) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
     let keypair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
     let keypair_ser = keypair.serialize_der();
-    let mut params = rcgen::CertificateParams::new(vec![name.to_owned()]);
+    let sanitized_name = name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+    let mut params = rcgen::CertificateParams::new(vec![sanitized_name.to_owned()]);
 
     params.key_pair = Some(keypair);
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
     params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
-        .push(rcgen::DnType::CommonName, name);
+        .push(rcgen::DnType::CommonName, sanitized_name);
 
     let cert = rcgen::Certificate::from_params(params)?;
 

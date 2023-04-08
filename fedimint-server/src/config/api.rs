@@ -91,11 +91,6 @@ impl ConfigGenApi {
         &self,
         request: ConfigGenConnectionsRequest,
     ) -> ApiResult<()> {
-        // TODO: should probably just replace bad chars with '_' in `TlsTcpConnector`
-        if rustls::ServerName::try_from(request.our_name.as_str()).is_err() {
-            return Self::bad_request("Name must be a valid domain string");
-        }
-
         let connection = {
             let mut state = self.state.lock().expect("lock poisoned");
 

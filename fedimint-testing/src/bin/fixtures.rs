@@ -365,7 +365,7 @@ fn fedimint_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
 async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
     // set env vars
     let bin_dir = env::var("FM_BIN_DIR")?;
-    let server_name = format!("Server-{id}");
+    let server_name = format!("Server {id}!");
     let env_vars = fedimint_env(id)?;
     let p2p_url = env_vars
         .get("FM_P2P_URL")
