@@ -559,7 +559,6 @@ macro_rules! env {
 }
 
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
-
     let tmp_dir = "/tmp/fm-XXXXX";
     let test_dir = tmp_dir.to_string();
     let bin_dir = tmp_dir.to_string() + "/target/debug";
@@ -587,10 +586,22 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
     let _ = std::fs::create_dir_all(&electrs_dir);
     let _ = std::fs::File::create(&pid_file);
 
-    fs::copy("misc/test/bitcoin.conf", format!("{}/bitcoin.conf", &btc_dir)).await?;
+    fs::copy(
+        "misc/test/bitcoin.conf",
+        format!("{}/bitcoin.conf", &btc_dir),
+    )
+    .await?;
     fs::copy("misc/test/lnd.conf", format!("{}/lnd.conf", &lnd_dir)).await?;
-    fs::copy("misc/test/lightningd.conf", format!("{}/lightningd.conf", &cln_dir)).await?;
-    fs::copy("misc/test/electrs.conf", format!("{}/electrs.conf", &electrs_dir)).await?;
+    fs::copy(
+        "misc/test/lightningd.conf",
+        format!("{}/lightningd.conf", &cln_dir),
+    )
+    .await?;
+    fs::copy(
+        "misc/test/electrs.conf",
+        format!("{}/electrs.conf", &electrs_dir),
+    )
+    .await?;
 
     env!(MyEnv {
         FM_FED_SIZE = "4",
@@ -670,28 +681,82 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
     // export FM_DB_TOOL="$FM_BIN_DIR/dbtool"
     // export FM_DISTRIBUTEDGEN="$FM_BIN_DIR/distributedgen"
 
-    std::env::set_var("FM_LIGHTNING_CLI", format!("lightning-cli --network regtest --lightning-dir={}", &cln_dir));
-    std::env::set_var("FM_LNCLI", format!("lncli -n regtest --lnddir={} --rpcserver=localhost:11009", &lnd_dir));
-    std::env::set_var("FM_BTC_CLIENT", "bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin");
-    std::env::set_var("FM_MINT_CLIENT", format!("{} --data-dir {}", &bin_dir, &cfg_dir));
-    std::env::set_var("FM_MINT_RPC_CLIENT", format!("{}/mint-rpc-client", &bin_dir));
-    std::env::set_var("FM_GWCLI_CLN", format!("{} --rpcpassword=theresnosecondbest", &bin_dir));
-    std::env::set_var("FM_GWCLI_LND", format!("{} --rpcpassword=theresnosecondbest -a http://127.0.0.1:28175/", &bin_dir));
+    std::env::set_var(
+        "FM_LIGHTNING_CLI",
+        format!(
+            "lightning-cli --network regtest --lightning-dir={}",
+            &cln_dir
+        ),
+    );
+    std::env::set_var(
+        "FM_LNCLI",
+        format!(
+            "lncli -n regtest --lnddir={} --rpcserver=localhost:11009",
+            &lnd_dir
+        ),
+    );
+    std::env::set_var(
+        "FM_BTC_CLIENT",
+        "bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin",
+    );
+    std::env::set_var(
+        "FM_MINT_CLIENT",
+        format!("{} --data-dir {}", &bin_dir, &cfg_dir),
+    );
+    std::env::set_var(
+        "FM_MINT_RPC_CLIENT",
+        format!("{}/mint-rpc-client", &bin_dir),
+    );
+    std::env::set_var(
+        "FM_GWCLI_CLN",
+        format!("{} --rpcpassword=theresnosecondbest", &bin_dir),
+    );
+    std::env::set_var(
+        "FM_GWCLI_LND",
+        format!(
+            "{} --rpcpassword=theresnosecondbest -a http://127.0.0.1:28175/",
+            &bin_dir
+        ),
+    );
     std::env::set_var("FM_DB_TOOL", format!("{}/dbtool", &bin_dir));
     std::env::set_var("FM_DISTRIBUTEDGEN", format!("{}/distributedgen", &bin_dir));
 
-    std::env::set_var("FM_TEST_BITCOIND_RPC", "http://bitcoin:bitcoin@127.0.0.1:18443");
+    std::env::set_var(
+        "FM_TEST_BITCOIND_RPC",
+        "http://bitcoin:bitcoin@127.0.0.1:18443",
+    );
     std::env::set_var("FM_BITCOIND_RPC", "http://bitcoin:bitcoin@127.0.0.1:18443");
 
-    std::env::set_var("LIGHTNING_CLI", format!("${}", env::var("FM_LIGHTNING_CLI").unwrap()));
+    std::env::set_var(
+        "LIGHTNING_CLI",
+        format!("${}", env::var("FM_LIGHTNING_CLI").unwrap()),
+    );
     std::env::set_var("LNCLI", format!("${}", env::var("FM_LNCLI").unwrap()));
-    std::env::set_var("BITCOIN_CLI", format!("${}", env::var("FM_BTC_CLIENT").unwrap()));
-    std::env::set_var("MINT_CLIENT", format!("${}", env::var("FM_MINT_CLIENT").unwrap()));
-    std::env::set_var("MINT_RPC_CLIENT", format!("${}", env::var("FM_MINT_RPC_CLIENT").unwrap()));
-    std::env::set_var("GATEWAY_CLN", format!("${}", env::var("FM_GWCLI_CLN").unwrap()));
-    std::env::set_var("GATEWAY_LND", format!("${}", env::var("FM_GWCLI_LND").unwrap()));
+    std::env::set_var(
+        "BITCOIN_CLI",
+        format!("${}", env::var("FM_BTC_CLIENT").unwrap()),
+    );
+    std::env::set_var(
+        "MINT_CLIENT",
+        format!("${}", env::var("FM_MINT_CLIENT").unwrap()),
+    );
+    std::env::set_var(
+        "MINT_RPC_CLIENT",
+        format!("${}", env::var("FM_MINT_RPC_CLIENT").unwrap()),
+    );
+    std::env::set_var(
+        "GATEWAY_CLN",
+        format!("${}", env::var("FM_GWCLI_CLN").unwrap()),
+    );
+    std::env::set_var(
+        "GATEWAY_LND",
+        format!("${}", env::var("FM_GWCLI_LND").unwrap()),
+    );
     std::env::set_var("DB_TOOL", format!("${}", env::var("FM_DB_TOOL").unwrap()));
-    std::env::set_var("DISTRIBUTEDGEN", format!("${}", env::var("FM_DISTRIBUTEDGEN").unwrap()));    
+    std::env::set_var(
+        "DISTRIBUTEDGEN",
+        format!("${}", env::var("FM_DISTRIBUTEDGEN").unwrap()),
+    );
 
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let (cln, lnd, electrs, esplora) = tokio::try_join!(
