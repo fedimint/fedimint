@@ -996,6 +996,15 @@
 <a href="#996" id="996">996</a>
 <a href="#997" id="997">997</a>
 <a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -1328,6 +1337,7 @@
                 |dbtx| {
                     <span class="kw">let </span>consensus_outcome = consensus_outcome.clone();
                     <span class="kw">let </span>reference_rejected_txs = reference_rejected_txs.clone();
+                    <span class="kw">let </span>peers: BTreeSet&lt;PeerId&gt; = consensus_outcome.contributions.keys().copied().collect();
 
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>epoch = consensus_outcome.epoch;
@@ -1345,7 +1355,7 @@
                             .flat_map(|(peer, cis)| cis.into_iter().map(<span class="kw">move </span>|ci| (peer, ci)))
                             .unzip_consensus_item();
 
-                        <span class="self">self</span>.process_module_consensus_items(dbtx, <span class="kw-2">&amp;</span>module_cis).<span class="kw">await</span>;
+                        <span class="self">self</span>.process_module_consensus_items(dbtx, <span class="kw-2">&amp;</span>module_cis, <span class="kw-2">&amp;</span>peers).<span class="kw">await</span>;
                         <span class="self">self</span>.process_upgrade_items(dbtx, <span class="kw-2">&amp;</span>consensus_upgrade_cis).<span class="kw">await</span>;
 
                         <span class="kw">let </span>rejected_txs = <span class="self">self
@@ -1364,7 +1374,7 @@
                         }
 
                         <span class="kw">let </span>epoch_history = <span class="self">self
-                            </span>.finalize_process_epoch(dbtx, outcome.clone(), rejected_txs)
+                            </span>.finalize_process_epoch(dbtx, outcome.clone(), rejected_txs, <span class="kw-2">&amp;</span>peers)
                             .<span class="kw">await</span>;
                         <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, ()&gt;::Ok(epoch_history)
                     })
@@ -1388,7 +1398,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_cis: <span class="kw-2">&amp;</span>[(PeerId, fedimint_core::core::DynModuleConsensusItem)],
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) {
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = <span class="macro">vec!</span>[];
         <span class="kw">let </span>per_module_cis: HashMap&lt;
             ModuleInstanceId,
             Vec&lt;(PeerId, fedimint_core::core::DynModuleConsensusItem)&gt;,
@@ -1398,10 +1410,17 @@
             .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
 
         <span class="kw">for </span>(module_key, module_cis) <span class="kw">in </span>per_module_cis {
-            <span class="self">self</span>.modules
+            <span class="kw">let </span>moduletx = <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_key);
+            <span class="kw">let </span><span class="kw-2">mut </span>module_drop_peers = <span class="self">self
+                </span>.modules
                 .get_expect(module_key)
-                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_key), module_cis)
+                .begin_consensus_epoch(moduletx, module_cis, consensus_peers)
                 .<span class="kw">await</span>;
+            drop_peers.append(<span class="kw-2">&amp;mut </span>module_drop_peers);
+        }
+
+        <span class="kw">for </span>peer <span class="kw">in </span>drop_peers {
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>DropPeerKey(peer), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
         }
     }
 
@@ -1477,9 +1496,8 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         outcome: HbbftConsensusOutcome,
         rejected_txs: BTreeSet&lt;TransactionId&gt;,
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) -&gt; SignedEpochOutcome {
-        <span class="kw">let </span>epoch_peers: HashSet&lt;PeerId&gt; = outcome.contributions.keys().copied().collect();
-
         <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
         <span class="self">self</span>.save_client_config_sig(dbtx, <span class="kw-2">&amp;</span>outcome, <span class="kw-2">&amp;mut </span>drop_peers)
@@ -1491,7 +1509,7 @@
 
         <span class="kw">for </span>(module_key, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="kw">let </span>module_drop_peers = module
-                .end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_key))
+                .end_consensus_epoch(consensus_peers, <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_key))
                 .<span class="kw">await</span>;
             drop_peers.extend(module_drop_peers);
         }

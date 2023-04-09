@@ -995,10 +995,13 @@
 <a href="#995" id="995">995</a>
 <a href="#996" id="996">996</a>
 <a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
-<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::marker::PhantomData;
@@ -1815,16 +1818,19 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConsensusProposal&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
 
-    <span class="doccomment">/// This function is called once before transaction processing starts. All
-    /// module consensus items of this round are supplied as
+    <span class="doccomment">/// This function is called once before transaction processing starts.
+    ///
+    /// All module consensus items of this round are supplied as
     /// `consensus_items`. The database transaction will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions.
+    /// results are available when processing transactions. Returns any
+    /// peers that need to be dropped.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_items: Vec&lt;(PeerId, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem)&gt;,
-    );
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+    ) -&gt; Vec&lt;PeerId&gt;;
 
     <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a
@@ -1903,7 +1909,7 @@
     /// returns a list of peers to drop if any are misbehaving.
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 

@@ -2016,7 +2016,33 @@
 <a href="#2016" id="2016">2016</a>
 <a href="#2017" id="2017">2017</a>
 <a href="#2018" id="2018">2018</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+<a href="#2019" id="2019">2019</a>
+<a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a>
+<a href="#2031" id="2031">2031</a>
+<a href="#2032" id="2032">2032</a>
+<a href="#2033" id="2033">2033</a>
+<a href="#2034" id="2034">2034</a>
+<a href="#2035" id="2035">2035</a>
+<a href="#2036" id="2036">2036</a>
+<a href="#2037" id="2037">2037</a>
+<a href="#2038" id="2038">2038</a>
+<a href="#2039" id="2039">2039</a>
+<a href="#2040" id="2040">2040</a>
+<a href="#2041" id="2041">2041</a>
+<a href="#2042" id="2042">2042</a>
+<a href="#2043" id="2043">2043</a>
+<a href="#2044" id="2044">2044</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
 <span class="kw">use </span>std::ops::Sub;
@@ -2370,7 +2396,8 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_items: Vec&lt;(PeerId, WalletConsensusItem)&gt;,
-    ) {
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+    ) -&gt; Vec&lt;PeerId&gt; {
         <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_items, <span class="string">&quot;Received consensus proposals&quot;</span>);
 
         <span class="comment">// Separate round consensus items from signatures for peg-out tx. While
@@ -2378,19 +2405,25 @@
         // need to be available at once.
         </span><span class="kw">let </span>UnzipWalletConsensusItem {
             peg_out_signature: peg_out_signatures,
-            round_consensus,
+            round_consensus: round_items,
         } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         <span class="comment">// Save signatures to the database
         </span><span class="self">self</span>.save_peg_out_signatures(dbtx, peg_out_signatures).<span class="kw">await</span>;
 
         <span class="kw">let </span>last_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
-        <span class="kw">let </span>round_consensus = <span class="self">Self</span>::process_round_consensus(last_height, round_consensus);
-        <span class="self">self</span>.sync_up_to_consensus_height(dbtx, round_consensus.block_height)
-            .<span class="kw">await</span>;
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>RoundConsensusKey, <span class="kw-2">&amp;</span>round_consensus)
-            .<span class="kw">await</span>;
+        <span class="kw">match </span><span class="self">Self</span>::round_consensus(last_height, round_items, consensus_peers) {
+            <span class="prelude-val">Ok</span>(round_consensus) =&gt; {
+                <span class="self">self</span>.sync_up_to_consensus_height(dbtx, round_consensus.block_height)
+                    .<span class="kw">await</span>;
+
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>RoundConsensusKey, <span class="kw-2">&amp;</span>round_consensus)
+                    .<span class="kw">await</span>;
+                <span class="macro">vec!</span>[]
+            }
+            <span class="prelude-val">Err</span>(dropped_peers) =&gt; dropped_peers,
+        }
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -2538,7 +2571,7 @@
 
     <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
         <span class="comment">// Sign and finalize any unsigned transactions that have signatures
@@ -2554,7 +2587,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
         <span class="kw">for </span>(key, <span class="kw-2">mut </span>unsigned) <span class="kw">in </span>unsigned_txs {
-            <span class="kw">let </span>signers: HashSet&lt;PeerId&gt; = unsigned
+            <span class="kw">let </span>signers: BTreeSet&lt;PeerId&gt; = unsigned
                 .signatures
                 .iter()
                 .filter_map(|(peer, sig)| {
@@ -2871,29 +2904,43 @@
         })
     }
 
-    <span class="kw">fn </span>process_round_consensus(
+    <span class="doccomment">/// Calculates all the round items from peers, returning the same consensus
+    /// for all peers or peers that should be banned for misbehaving
+    </span><span class="kw">fn </span>round_consensus(
         last_height: u32,
         items: Vec&lt;(PeerId, RoundConsensusItem)&gt;,
-    ) -&gt; RoundConsensus {
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;RoundConsensus, Vec&lt;PeerId&gt;&gt; {
         <span class="kw">fn </span>xor(<span class="kw-2">mut </span>lhs: [u8; <span class="number">32</span>], rhs: [u8; <span class="number">32</span>]) -&gt; [u8; <span class="number">32</span>] {
             lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| <span class="kw-2">*</span>lhs ^= rhs);
             lhs
         }
 
-        <span class="comment">// FIXME: also warn on less than 1/3, that should never happen
-        // FIXME: ban peers instead of panicking
-        // Make sure we have enough contributions to continue
-        </span><span class="kw">if </span>items.is_empty() {
-            <span class="macro">panic!</span>(<span class="string">&quot;No proposals were submitted this round&quot;</span>);
-        }
+        <span class="kw">let </span><span class="kw-2">mut </span>banned_peers = <span class="macro">vec!</span>[];
 
         <span class="kw">let </span><span class="kw-2">mut </span>dedup = BTreeMap::new();
         <span class="kw">for </span>(peer, item) <span class="kw">in </span>items.into_iter() {
             <span class="kw">if </span>dedup.insert(peer, item).is_some() {
-                <span class="comment">// FIXME: ban peers instead of warning
-                </span><span class="macro">warn!</span>(<span class="string">&quot;Peer {} submitted multiple RoundConsensusItem&quot;</span>, peer);
+                <span class="macro">warn!</span>(<span class="string">&quot;Banning peer {} for multiple RoundConsensusItem&quot;</span>, peer);
+                banned_peers.push(peer);
             }
         }
+
+        <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers {
+            <span class="kw">if </span>dedup.get(peer).is_none() {
+                <span class="macro">warn!</span>(
+                    <span class="string">&quot;Banning peer {} for not submitting a RoundConsensusItem&quot;</span>,
+                    peer
+                );
+                banned_peers.push(<span class="kw-2">*</span>peer);
+            }
+        }
+
+        <span class="comment">// If peers misbehaved, we cannot determine this consensus round
+        </span><span class="kw">if </span>!banned_peers.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(banned_peers);
+        }
+
         <span class="kw">let </span>items: Vec&lt;<span class="kw">_</span>&gt; = dedup.values().into_iter().collect();
 
         <span class="kw">let </span><span class="kw-2">mut </span>fees: Vec&lt;<span class="kw">_</span>&gt; = items.iter().map(|item| item.fee_rate).collect();
@@ -2912,11 +2959,11 @@
         <span class="kw">let </span>randoms: Vec&lt;<span class="kw">_</span>&gt; = items.iter().map(|item| item.randomness).collect();
         <span class="kw">let </span>randomness_beacon = randoms.into_iter().fold([<span class="number">0</span>; <span class="number">32</span>], xor);
 
-        RoundConsensus {
+        <span class="prelude-val">Ok</span>(RoundConsensus {
             block_height,
             fee_rate,
             randomness_beacon,
-        }
+        })
     }
 
     <span class="kw">pub async fn </span>current_round_consensus(
@@ -3561,6 +3608,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::collections::BTreeSet;
     <span class="kw">use </span>std::str::FromStr;
 
     <span class="kw">use </span>bitcoin::Network::{Bitcoin, Testnet};
@@ -3598,27 +3646,31 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>processes_round_consensus_items() {
+        <span class="kw">let </span>peers = <span class="kw-2">&amp;</span>BTreeSet::from([PeerId::from(<span class="number">0</span>), PeerId::from(<span class="number">1</span>), PeerId::from(<span class="number">2</span>)]);
+
         <span class="comment">// properly selects median fees / height and xor randomness
-        </span><span class="kw">let </span>consensus = Wallet::process_round_consensus(
+        </span><span class="kw">let </span>consensus = Wallet::round_consensus(
             <span class="number">0</span>,
             <span class="macro">vec!</span>[
                 (PeerId::from(<span class="number">0</span>), round_item(<span class="number">1</span>, <span class="number">4</span>, <span class="number">7</span>)),
                 (PeerId::from(<span class="number">1</span>), round_item(<span class="number">2</span>, <span class="number">5</span>, <span class="number">8</span>)),
                 (PeerId::from(<span class="number">2</span>), round_item(<span class="number">3</span>, <span class="number">6</span>, <span class="number">9</span>)),
             ],
+            peers,
         );
-        <span class="macro">assert_eq!</span>(consensus, round_consensus(<span class="number">2</span>, <span class="number">5</span>, <span class="number">7 </span>^ <span class="number">8 </span>^ <span class="number">9</span>));
+        <span class="macro">assert_eq!</span>(consensus, <span class="prelude-val">Ok</span>(round_consensus(<span class="number">2</span>, <span class="number">5</span>, <span class="number">7 </span>^ <span class="number">8 </span>^ <span class="number">9</span>)));
 
-        <span class="comment">// removes duplicate entries for a given peer, keeping last entry
-        </span><span class="kw">let </span>consensus = Wallet::process_round_consensus(
+        <span class="comment">// drops peers that submit duplicate items or don&#39;t submit any
+        </span><span class="kw">let </span>consensus = Wallet::round_consensus(
             <span class="number">0</span>,
             <span class="macro">vec!</span>[
                 (PeerId::from(<span class="number">0</span>), round_item(<span class="number">1</span>, <span class="number">4</span>, <span class="number">7</span>)),
                 (PeerId::from(<span class="number">1</span>), round_item(<span class="number">2</span>, <span class="number">5</span>, <span class="number">8</span>)),
                 (PeerId::from(<span class="number">1</span>), round_item(<span class="number">3</span>, <span class="number">6</span>, <span class="number">9</span>)),
             ],
+            peers,
         );
-        <span class="macro">assert_eq!</span>(consensus, round_consensus(<span class="number">3</span>, <span class="number">6</span>, <span class="number">7 </span>^ <span class="number">9</span>));
+        <span class="macro">assert_eq!</span>(consensus, <span class="prelude-val">Err</span>(<span class="macro">vec!</span>[PeerId::from(<span class="number">1</span>), PeerId::from(<span class="number">2</span>)]));
     }
 
     <span class="attr">#[test]

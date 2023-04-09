@@ -246,7 +246,9 @@
 <a href="#246" id="246">246</a>
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::ffi::OsString;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -408,7 +410,9 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         _consensus_items: Vec&lt;(PeerId, DummyConsensusItem)&gt;,
-    ) {
+        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+    ) -&gt; Vec&lt;PeerId&gt; {
+        <span class="macro">vec!</span>[]
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -457,7 +461,7 @@
 
     <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
         _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
         <span class="macro">vec!</span>[]

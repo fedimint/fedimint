@@ -437,13 +437,20 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
-</span><span class="kw">use </span>std::collections::HashSet;
+</span><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -506,16 +513,19 @@
         module_instance_id: ModuleInstanceId,
     ) -&gt; ConsensusProposal&lt;DynModuleConsensusItem&gt;;
 
-    <span class="doccomment">/// This function is called once before transaction processing starts. All
-    /// module consensus items of this round are supplied as
+    <span class="doccomment">/// This function is called once before transaction processing starts.
+    ///
+    /// All module consensus items of this round are supplied as
     /// `consensus_items`. The database transaction will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions.
+    /// results are available when processing transactions. Returns any
+    /// peers that need to be dropped.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, DynModuleConsensusItem)&gt;,
-    );
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+    ) -&gt; Vec&lt;PeerId&gt;;
 
     <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a
@@ -591,7 +601,7 @@
     /// returns a list of peers to drop if any are misbehaving.
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 
@@ -658,16 +668,19 @@
             </span>.map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
     }
 
-    <span class="doccomment">/// This function is called once before transaction processing starts. All
-    /// module consensus items of this round are supplied as
+    <span class="doccomment">/// This function is called once before transaction processing starts.
+    ///
+    /// All module consensus items of this round are supplied as
     /// `consensus_items`. The database transaction will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions.
+    /// results are available when processing transactions. Returns any
+    /// peers that need to be dropped.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, DynModuleConsensusItem)&gt;,
-    ) {
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+    ) -&gt; Vec&lt;PeerId&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::begin_consensus_epoch(
             <span class="self">self</span>,
             dbtx,
@@ -685,6 +698,7 @@
                     )
                 })
                 .collect(),
+            consensus_peers
         )
         .<span class="kw">await
     </span>}
@@ -826,7 +840,7 @@
     /// returns a list of peers to drop if any are misbehaving.
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::end_consensus_epoch(<span class="self">self</span>, consensus_peers, dbtx).<span class="kw">await

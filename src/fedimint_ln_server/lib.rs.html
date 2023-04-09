@@ -1132,7 +1132,9 @@
 <a href="#1132" id="1132">1132</a>
 <a href="#1133" id="1133">1133</a>
 <a href="#1134" id="1134">1134</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::ops::Sub;
 
@@ -1426,7 +1428,8 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_items: Vec&lt;(PeerId, LightningConsensusItem)&gt;,
-    ) {
+        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+    ) -&gt; Vec&lt;PeerId&gt; {
         <span class="kw">for </span>(peer, decryption_share) <span class="kw">in </span>consensus_items.into_iter() {
             <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer);
             <span class="kw">let </span>_guard = span.enter();
@@ -1437,6 +1440,7 @@
             )
             .<span class="kw">await</span>;
         }
+        <span class="macro">vec!</span>[]
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1706,7 +1710,7 @@
     <span class="attr">#[instrument(skip_all)]
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
         <span class="comment">// Decrypt preimages
