@@ -908,6 +908,7 @@ impl FederationTest {
                 .await
                 .fedimint
                 .consensus
+                .api
                 .submit_transaction(transaction.clone())
                 .await?;
         }
@@ -924,6 +925,7 @@ impl FederationTest {
                 .await
                 .fedimint
                 .consensus
+                .api
                 .transaction_status(txid)
                 .await;
             result.push(status);
@@ -1467,9 +1469,10 @@ impl FederationTest {
 
             let cfg = cfg.clone();
             let consensus = fedimint.consensus.clone();
+            let api = Arc::new(consensus.api.clone());
             task_group
                 .spawn("rpc server", move |handle| async {
-                    fedimint_server::net::api::run_server(cfg, consensus, handle).await
+                    fedimint_server::net::api::run_server(cfg, api, handle).await
                 })
                 .await;
 

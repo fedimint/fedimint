@@ -140,9 +140,10 @@ impl FedimintServer {
             .consensus
             .to_config_response(&server_consensus.module_inits);
 
+        let api = Arc::new(server_consensus.api.clone());
         task_group
             .spawn("api-server", |handle| {
-                net::api::run_server(cfg, server_consensus, handle)
+                net::api::run_server(cfg, api, handle)
             })
             .await;
 

@@ -1,7 +1,7 @@
 #![allow(clippy::let_unit_value)]
 
 pub mod debug;
-mod interconnect;
+pub mod interconnect;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::iter::FromIterator;
@@ -12,9 +12,7 @@ use anyhow::format_err;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    apply_migrations, Database, DatabaseTransaction, ModuleDatabaseTransaction,
-};
+use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
@@ -33,9 +31,8 @@ use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
+use tokio::sync::mpsc::Receiver;
+use tracing::{error, info, info_span, instrument, trace, warn, Instrument};
 
 use crate::config::api::ApiResult;
 use crate::config::ServerConfig;
@@ -46,6 +43,7 @@ use crate::db::{
     ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey,
     LastEpochKey, RejectedTransactionKey, GLOBAL_DATABASE_VERSION,
 };
+use crate::net::api::ConsensusApi;
 use crate::transaction::{Transaction, TransactionError};
 
 pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
@@ -94,21 +92,14 @@ pub enum ApiEvent {
 pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
-
-    /// Cached client config response to be returned with
-    /// `Self::get_config_with_sig`
-    client_cfg: ConfigResponse,
-
+    /// Modules config gen information
     pub module_inits: ServerModuleGenRegistry,
-
+    /// Modules registry information
     pub modules: ServerModuleRegistry,
-    /// KV Database into which all state is persisted to recover from in case of
-    /// a crash
+    /// Database storing the result of processing consensus outcomes
     pub db: Database,
-
-    /// For sending API events to consensus
-    pub api_sender: Sender<ApiEvent>,
-
+    /// API for accessing state
+    pub api: ConsensusApi,
     /// Cache of `ApiEvent` to include in a proposal
     // TODO should be able to eventually remove this Mutex
     pub api_event_cache: Mutex<HashSet<ApiEvent>>,
@@ -125,7 +116,7 @@ struct VerificationCaches {
     caches: HashMap<ModuleInstanceId, DynVerificationCache>,
 }
 
-struct FundingVerifier {
+pub struct FundingVerifier {
     input_amount: Amount,
     output_amount: Amount,
     fee_amount: Amount,
@@ -192,15 +183,21 @@ impl FedimintConsensus {
 
         let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
         let client_cfg = cfg.consensus.to_config_response(&module_inits);
+        let api = ConsensusApi {
+            cfg: cfg.clone(),
+            db: db.clone(),
+            modules: ModuleRegistry::from(modules.clone()),
+            client_cfg,
+            api_sender,
+        };
 
         Ok((
             Self {
                 modules: ModuleRegistry::from(modules),
                 cfg,
-                client_cfg,
                 module_inits,
                 db,
-                api_sender,
+                api,
                 api_event_cache: Default::default(),
             },
             api_receiver,
@@ -216,15 +213,21 @@ impl FedimintConsensus {
     ) -> (Self, Receiver<ApiEvent>) {
         let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
         let client_cfg = cfg.consensus.to_config_response(&module_inits);
+        let api = ConsensusApi {
+            cfg: cfg.clone(),
+            db: db.clone(),
+            modules: modules.clone(),
+            client_cfg,
+            api_sender,
+        };
 
         (
             Self {
                 modules,
                 cfg,
-                client_cfg,
                 module_inits,
                 db,
-                api_sender,
+                api,
                 api_event_cache: Default::default(),
             },
             api_receiver,
@@ -243,71 +246,6 @@ impl VerificationCaches {
 impl FedimintConsensus {
     pub fn decoders(&self) -> ModuleDecoderRegistry {
         self.modules.decoder_registry()
-    }
-
-    pub async fn submit_transaction(
-        &self,
-        transaction: Transaction,
-    ) -> Result<(), TransactionSubmissionError> {
-        // we already processed the transaction before the request was received
-        if self
-            .transaction_status(transaction.tx_hash())
-            .await
-            .is_some()
-        {
-            return Err(TransactionReplayError(transaction.tx_hash()));
-        }
-
-        let tx_hash = transaction.tx_hash();
-        debug!(%tx_hash, "Received mint transaction");
-
-        let mut funding_verifier = FundingVerifier::default();
-
-        let mut pub_keys = Vec::new();
-
-        // Create read-only DB tx so that the read state is consistent
-        let mut dbtx = self.db.begin_transaction().await;
-
-        for input in &transaction.inputs {
-            let module = self.modules.get_expect(input.module_instance_id());
-
-            let cache = module.build_verification_cache(&[input.clone()]);
-            let interconnect = self.build_interconnect();
-            let meta = module
-                .validate_input(
-                    &interconnect,
-                    &mut dbtx.with_module_prefix(input.module_instance_id()),
-                    &cache,
-                    input,
-                )
-                .await
-                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
-
-            pub_keys.push(meta.puk_keys);
-            funding_verifier.add_input(meta.amount);
-        }
-        transaction.validate_signature(pub_keys.into_iter().flatten())?;
-
-        for output in &transaction.outputs {
-            let amount = self
-                .modules
-                .get_expect(output.module_instance_id())
-                .validate_output(
-                    &mut dbtx.with_module_prefix(output.module_instance_id()),
-                    output,
-                )
-                .await
-                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
-            funding_verifier.add_output(amount);
-        }
-
-        funding_verifier.verify_funding()?;
-
-        self.api_sender
-            .send(ApiEvent::Transaction(transaction))
-            .await
-            .map_err(|_e| TransactionSubmissionError::TxChannelError)?;
-        Ok(())
     }
 
     /// Calculate the result of the `consensus_outcome` and save it/them.
@@ -524,7 +462,7 @@ impl FedimintConsensus {
         outcome: &HbbftConsensusOutcome,
         drop_peers: &mut Vec<PeerId>,
     ) {
-        let config = self.get_config_with_sig(&mut dbtx.get_isolated()).await;
+        let config = self.api.get_config_with_sig(&mut dbtx.get_isolated()).await;
 
         if config.client_hash_signature.is_none() {
             let maybe_client_hash = config.client.consensus_hash(&self.module_inits.to_common());
@@ -604,14 +542,9 @@ impl FedimintConsensus {
             .is_some()
     }
 
-    /// Sends an upgrade signal to the fedimint server thread
-    pub async fn signal_upgrade(&self) -> Result<(), SendError<ApiEvent>> {
-        self.api_sender.send(ApiEvent::UpgradeSignal).await
-    }
-
     /// Called to remove the upgrade items after the upgrade is complete
     pub async fn remove_upgrade_items(&self, epoch: u64) -> anyhow::Result<()> {
-        let last_epoch = self.get_epoch_count().await;
+        let last_epoch = self.api.get_epoch_count().await;
         let mut tx = self.db.begin_transaction().await;
         if last_epoch == epoch {
             tx.remove_entry(&ConsensusUpgradeKey).await;
@@ -624,69 +557,6 @@ impl FedimintConsensus {
                 last_epoch
             ))
         }
-    }
-
-    pub async fn download_config_with_token(
-        &self,
-        info: WsClientConnectInfo,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ApiResult<ConfigResponse> {
-        let token = self.cfg.local.download_token.clone();
-
-        if info.download_token != token {
-            return Err(ApiError::bad_request(
-                "Download token not found".to_string(),
-            ));
-        }
-
-        let times_used = dbtx
-            .get_value(&ClientConfigDownloadKey(token.clone()))
-            .await
-            .unwrap_or_default();
-
-        dbtx.insert_entry(&ClientConfigDownloadKey(token), &(times_used + 1))
-            .await;
-
-        if let Some(limit) = self.cfg.local.download_token_limit {
-            if times_used > limit {
-                return Err(ApiError::bad_request(
-                    "Download token used too many times".to_string(),
-                ));
-            }
-        }
-
-        Ok(self.get_config_with_sig(dbtx).await)
-    }
-
-    /// Returns the client config signed by all federation members
-    pub async fn get_config_with_sig(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ConfigResponse {
-        let mut client = self.client_cfg.clone();
-        let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
-        if let Some(SerdeSignature(sig)) = maybe_sig {
-            client.client_hash_signature = Some(sig);
-        }
-        client
-    }
-
-    pub async fn get_epoch_count(&self) -> u64 {
-        self.db
-            .begin_transaction()
-            .await
-            .get_value(&LastEpochKey)
-            .await
-            .map(|ep_hist_key| ep_hist_key.0 + 1)
-            .unwrap_or(0)
-    }
-
-    pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
-        self.db
-            .begin_transaction()
-            .await
-            .get_value(&EpochHistoryKey(epoch))
-            .await
     }
 
     async fn save_epoch_history<'a>(
@@ -806,7 +676,7 @@ impl FedimintConsensus {
 
         // Add a signature share for the client config hash if we don't have it signed
         // yet
-        let client = self.get_config_with_sig(&mut dbtx.get_isolated()).await;
+        let client = self.api.get_config_with_sig(&mut dbtx.get_isolated()).await;
         if client.client_hash_signature.is_none() {
             let maybe_client_hash = client.client.consensus_hash(&self.module_inits.to_common());
             let client_hash = maybe_client_hash.expect("Client config hashes");
@@ -846,7 +716,9 @@ impl FedimintConsensus {
                 .modules
                 .get_expect(input.module_instance_id())
                 .apply_input(
-                    &self.build_interconnect(),
+                    &FedimintInterconnect {
+                        fedimint: &self.api,
+                    },
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
                     input,
                     caches.get_cache(input.module_instance_id()),
@@ -881,82 +753,6 @@ impl FedimintConsensus {
         Ok(())
     }
 
-    async fn accepted_transaction_status(
-        &self,
-        txid: TransactionId,
-        accepted: AcceptedTransaction,
-        dbtx: &mut DatabaseTransaction<'_>,
-    ) -> TransactionStatus {
-        let mut outputs = Vec::new();
-        for (out_idx, output) in accepted.transaction.outputs.iter().enumerate() {
-            let outpoint = OutPoint {
-                txid,
-                out_idx: out_idx as u64,
-            };
-            let outcome = self
-                .modules
-                .get_expect(output.module_instance_id())
-                .output_status(
-                    &mut dbtx.with_module_prefix(output.module_instance_id()),
-                    outpoint,
-                    output.module_instance_id(),
-                )
-                .await
-                .expect("the transaction was processed, so must be known");
-            outputs.push((&outcome).into())
-        }
-
-        TransactionStatus::Accepted {
-            epoch: accepted.epoch,
-            outputs,
-        }
-    }
-
-    pub async fn wait_transaction_status(
-        &self,
-        txid: TransactionId,
-    ) -> crate::outcome::TransactionStatus {
-        let accepted_key = AcceptedTransactionKey(txid);
-        let rejected_key = RejectedTransactionKey(txid);
-        tokio::select! {
-            (accepted, mut dbtx) = self.db.wait_key_check(&accepted_key, std::convert::identity) => {
-                self.accepted_transaction_status(txid, accepted, &mut dbtx).await
-            }
-            rejected = self.db.wait_key_exists(&rejected_key) => {
-                TransactionStatus::Rejected(rejected)
-            }
-        }
-    }
-    pub async fn transaction_status(
-        &self,
-        txid: TransactionId,
-    ) -> Option<crate::outcome::TransactionStatus> {
-        let mut dbtx = self.db.begin_transaction().await;
-
-        let accepted: Option<AcceptedTransaction> =
-            dbtx.get_value(&AcceptedTransactionKey(txid)).await;
-
-        if let Some(accepted) = accepted {
-            return Some(
-                self.accepted_transaction_status(txid, accepted, &mut dbtx)
-                    .await,
-            );
-        }
-
-        let rejected: Option<String> = self
-            .db
-            .begin_transaction()
-            .await
-            .get_value(&RejectedTransactionKey(txid))
-            .await;
-
-        if let Some(message) = rejected {
-            return Some(TransactionStatus::Rejected(message));
-        }
-
-        None
-    }
-
     fn build_verification_caches<'a>(
         &self,
         transactions: impl Iterator<Item = &'a Transaction> + Send,
@@ -989,24 +785,20 @@ impl FedimintConsensus {
         }
         audit
     }
-
-    fn build_interconnect(&self) -> FedimintInterconnect {
-        FedimintInterconnect { fedimint: self }
-    }
 }
 
 impl FundingVerifier {
-    fn add_input(&mut self, input_amount: TransactionItemAmount) {
+    pub fn add_input(&mut self, input_amount: TransactionItemAmount) {
         self.input_amount += input_amount.amount;
         self.fee_amount += input_amount.fee;
     }
 
-    fn add_output(&mut self, output_amount: TransactionItemAmount) {
+    pub fn add_output(&mut self, output_amount: TransactionItemAmount) {
         self.output_amount += output_amount.amount;
         self.fee_amount += output_amount.fee;
     }
 
-    fn verify_funding(self) -> Result<(), TransactionError> {
+    pub fn verify_funding(self) -> Result<(), TransactionError> {
         if self.input_amount == (self.output_amount + self.fee_amount) {
             Ok(())
         } else {

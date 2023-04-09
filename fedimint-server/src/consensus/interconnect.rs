@@ -4,11 +4,10 @@ use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{ApiError, ApiRequestErased};
 use serde_json::Value;
 
-use crate::consensus::FedimintConsensus;
-use crate::net::api::HasApiContext;
+use crate::net::api::{ConsensusApi, HasApiContext};
 
 pub struct FedimintInterconnect<'a> {
-    pub fedimint: &'a FedimintConsensus,
+    pub fedimint: &'a ConsensusApi,
 }
 
 #[async_trait]
