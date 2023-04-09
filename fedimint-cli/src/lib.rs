@@ -363,7 +363,7 @@ enum Command {
         /// JSON-RPC parameters for the request
         #[clap(default_value = "null")]
         params: String,
-        /// Which server to send requst to
+        /// Which server to send request to
         #[clap(long = "peer-id")]
         peer_id: Option<u16>,
     },
