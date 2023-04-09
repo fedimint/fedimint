@@ -135,6 +135,34 @@ impl Federation {
         Ok(())
     }
 
+    pub async fn pegin_gateway(&self, amt: u64, gw_cln: &Gatewayd) -> Result<()> {
+        let fed_id = self.federation_id().await;
+        let pegin_addr = cmd!(gw_cln, "address", "--federation-id={fed_id}")
+            .out_json()
+            .await?["address"]
+            .as_str()
+            .context("address must be a string")?
+            .to_owned();
+        let txid = self.bitcoind.send_to(pegin_addr, amt).await?;
+        self.bitcoind.mine_blocks(11).await?;
+        self.await_block_sync().await?;
+        let (txout_proof, raw_tx) = tokio::try_join!(
+            self.bitcoind.get_txout_proof(&txid),
+            self.bitcoind.get_raw_transaction(&txid),
+        )?;
+        cmd!(
+            gw_cln,
+            "deposit",
+            "--federation-id={fed_id}",
+            "txout-proof={txout_proof}",
+            "--raw-tx={raw_tx}"
+        )
+        .run()
+        .await?;
+        cmd!(self, "fetch").run().await?;
+        Ok(())
+    }
+
     pub async fn federation_id(&self) -> String {
         self.client.config().0.federation_id.to_string()
     }
