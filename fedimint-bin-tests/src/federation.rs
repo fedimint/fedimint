@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::task::TaskGroup;
@@ -45,7 +45,7 @@ fn fedimint_env(peer_id: usize) -> anyhow::Result<HashMap<String, String>> {
 pub struct Federation {
     // client is only for internal use, use cli commands instead
     client: Arc<UserClient>,
-    members: Vec<Fedimintd>,
+    members: BTreeMap<usize, Fedimintd>,
     bitcoind: Bitcoind,
 }
 
@@ -55,9 +55,9 @@ impl Federation {
         bitcoind: Bitcoind,
         ids: Range<usize>,
     ) -> Result<Self> {
-        let mut members = Vec::new();
+        let mut members = BTreeMap::new();
         for id in ids {
-            members.push(Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
+            members.insert(id, Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
         }
 
         let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
@@ -78,7 +78,30 @@ impl Federation {
         })
     }
 
-    pub fn members(&self) -> &[Fedimintd] {
+    pub async fn start_server(
+        &mut self,
+        process_mgr: &ProcessManager,
+        peer_id: usize,
+    ) -> Result<()> {
+        if self.members.contains_key(&peer_id) {
+            return Err(anyhow!("fedimintd-{} already running", peer_id));
+        }
+        self.members.insert(
+            peer_id,
+            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer_id).await?,
+        );
+        Ok(())
+    }
+
+    pub async fn kill_server(&mut self, peer_id: usize) -> Result<()> {
+        let Some((_, fedimintd)) = self.members.remove_entry(&peer_id) else {
+            return Err(anyhow!("fedimintd-{} does not exist", peer_id));
+        };
+        fedimintd.kill().await?;
+        Ok(())
+    }
+
+    pub fn members(&self) -> &BTreeMap<usize, Fedimintd> {
         &self.members
     }
 
@@ -137,6 +160,17 @@ impl Federation {
         Ok(())
     }
 
+    pub async fn await_all_peers(&self) -> Result<()> {
+        cmd!(
+            self,
+            "api",
+            "/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/block_height"
+        )
+        .run()
+        .await?;
+        Ok(())
+    }
+
     pub async fn use_gateway(&self, gw: &Gatewayd) -> Result<()> {
         let pub_key = match &gw.ln {
             ClnOrLnd::Cln(cln) => cln.pub_key().await?,
@@ -146,12 +180,20 @@ impl Federation {
         info!("Using {name} gateway", name = gw.ln.name());
         Ok(())
     }
+
+    pub async fn generate_epochs(&self, epochs: usize) -> Result<()> {
+        for _ in 0..epochs {
+            self.bitcoind.mine_blocks(10).await?;
+            self.await_block_sync().await?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
 pub struct Fedimintd {
     _bitcoind: Bitcoind,
-    _process: ProcessHandle,
+    process: ProcessHandle,
 }
 
 impl Fedimintd {
@@ -175,7 +217,7 @@ impl Fedimintd {
         )
         .envs(env_vars);
 
-        info!("fedimintd started");
+        info!("fedimintd-{peer_id} started");
         let process = process_mgr
             .spawn_daemon(&format!("fedimintd-{peer_id}"), cmd)
             .await?;
@@ -183,8 +225,13 @@ impl Fedimintd {
         // TODO: wait for federation to start
         Ok(Self {
             _bitcoind: bitcoind,
-            _process: process,
+            process,
         })
+    }
+
+    pub async fn kill(self) -> Result<()> {
+        self.process.kill().await?;
+        Ok(())
     }
 }
 

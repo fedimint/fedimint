@@ -521,6 +521,52 @@ async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        mut fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    bitcoind.mine_blocks(110).await?;
+    fed.await_block_sync().await?;
+    fed.await_all_peers().await?;
+
+    // test a peer missing out on epochs and needing to rejoin
+    fed.kill_server(0).await?;
+    // FIXME increase this number once we can avoid processing epoch messages too
+    // far in the future
+    fed.generate_epochs(1).await?;
+
+    fed.start_server(process_mgr, 0).await?;
+    // FIXME increase this number once we can avoid processing epoch messages too
+    // far in the future
+    fed.generate_epochs(1).await?;
+    fed.await_all_peers().await?;
+    info!("Server 0 successfully rejoined!");
+    bitcoind.mine_blocks(100).await?;
+
+    // now test what happens if consensus needs to be restarted
+    fed.kill_server(1).await?;
+    bitcoind.mine_blocks(100).await?;
+    fed.await_block_sync().await?;
+    fed.kill_server(2).await?;
+    fed.kill_server(3).await?;
+
+    fed.start_server(process_mgr, 1).await?;
+    fed.start_server(process_mgr, 2).await?;
+    fed.start_server(process_mgr, 3).await?;
+    fed.await_all_peers().await?;
+    info!("fm success: reconnect-test");
+    Ok(())
+}
+
 struct DevFed {
     bitcoind: Bitcoind,
     cln: Lightningd,
@@ -645,6 +691,7 @@ use clap::{Parser, Subcommand};
 enum Cmd {
     Tmuxinator,
     LatencyTests,
+    ReconnectTest,
 }
 
 #[derive(Parser)]
@@ -666,6 +713,10 @@ async fn main() -> Result<()> {
         Cmd::LatencyTests => {
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             latency_tests(dev_fed).await?;
+        }
+        Cmd::ReconnectTest => {
+            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            reconnect_test(dev_fed, &process_mgr).await?;
         }
     }
     Ok(())

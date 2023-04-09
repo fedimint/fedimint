@@ -3,51 +3,6 @@
 
 set -euo pipefail
 export RUST_LOG="${RUST_LOG:-info}"
+source ./scripts/build.sh
 
-source ./scripts/setup-tests.sh
-
-server4=$(tail -4 $FM_PID_FILE | head -1)
-server3=$(tail -3 $FM_PID_FILE | head -1)
-server2=$(tail -2 $FM_PID_FILE | head -1)
-server1=$(tail -1 $FM_PID_FILE | head -1)
-
-function kill_server() {
-  echo "Killing server $1..."
-  kill $1
-  tail --pid=$1 -f /dev/null
-  echo "Killed server $1..."
-}
-
-function generate_epochs() {
-  for ((I=0; I<$1; I++)); do
-    mine_blocks 10
-    await_fedimint_block_sync
-  done
-}
-
-mine_blocks 110
-await_fedimint_block_sync
-await_all_peers
-
-# test a peer missing out on epochs and needing to rejoin
-kill_server $server1
-# FIXME increase this number once we can avoid processing epoch messages too far in the future
-generate_epochs 1
-
-start_federation
-# FIXME increase this number once we can avoid processing epoch messages too far in the future
-generate_epochs 1
-await_all_peers
-echo "Server 1 successfully rejoined!"
-mine_blocks 100
-
-## now test what happens if consensus needs to be restarted
-kill_server $server2
-mine_blocks 100
-await_fedimint_block_sync
-kill_server $server3
-kill_server $server4
-
-start_federation
-await_all_peers
-echo "fm success: reconnect-test"
+$FM_BIN_DIR/fedimint-bin-tests reconnect-test

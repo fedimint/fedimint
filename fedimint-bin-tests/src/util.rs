@@ -1,11 +1,18 @@
 use std::collections::HashMap;
 
-use anyhow::bail;
-use tokio::fs;
+use anyhow::{anyhow, bail};
+use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tracing::warn;
 
 use super::*;
+
+fn kill(child: &Child) {
+    let _ = nix::sys::signal::kill(
+        nix::unistd::Pid::from_raw(child.id().expect("pid should be present") as _),
+        nix::sys::signal::Signal::SIGTERM,
+    );
+}
 
 /// Kills process when all references to ProcessHandle are dropped.
 ///
@@ -14,19 +21,32 @@ use super::*;
 #[derive(Debug, Clone)]
 pub struct ProcessHandle(Arc<ProcessHandleInner>);
 
+impl ProcessHandle {
+    pub async fn kill(self) -> Result<()> {
+        let arc_process_handle_inner = self.0;
+        let mut process_handle_inner = match Arc::try_unwrap(arc_process_handle_inner) {
+            Ok(process_handler_inner) => process_handler_inner,
+            Err(_) => return Err(anyhow!("Cannot kill process because of clones")),
+        };
+        let mut child = std::mem::take(&mut process_handle_inner.child).unwrap();
+        info!("killing {}", process_handle_inner.name);
+        kill(&child);
+        child.wait().await?;
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct ProcessHandleInner {
     name: String,
-    child: Child,
+    child: Option<Child>,
 }
 
 impl Drop for ProcessHandleInner {
     fn drop(&mut self) {
+        let Some(child) = &mut self.child else { return; };
         info!("killing {}", self.name);
-        let _ = nix::sys::signal::kill(
-            nix::unistd::Pid::from_raw(self.child.id().expect("pid should be present") as _),
-            nix::sys::signal::Signal::SIGTERM,
-        );
+        kill(child);
     }
 }
 
@@ -41,7 +61,11 @@ impl ProcessManager {
     /// Logs to $FM_LOGS_DIR/{name}.{out,err}
     pub async fn spawn_daemon(&self, name: &str, mut cmd: Command) -> Result<ProcessHandle> {
         let logs_dir = env::var("FM_LOGS_DIR")?;
-        let log = fs::File::create(format!("{logs_dir}/{name}.log"))
+        let path = format!("{logs_dir}/{name}.log");
+        let log = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
             .await?
             .into_std()
             .await;
@@ -51,7 +75,7 @@ impl ProcessManager {
         let child = cmd.cmd.spawn()?;
         Ok(ProcessHandle(Arc::new(ProcessHandleInner {
             name: name.to_owned(),
-            child,
+            child: Some(child),
         })))
     }
 }
