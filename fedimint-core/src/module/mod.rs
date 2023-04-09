@@ -1,7 +1,7 @@
 pub mod audit;
 pub mod interconnect;
 pub mod registry;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -818,16 +818,19 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
 
-    /// This function is called once before transaction processing starts. All
-    /// module consensus items of this round are supplied as
+    /// This function is called once before transaction processing starts.
+    ///
+    /// All module consensus items of this round are supplied as
     /// `consensus_items`. The database transaction will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions.
+    /// results are available when processing transactions. Returns any
+    /// peers that need to be dropped.
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, <Self::Common as ModuleCommon>::ConsensusItem)>,
-    );
+        consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId>;
 
     /// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a
@@ -906,7 +909,7 @@ pub trait ServerModule: Debug + Sized {
     /// returns a list of peers to drop if any are misbehaving.
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId>;
 

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs::read_dir;
 use std::future::Future;
@@ -176,7 +176,7 @@ where
             );
         }
 
-        let peers: HashSet<PeerId> = self.members.iter().map(|p| p.0).collect();
+        let peers: BTreeSet<PeerId> = self.members.iter().map(|p| p.0).collect();
         for (_peer, member, db, module_instance_id) in &mut self.members {
             let database = db as &mut Database;
             let mut dbtx = database.begin_transaction().await;
@@ -184,7 +184,7 @@ where
                 let mut module_dbtx = dbtx.with_module_prefix(*module_instance_id);
 
                 member
-                    .begin_consensus_epoch(&mut module_dbtx, consensus.clone())
+                    .begin_consensus_epoch(&mut module_dbtx, consensus.clone(), &peers)
                     .await;
 
                 let cache = member.build_verification_cache(inputs.iter());

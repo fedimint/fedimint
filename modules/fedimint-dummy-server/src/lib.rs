@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 
 use async_trait::async_trait;
@@ -160,7 +160,9 @@ impl ServerModule for Dummy {
         &'a self,
         _dbtx: &mut ModuleDatabaseTransaction<'b>,
         _consensus_items: Vec<(PeerId, DummyConsensusItem)>,
-    ) {
+        _consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId> {
+        vec![]
     }
 
     fn build_verification_cache<'a>(
@@ -209,7 +211,7 @@ impl ServerModule for Dummy {
 
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        _consensus_peers: &HashSet<PeerId>,
+        _consensus_peers: &BTreeSet<PeerId>,
         _dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         vec![]

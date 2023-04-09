@@ -4,7 +4,7 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use fedimint_core::module::audit::Audit;
@@ -67,16 +67,19 @@ pub trait IServerModule: Debug {
         module_instance_id: ModuleInstanceId,
     ) -> ConsensusProposal<DynModuleConsensusItem>;
 
-    /// This function is called once before transaction processing starts. All
-    /// module consensus items of this round are supplied as
+    /// This function is called once before transaction processing starts.
+    ///
+    /// All module consensus items of this round are supplied as
     /// `consensus_items`. The database transaction will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions.
+    /// results are available when processing transactions. Returns any
+    /// peers that need to be dropped.
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
-    );
+        consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId>;
 
     /// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a
@@ -152,7 +155,7 @@ pub trait IServerModule: Debug {
     /// returns a list of peers to drop if any are misbehaving.
     async fn end_consensus_epoch<'a>(
         &self,
-        consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
     ) -> Vec<PeerId>;
 
@@ -219,16 +222,19 @@ where
             .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
     }
 
-    /// This function is called once before transaction processing starts. All
-    /// module consensus items of this round are supplied as
+    /// This function is called once before transaction processing starts.
+    ///
+    /// All module consensus items of this round are supplied as
     /// `consensus_items`. The database transaction will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions.
+    /// results are available when processing transactions. Returns any
+    /// peers that need to be dropped.
     async fn begin_consensus_epoch<'a>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, DynModuleConsensusItem)>,
-    ) {
+        consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId> {
         <Self as ServerModule>::begin_consensus_epoch(
             self,
             dbtx,
@@ -246,6 +252,7 @@ where
                     )
                 })
                 .collect(),
+            consensus_peers
         )
         .await
     }
@@ -387,7 +394,7 @@ where
     /// returns a list of peers to drop if any are misbehaving.
     async fn end_consensus_epoch<'a>(
         &self,
-        consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
     ) -> Vec<PeerId> {
         <Self as ServerModule>::end_consensus_epoch(self, consensus_peers, dbtx).await
