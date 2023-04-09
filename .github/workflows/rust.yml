@@ -49,3 +49,21 @@ jobs:
       - name: Clippy workspace
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#debug.workspaceClippy
+
+  notifications:
+    if: ${{ always() && github.ref == 'refs/heads/master' }}
+    name: "Notifications"
+    timeout-minutes: 1
+    runs-on: ubuntu-22.04
+    needs: [ build ]
+
+    steps:
+    - name: Discord notifications on failure                                                         
+      # https://stackoverflow.com/a/74562058/134409
+      if: ${{ always() && contains(needs.*.result, 'failure') }}
+      # https://github.com/marketplace/actions/actions-status-discord
+      uses: sarisia/actions-status-discord@v1
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK }}
+        # current job is a success, but that's not what we're interested in
+        status: failure
