@@ -154,8 +154,8 @@ impl Federation {
             gw_cln,
             "deposit",
             "--federation-id={fed_id}",
-            "txout-proof={txout_proof}",
-            "--raw-tx={raw_tx}"
+            "--txout-proof={txout_proof}",
+            "--transaction={raw_tx}"
         )
         .run()
         .await?;
