@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use std::ffi::OsStr;
 
 use anyhow::{anyhow, bail};
+use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tracing::warn;
@@ -248,5 +248,15 @@ impl ToCmdExt for &'_ str {
             cmd: tokio::process::Command::new(self),
             args_debug: vec![self.to_owned()],
         })
+    }
+}
+
+pub trait JsonValueExt {
+    fn to_typed<T: DeserializeOwned>(self) -> Result<T>;
+}
+
+impl JsonValueExt for serde_json::Value {
+    fn to_typed<T: DeserializeOwned>(self) -> Result<T> {
+        Ok(serde_json::from_value(self)?)
     }
 }
