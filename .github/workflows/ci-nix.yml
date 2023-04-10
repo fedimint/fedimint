@@ -59,6 +59,9 @@ jobs:
         run: nix build -L .#ci.workspaceDoc
 
       - name: Run cargo audit
+        # sometimes we can't fix these immediately, yet
+        # we don't want to stop the world because of it
+        continue-on-error: true
         run: nix build -L .#ci.workspaceAudit
 
       # `ccov` job will run `cargo test`, so no need to spend time on it here
