@@ -587,6 +587,7 @@
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::Arc;
@@ -594,6 +595,7 @@
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>fedimint_client_legacy::mint::backup::Metadata;
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
@@ -1136,7 +1138,7 @@
     <span class="kw">pub async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.client
             .mint_client()
-            .back_up_ecash_to_federation()
+            .back_up_ecash_to_federation(Metadata::empty())
             .<span class="kw">await
             </span>.map_err(GatewayError::Other)<span class="question-mark">?</span>;
 
