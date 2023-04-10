@@ -48,20 +48,17 @@ impl ClientModuleGen for MintClientGen {
 
     async fn init(
         &self,
-        _cfg: Self::Config,
+        cfg: Self::Config,
         _db: Database,
-        _instance_id: ModuleInstanceId,
+        instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
     ) -> anyhow::Result<Self::Module> {
-        unimplemented!()
-        /*
-        // FIXME: give module secret to module on init
         Ok(MintClientModule {
             instance_id,
             cfg,
-            secret: ,
+            secret: module_root_secret,
             secp: Secp256k1::new(),
         })
-         */
     }
 }
 

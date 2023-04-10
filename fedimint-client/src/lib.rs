@@ -9,15 +9,21 @@ use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
-use rand::thread_rng;
+pub use fedimint_derive_secret as derivable_secret;
+use fedimint_derive_secret::{ChildId, DerivableSecret};
+use rand::distributions::{Distribution, Standard};
+use rand::{thread_rng, Rng};
 use secp256k1_zkp::Secp256k1;
+use serde::Serialize;
 
+use crate::db::ClientSecretKey;
 use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
 use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::{
@@ -30,6 +36,8 @@ use crate::transaction::{
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
+/// Database keys used by the client
+mod db;
 /// Module client interface definitions
 pub mod module;
 /// Client state machine interfaces and executor implementation
@@ -369,6 +377,8 @@ impl ClientBuilder {
 
         let api = DynFederationApi::from(WsFederationApi::from_config(&config));
 
+        let root_secret = get_client_root_secret(&db).await;
+
         let (modules, primary_module) = {
             let mut modules = ClientModuleRegistry::default();
             let mut primary_module = None;
@@ -387,7 +397,16 @@ impl ClientBuilder {
                         .module_gens
                         .get(module_config.kind())
                         .ok_or(anyhow!("Unknown module kind in config"))?
-                        .init(module_config, db.clone(), module_instance)
+                        .init(
+                            module_config,
+                            db.clone(),
+                            module_instance,
+                            // This is a divergence from the legacy client, where the child secret
+                            // keys were derived using *module kind*-specific derivation paths.
+                            // Since the new client has to support multiple, segregated modules of
+                            // the same kind we have to use the instance id instead.
+                            root_secret.child_key(ChildId(module_instance as u64)),
+                        )
                         .await?;
                     modules.register_module(module_instance, module);
                 }
@@ -431,5 +450,60 @@ impl ClientBuilder {
         Ok(Client {
             inner: client_inner,
         })
+    }
+}
+
+/// Fetches the client secret from the database or generates a new one if
+/// none is present
+pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
+    let mut tx = db.begin_transaction().await;
+    let client_secret = tx.get_value(&ClientSecretKey).await;
+    let secret = if let Some(client_secret) = client_secret {
+        client_secret
+    } else {
+        let secret: ClientSecret = thread_rng().gen();
+        let no_replacement = tx.insert_entry(&ClientSecretKey, &secret).await.is_none();
+        assert!(
+            no_replacement,
+            "We would have overwritten our secret key, aborting!"
+        );
+        secret
+    };
+    tx.commit_tx().await;
+    secret.into_root_secret()
+}
+
+/// Secret input key material from which the [`DerivableSecret`] used by the
+/// client will be seeded
+#[derive(Encodable, Decodable)]
+pub struct ClientSecret([u8; 64]);
+
+impl ClientSecret {
+    fn into_root_secret(self) -> DerivableSecret {
+        const FEDIMINT_CLIENT_NONCE: &[u8] = b"Fedimint Client Salt";
+        DerivableSecret::new_root(&self.0, FEDIMINT_CLIENT_NONCE)
+    }
+}
+
+impl Distribution<ClientSecret> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ClientSecret {
+        let mut secret = [0u8; 64];
+        rng.fill(&mut secret);
+        ClientSecret(secret)
+    }
+}
+
+impl Debug for ClientSecret {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ClientSecret([redacted])")
+    }
+}
+
+impl Serialize for ClientSecret {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(&self.0)
     }
 }

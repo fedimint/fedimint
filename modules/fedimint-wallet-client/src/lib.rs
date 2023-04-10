@@ -1,3 +1,4 @@
+use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
@@ -27,6 +28,7 @@ impl ClientModuleGen for WalletClientGen {
         _cfg: Self::Config,
         _db: Database,
         _instance_id: ModuleInstanceId,
+        _module_root_secret: DerivableSecret,
     ) -> anyhow::Result<Self::Module> {
         unimplemented!()
     }

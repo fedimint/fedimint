@@ -11,6 +11,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
+use fedimint_derive_secret::DerivableSecret;
 
 use crate::module::{ClientModule, DynClientModule, DynPrimaryClientModule};
 
@@ -39,6 +40,7 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
         cfg: Self::Config,
         db: Database,
         instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
     ) -> anyhow::Result<Self::Module>;
 
     /// Initialize a [`crate::module::PrimaryClientModule`] instance from its
@@ -82,6 +84,7 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
         db: Database,
         // FIXME: don't make modules aware of their instance id
         instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
     ) -> anyhow::Result<DynClientModule>;
 
     async fn init_primary(
@@ -117,9 +120,13 @@ where
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg = cfg.cast::<T::Config>()?;
-        Ok(self.init(typed_cfg, db, instance_id).await?.into())
+        Ok(self
+            .init(typed_cfg, db, instance_id, module_root_secret)
+            .await?
+            .into())
     }
 
     async fn init_primary(

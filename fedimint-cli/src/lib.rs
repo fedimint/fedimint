@@ -11,6 +11,8 @@ use std::{ffi, fs, result};
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
+use fedimint_client::derivable_secret::ChildId;
+use fedimint_client::get_client_root_secret;
 use fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
@@ -991,6 +993,8 @@ impl FedimintCli {
                 let cfg = cli.load_config()?;
                 let decoders = cli.load_decoders(&cfg, &self.module_gens);
                 let db = cli.load_db(&decoders)?;
+                let root_secret = get_client_root_secret(&db).await;
+
                 let (id, module_cfg) = match id {
                     ModuleSelector::Id(id) => (
                         id,
@@ -1008,7 +1012,12 @@ impl FedimintCli {
                     self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
 
                 let module = module_gen
-                    .init(module_cfg, db, id)
+                    .init(
+                        module_cfg,
+                        db,
+                        id,
+                        root_secret.child_key(ChildId(id as u64)),
+                    )
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;
 
