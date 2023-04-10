@@ -16,7 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
-use crate::{Gateway, GatewayError, Mode, Result};
+use crate::{Gateway, GatewayError, LightningMode, Result};
 
 #[derive(Debug, Clone)]
 pub struct GatewayRpcSender {
@@ -78,7 +78,7 @@ pub struct RestorePayload {
 pub struct LightningReconnectPayload {
     // Sending `None` for node_type will be interpreted as just reconnecting using the existing
     // settings
-    pub node_type: Option<Mode>,
+    pub node_type: Option<LightningMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

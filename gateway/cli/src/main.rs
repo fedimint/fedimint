@@ -11,7 +11,7 @@ use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
     LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
-use ln_gateway::Mode;
+use ln_gateway::LightningMode;
 use url::Url;
 
 #[derive(Parser)]
@@ -81,9 +81,9 @@ pub enum Commands {
         federation_id: FederationId,
     },
     // Reconnect to the Lightning Node
-    Reconnect {
+    ReconnectLightning {
         #[clap(subcommand)]
-        mode: Mode,
+        lightning_mode: LightningMode,
     },
 }
 
@@ -189,17 +189,17 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::Reconnect { mode } => {
-            let payload = match mode {
-                Mode::Cln { cln_extension_addr } => LightningReconnectPayload {
-                    node_type: Some(Mode::Cln { cln_extension_addr }),
+        Commands::ReconnectLightning { lightning_mode } => {
+            let payload = match lightning_mode {
+                LightningMode::Cln { cln_extension_addr } => LightningReconnectPayload {
+                    node_type: Some(LightningMode::Cln { cln_extension_addr }),
                 },
-                Mode::Lnd {
+                LightningMode::Lnd {
                     lnd_rpc_addr,
                     lnd_tls_cert,
                     lnd_macaroon,
                 } => LightningReconnectPayload {
-                    node_type: Some(Mode::Lnd {
+                    node_type: Some(LightningMode::Lnd {
                         lnd_rpc_addr,
                         lnd_tls_cert,
                         lnd_macaroon,

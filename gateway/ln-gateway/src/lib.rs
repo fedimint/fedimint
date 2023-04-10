@@ -61,7 +61,7 @@ const INITIAL_SCID: u64 = 1;
 pub type Result<T> = std::result::Result<T, GatewayError>;
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
-pub enum Mode {
+pub enum LightningMode {
     #[clap(name = "lnd")]
     Lnd {
         /// LND RPC address
@@ -115,7 +115,7 @@ pub struct Gateway {
     decoders: ModuleDecoderRegistry,
     module_gens: ClientModuleGenRegistry,
     lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
-    lightning_mode: Option<Mode>,
+    lightning_mode: Option<LightningMode>,
     actors: Mutex<HashMap<String, Arc<RwLock<GatewayActor>>>>,
     client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
@@ -127,7 +127,7 @@ pub struct Gateway {
 impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
-        lightning_mode: Mode,
+        lightning_mode: LightningMode,
         client_builder: DynGatewayClientBuilder,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
@@ -188,11 +188,11 @@ impl Gateway {
     }
 
     async fn create_lightning_client(
-        mode: Mode,
+        mode: LightningMode,
         task_group: TaskGroup,
     ) -> Result<Arc<RwLock<dyn ILnRpcClient>>> {
         let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = match mode {
-            Mode::Cln { cln_extension_addr } => {
+            LightningMode::Cln { cln_extension_addr } => {
                 info!(
                     "Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} ",
                     cln_extension_addr
@@ -201,7 +201,7 @@ impl Gateway {
                     NetworkLnRpcClient::new(cln_extension_addr).await?,
                 ))
             }
-            Mode::Lnd {
+            LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,

@@ -16,14 +16,14 @@ use fedimint_core::module::ModuleCommon;
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::{Gateway, Mode};
+use ln_gateway::{Gateway, LightningMode};
 use tracing::{error, info};
 use url::Url;
 
 #[derive(Parser)]
 pub struct GatewayOpts {
     #[clap(subcommand)]
-    mode: Mode,
+    mode: LightningMode,
 
     /// Path to folder containing gateway config and data files
     #[arg(long = "data-dir", env = "FM_GATEWAY_DATA_DIR")]
