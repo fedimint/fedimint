@@ -3,45 +3,33 @@
 pub mod debug;
 pub mod interconnect;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::ffi::OsString;
 use std::iter::FromIterator;
-use std::os::unix::prelude::OsStrExt;
-use std::sync::Mutex;
 
 use anyhow::format_err;
-use fedimint_core::api::WsClientConnectInfo;
-use fedimint_core::config::{ConfigResponse, ServerModuleGenRegistry};
+use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::registry::{
-    ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
-};
-use fedimint_core::module::{ApiError, ModuleError, TransactionItemAmount};
-use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::server::{DynServerModule, DynVerificationCache};
-use fedimint_core::task::TaskGroup;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
+use fedimint_core::module::{ModuleError, TransactionItemAmount};
+use fedimint_core::server::DynVerificationCache;
 use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, TransactionId};
-use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+use fedimint_logging::LOG_CONSENSUS;
 use futures::future::select_all;
 use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use thiserror::Error;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Receiver;
-use tracing::{error, info, info_span, instrument, trace, warn, Instrument};
+use tracing::{error, info_span, instrument, trace, warn, Instrument};
 
-use crate::config::api::ApiResult;
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
-    get_global_database_migrations, AcceptedTransactionKey, ClientConfigDownloadKey,
-    ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey,
-    LastEpochKey, RejectedTransactionKey, GLOBAL_DATABASE_VERSION,
+    AcceptedTransactionKey, ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey,
+    DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
 };
 use crate::net::api::ConsensusApi;
 use crate::transaction::{Transaction, TransactionError};
@@ -49,9 +37,6 @@ use crate::transaction::{Transaction, TransactionError};
 pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
 pub type HbbftConsensusOutcome = hbbft::honey_badger::Batch<Vec<ConsensusItem>, PeerId>;
 pub type HbbftMessage = hbbft::honey_badger::Message<PeerId>;
-
-/// How many txs can be stored in memory before blocking the API
-const TRANSACTION_BUFFER_SIZE: usize = 1000;
 
 // TODO remove HBBFT `Batch` from `ConsensusOutcome`
 #[derive(Debug, Clone)]
@@ -94,15 +79,14 @@ pub struct FedimintConsensus {
     pub cfg: ServerConfig,
     /// Modules config gen information
     pub module_inits: ServerModuleGenRegistry,
-    /// Modules registry information
+    /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Database storing the result of processing consensus outcomes
     pub db: Database,
     /// API for accessing state
     pub api: ConsensusApi,
     /// Cache of `ApiEvent` to include in a proposal
-    // TODO should be able to eventually remove this Mutex
-    pub api_event_cache: Mutex<HashSet<ApiEvent>>,
+    pub api_event_cache: HashSet<ApiEvent>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -120,119 +104,6 @@ pub struct FundingVerifier {
     input_amount: Amount,
     output_amount: Amount,
     fee_amount: Amount,
-}
-
-impl FedimintConsensus {
-    pub fn get_env_vars_map() -> BTreeMap<OsString, OsString> {
-        std::env::vars_os()
-            // We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
-            .collect()
-    }
-
-    /// Returns a new consensus with a receiver for handling submitted
-    /// transactions
-    pub async fn new(
-        cfg: ServerConfig,
-        db: Database,
-        module_inits: ServerModuleGenRegistry,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<(Self, Receiver<ApiEvent>)> {
-        let mut modules = BTreeMap::new();
-
-        let env = Self::get_env_vars_map();
-
-        apply_migrations(
-            &db,
-            "Global".to_string(),
-            GLOBAL_DATABASE_VERSION,
-            get_global_database_migrations(),
-        )
-        .await?;
-
-        for (module_id, module_cfg) in &cfg.consensus.modules {
-            let kind = module_cfg.kind();
-
-            let Some(init) = module_inits.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
-            };
-            info!(target: LOG_CORE,
-                module_instance_id = *module_id, kind = %kind, "Init module");
-
-            let isolated_db = db.new_isolated(*module_id);
-            apply_migrations(
-                &isolated_db,
-                init.module_kind().to_string(),
-                init.database_version(),
-                init.get_database_migrations(),
-            )
-            .await?;
-
-            let module = init
-                .init(
-                    cfg.get_module_config(*module_id)?,
-                    isolated_db,
-                    &env,
-                    task_group,
-                )
-                .await?;
-            modules.insert(*module_id, module);
-        }
-
-        let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
-        let client_cfg = cfg.consensus.to_config_response(&module_inits);
-        let api = ConsensusApi {
-            cfg: cfg.clone(),
-            db: db.clone(),
-            modules: ModuleRegistry::from(modules.clone()),
-            client_cfg,
-            api_sender,
-        };
-
-        Ok((
-            Self {
-                modules: ModuleRegistry::from(modules),
-                cfg,
-                module_inits,
-                db,
-                api,
-                api_event_cache: Default::default(),
-            },
-            api_receiver,
-        ))
-    }
-
-    /// Like [`Self::new`], but when you want to initialize modules separately.
-    pub fn new_with_modules(
-        cfg: ServerConfig,
-        db: Database,
-        module_inits: ServerModuleGenRegistry,
-        modules: ModuleRegistry<DynServerModule>,
-    ) -> (Self, Receiver<ApiEvent>) {
-        let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
-        let client_cfg = cfg.consensus.to_config_response(&module_inits);
-        let api = ConsensusApi {
-            cfg: cfg.clone(),
-            db: db.clone(),
-            modules: modules.clone(),
-            client_cfg,
-            api_sender,
-        };
-
-        (
-            Self {
-                modules,
-                cfg,
-                module_inits,
-                db,
-                api,
-                api_event_cache: Default::default(),
-            },
-            api_receiver,
-        )
-    }
 }
 
 impl VerificationCaches {
@@ -382,8 +253,6 @@ impl FedimintConsensus {
             let span = info_span!("Processing transaction");
             async {
                 trace!(?transaction);
-                let event = ApiEvent::Transaction(transaction.clone());
-                self.api_event_cache.lock().unwrap().remove(&event);
 
                 dbtx.set_tx_savepoint()
                     .await
@@ -522,12 +391,6 @@ impl FedimintConsensus {
             let mut peers = maybe_exists.unwrap_or_default();
             peers.extend(upgrade_signals.iter().map(|(peer, _)| peer));
             dbtx.insert_entry(&ConsensusUpgradeKey, &peers).await;
-
-            // Remove our upgrade signal event if we signaled
-            if peers.contains(&self.cfg.local.identity) {
-                let mut cache = self.api_event_cache.lock().expect("locks");
-                cache.remove(&ApiEvent::UpgradeSignal);
-            }
         }
     }
 
@@ -640,8 +503,6 @@ impl FedimintConsensus {
 
         let mut items: Vec<ConsensusItem> = self
             .api_event_cache
-            .lock()
-            .unwrap()
             .iter()
             .cloned()
             .map(|event| match event {

@@ -62,7 +62,7 @@ pub struct ConsensusApi {
     pub cfg: ServerConfig,
     /// Database for serving the API
     pub db: Database,
-    /// Modules registry information
+    /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Cached client config response
     pub client_cfg: ConfigResponse,
