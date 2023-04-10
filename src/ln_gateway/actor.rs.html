@@ -577,6 +577,16 @@
 <a href="#577" id="577">577</a>
 <a href="#578" id="578">578</a>
 <a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::Arc;
@@ -690,10 +700,15 @@
 
     <span class="kw">pub async fn </span>stop_subscribing_htlcs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = <span class="kw-2">&amp;</span><span class="self">self</span>.sender {
-            sender
+            <span class="kw">return </span>sender
                 .send(Arc::new(AtomicBool::new(<span class="bool-val">true</span>)))
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Couldn&#39;t send signal to shutdown HTLC thread&quot;</span>);
+                </span>.map_err(|e| {
+                    GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                        <span class="string">&quot;Couldn&#39;t send shutdown signal to HTLC thread: {:?}&quot;</span>,
+                        e
+                    ))
+                });
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -711,7 +726,12 @@
                     <span class="comment">// Sending a `LightningReconnectPayload` with `node_type` as None will use the existing
                     // credentials to reconnect to the same node.
                     </span><span class="kw">let </span>reconnect_req = LightningReconnectPayload { node_type: <span class="prelude-val">None </span>};
-                    gw_rpc_copy.send(reconnect_req).<span class="kw">await</span>.expect(<span class="string">&quot;Error sending reconnect RPC to gatewayd&quot;</span>);
+
+                    <span class="comment">// We swallow the error here and simply return `None` to alert the subscription thread that
+                    // it should shutdown since we received an error from the lightning node.
+                    </span><span class="kw">let _ </span>= gw_rpc_copy.send(reconnect_req).<span class="kw">await</span>.map_err(|e| {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Error sending reconnect RPC to gatewayd: {:?}&quot;</span>, e);
+                    });
                     <span class="prelude-val">None
                 </span>}
                 <span class="prelude-val">None </span>=&gt; {
