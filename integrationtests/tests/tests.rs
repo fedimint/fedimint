@@ -23,6 +23,7 @@ use std::time::Duration;
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
+use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::MintClient;
 use fedimint_client_legacy::transaction::legacy::Output;
 use fedimint_client_legacy::transaction::TransactionBuilder;
@@ -43,6 +44,7 @@ use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
 use fedimint_wallet_server::common::{PegOutFees, PegOutSignatureItem, Rbf};
 use fixtures::{rng, secp, sha256};
 use futures::future::{join_all, Either};
+use serde::{Deserialize, Serialize};
 use threshold_crypto::{SecretKey, SecretKeyShare};
 use tracing::log::warn;
 use tracing::{debug, info, instrument};
@@ -1219,6 +1221,41 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn ecash_backup_can_recover_metadata() -> Result<()> {
+    non_lightning_test(2, |_fed, user_send, _bitcoin, _, _| async move {
+        #[derive(Serialize, Deserialize)]
+        struct OurMetadata {
+            name: String,
+        }
+
+        let metadata = Metadata::from_json_serialized(OurMetadata {
+            name: "our_name".into(),
+        });
+
+        user_send
+            .client
+            .mint_client()
+            .back_up_ecash_to_federation(metadata.clone())
+            .await
+            .unwrap();
+
+        let mut task_group = TaskGroup::new();
+
+        assert_eq!(
+            user_send
+                .client
+                .mint_client()
+                .restore_ecash_from_federation(10, &mut task_group)
+                .await
+                .unwrap()
+                .unwrap(),
+            metadata
+        );
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn ecash_can_be_recovered() -> Result<()> {
     non_lightning_test(2, |fed, user_send, bitcoin, _, _| async move {
         let user_receive = user_send.new_user_with_peers(peers(&[0, 1, 2])).await;
@@ -1230,7 +1267,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
         user_send
             .client
             .mint_client()
-            .back_up_ecash_to_federation()
+            .back_up_ecash_to_federation(Metadata::empty())
             .await
             .unwrap();
 

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_client_legacy::modules::ln::route_hints::RouteHint;
 use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
@@ -547,7 +548,7 @@ impl GatewayActor {
     pub async fn backup(&self) -> Result<()> {
         self.client
             .mint_client()
-            .back_up_ecash_to_federation()
+            .back_up_ecash_to_federation(Metadata::empty())
             .await
             .map_err(GatewayError::Other)?;
 
