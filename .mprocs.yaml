@@ -19,3 +19,5 @@ procs:
     shell: tail -n +0 -F $FM_LOGS_DIR/lnd.log
   bitcoind:
     shell: tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
+  fedimint-bin-tests:
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimint-dev.log
