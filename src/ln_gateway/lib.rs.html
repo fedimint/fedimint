@@ -689,7 +689,7 @@
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, GatewayError&gt;;
 
 <span class="attr">#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>Mode {
+</span><span class="kw">pub enum </span>LightningMode {
     <span class="attr">#[clap(name = <span class="string">&quot;lnd&quot;</span>)]
     </span>Lnd {
         <span class="doccomment">/// LND RPC address
@@ -743,7 +743,7 @@
     decoders: ModuleDecoderRegistry,
     module_gens: ClientModuleGenRegistry,
     lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
-    lightning_mode: <span class="prelude-ty">Option</span>&lt;Mode&gt;,
+    lightning_mode: <span class="prelude-ty">Option</span>&lt;LightningMode&gt;,
     actors: Mutex&lt;HashMap&lt;String, Arc&lt;RwLock&lt;GatewayActor&gt;&gt;&gt;&gt;,
     client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender&lt;GatewayRequest&gt;,
@@ -755,7 +755,7 @@
 <span class="kw">impl </span>Gateway {
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub async fn </span>new(
-        lightning_mode: Mode,
+        lightning_mode: LightningMode,
         client_builder: DynGatewayClientBuilder,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
@@ -816,11 +816,11 @@
     }
 
     <span class="kw">async fn </span>create_lightning_client(
-        mode: Mode,
+        mode: LightningMode,
         task_group: TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;&gt; {
         <span class="kw">let </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt; = <span class="kw">match </span>mode {
-            Mode::Cln { cln_extension_addr } =&gt; {
+            LightningMode::Cln { cln_extension_addr } =&gt; {
                 <span class="macro">info!</span>(
                     <span class="string">&quot;Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} &quot;</span>,
                     cln_extension_addr
@@ -829,7 +829,7 @@
                     NetworkLnRpcClient::new(cln_extension_addr).<span class="kw">await</span><span class="question-mark">?</span>,
                 ))
             }
-            Mode::Lnd {
+            LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,

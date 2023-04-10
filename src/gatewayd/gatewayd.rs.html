@@ -145,14 +145,14 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-<span class="kw">use </span>ln_gateway::{Gateway, Mode};
+<span class="kw">use </span>ln_gateway::{Gateway, LightningMode};
 <span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>url::Url;
 
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">pub struct </span>GatewayOpts {
     <span class="attr">#[clap(subcommand)]
-    </span>mode: Mode,
+    </span>mode: LightningMode,
 
     <span class="doccomment">/// Path to folder containing gateway config and data files
     </span><span class="attr">#[arg(long = <span class="string">&quot;data-dir&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>)]

@@ -253,7 +253,7 @@
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot};
 <span class="kw">use </span>tracing::error;
 
-<span class="kw">use crate</span>::{Gateway, GatewayError, Mode, <span class="prelude-ty">Result</span>};
+<span class="kw">use crate</span>::{Gateway, GatewayError, LightningMode, <span class="prelude-ty">Result</span>};
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayRpcSender {
@@ -315,7 +315,7 @@
 </span><span class="kw">pub struct </span>LightningReconnectPayload {
     <span class="comment">// Sending `None` for node_type will be interpreted as just reconnecting using the existing
     // settings
-    </span><span class="kw">pub </span>node_type: <span class="prelude-ty">Option</span>&lt;Mode&gt;,
+    </span><span class="kw">pub </span>node_type: <span class="prelude-ty">Option</span>&lt;LightningMode&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]

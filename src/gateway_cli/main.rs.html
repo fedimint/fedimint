@@ -257,7 +257,7 @@
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
     LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
-<span class="kw">use </span>ln_gateway::Mode;
+<span class="kw">use </span>ln_gateway::LightningMode;
 <span class="kw">use </span>url::Url;
 
 <span class="attr">#[derive(Parser)]
@@ -327,9 +327,9 @@
         </span>federation_id: FederationId,
     },
     <span class="comment">// Reconnect to the Lightning Node
-    </span>Reconnect {
+    </span>ReconnectLightning {
         <span class="attr">#[clap(subcommand)]
-        </span>mode: Mode,
+        </span>lightning_mode: LightningMode,
     },
 }
 
@@ -435,17 +435,17 @@
 
             print_response(response).<span class="kw">await</span>;
         }
-        Commands::Reconnect { mode } =&gt; {
-            <span class="kw">let </span>payload = <span class="kw">match </span>mode {
-                Mode::Cln { cln_extension_addr } =&gt; LightningReconnectPayload {
-                    node_type: <span class="prelude-val">Some</span>(Mode::Cln { cln_extension_addr }),
+        Commands::ReconnectLightning { lightning_mode } =&gt; {
+            <span class="kw">let </span>payload = <span class="kw">match </span>lightning_mode {
+                LightningMode::Cln { cln_extension_addr } =&gt; LightningReconnectPayload {
+                    node_type: <span class="prelude-val">Some</span>(LightningMode::Cln { cln_extension_addr }),
                 },
-                Mode::Lnd {
+                LightningMode::Lnd {
                     lnd_rpc_addr,
                     lnd_tls_cert,
                     lnd_macaroon,
                 } =&gt; LightningReconnectPayload {
-                    node_type: <span class="prelude-val">Some</span>(Mode::Lnd {
+                    node_type: <span class="prelude-val">Some</span>(LightningMode::Lnd {
                         lnd_rpc_addr,
                         lnd_tls_cert,
                         lnd_macaroon,
