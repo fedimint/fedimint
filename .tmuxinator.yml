@@ -36,3 +36,8 @@ windows:
       panes:
         - bitcoind:
           - tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
+  - fedimint_dkg:
+      panes:
+        - log:
+          - tail -n +0 -F $FM_LOGS_DIR/fedimint-dev.log
+
