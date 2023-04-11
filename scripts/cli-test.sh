@@ -29,12 +29,12 @@ rm $FM_DATA_DIR/client.json
 $FM_MINT_CLIENT join-federation "$CONNECT_STRING"
 
 FED_ID="$(get_federation_id)"
-[[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.id')" = "${FED_ID}" ]]
-# Number required for one honest is ceil(($FM_FED_SIZE-1)/3+1)
-ONE_HONEST=2
-ONE_HONEST_URLS=$(cat $FM_DATA_DIR/client.json | jq --argjson one_honest $ONE_HONEST -e -r '.api_endpoints | to_entries[:$one_honest] | map(.value.url) | join(",")')
-[[ "$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.urls | join(",")')" = "$ONE_HONEST_URLS" ]]
-[[ "$($FM_MINT_CLIENT encode-connect-info --urls $ONE_HONEST_URLS --id $FED_ID | jq -e -r '.connect_info')" = "$CONNECT_STRING" ]]
+URL=$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.url')
+TOKEN=$($FM_MINT_CLIENT decode-connect-info "$CONNECT_STRING" | jq -e -r '.download_token')
+if [[ "$($FM_MINT_CLIENT encode-connect-info --url $URL --download-token $TOKEN --id $FED_ID | jq -e -r '.connect_info')" != "${CONNECT_STRING}" ]]; then
+  echo "failed to decode and encode the client connection info string"
+  exit 1
+fi
 
 # reissue
 NOTES=$($FM_MINT_CLIENT spend '42000msat' | jq -e -r '.note')

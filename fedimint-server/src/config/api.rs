@@ -390,6 +390,7 @@ impl ConfigGenApi {
             api_auth: connection.auth,
             p2p_bind: connection.settings.p2p_bind,
             api_bind: connection.settings.api_bind,
+            download_token_limit: connection.settings.download_token_limit,
         };
 
         let params = ConfigGenParams { local, consensus };
@@ -412,11 +413,15 @@ pub struct ConfigGenParamsLocal {
     pub p2p_bind: SocketAddr,
     /// Bind address for API communication
     pub api_bind: SocketAddr,
+    /// Limit on the number of times a config download token can be used
+    pub download_token_limit: Option<u64>,
 }
 
 /// All the connections info we configure locally without talking to peers
 #[derive(Debug, Clone)]
 pub struct ConfigGenSettings {
+    /// Limit on the number of times a config download token can be used
+    pub download_token_limit: Option<u64>,
     /// Bind address for our P2P connection
     pub p2p_bind: SocketAddr,
     /// Bind address for our API connection
@@ -721,6 +726,7 @@ mod tests {
     use url::Url;
 
     use crate::config::api::{run_server, ConfigGenConnectionsRequest, ConfigGenSettings};
+    use crate::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
@@ -744,6 +750,7 @@ mod tests {
                 .parse()
                 .expect("parses");
             let our_connections = ConfigGenSettings {
+                download_token_limit: Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
                 p2p_bind,
                 api_bind,
                 p2p_url,

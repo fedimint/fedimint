@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 
+use fedimint_core::api::ClientConfigDownloadToken;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
@@ -22,6 +23,7 @@ pub enum DbKeyPrefix {
     LastEpoch = 0x06,
     ClientConfigSignature = 0x07,
     ConsensusUpgrade = 0x08,
+    ClientConfigDownload = 0x09,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -125,6 +127,22 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::ConsensusUpgrade,
 );
 
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ClientConfigDownloadKeyPrefix;
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ClientConfigDownloadKey(pub ClientConfigDownloadToken);
+
+impl_db_record!(
+    key = ClientConfigDownloadKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::ClientConfigDownload
+);
+impl_db_lookup!(
+    key = ClientConfigDownloadKey,
+    query_prefix = ClientConfigDownloadKeyPrefix
+);
+
 pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
     MigrationMap::new()
 }
@@ -135,6 +153,7 @@ mod fedimint_migration_tests {
 
     use bitcoin::{secp256k1, KeyPair};
     use bitcoin_hashes::Hash;
+    use fedimint_core::api::ClientConfigDownloadToken;
     use fedimint_core::core::DynInput;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::epoch::{
@@ -150,6 +169,7 @@ mod fedimint_migration_tests {
     use futures::StreamExt;
     use rand::distributions::{Distribution, Standard};
     use rand::rngs::OsRng;
+    use rand::Rng;
     use secp256k1_zkp::Message;
     use strum::IntoEnumIterator;
     use threshold_crypto::SignatureShare;
@@ -161,9 +181,10 @@ mod fedimint_migration_tests {
     use crate::consensus::AcceptedTransaction;
     use crate::core::DynOutput;
     use crate::db::{
-        get_global_database_migrations, AcceptedTransactionKeyPrefix,
-        ClientConfigSignatureKeyPrefix, DbKeyPrefix, DropPeerKeyPrefix, EpochHistoryKeyPrefix,
-        RejectedTransactionKeyPrefix, GLOBAL_DATABASE_VERSION,
+        get_global_database_migrations, AcceptedTransactionKeyPrefix, ClientConfigDownloadKey,
+        ClientConfigDownloadKeyPrefix, ClientConfigSignatureKeyPrefix, DbKeyPrefix,
+        DropPeerKeyPrefix, EpochHistoryKeyPrefix, RejectedTransactionKeyPrefix,
+        GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -229,6 +250,12 @@ mod fedimint_migration_tests {
         let serde_sig = SerdeSignature(Standard.sample(&mut OsRng));
         dbtx.insert_new_entry(&ClientConfigSignatureKey, &serde_sig)
             .await;
+
+        dbtx.insert_new_entry(
+            &ClientConfigDownloadKey(ClientConfigDownloadToken(OsRng::default().gen())),
+            &0,
+        )
+        .await;
 
         let mut peers: BTreeSet<PeerId> = BTreeSet::new();
         peers.insert(0.into());
@@ -338,6 +365,18 @@ mod fedimint_migration_tests {
                             }
                             DbKeyPrefix::ConsensusUpgrade => {
                                 assert!(dbtx.get_value(&ConsensusUpgradeKey).await.is_some());
+                            }
+                            DbKeyPrefix::ClientConfigDownload => {
+                                let downloads = dbtx
+                                    .find_by_prefix(&ClientConfigDownloadKeyPrefix)
+                                    .await
+                                    .collect::<Vec<_>>()
+                                    .await;
+                                let downloads_len = downloads.len();
+                                assert!(
+                                    downloads_len > 0,
+                                    "validate_migrations was not able to read any ClientConfigDownloadKey"
+                                );
                             }
                             // Module prefix is reserved for modules, no migration testing is needed
                             DbKeyPrefix::Module => {}

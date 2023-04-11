@@ -23,7 +23,7 @@ use fedimint_client_legacy::{
     module_decode_stubs, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
 };
 use fedimint_core::admin_client::PeerServerParams;
-use fedimint_core::api::WsFederationApi;
+use fedimint_core::api::{WsClientConnectInfo, WsFederationApi};
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
@@ -511,6 +511,7 @@ pub fn gen_local(
                 *peer,
                 peer_params.clone(),
                 federation_name.to_string(),
+                Some(1),
                 modules.clone(),
             );
             Ok((*peer, params))
@@ -823,6 +824,7 @@ pub struct FederationTest {
     pub mint_id: ModuleInstanceId,
     pub ln_id: ModuleInstanceId,
     pub wallet_id: ModuleInstanceId,
+    pub connect_info: WsClientConnectInfo,
 }
 
 struct ServerTest {
@@ -951,6 +953,7 @@ impl FederationTest {
             mint_id: self.mint_id,
             ln_id: self.ln_id,
             wallet_id: self.wallet_id,
+            connect_info: self.connect_info.clone(),
         }
     }
 
@@ -1497,11 +1500,12 @@ impl FederationTest {
             max_balance_sheet,
             last_consensus,
             decoders: module_inits.decoders(cfg.iter_module_instances()).unwrap(),
-            cfg,
+            cfg: cfg.clone(),
             wallet,
             mint_id: LEGACY_HARDCODED_INSTANCE_ID_MINT,
             ln_id: LEGACY_HARDCODED_INSTANCE_ID_LN,
             wallet_id: LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            connect_info: cfg.get_connect_info(),
         }
     }
 }

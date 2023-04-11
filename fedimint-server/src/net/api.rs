@@ -6,6 +6,8 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
+use bitcoin_hashes::sha256;
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::ConfigResponse;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::epoch::SerdeEpochHistory;
@@ -258,8 +260,14 @@ fn server_endpoints() -> Vec<ApiEndpoint<FedimintConsensus>> {
         },
         api_endpoint! {
             "/config",
-            async |fedimint: &FedimintConsensus, context, _v: ()| -> ConfigResponse {
-                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await)
+            async |fedimint: &FedimintConsensus, context, info: WsClientConnectInfo| -> ConfigResponse {
+                fedimint.download_config_with_token(info, &mut context.dbtx()).await
+            }
+        },
+        api_endpoint! {
+            "/config_hash",
+            async |fedimint: &FedimintConsensus, context, _v: ()| -> sha256::Hash {
+                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await.consensus_hash)
             }
         },
         api_endpoint! {

@@ -11,16 +11,16 @@ use axum::routing::{get, post};
 use axum::Router;
 use axum_macros::debug_handler;
 use bitcoin::Network;
-use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
 use fedimint_server::config::io::{
-    create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
+    create_cert, parse_peer_params, read_server_config, write_server_config, CONSENSUS_CONFIG,
+    JSON_EXT,
 };
-use fedimint_server::config::{ConfigGenParams, ServerConfig, ServerConfigConsensus};
+use fedimint_server::config::{ConfigGenParams, ServerConfig};
 use fedimint_server::net::peers::DelayCalculator;
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
@@ -68,23 +68,9 @@ async fn run_page(axum::extract::State(state): axum::extract::State<MutableState
     RunTemplate {
         state: match state.dkg_state {
             Some(DkgState::Success) => {
-                let path = state
-                    .data_dir
-                    .join(CONSENSUS_CONFIG)
-                    .with_extension(JSON_EXT);
                 // TODO: refactor be a standalone function
-                match std::fs::File::open(path) {
-                    Ok(file) => match serde_json::from_reader(file) {
-                        Ok::<ServerConfigConsensus, _>(consensus_config) => {
-                            let cfg = consensus_config
-                                .to_config_response(&state.module_gens)
-                                .client;
-                            let connect_info = WsClientConnectInfo::from_honest_peers(&cfg);
-
-                            RunTemplateState::DkgDone(connect_info.to_string())
-                        }
-                        Err(e) => RunTemplateState::LocalIoError(e.to_string()),
-                    },
+                match read_server_config(&state.password, state.data_dir.clone()) {
+                    Ok(cfg) => RunTemplateState::DkgDone(cfg.get_connect_info().to_string()),
                     Err(e) => RunTemplateState::LocalIoError(e.to_string()),
                 }
             }
@@ -352,16 +338,8 @@ impl IntoResponse for UIError {
 
 async fn qr(axum::extract::State(state): axum::extract::State<MutableState>) -> impl IntoResponse {
     let state = state.lock().await;
-    let path = state.data_dir.join("client.json");
-    let connection_string: String = match std::fs::File::open(path) {
-        Ok(file) => {
-            let cfg: ClientConfig =
-                serde_json::from_reader(file).expect("Could not parse cfg file.");
-            let connect_info = WsClientConnectInfo::from_honest_peers(&cfg);
-            connect_info.to_string()
-        }
-        Err(_) => "".into(),
-    };
+    let cfg = read_server_config(&state.password, state.data_dir.clone()).expect("reads cfg file");
+    let connection_string = cfg.get_connect_info().to_string();
     let png_bytes: Vec<u8> =
         qrcode_generator::to_png_to_vec(connection_string, QrCodeEcc::Low, 1024).unwrap();
     ([(axum::http::header::CONTENT_TYPE, "image/png")], png_bytes)

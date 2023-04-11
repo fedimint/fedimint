@@ -11,6 +11,7 @@ use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
 use fedimint_core::admin_client::{
     ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
 };
+use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
@@ -29,6 +30,7 @@ use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
 use itertools::Itertools;
 use rand::rngs::OsRng;
+use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
@@ -50,6 +52,9 @@ pub mod io;
 
 /// The maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
+
+/// How many times a config download token can be used by a client
+const DEFAULT_CONFIG_DOWNLOAD_LIMIT: u64 = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
@@ -130,6 +135,10 @@ pub struct ServerConfigLocal {
     pub max_connections: u32,
     /// Non-consensus, non-private configuration from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+    /// Required to download the client config
+    pub download_token: ClientConfigDownloadToken,
+    /// Limit on the number of times a config download token can be used
+    pub download_token_limit: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -228,6 +237,8 @@ impl ServerConfig {
             api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
+            download_token: ClientConfigDownloadToken(OsRng.gen()),
+            download_token_limit: params.local.download_token_limit,
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
@@ -246,6 +257,20 @@ impl ServerConfig {
         };
         cfg.add_modules(modules);
         cfg
+    }
+
+    pub fn get_connect_info(&self) -> WsClientConnectInfo {
+        let id = FederationId(self.consensus.auth_pk_set.public_key());
+        let url = self.consensus.api_endpoints[&self.local.identity]
+            .url
+            .clone();
+        let download_token = self.local.download_token.clone();
+
+        WsClientConnectInfo {
+            url,
+            download_token,
+            id,
+        }
     }
 
     pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {
@@ -679,6 +704,7 @@ impl ConfigGenParams {
             our_id,
             peers,
             federation_name,
+            Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
             module_params,
         ))
     }
@@ -693,6 +719,7 @@ impl ConfigGenParams {
         our_id: PeerId,
         peers: BTreeMap<PeerId, PeerServerParams>,
         federation_name: String,
+        download_token_limit: Option<u64>,
         modules: ServerModuleGenParamsRegistry,
     ) -> ConfigGenParams {
         ConfigGenParams {
@@ -702,6 +729,7 @@ impl ConfigGenParams {
                 api_auth,
                 p2p_bind,
                 api_bind,
+                download_token_limit,
             },
             consensus: ConfigGenParamsConsensus {
                 peers,

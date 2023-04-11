@@ -9,7 +9,6 @@ use fedimint_aead::{
     encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
 };
 use fedimint_core::admin_client::PeerServerParams;
-use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::ServerModuleGenRegistry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -139,10 +138,7 @@ pub fn write_server_config(
         .client;
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
-    plaintext_display_write(
-        &WsClientConnectInfo::from_honest_peers(&client_config),
-        &path.join(CLIENT_CONNECT_FILE),
-    )?;
+    plaintext_display_write(&server.get_connect_info(), &path.join(CLIENT_CONNECT_FILE))?;
     plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))?;
     encrypted_json_write(&server.private, &key, path.join(PRIVATE_CONFIG))
 }
