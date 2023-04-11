@@ -24,13 +24,31 @@ fi
 cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --all --all-targets
 
 function dump_db_content_on_termination() {
-  trap 'if [ "$?" -ne 0 ]; then echo "##Client Database"; dbtool $FM_DATA_DIR/client.db dump $FM_DATA_DIR clientpass client; echo "##Server Database"; dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass0; fi' EXIT
+  if [ -f "$FM_DATA_DIR/client.db" ]; then 
+    echo "##Client Database"; 
+    dbtool "$FM_DATA_DIR/client.db" dump "$FM_DATA_DIR" clientpass client; 
+  else
+    echo "##Client Database does not seem to exist yet, will not dump"; 
+  fi
+  if [ -d "$FM_DATA_DIR/server-0/database" ]; then 
+    echo "##Server Database"; 
+    dbtool "$FM_DATA_DIR/server-0/database" dump -- "$FM_DATA_DIR/server-0" pass0; 
+  else
+    echo "##Server Database does not seem to exist yet, will not dump"; 
+  fi
 }
+export -f dump_db_content_on_termination
+
+function register_trap_dump_db_content_on_failure() {
+  trap 'if [ "$?" -ne 0 ]; then dump_db_content_on_termination; fi' EXIT
+}
+export -f register_trap_dump_db_content_on_failure
 
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
-
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  # Call register_trap_dump_db_content_on_failure to register a trap to dump the databases on failure
+  register_trap_dump_db_content_on_failure
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/reconnect-test.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
@@ -39,8 +57,9 @@ export -f cli_test_reconnect
 
 function cli_test_upgrade() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
-
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  # Call register_trap_dump_db_content_on_failure to register a trap to dump the databases on failure
+  register_trap_dump_db_content_on_failure
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/upgrade-test.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
@@ -49,8 +68,9 @@ export -f cli_test_upgrade
 
 function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
-
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  # Call register_trap_dump_db_content_on_failure to register a trap to dump the databases on failure
+  register_trap_dump_db_content_on_failure
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/latency-test.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
@@ -59,8 +79,9 @@ export -f cli_test_latency
 
 function cli_test_cli() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
-
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  # Call register_trap_dump_db_content_on_failure to register a trap to dump the databases on failure
+  register_trap_dump_db_content_on_failure
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/cli-test.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
@@ -69,8 +90,9 @@ export -f cli_test_cli
 
 function cli_test_rust_tests() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
-
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  # Call register_trap_dump_db_content_on_failure to register a trap to dump the databases on failure
+  register_trap_dump_db_content_on_failure
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/rust-tests.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
@@ -79,8 +101,9 @@ export -f cli_test_rust_tests
 
 function cli_test_always_success() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'dump_db_on_failure; echo "## FAILED: ${FUNCNAME[0]}"' ERR 
-
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  # Call register_trap_dump_db_content_on_failure to register a trap to dump the databases on failure
+  register_trap_dump_db_content_on_failure
   echo "## START: ${FUNCNAME[0]}"
   # this must fail, so we know nix build is actually running tests
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-success-test.sh" 2>&1 | ts -s
