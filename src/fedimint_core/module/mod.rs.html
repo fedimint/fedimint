@@ -998,6 +998,9 @@
 <a href="#998" id="998">998</a>
 <a href="#999" id="999">999</a>
 <a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1024,7 +1027,8 @@
     OutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    Database, DatabaseTransaction, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
+    Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
@@ -1144,36 +1148,38 @@
 
 <span class="doccomment">/// State made available to all API endpoints for handling a request
 </span><span class="kw">pub struct </span>ApiEndpointContext&lt;<span class="lifetime">&#39;a</span>&gt; {
+    db: Database,
     dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
     has_auth: bool,
-    module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ApiEndpointContext&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">pub fn </span>new(
-        has_auth: bool,
-        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            has_auth,
-            dbtx,
-            module_id,
-        }
+    <span class="doccomment">/// `db` and `dbtx` should be isolated.
+    </span><span class="kw">pub fn </span>new(db: Database, dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;, has_auth: bool) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ db, dbtx, has_auth }
     }
 
     <span class="doccomment">/// Database tx handle, will be committed
     </span><span class="kw">pub fn </span>dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="kw">match </span><span class="self">self</span>.module_id {
-            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.dbtx.get_isolated(),
-            <span class="prelude-val">Some</span>(id) =&gt; <span class="self">self</span>.dbtx.with_module_prefix(id),
-        }
+        <span class="comment">// dbtx is already isolated.
+        </span><span class="self">self</span>.dbtx.get_isolated()
     }
 
     <span class="doccomment">/// Whether the request was authenticated as the guardian who controls this
     /// fedimint server
     </span><span class="kw">pub fn </span>has_auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.has_auth
+    }
+
+    <span class="doccomment">/// Waits for key to be present in database.
+    </span><span class="kw">pub fn </span>wait_key_exists&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: K) -&gt; <span class="kw">impl </span>Future&lt;Output = K::Value&gt;
+    <span class="kw">where
+        </span>K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        <span class="kw">let </span>db = <span class="self">self</span>.db.clone();
+        <span class="comment">// self contains dbtx which is !Send
+        // try removing this and see the error.
+        </span><span class="kw">async move </span>{ db.wait_key_exists(<span class="kw-2">&amp;</span>key).<span class="kw">await </span>}
     }
 
     <span class="doccomment">/// Attempts to commit the dbtx or returns an ApiError

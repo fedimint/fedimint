@@ -888,6 +888,11 @@
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
 <a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::iter::once;
@@ -1411,7 +1416,12 @@
         request: <span class="kw-2">&amp;</span>ApiRequestErased,
         id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
     ) -&gt; (<span class="kw-2">&amp;</span>ConfigGenApi, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="kw">let </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>db = <span class="self">self</span>.db.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
+            db = <span class="self">self</span>.db.new_isolated(id);
+            dbtx = dbtx.new_module_tx(id)
+        }
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;locks&quot;</span>);
         <span class="kw">let </span>auth = request.auth.as_ref();
         <span class="kw">let </span>has_auth = <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
@@ -1426,7 +1436,7 @@
             ConfigApiState::RunningConsensus(cfg) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>cfg.private.api_auth) == auth,
         };
 
-        (<span class="self">self</span>, ApiEndpointContext::new(has_auth, dbtx, id))
+        (<span class="self">self</span>, ApiEndpointContext::new(db, dbtx, has_auth))
     }
 }
 

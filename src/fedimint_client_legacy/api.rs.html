@@ -178,7 +178,7 @@
 };
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::{
-    CurrentConsensus, EventuallyConsistent, Retry404, UnionResponses, UnionResponsesSingle,
+    CurrentConsensus, EventuallyConsistent, UnionResponses, UnionResponsesSingle,
 };
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers};
@@ -207,9 +207,8 @@
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            Retry404::new(<span class="self">self</span>.all_members().one_honest()),
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/account&quot;</span>),
+        <span class="self">self</span>.request_current_consensus(
+            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_account&quot;</span>),
             ApiRequestErased::new(contract),
         )
         .<span class="kw">await
@@ -218,9 +217,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Sha256Hash,
     ) -&gt; FederationResult&lt;IncomingContractOffer&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            Retry404::new(<span class="self">self</span>.all_members().one_honest()),
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/offer&quot;</span>),
+        <span class="self">self</span>.request_current_consensus(
+            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_offer&quot;</span>),
             ApiRequestErased::new(payment_hash),
         )
         .<span class="kw">await
@@ -245,11 +243,13 @@
     </span>}
 
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt; {
-        <span class="kw">match </span><span class="self">self</span>.fetch_offer(payment_hash).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
-            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
-        }
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.request_current_consensus::&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt;&gt;(
+                <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/offer&quot;</span>),
+                ApiRequestErased::new(payment_hash),
+            )
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.is_some())
     }
 }
 

@@ -1134,6 +1134,36 @@
 <a href="#1134" id="1134">1134</a>
 <a href="#1135" id="1135">1135</a>
 <a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
+<a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
+<a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::ops::Sub;
@@ -1149,7 +1179,7 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, ConsensusProposal,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiRequestErased, ApiVersion, ConsensusProposal,
     CoreConsensusVersion, ExtendsCommonModuleGen, InputMeta, IntoModuleError,
     ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
 };
@@ -1884,23 +1914,34 @@
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/account&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
-                    module
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
+                    <span class="prelude-val">Ok</span>(module
                         .get_contract_account(<span class="kw-2">&amp;mut </span>context.dbtx(), contract_id)
-                        .<span class="kw">await
-                        </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
+                        .<span class="kw">await</span>)
+                }
+            },
+            <span class="macro">api_endpoint! </span>{
+                <span class="string">&quot;/wait_account&quot;</span>,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
+                    <span class="prelude-val">Ok</span>(module
+                        .wait_contract_account(context, contract_id)
+                        .<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;/offer&quot;</span>,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
-                    <span class="kw">let </span>offer = module
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
+                    <span class="prelude-val">Ok</span>(module
                         .get_offer(<span class="kw-2">&amp;mut </span>context.dbtx(), payment_hash)
-                        .<span class="kw">await
-                        </span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
-
-                    <span class="macro">debug!</span>(%payment_hash, <span class="string">&quot;Sending offer info&quot;</span>);
-                    <span class="prelude-val">Ok</span>(offer)
+                        .<span class="kw">await</span>)
+               }
+            },
+            <span class="macro">api_endpoint! </span>{
+                <span class="string">&quot;/wait_offer&quot;</span>,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
+                    <span class="prelude-val">Ok</span>(module
+                        .wait_offer(context, payment_hash)
+                        .<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
@@ -1945,6 +1986,15 @@
         dbtx.get_value(<span class="kw-2">&amp;</span>OfferKey(payment_hash)).<span class="kw">await
     </span>}
 
+    <span class="kw">pub async fn </span>wait_offer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: <span class="kw-2">&amp;mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+        payment_hash: bitcoin_hashes::sha256::Hash,
+    ) -&gt; IncomingContractOffer {
+        <span class="kw">let </span>future = context.wait_key_exists(OfferKey(payment_hash));
+        future.<span class="kw">await
+    </span>}
+
     <span class="kw">pub async fn </span>get_offers(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1962,6 +2012,16 @@
         contract_id: ContractId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ContractKey(contract_id)).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>wait_contract_account(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: <span class="kw-2">&amp;mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+        contract_id: ContractId,
+    ) -&gt; ContractAccount {
+        <span class="comment">// not using a variable here leads to a !Send error
+        </span><span class="kw">let </span>future = context.wait_key_exists(ContractKey(contract_id));
+        future.<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>list_gateways(

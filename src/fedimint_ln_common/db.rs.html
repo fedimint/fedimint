@@ -118,6 +118,8 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -155,6 +157,7 @@
     key = ContractKey,
     value = ContractAccount,
     db_prefix = DbKeyPrefix::Contract,
+    notify_on_modify = <span class="bool-val">true</span>,
 );
 <span class="macro">impl_db_lookup!</span>(key = ContractKey, query_prefix = ContractKeyPrefix);
 
@@ -184,6 +187,7 @@
     key = OfferKey,
     value = IncomingContractOffer,
     db_prefix = DbKeyPrefix::Offer,
+    notify_on_modify = <span class="bool-val">true</span>,
 );
 <span class="macro">impl_db_lookup!</span>(key = OfferKey, query_prefix = OfferKeyPrefix);
 

@@ -269,6 +269,12 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -331,12 +337,18 @@
         request: <span class="kw-2">&amp;</span>ApiRequestErased,
         id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
     ) -&gt; (<span class="kw-2">&amp;</span>FedimintConsensus, ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        <span class="kw">let </span><span class="kw-2">mut </span>db = <span class="self">self</span>.db.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
+            db = <span class="self">self</span>.db.new_isolated(id);
+            dbtx = dbtx.new_module_tx(id)
+        }
         (
             <span class="self">self</span>,
             ApiEndpointContext::new(
+                db,
+                dbtx,
                 request.auth == <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.private.api_auth.clone()),
-                <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>,
-                id,
             ),
         )
     }
