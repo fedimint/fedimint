@@ -13,6 +13,10 @@ check:
 clippy:
   cargo clippy --all --all-targets
 
+# run `cargo clippy --fix` on everything
+clippy-fix:
+  cargo clippy --all --all-targets --fix
+
 # check if ulimit is set correctly
 check-ulimit:
   #!/usr/bin/env bash
@@ -41,6 +45,11 @@ lint:
   env NO_STASH=true misc/git-hooks/pre-commit
   just clippy
   env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --profile dev --no-deps --document-private-items
+
+# fix some lint failures
+lint-fix:
+  just format
+  just clippy-fix
 
 # `cargo udeps` check
 udeps:

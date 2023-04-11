@@ -15,7 +15,7 @@ function generate_certs() {
         fed_port=$(echo "$BASE_PORT + $ID * 10" | bc -l)
         api_port=$(echo "$BASE_PORT + $ID * 10 + 1" | bc -l)
         export FM_PASSWORD="pass$ID"
-        docker run -v $1/server-$ID:/var/fedimint -e FM_PASSWORD=pass$ID $2 distributedgen create-cert --p2p-url ws://server-$ID:$fed_port --api-url ws://server-$ID:$api_port --out-dir /var/fedimint --name "Server-$ID"
+        docker run -v $1/server-$ID:/var/fedimint -e FM_PASSWORD=pass$ID $2 distributedgen create-cert --p2p-url ws://server-$ID:$fed_port --api-url ws://server-$ID:$api_port --out-dir /var/fedimint --name "Server $ID!"
         CERTS="$CERTS,$(cat $1/server-$ID/tls-cert)"
     done
     export CERTS=${CERTS:1}

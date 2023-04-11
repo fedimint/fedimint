@@ -1,7 +1,7 @@
 pub mod audit;
 pub mod interconnect;
 pub mod registry;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -24,7 +24,8 @@ use crate::core::{
     OutputOutcome,
 };
 use crate::db::{
-    Database, DatabaseTransaction, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
+    Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -144,36 +145,38 @@ impl ApiError {
 
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'a> {
+    db: Database,
     dbtx: DatabaseTransaction<'a>,
     has_auth: bool,
-    module_id: Option<ModuleInstanceId>,
 }
 
 impl<'a> ApiEndpointContext<'a> {
-    pub fn new(
-        has_auth: bool,
-        dbtx: DatabaseTransaction<'a>,
-        module_id: Option<ModuleInstanceId>,
-    ) -> Self {
-        Self {
-            has_auth,
-            dbtx,
-            module_id,
-        }
+    /// `db` and `dbtx` should be isolated.
+    pub fn new(db: Database, dbtx: DatabaseTransaction<'a>, has_auth: bool) -> Self {
+        Self { db, dbtx, has_auth }
     }
 
     /// Database tx handle, will be committed
     pub fn dbtx(&mut self) -> ModuleDatabaseTransaction<'_> {
-        match self.module_id {
-            None => self.dbtx.get_isolated(),
-            Some(id) => self.dbtx.with_module_prefix(id),
-        }
+        // dbtx is already isolated.
+        self.dbtx.get_isolated()
     }
 
     /// Whether the request was authenticated as the guardian who controls this
     /// fedimint server
     pub fn has_auth(&self) -> bool {
         self.has_auth
+    }
+
+    /// Waits for key to be present in database.
+    pub fn wait_key_exists<K>(&self, key: K) -> impl Future<Output = K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        let db = self.db.clone();
+        // self contains dbtx which is !Send
+        // try removing this and see the error.
+        async move { db.wait_key_exists(&key).await }
     }
 
     /// Attempts to commit the dbtx or returns an ApiError
@@ -818,16 +821,19 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
 
-    /// This function is called once before transaction processing starts. All
-    /// module consensus items of this round are supplied as
+    /// This function is called once before transaction processing starts.
+    ///
+    /// All module consensus items of this round are supplied as
     /// `consensus_items`. The database transaction will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions.
+    /// results are available when processing transactions. Returns any
+    /// peers that need to be dropped.
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, <Self::Common as ModuleCommon>::ConsensusItem)>,
-    );
+        consensus_peers: &BTreeSet<PeerId>,
+    ) -> Vec<PeerId>;
 
     /// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a
@@ -906,7 +912,7 @@ pub trait ServerModule: Debug + Sized {
     /// returns a list of peers to drop if any are misbehaving.
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &BTreeSet<PeerId>,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId>;
 

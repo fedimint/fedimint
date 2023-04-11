@@ -58,9 +58,6 @@ jobs:
       - name: Run cargo doc
         run: nix build -L .#ci.workspaceDoc
 
-      - name: Run cargo audit
-        run: nix build -L .#ci.workspaceAudit
-
       # `ccov` job will run `cargo test`, so no need to spend time on it here
       # - name: Test workspace
       #   run: nix build -L .#workspaceTest
@@ -70,6 +67,28 @@ jobs:
 
       - name: Tests
         run: nix build -L .#ci.cli-test.all
+
+  audit:
+    name: "Audit"
+    runs-on: buildjet-2vcpu-ubuntu-2004
+    timeout-minutes: 10
+    # sometimes we can't fix these immediately, yet
+    # we don't want to stop the world because of it
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cachix/install-nix-action@v20
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v12
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Run cargo audit
+        run: |
+          nix flake lock --update-input advisory-db
+          nix build -L .#ci.workspaceAudit
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another
@@ -219,6 +238,8 @@ jobs:
     name: "Notifications"
     timeout-minutes: 1
     runs-on: ubuntu-22.04
+    # note: we don't depend on `audit` because it will
+    # be often broken, and we can't fix it immediately
     needs: [ build, cross, ccov, containers, pkgs ]
 
     steps:

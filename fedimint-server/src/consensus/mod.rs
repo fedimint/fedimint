@@ -330,6 +330,7 @@ impl FedimintConsensus {
                 |dbtx| {
                     let consensus_outcome = consensus_outcome.clone();
                     let reference_rejected_txs = reference_rejected_txs.clone();
+                    let peers: BTreeSet<PeerId> = consensus_outcome.contributions.keys().copied().collect();
 
                     Box::pin(async move {
                         let epoch = consensus_outcome.epoch;
@@ -347,7 +348,7 @@ impl FedimintConsensus {
                             .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
                             .unzip_consensus_item();
 
-                        self.process_module_consensus_items(dbtx, &module_cis).await;
+                        self.process_module_consensus_items(dbtx, &module_cis, &peers).await;
                         self.process_upgrade_items(dbtx, &consensus_upgrade_cis).await;
 
                         let rejected_txs = self
@@ -366,7 +367,7 @@ impl FedimintConsensus {
                         }
 
                         let epoch_history = self
-                            .finalize_process_epoch(dbtx, outcome.clone(), rejected_txs)
+                            .finalize_process_epoch(dbtx, outcome.clone(), rejected_txs, &peers)
                             .await;
                         Result::<_, ()>::Ok(epoch_history)
                     })
@@ -390,7 +391,9 @@ impl FedimintConsensus {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         module_cis: &[(PeerId, fedimint_core::core::DynModuleConsensusItem)],
+        consensus_peers: &BTreeSet<PeerId>,
     ) {
+        let mut drop_peers = vec![];
         let per_module_cis: HashMap<
             ModuleInstanceId,
             Vec<(PeerId, fedimint_core::core::DynModuleConsensusItem)>,
@@ -400,10 +403,17 @@ impl FedimintConsensus {
             .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
 
         for (module_key, module_cis) in per_module_cis {
-            self.modules
+            let moduletx = &mut dbtx.with_module_prefix(module_key);
+            let mut module_drop_peers = self
+                .modules
                 .get_expect(module_key)
-                .begin_consensus_epoch(&mut dbtx.with_module_prefix(module_key), module_cis)
+                .begin_consensus_epoch(moduletx, module_cis, consensus_peers)
                 .await;
+            drop_peers.append(&mut module_drop_peers);
+        }
+
+        for peer in drop_peers {
+            dbtx.insert_entry(&DropPeerKey(peer), &()).await;
         }
     }
 
@@ -479,9 +489,8 @@ impl FedimintConsensus {
         dbtx: &mut DatabaseTransaction<'_>,
         outcome: HbbftConsensusOutcome,
         rejected_txs: BTreeSet<TransactionId>,
+        consensus_peers: &BTreeSet<PeerId>,
     ) -> SignedEpochOutcome {
-        let epoch_peers: HashSet<PeerId> = outcome.contributions.keys().copied().collect();
-
         let mut drop_peers = Vec::<PeerId>::new();
 
         self.save_client_config_sig(dbtx, &outcome, &mut drop_peers)
@@ -493,7 +502,7 @@ impl FedimintConsensus {
 
         for (module_key, module) in self.modules.iter_modules() {
             let module_drop_peers = module
-                .end_consensus_epoch(&epoch_peers, &mut dbtx.with_module_prefix(module_key))
+                .end_consensus_epoch(consensus_peers, &mut dbtx.with_module_prefix(module_key))
                 .await;
             drop_peers.extend(module_drop_peers);
         }

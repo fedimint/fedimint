@@ -91,11 +91,6 @@ impl ConfigGenApi {
         &self,
         request: ConfigGenConnectionsRequest,
     ) -> ApiResult<()> {
-        // TODO: should probably just replace bad chars with '_' in `TlsTcpConnector`
-        if rustls::ServerName::try_from(request.our_name.as_str()).is_err() {
-            return Self::bad_request("Name must be a valid domain string");
-        }
-
         let connection = {
             let mut state = self.state.lock().expect("lock poisoned");
 
@@ -526,7 +521,12 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
     ) -> (&ConfigGenApi, ApiEndpointContext<'_>) {
-        let dbtx = self.db.begin_transaction().await;
+        let mut db = self.db.clone();
+        let mut dbtx = self.db.begin_transaction().await;
+        if let Some(id) = id {
+            db = self.db.new_isolated(id);
+            dbtx = dbtx.new_module_tx(id)
+        }
         let state = self.state.lock().expect("locks");
         let auth = request.auth.as_ref();
         let has_auth = match &*state {
@@ -541,7 +541,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             ConfigApiState::RunningConsensus(cfg) => Some(&cfg.private.api_auth) == auth,
         };
 
-        (self, ApiEndpointContext::new(has_auth, dbtx, id))
+        (self, ApiEndpointContext::new(db, dbtx, has_auth))
     }
 }
 

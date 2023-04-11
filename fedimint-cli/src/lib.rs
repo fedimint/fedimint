@@ -14,6 +14,7 @@ use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
+use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
 use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
@@ -363,16 +364,16 @@ enum Command {
         /// JSON-RPC parameters for the request
         #[clap(default_value = "null")]
         params: String,
-        /// Which server to send requst to
+        /// Which server to send request to
         #[clap(long = "peer-id")]
         peer_id: Option<u16>,
     },
 
     /// Issue notes in exchange for a peg-in proof
     PegIn {
-        #[clap(value_parser = from_hex::<TxOutProof>)]
+        #[clap(long, value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
-        #[clap(value_parser = from_hex::<Transaction>)]
+        #[clap(long, value_parser = from_hex::<Transaction>)]
         transaction: Transaction,
     },
 
@@ -397,9 +398,10 @@ enum Command {
 
     /// Withdraw funds from the federation
     PegOut {
+        #[clap(long)]
         address: Address,
-        #[clap(value_parser = parse_bitcoin_amount)]
-        satoshis: bitcoin::Amount,
+        #[clap(long, value_parser = parse_bitcoin_amount)]
+        amount: bitcoin::Amount,
     },
 
     /// Pay a lightning invoice via a gateway
@@ -413,10 +415,11 @@ enum Command {
 
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
-        #[clap(value_parser = parse_fedimint_amount)]
+        #[clap(long, value_parser = parse_fedimint_amount)]
         amount: Amount,
-        #[clap(default_value = "")]
+        #[clap(long, default_value = "")]
         description: String,
+        #[clap(long)]
         expiry_time: Option<u64>,
     },
 
@@ -431,9 +434,9 @@ enum Command {
 
     /// Encode connection info from its constituent parts
     EncodeConnectInfo {
-        #[clap(long = "urls", required = true, value_delimiter = ',')]
+        #[clap(long, required = true, value_delimiter = ',')]
         urls: Vec<Url>,
-        #[clap(long = "id")]
+        #[clap(long)]
         id: FederationId,
     },
 
@@ -454,7 +457,13 @@ enum Command {
     },
 
     /// Upload the (encrypted) snapshot of mint notes to federation
-    Backup,
+    Backup {
+        #[clap(long = "metadata")]
+        /// Backup metadata, encoded as `key=value` (use `--metadata=key=value`,
+        /// possibly multiple times)
+        // TODO: Can we make it `*Map<String, String>` and avoid custom parsing?
+        metadata: Vec<String>,
+    },
 
     /// Restore the previously created backup of mint notes (with `backup`
     /// command)
@@ -465,7 +474,7 @@ enum Command {
         /// Larger values might make the restore initialization slower and
         /// memory usage slightly higher, but help restore all mint
         /// notes in some rare situations.
-        #[clap(long = "gap-limit", default_value = "100")]
+        #[clap(long, default_value = "100")]
         gap_limit: usize,
     },
 
@@ -479,12 +488,13 @@ enum Command {
     /// Signal a consensus upgrade
     SignalUpgrade {
         /// Location of the salt file
+        #[clap(long)]
         salt_path: PathBuf,
         /// Peer id of the guardian
-        #[arg(value_parser = parse_peer_id)]
+        #[arg(long, value_parser = parse_peer_id)]
         our_id: PeerId,
         /// Guardian password for authentication
-        #[arg(env = "FM_PASSWORD")]
+        #[arg(long, env = "FM_PASSWORD")]
         password: String,
     },
 
@@ -493,9 +503,11 @@ enum Command {
 
     /// Call module-specific commands
     Module {
+        #[clap(long)]
         id: ModuleSelector,
 
         /// Command with arguments to call the module with
+        #[clap(long)]
         arg: Vec<ffi::OsString>,
     },
 }
@@ -730,10 +742,10 @@ impl FedimintCli {
                     details: (details_vec),
                 })
             }
-            Command::PegOut { address, satoshis } => {
+            Command::PegOut { address, amount } => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let peg_out = client
-                    .new_peg_out_with_fees(satoshis, address)
+                    .new_peg_out_with_fees(amount, address)
                     .await
                     .map_err_cli_msg(
                         CliErrorKind::GeneralFederationError,
@@ -874,14 +886,17 @@ impl FedimintCli {
                     new_gateway: (gateway_json),
                 })
             }
-            Command::Backup => cli
-                .build_client(&self.module_gens)
-                .await?
-                .mint_client()
-                .back_up_ecash_to_federation()
-                .await
-                .map(|_| CliOutput::Backup)
-                .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed"),
+            Command::Backup { metadata } => {
+                let metadata = metadata_from_clap_cli(metadata)?;
+
+                cli.build_client(&self.module_gens)
+                    .await?
+                    .mint_client()
+                    .back_up_ecash_to_federation(Metadata::from_json_serialized(metadata))
+                    .await
+                    .map(|_| CliOutput::Backup)
+                    .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed")
+            }
             Command::Restore { gap_limit } => cli
                 .build_client(&self.module_gens)
                 .await?
@@ -984,5 +999,42 @@ impl FedimintCli {
                 ))
             }
         }
+    }
+}
+
+/// Convert clap arguments to backup metadata
+fn metadata_from_clap_cli(metadata: Vec<String>) -> Result<BTreeMap<String, String>, CliError> {
+    let metadata: BTreeMap<String, String> = metadata
+        .into_iter()
+        .map(|item| {
+            match &item
+                .splitn(2, '=')
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()[..]
+            {
+                [] => Err(anyhow::format_err!("Empty metadata argument not allowed")),
+                [key] => Err(anyhow::format_err!("Metadata {key} is missing a value")),
+                [key, val] => Ok((key.clone(), val.clone())),
+                [..] => unreachable!(),
+            }
+        })
+        .collect::<anyhow::Result<_>>()
+        .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid metadata")?;
+    Ok(metadata)
+}
+
+#[test]
+fn metadata_from_clap_cli_test() {
+    for (args, expected) in [
+        (
+            vec!["a=b".to_string()],
+            BTreeMap::from([("a".into(), "b".into())]),
+        ),
+        (
+            vec!["a=b".to_string(), "c=d".to_string()],
+            BTreeMap::from([("a".into(), "b".into()), ("c".into(), "d".into())]),
+        ),
+    ] {
+        assert_eq!(metadata_from_clap_cli(args).unwrap(), expected);
     }
 }

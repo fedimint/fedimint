@@ -89,7 +89,6 @@ fn gen_tls(
     let (cert, pk) = gen_cert_and_key(&name)?;
     encrypted_write(pk.0, key, dir_out_path.join(TLS_PK))?;
 
-    rustls::ServerName::try_from(name.as_str())?;
     // TODO Base64 encode name, hash fingerprint cert_string
     let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, cert.0.to_hex());
     fs::write(dir_out_path.join(TLS_CERT), &cert_url)?;

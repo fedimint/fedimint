@@ -50,17 +50,17 @@ struct RecoveryTool {
     #[arg(long = "cfg")]
     config: Option<PathBuf>,
     /// The password that encrypts the configs
-    #[arg(long = "password", env = "FM_PASSWORD", requires = "config")]
+    #[arg(long, env = "FM_PASSWORD", requires = "config")]
     password: String,
     /// Wallet descriptor, can be used instead of --cfg
-    #[arg(long = "descriptor")]
+    #[arg(long)]
     descriptor: Option<PegInDescriptor>,
     /// Wallet secret key, can be used instead of config together with
     /// --descriptor
-    #[arg(long = "key", requires = "descriptor")]
+    #[arg(long, requires = "descriptor")]
     key: Option<SecretKey>,
     /// Network to operate on, has to be specified if --cfg isn't present
-    #[arg(long = "network", default_value = "bitcoin", requires = "descriptor")]
+    #[arg(long, default_value = "bitcoin", requires = "descriptor")]
     network: Network,
     #[command(subcommand)]
     strategy: TweakSource,
@@ -70,17 +70,17 @@ struct RecoveryTool {
 enum TweakSource {
     /// Derive the wallet descriptor using a single tweak
     Direct {
-        #[arg(value_parser = tweak_parser)]
+        #[arg(long, value_parser = tweak_parser)]
         tweak: [u8; 32],
     },
     /// Derive all wallet descriptors of confirmed UTXOs in the on-chain wallet.
     /// Note that unconfirmed change UTXOs will not appear here.
     Utxos {
         /// Extract UTXOs from a database without module partitioning
-        #[arg(long = "legacy")]
+        #[arg(long)]
         legacy: bool,
         /// Path to database
-        #[arg(long = "db")]
+        #[arg(long)]
         db: PathBuf,
     },
     /// Derive all wallet descriptors of tweaks that were ever used according to
@@ -88,7 +88,7 @@ enum TweakSource {
     /// contain many empty descriptors.
     Epochs {
         /// Path to database
-        #[arg(long = "db")]
+        #[arg(long)]
         db: PathBuf,
     },
 }

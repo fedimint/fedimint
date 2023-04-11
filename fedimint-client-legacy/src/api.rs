@@ -9,7 +9,7 @@ use fedimint_core::core::{
 };
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::{
-    CurrentConsensus, EventuallyConsistent, Retry404, UnionResponses, UnionResponsesSingle,
+    CurrentConsensus, EventuallyConsistent, UnionResponses, UnionResponsesSingle,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
@@ -38,9 +38,8 @@ where
     T: IFederationApi + MaybeSend + MaybeSync + 'static,
 {
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
-        self.request_with_strategy(
-            Retry404::new(self.all_members().one_honest()),
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/account"),
+        self.request_current_consensus(
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_account"),
             ApiRequestErased::new(contract),
         )
         .await
@@ -49,9 +48,8 @@ where
         &self,
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer> {
-        self.request_with_strategy(
-            Retry404::new(self.all_members().one_honest()),
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/offer"),
+        self.request_current_consensus(
+            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_offer"),
             ApiRequestErased::new(payment_hash),
         )
         .await
@@ -76,11 +74,13 @@ where
     }
 
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool> {
-        match self.fetch_offer(payment_hash).await {
-            Ok(_) => Ok(true),
-            Err(e) if e.is_retryable() => Ok(false),
-            Err(e) => Err(e),
-        }
+        Ok(self
+            .request_current_consensus::<Option<IncomingContractOffer>>(
+                format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/offer"),
+                ApiRequestErased::new(payment_hash),
+            )
+            .await?
+            .is_some())
     }
 }
 

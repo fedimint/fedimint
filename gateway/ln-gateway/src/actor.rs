@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_client_legacy::modules::ln::route_hints::RouteHint;
 use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
@@ -111,10 +112,15 @@ impl GatewayActor {
 
     pub async fn stop_subscribing_htlcs(&mut self) -> Result<()> {
         if let Some(sender) = &self.sender {
-            sender
+            return sender
                 .send(Arc::new(AtomicBool::new(true)))
                 .await
-                .expect("Couldn't send signal to shutdown HTLC thread");
+                .map_err(|e| {
+                    GatewayError::Other(anyhow::anyhow!(
+                        "Couldn't send shutdown signal to HTLC thread: {:?}",
+                        e
+                    ))
+                });
         }
         Ok(())
     }
@@ -132,7 +138,12 @@ impl GatewayActor {
                     // Sending a `LightningReconnectPayload` with `node_type` as None will use the existing
                     // credentials to reconnect to the same node.
                     let reconnect_req = LightningReconnectPayload { node_type: None };
-                    gw_rpc_copy.send(reconnect_req).await.expect("Error sending reconnect RPC to gatewayd");
+
+                    // We swallow the error here and simply return `None` to alert the subscription thread that
+                    // it should shutdown since we received an error from the lightning node.
+                    let _ = gw_rpc_copy.send(reconnect_req).await.map_err(|e| {
+                        warn!("Error sending reconnect RPC to gatewayd: {:?}", e);
+                    });
                     None
                 }
                 None => {
@@ -537,7 +548,7 @@ impl GatewayActor {
     pub async fn backup(&self) -> Result<()> {
         self.client
             .mint_client()
-            .back_up_ecash_to_federation()
+            .back_up_ecash_to_federation(Metadata::empty())
             .await
             .map_err(GatewayError::Other)?;
 

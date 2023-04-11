@@ -11,7 +11,7 @@ use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
     LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
-use ln_gateway::Mode;
+use ln_gateway::LightningMode;
 use url::Url;
 
 #[derive(Parser)]
@@ -34,25 +34,35 @@ pub enum Commands {
     /// Display high-level information about the Gateway
     Info,
     /// Check gateway balance
-    Balance { federation_id: FederationId },
+    Balance {
+        #[clap(long)]
+        federation_id: FederationId,
+    },
     /// Generate a new peg-in address, funds sent to it can later be claimed
-    Address { federation_id: FederationId },
+    Address {
+        #[clap(long)]
+        federation_id: FederationId,
+    },
     /// Deposit funds into a gateway federation
     Deposit {
+        #[clap(long)]
         federation_id: FederationId,
         /// The TxOutProof which was created from sending BTC to the
         /// pegin-address
-        #[clap(value_parser = from_hex::<TxOutProof>)]
+        #[clap(long, value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
-        #[clap(value_parser = from_hex::<Transaction>)]
+        #[clap(long, value_parser = from_hex::<Transaction>)]
         transaction: Transaction,
     },
     /// Claim funds from a gateway federation
     Withdraw {
+        #[clap(long)]
         federation_id: FederationId,
         /// The amount to withdraw
+        #[clap(long)]
         amount: Amount,
         /// The address to send the funds to
+        #[clap(long)]
         address: Address,
     },
     /// Register federation with the gateway
@@ -61,13 +71,19 @@ pub enum Commands {
         connect: String,
     },
     /// Make a backup of snapshot of all ecash
-    Backup { federation_id: FederationId },
+    Backup {
+        #[clap(long)]
+        federation_id: FederationId,
+    },
     /// Restore ecash from last available snapshot or from scratch
-    Restore { federation_id: FederationId },
+    Restore {
+        #[clap(long)]
+        federation_id: FederationId,
+    },
     // Reconnect to the Lightning Node
-    Reconnect {
+    ReconnectLightning {
         #[clap(subcommand)]
-        mode: Mode,
+        lightning_mode: LightningMode,
     },
 }
 
@@ -173,17 +189,17 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::Reconnect { mode } => {
-            let payload = match mode {
-                Mode::Cln { cln_extension_addr } => LightningReconnectPayload {
-                    node_type: Some(Mode::Cln { cln_extension_addr }),
+        Commands::ReconnectLightning { lightning_mode } => {
+            let payload = match lightning_mode {
+                LightningMode::Cln { cln_extension_addr } => LightningReconnectPayload {
+                    node_type: Some(LightningMode::Cln { cln_extension_addr }),
                 },
-                Mode::Lnd {
+                LightningMode::Lnd {
                     lnd_rpc_addr,
                     lnd_tls_cert,
                     lnd_macaroon,
                 } => LightningReconnectPayload {
-                    node_type: Some(Mode::Lnd {
+                    node_type: Some(LightningMode::Lnd {
                         lnd_rpc_addr,
                         lnd_tls_cert,
                         lnd_macaroon,

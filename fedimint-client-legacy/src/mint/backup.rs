@@ -30,8 +30,8 @@ use crate::modules::mint::{MintConsensusItem, MintInput, MintOutput};
 
 impl MintClient {
     /// Prepare an encrypted backup and send it to federation for storing
-    pub async fn back_up_ecash_to_federation(&self) -> Result<()> {
-        let backup = self.prepare_ecash_backup().await?;
+    pub async fn back_up_ecash_to_federation(&self, metadata: Metadata) -> Result<()> {
+        let backup = self.prepare_ecash_backup(metadata).await?;
 
         self.upload_ecash_backup(backup).await?;
 
@@ -42,7 +42,7 @@ impl MintClient {
         &self,
         gap_limit: usize,
         task_group: &mut TaskGroup,
-    ) -> Result<Cancellable<()>> {
+    ) -> Result<Cancellable<Metadata>> {
         let backup = if let Some(backup) = self.download_ecash_backup_from_federation().await? {
             backup
         } else {
@@ -55,6 +55,7 @@ impl MintClient {
         };
 
         let mut task_group = task_group.make_subgroup().await;
+        let metadata = backup.metadata.clone();
 
         // TODO: If the client attempts any operations between while the recovery is
         // working, the recovery code will most probably miss them, which might
@@ -95,7 +96,7 @@ impl MintClient {
         }
         dbtx.commit_tx_result().await?;
 
-        Ok(Ok(()))
+        Ok(Ok(metadata))
     }
 
     pub async fn wipe_notes(&self) -> Result<()> {
@@ -186,7 +187,10 @@ impl MintClient {
         Self::get_derived_backup_signing_key_static(&self.secret)
     }
 
-    async fn prepare_plaintext_ecash_backup(&self) -> Result<PlaintextEcashBackup> {
+    async fn prepare_plaintext_ecash_backup(
+        &self,
+        metadata: Metadata,
+    ) -> Result<PlaintextEcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning
         let epoch_count = self.context.api.fetch_epoch_count().await?;
 
@@ -210,11 +214,12 @@ impl MintClient {
             pending_notes,
             next_note_idx,
             epoch_count,
+            metadata,
         })
     }
 
-    async fn prepare_ecash_backup(&self) -> Result<EcashBackup> {
-        let plaintext = self.prepare_plaintext_ecash_backup().await?;
+    async fn prepare_ecash_backup(&self, metadata: Metadata) -> Result<EcashBackup> {
+        let plaintext = self.prepare_plaintext_ecash_backup(metadata).await?;
         plaintext.encrypt_to(&self.get_derived_backup_encryption_key())
     }
 
@@ -321,6 +326,49 @@ impl MintClient {
     }
 }
 
+/// Backup metadata
+///
+/// A backup can have a blob of extra data encoded in it.
+/// We provide methods to use json encoding, but clients
+/// are free to use their own encoding.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable, Clone)]
+pub struct Metadata(Vec<u8>);
+
+impl Metadata {
+    /// Create empty metadata
+    pub fn empty() -> Self {
+        Self(vec![])
+    }
+
+    pub fn from_raw(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+
+    pub fn into_raw(self) -> Vec<u8> {
+        self.0
+    }
+
+    /// Is metadata empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Create metadata as json from typed `val`
+    pub fn from_json_serialized<T: Serialize>(val: T) -> Self {
+        Self(serde_json::to_vec(&val).expect("serializing to vec can't fail"))
+    }
+
+    /// Attempt to deserialize metadata as typed json
+    pub fn to_json_deserialized<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+        Ok(serde_json::from_slice(&self.0)?)
+    }
+
+    /// Attempt to deserialize metadata as untyped json (`serde_json::Value`)
+    pub fn to_json_value<T: serde::de::DeserializeOwned>(&self) -> Result<serde_json::Value> {
+        Ok(serde_json::from_slice(&self.0)?)
+    }
+}
+
 /// Snapshot of a ecash state (notes)
 ///
 /// Used to speed up and improve privacy of ecash recovery,
@@ -331,6 +379,7 @@ pub struct PlaintextEcashBackup {
     pending_notes: Vec<(OutputFinalizationKey, NoteIssuanceRequests)>,
     epoch_count: u64,
     next_note_idx: Tiered<NoteIndex>,
+    metadata: Metadata,
 }
 
 impl PlaintextEcashBackup {
@@ -341,6 +390,7 @@ impl PlaintextEcashBackup {
             pending_notes: vec![],
             epoch_count: 0,
             next_note_idx: Tiered::default(),
+            metadata: Metadata::empty(),
         }
     }
 
