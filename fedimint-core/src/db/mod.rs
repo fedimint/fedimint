@@ -393,7 +393,7 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
 /// `ISingleUseDatabaseTransaction` without needing to make additional
 /// allocations.
 #[apply(async_trait_maybe_send!)]
-pub trait ISingleUseDatabaseTransaction<'a>: 'a + Send {
+pub trait ISingleUseDatabaseTransaction<'a>: 'a + MaybeSend {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
@@ -415,19 +415,19 @@ pub trait ISingleUseDatabaseTransaction<'a>: 'a + Send {
 
 /// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
-pub struct SingleUseDatabaseTransaction<'a, Tx: IDatabaseTransaction<'a> + Send>(
+pub struct SingleUseDatabaseTransaction<'a, Tx: IDatabaseTransaction<'a> + MaybeSend>(
     Option<Tx>,
     &'a PhantomData<()>,
 );
 
-impl<'a, Tx: IDatabaseTransaction<'a> + Send> SingleUseDatabaseTransaction<'a, Tx> {
+impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> SingleUseDatabaseTransaction<'a, Tx> {
     pub fn new(dbtx: Tx) -> SingleUseDatabaseTransaction<'a, Tx> {
         SingleUseDatabaseTransaction(Some(dbtx), &PhantomData)
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a, Tx: IDatabaseTransaction<'a> + Send> ISingleUseDatabaseTransaction<'a>
+impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction<'a>
     for SingleUseDatabaseTransaction<'a, Tx>
 {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
@@ -609,15 +609,17 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransa
 /// modules are allowed to interact with are a subset of `DatabaseTransaction`,
 /// since modules do not manage the lifetime of database transactions.
 /// Committing to the database or rolling back a transaction is not exposed.
-pub struct ModuleDatabaseTransaction<'isolated, T: Send + Encodable + 'isolated = ModuleInstanceId>
-{
+pub struct ModuleDatabaseTransaction<
+    'isolated,
+    T: MaybeSend + Encodable + 'isolated = ModuleInstanceId,
+> {
     isolated_tx: Box<dyn ISingleUseDatabaseTransaction<'isolated>>,
     decoders: &'isolated ModuleDecoderRegistry,
     commit_tracker: &'isolated mut CommitTracker,
     _marker: PhantomData<T>,
 }
 
-impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
+impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T> {
     pub fn new<'parent: 'isolated>(
         dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
         module_prefix: Option<T>,
@@ -762,13 +764,17 @@ impl<'isolated, T: Send + Encodable> ModuleDatabaseTransaction<'isolated, T> {
 /// in the raw insert/get functions. This is done to isolate modules/module
 /// instances from each other inside the database, which allows the same module
 /// to be instantiated twice or two different modules to use the same key.
-struct IsolatedDatabaseTransaction<'isolated, 'parent: 'isolated, T: Send + Encodable + 'isolated> {
+struct IsolatedDatabaseTransaction<
+    'isolated,
+    'parent: 'isolated,
+    T: MaybeSend + Encodable + 'isolated,
+> {
     inner_tx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
     prefix: Vec<u8>,
     _marker: PhantomData<T>,
 }
 
-impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
+impl<'isolated, 'parent: 'isolated, T: MaybeSend + Encodable>
     IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {
     pub fn new(
@@ -792,7 +798,8 @@ impl<'isolated, 'parent: 'isolated, T: Send + Encodable>
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'isolated, 'parent, T: Send + Encodable + 'isolated> ISingleUseDatabaseTransaction<'isolated>
+impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
+    ISingleUseDatabaseTransaction<'isolated>
     for IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
