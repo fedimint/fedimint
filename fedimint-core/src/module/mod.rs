@@ -24,7 +24,8 @@ use crate::core::{
     OutputOutcome,
 };
 use crate::db::{
-    Database, DatabaseTransaction, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
+    Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -144,36 +145,38 @@ impl ApiError {
 
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'a> {
+    db: Database,
     dbtx: DatabaseTransaction<'a>,
     has_auth: bool,
-    module_id: Option<ModuleInstanceId>,
 }
 
 impl<'a> ApiEndpointContext<'a> {
-    pub fn new(
-        has_auth: bool,
-        dbtx: DatabaseTransaction<'a>,
-        module_id: Option<ModuleInstanceId>,
-    ) -> Self {
-        Self {
-            has_auth,
-            dbtx,
-            module_id,
-        }
+    /// `db` and `dbtx` should be isolated.
+    pub fn new(db: Database, dbtx: DatabaseTransaction<'a>, has_auth: bool) -> Self {
+        Self { db, dbtx, has_auth }
     }
 
     /// Database tx handle, will be committed
     pub fn dbtx(&mut self) -> ModuleDatabaseTransaction<'_> {
-        match self.module_id {
-            None => self.dbtx.get_isolated(),
-            Some(id) => self.dbtx.with_module_prefix(id),
-        }
+        // dbtx is already isolated.
+        self.dbtx.get_isolated()
     }
 
     /// Whether the request was authenticated as the guardian who controls this
     /// fedimint server
     pub fn has_auth(&self) -> bool {
         self.has_auth
+    }
+
+    /// Waits for key to be present in database.
+    pub fn wait_key_exists<K>(&self, key: K) -> impl Future<Output = K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        let db = self.db.clone();
+        // self contains dbtx which is !Send
+        // try removing this and see the error.
+        async move { db.wait_key_exists(&key).await }
     }
 
     /// Attempts to commit the dbtx or returns an ApiError

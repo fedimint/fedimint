@@ -406,6 +406,27 @@ mod tests {
             .with(
                 format!("/module/{module_id}/account"),
                 |mint: Arc<Mutex<FakeFed<Lightning>>>, contract: ContractId| async move {
+                    Ok(Some(
+                        mint.lock()
+                            .await
+                            .fetch_from_all(|m, db, module_instance_id| async {
+                                m.get_contract_account(
+                                    &mut db
+                                        .begin_transaction()
+                                        .await
+                                        .with_module_prefix(*module_instance_id),
+                                    contract,
+                                )
+                                .await
+                            })
+                            .await
+                            .unwrap(),
+                    ))
+                },
+            )
+            .with(
+                format!("/module/{module_id}/wait_account"),
+                |mint: Arc<Mutex<FakeFed<Lightning>>>, contract: ContractId| async move {
                     Ok(mint
                         .lock()
                         .await
