@@ -214,7 +214,33 @@ impl MintClientModule {
         let available_notes = self.available_notes(dbtx).await;
         let spendable_selected_notes =
             select_notes(available_notes, min_amount).ok_or(anyhow!("Not enough funds"))?;
-        let (spend_keys, selected_notes) = spendable_selected_notes
+
+        self.create_input_from_notes(operation_id, spendable_selected_notes)
+            .await
+    }
+
+    /// Create a mint input from external, potentially untrusted notes
+    pub async fn create_input_from_notes(
+        &self,
+        operation_id: OperationId,
+        notes: TieredMulti<SpendableNote>,
+    ) -> anyhow::Result<(
+        Vec<KeyPair>,
+        MintInput,
+        StateGenerator<MintClientStateMachines>,
+    )> {
+        if let Some((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
+            let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {return true;};
+            !note.note.verify(*mint_key)
+        }) {
+            return Err(anyhow!(
+                "Invalid note in input: amt={} note={:?}",
+                amt,
+                invalid_note
+            ));
+        }
+
+        let (spend_keys, selected_notes) = notes
             .iter_items()
             .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note)))
             .unzip();
@@ -227,7 +253,7 @@ impl MintClientModule {
                     input_idx,
                 },
                 state: MintInputStates::Created(MintInputStateCreated {
-                    notes: spendable_selected_notes.clone(),
+                    notes: notes.clone(),
                 }),
             })]
         });
