@@ -10,6 +10,9 @@ use crate::maybe_add_send;
 /// Future that is `Send` unless targeting WASM
 pub type BoxFuture<'a, T> = Pin<Box<maybe_add_send!(dyn Future<Output = T> + 'a)>>;
 
+/// Stream that is `Send` unless targeting WASM
+pub type BoxStream<'a, T> = Pin<Box<maybe_add_send!(dyn futures::Stream<Item = T> + 'a)>>;
+
 // TODO: make fully RFC1738 conformant
 /// Wrapper for `Url` that only prints the scheme, domain, port and path portion
 /// of a `Url` in its `Display` implementation. This is useful to hide private
