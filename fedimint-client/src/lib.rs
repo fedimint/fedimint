@@ -245,6 +245,7 @@ impl ClientInner {
     async fn finalize_transaction(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState<DynGlobalClientContext>>)> {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
@@ -252,7 +253,12 @@ impl ClientInner {
         {
             let (keys, input, state_machines) = self
                 .primary_module
-                .create_sufficient_input(self.primary_module_instance, dbtx, missing_amount)
+                .create_sufficient_input(
+                    self.primary_module_instance,
+                    dbtx,
+                    operation_id,
+                    missing_amount,
+                )
                 .await?;
 
             partial_transaction.inputs.push(ClientInput {
@@ -267,7 +273,12 @@ impl ClientInner {
         {
             let (output, state_machines) = self
                 .primary_module
-                .create_exact_output(self.primary_module_instance, dbtx, excess_amount)
+                .create_exact_output(
+                    self.primary_module_instance,
+                    dbtx,
+                    operation_id,
+                    excess_amount,
+                )
                 .await;
             partial_transaction.outputs.push(ClientOutput {
                 output,
@@ -292,7 +303,9 @@ impl ClientInner {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId> {
-        let (transaction, mut states) = self.finalize_transaction(dbtx, tx_builder).await?;
+        let (transaction, mut states) = self
+            .finalize_transaction(dbtx, operation_id, tx_builder)
+            .await?;
         let txid = transaction.tx_hash();
 
         let tx_submission_sm = DynState::from_typed(

@@ -6,7 +6,7 @@ use std::iter::once;
 
 use anyhow::anyhow;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{ClientModule, StateGenerator};
+use fedimint_client::module::{ClientModule, PrimaryClientModule, StateGenerator};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, OperationId, State, StateTransition};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
@@ -116,6 +116,35 @@ impl ClientModule for MintClientModule {
             amount: output.0.total_amount(),
             fee: self.cfg.fee_consensus.note_issuance_abs * (output.0.count_items() as u64),
         }
+    }
+}
+
+#[apply(async_trait_maybe_send)]
+impl PrimaryClientModule for MintClientModule {
+    async fn create_sufficient_input(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        operation_id: OperationId,
+        min_amount: Amount,
+    ) -> anyhow::Result<(
+        Vec<KeyPair>,
+        <Self::Common as ModuleCommon>::Input,
+        StateGenerator<Self::States>,
+    )> {
+        self.create_input(dbtx, operation_id, min_amount).await
+    }
+
+    async fn create_exact_output(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        operation_id: OperationId,
+        amount: Amount,
+    ) -> (
+        <Self::Common as ModuleCommon>::Output,
+        StateGenerator<Self::States>,
+    ) {
+        // FIXME: don't hardcode notes per denomination
+        self.create_output(dbtx, operation_id, 2, amount).await
     }
 }
 
