@@ -90,7 +90,9 @@ rec {
     ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
     PROTOC = "${pkgs.protobuf}/bin/protoc";
     PROTOC_INCLUDE = "${pkgs.protobuf}/include";
+    CC = "${pkgs.llvmPackages_15.clang}/bin/clang";
   };
+
   commonArgsBase = {
     pname = "fedimint-workspace";
 

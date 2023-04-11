@@ -374,6 +374,7 @@
                     fi
 
                     >&2 echo "💡 Run 'just' for a list of available 'just ...' helper recipes"
+                    export CC=${commonEnvs.CC};
                   '';
                 };
               shellCommonNative = shellCommon toolchain.craneLibNative;
