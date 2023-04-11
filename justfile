@@ -79,3 +79,11 @@ fed-shell:
 # exit fed-shell session
 exit fed-shell:
   mprocs --ctl '{c: quit}' --server 127.0.0.1:4050
+
+# start tmuxinator with dev federation setup
+tmuxinator:
+  ./scripts/tmuxinator.sh
+
+# exit tmuxinator session
+exit-tmuxinator:
+  tmux kill-session -t fedimint-dev
