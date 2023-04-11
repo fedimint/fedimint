@@ -18,7 +18,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::{
-    self, route_htlc_request, route_htlc_response, CompleteHtlcsRequest, PayInvoiceRequest,
+    route_htlc_request, route_htlc_response, CompleteHtlcsRequest, PayInvoiceRequest,
     PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse, SubscribeInterceptHtlcsRequest,
     SubscribeInterceptHtlcsResponse,
 };
@@ -36,7 +36,7 @@ pub struct GatewayActor {
     pub lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
     task_group: TaskGroup,
     gw_rpc: GatewayRpcSender,
-    sender: Option<Sender<Arc<AtomicBool>>>,
+    pub sender: Sender<Arc<AtomicBool>>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +45,96 @@ pub enum BuyPreimage {
     External(Preimage),
 }
 
+#[derive(Clone)]
+struct LightningSenderStream {
+    ln_sender: Sender<RouteHtlcRequest>,
+    lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
+}
+
 type RouteHTLCStream = BoxStream<'static, std::result::Result<RouteHtlcResponse, Status>>;
+
+impl LightningSenderStream {
+    async fn subscribe_to_htlcs(
+        &self,
+        short_channel_id: u64,
+        ln_receiver: Receiver<RouteHtlcRequest>,
+    ) -> Result<RouteHTLCStream> {
+        let stream = self
+            .lnrpc
+            .write()
+            .await
+            .route_htlcs(ln_receiver.into())
+            .await?;
+
+        self.ln_sender
+            .send(RouteHtlcRequest {
+                action: Some(route_htlc_request::Action::SubscribeRequest(
+                    SubscribeInterceptHtlcsRequest { short_channel_id },
+                )),
+            })
+            .await
+            .map_err(|_| GatewayError::Other(anyhow::anyhow!("Failed to subscribe to HTLCs")))?;
+
+        info!(?short_channel_id, "Subscribed to HTLCs",);
+        Ok(stream)
+    }
+
+    async fn settle_htlc(
+        &self,
+        preimage: Preimage,
+        incoming_chan_id: u64,
+        htlc_id: u64,
+    ) -> Result<()> {
+        info!(
+            ?incoming_chan_id,
+            ?htlc_id,
+            "Successfully processed intercepted HTLC"
+        );
+        self.ln_sender
+            .send(RouteHtlcRequest {
+                action: Some(route_htlc_request::Action::CompleteRequest(
+                    CompleteHtlcsRequest {
+                        action: Some(Action::Settle(Settle {
+                            preimage: preimage.0.to_vec(),
+                        })),
+                        incoming_chan_id,
+                        htlc_id,
+                    },
+                )),
+            })
+            .await
+            .map_err(|_| GatewayError::Other(anyhow::anyhow!("Failed to complete to HTLC")))
+    }
+
+    async fn cancel_htlc(
+        &self,
+        error_message: &str,
+        incoming_chan_id: u64,
+        htlc_id: u64,
+    ) -> Result<()> {
+        // Note: this specific complete htlc requires no further action.
+        // If we fail to send the complete htlc message, or get an error
+        // result, lightning node will still
+        // cancel HTCL after expiry period lapses.
+        // Result can be safely ignored.
+        // TODO: make sure this succeeded?
+        error!("{}", error_message);
+        self.ln_sender
+            .send(RouteHtlcRequest {
+                action: Some(route_htlc_request::Action::CompleteRequest(
+                    CompleteHtlcsRequest {
+                        action: Some(Action::Cancel(Cancel {
+                            reason: error_message.to_string(),
+                        })),
+                        incoming_chan_id,
+                        htlc_id,
+                    },
+                )),
+            })
+            .await
+            .map_err(|_| GatewayError::Other(anyhow::anyhow!("Failed to cancel to HTLC")))
+    }
+}
 
 impl GatewayActor {
     pub async fn new(
@@ -89,32 +178,32 @@ impl GatewayActor {
         })
         .await;
 
+        // Create a channel that will be used to shutdown the HTLC thread
+        let (sender, receiver) = mpsc::channel::<Arc<AtomicBool>>(100);
+
         let mut actor = Self {
             client,
             lnrpc,
             task_group: tg,
             gw_rpc,
-            sender: None,
+            sender,
         };
 
-        actor.route_htlcs().await?;
+        actor.route_htlcs(receiver).await?;
 
         Ok(actor)
     }
 
     pub async fn stop_subscribing_htlcs(&mut self) -> Result<()> {
-        if let Some(sender) = &self.sender {
-            return sender
-                .send(Arc::new(AtomicBool::new(true)))
-                .await
-                .map_err(|e| {
-                    GatewayError::Other(anyhow::anyhow!(
-                        "Couldn't send shutdown signal to HTLC thread: {:?}",
-                        e
-                    ))
-                });
-        }
-        Ok(())
+        self.sender
+            .send(Arc::new(AtomicBool::new(true)))
+            .await
+            .map_err(|e| {
+                GatewayError::Other(anyhow::anyhow!(
+                    "Couldn't send shutdown signal to HTLC thread: {:?}",
+                    e
+                ))
+            })
     }
 
     async fn wait_for_htlc_or_shutdown(
@@ -150,86 +239,16 @@ impl GatewayActor {
         }
     }
 
-    async fn subscribe_to_htlcs(
-        &self,
-        ln_sender: Sender<RouteHtlcRequest>,
-        short_channel_id: u64,
-    ) -> Result<()> {
-        let res = ln_sender
-            .send(RouteHtlcRequest {
-                action: Some(route_htlc_request::Action::SubscribeRequest(
-                    SubscribeInterceptHtlcsRequest { short_channel_id },
-                )),
-            })
-            .await
-            .map_err(|_| GatewayError::Other(anyhow::anyhow!("Failed to subscribe to HTLCs")));
-
-        info!(?short_channel_id, "Subscribed to HTLCs",);
-
-        res
-    }
-
-    async fn cancel_htlc(
-        ln_sender: Sender<RouteHtlcRequest>,
-        error_message: &str,
-        intercepted_htlc_id: Vec<u8>,
-    ) -> Result<()> {
-        // Note: this specific complete htlc requires no further action.
-        // If we fail to send the complete htlc message, or get an error
-        // result, lightning node will still
-        // cancel HTCL after expiry period lapses.
-        // Result can be safely ignored.
-        // TODO: make sure this succeeded?
-        error!("{}", error_message);
-        ln_sender
-            .send(RouteHtlcRequest {
-                action: Some(route_htlc_request::Action::CompleteRequest(
-                    CompleteHtlcsRequest {
-                        intercepted_htlc_id,
-                        action: Some(Action::Cancel(Cancel {
-                            reason: error_message.to_string(),
-                        })),
-                        key: None,
-                    },
-                )),
-            })
-            .await
-            .map_err(|_| GatewayError::Other(anyhow::anyhow!("Failed to cancel to HTLC")))
-    }
-
-    async fn settle_htlc(
-        ln_sender: Sender<RouteHtlcRequest>,
-        intercepted_htlc_id: Vec<u8>,
-        preimage: Preimage,
-        key: Option<gatewaylnrpc::CircuitKey>,
-    ) -> Result<()> {
-        info!("Successfully processed intercepted HTLC");
-        ln_sender
-            .send(RouteHtlcRequest {
-                action: Some(route_htlc_request::Action::CompleteRequest(
-                    CompleteHtlcsRequest {
-                        intercepted_htlc_id,
-                        action: Some(Action::Settle(Settle {
-                            preimage: preimage.0.to_vec(),
-                        })),
-                        key,
-                    },
-                )),
-            })
-            .await
-            .map_err(|_| GatewayError::Other(anyhow::anyhow!("Failed to complete to HTLC")))
-    }
-
     async fn handle_intercepted_htlc(
         htlc: SubscribeInterceptHtlcsResponse,
-        ln_sender: Sender<RouteHtlcRequest>,
+        ln_sender: LightningSenderStream,
         actor: GatewayActor,
     ) -> Result<()> {
         let SubscribeInterceptHtlcsResponse {
             payment_hash,
             outgoing_amount_msat,
-            intercepted_htlc_id,
-            key,
+            incoming_chan_id,
+            htlc_id,
             ..
         } = htlc;
 
@@ -243,12 +262,9 @@ impl GatewayActor {
         let hash = match sha256::Hash::from_slice(&payment_hash) {
             Ok(hash) => hash,
             Err(_) => {
-                return Self::cancel_htlc(
-                    ln_sender.clone(),
-                    "Failed to parse payment hash",
-                    intercepted_htlc_id,
-                )
-                .await;
+                return ln_sender
+                    .cancel_htlc("Failed to parse payment hash", incoming_chan_id, htlc_id)
+                    .await;
             }
         };
 
@@ -260,12 +276,9 @@ impl GatewayActor {
         {
             Ok((outpoint, contract_id)) => (outpoint, contract_id),
             Err(_) => {
-                return Self::cancel_htlc(
-                    ln_sender.clone(),
-                    "Failed to buy preimage",
-                    intercepted_htlc_id,
-                )
-                .await;
+                return ln_sender
+                    .cancel_htlc("Failed to buy preimage", incoming_chan_id, htlc_id)
+                    .await;
             }
         };
 
@@ -274,38 +287,37 @@ impl GatewayActor {
             .await
         {
             Ok(preimage) => {
-                return Self::settle_htlc(ln_sender.clone(), intercepted_htlc_id, preimage, key)
+                return ln_sender
+                    .settle_htlc(preimage, incoming_chan_id, htlc_id)
                     .await;
             }
             Err(_) => {
-                return Self::cancel_htlc(
-                    ln_sender.clone(),
-                    "Failed to process intercepted HTLC",
-                    intercepted_htlc_id,
-                )
-                .await;
+                return ln_sender
+                    .cancel_htlc(
+                        "Failed to process intercepted HTLC",
+                        incoming_chan_id,
+                        htlc_id,
+                    )
+                    .await;
             }
         }
     }
 
-    pub async fn route_htlcs(&mut self) -> Result<()> {
+    pub async fn route_htlcs(
+        &mut self,
+        mut shutdown_receiver: Receiver<Arc<AtomicBool>>,
+    ) -> Result<()> {
         let short_channel_id = self.client.config().mint_channel_id;
 
-        // Create a channel that will be used to shutdown the HTLC thread
-        let (sender, mut receiver) = mpsc::channel::<Arc<AtomicBool>>(100);
-        self.sender = Some(sender);
-
         // Create a stream used to communicate with the Lightning implementation
-        let (ln_sender, ln_receiver) = mpsc::channel::<RouteHtlcRequest>(100);
+        let (sender, ln_receiver) = mpsc::channel::<RouteHtlcRequest>(100);
+        let ln_sender = LightningSenderStream {
+            ln_sender: sender,
+            lnrpc: self.lnrpc.clone(),
+        };
 
-        let mut stream = self
-            .lnrpc
-            .write()
-            .await
-            .route_htlcs(ln_receiver.into())
-            .await?;
-
-        self.subscribe_to_htlcs(ln_sender.clone(), short_channel_id)
+        let mut stream = ln_sender
+            .subscribe_to_htlcs(short_channel_id, ln_receiver)
             .await?;
 
         let actor = self.to_owned();
@@ -319,7 +331,7 @@ impl GatewayActor {
                         action
                     }) = Self::wait_for_htlc_or_shutdown(
                         &mut stream,
-                        &mut receiver,
+                        &mut shutdown_receiver,
                         gw_rpc_copy.clone(),
                     )
                     .await

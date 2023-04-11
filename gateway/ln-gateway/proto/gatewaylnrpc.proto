@@ -103,20 +103,11 @@ message SubscribeInterceptHtlcsResponse {
   // Use this value to confirm relevance of the intercepted HTLC
   uint64 short_channel_id = 10;
 
-  // A unique identifier for every intercepted HTLC
-  // Used to identify an intercepted HTLC through processing and settlement
-  bytes intercepted_htlc_id = 11;
+  // The id of the incoming channel
+  uint64 incoming_chan_id = 12;
 
-  // Optional CircuitKey that LND needs to complete the HTLC
-  CircuitKey key = 12;
-}
-
-message CircuitKey {
-  // The id of the channel that the is part of this circuit.
-  uint64 chan_id = 1;
-
-  // The index of the incoming htlc in the incoming channel.
-  uint64 htlc_id = 2;
+  // The index of the incoming htlc in the incoming channel
+  uint64 htlc_id = 13;
 }
 
 message CompleteHtlcsRequest {
@@ -148,11 +139,11 @@ message CompleteHtlcsRequest {
     Cancel cancel = 2;
   }
 
-  // A unique identifier for every intercepted HTLC
-  // Used to identify an intercepted HTLC through processing and settlement
-  bytes intercepted_htlc_id = 3;
+  // The id of the incoming channel
+  uint64 incoming_chan_id = 4;
 
-  CircuitKey key = 4;
+  // The index of the incoming htlc in the incoming channel
+  uint64 htlc_id = 5;
 }
 
 message CompleteHtlcsResponse {}

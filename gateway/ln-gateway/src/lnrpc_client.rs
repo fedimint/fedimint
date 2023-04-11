@@ -14,12 +14,9 @@ use url::Url;
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
     EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest,
-    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse, SubscribeInterceptHtlcsResponse,
+    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse,
 };
 use crate::{GatewayError, Result};
-
-pub type HtlcStream<'a> =
-    BoxStream<'a, std::result::Result<SubscribeInterceptHtlcsResponse, tonic::Status>>;
 
 pub type RouteHtlcStream<'a> = BoxStream<'a, std::result::Result<RouteHtlcResponse, tonic::Status>>;
 

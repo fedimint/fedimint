@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::task::{sleep, TaskGroup};
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, Mutex};
@@ -20,7 +19,7 @@ use tracing::{error, info, trace};
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
 use crate::gatewaylnrpc::{
-    self, route_htlc_request, route_htlc_response, CompleteHtlcsRequest, GetNodeInfoResponse,
+    route_htlc_request, route_htlc_response, CompleteHtlcsRequest, GetNodeInfoResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, RouteHtlcRequest,
     RouteHtlcResponse, SubscribeInterceptHtlcsResponse,
 };
@@ -51,12 +50,12 @@ impl GatewayLndClient {
         let (lnd_tx, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(CHANNEL_SIZE);
 
         let client = Self::connect(address, tls_cert, macaroon).await?;
-        let subs = Arc::new(Mutex::new(HashMap::new()));
+        let subscriptions = Arc::new(Mutex::new(HashMap::new()));
 
         let mut gw_rpc = GatewayLndClient {
             client,
             task_group,
-            subscriptions: subs,
+            subscriptions,
             lnd_tx,
         };
 
@@ -122,19 +121,14 @@ impl GatewayLndClient {
                     if let Some(actor_sender) =
                         Self::can_route_htlc(htlc.outgoing_requested_chan_id, subs.clone()).await
                     {
-                        let intercepted_htlc_id = sha256::Hash::hash(&htlc.onion_blob);
-
                         let intercept = SubscribeInterceptHtlcsResponse {
                             payment_hash: htlc.payment_hash,
                             incoming_amount_msat: htlc.incoming_amount_msat,
                             outgoing_amount_msat: htlc.outgoing_amount_msat,
                             incoming_expiry: htlc.incoming_expiry,
                             short_channel_id: htlc.outgoing_requested_chan_id,
-                            intercepted_htlc_id: intercepted_htlc_id.into_inner().to_vec(),
-                            key: Some(gatewaylnrpc::CircuitKey {
-                                chan_id: incoming_circuit_key.chan_id,
-                                htlc_id: incoming_circuit_key.htlc_id,
-                            }),
+                            incoming_chan_id: incoming_circuit_key.chan_id,
+                            htlc_id: incoming_circuit_key.htlc_id,
                         };
 
                         match actor_sender
@@ -190,13 +184,12 @@ impl GatewayLndClient {
     }
 
     async fn settle_htlc(
-        key: gatewaylnrpc::CircuitKey,
+        key: CircuitKey,
         preimage: Vec<u8>,
         lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
     ) -> crate::Result<()> {
-        let gatewaylnrpc::CircuitKey { chan_id, htlc_id } = key;
         let response = ForwardHtlcInterceptResponse {
-            incoming_circuit_key: Some(CircuitKey { chan_id, htlc_id }),
+            incoming_circuit_key: Some(key),
             action: ResolveHoldForwardAction::Settle.into(),
             preimage,
             failure_message: vec![],
@@ -329,30 +322,28 @@ impl ILnRpcClient for GatewayLndClient {
                     Some(route_htlc_request::Action::CompleteRequest(complete_request)) => {
                         let CompleteHtlcsRequest {
                             action,
-                            intercepted_htlc_id: _,
-                            key,
+                            incoming_chan_id,
+                            htlc_id,
                         } = complete_request;
 
-                        if let Some(circuit_key) = key {
-                            match action {
-                                Some(Action::Settle(Settle { preimage })) => {
-                                    let _ = Self::settle_htlc(circuit_key, preimage, lnd_sender.clone()).await.map_err(|e| {
-                                        error!("Failed to settle HTLC: {:?}", e);
-                                    });
-                                },
-                                Some(Action::Cancel(Cancel { reason: _ })) => {
-                                    let _ = Self::cancel_htlc(CircuitKey { chan_id: circuit_key.chan_id, htlc_id: circuit_key.htlc_id }, lnd_sender.clone()).await.map_err(|e| {
-                                        error!("Failed to cancel HTLC: {:?}", e);
-                                    });
-                                },
-                                None => {
-                                    error!("No action specified for intercepted htlc. This should not happen. ChanId: {} HTLC ID: {}", circuit_key.chan_id, circuit_key.htlc_id);
-                                    let _ = Self::cancel_htlc(CircuitKey { chan_id: circuit_key.chan_id, htlc_id: circuit_key.htlc_id }, lnd_sender.clone()).await.map_err(|e| {
-                                        error!("Failed to cancel HTLC: {:?}", e);
-                                    });
-                                }
-                            };
-                        }
+                        match action {
+                            Some(Action::Settle(Settle { preimage })) => {
+                                let _ = Self::settle_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, preimage, lnd_sender.clone()).await.map_err(|e| {
+                                    error!("Failed to settle HTLC: {:?}", e);
+                                });
+                            },
+                            Some(Action::Cancel(Cancel { reason: _ })) => {
+                                let _ = Self::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).await.map_err(|e| {
+                                    error!("Failed to cancel HTLC: {:?}", e);
+                                });
+                            },
+                            None => {
+                                error!("No action specified for intercepted htlc. This should not happen. ChanId: {} HTLC ID: {}", incoming_chan_id, htlc_id);
+                                let _ = Self::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).await.map_err(|e| {
+                                    error!("Failed to cancel HTLC: {:?}", e);
+                                });
+                            }
+                        };
                     }
                     None => {
                         error!("No action was sent as part of RouteHtlcRequest");

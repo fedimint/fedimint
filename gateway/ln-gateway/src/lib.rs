@@ -14,7 +14,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -503,8 +503,13 @@ impl Gateway {
 
         // Restart the subscription of HTLCs for each actor
         tracing::info!("Restarting HTLC subscription threads.");
+
+        // Create a channel that will be used to shutdown the HTLC thread
         for actor in actors.values() {
-            actor.write().await.route_htlcs().await?;
+            let (sender, receiver) = mpsc::channel::<Arc<AtomicBool>>(100);
+            let mut a = actor.write().await;
+            a.route_htlcs(receiver).await?;
+            a.sender = sender;
         }
 
         Ok(())
