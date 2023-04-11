@@ -569,13 +569,24 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransa
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
-        let stream = isolated
-            .raw_find_by_prefix(key_prefix)
-            .await?
-            .collect::<Vec<_>>()
-            .await;
-        Ok(Box::pin(stream::iter(stream)))
+        let module_prefix = self.prefix;
+        let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
+        module_prefix
+            .consensus_encode(&mut prefix_bytes)
+            .expect("Error encoding module instance id as prefix");
+        let prefix_len = prefix_bytes.len();
+        prefix_bytes.extend_from_slice(key_prefix);
+        let raw_prefix = self
+            .dbtx
+            .as_mut()
+            .raw_find_by_prefix(prefix_bytes.as_slice())
+            .await?;
+
+        Ok(Box::pin(raw_prefix.map(move |kv| {
+            let key = kv.0;
+            let stripped_key = &key[prefix_len..];
+            (stripped_key.to_vec(), kv.1)
+        })))
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
