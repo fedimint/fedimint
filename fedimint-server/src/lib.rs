@@ -102,8 +102,8 @@ pub struct FedimintServer {
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     /// Used to make API calls to our peers
     pub api: DynFederationApi,
-    /// The list of all peers
-    pub peers: BTreeSet<PeerId>,
+    /// The list of all other peers
+    pub other_peers: BTreeSet<PeerId>,
     /// If `Some` then we restarted and look for the epoch to rejoin at
     pub rejoin_at_epoch: Option<HashMap<u64, HashSet<PeerId>>>,
     /// How many empty epochs peers requested we run
@@ -227,6 +227,8 @@ impl FedimintServer {
             .into_iter()
             .map(|(id, node)| (id, node.url));
         let api = WsFederationApi::new(api_endpoints.collect());
+        let mut other_peers: BTreeSet<_> = cfg.local.p2p_endpoints.keys().cloned().collect();
+        other_peers.remove(&cfg.local.identity);
 
         FedimintServer {
             task_group: task_group.clone(),
@@ -236,7 +238,7 @@ impl FedimintServer {
             api_receiver: ReceiverStream::new(api_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
-            peers: cfg.local.p2p_endpoints.keys().cloned().collect(),
+            other_peers,
             rejoin_at_epoch: None,
             run_empty_epochs: 0,
             last_processed_epoch: None,
@@ -470,7 +472,7 @@ impl FedimintServer {
         for msg in step.messages {
             self.connections
                 .send(
-                    &msg.target.peers(&self.peers),
+                    &msg.target.peers(&self.other_peers),
                     EpochMessage::Continue(msg.message),
                 )
                 .await?;
@@ -562,8 +564,9 @@ impl FedimintServer {
         if let Some(epochs) = self.rejoin_at_epoch.as_mut() {
             let peers = epochs.entry(epoch).or_default();
             peers.insert(peer);
+            let threshold = self.cfg.local.p2p_endpoints.threshold();
 
-            if peers.len() >= self.peers.threshold() && self.hbbft.epoch() < epoch {
+            if peers.len() >= threshold && self.hbbft.epoch() < epoch {
                 info!(
                     target: LOG_CONSENSUS,
                     "Skipping to epoch {}",
@@ -580,7 +583,7 @@ impl FedimintServer {
     async fn request_rejoin(&mut self, epochs_to_run: u64) {
         self.connections
             .send(
-                &Target::all().peers(&self.peers),
+                &Target::all().peers(&self.other_peers),
                 EpochMessage::RejoinRequest(epochs_to_run),
             )
             .await
