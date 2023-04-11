@@ -76,7 +76,7 @@ impl State for MintInputStateMachine {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintInputStateCreated {
-    notes: TieredMulti<SpendableNote>,
+    pub(crate) notes: TieredMulti<SpendableNote>,
 }
 
 impl MintInputStateCreated {
