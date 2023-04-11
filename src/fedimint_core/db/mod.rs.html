@@ -2268,6 +2268,13 @@
 <a href="#2268" id="2268">2268</a>
 <a href="#2269" id="2269">2269</a>
 <a href="#2270" id="2270">2270</a>
+<a href="#2271" id="2271">2271</a>
+<a href="#2272" id="2272">2272</a>
+<a href="#2273" id="2273">2273</a>
+<a href="#2274" id="2274">2274</a>
+<a href="#2275" id="2275">2275</a>
+<a href="#2276" id="2276">2276</a>
+<a href="#2277" id="2277">2277</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2663,7 +2670,7 @@
 /// `ISingleUseDatabaseTransaction` without needing to make additional
 /// allocations.
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;: <span class="lifetime">&#39;a </span>+ Send {
+</span><span class="kw">pub trait </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;: <span class="lifetime">&#39;a </span>+ MaybeSend {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
@@ -2685,19 +2692,19 @@
 
 <span class="doccomment">/// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
-</span><span class="kw">pub struct </span>SingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Tx: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send&gt;(
+</span><span class="kw">pub struct </span>SingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Tx: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + MaybeSend&gt;(
     <span class="prelude-ty">Option</span>&lt;Tx&gt;,
     <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>PhantomData&lt;()&gt;,
 );
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, Tx: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send&gt; SingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Tx&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, Tx: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + MaybeSend&gt; SingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Tx&gt; {
     <span class="kw">pub fn </span>new(dbtx: Tx) -&gt; SingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Tx&gt; {
         SingleUseDatabaseTransaction(<span class="prelude-val">Some</span>(dbtx), <span class="kw-2">&amp;</span>PhantomData)
     }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, Tx: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + Send&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, Tx: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + MaybeSend&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;
     <span class="kw">for </span>SingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Tx&gt;
 {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
@@ -2879,15 +2886,17 @@
 /// modules are allowed to interact with are a subset of `DatabaseTransaction`,
 /// since modules do not manage the lifetime of database transactions.
 /// Committing to the database or rolling back a transaction is not exposed.
-</span><span class="kw">pub struct </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, T: Send + Encodable + <span class="lifetime">&#39;isolated </span>= ModuleInstanceId&gt;
-{
+</span><span class="kw">pub struct </span>ModuleDatabaseTransaction&lt;
+    <span class="lifetime">&#39;isolated</span>,
+    T: MaybeSend + Encodable + <span class="lifetime">&#39;isolated </span>= ModuleInstanceId,
+&gt; {
     isolated_tx: Box&lt;<span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>&gt;&gt;,
     decoders: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span>ModuleDecoderRegistry,
     commit_tracker: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span>CommitTracker,
     _marker: PhantomData&lt;T&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;isolated</span>, T: Send + Encodable&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, T&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;isolated</span>, T: MaybeSend + Encodable&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, T&gt; {
     <span class="kw">pub fn </span>new&lt;<span class="lifetime">&#39;parent</span>: <span class="lifetime">&#39;isolated</span>&gt;(
         dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span><span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt;,
         module_prefix: <span class="prelude-ty">Option</span>&lt;T&gt;,
@@ -3032,13 +3041,17 @@
 /// in the raw insert/get functions. This is done to isolate modules/module
 /// instances from each other inside the database, which allows the same module
 /// to be instantiated twice or two different modules to use the same key.
-</span><span class="kw">struct </span>IsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>: <span class="lifetime">&#39;isolated</span>, T: Send + Encodable + <span class="lifetime">&#39;isolated</span>&gt; {
+</span><span class="kw">struct </span>IsolatedDatabaseTransaction&lt;
+    <span class="lifetime">&#39;isolated</span>,
+    <span class="lifetime">&#39;parent</span>: <span class="lifetime">&#39;isolated</span>,
+    T: MaybeSend + Encodable + <span class="lifetime">&#39;isolated</span>,
+&gt; {
     inner_tx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span><span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt;,
     prefix: Vec&lt;u8&gt;,
     _marker: PhantomData&lt;T&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>: <span class="lifetime">&#39;isolated</span>, T: Send + Encodable&gt;
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>: <span class="lifetime">&#39;isolated</span>, T: MaybeSend + Encodable&gt;
     IsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>, T&gt;
 {
     <span class="kw">pub fn </span>new(
@@ -3062,7 +3075,8 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>, T: Send + Encodable + <span class="lifetime">&#39;isolated</span>&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>&gt;
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>, T: MaybeSend + Encodable + <span class="lifetime">&#39;isolated</span>&gt;
+    ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>&gt;
     <span class="kw">for </span>IsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>, T&gt;
 {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
