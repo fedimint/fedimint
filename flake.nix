@@ -19,9 +19,7 @@
       flake = false;
     };
     android-nixpkgs = {
-      # url = "github:tadfisher/android-nixpkgs?rev=39538bf26d9064555c2a77b5bd6eb88049285905"; # stable
-      url = "github:tadfisher/android-nixpkgs";
-      # inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:tadfisher/android-nixpkgs?rev=39538bf26d9064555c2a77b5bd6eb88049285905"; # stable
     };
   };
 
@@ -53,8 +51,6 @@
           # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
           # the binary we need from `moreutils`
           moreutils-ts = pkgs.writeShellScriptBin "ts" "exec ${pkgs.moreutils}/bin/ts \"$@\"";
-
-          isArch64Darwin = stdenv.isAarch64 || stdenv.isDarwin;
 
           toolchain = import ./flake.toolchain.nix
             {
