@@ -171,10 +171,6 @@
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
@@ -186,7 +182,6 @@
     encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
 };
 <span class="kw">use </span>fedimint_core::admin_client::PeerServerParams;
-<span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
@@ -316,10 +311,7 @@
         .client;
     plaintext_json_write(<span class="kw-2">&amp;</span>server.local, path.join(LOCAL_CONFIG))<span class="question-mark">?</span>;
     plaintext_json_write(<span class="kw-2">&amp;</span>server.consensus, path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>;
-    plaintext_display_write(
-        <span class="kw-2">&amp;</span>WsClientConnectInfo::from_honest_peers(<span class="kw-2">&amp;</span>client_config),
-        <span class="kw-2">&amp;</span>path.join(CLIENT_CONNECT_FILE),
-    )<span class="question-mark">?</span>;
+    plaintext_display_write(<span class="kw-2">&amp;</span>server.get_connect_info(), <span class="kw-2">&amp;</span>path.join(CLIENT_CONNECT_FILE))<span class="question-mark">?</span>;
     plaintext_json_write(<span class="kw-2">&amp;</span>client_config, path.join(CLIENT_CONFIG))<span class="question-mark">?</span>;
     encrypted_json_write(<span class="kw-2">&amp;</span>server.private, <span class="kw-2">&amp;</span>key, path.join(PRIVATE_CONFIG))
 }

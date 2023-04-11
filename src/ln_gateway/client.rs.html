@@ -366,10 +366,10 @@
         node_pubkey: PublicKey,
         module_gens: ClientModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
-        <span class="kw">let </span>api: DynFederationApi = WsFederationApi::from_urls(<span class="kw-2">&amp;</span>connect).into();
+        <span class="kw">let </span>api: DynFederationApi = WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect.clone()]).into();
 
         <span class="kw">let </span>client_config = api
-            .download_client_config(<span class="kw-2">&amp;</span>connect.id, module_gens.to_common())
+            .download_client_config(<span class="kw-2">&amp;</span>connect, module_gens.to_common())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;

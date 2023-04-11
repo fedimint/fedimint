@@ -429,28 +429,6 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -464,16 +442,16 @@
 <span class="kw">use </span>axum::Router;
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SanitizedUrl;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_server::config::io::{
-    create_cert, parse_peer_params, write_server_config, CONSENSUS_CONFIG, JSON_EXT,
+    create_cert, parse_peer_params, read_server_config, write_server_config, CONSENSUS_CONFIG,
+    JSON_EXT,
 };
-<span class="kw">use </span>fedimint_server::config::{ConfigGenParams, ServerConfig, ServerConfigConsensus};
+<span class="kw">use </span>fedimint_server::config::{ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
 <span class="kw">use </span>http::StatusCode;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
@@ -521,23 +499,9 @@
     RunTemplate {
         state: <span class="kw">match </span>state.dkg_state {
             <span class="prelude-val">Some</span>(DkgState::Success) =&gt; {
-                <span class="kw">let </span>path = state
-                    .data_dir
-                    .join(CONSENSUS_CONFIG)
-                    .with_extension(JSON_EXT);
                 <span class="comment">// TODO: refactor be a standalone function
-                </span><span class="kw">match </span>std::fs::File::open(path) {
-                    <span class="prelude-val">Ok</span>(file) =&gt; <span class="kw">match </span>serde_json::from_reader(file) {
-                        <span class="prelude-val">Ok</span>::&lt;ServerConfigConsensus, <span class="kw">_</span>&gt;(consensus_config) =&gt; {
-                            <span class="kw">let </span>cfg = consensus_config
-                                .to_config_response(<span class="kw-2">&amp;</span>state.module_gens)
-                                .client;
-                            <span class="kw">let </span>connect_info = WsClientConnectInfo::from_honest_peers(<span class="kw-2">&amp;</span>cfg);
-
-                            RunTemplateState::DkgDone(connect_info.to_string())
-                        }
-                        <span class="prelude-val">Err</span>(e) =&gt; RunTemplateState::LocalIoError(e.to_string()),
-                    },
+                </span><span class="kw">match </span>read_server_config(<span class="kw-2">&amp;</span>state.password, state.data_dir.clone()) {
+                    <span class="prelude-val">Ok</span>(cfg) =&gt; RunTemplateState::DkgDone(cfg.get_connect_info().to_string()),
                     <span class="prelude-val">Err</span>(e) =&gt; RunTemplateState::LocalIoError(e.to_string()),
                 }
             }
@@ -805,16 +769,8 @@
 
 <span class="kw">async fn </span>qr(axum::extract::State(state): axum::extract::State&lt;MutableState&gt;) -&gt; <span class="kw">impl </span>IntoResponse {
     <span class="kw">let </span>state = state.lock().<span class="kw">await</span>;
-    <span class="kw">let </span>path = state.data_dir.join(<span class="string">&quot;client.json&quot;</span>);
-    <span class="kw">let </span>connection_string: String = <span class="kw">match </span>std::fs::File::open(path) {
-        <span class="prelude-val">Ok</span>(file) =&gt; {
-            <span class="kw">let </span>cfg: ClientConfig =
-                serde_json::from_reader(file).expect(<span class="string">&quot;Could not parse cfg file.&quot;</span>);
-            <span class="kw">let </span>connect_info = WsClientConnectInfo::from_honest_peers(<span class="kw-2">&amp;</span>cfg);
-            connect_info.to_string()
-        }
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="string">&quot;&quot;</span>.into(),
-    };
+    <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>state.password, state.data_dir.clone()).expect(<span class="string">&quot;reads cfg file&quot;</span>);
+    <span class="kw">let </span>connection_string = cfg.get_connect_info().to_string();
     <span class="kw">let </span>png_bytes: Vec&lt;u8&gt; =
         qrcode_generator::to_png_to_vec(connection_string, QrCodeEcc::Low, <span class="number">1024</span>).unwrap();
     ([(axum::http::header::CONTENT_TYPE, <span class="string">&quot;image/png&quot;</span>)], png_bytes)
