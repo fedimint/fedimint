@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
+source .tmpenv
+
 source ./scripts/lib.sh
+source ./scripts/aliases.sh
 
 echo Waiting for fedimint start
 
