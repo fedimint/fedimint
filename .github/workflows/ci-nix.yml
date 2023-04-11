@@ -46,7 +46,7 @@ jobs:
             build-in-pr: true
             timeout: 20
           - host: macos
-            runs-on: macos
+            runs-on: macos-12
             build-in-pr: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             timeout: 60
@@ -165,7 +165,7 @@ jobs:
             build-in-pr: true
             timeout: 15
           - host: macos
-            runs-on: macos
+            runs-on: macos-12
             build-in-pr: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             timeout: 60
