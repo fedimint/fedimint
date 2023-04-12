@@ -578,38 +578,22 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cmd!(fed, "join-federation", connect_string.clone());
 
     let fed_id = fed.federation_id().await;
-    assert_eq!(
-        cmd!(fed, "decode-connect-info", connect_string.clone())
-            .out_json()
-            .await?["id"]
-            .as_str(),
-        Some(&*fed_id),
-    );
-    // Number required for one honest is ceil(($FM_FED_SIZE-1)/3+1)
-    let one_honest = 2;
-    let client_json_str = fs::read_to_string(format!("{}/client.json", data_dir)).await?;
-    let client_json: serde_json::Value = serde_json::from_str(&client_json_str)?;
-    let api_endpoints = client_json["api_endpoints"].as_object().unwrap();
-    let one_honest_urls: Vec<&str> = api_endpoints
-        .iter()
-        .take(one_honest)
-        .map(|(_, value)| value["url"].as_str().unwrap())
-        .collect();
-    assert_eq!(
-        cmd!(fed, "decode-connect-info", connect_string.clone())
-            .out_json()
-            .await?["urls"]
-            .clone()
-            .to_typed::<Vec<String>>()
-            .unwrap(),
-        one_honest_urls
-    );
-    let urls = one_honest_urls.join(",");
-    assert_eq!(
-        cmd!(fed, "encode-connect-info", "--urls={urls}", "--id={fed_id}")
-            .out_json()
-            .await?["connect_info"],
-        connect_string
+    let connect_info = cmd!(fed, "decode-connect-info", connect_string.clone())
+        .out_json()
+        .await?;
+    anyhow::ensure!(
+        cmd!(
+            fed,
+            "encode-connect-info",
+            format!("--url={}", connect_info["url"]),
+            format!("--download-token={}", connect_info["download_token"]),
+            "--id={fed_id}"
+        )
+        .out_json()
+        .await?["connect_info"]
+            .to_string()
+            == connect_string,
+        "failed to decode and encode the client connection info string",
     );
 
     // reissue
