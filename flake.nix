@@ -317,6 +317,7 @@
                     (hiPrio pkgs.bashInteractive)
                     tmux
                     tmuxinator
+                    mprocs
                     docker-compose
                     pkgs.tokio-console
                     moreutils-ts

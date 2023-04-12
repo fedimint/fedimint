@@ -33,7 +33,7 @@ test-real: check-ulimit
   ./scripts/rust-tests.sh
 
 # run all tests in parallel like CI would
-test-ci-all: 
+test-ci-all:
   ./scripts/test-ci-all.sh
 
 # show number of tests per package
@@ -81,7 +81,15 @@ format:
   cargo fmt --all
   nixpkgs-fmt $(echo **.nix)
 
-# start tmuxinator with a dev federation setup
+# start mprocs with a dev federation setup
+fed-shell:
+  ./scripts/fed-shell.sh
+
+# exit fed-shell session
+exit-fed-shell:
+  mprocs --ctl '{c: quit}' --server 127.0.0.1:4050
+
+# start tmuxinator with dev federation setup
 tmuxinator:
   ./scripts/tmuxinator.sh
 

@@ -8,5 +8,5 @@ Here you can find scripts for running and testing Fedimint:
 * `latency-test.sh` - Runs a test to determine the latency of certain user actions
 * `cli-test.sh` - Runs a CLI-based integration test (required for PRs)
 * `final-checks.sh` - Checks to run before opening a PR
-* `tmux-user-shell.sh` - Helper script that prepares the tmuxinator setup (generate some blocks, fund wallet, …)
+* `mprocs-user-shell.sh` - Helper script that prepares the mprocs setup (generate some blocks, fund wallet, …)
 * `tmuxinator.sh` - Sets up a complete fedimint federation with Lightning gateway in tmux
