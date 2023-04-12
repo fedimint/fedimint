@@ -286,7 +286,6 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::str::FromStr;
 
@@ -325,9 +324,8 @@
         }
 
         <span class="comment">// Disable statement logging otherwise the queries clutter the log
-        </span><span class="kw">let </span><span class="kw-2">mut </span>opts = SqliteConnectOptions::from_str(connection_string).unwrap();
-        opts.disable_statement_logging();
-        <span class="kw">let </span>db = SqlitePool::connect_with(opts).<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>opts = SqliteConnectOptions::from_str(connection_string).unwrap();
+        <span class="kw">let </span>db = SqlitePool::connect_with(opts.disable_statement_logging()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         sqlx::query(<span class="string">&quot;CREATE TABLE IF NOT EXISTS kv (key BLOB, value BLOB);&quot;</span>)
             .execute(<span class="kw-2">&amp;</span>db)
