@@ -545,7 +545,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/server-0/private.encrypt",
         "--out-file={data_dir}/server-0/config-plaintext.json"
     )
-    .env("FM_PASSWORD", "pass0");
+    .env("FM_PASSWORD", "pass0")
+    .run()
+    .await?;
 
     cmd!(
         "{bin_dir}/distributedgen",
@@ -553,7 +555,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/server-0/config-plaintext.json",
         "--out-file={data_dir}/server-0/config-2"
     )
-    .env("FM_PASSWORD", "pass-foo");
+    .env("FM_PASSWORD", "pass-foo")
+    .run()
+    .await?;
 
     cmd!(
         "{bin_dir}/distributedgen",
@@ -561,7 +565,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/server-0/config-2",
         "--out-file={data_dir}/server-0/config-plaintext-2.json"
     )
-    .env("FM_PASSWORD", "pass-foo");
+    .env("FM_PASSWORD", "pass-foo")
+    .run()
+    .await?;
 
     let plaintext_one =
         fs::read_to_string(format!("{data_dir}/server-0/config-plaintext.json")).await?;
@@ -577,7 +583,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let connect_string = fs::read_to_string(format!("{}/client-connect", data_dir)).await?;
     fs::remove_file(format!("{}/client.json", data_dir));
-    cmd!(fed, "join-federation", connect_string.clone());
+    cmd!(fed, "join-federation", connect_string.clone())
+        .run()
+        .await?;
 
     let fed_id = fed.federation_id().await;
     let connect_info = cmd!(fed, "decode-connect-info", connect_string.clone())
@@ -606,9 +614,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             .unwrap(),
         9_958_000
     );
-    cmd!(fed, "validate", notes.clone());
-    cmd!(fed, "reissue", notes);
-    cmd!(fed, "fetch");
+    cmd!(fed, "validate", notes.clone()).run().await?;
+    cmd!(fed, "reissue", notes).run().await?;
+    cmd!(fed, "fetch").run().await?;
 
     // peg out
     let pegout_addr = bitcoind.client().get_new_address(None, None)?;
@@ -617,7 +625,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "peg-out",
         format!("--address={}", pegout_addr.clone()),
         "--amount=500sat"
-    );
+    )
+    .run()
+    .await?;
     let amount = Amount::from_btc("0.00000500".parse::<f64>()?)?;
     poll("btc_amount_receive", || async {
         let received_by_addr = bitcoind
@@ -665,7 +675,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .into_inner();
     let invoice = add_invoice.payment_request;
     let payment_hash = add_invoice.r_hash;
-    cmd!(fed, "ln-pay", invoice);
+    cmd!(fed, "ln-pay", invoice).run().await?;
 
     let invoice_status = lnd
         .client_lock()
@@ -771,7 +781,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?
         .bolt11;
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-    cmd!(fed, "ln-pay", invoice.clone());
+    cmd!(fed, "ln-pay", invoice.clone()).run().await?;
     let fed_id = fed.federation_id().await;
 
     let invoice_status = cln
