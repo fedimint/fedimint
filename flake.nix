@@ -18,9 +18,12 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+    android-nixpkgs = {
+      url = "github:tadfisher/android-nixpkgs?rev=39538bf26d9064555c2a77b5bd6eb88049285905"; # stable
+    };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flake-compat, fenix, crane, advisory-db }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flake-compat, fenix, crane, advisory-db, android-nixpkgs }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
@@ -49,12 +52,10 @@
           # the binary we need from `moreutils`
           moreutils-ts = pkgs.writeShellScriptBin "ts" "exec ${pkgs.moreutils}/bin/ts \"$@\"";
 
-          isArch64Darwin = stdenv.isAarch64 || stdenv.isDarwin;
-
           toolchain = import ./flake.toolchain.nix
             {
 
-              inherit pkgs lib system stdenv fenix crane;
+              inherit pkgs lib system stdenv fenix crane android-nixpkgs;
             };
 
 
@@ -397,10 +398,8 @@
               cross = pkgs.mkShell (shellCommonCross // {
                 nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ toolchain.fenixToolchainCrossAll ];
 
-                shellHook = shellCommonCross.shellHook +
-
-                  # Android NDK not available for Arm MacOS
-                  (if isArch64Darwin then "" else toolchain.androidCrossEnvVars)
+                shellHook = shellCommonCross.shellHook
+                  + toolchain.androidCrossEnvVars
                   + toolchain.wasm32CrossEnvVars;
               });
 
