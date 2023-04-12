@@ -581,8 +581,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     fed.pegin(10_000).await;
     fed.pegin_gateway(99_999, &gw_cln).await;
 
-    let connect_string = fs::read_to_string(format!("{}/client-connect", data_dir)).await?;
-    fs::remove_file(format!("{}/client.json", data_dir));
+    let connect_string = fs::read_to_string(format!("{data_dir}/client-connect")).await?;
+    fs::remove_file(format!("{data_dir}/client.json"));
     cmd!(fed, "join-federation", connect_string.clone())
         .run()
         .await?;
@@ -620,14 +620,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // peg out
     let pegout_addr = bitcoind.client().get_new_address(None, None)?;
-    cmd!(
-        fed,
-        "peg-out",
-        format!("--address={}", pegout_addr.clone()),
-        "--amount=500sat"
-    )
-    .run()
-    .await?;
+    cmd!(fed, "peg-out", "--address={pegout_addr}", "--amount=500sat")
+        .run()
+        .await?;
     let amount = Amount::from_btc("0.00000500".parse::<f64>()?)?;
     poll("btc_amount_receive", || async {
         let received_by_addr = bitcoind
@@ -655,13 +650,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_f64()
         .unwrap();
-    let initial_gateway_balance = cmd!(
-        gw_cln,
-        "balance",
-        format!("--federation-id={}", fed_id.clone())
-    )
-    .out_json()
-    .await?["balance_msat"]
+    let initial_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?["balance_msat"]
         .as_f64()
         .unwrap();
     let add_invoice = lnd
@@ -693,13 +684,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_f64()
         .unwrap();
-    let final_gateway_balance = cmd!(
-        gw_cln,
-        "balance",
-        format!("--federation-id={}", fed_id.clone())
-    )
-    .out_json()
-    .await?["balance_msat"]
+    let final_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?["balance_msat"]
         .as_f64()
         .unwrap();
     anyhow::ensure!(
@@ -757,13 +744,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_f64()
         .unwrap();
-    let initial_gateway_balance = cmd!(
-        gw_cln,
-        "balance",
-        format!("--federation-id={}", fed_id.clone())
-    )
-    .out_json()
-    .await?["balance_msat"]
+    let initial_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?["balance_msat"]
         .as_f64()
         .unwrap();
     let invoice = cln
@@ -800,13 +783,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_f64()
         .unwrap();
-    let final_gateway_balance = cmd!(
-        gw_cln,
-        "balance",
-        format!("--federation-id={}", fed_id.clone())
-    )
-    .out_json()
-    .await?["balance_msat"]
+    let final_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?["balance_msat"]
         .as_f64()
         .unwrap();
     anyhow::ensure!(
