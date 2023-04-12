@@ -606,7 +606,6 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?["connect_info"]
             .as_str()
             .unwrap()
-            .to_owned()
             == connect_string,
         "failed to decode and encode the client connection info string",
     );
