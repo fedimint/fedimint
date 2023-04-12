@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["cancel_intercepted_htlc",""]],"struct":[["GatewayLndClient",""]],"type":[["LndSenderRef",""],["OutcomeMap",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["GatewayLndClient",""]],"type":[["HtlcSubscriptionSender",""]]};

@@ -667,38 +667,6 @@
 <a href="#667" id="667">667</a>
 <a href="#668" id="668">668</a>
 <a href="#669" id="669">669</a>
-<a href="#670" id="670">670</a>
-<a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
-<a href="#674" id="674">674</a>
-<a href="#675" id="675">675</a>
-<a href="#676" id="676">676</a>
-<a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
-<a href="#680" id="680">680</a>
-<a href="#681" id="681">681</a>
-<a href="#682" id="682">682</a>
-<a href="#683" id="683">683</a>
-<a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a>
-<a href="#687" id="687">687</a>
-<a href="#688" id="688">688</a>
-<a href="#689" id="689">689</a>
-<a href="#690" id="690">690</a>
-<a href="#691" id="691">691</a>
-<a href="#692" id="692">692</a>
-<a href="#693" id="693">693</a>
-<a href="#694" id="694">694</a>
-<a href="#695" id="695">695</a>
-<a href="#696" id="696">696</a>
-<a href="#697" id="697">697</a>
-<a href="#698" id="698">698</a>
-<a href="#699" id="699">699</a>
-<a href="#700" id="700">700</a>
-<a href="#701" id="701">701</a>
 </pre><pre class="rust"><code><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyRequest {}
@@ -728,6 +696,42 @@
     <span class="doccomment">/// The preimage of the invoice
     </span><span class="attr">#[prost(bytes = <span class="string">&quot;vec&quot;</span>, tag = <span class="string">&quot;1&quot;</span>)]
     </span><span class="kw">pub </span>preimage: ::prost::alloc::vec::Vec&lt;u8&gt;,
+}
+<span class="doccomment">/// Request to begin intercepting HTLCs or to complete
+/// a specific HTLC.
+</span><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>RouteHtlcRequest {
+    <span class="attr">#[prost(oneof = <span class="string">&quot;route_htlc_request::Action&quot;</span>, tags = <span class="string">&quot;1, 2&quot;</span>)]
+    </span><span class="kw">pub </span>action: ::core::option::Option&lt;route_htlc_request::Action&gt;,
+}
+<span class="doccomment">/// Nested message and enum types in `RouteHtlcRequest`.
+</span><span class="kw">pub mod </span>route_htlc_request {
+    <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    </span><span class="kw">pub enum </span>Action {
+        <span class="attr">#[prost(message, tag = <span class="string">&quot;1&quot;</span>)]
+        </span>SubscribeRequest(<span class="kw">super</span>::SubscribeInterceptHtlcsRequest),
+        <span class="attr">#[prost(message, tag = <span class="string">&quot;2&quot;</span>)]
+        </span>CompleteRequest(<span class="kw">super</span>::CompleteHtlcsRequest),
+    }
+}
+<span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>RouteHtlcResponse {
+    <span class="attr">#[prost(oneof = <span class="string">&quot;route_htlc_response::Action&quot;</span>, tags = <span class="string">&quot;1, 2&quot;</span>)]
+    </span><span class="kw">pub </span>action: ::core::option::Option&lt;route_htlc_response::Action&gt;,
+}
+<span class="doccomment">/// Nested message and enum types in `RouteHtlcResponse`.
+</span><span class="kw">pub mod </span>route_htlc_response {
+    <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    </span><span class="kw">pub enum </span>Action {
+        <span class="attr">#[prost(message, tag = <span class="string">&quot;1&quot;</span>)]
+        </span>SubscribeResponse(<span class="kw">super</span>::SubscribeInterceptHtlcsResponse),
+        <span class="attr">#[prost(message, tag = <span class="string">&quot;2&quot;</span>)]
+        </span>CompleteResponse(<span class="kw">super</span>::CompleteHtlcsResponse),
+    }
 }
 <span class="doccomment">/// Request to subscribe to HTLCs with a specific short channel id
 ///
@@ -767,18 +771,22 @@
     /// Use this value to confirm relevance of the intercepted HTLC
     </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;10&quot;</span>)]
     </span><span class="kw">pub </span>short_channel_id: u64,
-    <span class="doccomment">/// A unique identifier for every intercepted HTLC
-    /// Used to identify an intercepted HTLC through processing and settlement
-    </span><span class="attr">#[prost(bytes = <span class="string">&quot;vec&quot;</span>, tag = <span class="string">&quot;11&quot;</span>)]
-    </span><span class="kw">pub </span>intercepted_htlc_id: ::prost::alloc::vec::Vec&lt;u8&gt;,
+    <span class="doccomment">/// The id of the incoming channel
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;12&quot;</span>)]
+    </span><span class="kw">pub </span>incoming_chan_id: u64,
+    <span class="doccomment">/// The index of the incoming htlc in the incoming channel
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;13&quot;</span>)]
+    </span><span class="kw">pub </span>htlc_id: u64,
 }
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>CompleteHtlcsRequest {
-    <span class="doccomment">/// A unique identifier for every intercepted HTLC
-    /// Used to identify an intercepted HTLC through processing and settlement
-    </span><span class="attr">#[prost(bytes = <span class="string">&quot;vec&quot;</span>, tag = <span class="string">&quot;3&quot;</span>)]
-    </span><span class="kw">pub </span>intercepted_htlc_id: ::prost::alloc::vec::Vec&lt;u8&gt;,
+    <span class="doccomment">/// The id of the incoming channel
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;4&quot;</span>)]
+    </span><span class="kw">pub </span>incoming_chan_id: u64,
+    <span class="doccomment">/// The index of the incoming htlc in the incoming channel
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;5&quot;</span>)]
+    </span><span class="kw">pub </span>htlc_id: u64,
     <span class="attr">#[prost(oneof = <span class="string">&quot;complete_htlcs_request::Action&quot;</span>, tags = <span class="string">&quot;1, 2&quot;</span>)]
     </span><span class="kw">pub </span>action: ::core::option::Option&lt;complete_htlcs_request::Action&gt;,
 }
@@ -996,21 +1004,19 @@
             );
             <span class="self">self</span>.inner.unary(request.into_request(), path, codec).<span class="kw">await
         </span>}
-        <span class="doccomment">/// SubscribeInterceptHtlcs opens a stream for a client to receive specific
-        /// HTLCs that have a specific short channel id. For every HTLC intercepted and
-        /// processed, the client should use `CompleteHtlcs` RPC to stream back a
-        /// Success or Failure response.
+        <span class="doccomment">/// RouteHtlcs opens a stream for a client to receive specific
+        /// HTLCs that have a specific short channel id and receives a stream as input.
+        /// For every HTLC intercepted and processed, the client can send a CompleteHtlcsRequest
+        /// over the input stream to complete the HTLC.
         ///
         /// Recommendation:
         /// GatewayLightning implementations should respond with a channel stream
         /// over which intercepted HTLCs are continually sent to the client.
-        </span><span class="kw">pub async fn </span>subscribe_intercept_htlcs(
+        </span><span class="kw">pub async fn </span>route_htlcs(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-            request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::SubscribeInterceptHtlcsRequest&gt;,
+            request: <span class="kw">impl </span>tonic::IntoStreamingRequest&lt;Message = <span class="kw">super</span>::RouteHtlcRequest&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;
-            tonic::Response&lt;
-                tonic::codec::Streaming&lt;<span class="kw">super</span>::SubscribeInterceptHtlcsResponse&gt;,
-            &gt;,
+            tonic::Response&lt;tonic::codec::Streaming&lt;<span class="kw">super</span>::RouteHtlcResponse&gt;&gt;,
             tonic::Status,
         &gt; {
             <span class="self">self</span>.inner
@@ -1024,30 +1030,9 @@
                 })<span class="question-mark">?</span>;
             <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
             <span class="kw">let </span>path = http::uri::PathAndQuery::from_static(
-                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/SubscribeInterceptHtlcs&quot;</span>,
+                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/RouteHtlcs&quot;</span>,
             );
-            <span class="self">self</span>.inner.server_streaming(request.into_request(), path, codec).<span class="kw">await
-        </span>}
-        <span class="doccomment">/// CompleteHtlc allows a client to send a Success or Failure response
-        /// for a HTLC that was intercepted and processed.
-        </span><span class="kw">pub async fn </span>complete_htlc(
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-            request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::CompleteHtlcsRequest&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::CompleteHtlcsResponse&gt;, tonic::Status&gt; {
-            <span class="self">self</span>.inner
-                .ready()
-                .<span class="kw">await
-                </span>.map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        <span class="macro">format!</span>(<span class="string">&quot;Service was not ready: {}&quot;</span>, e.into()),
-                    )
-                })<span class="question-mark">?</span>;
-            <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
-            <span class="kw">let </span>path = http::uri::PathAndQuery::from_static(
-                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/CompleteHtlc&quot;</span>,
-            );
-            <span class="self">self</span>.inner.unary(request.into_request(), path, codec).<span class="kw">await
+            <span class="self">self</span>.inner.streaming(request.into_streaming_request(), path, codec).<span class="kw">await
         </span>}
     }
 }
@@ -1073,30 +1058,24 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             request: tonic::Request&lt;<span class="kw">super</span>::PayInvoiceRequest&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::PayInvoiceResponse&gt;, tonic::Status&gt;;
-        <span class="doccomment">/// Server streaming response type for the SubscribeInterceptHtlcs method.
-        </span><span class="kw">type </span>SubscribeInterceptHtlcsStream: futures_core::Stream&lt;
-                Item = <span class="prelude-ty">Result</span>&lt;<span class="kw">super</span>::SubscribeInterceptHtlcsResponse, tonic::Status&gt;,
+        <span class="doccomment">/// Server streaming response type for the RouteHtlcs method.
+        </span><span class="kw">type </span>RouteHtlcsStream: futures_core::Stream&lt;
+                Item = <span class="prelude-ty">Result</span>&lt;<span class="kw">super</span>::RouteHtlcResponse, tonic::Status&gt;,
             &gt;
             + Send
             + <span class="lifetime">&#39;static</span>;
-        <span class="doccomment">/// SubscribeInterceptHtlcs opens a stream for a client to receive specific
-        /// HTLCs that have a specific short channel id. For every HTLC intercepted and
-        /// processed, the client should use `CompleteHtlcs` RPC to stream back a
-        /// Success or Failure response.
+        <span class="doccomment">/// RouteHtlcs opens a stream for a client to receive specific
+        /// HTLCs that have a specific short channel id and receives a stream as input.
+        /// For every HTLC intercepted and processed, the client can send a CompleteHtlcsRequest
+        /// over the input stream to complete the HTLC.
         ///
         /// Recommendation:
         /// GatewayLightning implementations should respond with a channel stream
         /// over which intercepted HTLCs are continually sent to the client.
-        </span><span class="kw">async fn </span>subscribe_intercept_htlcs(
+        </span><span class="kw">async fn </span>route_htlcs(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            request: tonic::Request&lt;<span class="kw">super</span>::SubscribeInterceptHtlcsRequest&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::SubscribeInterceptHtlcsStream&gt;, tonic::Status&gt;;
-        <span class="doccomment">/// CompleteHtlc allows a client to send a Success or Failure response
-        /// for a HTLC that was intercepted and processed.
-        </span><span class="kw">async fn </span>complete_htlc(
-            <span class="kw-2">&amp;</span><span class="self">self</span>,
-            request: tonic::Request&lt;<span class="kw">super</span>::CompleteHtlcsRequest&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::CompleteHtlcsResponse&gt;, tonic::Status&gt;;
+            request: tonic::Request&lt;tonic::Streaming&lt;<span class="kw">super</span>::RouteHtlcRequest&gt;&gt;,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::RouteHtlcsStream&gt;, tonic::Status&gt;;
     }
     <span class="doccomment">/// GatewayLightning is a service that provides limited access and functionality
     /// from a lightning node to Fedimint gateways
@@ -1277,16 +1256,15 @@
                     };
                     Box::pin(fut)
                 }
-                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/SubscribeInterceptHtlcs&quot; </span>=&gt; {
+                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/RouteHtlcs&quot; </span>=&gt; {
                     <span class="attr">#[allow(non_camel_case_types)]
-                    </span><span class="kw">struct </span>SubscribeInterceptHtlcsSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
+                    </span><span class="kw">struct </span>RouteHtlcsSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
                     <span class="kw">impl</span>&lt;
                         T: GatewayLightning,
-                    &gt; tonic::server::ServerStreamingService&lt;
-                        <span class="kw">super</span>::SubscribeInterceptHtlcsRequest,
-                    &gt; <span class="kw">for </span>SubscribeInterceptHtlcsSvc&lt;T&gt; {
-                        <span class="kw">type </span>Response = <span class="kw">super</span>::SubscribeInterceptHtlcsResponse;
-                        <span class="kw">type </span>ResponseStream = T::SubscribeInterceptHtlcsStream;
+                    &gt; tonic::server::StreamingService&lt;<span class="kw">super</span>::RouteHtlcRequest&gt;
+                    <span class="kw">for </span>RouteHtlcsSvc&lt;T&gt; {
+                        <span class="kw">type </span>Response = <span class="kw">super</span>::RouteHtlcResponse;
+                        <span class="kw">type </span>ResponseStream = T::RouteHtlcsStream;
                         <span class="kw">type </span>Future = BoxFuture&lt;
                             tonic::Response&lt;<span class="self">Self</span>::ResponseStream&gt;,
                             tonic::Status,
@@ -1294,13 +1272,11 @@
                         <span class="kw">fn </span>call(
                             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
                             request: tonic::Request&lt;
-                                <span class="kw">super</span>::SubscribeInterceptHtlcsRequest,
+                                tonic::Streaming&lt;<span class="kw">super</span>::RouteHtlcRequest&gt;,
                             &gt;,
                         ) -&gt; <span class="self">Self</span>::Future {
                             <span class="kw">let </span>inner = <span class="self">self</span>.<span class="number">0</span>.clone();
-                            <span class="kw">let </span>fut = <span class="kw">async move </span>{
-                                (<span class="kw-2">*</span>inner).subscribe_intercept_htlcs(request).<span class="kw">await
-                            </span>};
+                            <span class="kw">let </span>fut = <span class="kw">async move </span>{ (<span class="kw-2">*</span>inner).route_htlcs(request).<span class="kw">await </span>};
                             Box::pin(fut)
                         }
                     }
@@ -1309,54 +1285,14 @@
                     <span class="kw">let </span>inner = <span class="self">self</span>.inner.clone();
                     <span class="kw">let </span>fut = <span class="kw">async move </span>{
                         <span class="kw">let </span>inner = inner.<span class="number">0</span>;
-                        <span class="kw">let </span>method = SubscribeInterceptHtlcsSvc(inner);
+                        <span class="kw">let </span>method = RouteHtlcsSvc(inner);
                         <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
                         <span class="kw">let </span><span class="kw-2">mut </span>grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
                             );
-                        <span class="kw">let </span>res = grpc.server_streaming(method, req).<span class="kw">await</span>;
-                        <span class="prelude-val">Ok</span>(res)
-                    };
-                    Box::pin(fut)
-                }
-                <span class="string">&quot;/gatewaylnrpc.GatewayLightning/CompleteHtlc&quot; </span>=&gt; {
-                    <span class="attr">#[allow(non_camel_case_types)]
-                    </span><span class="kw">struct </span>CompleteHtlcSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
-                    <span class="kw">impl</span>&lt;
-                        T: GatewayLightning,
-                    &gt; tonic::server::UnaryService&lt;<span class="kw">super</span>::CompleteHtlcsRequest&gt;
-                    <span class="kw">for </span>CompleteHtlcSvc&lt;T&gt; {
-                        <span class="kw">type </span>Response = <span class="kw">super</span>::CompleteHtlcsResponse;
-                        <span class="kw">type </span>Future = BoxFuture&lt;
-                            tonic::Response&lt;<span class="self">Self</span>::Response&gt;,
-                            tonic::Status,
-                        &gt;;
-                        <span class="kw">fn </span>call(
-                            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-                            request: tonic::Request&lt;<span class="kw">super</span>::CompleteHtlcsRequest&gt;,
-                        ) -&gt; <span class="self">Self</span>::Future {
-                            <span class="kw">let </span>inner = <span class="self">self</span>.<span class="number">0</span>.clone();
-                            <span class="kw">let </span>fut = <span class="kw">async move </span>{
-                                (<span class="kw-2">*</span>inner).complete_htlc(request).<span class="kw">await
-                            </span>};
-                            Box::pin(fut)
-                        }
-                    }
-                    <span class="kw">let </span>accept_compression_encodings = <span class="self">self</span>.accept_compression_encodings;
-                    <span class="kw">let </span>send_compression_encodings = <span class="self">self</span>.send_compression_encodings;
-                    <span class="kw">let </span>inner = <span class="self">self</span>.inner.clone();
-                    <span class="kw">let </span>fut = <span class="kw">async move </span>{
-                        <span class="kw">let </span>inner = inner.<span class="number">0</span>;
-                        <span class="kw">let </span>method = CompleteHtlcSvc(inner);
-                        <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
-                        <span class="kw">let </span><span class="kw-2">mut </span>grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        <span class="kw">let </span>res = grpc.unary(method, req).<span class="kw">await</span>;
+                        <span class="kw">let </span>res = grpc.streaming(method, req).<span class="kw">await</span>;
                         <span class="prelude-val">Ok</span>(res)
                     };
                     Box::pin(fut)
