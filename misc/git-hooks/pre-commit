@@ -32,6 +32,8 @@ fi
 
 export git_ls_files
 git_ls_files="$(git ls-files)"
+export git_ls_nonbinary_files
+git_ls_nonbinary_files="$(echo "$git_ls_files" | xargs file --mime | grep -v "; charset=binary" | cut -d: -f1)"
 
 function check_forbidden_dependencies() {
   set -eo pipefail
@@ -146,7 +148,7 @@ export -f check_eof
 function trailing_space_check(){
   set -eo pipefail
 
-  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png|log)' | grep -v -E '^db/'); do
+  for path in $(echo "$git_ls_nonbinary_files" | grep -v -E '.*\.(ods|log)' | grep -v -E '^db/'); do
 
     if git diff --check --cached; then
       echo "Trailing whitespace detected. Please remove them before committing."
