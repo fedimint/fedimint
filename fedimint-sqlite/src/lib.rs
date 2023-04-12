@@ -36,9 +36,8 @@ impl SqliteDb {
         }
 
         // Disable statement logging otherwise the queries clutter the log
-        let mut opts = SqliteConnectOptions::from_str(connection_string).unwrap();
-        opts.disable_statement_logging();
-        let db = SqlitePool::connect_with(opts).await?;
+        let opts = SqliteConnectOptions::from_str(connection_string).unwrap();
+        let db = SqlitePool::connect_with(opts.disable_statement_logging()).await?;
 
         sqlx::query("CREATE TABLE IF NOT EXISTS kv (key BLOB, value BLOB);")
             .execute(&db)
