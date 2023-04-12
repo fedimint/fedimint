@@ -80,11 +80,3 @@ typos-fix-all:
 format:
   cargo fmt --all
   nixpkgs-fmt $(echo **.nix)
-
-# start tmuxinator with a dev federation setup
-tmuxinator:
-  ./scripts/tmuxinator.sh
-
-# exit tmuxinator session
-exit-tmuxinator:
-  tmux kill-session -t fedimint-dev
