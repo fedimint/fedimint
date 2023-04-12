@@ -22,6 +22,6 @@ echo $! >> $FM_PID_FILE
 
 env | sed -En 's/^(FM_[^=]*).*/\1/gp' | while read var; do printf 'export %s=%q\n' "$var" "${!var}"; done > .tmpenv
 
-mprocs -c .mprocs.yaml
+mprocs -c misc/mprocs.yaml
 
 rm .tmpenv
