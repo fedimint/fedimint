@@ -15,22 +15,16 @@ service GatewayLightning {
    */
   rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse) {}
 
-  /* SubscribeInterceptHtlcs opens a stream for a client to receive specific
-   * HTLCs that have a specific short channel id. For every HTLC intercepted and
-   * processed, the client should use `CompleteHtlcs` RPC to stream back a
-   * Success or Failure response.
+  /* RouteHtlcs opens a stream for a client to receive specific
+   * HTLCs that have a specific short channel id and receives a stream as input. 
+   * For every HTLC intercepted and processed, the client can send a CompleteHtlcsRequest
+   * over the input stream to complete the HTLC.
    *
    * Recommendation:
    * GatewayLightning implementations should respond with a channel stream
    * over which intercepted HTLCs are continually sent to the client.
    */
-  rpc SubscribeInterceptHtlcs(SubscribeInterceptHtlcsRequest)
-      returns (stream SubscribeInterceptHtlcsResponse) {}
-
-  /* CompleteHtlc allows a client to send a Success or Failure response
-   * for a HTLC that was intercepted and processed.
-   */
-  rpc CompleteHtlc(CompleteHtlcsRequest) returns (CompleteHtlcsResponse) {}
+  rpc RouteHtlcs(stream RouteHtlcRequest) returns (stream RouteHtlcResponse) {}
 }
 
 message EmptyRequest {}
@@ -54,6 +48,22 @@ message PayInvoiceRequest {
 message PayInvoiceResponse {
   // The preimage of the invoice
   bytes preimage = 1;
+}
+
+// Request to begin intercepting HTLCs or to complete
+// a specific HTLC.
+message RouteHtlcRequest {
+  oneof action {
+    SubscribeInterceptHtlcsRequest subscribe_request = 1;
+    CompleteHtlcsRequest complete_request = 2;
+  }
+}
+
+message RouteHtlcResponse {
+  oneof action {
+    SubscribeInterceptHtlcsResponse subscribe_response = 1;
+    CompleteHtlcsResponse complete_response = 2;
+  }
 }
 
 // Request to subscribe to HTLCs with a specific short channel id
@@ -93,9 +103,11 @@ message SubscribeInterceptHtlcsResponse {
   // Use this value to confirm relevance of the intercepted HTLC
   uint64 short_channel_id = 10;
 
-  // A unique identifier for every intercepted HTLC
-  // Used to identify an intercepted HTLC through processing and settlement
-  bytes intercepted_htlc_id = 11;
+  // The id of the incoming channel
+  uint64 incoming_chan_id = 12;
+
+  // The index of the incoming htlc in the incoming channel
+  uint64 htlc_id = 13;
 }
 
 message CompleteHtlcsRequest {
@@ -127,9 +139,11 @@ message CompleteHtlcsRequest {
     Cancel cancel = 2;
   }
 
-  // A unique identifier for every intercepted HTLC
-  // Used to identify an intercepted HTLC through processing and settlement
-  bytes intercepted_htlc_id = 3;
+  // The id of the incoming channel
+  uint64 incoming_chan_id = 4;
+
+  // The index of the incoming htlc in the incoming channel
+  uint64 htlc_id = 5;
 }
 
 message CompleteHtlcsResponse {}

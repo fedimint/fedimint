@@ -1,5 +1,5 @@
 use std::array::TryFromSliceError;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -8,21 +8,22 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use bitcoin_hashes::hex::ToHex;
-use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
+use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
+use futures::stream::StreamExt;
 use ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
 use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcsRequest, CompleteHtlcsResponse, EmptyRequest, GetNodeInfoResponse,
-    GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
-    SubscribeInterceptHtlcsResponse,
+    route_htlc_request, route_htlc_response, CompleteHtlcsRequest, CompleteHtlcsResponse,
+    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest,
+    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse, SubscribeInterceptHtlcsResponse,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -99,6 +100,10 @@ pub struct Htlc {
     pub cltv_expiry: u32,
     pub cltv_expiry_relative: u32,
     pub payment_hash: bitcoin_hashes::sha256::Hash,
+    // The short channel id of the incoming channel
+    pub short_channel_id: String,
+    // The ID of the HTLC
+    pub id: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -121,6 +126,7 @@ pub struct ClnRpcClient {}
 pub struct ClnRpcService {
     socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
+    task_group: TaskGroup,
 }
 
 impl ClnRpcService {
@@ -191,6 +197,7 @@ impl ClnRpcService {
                 Self {
                     socket,
                     interceptor,
+                    task_group: TaskGroup::new()
                 },
                 listen,
                 plugin,
@@ -229,6 +236,87 @@ impl ClnRpcService {
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
             .map_err(ClnExtensionError::RpcError)?
+    }
+
+    async fn complete_htlc(
+        complete_request: CompleteHtlcsRequest,
+        interceptors: Arc<ClnHtlcInterceptor>,
+        sender: mpsc::Sender<Result<RouteHtlcResponse, Status>>,
+    ) -> Result<(), Status> {
+        let CompleteHtlcsRequest {
+            action,
+            incoming_chan_id,
+            htlc_id,
+        } = complete_request;
+        if let Some(outcome) = interceptors
+            .outcomes
+            .lock()
+            .await
+            .remove(&(incoming_chan_id, htlc_id))
+        {
+            // Translate action request into a cln rpc response for
+            // `htlc_accepted` event
+            let htlca_res = match action {
+                Some(Action::Settle(Settle { preimage })) => {
+                    let assert_pk: Result<[u8; 32], TryFromSliceError> =
+                        preimage.as_slice().try_into();
+                    if let Ok(pk) = assert_pk {
+                        serde_json::json!({ "result": "resolve", "payment_key": pk.to_hex() })
+                    } else {
+                        htlc_processing_failure()
+                    }
+                }
+                Some(Action::Cancel(Cancel { reason: _ })) => {
+                    // TODO: Translate the reason into a BOLT 4 failure message
+                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                    htlc_processing_failure()
+                }
+                None => {
+                    error!(
+                        ?incoming_chan_id,
+                        ?htlc_id,
+                        "No action specified for intercepted htlc"
+                    );
+                    return Err(Status::internal(
+                        "No action specified on this intercepted htlc",
+                    ));
+                }
+            };
+
+            // Send translated response to the HTLC interceptor for submission
+            // to the cln rpc
+            match outcome.send(htlca_res) {
+                Ok(_) => {
+                    let _ = sender
+                        .send(Ok(RouteHtlcResponse {
+                            action: Some(route_htlc_response::Action::CompleteResponse(
+                                CompleteHtlcsResponse {},
+                            )),
+                        }))
+                        .await
+                        .map_err(|e| {
+                            error!("Failed to send CompleteResponse to gatewayd: {:?}", e);
+                        });
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to send htlc_accepted response to interceptor: {:?}",
+                        e
+                    );
+                    return Err(Status::internal(
+                        "Failed to send htlc_accepted response to interceptor",
+                    ));
+                }
+            };
+        } else {
+            error!(
+                ?incoming_chan_id,
+                ?htlc_id,
+                "No interceptor reference found for this processed htlc",
+            );
+            return Err(Status::internal("No interceptor reference found for htlc"));
+        }
+        Ok(())
     }
 }
 
@@ -320,7 +408,7 @@ impl GatewayLightning for ClnRpcService {
             let channel = match channels_response {
                 cln_rpc::Response::ListChannels(channels) => {
                     let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == node_info.0) else {
-                        warn!("Channel {:?} not found in graph", scid);
+                        warn!(?scid, "Channel not found in graph");
                         continue;
                     };
                     Ok(channel)
@@ -393,89 +481,50 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(outcome))
     }
 
-    type SubscribeInterceptHtlcsStream =
-        ReceiverStream<Result<SubscribeInterceptHtlcsResponse, Status>>;
+    type RouteHtlcsStream = ReceiverStream<Result<RouteHtlcResponse, Status>>;
 
-    async fn subscribe_intercept_htlcs(
+    async fn route_htlcs(
         &self,
-        request: tonic::Request<SubscribeInterceptHtlcsRequest>,
-    ) -> Result<tonic::Response<Self::SubscribeInterceptHtlcsStream>, Status> {
-        let SubscribeInterceptHtlcsRequest { short_channel_id } = request.into_inner();
-        let receiver = self.interceptor.add_htlc_subscriber(short_channel_id).await;
+        request: tonic::Request<tonic::Streaming<RouteHtlcRequest>>,
+    ) -> Result<tonic::Response<Self::RouteHtlcsStream>, Status> {
+        let mut stream = request.into_inner();
 
-        Ok(tonic::Response::new(ReceiverStream::new(receiver)))
-    }
+        // First create new channel that we will use to send responses back to gatewayd
+        let (gatewayd_sender, gatewayd_receiver) =
+            mpsc::channel::<Result<RouteHtlcResponse, Status>>(100);
 
-    async fn complete_htlc(
-        &self,
-        request: tonic::Request<CompleteHtlcsRequest>,
-    ) -> Result<tonic::Response<CompleteHtlcsResponse>, Status> {
-        let CompleteHtlcsRequest {
-            action,
-            intercepted_htlc_id,
-        } = request.into_inner();
-
-        let hash = match sha256::Hash::from_slice(&intercepted_htlc_id) {
-            Ok(hash) => hash,
-            Err(e) => {
-                error!("Invalid intercepted_htlc_id: {:?}", e);
-                return Err(Status::invalid_argument(e.to_string()));
-            }
-        };
-
-        info!("Completing htlc with reference, {:?}", hash);
-
-        if let Some(outcome) = self.interceptor.outcomes.lock().await.remove(&hash) {
-            // Translate action request into a cln rpc response for `htlc_accepted` event
-            let htlca_res = match action {
-                Some(Action::Settle(Settle { preimage })) => {
-                    let assert_pk: Result<[u8; 32], TryFromSliceError> =
-                        preimage.as_slice().try_into();
-                    if let Ok(pk) = assert_pk {
-                        serde_json::json!({ "result": "resolve", "payment_key": pk.to_hex() })
-                    } else {
-                        htlc_processing_failure()
+        // Spawn new thread that listens for events from the input stream
+        let interceptors = self.interceptor.clone();
+        tokio::spawn(async move {
+            while let Some(res) = stream.next().await {
+                if let Ok(route_request) = res {
+                    match route_request.action {
+                        Some(route_htlc_request::Action::SubscribeRequest(subscribe_request)) => {
+                            interceptors.subscriptions.lock().await.insert(
+                                subscribe_request.short_channel_id,
+                                gatewayd_sender.clone(),
+                            );
+                        }
+                        Some(route_htlc_request::Action::CompleteRequest(complete_request)) => {
+                            let _ = Self::complete_htlc(
+                                complete_request,
+                                interceptors.clone(),
+                                gatewayd_sender.clone(),
+                            )
+                            .await
+                            .map_err(|e| {
+                                error!("CLN extension failed to complete HTLC: {:?}", e);
+                            });
+                        }
+                        None => {
+                            error!("No action was sent as part of RouteHtlcRequest");
+                        }
                     }
                 }
-                Some(Action::Cancel(Cancel { reason: _ })) => {
-                    // TODO: Translate the reason into a BOLT 4 failure message
-                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                    htlc_processing_failure()
-                }
-                None => {
-                    error!("No action specified for intercepted htlc id: {:?}", hash);
-                    return Err(Status::internal(
-                        "No action specified on this intercepted htlc",
-                    ));
-                }
-            };
+            }
+        });
 
-            // Send translated response to the HTLC interceptor for submission to the cln
-            // rpc
-            match outcome.send(htlca_res) {
-                Ok(_) => {
-                    return Ok(tonic::Response::new(CompleteHtlcsResponse {}));
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to send htlc_accepted response to interceptor: {:?}",
-                        e
-                    );
-                    return Err(Status::internal(
-                        "Failed to send htlc_accepted outcome to interceptor",
-                    ));
-                }
-            };
-        } else {
-            error!(
-                "No interceptor reference found for this processed htlc with id: {:?}",
-                intercepted_htlc_id
-            );
-            // TODO: Use error codes to signal the gateway to take reactionary actions
-            return Err(Status::internal(
-                "No interceptor reference found for this processed htlc. Potential loss of funds",
-            ));
-        }
+        Ok(tonic::Response::new(ReceiverStream::new(gatewayd_receiver)))
     }
 }
 
@@ -509,7 +558,7 @@ fn htlc_processing_failure() -> serde_json::Value {
     })
 }
 
-type HtlcSubscriptionSender = mpsc::Sender<Result<SubscribeInterceptHtlcsResponse, Status>>;
+type HtlcSubscriptionSender = mpsc::Sender<Result<RouteHtlcResponse, Status>>;
 type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 
 /// Functional structure to filter intercepted HTLCs into subscription streams.
@@ -517,59 +566,69 @@ type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 #[derive(Clone)]
 pub struct ClnHtlcInterceptor {
     subscriptions: Arc<Mutex<HashMap<u64, HtlcSubscriptionSender>>>,
-    pub outcomes: Arc<Mutex<HashMap<sha256::Hash, HtlcOutcomeSender>>>,
+    pub outcomes: Arc<Mutex<BTreeMap<(u64, u64), HtlcOutcomeSender>>>,
 }
 
 impl ClnHtlcInterceptor {
     fn new() -> Self {
         Self {
             subscriptions: Arc::new(Mutex::new(HashMap::new())),
-            outcomes: Arc::new(Mutex::new(HashMap::new())),
+            outcomes: Arc::new(Mutex::new(BTreeMap::new())),
+        }
+    }
+
+    fn convert_short_channel_id(scid: &str) -> Result<u64, anyhow::Error> {
+        match ShortChannelId::from_str(scid) {
+            Ok(scid) => Ok(scid_to_u64(scid)),
+            Err(_) => Err(anyhow::anyhow!(
+                "Received invalid short channel id: {:?}",
+                scid
+            )),
         }
     }
 
     async fn intercept_htlc(&self, payload: HtlcAccepted) -> serde_json::Value {
-        info!("Intercepted htlc with payload, {:?}", payload);
+        info!(?payload, "Intercepted htlc with payload");
 
         let htlc_expiry = payload.htlc.cltv_expiry;
 
-        let short_channel_id = match payload.onion.short_channel_id {
-            Some(scid) => match ShortChannelId::from_str(&scid) {
-                Ok(scid) => scid_to_u64(scid),
-                Err(_) => {
-                    // Ignore invalid SCID
-                    error!("Received invalid short channel id {:?}", scid);
-                    return serde_json::json!({ "result": "continue" });
-                }
-            },
-            None => {
-                // This is a HTLC terminating at the gateway node. DO NOT intercept
-                return serde_json::json!({ "result": "continue" });
-            }
+        if payload.onion.short_channel_id.is_none() {
+            // This is a HTLC terminating at the gateway node. DO NOT intercept
+            return serde_json::json!({ "result": "continue" });
+        }
+
+        let short_channel_id = match Self::convert_short_channel_id(
+            payload.onion.short_channel_id.unwrap().as_str(),
+        ) {
+            Ok(scid) => scid,
+            Err(_) => return serde_json::json!({ "result": "continue" }),
         };
 
-        info!("Intercepted htlc with SCID: {:?}", short_channel_id);
+        info!(?short_channel_id, "Intercepted htlc with SCID");
 
         if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
             let payment_hash = payload.htlc.payment_hash.to_vec();
 
-            // This has a chance of collision since payment_hashes are not guaranteed to be
-            // unique TODO: generate unique id for each intercepted HTLC
-            let intercepted_htlc_id = sha256::Hash::hash(&payment_hash);
-
-            info!(
-                "Sending htlc to gatewayd for processing. Reference {:?}",
-                intercepted_htlc_id
-            );
+            let incoming_chan_id =
+                match Self::convert_short_channel_id(payload.htlc.short_channel_id.as_str()) {
+                    Ok(scid) => scid,
+                    // Failed to parse incoming_chan_id, just forward the HTLC
+                    Err(_) => return serde_json::json!({ "result": "continue" }),
+                };
 
             match subscription
-                .send(Ok(SubscribeInterceptHtlcsResponse {
-                    payment_hash: payment_hash.clone(),
-                    incoming_amount_msat: payload.htlc.amount_msat.msats,
-                    outgoing_amount_msat: payload.onion.forward_msat.msats,
-                    incoming_expiry: htlc_expiry,
-                    short_channel_id,
-                    intercepted_htlc_id: intercepted_htlc_id.into_inner().to_vec(),
+                .send(Ok(RouteHtlcResponse {
+                    action: Some(route_htlc_response::Action::SubscribeResponse(
+                        SubscribeInterceptHtlcsResponse {
+                            payment_hash: payment_hash.clone(),
+                            incoming_amount_msat: payload.htlc.amount_msat.msats,
+                            outgoing_amount_msat: payload.onion.forward_msat.msats,
+                            incoming_expiry: htlc_expiry,
+                            short_channel_id,
+                            incoming_chan_id,
+                            htlc_id: payload.htlc.id,
+                        },
+                    )),
                 }))
                 .await
             {
@@ -579,7 +638,7 @@ impl ClnHtlcInterceptor {
                     self.outcomes
                         .lock()
                         .await
-                        .insert(intercepted_htlc_id, sender);
+                        .insert((incoming_chan_id, payload.htlc.id), sender);
 
                     // If the gateway does not respond within the HTLC expiry,
                     // Automatically respond with a failure message.
@@ -605,19 +664,6 @@ impl ClnHtlcInterceptor {
         // We have no subscription for this HTLC.
         // Ignore it by requesting the node to continue
         serde_json::json!({ "result": "continue" })
-    }
-
-    async fn add_htlc_subscriber(
-        &self,
-        short_channel_id: u64,
-    ) -> mpsc::Receiver<Result<SubscribeInterceptHtlcsResponse, Status>> {
-        let (sender, receiver) =
-            mpsc::channel::<Result<SubscribeInterceptHtlcsResponse, Status>>(100);
-        self.subscriptions
-            .lock()
-            .await
-            .insert(short_channel_id, sender);
-        receiver
     }
 
     // TODO: Add a method to remove a HTLC subscriber
