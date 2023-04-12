@@ -563,11 +563,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     )
     .env("FM_PASSWORD", "pass-foo");
 
-    cmd!(
-        "cmp",
-        "--silent",
-        "{data_dir}/server-0/config-plaintext.json",
-        "{data_dir}/server-0/config-plaintext-2.json",
+    let plaintext_one =
+        fs::read_to_string(format!("{data_dir}/server-0/config-plaintext.json")).await?;
+    let plaintext_two =
+        fs::read_to_string(format!("{data_dir}/server-0/config-plaintext-2.json")).await?;
+    anyhow::ensure!(
+        plaintext_one == plaintext_two,
+        "config-decrypt/encrypt failed"
     );
 
     fed.pegin(10_000).await;
