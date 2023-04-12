@@ -1,3 +1,6 @@
+/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
+pub mod broadcaststream;
+
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;

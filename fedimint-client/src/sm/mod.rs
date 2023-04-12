@@ -4,6 +4,10 @@ pub(crate) mod executor;
 mod state;
 pub mod util;
 
+// FIXME: use DB subscriptions? Needs prefix subscriptions :(
+/// Helper to notify modules about state transitions
+mod notifier;
+
 use std::fmt::Debug;
 
 pub use dbtx::ClientSMDatabaseTransaction;
