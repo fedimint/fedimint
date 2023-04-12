@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
-use futures::{stream, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use macro_rules_attribute::apply;
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -554,32 +554,32 @@ impl<'a> CommittableIsolatedDatabaseTransaction<'a> {
 #[apply(async_trait_maybe_send!)]
 impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.raw_insert_bytes(key, value).await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.raw_get_bytes(key).await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
-        let stream = isolated
-            .raw_find_by_prefix(key_prefix)
-            .await?
-            .collect::<Vec<_>>()
-            .await;
-        Ok(Box::pin(stream::iter(stream)))
+        let prefix_with_module = IsolatedDatabaseTransaction::prefix_with_module(&self.prefix);
+        IsolatedDatabaseTransaction::<u16>::raw_find_by_prefix(
+            prefix_with_module,
+            self.dbtx.as_mut(),
+            key_prefix,
+        )
+        .await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.raw_remove_by_prefix(key_prefix).await
     }
 
@@ -588,17 +588,17 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransa
     }
 
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.rollback_tx_to_savepoint().await
     }
 
     async fn set_tx_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.set_tx_savepoint().await
     }
 
     fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(self.prefix));
+        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.add_notification_key(key)
     }
 }
@@ -622,7 +622,7 @@ pub struct ModuleDatabaseTransaction<
 impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T> {
     pub fn new<'parent: 'isolated>(
         dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-        module_prefix: Option<T>,
+        module_prefix: Option<&T>,
         decoders: &'isolated ModuleDecoderRegistry,
         commit_tracker: &'isolated mut CommitTracker,
     ) -> ModuleDatabaseTransaction<'isolated, T> {
@@ -779,14 +779,11 @@ impl<'isolated, 'parent: 'isolated, T: MaybeSend + Encodable>
 {
     pub fn new(
         dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-        module_prefix: Option<T>,
+        module_prefix: Option<&T>,
     ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
         let mut prefix_bytes = vec![];
         if let Some(module_prefix) = module_prefix {
-            prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
-            module_prefix
-                .consensus_encode(&mut prefix_bytes)
-                .expect("Error encoding module instance id as prefix");
+            prefix_bytes = Self::prefix_with_module(module_prefix);
         }
 
         IsolatedDatabaseTransaction {
@@ -794,6 +791,33 @@ impl<'isolated, 'parent: 'isolated, T: MaybeSend + Encodable>
             prefix: prefix_bytes,
             _marker: PhantomData::<T>,
         }
+    }
+
+    fn prefix_with_module(module_prefix: &T) -> Vec<u8> {
+        let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
+        module_prefix
+            .consensus_encode(&mut prefix_bytes)
+            .expect("Error encoding module instance id as prefix");
+        prefix_bytes
+    }
+
+    // Yes, this could be proper method receiving self but it's hard to return a
+    // stream and satisfy the borrow checker if this struct is short lived
+    async fn raw_find_by_prefix(
+        mut prefix_with_module: Vec<u8>,
+        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'isolated>> {
+        let original_prefix_len = prefix_with_module.len();
+        prefix_with_module.extend_from_slice(key_prefix);
+        let raw_prefix = dbtx
+            .raw_find_by_prefix(prefix_with_module.as_slice())
+            .await?;
+
+        Ok(Box::pin(raw_prefix.map(move |(key, value)| {
+            let stripped_key = &key[original_prefix_len..];
+            (stripped_key.to_vec(), value)
+        })))
     }
 }
 
@@ -827,18 +851,12 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        let mut prefix_with_module = self.prefix.clone();
-        prefix_with_module.extend_from_slice(key_prefix);
-        let raw_prefix = self
-            .inner_tx
-            .raw_find_by_prefix(prefix_with_module.as_slice())
-            .await?;
-
-        Ok(Box::pin(raw_prefix.map(|kv| {
-            let key = kv.0;
-            let stripped_key = &key[(self.prefix.len())..];
-            (stripped_key.to_vec(), kv.1)
-        })))
+        IsolatedDatabaseTransaction::<T>::raw_find_by_prefix(
+            self.prefix.clone(),
+            self.inner_tx,
+            key_prefix,
+        )
+        .await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
@@ -915,7 +933,7 @@ impl<'parent> DatabaseTransaction<'parent> {
     ) -> ModuleDatabaseTransaction<'_> {
         ModuleDatabaseTransaction::new(
             self.tx.as_mut(),
-            Some(module_instance_id),
+            Some(&module_instance_id),
             &self.decoders,
             &mut self.commit_tracker,
         )
