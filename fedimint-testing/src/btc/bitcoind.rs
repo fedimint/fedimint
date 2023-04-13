@@ -1,11 +1,104 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::ffi::OsString;
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
-use fedimint_bitcoind::{IBitcoindRpc, Result};
-use fedimint_core::Feerate;
+use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, Result};
+use fedimint_core::config::{
+    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+};
+use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
+use fedimint_core::module::{
+    CoreConsensusVersion, ExtendsCommonModuleGen, ModuleConsensusVersion, PeerHandle,
+    ServerModuleGen,
+};
+use fedimint_core::server::DynServerModule;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::{apply, async_trait_maybe_send, Feerate, PeerId};
+use fedimint_wallet_client::WalletCommonGen;
+use fedimint_wallet_server::{Wallet, WalletGen};
+use serde_json::Value;
+
+#[derive(Debug, Clone)]
+/// Used to create a wallet module with a mock bitcoind
+pub struct FakeWalletGen {
+    inner: WalletGen,
+    bitcoin_rpc: DynBitcoindRpc,
+}
+
+impl FakeWalletGen {
+    pub fn new(bitcoin_rpc: DynBitcoindRpc) -> Self {
+        Self {
+            inner: WalletGen,
+            bitcoin_rpc,
+        }
+    }
+}
+
+impl ExtendsCommonModuleGen for FakeWalletGen {
+    type Common = WalletCommonGen;
+}
+
+#[apply(async_trait_maybe_send!)]
+impl ServerModuleGen for FakeWalletGen {
+    const DATABASE_VERSION: DatabaseVersion = WalletGen::DATABASE_VERSION;
+
+    fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+        self.inner.versions(core)
+    }
+
+    async fn init(
+        &self,
+        cfg: ServerModuleConfig,
+        db: Database,
+        _env: &BTreeMap<OsString, OsString>,
+        task_group: &mut TaskGroup,
+    ) -> Result<DynServerModule> {
+        Ok(Wallet::new_with_bitcoind(
+            cfg.to_typed().expect("config is correct type"),
+            db,
+            self.bitcoin_rpc.clone(),
+            task_group,
+        )
+        .await?
+        .into())
+    }
+
+    fn trusted_dealer_gen(
+        &self,
+        peers: &[PeerId],
+        params: &ConfigGenModuleParams,
+    ) -> BTreeMap<PeerId, ServerModuleConfig> {
+        self.inner.trusted_dealer_gen(peers, params)
+    }
+
+    async fn distributed_gen(
+        &self,
+        peer: &PeerHandle,
+        params: &ConfigGenModuleParams,
+    ) -> DkgResult<ServerModuleConfig> {
+        self.inner.distributed_gen(peer, params).await
+    }
+
+    fn to_config_response(&self, config: Value) -> Result<ModuleConfigResponse> {
+        self.inner.to_config_response(config)
+    }
+
+    fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> Result<()> {
+        self.inner.validate_config(identity, config)
+    }
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        self.inner.dump_database(dbtx, prefix_names).await
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct FakeBitcoindRpcState {

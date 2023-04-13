@@ -18,6 +18,7 @@ async-trait = "*"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
+erased-serde = "0.3"
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-client  = { path = "../fedimint-client" }
@@ -25,6 +26,7 @@ fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
+fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 ln-gateway = { path = "../gateway/ln-gateway" }
 futures = "0.3"

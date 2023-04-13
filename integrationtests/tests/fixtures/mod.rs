@@ -33,10 +33,9 @@ use fedimint_core::core::{
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
-use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, DynServerModuleGen, ModuleCommon};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, RwLock, TaskGroup};
 use fedimint_core::{
     core, sats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
@@ -50,13 +49,13 @@ use fedimint_mint_server::common::MintOutput;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::{
-    ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome, TransactionSubmissionError,
+    ConsensusProposal, HbbftConsensusOutcome, TransactionSubmissionError,
 };
-use fedimint_server::db::GLOBAL_DATABASE_VERSION;
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
 use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
 use fedimint_server::{consensus, EpochMessage, FedimintServer};
+use fedimint_testing::btc::bitcoind::FakeWalletGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::fixtures::FakeLightningTest;
@@ -221,12 +220,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     );
     let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
-    let server_module_inits = ServerModuleGenRegistry::from(vec![
-        DynServerModuleGen::from(WalletGen),
-        DynServerModuleGen::from(MintGen),
-        DynServerModuleGen::from(LightningGen),
-    ]);
-
     let client_module_inits = ClientModuleGenRegistry::from(vec![
         DynClientModuleGen::from(WalletClientGen),
         DynClientModuleGen::from(MintClientGen),
@@ -237,6 +230,12 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
     let fixtures = match env::var("FM_TEST_USE_REAL_DAEMONS") {
         Ok(s) if s == "1" => {
+            let server_module_inits = ServerModuleGenRegistry::from(vec![
+                DynServerModuleGen::from(WalletGen),
+                DynServerModuleGen::from(MintGen),
+                DynServerModuleGen::from(LightningGen),
+            ]);
+
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
             let (server_config, client_config) = distributed_config(
@@ -308,7 +307,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 &|| bitcoin_rpc.clone(),
                 &connect_gen,
                 server_module_inits.clone(),
-                |_cfg: ServerConfig, _db| Box::pin(async { BTreeMap::default() }),
                 &mut task_group,
             )
             .await;
@@ -356,6 +354,15 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
+            let bitcoin = FakeBitcoinTest::new();
+            let bitcoin_rpc = || bitcoin.clone().into();
+
+            let server_module_inits = ServerModuleGenRegistry::from(vec![
+                DynServerModuleGen::from(FakeWalletGen::new(bitcoin.clone().into())),
+                DynServerModuleGen::from(MintGen),
+                DynServerModuleGen::from(LightningGen),
+            ]);
+
             let server_config = ServerConfig::trusted_dealer_gen(
                 &params,
                 server_module_inits.clone().legacy_init_modules(),
@@ -364,10 +371,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 .consensus
                 .to_config_response(&server_module_inits)
                 .client;
-
-            let bitcoin = FakeBitcoinTest::new();
-            let bitcoin_rpc = || bitcoin.clone().into();
-            let bitcoin_rpc_2: DynBitcoindRpc = bitcoin.clone().into();
 
             let lightning = FakeLightningTest::new();
             let ln_arc = Arc::new(RwLock::new(lightning.clone()));
@@ -388,31 +391,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 &bitcoin_rpc,
                 &connect_gen,
                 server_module_inits.clone(),
-                // the things dealing with async makes us do...
-                // if you know how to make it better, please do --dpc
-                |cfg: ServerConfig, db: Database| {
-                    Box::pin({
-                        let bitcoin_rpc_2 = bitcoin_rpc_2.clone();
-                        let mut task_group = task_group.clone();
-                        async move {
-                            BTreeMap::from([(
-                                "wallet",
-                                Wallet::new_with_bitcoind(
-                                    cfg.get_module_config_typed(
-                                        cfg.get_module_id_by_kind("wallet").unwrap(),
-                                    )
-                                    .unwrap(),
-                                    db,
-                                    bitcoin_rpc_2.clone(),
-                                    &mut task_group,
-                                )
-                                .await
-                                .expect("Couldn't create wallet")
-                                .into(),
-                            )])
-                        }
-                    })
-                },
                 &mut task_group.clone(),
             )
             .await;
@@ -908,6 +886,7 @@ impl FederationTest {
                 .await
                 .fedimint
                 .consensus
+                .api
                 .submit_transaction(transaction.clone())
                 .await?;
         }
@@ -924,6 +903,7 @@ impl FederationTest {
                 .await
                 .fedimint
                 .consensus
+                .api
                 .transaction_status(txid)
                 .await;
             result.push(status);
@@ -1314,17 +1294,14 @@ impl FederationTest {
     ) -> anyhow::Result<()> {
         tokio::time::sleep(delay).await;
         let mut server = server.lock().await;
-        let consensus = server.fedimint.consensus.clone();
+        let mut proposal = server.fedimint.consensus.get_consensus_proposal().await;
+        let override_proposal = server.override_proposal.clone();
 
-        let overrider = server.override_proposal.clone();
-        let proposal = async { overrider.unwrap_or(consensus.get_consensus_proposal().await) };
-        server
-            .dropped_peers
-            .append(&mut consensus.get_consensus_proposal().await.drop_peers);
+        server.dropped_peers.append(&mut proposal.drop_peers);
 
         server.last_consensus = server
             .fedimint
-            .run_consensus_epoch(proposal, &mut rng())
+            .run_consensus_epoch(override_proposal, &mut rng())
             .await?;
 
         for outcome in server.last_consensus.clone() {
@@ -1385,12 +1362,6 @@ impl FederationTest {
         bitcoin_gen: &impl Fn() -> DynBitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
         module_inits: ServerModuleGenRegistry,
-        override_modules: impl Fn(
-            ServerConfig,
-            Database,
-        ) -> Pin<
-            Box<dyn Future<Output = BTreeMap<&'static str, DynServerModule>>>,
-        >,
         task_group: &mut TaskGroup,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
@@ -1399,79 +1370,18 @@ impl FederationTest {
             let db = database_gen(decoders.clone());
             let mut task_group = task_group.clone();
 
-            let mut override_modules = override_modules(cfg.clone(), db.clone()).await;
-
-            let mut modules = BTreeMap::new();
-            let env_vars = FedimintConsensus::get_env_vars_map();
-
-            fedimint_core::db::apply_migrations(
-                &db,
-                "Global".to_string(),
-                GLOBAL_DATABASE_VERSION,
-                fedimint_server::db::get_global_database_migrations(),
-            )
-            .await
-            .unwrap_or_else(|_| panic!("Error while applying global database migrations"));
-
-            for (kind, gen) in module_inits.legacy_init_order_iter() {
-                let id = cfg.get_module_id_by_kind(kind.clone()).unwrap();
-                if let Some(module) = override_modules.remove(kind.as_str()) {
-                    info!(module_instance_id = id, kind = %kind, "Use overridden module");
-                    modules.insert(id, module);
-                } else {
-                    info!(module_instance_id = id, kind = %kind, "Init module");
-
-                    let isolated_db = db.new_isolated(id);
-                    fedimint_core::db::apply_migrations(
-                        &isolated_db,
-                        kind.to_string(),
-                        gen.database_version(),
-                        gen.get_database_migrations(),
-                    )
-                    .await
-                    .unwrap_or_else(|_| {
-                        panic!("Error while applying database migrations for module {kind}")
-                    });
-
-                    let module = gen
-                        .init(
-                            cfg.get_module_config(id).unwrap(),
-                            isolated_db,
-                            &env_vars,
-                            &mut task_group,
-                        )
-                        .await
-                        .unwrap();
-                    modules.insert(id, module);
-                }
-            }
-
-            let (consensus, tx_receiver) = FedimintConsensus::new_with_modules(
+            let mut fedimint = FedimintServer::new_with(
                 cfg.clone(),
                 db.clone(),
                 module_inits.clone(),
-                ModuleRegistry::from(modules),
-            );
-            let decoders = consensus.decoders();
-
-            let fedimint = FedimintServer::new_with(
-                cfg.clone(),
-                consensus,
-                tx_receiver,
                 connect_gen(cfg),
-                decoders,
                 DelayCalculator::TEST_DEFAULT,
                 &mut task_group,
             )
-            .await;
+            .await
+            .expect("failed to init server");
 
-            let cfg = cfg.clone();
-            let consensus = fedimint.consensus.clone();
-            task_group
-                .spawn("rpc server", move |handle| async {
-                    fedimint_server::net::api::run_server(cfg, consensus, handle).await
-                })
-                .await;
+            fedimint.spawn_api().await;
 
             Arc::new(Mutex::new(ServerTest {
                 fedimint,
