@@ -459,7 +459,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3c196a77437e7cc2fb515ce413a6401291578b5afc8ecb29a3c7ab957f05941"
 dependencies = [
- "ff",
+ "ff 0.12.1",
  "group",
  "pairing",
  "rand_core",
@@ -1797,6 +1797,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ff"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ded41244b729663b1e574f1b4fb731469f69f79c17667b5d776b16cda0479449"
+dependencies = [
+ "bitvec",
+ "rand_core",
+ "subtle",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2099,7 +2110,7 @@ version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dfbfb3a6cfbd390d5c9564ab283a0349b9b9fcd46a706c1eb10e0db70bfbac7"
 dependencies = [
- "ff",
+ "ff 0.12.1",
  "rand_core",
  "subtle",
 ]
@@ -4639,7 +4650,7 @@ dependencies = [
  "bitcoin_hashes",
  "bls12_381",
  "clap",
- "ff",
+ "ff 0.13.0",
  "group",
  "rand",
  "rand_chacha",
@@ -4725,7 +4736,7 @@ source = "git+https://github.com/fedimint/threshold_crypto#f5b283e74268f566eae74
 dependencies = [
  "bls12_381",
  "byteorder",
- "ff",
+ "ff 0.12.1",
  "group",
  "hex_fmt",
  "log",
