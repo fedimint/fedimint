@@ -92,6 +92,9 @@
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt::{Debug, Display, Formatter};
 <span class="kw">use </span>std::future::Future;
@@ -103,6 +106,9 @@
 
 <span class="doccomment">/// Future that is `Send` unless targeting WASM
 </span><span class="kw">pub type </span>BoxFuture&lt;<span class="lifetime">&#39;a</span>, T&gt; = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = T&gt; + <span class="lifetime">&#39;a</span>)&gt;&gt;;
+
+<span class="doccomment">/// Stream that is `Send` unless targeting WASM
+</span><span class="kw">pub type </span>BoxStream&lt;<span class="lifetime">&#39;a</span>, T&gt; = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>futures::Stream&lt;Item = T&gt; + <span class="lifetime">&#39;a</span>)&gt;&gt;;
 
 <span class="comment">// TODO: make fully RFC1738 conformant
 </span><span class="doccomment">/// Wrapper for `Url` that only prints the scheme, domain, port and path portion
