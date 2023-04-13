@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use fedimint_core::time::now;
 use fedimint_logging::LOG_TASK;
 #[cfg(target_family = "wasm")]
 use futures::channel::oneshot;
@@ -244,26 +245,34 @@ impl TaskGroup {
         rx
     }
 
-    pub async fn join_all(self, join_timeout: Option<Duration>) -> Result<(), anyhow::Error> {
+    pub async fn join_all(self, timeout: Option<Duration>) -> Result<(), anyhow::Error> {
         let mut errors = vec![];
+
+        let deadline = timeout.map(|timeout| now() + timeout);
+
         while let Some((name, join)) = self.inner.join.lock().await.pop_front() {
             debug!(target: LOG_TASK, task=%name, "Waiting for task to finish");
 
+            let timeout = deadline.map(|deadline| {
+                deadline
+                    .duration_since(now())
+                    .unwrap_or(Duration::from_millis(10))
+            });
+
             #[cfg(not(target_family = "wasm"))]
             let join_future: Pin<Box<dyn Future<Output = _> + Send>> =
-                if let Some(join_timeout) = join_timeout {
-                    Box::pin(timeout(join_timeout, join))
+                if let Some(timeout) = timeout {
+                    Box::pin(self::timeout(timeout, join))
                 } else {
                     Box::pin(async move { Ok(join.await) })
                 };
 
             #[cfg(target_family = "wasm")]
-            let join_future: Pin<Box<dyn Future<Output = _>>> =
-                if let Some(join_timeout) = join_timeout {
-                    Box::pin(timeout(join_timeout, join))
-                } else {
-                    Box::pin(async move { Ok(join.await) })
-                };
+            let join_future: Pin<Box<dyn Future<Output = _>>> = if let Some(timeout) = timeout {
+                Box::pin(self::timeout(timeout, join))
+            } else {
+                Box::pin(async move { Ok(join.await) })
+            };
 
             match join_future.await {
                 Ok(Ok(())) => {
