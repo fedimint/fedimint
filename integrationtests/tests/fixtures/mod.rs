@@ -171,7 +171,10 @@ where
             fixtures.lightning,
         )
         .await;
-        fixtures.task_group.shutdown_join_all(None).await?;
+        fixtures
+            .task_group
+            .shutdown_join_all(Some(Duration::from_secs(30)))
+            .await?;
     }
     Ok(())
 }
