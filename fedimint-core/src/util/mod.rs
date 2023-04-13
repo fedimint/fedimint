@@ -6,15 +6,48 @@ use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
 
+use futures::StreamExt;
+use tracing::debug;
 use url::Url;
 
-use crate::maybe_add_send;
+use crate::task::MaybeSend;
+use crate::{apply, async_trait_maybe_send, maybe_add_send};
 
 /// Future that is `Send` unless targeting WASM
 pub type BoxFuture<'a, T> = Pin<Box<maybe_add_send!(dyn Future<Output = T> + 'a)>>;
 
 /// Stream that is `Send` unless targeting WASM
 pub type BoxStream<'a, T> = Pin<Box<maybe_add_send!(dyn futures::Stream<Item = T> + 'a)>>;
+
+#[apply(async_trait_maybe_send!)]
+pub trait NextOrPending {
+    type Output;
+
+    async fn next_or_pending(&mut self) -> Self::Output;
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<S> NextOrPending for S
+where
+    S: futures::Stream + Unpin + MaybeSend,
+    S::Item: MaybeSend,
+{
+    type Output = S::Item;
+
+    /// Waits for the next item in a stream. If the stream is closed while
+    /// waiting the future will be pending forever. This is useful in cases
+    /// where the future will be cancelled by shutdown logic anyway and handling
+    /// each place where a stream may terminate would be too much trouble.
+    async fn next_or_pending(&mut self) -> Self::Output {
+        match self.next().await {
+            Some(item) => item,
+            None => {
+                debug!("Stream ended in next_or_pending, pending forever to avoid throwing an error on shutdown");
+                std::future::pending().await
+            }
+        }
+    }
+}
 
 // TODO: make fully RFC1738 conformant
 /// Wrapper for `Url` that only prints the scheme, domain, port and path portion
@@ -66,9 +99,14 @@ impl<'a> Debug for SanitizedUrl<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use fedimint_core::task::Elapsed;
+    use futures::FutureExt;
     use url::Url;
 
-    use crate::util::SanitizedUrl;
+    use crate::task::timeout;
+    use crate::util::{NextOrPending, SanitizedUrl};
 
     #[test]
     fn test_sanitized_url() {
@@ -96,5 +134,16 @@ mod tests {
                 "Debug implementation out of spec"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_next_or_pending() {
+        let mut stream = futures::stream::iter(vec![1, 2]);
+        assert_eq!(stream.next_or_pending().now_or_never(), Some(1));
+        assert_eq!(stream.next_or_pending().now_or_never(), Some(2));
+        assert!(matches!(
+            timeout(Duration::from_millis(100), stream.next_or_pending()).await,
+            Err(Elapsed)
+        ));
     }
 }

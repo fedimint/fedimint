@@ -451,7 +451,7 @@ pub struct ActiveStateKey<GC> {
 }
 
 impl<GC> ActiveStateKey<GC> {
-    fn from_state(state: DynState<GC>) -> ActiveStateKey<GC> {
+    pub(crate) fn from_state(state: DynState<GC>) -> ActiveStateKey<GC> {
         ActiveStateKey {
             operation_id: state.operation_id(),
             state,
@@ -572,7 +572,7 @@ pub struct InactiveStateKey<GC> {
 }
 
 impl<GC> InactiveStateKey<GC> {
-    fn from_state(state: DynState<GC>) -> InactiveStateKey<GC> {
+    pub(crate) fn from_state(state: DynState<GC>) -> InactiveStateKey<GC> {
         InactiveStateKey {
             operation_id: state.operation_id(),
             state,

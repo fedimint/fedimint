@@ -7,17 +7,19 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::ClientConfig;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use futures::StreamExt;
 use rand::distributions::{Distribution, Standard};
 use rand::{thread_rng, Rng};
 use secp256k1_zkp::Secp256k1;
@@ -27,8 +29,7 @@ use crate::db::ClientSecretKey;
 use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
 use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::{
-    ActiveState, ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, InactiveState,
-    OperationId, OperationState,
+    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, OperationId, OperationState,
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -63,11 +64,10 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId>;
 
-    /// Wait for any active state to appear in the database
-    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState;
-
-    /// Wait for any inactive state to appear in the database
-    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState;
+    async fn transaction_update_stream(
+        &self,
+        operation_id: OperationId,
+    ) -> BoxStream<OperationState<TxSubmissionStates>>;
 }
 
 dyn_newtype_define! {
@@ -78,34 +78,34 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
-    /// Waits till consensus has been achieved on the transaction and it was
-    /// accepted by consensus.
-    pub async fn await_tx_accepted(
-        &self,
-        operation_id: OperationId,
-        txid: TransactionId,
-    ) -> InactiveState {
-        let state = OperationState {
-            operation_id,
-            state: TxSubmissionStates::Accepted { txid },
-        };
-        self.await_inactive_state(state.into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE))
-            .await
+    pub async fn await_tx_accepted(&self, operation_id: OperationId, txid: TransactionId) {
+        let update_stream = self.transaction_update_stream(operation_id).await;
+
+        let query_txid = txid;
+        update_stream
+            .filter(move |tx_submission_state| {
+                std::future::ready(matches!(
+                    tx_submission_state.state,
+                    TxSubmissionStates::Accepted { txid, .. } if txid == query_txid
+                ))
+            })
+            .next_or_pending()
+            .await;
     }
 
-    /// Waits till the transaction is either rejected on submission or after
-    /// consensus has been achieved on it.
-    pub async fn await_tx_rejected(
-        &self,
-        operation_id: OperationId,
-        txid: TransactionId,
-    ) -> InactiveState {
-        let state = OperationState {
-            operation_id,
-            state: TxSubmissionStates::Rejected { txid },
-        };
-        self.await_inactive_state(state.into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE))
-            .await
+    pub async fn await_tx_rejected(&self, operation_id: OperationId, txid: TransactionId) {
+        let update_stream = self.transaction_update_stream(operation_id).await;
+
+        let query_txid = txid;
+        update_stream
+            .filter(move |tx_submission_state| {
+                std::future::ready(matches!(
+                    tx_submission_state.state,
+                    TxSubmissionStates::Rejected { txid, .. } if txid == query_txid
+                ))
+            })
+            .next_or_pending()
+            .await;
     }
 }
 
@@ -148,12 +148,17 @@ impl IGlobalClientContext for ClientInner {
         .await
     }
 
-    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState {
-        ClientInner::await_active_state(self, state).await
-    }
-
-    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState {
-        ClientInner::await_inactive_state(self, state).await
+    async fn transaction_update_stream(
+        &self,
+        operation_id: OperationId,
+    ) -> BoxStream<OperationState<TxSubmissionStates>> {
+        self.executor
+            .notifier()
+            .module_notifier::<OperationState<TxSubmissionStates>>(
+                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            )
+            .subscribe(operation_id)
+            .await
     }
 }
 

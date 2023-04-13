@@ -224,16 +224,14 @@ mod tests {
     use fedimint_core::module::ApiRequestErased;
     use fedimint_core::task::TaskGroup;
     use fedimint_core::transaction::SerdeTransaction;
+    use fedimint_core::util::BoxStream;
     use fedimint_core::{PeerId, TransactionId};
     use rand::thread_rng;
     use serde_json::Value;
     use tokio::sync::Mutex;
     use tokio::time::{sleep, timeout};
 
-    use crate::sm::{
-        ActiveState, ClientSMDatabaseTransaction, DynState, Executor, InactiveState, OperationId,
-        OperationState,
-    };
+    use crate::sm::{ClientSMDatabaseTransaction, Executor, OperationId, OperationState};
     use crate::transaction::{
         tx_submission_sm_decoder, TransactionBuilder, TxSubmissionContext, TxSubmissionStates,
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -349,15 +347,17 @@ mod tests {
             Ok(txid)
         }
 
-        async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState {
-            self.executor.await_active_state(state).await
-        }
-
-        async fn await_inactive_state(
+        async fn transaction_update_stream(
             &self,
-            state: DynState<DynGlobalClientContext>,
-        ) -> InactiveState {
-            self.executor.await_inactive_state(state).await
+            operation_id: OperationId,
+        ) -> BoxStream<OperationState<TxSubmissionStates>> {
+            self.executor
+                .notifier()
+                .module_notifier::<OperationState<TxSubmissionStates>>(
+                    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+                )
+                .subscribe(operation_id)
+                .await
         }
     }
 
