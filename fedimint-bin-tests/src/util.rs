@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::ffi::OsStr;
 
 use anyhow::{anyhow, bail};
+use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tracing::warn;
@@ -93,7 +94,21 @@ impl Command {
         self
     }
 
-    pub fn envs(mut self, env: HashMap<String, String>) -> Self {
+    pub fn env<K, V>(mut self, key: K, val: V) -> Self
+    where
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
+        self.cmd.env(key, val);
+        self
+    }
+
+    pub fn envs<I, K, V>(mut self, env: I) -> Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
         self.cmd.envs(env);
         self
     }
@@ -233,5 +248,15 @@ impl ToCmdExt for &'_ str {
             cmd: tokio::process::Command::new(self),
             args_debug: vec![self.to_owned()],
         })
+    }
+}
+
+pub trait JsonValueExt {
+    fn to_typed<T: DeserializeOwned>(self) -> Result<T>;
+}
+
+impl JsonValueExt for serde_json::Value {
+    fn to_typed<T: DeserializeOwned>(self) -> Result<T> {
+        Ok(serde_json::from_value(self)?)
     }
 }
