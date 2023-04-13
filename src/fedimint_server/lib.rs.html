@@ -626,12 +626,87 @@
 <a href="#626" id="626">626</a>
 <a href="#627" id="627">627</a>
 <a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
 <span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-<span class="kw">use </span>std::future::Future;
+<span class="kw">use </span>std::os::unix::ffi::OsStrExt;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -640,12 +715,12 @@
 <span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
 <span class="kw">use </span>fedimint_core::cancellable::Cancellable;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
-<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::db::{apply_migrations, Database};
 <span class="kw">use </span>fedimint_core::encoding::DecodeError;
 <span class="kw">use </span>fedimint_core::epoch::{
     ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
@@ -660,7 +735,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tokio::sync::mpsc::Receiver;
+<span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tracing::{error, info, warn};
 
@@ -668,9 +743,10 @@
     ApiEvent, ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome,
     HbbftSerdeConsensusOutcome,
 };
-<span class="kw">use </span><span class="kw">crate</span>::db::LastEpochKey;
+<span class="kw">use </span><span class="kw">crate</span>::db::{get_global_database_migrations, LastEpochKey, GLOBAL_DATABASE_VERSION};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::peers::IPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::api::ConsensusApi;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{PeerConnector, PeerSlice, ReconnectPeerConnections};
 
@@ -693,6 +769,9 @@
 
 <span class="doccomment">/// how many epochs ahead of consensus to rejoin
 </span><span class="kw">const </span>NUM_EPOCHS_REJOIN_AHEAD: u64 = <span class="number">10</span>;
+
+<span class="doccomment">/// How many txs can be stored in memory before blocking the API
+</span><span class="kw">const </span>TRANSACTION_BUFFER_SIZE: usize = <span class="number">1000</span>;
 
 <span class="attr">#[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
@@ -719,7 +798,7 @@
     <span class="doccomment">/// `TaskGroup` that is running the server
     </span><span class="kw">pub </span>task_group: TaskGroup,
     <span class="doccomment">/// Delegate for processing consensus information
-    </span><span class="kw">pub </span>consensus: Arc&lt;FedimintConsensus&gt;,
+    </span><span class="kw">pub </span>consensus: FedimintConsensus,
     <span class="doccomment">/// Receives event notifications from the API (triggers epochs)
     </span><span class="kw">pub </span>api_receiver: Peekable&lt;ReceiverStream&lt;ApiEvent&gt;&gt;,
     <span class="doccomment">/// P2P connections for running consensus
@@ -747,32 +826,22 @@
     </span><span class="kw">pub async fn </span>run(
         cfg: ServerConfig,
         db: Database,
-        module_gens: ServerModuleGenRegistry,
+        module_inits: ServerModuleGenRegistry,
         upgrade_epoch: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>decoders = module_gens.decoders(cfg.iter_module_instances())<span class="question-mark">?</span>;
+        <span class="kw">let </span>our_hash = cfg
+            .consensus
+            .to_config_response(<span class="kw-2">&amp;</span>module_inits)
+            .consensus_hash;
 
-        <span class="kw">let </span>(consensus, api_receiver) =
-            FedimintConsensus::new(cfg.clone(), db, module_gens, task_group).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>server = FedimintServer::new(cfg.clone(), db, module_inits, task_group).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = upgrade_epoch {
-            consensus.remove_upgrade_items(epoch).<span class="kw">await</span><span class="question-mark">?</span>;
+            server.consensus.remove_upgrade_items(epoch).<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
-        <span class="kw">let </span>server =
-            FedimintServer::new(cfg.clone(), consensus, api_receiver, decoders, task_group).<span class="kw">await</span>;
-        <span class="kw">let </span>server_consensus = server.consensus.clone();
-        <span class="kw">let </span>consensus = server
-            .cfg
-            .consensus
-            .to_config_response(<span class="kw-2">&amp;</span>server_consensus.module_inits);
-
-        task_group
-            .spawn(<span class="string">&quot;api-server&quot;</span>, |handle| {
-                net::api::run_server(cfg, server_consensus, handle)
-            })
-            .<span class="kw">await</span>;
+        server.spawn_api().<span class="kw">await</span>;
 
         <span class="kw">loop </span>{
             <span class="macro">info!</span>(
@@ -780,7 +849,7 @@
                 <span class="string">&quot;Waiting for peers to agree on a consensus config hash&quot;
             </span>);
             <span class="kw">match </span>server.api.consensus_config_hash().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == consensus.consensus_hash =&gt; <span class="kw">break</span>,
+                <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == our_hash =&gt; <span class="kw">break</span>,
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;ERROR {:?}&quot;</span>, e)
@@ -795,41 +864,100 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>new(
+    <span class="doccomment">/// Starts the API listening in a new thread
+    </span><span class="kw">pub async fn </span>spawn_api(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span>api = Arc::new(<span class="self">self</span>.consensus.api.clone());
+        <span class="kw">let </span>cfg = <span class="self">self</span>.cfg.clone();
+        <span class="self">self</span>.task_group
+            .spawn(<span class="string">&quot;api-server&quot;</span>, |handle| {
+                net::api::run_server(cfg, api, handle)
+            })
+            .<span class="kw">await</span>;
+    }
+
+    <span class="doccomment">/// Creates a server with real network and no delays
+    </span><span class="kw">pub async fn </span>new(
         cfg: ServerConfig,
-        consensus: FedimintConsensus,
-        api_receiver: Receiver&lt;ApiEvent&gt;,
-        decoders: ModuleDecoderRegistry,
+        db: Database,
+        module_inits: ServerModuleGenRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="self">Self </span>{
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>connector: PeerConnector&lt;EpochMessage&gt; =
             TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
 
         <span class="self">Self</span>::new_with(
-            cfg.clone(),
-            consensus,
-            api_receiver,
+            cfg,
+            db,
+            module_inits,
             connector,
-            decoders,
             DelayCalculator::default(),
             task_group,
         )
         .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>new_with(
+    <span class="doccomment">/// Creates a server that can simulate network and delays
+    ///
+    /// Initializes modules and runs any database migrations
+    </span><span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
-        consensus: FedimintConsensus,
-        api_receiver: Receiver&lt;ApiEvent&gt;,
+        db: Database,
+        module_inits: ServerModuleGenRegistry,
         connector: PeerConnector&lt;EpochMessage&gt;,
-        decoders: ModuleDecoderRegistry,
         delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="self">Self </span>{
-        cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>consensus.module_inits)
-            .expect(<span class="string">&quot;invalid config&quot;</span>);
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// Apply database migrations and build `ServerModuleRegistry`
+        </span><span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+        <span class="kw">let </span>env = std::env::vars_os()
+            <span class="comment">// We currently have no way to enforce that modules are not reading
+            // global environment variables manually, but to set a good example
+            // and expectations we filter them here and pass explicitly.
+            </span>.filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(<span class="string">b&quot;FM_&quot;</span>))
+            .collect();
 
-        <span class="kw">let </span>connections = ReconnectPeerConnections::new(
+        apply_migrations(
+            <span class="kw-2">&amp;</span>db,
+            <span class="string">&quot;Global&quot;</span>.to_string(),
+            GLOBAL_DATABASE_VERSION,
+            get_global_database_migrations(),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
+            <span class="kw">let </span>kind = module_cfg.kind();
+
+            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = module_inits.get(kind) <span class="kw">else </span>{
+                <span class="macro">bail!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>)
+            };
+            <span class="macro">info!</span>(target: LOG_CORE,
+                module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">&quot;Init module&quot;</span>);
+
+            <span class="kw">let </span>isolated_db = db.new_isolated(<span class="kw-2">*</span>module_id);
+            apply_migrations(
+                <span class="kw-2">&amp;</span>isolated_db,
+                init.module_kind().to_string(),
+                init.database_version(),
+                init.get_database_migrations(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>module = init
+                .init(
+                    cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
+                    isolated_db,
+                    <span class="kw-2">&amp;</span>env,
+                    task_group,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            modules.insert(<span class="kw-2">*</span>module_id, module);
+        }
+
+        <span class="comment">// Check the configs are valid
+        </span>cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>;
+
+        <span class="comment">// Build P2P connections for HBBFT consensus
+        </span><span class="kw">let </span>connections = ReconnectPeerConnections::new(
             cfg.network_config(),
             delay_calculator,
             connector,
@@ -858,11 +986,34 @@
         <span class="kw">let </span><span class="kw-2">mut </span>other_peers: BTreeSet&lt;<span class="kw">_</span>&gt; = cfg.local.p2p_endpoints.keys().cloned().collect();
         other_peers.remove(<span class="kw-2">&amp;</span>cfg.local.identity);
 
-        FedimintServer {
+        <span class="comment">// Build API that can handle requests
+        </span><span class="kw">let </span>(api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
+        <span class="kw">let </span>client_cfg = cfg.consensus.to_config_response(<span class="kw-2">&amp;</span>module_inits);
+        <span class="kw">let </span>modules = ModuleRegistry::from(modules);
+
+        <span class="kw">let </span>consensus_api = ConsensusApi {
+            cfg: cfg.clone(),
+            db: db.clone(),
+            modules: modules.clone(),
+            client_cfg,
+            api_sender,
+        };
+
+        <span class="comment">// Build consensus processor
+        </span><span class="kw">let </span>consensus = FedimintConsensus {
+            cfg: cfg.clone(),
+            module_inits,
+            modules: modules.clone(),
+            db: db.clone(),
+            api: consensus_api,
+            api_event_cache: Default::default(),
+        };
+
+        <span class="prelude-val">Ok</span>(FedimintServer {
             task_group: task_group.clone(),
             connections,
             hbbft,
-            consensus: Arc::new(consensus),
+            consensus,
             api_receiver: ReceiverStream::new(api_receiver).peekable(),
             cfg: cfg.clone(),
             api: api.into(),
@@ -870,8 +1021,8 @@
             rejoin_at_epoch: <span class="prelude-val">None</span>,
             run_empty_epochs: <span class="number">0</span>,
             last_processed_epoch: <span class="prelude-val">None</span>,
-            decoders,
-        }
+            decoders: modules.decoder_registry(),
+        })
     }
 
     <span class="doccomment">/// Loop `run_conensus_epoch` until shut down
@@ -887,14 +1038,10 @@
         <span class="comment">// FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a
         // problem for change, but maybe later for other use cases
         </span><span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
-        <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
         <span class="self">self</span>.start_consensus().<span class="kw">await</span>;
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
-            <span class="kw">let </span>outcomes = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = <span class="self">self
-                </span>.run_consensus_epoch(consensus.get_consensus_proposal(), <span class="kw-2">&amp;mut </span>rng)
-                .<span class="kw">await
-            </span>{
+            <span class="kw">let </span>outcomes = <span class="kw">if let </span><span class="prelude-val">Ok</span>(v) = <span class="self">self</span>.run_consensus_epoch(<span class="prelude-val">None</span>, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await </span>{
                 v
             } <span class="kw">else </span>{
                 <span class="comment">// `None` is supposed to mean the process is shutting down
@@ -1041,7 +1188,7 @@
     /// 3. Run HBBFT until a `ConsensusOutcome` can be returned
     </span><span class="kw">pub async fn </span>run_consensus_epoch(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        proposal: <span class="kw">impl </span>Future&lt;Output = ConsensusProposal&gt;,
+        override_proposal: <span class="prelude-ty">Option</span>&lt;ConsensusProposal&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
     ) -&gt; anyhow::Result&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
         <span class="comment">// for testing federations with one peer
@@ -1050,8 +1197,7 @@
               <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; (),
               () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
             }
-            <span class="self">self</span>.save_events_to_consensus_cache();
-            <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
+            <span class="kw">let </span>proposal = <span class="self">self</span>.process_events_then_propose(override_proposal).<span class="kw">await</span>;
             <span class="kw">let </span>epoch = <span class="self">self</span>.hbbft.epoch();
             <span class="self">self</span>.hbbft.skip_to_epoch(epoch + <span class="number">1</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[HbbftConsensusOutcome {
@@ -1070,9 +1216,8 @@
                 <span class="kw">_ </span>=&gt; <span class="kw">break </span><span class="macro">vec!</span>[],
             };
         };
-        <span class="self">self</span>.save_events_to_consensus_cache();
+        <span class="kw">let </span>proposal = <span class="self">self</span>.process_events_then_propose(override_proposal).<span class="kw">await</span>;
 
-        <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
         <span class="kw">for </span>peer <span class="kw">in </span>proposal.drop_peers.iter() {
             <span class="self">self</span>.connections.ban_peer(<span class="kw-2">*</span>peer).<span class="kw">await</span>;
         }
@@ -1086,12 +1231,17 @@
         <span class="prelude-val">Ok</span>(outcomes)
     }
 
-    <span class="comment">// save any API events we have in the channel
-    </span><span class="kw">fn </span>save_events_to_consensus_cache(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">let </span><span class="kw-2">mut </span>event_cache = <span class="self">self</span>.consensus.api_event_cache.lock().unwrap();
+    <span class="comment">// save any API events we have in the channel then create a proposal
+    </span><span class="kw">async fn </span>process_events_then_propose(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        override_proposal: <span class="prelude-ty">Option</span>&lt;ConsensusProposal&gt;,
+    ) -&gt; ConsensusProposal {
         <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(event)) = <span class="self">self</span>.api_receiver.next().now_or_never() {
-            event_cache.insert(event);
+            <span class="self">self</span>.consensus.api_event_cache.insert(event);
         }
+        <span class="kw">let </span>consensus_proposal = <span class="self">self</span>.consensus.get_consensus_proposal().<span class="kw">await</span>;
+        <span class="self">self</span>.consensus.api_event_cache.clear();
+        override_proposal.unwrap_or(consensus_proposal)
     }
 
     <span class="doccomment">/// Handles one step of the HBBFT algorithm, sending messages to peers and

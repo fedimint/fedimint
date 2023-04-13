@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["height_hash",""]],"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["height_hash",""]],"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""],["FakeWalletGen","Used to create a wallet module with a mock bitcoind"]]};
