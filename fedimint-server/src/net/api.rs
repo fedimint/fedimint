@@ -21,7 +21,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{OutPoint, TransactionId};
-use fedimint_logging::LOG_NET_API;
+use fedimint_logging::{LOG_NET_API, LOG_TASK};
 use futures::FutureExt;
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::types::error::CallError;
@@ -362,13 +362,15 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<ConsensusApi>, task_han
     task_handle
         .on_shutdown(Box::new(move || {
             Box::pin(async move {
+                debug!(target: LOG_TASK, "Shutting down jsonrpcsee server");
                 // ignore errors: we don't care if already stopped
                 let _ = stop_handle.stop();
             })
         }))
         .await;
 
-    server_handle.stopped().await
+    server_handle.stopped().await;
+    debug!(target: LOG_TASK, "jsonrpcsee server stopped");
 }
 
 const API_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(60);
