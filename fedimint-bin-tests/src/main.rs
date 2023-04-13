@@ -752,7 +752,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_u64()
         .unwrap();
-    let initial_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+    let initial_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?["balance_msat"]
         .as_u64()
@@ -762,7 +762,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(100_000)),
             description: "lnd-gw-to-cln".to_string(),
             label: "test".to_string(),
-            expiry: Some(1),
+            expiry: Some(60),
             fallbacks: None,
             preimage: None,
             exposeprivatechannels: None,
@@ -791,7 +791,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_u64()
         .unwrap();
-    let final_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+    let final_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?["balance_msat"]
         .as_u64()
@@ -812,14 +812,16 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         "ln-invoice",
         "--amount=100000msat",
-        "--description='integration test'"
+        "--description=integration test"
     )
     .out_json()
     .await?["invoice"]
-        .clone();
+        .as_str()
+        .unwrap()
+        .to_owned();
     let invoice_status = cln
         .request(cln_rpc::model::PayRequest {
-            bolt11: invoice.to_string(),
+            bolt11: invoice,
             amount_msat: None,
             label: None,
             riskfactor: None,
@@ -846,8 +848,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .request(cln_rpc::model::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(42_000)),
             description: "test".to_string(),
-            label: "test".to_string(),
-            expiry: Some(1),
+            label: "test2".to_string(),
+            expiry: Some(60),
             fallbacks: None,
             preimage: None,
             exposeprivatechannels: None,
@@ -889,7 +891,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let invoice = add_invoice.payment_request;
     let payment_hash = add_invoice.r_hash;
     cln.request(cln_rpc::model::PayRequest {
-        bolt11: invoice.to_string(),
+        bolt11: invoice,
         amount_msat: None,
         label: None,
         riskfactor: None,
