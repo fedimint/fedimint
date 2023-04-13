@@ -247,7 +247,7 @@ impl TaskGroup {
     pub async fn join_all(self, join_timeout: Option<Duration>) -> Result<(), anyhow::Error> {
         let mut errors = vec![];
         while let Some((name, join)) = self.inner.join.lock().await.pop_front() {
-            debug!("Waiting for {name} task to finish");
+            debug!(target: LOG_TASK, task=%name, "Waiting for task to finish");
 
             #[cfg(not(target_family = "wasm"))]
             let join_future: Pin<Box<dyn Future<Output = _> + Send>> =
@@ -267,16 +267,16 @@ impl TaskGroup {
 
             match join_future.await {
                 Ok(Ok(())) => {
-                    info!(target: LOG_TASK, "{name} task finished");
+                    info!(target: LOG_TASK, task=%name, "Task finished");
                 }
                 Ok(Err(e)) => {
-                    error!(target: LOG_TASK, "Thread {name} panicked with: {e}");
+                    error!(target: LOG_TASK, task=%name, error=%e, "Task panicked");
                     errors.push(e);
                 }
                 Err(Elapsed) => {
                     warn!(
-                        target: LOG_TASK,
-                        "{name} task hit timeout while shutting down"
+                        target: LOG_TASK, task=%name,
+                        "Timeout waiting for task to shut down"
                     )
                 }
             }
