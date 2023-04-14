@@ -16,6 +16,7 @@ use fedimint_client::get_client_root_secret;
 use fedimint_client::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
 };
+use fedimint_client::sm::Notifier;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -1014,9 +1015,10 @@ impl FedimintCli {
                 let module = module_gen
                     .init(
                         module_cfg,
-                        db,
+                        db.clone(),
                         id,
                         root_secret.child_key(ChildId(id as u64)),
+                        Notifier::new(db),
                     )
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;

@@ -8,13 +8,14 @@ use anyhow::anyhow;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, PrimaryClientModule, StateGenerator};
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, OperationId, State, StateTransition};
+use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
+use fedimint_core::util::NextOrPending;
 use fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
 };
@@ -22,7 +23,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
-use futures::StreamExt;
+use futures::{pin_mut, StreamExt};
 use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tbs::AggregatePublicKey;
@@ -57,12 +58,14 @@ impl ClientModuleGen for MintClientGen {
         _db: Database,
         instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
+        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
         Ok(MintClientModule {
             instance_id,
             cfg,
             secret: module_root_secret,
             secp: Secp256k1::new(),
+            notifier,
         })
     }
 }
@@ -73,6 +76,7 @@ pub struct MintClientModule {
     cfg: MintClientConfig,
     secret: DerivableSecret,
     secp: Secp256k1<All>,
+    notifier: ModuleNotifier<DynGlobalClientContext, MintClientStateMachines>,
 }
 
 // TODO: wrap in Arc
@@ -197,6 +201,40 @@ impl MintClientModule {
         );
 
         (sig_req, state_generator)
+    }
+
+    /// Wait for the e-cash notes to be retrieved. If this is not possible
+    /// because another terminal state was reached an error describing the
+    /// failure is returned.
+    pub async fn await_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<()> {
+        let stream = self
+            .notifier
+            .subscribe(operation_id)
+            .await
+            .filter_map(|state| async move {
+                let MintClientStateMachines::Output(state) = state else { return None };
+
+                if state.common.out_point != out_point {
+                    return None;
+                }
+
+                match state.state {
+                    MintOutputStates::Succeeded(_) => Some(Ok(())),
+                    MintOutputStates::Aborted(_) => Some(Err(anyhow!("Transaction was rejected"))),
+                    MintOutputStates::Failed(failed) => Some(Err(anyhow!(
+                        "Failed to finalize transaction: {}",
+                        failed.error
+                    ))),
+                    _ => None,
+                }
+            });
+        pin_mut!(stream);
+
+        stream.next_or_pending().await
     }
 
     // FIXME: use lazy e-cash note loading implemented in #2183

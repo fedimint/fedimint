@@ -223,7 +223,7 @@ pub struct MintOutputStatesAborted;
 /// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintOutputStatesFailed {
-    error: String,
+    pub error: String,
 }
 
 /// See [`MintOutputStates`]

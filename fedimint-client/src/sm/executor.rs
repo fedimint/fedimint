@@ -423,15 +423,15 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build<GC>(self, db: Database) -> Executor<GC>
+    pub async fn build<GC>(self, db: Database, notifier: Notifier<GC>) -> Executor<GC>
     where
         GC: GlobalContext,
     {
         let inner = Arc::new(ExecutorInner {
-            db: db.clone(),
+            db,
             context: Mutex::new(None),
             module_contexts: self.module_contexts,
-            notifier: Notifier::new(db),
+            notifier,
         });
 
         debug!(
@@ -688,7 +688,7 @@ mod tests {
     use tracing::{info, trace};
 
     use crate::sm::state::{Context, DynContext, DynState};
-    use crate::sm::{Executor, OperationId, State, StateTransition};
+    use crate::sm::{Executor, Notifier, OperationId, State, StateTransition};
 
     #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     enum MockStateMachine {
@@ -806,7 +806,9 @@ mod tests {
                 broadcast: broadcast.clone(),
             },
         );
-        let executor = executor_builder.build(db.clone()).await;
+        let executor = executor_builder
+            .build(db.clone(), Notifier::new(db.clone()))
+            .await;
         executor.start_executor(tg, ()).await;
 
         info!("Initialized test executor");

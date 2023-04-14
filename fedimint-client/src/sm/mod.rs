@@ -13,6 +13,7 @@ use std::fmt::Debug;
 pub use dbtx::ClientSMDatabaseTransaction;
 pub use executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
 use fedimint_core::task::{MaybeSend, MaybeSync};
+pub use notifier::{ModuleNotifier, Notifier};
 pub use state::{Context, DynContext, DynState, OperationState, State, StateTransition};
 
 /// Context given to all state machines

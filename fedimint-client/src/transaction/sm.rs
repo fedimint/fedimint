@@ -231,7 +231,7 @@ mod tests {
     use tokio::sync::Mutex;
     use tokio::time::{sleep, timeout};
 
-    use crate::sm::{ClientSMDatabaseTransaction, Executor, OperationId, OperationState};
+    use crate::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationId, OperationState};
     use crate::transaction::{
         tx_submission_sm_decoder, TransactionBuilder, TxSubmissionContext, TxSubmissionStates,
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -376,7 +376,9 @@ mod tests {
 
         let mut executor_builder = Executor::<DynGlobalClientContext>::builder();
         executor_builder.with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
-        let executor = executor_builder.build(db.clone()).await;
+        let executor = executor_builder
+            .build(db.clone(), Notifier::new(db.clone()))
+            .await;
 
         let context = Arc::new(FakeGlobalContext {
             api: Default::default(),

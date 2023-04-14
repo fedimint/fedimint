@@ -29,7 +29,8 @@ use crate::db::ClientSecretKey;
 use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
 use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, OperationId, OperationState,
+    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, Notifier, OperationId,
+    OperationState,
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -393,6 +394,8 @@ impl ClientBuilder {
 
         let db = Database::new(db, decoders);
 
+        let notifier = Notifier::new(db.clone());
+
         let api = DynFederationApi::from(WsFederationApi::from_config(&config));
 
         let root_secret = get_client_root_secret(&db).await;
@@ -424,6 +427,7 @@ impl ClientBuilder {
                             // Since the new client has to support multiple, segregated modules of
                             // the same kind we have to use the instance id instead.
                             root_secret.child_key(ChildId(module_instance as u64)),
+                            notifier.clone(),
                         )
                         .await?;
                     modules.register_module(module_instance, module);
@@ -445,7 +449,7 @@ impl ClientBuilder {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
             }
 
-            executor_builder.build(db.clone()).await
+            executor_builder.build(db.clone(), notifier).await
         };
 
         let client_inner = Arc::new(ClientInner {
