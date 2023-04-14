@@ -1366,6 +1366,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-gw-client"
+version = "0.1.0"
+
+[[package]]
 name = "fedimint-ln-client"
 version = "0.1.0"
 dependencies = [

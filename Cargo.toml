@@ -29,6 +29,7 @@ members = [
     "modules/fedimint-ln-common",
     "modules/fedimint-ln-client",
     "modules/fedimint-ln-server",
+    "modules/fedimint-gw-client",
     "modules/fedimint-wallet-common",
     "modules/fedimint-wallet-client",
     "modules/fedimint-wallet-server",
