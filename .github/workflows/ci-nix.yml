@@ -35,37 +35,59 @@ jobs:
         run: nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
 
   build:
-    name: "Build"
-    runs-on: buildjet-8vcpu-ubuntu-2004
-    timeout-minutes: 30
+    strategy:
+      matrix:
+        host:
+          - linux
+          - macos
+        include:
+          - on: linux
+            runs-on: buildjet-8vcpu-ubuntu-2004
+            build-in-pr: true
+            timeout: 20
+          - host: macos
+            runs-on: macos-12
+            build-in-pr: false
+            # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
+            timeout: 60
+
+    name: "Build on ${{ matrix.host }}"
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ matrix.timeout }}
+
     steps:
       - uses: actions/checkout@v3
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+
       - uses: cachix/install-nix-action@v20
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
       - name: Build workspace
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceBuild
 
       - name: Clippy workspace
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceClippy
 
       - name: Run cargo doc
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceDoc
 
-      # `ccov` job will run `cargo test`, so no need to spend time on it here
-      # - name: Test workspace
-      #   run: nix build -L .#workspaceTest
-
       - name: Test docs
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceTestDoc
 
       - name: Tests
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.cli-test.all
 
   audit:
@@ -124,30 +146,52 @@ jobs:
           files: result/lcov.info
 
   cross:
-    name: "Cross-compile: ${{ matrix.build }}"
+    name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.target}}"
 
     strategy:
       matrix:
-        build:
+        host:
+          - linux
+          - macos
+        target:
           - aarch64-linux-android
+          - armv7-linux-androideabi
           - x86_64-linux-android
+          - i686-linux-android
           - wasm32-unknown-unknown
+        include:
+          - on: linux
+            runs-on: ubuntu-22.04
+            build-in-pr: true
+            timeout: 15
+          - host: macos
+            runs-on: macos-12
+            build-in-pr: false
+            # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
+            timeout: 60
 
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: ${{ matrix.timeout }}
+
     steps:
       - uses: actions/checkout@v3
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+
       - uses: cachix/install-nix-action@v20
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
+
       - uses: cachix/cachix-action@v12
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
-      - name: Build client packages for ${{ matrix.build }}
-        run: nix build -L .#cross.${{ matrix.build }}.client-pkgs
+      - name: Build client packages for ${{ matrix.target }}
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        run: nix build -L .#cross.${{ matrix.target }}.client-pkgs
 
 
   containers:
