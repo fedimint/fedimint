@@ -63,15 +63,35 @@ function cli_test_cli() {
 }
 export -f cli_test_cli
 
-function cli_test_rust_tests() {
+function cli_test_rust_tests_bitcoind() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
 
   echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/rust-tests.sh" 2>&1 | ts -s
+  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=bitcoind ./scripts/rust-tests.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
 }
-export -f cli_test_rust_tests
+export -f cli_test_rust_tests_bitcoind
+
+function cli_test_rust_tests_electrs() {
+  set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
+  echo "## START: ${FUNCNAME[0]}"
+  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=electrs ./scripts/rust-tests.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
+}
+export -f cli_test_rust_tests_electrs
+
+function cli_test_rust_tests_esplora() {
+  set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+
+  echo "## START: ${FUNCNAME[0]}"
+  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=esplora ./scripts/rust-tests.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
+}
+export -f cli_test_rust_tests_esplora
 
 function cli_test_always_success() {
   set -eo pipefail # pipefail must be set manually again
@@ -104,7 +124,9 @@ if parallel \
   --memfree 512M \
   --nice 15 ::: \
   cli_test_always_success \
-  cli_test_rust_tests \
+  cli_test_rust_tests_bitcoind \
+  cli_test_rust_tests_electrs \
+  cli_test_rust_tests_esplora \
   cli_test_latency \
   cli_test_reconnect \
   cli_test_upgrade \
