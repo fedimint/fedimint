@@ -2,7 +2,7 @@
 # Runs the all the Rust integration tests
 
 set -euo pipefail
-export RUST_LOG="${RUST_LOG:-info}"
+export RUST_LOG="${RUST_LOG:-info,timing=debug}"
 
 
 >&2 echo "### Setting up tests"
