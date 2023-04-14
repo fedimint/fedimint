@@ -127,7 +127,7 @@ impl<'a> NotifyingTransaction<'a> {
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> ISingleUseDatabaseTransaction<'a> for NotifyingTransaction<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         self.dbtx.raw_insert_bytes(key, value).await
     }
 

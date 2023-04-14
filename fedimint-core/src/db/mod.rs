@@ -345,7 +345,7 @@ impl Database {
 /// | Prevented           | Prevented      | Prevented   |
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
@@ -394,7 +394,7 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
 /// allocations.
 #[apply(async_trait_maybe_send!)]
 pub trait ISingleUseDatabaseTransaction<'a>: 'a + MaybeSend {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
@@ -430,7 +430,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> SingleUseDatabaseTransaction<
 impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction<'a>
     for SingleUseDatabaseTransaction<'a, Tx>
 {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         self.0
             .as_mut()
             .context("Cannot insert into already consumed transaction")?
@@ -553,7 +553,7 @@ impl<'a> CommittableIsolatedDatabaseTransaction<'a> {
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransaction<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.raw_insert_bytes(key, value).await
     }
@@ -693,7 +693,7 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
     {
         self.commit_tracker.has_writes = true;
         self.isolated_tx
-            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
             .await
             .expect("Unrecoverable error while inserting into the database")
             .map(|old_val_bytes| {
@@ -708,17 +708,19 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        let key_bytes = key.to_bytes();
+        let value_bytes = value.to_bytes();
         let prev_val = self
             .isolated_tx
-            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(&key_bytes, &value_bytes)
             .await
             .expect("Unrecoverable error occurred while inserting new entry into database");
         if let Some(prev_val) = prev_val {
             warn!(
                 target: LOG_DB,
-                "Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}",
-                key,
-                prev_val,
+                key = %AbbreviateHexBytes(&key_bytes),
+                prev_value = %AbbreviateHexBytes(&prev_val),
+                "Database overwriting element when expecting insertion of new entry.",
             );
         }
     }
@@ -826,7 +828,7 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
     ISingleUseDatabaseTransaction<'isolated>
     for IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let mut key_with_prefix = self.prefix.clone();
         key_with_prefix.extend_from_slice(key);
         self.inner_tx
@@ -1036,7 +1038,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
 
         self.tx
-            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
             .await
             .expect("Unrecoverable error while inserting into the database")
             .map(|old_val_bytes| {
@@ -1056,7 +1058,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
         let prev_val = self
             .tx
-            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
             .await
             .expect("Unrecoverable error occurred while inserting new entry into database");
         if let Some(prev_val) = prev_val {
@@ -2095,7 +2097,7 @@ mod test_utils {
             async fn raw_insert_bytes(
                 &mut self,
                 _key: &[u8],
-                _value: Vec<u8>,
+                _value: &[u8],
             ) -> anyhow::Result<Option<Vec<u8>>> {
                 unimplemented!()
             }

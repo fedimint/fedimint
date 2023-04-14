@@ -85,14 +85,14 @@ impl IDatabase for MemDatabase {
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key).await;
         // Insert data from copy so we can read our own writes
-        self.tx_data.insert(key.to_vec(), value.clone());
+        self.tx_data.insert(key.to_vec(), value.to_owned());
         self.operations
             .push(DatabaseOperation::Insert(DatabaseInsertOperation {
                 key: key.to_vec(),
-                value,
+                value: value.to_owned(),
             }));
         self.num_pending_operations += 1;
         val

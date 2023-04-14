@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
             let rocksdb: Box<dyn IDatabase> =
                 Box::new(fedimint_rocksdb::RocksDb::open(&options.database).unwrap());
             let mut dbtx = rocksdb.begin_transaction().await;
-            dbtx.raw_insert_bytes(&key, value.into())
+            dbtx.raw_insert_bytes(&key, &value)
                 .await
                 .expect("Error inserting entry into RocksDb");
             dbtx.commit_tx().await.expect("Error committing to RocksDb");

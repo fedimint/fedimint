@@ -68,7 +68,7 @@ impl IDatabase for RocksDb {
 
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         fedimint_core::task::block_in_place(|| {
             let val = self.0.get(key).unwrap();
             self.0.put(key, value)?;
@@ -136,7 +136,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
 
 #[async_trait]
 impl IDatabaseTransaction<'_> for RocksDbReadOnly {
-    async fn raw_insert_bytes(&mut self, _key: &[u8], _value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, _key: &[u8], _value: &[u8]) -> Result<Option<Vec<u8>>> {
         panic!("Cannot insert into a read only transaction");
     }
 
