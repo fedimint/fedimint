@@ -3,8 +3,7 @@ use std::fs;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::HashEngine;
@@ -25,19 +24,16 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use itertools::Itertools;
-use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::RpcModule;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Notify;
 use tokio_rustls::rustls;
 use tracing::error;
 use url::Url;
 
+use crate::api::HasApiContext;
 use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
-use crate::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
 use crate::net::peers::DelayCalculator;
-use crate::FedimintServer;
 
 pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
@@ -431,11 +427,11 @@ pub struct ConfigGenSettings {
     /// Url for our API connection
     pub api_url: Url,
     /// The default params for the modules
-    default_params: ConfigGenParamsRequest,
+    pub default_params: ConfigGenParamsRequest,
     /// Modules that will generate configs
-    module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+    pub module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
     /// Registry for config gen
-    registry: ServerModuleGenRegistry,
+    pub registry: ServerModuleGenRegistry,
 }
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -550,55 +546,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
     }
 }
 
-/// Starts the config gen server
-///
-/// Runs the consensus server once the configuration has been created
-/// If the server exits, restarts config gen
-// TODO: combine with net::run_server and replace DKG CLI with the API
-pub async fn run_server(
-    data_dir: PathBuf,
-    settings: ConfigGenSettings,
-    db: Database,
-    mut task_group: TaskGroup,
-) -> anyhow::Result<()> {
-    loop {
-        let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
-        let state = RpcHandlerCtx {
-            rpc_context: Arc::new(ConfigGenApi::new(
-                data_dir.clone(),
-                settings.clone(),
-                db.clone(),
-                config_generated_tx,
-            )),
-        };
-        let mut rpc_module = RpcModule::new(state);
-
-        attach_endpoints(&mut rpc_module, config_endpoints(), None);
-
-        let server_handle = ServerBuilder::new()
-            .max_connections(10)
-            .ping_interval(Duration::from_secs(10))
-            .build(&settings.api_bind.to_string())
-            .await?
-            .start(rpc_module)?;
-
-        // TODO: Return failures by restarting the config API
-        let auth = config_generated_rx.recv().await.expect("should not close");
-        server_handle.stop().expect("Able to stop server");
-        let cfg = read_server_config(&auth.0, data_dir.clone())?;
-        FedimintServer::run(
-            cfg,
-            db.clone(),
-            settings.registry.clone(),
-            None,
-            &mut task_group,
-        )
-        .await?;
-    }
-}
-
-/// Returns the endpoints that are necessary prior to the config being generated
-fn config_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
+pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
     vec![
         api_endpoint! {
             "set_password",
@@ -725,7 +673,8 @@ mod tests {
     use itertools::Itertools;
     use url::Url;
 
-    use crate::config::api::{run_server, ConfigGenConnectionsRequest, ConfigGenSettings};
+    use crate::api::FedimintApi;
+    use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
 
     /// Helper in config API tests for simulating a guardian's client and server
@@ -767,7 +716,7 @@ mod tests {
             let subgroup = task_group.make_subgroup().await;
             task_group
                 .spawn("run-server", move |_| async move {
-                    run_server(dir, connections, db, subgroup).await
+                    FedimintApi::run_config_gen(dir, connections, db, subgroup).await
                 })
                 .await;
             // our id doesn't really exist at this point

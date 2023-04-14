@@ -36,6 +36,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, warn};
 
+use crate::api::FedimintApi;
 use crate::consensus::{
     ApiEvent, ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome,
     HbbftSerdeConsensusOutcome,
@@ -61,6 +62,9 @@ pub mod config;
 
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
+
+/// Runs the Fedimint APIs
+pub mod api;
 
 type PeerMessage = (PeerId, EpochMessage);
 
@@ -167,7 +171,7 @@ impl FedimintServer {
         let cfg = self.cfg.clone();
         self.task_group
             .spawn("api-server", |handle| {
-                net::api::run_server(cfg, api, handle)
+                FedimintApi::run_consensus(cfg, api, handle)
             })
             .await;
     }
