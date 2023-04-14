@@ -20,7 +20,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 #[cfg(not(target_family = "wasm"))]
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
@@ -251,7 +251,7 @@ impl TaskGroup {
         let deadline = timeout.map(|timeout| now() + timeout);
 
         while let Some((name, join)) = self.inner.join.lock().await.pop_front() {
-            debug!(target: LOG_TASK, task=%name, "Waiting for task to finish");
+            info!(target: LOG_TASK, task=%name, "Waiting for task to finish");
 
             let timeout = deadline.map(|deadline| {
                 deadline
