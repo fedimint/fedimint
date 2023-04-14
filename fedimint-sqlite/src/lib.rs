@@ -73,7 +73,7 @@ impl IDatabase for SqliteDb {
 
 #[async_trait]
 impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key).await.unwrap();
         let query_prepared = sqlx::query("INSERT INTO kv (key, value) VALUES (?, ?)")
             .bind(key)
