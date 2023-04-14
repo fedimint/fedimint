@@ -232,7 +232,7 @@
             <span class="kw">let </span>rocksdb: Box&lt;<span class="kw">dyn </span>IDatabase&gt; =
                 Box::new(fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database).unwrap());
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
-            dbtx.raw_insert_bytes(<span class="kw-2">&amp;</span>key, value.into())
+            dbtx.raw_insert_bytes(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value)
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Error inserting entry into RocksDb&quot;</span>);
             dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;Error committing to RocksDb&quot;</span>);

@@ -2293,6 +2293,8 @@
 <a href="#2293" id="2293">2293</a>
 <a href="#2294" id="2294">2294</a>
 <a href="#2295" id="2295">2295</a>
+<a href="#2296" id="2296">2296</a>
+<a href="#2297" id="2297">2297</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2640,7 +2642,7 @@
 /// | Prevented           | Prevented      | Prevented   |
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;: <span class="lifetime">&#39;a </span>+ MaybeSend {
-    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
+    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
@@ -2689,7 +2691,7 @@
 /// allocations.
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;: <span class="lifetime">&#39;a </span>+ MaybeSend {
-    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
+    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
@@ -2725,7 +2727,7 @@
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, Tx: IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; + MaybeSend&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;
     <span class="kw">for </span>SingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>, Tx&gt;
 {
-    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="self">self</span>.<span class="number">0
             </span>.as_mut()
             .context(<span class="string">&quot;Cannot insert into already consumed transaction&quot;</span>)<span class="question-mark">?
@@ -2848,7 +2850,7 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>CommittableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.raw_insert_bytes(key, value).<span class="kw">await
     </span>}
@@ -2988,7 +2990,7 @@
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
         <span class="self">self</span>.isolated_tx
-            .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), <span class="kw-2">&amp;</span>value.to_bytes())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Unrecoverable error while inserting into the database&quot;</span>)
             .map(|old_val_bytes| {
@@ -3003,17 +3005,19 @@
         </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
+        <span class="kw">let </span>key_bytes = key.to_bytes();
+        <span class="kw">let </span>value_bytes = value.to_bytes();
         <span class="kw">let </span>prev_val = <span class="self">self
             </span>.isolated_tx
-            .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>value_bytes)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Unrecoverable error occurred while inserting new entry into database&quot;</span>);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev_val) = prev_val {
             <span class="macro">warn!</span>(
                 target: LOG_DB,
-                <span class="string">&quot;Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}&quot;</span>,
-                key,
-                prev_val,
+                key = %AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes),
+                prev_value = %AbbreviateHexBytes(<span class="kw-2">&amp;</span>prev_val),
+                <span class="string">&quot;Database overwriting element when expecting insertion of new entry.&quot;</span>,
             );
         }
     }
@@ -3121,7 +3125,7 @@
     ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>&gt;
     <span class="kw">for </span>IsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>, T&gt;
 {
-    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>key_with_prefix = <span class="self">self</span>.prefix.clone();
         key_with_prefix.extend_from_slice(key);
         <span class="self">self</span>.inner_tx
@@ -3331,7 +3335,7 @@
         }
 
         <span class="self">self</span>.tx
-            .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), <span class="kw-2">&amp;</span>value.to_bytes())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Unrecoverable error while inserting into the database&quot;</span>)
             .map(|old_val_bytes| {
@@ -3351,7 +3355,7 @@
         }
         <span class="kw">let </span>prev_val = <span class="self">self
             </span>.tx
-            .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), <span class="kw-2">&amp;</span>value.to_bytes())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Unrecoverable error occurred while inserting new entry into database&quot;</span>);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev_val) = prev_val {
@@ -4390,7 +4394,7 @@
             <span class="kw">async fn </span>raw_insert_bytes(
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>,
                 _key: <span class="kw-2">&amp;</span>[u8],
-                _value: Vec&lt;u8&gt;,
+                _value: <span class="kw-2">&amp;</span>[u8],
             ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
                 <span class="macro">unimplemented!</span>()
             }

@@ -361,7 +361,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>SqliteDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="kw">let </span>val = <span class="self">self</span>.raw_get_bytes(key).<span class="kw">await</span>.unwrap();
         <span class="kw">let </span>query_prepared = sqlx::query(<span class="string">&quot;INSERT INTO kv (key, value) VALUES (?, ?)&quot;</span>)
             .bind(key)
