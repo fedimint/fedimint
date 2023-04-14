@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["TimeReporter",""],["TimeReporterInner","Data inside `TimeReporter`, in another struct to be able to move it out of without violating `drop` consistency"]]};

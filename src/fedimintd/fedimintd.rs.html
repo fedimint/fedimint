@@ -256,6 +256,11 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
@@ -268,6 +273,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::timing;
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
@@ -397,6 +403,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
+        <span class="kw">let </span>timing_total_runtime = timing::TimeReporter::new(<span class="string">&quot;total-runtime&quot;</span>).info();
+
         <span class="comment">// DO NOT REMOVE, or spawn_local tasks won&#39;t run anymore
         </span><span class="kw">let </span>local_task_set = tokio::task::LocalSet::new();
         <span class="kw">let </span>_guard = local_task_set.enter();
@@ -449,6 +457,8 @@
 
         <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
         </span>opentelemetry::global::shutdown_tracer_provider();
+
+        drop(timing_total_runtime);
 
         <span class="comment">// Should we ever shut down without an error code?
         </span>std::process::exit(-<span class="number">1</span>);

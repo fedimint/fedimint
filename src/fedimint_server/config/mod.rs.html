@@ -848,6 +848,7 @@
 <a href="#848" id="848">848</a>
 <a href="#849" id="849">849</a>
 <a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -874,7 +875,7 @@
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, DynServerModuleGen, PeerHandle};
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_core::task::{timeout, Elapsed, TaskGroup};
-<span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_core::{timing, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>hbbft::NetworkInfo;
@@ -1292,6 +1293,7 @@
         delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;distributed-gen&quot;</span>).info();
         <span class="kw">let </span>server_conn = connect(
             params.p2p_network(),
             params.tls_config(),
