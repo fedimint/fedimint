@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,13 +12,13 @@ use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::lnrpc::failure::FailureCode;
-use tonic_lnd::lnrpc::{GetInfoRequest, SendRequest};
+use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, SendRequest};
 use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction};
 use tonic_lnd::{connect, LndClient};
 use tracing::{error, info, trace};
 
 use crate::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
-use crate::gatewaylnrpc::get_route_hints_response::RouteHint;
+use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gatewaylnrpc::{
     route_htlc_request, route_htlc_response, CompleteHtlcsRequest, GetNodeInfoResponse,
     GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, RouteHtlcRequest,
@@ -263,10 +264,71 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
-        // TODO: Issue #1953: Implement full route hint fetching for LND gateways
-        Ok(GetRouteHintsResponse {
-            route_hints: vec![RouteHint { hops: vec![] }],
-        })
+        let mut client = self.client.clone();
+        let channels = client
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: true,
+                inactive_only: false,
+                public_only: false,
+                private_only: false,
+                peer: vec![],
+            })
+            .await
+            .map_err(|e| {
+                GatewayError::LnRpcError(tonic::Status::new(
+                    tonic::Code::Internal,
+                    format!("LND error: {e:?}"),
+                ))
+            })?
+            .into_inner();
+
+        let mut route_hints: Vec<RouteHint> = vec![];
+        for chan in channels.channels {
+            let info = client
+                .lightning()
+                .get_chan_info(ChanInfoRequest {
+                    chan_id: chan.chan_id,
+                })
+                .await
+                .map_err(|e| {
+                    GatewayError::LnRpcError(tonic::Status::new(
+                        tonic::Code::Internal,
+                        format!("LND error: {e:?}"),
+                    ))
+                })?
+                .into_inner();
+
+            let policy = match info.node1_policy.clone() {
+                Some(policy) => policy,
+                None => continue,
+            };
+            let src_node_id = PublicKey::from_str(&chan.remote_pubkey)
+                .unwrap()
+                .serialize()
+                .to_vec();
+            let short_channel_id = chan.chan_id;
+            let base_msat = policy.fee_base_msat as u32;
+            let proportional_millionths = policy.fee_rate_milli_msat as u32;
+            let cltv_expiry_delta = policy.time_lock_delta;
+            let htlc_maximum_msat = Some(policy.max_htlc_msat);
+            let htlc_minimum_msat = Some(policy.min_htlc as u64);
+
+            let route_hint_hop = RouteHintHop {
+                src_node_id,
+                short_channel_id,
+                base_msat,
+                proportional_millionths,
+                cltv_expiry_delta,
+                htlc_minimum_msat,
+                htlc_maximum_msat,
+            };
+            route_hints.push(RouteHint {
+                hops: vec![route_hint_hop],
+            });
+        }
+
+        Ok(GetRouteHintsResponse { route_hints })
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
