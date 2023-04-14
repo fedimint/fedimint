@@ -708,17 +708,19 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        let key_bytes = key.to_bytes();
+        let value_bytes = value.to_bytes();
         let prev_val = self
             .isolated_tx
-            .raw_insert_bytes(&key.to_bytes(), value.to_bytes())
+            .raw_insert_bytes(&key_bytes, value_bytes)
             .await
             .expect("Unrecoverable error occurred while inserting new entry into database");
         if let Some(prev_val) = prev_val {
             warn!(
                 target: LOG_DB,
-                "Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}",
-                key,
-                prev_val,
+                key = %AbbreviateHexBytes(&key_bytes),
+                prev_value = %AbbreviateHexBytes(&prev_val),
+                "Database overwriting element when expecting insertion of new entry.",
             );
         }
     }
