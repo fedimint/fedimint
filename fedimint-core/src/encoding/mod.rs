@@ -5,6 +5,8 @@
 mod btc;
 mod secp256k1;
 mod tbs;
+
+#[cfg(not(target_family = "wasm"))]
 mod tls;
 
 use std::collections::{BTreeMap, BTreeSet};
