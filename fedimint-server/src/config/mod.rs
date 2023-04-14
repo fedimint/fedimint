@@ -24,7 +24,7 @@ use fedimint_core::core::{
 use fedimint_core::module::{ApiAuth, DynServerModuleGen, PeerHandle};
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
-use fedimint_core::PeerId;
+use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
@@ -442,6 +442,7 @@ impl ServerConfig {
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
         let server_conn = connect(
             params.p2p_network(),
             params.tls_config(),

@@ -10,6 +10,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::timing;
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
@@ -139,6 +140,8 @@ impl Fedimintd {
         let mut root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
+        let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
+
         // DO NOT REMOVE, or spawn_local tasks won't run anymore
         let local_task_set = tokio::task::LocalSet::new();
         let _guard = local_task_set.enter();
@@ -191,6 +194,8 @@ impl Fedimintd {
 
         #[cfg(feature = "telemetry")]
         opentelemetry::global::shutdown_tracer_provider();
+
+        drop(timing_total_runtime);
 
         // Should we ever shut down without an error code?
         std::process::exit(-1);
