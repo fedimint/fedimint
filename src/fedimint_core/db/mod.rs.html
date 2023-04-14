@@ -2275,6 +2275,24 @@
 <a href="#2275" id="2275">2275</a>
 <a href="#2276" id="2276">2276</a>
 <a href="#2277" id="2277">2277</a>
+<a href="#2278" id="2278">2278</a>
+<a href="#2279" id="2279">2279</a>
+<a href="#2280" id="2280">2280</a>
+<a href="#2281" id="2281">2281</a>
+<a href="#2282" id="2282">2282</a>
+<a href="#2283" id="2283">2283</a>
+<a href="#2284" id="2284">2284</a>
+<a href="#2285" id="2285">2285</a>
+<a href="#2286" id="2286">2286</a>
+<a href="#2287" id="2287">2287</a>
+<a href="#2288" id="2288">2288</a>
+<a href="#2289" id="2289">2289</a>
+<a href="#2290" id="2290">2290</a>
+<a href="#2291" id="2291">2291</a>
+<a href="#2292" id="2292">2292</a>
+<a href="#2293" id="2293">2293</a>
+<a href="#2294" id="2294">2294</a>
+<a href="#2295" id="2295">2295</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2285,7 +2303,7 @@
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_logging::LOG_DB;
-<span class="kw">use </span>futures::{stream, Stream, StreamExt};
+<span class="kw">use </span>futures::{Stream, StreamExt};
 <span class="kw">use </span>macro_rules_attribute::apply;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
@@ -2831,32 +2849,32 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>CommittableIsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.raw_insert_bytes(key, value).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.raw_get_bytes(key).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.raw_remove_entry(key).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
-        <span class="kw">let </span>stream = isolated
-            .raw_find_by_prefix(key_prefix)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-            .<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(Box::pin(stream::iter(stream)))
-    }
+        <span class="kw">let </span>prefix_with_module = IsolatedDatabaseTransaction::prefix_with_module(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix);
+        IsolatedDatabaseTransaction::&lt;u16&gt;::raw_find_by_prefix(
+            prefix_with_module,
+            <span class="self">self</span>.dbtx.as_mut(),
+            key_prefix,
+        )
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.raw_remove_by_prefix(key_prefix).<span class="kw">await
     </span>}
 
@@ -2865,17 +2883,17 @@
     </span>}
 
     <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.rollback_tx_to_savepoint().<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.set_tx_savepoint().<span class="kw">await
     </span>}
 
     <span class="kw">fn </span>add_notification_key(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="self">self</span>.prefix));
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated = IsolatedDatabaseTransaction::new(<span class="self">self</span>.dbtx.as_mut(), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix));
         isolated.add_notification_key(key)
     }
 }
@@ -2899,7 +2917,7 @@
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;isolated</span>, T: MaybeSend + Encodable&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, T&gt; {
     <span class="kw">pub fn </span>new&lt;<span class="lifetime">&#39;parent</span>: <span class="lifetime">&#39;isolated</span>&gt;(
         dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span><span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt;,
-        module_prefix: <span class="prelude-ty">Option</span>&lt;T&gt;,
+        module_prefix: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>T&gt;,
         decoders: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span>ModuleDecoderRegistry,
         commit_tracker: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span>CommitTracker,
     ) -&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, T&gt; {
@@ -3056,14 +3074,11 @@
 {
     <span class="kw">pub fn </span>new(
         dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span><span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt;,
-        module_prefix: <span class="prelude-ty">Option</span>&lt;T&gt;,
+        module_prefix: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>T&gt;,
     ) -&gt; IsolatedDatabaseTransaction&lt;<span class="lifetime">&#39;isolated</span>, <span class="lifetime">&#39;parent</span>, T&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>prefix_bytes = <span class="macro">vec!</span>[];
         <span class="kw">if let </span><span class="prelude-val">Some</span>(module_prefix) = module_prefix {
-            prefix_bytes = <span class="macro">vec!</span>[MODULE_GLOBAL_PREFIX];
-            module_prefix
-                .consensus_encode(<span class="kw-2">&amp;mut </span>prefix_bytes)
-                .expect(<span class="string">&quot;Error encoding module instance id as prefix&quot;</span>);
+            prefix_bytes = <span class="self">Self</span>::prefix_with_module(module_prefix);
         }
 
         IsolatedDatabaseTransaction {
@@ -3071,6 +3086,33 @@
             prefix: prefix_bytes,
             _marker: PhantomData::&lt;T&gt;,
         }
+    }
+
+    <span class="kw">fn </span>prefix_with_module(module_prefix: <span class="kw-2">&amp;</span>T) -&gt; Vec&lt;u8&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>prefix_bytes = <span class="macro">vec!</span>[MODULE_GLOBAL_PREFIX];
+        module_prefix
+            .consensus_encode(<span class="kw-2">&amp;mut </span>prefix_bytes)
+            .expect(<span class="string">&quot;Error encoding module instance id as prefix&quot;</span>);
+        prefix_bytes
+    }
+
+    <span class="comment">// Yes, this could be proper method receiving self but it&#39;s hard to return a
+    // stream and satisfy the borrow checker if this struct is short lived
+    </span><span class="kw">async fn </span>raw_find_by_prefix(
+        <span class="kw-2">mut </span>prefix_with_module: Vec&lt;u8&gt;,
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;isolated </span><span class="kw-2">mut </span><span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;parent</span>&gt;,
+        key_prefix: <span class="kw-2">&amp;</span>[u8],
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;isolated</span>&gt;&gt; {
+        <span class="kw">let </span>original_prefix_len = prefix_with_module.len();
+        prefix_with_module.extend_from_slice(key_prefix);
+        <span class="kw">let </span>raw_prefix = dbtx
+            .raw_find_by_prefix(prefix_with_module.as_slice())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(Box::pin(raw_prefix.map(<span class="kw">move </span>|(key, value)| {
+            <span class="kw">let </span>stripped_key = <span class="kw-2">&amp;</span>key[original_prefix_len..];
+            (stripped_key.to_vec(), value)
+        })))
     }
 }
 
@@ -3104,19 +3146,13 @@
     </span>}
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>prefix_with_module = <span class="self">self</span>.prefix.clone();
-        prefix_with_module.extend_from_slice(key_prefix);
-        <span class="kw">let </span>raw_prefix = <span class="self">self
-            </span>.inner_tx
-            .raw_find_by_prefix(prefix_with_module.as_slice())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(Box::pin(raw_prefix.map(|kv| {
-            <span class="kw">let </span>key = kv.<span class="number">0</span>;
-            <span class="kw">let </span>stripped_key = <span class="kw-2">&amp;</span>key[(<span class="self">self</span>.prefix.len())..];
-            (stripped_key.to_vec(), kv.<span class="number">1</span>)
-        })))
-    }
+        IsolatedDatabaseTransaction::&lt;T&gt;::raw_find_by_prefix(
+            <span class="self">self</span>.prefix.clone(),
+            <span class="self">self</span>.inner_tx,
+            key_prefix,
+        )
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.inner_tx.raw_remove_by_prefix(key_prefix).<span class="kw">await
@@ -3192,7 +3228,7 @@
     ) -&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
         ModuleDatabaseTransaction::new(
             <span class="self">self</span>.tx.as_mut(),
-            <span class="prelude-val">Some</span>(module_instance_id),
+            <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>module_instance_id),
             <span class="kw-2">&amp;</span><span class="self">self</span>.decoders,
             <span class="kw-2">&amp;mut </span><span class="self">self</span>.commit_tracker,
         )
