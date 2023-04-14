@@ -18,22 +18,29 @@ fi
 
 export FM_TEST_USE_REAL_DAEMONS=1
 
->&2 echo "### Testing against bitcoind"
-env RUST_BACKTRACE=1 cargo test -p fedimint-tests -- --test-threads=$(($(nproc) * 2)) "$@"
->&2 echo "### Testing against bitcoind - complete"
+if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
+  >&2 echo "### Testing against bitcoind"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-tests -- --test-threads=$(($(nproc) * 2)) "$@"
+  >&2 echo "### Testing against bitcoind - complete"
+fi
 
 # Switch to electrum and run wallet tests
 unset FM_BITCOIND_RPC
 export FM_ELECTRUM_RPC="tcp://127.0.0.1:50001"
->&2 echo "### Testing against electrs"
-env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
->&2 echo "### Testing against electrs - complete"
+
+if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
+  >&2 echo "### Testing against electrs"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
+  >&2 echo "### Testing against electrs - complete"
+fi
 
 # Switch to esplora and run wallet tests
 unset FM_ELECTRUM_RPC
 export FM_ESPLORA_RPC="http://127.0.0.1:50002"
->&2 echo "### Testing against esplora"
-env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
->&2 echo "### Testing against esplora - complete"
+if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
+  >&2 echo "### Testing against esplora"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
+  >&2 echo "### Testing against esplora - complete"
+fi
 
 echo "fm success: rust-tests"
