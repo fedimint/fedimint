@@ -268,7 +268,7 @@ rec {
     pnameSuffix = "-lcov";
     version = "0.0.1";
     cargoArtifacts = workspaceDepsCov;
-    buildPhaseCargoCommand = "mkdir -p $out ; env RUST_LOG=timing=debug,info cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
+    buildPhaseCargoCommand = "mkdir -p $out ; env RUST_LOG=info,timing=debug cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info";
     installPhaseCommand = "true";
     nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
     doCheck = false;
