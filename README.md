@@ -1,3 +1,4 @@
+
 <h1 align="center">
   <a href="https://fedimint.org">
     Fedimint
@@ -5,7 +6,7 @@
 </h1>
 
 <p align="center">
-    <img src="docs/logo.jpg">
+    <img src="docs/banner.png">
 </p>
 
 <p align="center">
