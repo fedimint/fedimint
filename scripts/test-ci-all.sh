@@ -121,7 +121,8 @@ if parallel \
   --timeout 600 \
   --load 150% \
   --delay 5 \
-  --memfree 512M \
+  --jobs '+0' \
+  --memfree 1G \
   --nice 15 ::: \
   cli_test_always_success \
   cli_test_rust_tests_bitcoind \
