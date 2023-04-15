@@ -16,8 +16,6 @@ fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
-fedimint-rocksdb = { path = "../fedimint-rocksdb" }
-ln-gateway = { path = "../gateway/ln-gateway" }
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 nix = { version = "0.26.2", features = ["signal"] }
 serde_json = "1.0.94"
