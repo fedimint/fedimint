@@ -45,11 +45,13 @@ jobs:
             runs-on: buildjet-8vcpu-ubuntu-2004
             build-in-pr: true
             timeout: 20
+            run-tests: true
           - host: macos
             runs-on: macos-12
             build-in-pr: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             timeout: 60
+            run-tests: false
 
     name: "Build on ${{ matrix.host }}"
     runs-on: ${{ matrix.runs-on }}
@@ -87,7 +89,7 @@ jobs:
         run: nix build -L .#ci.workspaceTestDoc
 
       - name: Tests
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
         run: nix build -L .#ci.cli-test.all
 
   audit:
