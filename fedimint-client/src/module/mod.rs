@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -68,6 +69,8 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 /// Type-erased version of [`ClientModule`]
 #[apply(async_trait_maybe_send!)]
 pub trait IClientModule: Debug {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn std::any::Any));
+
     fn decoder(&self) -> Decoder;
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
@@ -87,6 +90,10 @@ impl<T> IClientModule for T
 where
     T: ClientModule,
 {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
+        self
+    }
+
     fn decoder(&self) -> Decoder {
         T::decoder()
     }
