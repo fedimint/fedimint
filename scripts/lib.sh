@@ -247,9 +247,17 @@ function start_federation() {
   START_SERVER=${1:-0}
   END_SERVER=${2:-$FM_FED_SIZE}
   $FM_BIN_DIR/fixtures federation $START_SERVER $END_SERVER &
+  # BUG: Give daemons some time to write to `FM_PID_FILE`
+  # before moving on and letting other scripts rely on it.
+  # See https://github.com/fedimint/fedimint/issues/2236
+  sleep 2
 }
 
 function start_all_daemons() {
   $FM_BIN_DIR/fixtures all-daemons &
+  # BUG: Give daemons some time to write to `FM_PID_FILE`
+  # before touching it from here.
+  # See https://github.com/fedimint/fedimint/issues/2236
+  sleep 2
   echo $! >> $FM_PID_FILE
 }
