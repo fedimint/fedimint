@@ -488,7 +488,11 @@ impl FedimintConsensus {
             })
             .collect::<Vec<_>>();
 
-        select_all(proposal_futures).await;
+        if !proposal_futures.is_empty() {
+            select_all(proposal_futures).await;
+        } else {
+            std::future::pending().await
+        }
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {

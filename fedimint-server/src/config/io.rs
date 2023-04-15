@@ -38,6 +38,10 @@ pub const CLIENT_CONNECT_FILE: &str = "client-connect";
 /// Salt backup for combining with the private key
 pub const SALT_FILE: &str = "private.salt";
 
+/// Plain-text stored password, used to restart the server without having to
+/// send a password in via the API
+pub const PLAINTEXT_PASSWORD: &str = "password.private";
+
 /// Database file name
 pub const DB_FILE: &str = "database";
 
@@ -48,6 +52,7 @@ pub const TLS_PK: &str = "tls-pk";
 pub const TLS_CERT: &str = "tls-cert";
 
 pub const JSON_EXT: &str = "json";
+
 const ENCRYPTED_EXT: &str = "encrypt";
 
 pub fn create_cert(

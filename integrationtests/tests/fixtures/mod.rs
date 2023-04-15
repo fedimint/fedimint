@@ -47,6 +47,8 @@ use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
 use fedimint_mint_server::MintGen;
+use fedimint_server::api::FedimintApi;
+use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::{
     ConsensusProposal, HbbftConsensusOutcome, TransactionSubmissionError,
@@ -1375,7 +1377,7 @@ impl FederationTest {
             let db = database_gen(decoders.clone());
             let mut task_group = task_group.clone();
 
-            let mut fedimint = FedimintServer::new_with(
+            let fedimint = FedimintServer::new_with(
                 cfg.clone(),
                 db.clone(),
                 module_inits.clone(),
@@ -1386,7 +1388,24 @@ impl FederationTest {
             .await
             .expect("failed to init server");
 
-            fedimint.spawn_api().await;
+            let api = FedimintApi {
+                data_dir: Default::default(),
+                settings: ConfigGenSettings {
+                    download_token_limit: cfg.local.download_token_limit,
+                    p2p_bind: cfg.local.fed_bind,
+                    api_bind: cfg.local.api_bind,
+                    p2p_url: cfg.local.p2p_endpoints[&cfg.local.identity].url.clone(),
+                    api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
+                    default_params: Default::default(),
+                    module_gens: module_inits.legacy_init_modules(),
+                    registry: module_inits.clone(),
+                },
+                db: db.clone(),
+                upgrade_epoch: None,
+            };
+            api.run_consensus_api(&fedimint.consensus.api, &mut task_group)
+                .await
+                .expect("api starts");
 
             Arc::new(Mutex::new(ServerTest {
                 fedimint,

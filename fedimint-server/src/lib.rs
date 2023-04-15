@@ -5,7 +5,6 @@ use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::os::unix::ffi::OsStrExt;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::bail;
 use config::ServerConfig;
@@ -19,7 +18,7 @@ use fedimint_core::epoch::{
 };
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
-use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
+use fedimint_core::task::{TaskGroup, TaskHandle};
 pub use fedimint_core::*;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
@@ -36,7 +35,6 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, warn};
 
-use crate::api::FedimintApi;
 use crate::consensus::{
     ApiEvent, ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome,
     HbbftSerdeConsensusOutcome,
@@ -123,59 +121,6 @@ pub struct FedimintServer {
 }
 
 impl FedimintServer {
-    /// Start all the components of the mint and plug them together
-    pub async fn run(
-        cfg: ServerConfig,
-        db: Database,
-        module_inits: ServerModuleGenRegistry,
-        upgrade_epoch: Option<u64>,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<()> {
-        let our_hash = cfg
-            .consensus
-            .to_config_response(&module_inits)
-            .consensus_hash;
-
-        let mut server = FedimintServer::new(cfg.clone(), db, module_inits, task_group).await?;
-
-        if let Some(epoch) = upgrade_epoch {
-            server.consensus.remove_upgrade_items(epoch).await?;
-        }
-
-        server.spawn_api().await;
-
-        loop {
-            info!(
-                target: LOG_CONSENSUS,
-                "Waiting for peers to agree on a consensus config hash"
-            );
-            match server.api.consensus_config_hash().await {
-                Ok(consensus_hash) if consensus_hash == our_hash => break,
-                Ok(_) => bail!("Our consensus config doesn't match peers!"),
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "ERROR {:?}", e)
-                }
-            }
-            sleep(Duration::from_millis(1000)).await;
-        }
-
-        task_group
-            .spawn_local("consensus", move |handle| server.run_consensus(handle))
-            .await;
-        Ok(())
-    }
-
-    /// Starts the API listening in a new thread
-    pub async fn spawn_api(&mut self) {
-        let api = Arc::new(self.consensus.api.clone());
-        let cfg = self.cfg.clone();
-        self.task_group
-            .spawn("api-server", |handle| {
-                FedimintApi::run_consensus(cfg, api, handle)
-            })
-            .await;
-    }
-
     /// Creates a server with real network and no delays
     pub async fn new(
         cfg: ServerConfig,

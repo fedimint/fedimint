@@ -17,11 +17,6 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{OutPoint, TransactionId};
-use fedimint_logging::{LOG_NET_API, LOG_TASK};
-use futures::FutureExt;
-use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::types::error::CallError;
-use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
@@ -45,6 +40,14 @@ use crate::transaction::SerdeTransaction;
 #[derive(Clone)]
 pub struct RpcHandlerCtx<M> {
     pub rpc_context: Arc<M>,
+}
+
+impl<M> RpcHandlerCtx<M> {
+    pub fn new_module(state: M) -> RpcModule<RpcHandlerCtx<M>> {
+        RpcModule::new(Self {
+            rpc_context: Arc::new(state),
+        })
+    }
 }
 
 impl<M: Debug> Debug for RpcHandlerCtx<M> {
