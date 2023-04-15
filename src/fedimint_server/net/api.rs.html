@@ -517,6 +517,8 @@
 <a href="#517" id="517">517</a>
 <a href="#518" id="518">518</a>
 <a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -540,7 +542,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_logging::LOG_NET_API;
+<span class="kw">use </span>fedimint_logging::{LOG_NET_API, LOG_TASK};
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>jsonrpsee::server::ServerBuilder;
 <span class="kw">use </span>jsonrpsee::types::error::CallError;
@@ -881,14 +883,16 @@
     task_handle
         .on_shutdown(Box::new(<span class="kw">move </span>|| {
             Box::pin(<span class="kw">async move </span>{
+                <span class="macro">debug!</span>(target: LOG_TASK, <span class="string">&quot;Shutting down jsonrpcsee server&quot;</span>);
                 <span class="comment">// ignore errors: we don&#39;t care if already stopped
                 </span><span class="kw">let _ </span>= stop_handle.stop();
             })
         }))
         .<span class="kw">await</span>;
 
-    server_handle.stopped().<span class="kw">await
-</span>}
+    server_handle.stopped().<span class="kw">await</span>;
+    <span class="macro">debug!</span>(target: LOG_TASK, <span class="string">&quot;jsonrpcsee server stopped&quot;</span>);
+}
 
 <span class="kw">const </span>API_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(<span class="number">60</span>);
 
