@@ -1,5 +1,7 @@
-/// State machine that requests the lightning gateway to pay an invoice on behalf of a
-/// federation client.
+use fedimint_core::encoding::{Decodable, Encodable};
+
+/// State machine that requests the lightning gateway to pay an invoice on
+/// behalf of a federation client.
 ///
 /// ```mermaid
 /// graph LR
@@ -14,3 +16,5 @@
 ///     Refund -- await transaction acceptance --> Refunded
 ///     Refund -- await transaction rejected --> Failure
 /// ```
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+pub enum LnPayStates {}

@@ -1,3 +1,5 @@
+use fedimint_core::encoding::{Decodable, Encodable};
+
 /// State machine that handles an intercepted HTLC from the Lightning node.
 ///
 /// ```mermaid
@@ -13,3 +15,5 @@
 ///    CancelHTLC -- cancel success --> Canceled
 ///    CancelHTLC -- cancel failure --> CancelHTLC
 /// ```
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+pub enum GwReceiveStates {}

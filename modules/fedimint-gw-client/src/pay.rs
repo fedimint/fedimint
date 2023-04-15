@@ -1,3 +1,5 @@
+use fedimint_core::encoding::{Decodable, Encodable};
+
 /// State machine that pays a lightning invoice on behalf of a federation user.
 ///
 /// ```mermaid
@@ -15,3 +17,5 @@
 ///    Refund -- await cancel transaction acceptance --> Refunded
 ///    Refund -- await cancel transaction failure --> Failure
 /// ```
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+pub enum GwPayStates {}

@@ -1368,6 +1368,11 @@ dependencies = [
 [[package]]
 name = "fedimint-gw-client"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aquamarine",
+ "fedimint-core",
+]
 
 [[package]]
 name = "fedimint-ln-client"

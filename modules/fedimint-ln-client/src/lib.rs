@@ -1,3 +1,6 @@
+mod pay;
+mod receive;
+
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
