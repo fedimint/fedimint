@@ -5,6 +5,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_mint_common::{BlindNonce, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note};
@@ -154,15 +155,21 @@ impl MintOutputStatesCreated {
         common: MintOutputCommon,
         decoders: ModuleDecoderRegistry,
     ) -> Result<MintOutputBlindSignatures, String> {
-        let outcome: MintOutputOutcome = global_context
-            .api()
-            .await_output_outcome(common.out_point, Duration::MAX, &decoders)
-            .await
-            .map_err(|e| e.to_string())?;
+        loop {
+            let outcome: MintOutputOutcome = global_context
+                .api()
+                .await_output_outcome(common.out_point, Duration::MAX, &decoders)
+                .await
+                .map_err(|e| e.to_string())?;
 
-        outcome
-            .0
-            .ok_or("await_output_outcome returned a non-final outcome".to_owned())
+            match outcome.0 {
+                Some(bsigs) => return Ok(bsigs),
+                None => {
+                    // FIXME: hack since we can't await outpoints yet?! may return non-final outcome
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
     }
 
     async fn transition_outcome_ready(
