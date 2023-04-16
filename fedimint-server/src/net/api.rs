@@ -22,7 +22,6 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
 use tracing::debug;
 
-use crate::api::HasApiContext;
 use crate::config::api::ApiResult;
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
@@ -35,6 +34,7 @@ use crate::db::{
     LastEpochKey, RejectedTransactionKey,
 };
 use crate::transaction::SerdeTransaction;
+use crate::HasApiContext;
 
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]

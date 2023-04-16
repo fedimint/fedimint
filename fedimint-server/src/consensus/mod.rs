@@ -2,6 +2,8 @@
 
 pub mod debug;
 pub mod interconnect;
+pub mod server;
+
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::FromIterator;
 

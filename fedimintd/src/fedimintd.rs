@@ -15,11 +15,11 @@ use fedimint_core::timing;
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
-use fedimint_server::api::FedimintApi;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{
     read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG, PLAINTEXT_PASSWORD,
 };
+use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
 use tokio::select;
@@ -263,7 +263,7 @@ async fn run(
 
     // TODO: Fedimintd should use the config gen API
     fs::write(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)?;
-    let api = FedimintApi {
+    let api = FedimintServer {
         data_dir: opts.data_dir,
         settings: ConfigGenSettings {
             download_token_limit: cfg.local.download_token_limit,

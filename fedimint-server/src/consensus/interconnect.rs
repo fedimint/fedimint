@@ -4,8 +4,8 @@ use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{ApiError, ApiRequestErased};
 use serde_json::Value;
 
-use crate::api::HasApiContext;
 use crate::net::api::ConsensusApi;
+use crate::HasApiContext;
 
 pub struct FedimintInterconnect<'a> {
     pub fedimint: &'a ConsensusApi,

@@ -771,9 +771,9 @@ mod tests {
     use url::Url;
 
     use crate::config::gen_cert_and_key;
-    use crate::net::connect::{ConnectionListener, TlsConfig};
+    use crate::net::connect::{ConnectionListener, Connector, TlsConfig};
     use crate::net::framed::AnyFramedTransport;
-    use crate::{Connector, TlsTcpConnector};
+    use crate::TlsTcpConnector;
 
     fn gen_connector_config(count: usize) -> Vec<TlsConfig> {
         let peer_keys = (0..count)

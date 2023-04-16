@@ -47,16 +47,16 @@ use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
 use fedimint_mint_server::MintGen;
-use fedimint_server::api::FedimintApi;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+use fedimint_server::consensus::server::{ConsensusServer, EpochMessage};
 use fedimint_server::consensus::{
     ConsensusProposal, HbbftConsensusOutcome, TransactionSubmissionError,
 };
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
 use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
-use fedimint_server::{consensus, EpochMessage, FedimintServer};
+use fedimint_server::{consensus, FedimintServer};
 use fedimint_testing::btc::bitcoind::FakeWalletGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
@@ -813,7 +813,7 @@ pub struct FederationTest {
 }
 
 struct ServerTest {
-    fedimint: FedimintServer,
+    fedimint: ConsensusServer,
     last_consensus: Vec<HbbftConsensusOutcome>,
     bitcoin_rpc: DynBitcoindRpc,
     database: Database,
@@ -1377,7 +1377,7 @@ impl FederationTest {
             let db = database_gen(decoders.clone());
             let mut task_group = task_group.clone();
 
-            let fedimint = FedimintServer::new_with(
+            let fedimint = ConsensusServer::new_with(
                 cfg.clone(),
                 db.clone(),
                 module_inits.clone(),
@@ -1388,7 +1388,7 @@ impl FederationTest {
             .await
             .expect("failed to init server");
 
-            let api = FedimintApi {
+            let api = FedimintServer {
                 data_dir: Default::default(),
                 settings: ConfigGenSettings {
                     download_token_limit: cfg.local.download_token_limit,

@@ -30,10 +30,10 @@ use tokio_rustls::rustls;
 use tracing::error;
 use url::Url;
 
-use crate::api::HasApiContext;
 use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
 use crate::net::peers::DelayCalculator;
+use crate::HasApiContext;
 
 pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
@@ -671,9 +671,9 @@ mod tests {
     use tokio::spawn;
     use url::Url;
 
-    use crate::api::FedimintApi;
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
+    use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
@@ -689,7 +689,7 @@ mod tests {
             port: u16,
             name_suffix: u16,
             data_dir: PathBuf,
-        ) -> (TestConfigApi, FedimintApi) {
+        ) -> (TestConfigApi, FedimintServer) {
             let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
 
             let name = format!("peer{name_suffix}");
@@ -712,7 +712,7 @@ mod tests {
             let dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
 
-            let api = FedimintApi {
+            let api = FedimintServer {
                 data_dir: dir,
                 settings: settings.clone(),
                 db,
