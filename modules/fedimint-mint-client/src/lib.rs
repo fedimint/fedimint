@@ -6,7 +6,9 @@ use std::iter::once;
 
 use anyhow::anyhow;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{ClientModule, PrimaryClientModule, StateGenerator};
+use fedimint_client::module::{
+    ClientModule, DynPrimaryClientModule, PrimaryClientModule, StateGenerator,
+};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
@@ -67,6 +69,20 @@ impl ClientModuleGen for MintClientGen {
             secp: Secp256k1::new(),
             notifier,
         })
+    }
+
+    async fn init_primary(
+        &self,
+        cfg: Self::Config,
+        db: Database,
+        instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
+        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+    ) -> anyhow::Result<DynPrimaryClientModule> {
+        Ok(self
+            .init(cfg, db, instance_id, module_root_secret, notifier)
+            .await?
+            .into())
     }
 }
 

@@ -58,14 +58,20 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     ///     &self,
     ///     cfg: Self::Config,
     ///     db: Database,
+    ///     instance_id: ModuleInstanceId,
+    ///     module_root_secret: DerivableSecret,
+    ///     notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     /// ) -> anyhow::Result<DynPrimaryClientModule> {
-    ///     Ok(self.init(cfg, db)?.into())
+    ///     Ok(self.init(cfg, db, instance_id, module_root_secret, notifier)?.into())
     /// }
     /// ```
     async fn init_primary(
         &self,
         _cfg: Self::Config,
         _db: Database,
+        _instance_id: ModuleInstanceId,
+        _module_root_secret: DerivableSecret,
+        _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<DynPrimaryClientModule> {
         bail!("Not a primary module")
     }
@@ -95,6 +101,10 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
         &self,
         cfg: ClientModuleConfig,
         db: Database,
+        instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
+        // TODO: make dyn type for notifier
+        notifier: Notifier<DynGlobalClientContext>,
     ) -> anyhow::Result<DynPrimaryClientModule>;
 }
 
@@ -104,7 +114,7 @@ where
     T: ClientModuleGen + 'static + MaybeSend + Sync,
 {
     fn decoder(&self) -> Decoder {
-        <Self as ExtendsCommonModuleGen>::Common::decoder()
+        T::Module::decoder()
     }
 
     fn module_kind(&self) -> ModuleKind {
@@ -145,9 +155,20 @@ where
         &self,
         cfg: ClientModuleConfig,
         db: Database,
+        instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
+        notifier: Notifier<DynGlobalClientContext>,
     ) -> anyhow::Result<DynPrimaryClientModule> {
         let typed_cfg = cfg.cast::<T::Config>()?;
-        Ok(self.init_primary(typed_cfg, db).await?)
+        Ok(self
+            .init_primary(
+                typed_cfg,
+                db,
+                instance_id,
+                module_root_secret,
+                notifier.module_notifier(instance_id),
+            )
+            .await?)
     }
 }
 

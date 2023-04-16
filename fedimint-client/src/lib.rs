@@ -409,10 +409,16 @@ impl ClientBuilder {
                         .module_gens
                         .get(module_config.kind())
                         .ok_or(anyhow!("Unknown module kind in config"))?
-                        .init_primary(module_config, db.clone())
+                        .init_primary(
+                            module_config,
+                            db.clone(),
+                            module_instance,
+                            root_secret.child_key(ChildId(module_instance as u64)),
+                            notifier.clone(),
+                        )
                         .await?;
-                    let replaced = primary_module.replace(module).is_some();
-                    assert!(replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
+                    let not_replaced = primary_module.replace(module).is_none();
+                    assert!(not_replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
                 } else {
                     let module = self
                         .module_gens
