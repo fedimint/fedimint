@@ -182,3 +182,9 @@ impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynClientModuleG
         self.0.as_common()
     }
 }
+
+impl AsRef<dyn IClientModuleGen + 'static> for DynClientModuleGen {
+    fn as_ref(&self) -> &(dyn IClientModuleGen + 'static) {
+        self.0.as_ref()
+    }
+}

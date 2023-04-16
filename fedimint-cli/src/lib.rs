@@ -14,7 +14,7 @@ use fedimint_aead::get_password_hash;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::get_client_root_secret;
 use fedimint_client::module::gen::{
-    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
+    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt, IClientModuleGen,
 };
 use fedimint_client::sm::Notifier;
 use fedimint_client_legacy::mint::backup::Metadata;
@@ -323,9 +323,14 @@ impl Opts {
     ) -> ModuleDecoderRegistry {
         ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().filter_map(
             |(id, module_cfg)| {
-                module_gens
-                    .get(module_cfg.kind())
-                    .map(|module_gen| (id, module_gen.as_ref().decoder()))
+                module_gens.get(module_cfg.kind()).map(|module_gen| {
+                    (
+                        id,
+                        IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(
+                            module_gen,
+                        )),
+                    )
+                })
             },
         ))
     }
