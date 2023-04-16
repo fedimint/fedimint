@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use anyhow::anyhow;
+
 use crate::core::Decoder;
 pub use crate::core::ModuleInstanceId;
 use crate::server::DynServerModule;
@@ -41,14 +43,25 @@ impl<M> ModuleRegistry<M> {
     pub fn get(&self, id: ModuleInstanceId) -> Option<&M> {
         self.0.get(&id)
     }
+}
 
+impl<M: std::fmt::Debug> ModuleRegistry<M> {
     /// Return the module data belonging to the module identified by the
     /// supplied `module_id`
     ///
     /// # Panics
     /// If the module isn't in the registry
     pub fn get_expect(&self, id: ModuleInstanceId) -> &M {
-        self.0.get(&id).expect("Instance ID not found")
+        self.0
+            .get(&id)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Instance ID not found: got {}, expected one of {:?}",
+                    id,
+                    self.0.keys().collect::<Vec<_>>()
+                )
+            })
+            .expect("Only existing instance should be fetched")
     }
 
     /// Add a module to the registry
