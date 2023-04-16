@@ -275,7 +275,7 @@ where
     }
 }
 
-fn state_gen_to_dyn<S>(
+pub fn state_gen_to_dyn<S>(
     state_gen: StateGenerator<S>,
     module_instance: ModuleInstanceId,
 ) -> StateGenerator<DynState<DynGlobalClientContext>>

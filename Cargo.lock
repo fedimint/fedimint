@@ -1125,6 +1125,7 @@ name = "fedimint-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.20.0",
  "bitcoin",
  "bitcoin_hashes",
  "clap",
@@ -1137,6 +1138,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-rocksdb",
+ "fedimint-wallet-client",
  "lightning-invoice",
  "rand",
  "serde",

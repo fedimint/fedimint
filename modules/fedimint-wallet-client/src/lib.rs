@@ -31,7 +31,7 @@ impl ClientModuleGen for WalletClientGen {
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
-        unimplemented!()
+        Ok(WalletClientModule {})
     }
 }
 
@@ -43,9 +43,7 @@ impl ClientModule for WalletClientModule {
     type ModuleStateMachineContext = ();
     type States = WalletClientStates;
 
-    fn context(&self) -> Self::ModuleStateMachineContext {
-        unimplemented!()
-    }
+    fn context(&self) -> Self::ModuleStateMachineContext {}
 
     fn input_amount(
         &self,

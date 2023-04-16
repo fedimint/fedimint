@@ -1,3 +1,5 @@
+mod ng;
+
 use core::fmt;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -522,6 +524,9 @@ enum Command {
         #[clap(long)]
         arg: Vec<ffi::OsString>,
     },
+
+    #[clap(subcommand)]
+    Ng(ng::ClientNg),
 }
 
 #[derive(Clone)]
@@ -1031,6 +1036,14 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     module
                         .handle_cli_command(&arg)
+                        .await
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                ))
+            }
+            Command::Ng(command) => {
+                let cfg = cli.load_config()?;
+                Ok(CliOutput::Raw(
+                    ng::handle_ng_command(command, cfg.0, cli.load_rocks_db().unwrap())
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))

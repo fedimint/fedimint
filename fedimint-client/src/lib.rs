@@ -1,15 +1,17 @@
 //! Client library for fedimintd
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 use anyhow::anyhow;
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
-use fedimint_core::config::ClientConfig;
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
@@ -26,7 +28,9 @@ use secp256k1_zkp::Secp256k1;
 use serde::Serialize;
 
 use crate::db::ClientSecretKey;
-use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
+use crate::module::gen::{
+    ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
+};
 use crate::module::{ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, Notifier, OperationId,
@@ -408,10 +412,13 @@ impl ClientBuilder {
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
 
-        let mut decoders =
-            self.module_gens.decoders(config.modules.iter().map(
-                |(module_instance, module_config)| (*module_instance, module_config.kind()),
-            ))?;
+        let mut decoders = client_decoders(
+            &self.module_gens,
+            config
+                .modules
+                .iter()
+                .map(|(module_instance, module_config)| (*module_instance, module_config.kind())),
+        )?;
         decoders.register_module(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
             tx_submission_sm_decoder(),
@@ -559,4 +566,22 @@ impl Serialize for ClientSecret {
     {
         serializer.serialize_bytes(&self.0)
     }
+}
+
+pub fn client_decoders<'a>(
+    registry: &ModuleGenRegistry<DynClientModuleGen>,
+    module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+) -> anyhow::Result<ModuleDecoderRegistry> {
+    let mut modules = BTreeMap::new();
+    for (id, kind) in module_kinds {
+        let Some(init) = registry.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
+            };
+
+        modules.insert(
+            id,
+            IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(init)),
+        );
+    }
+    Ok(ModuleDecoderRegistry::from_iter(modules))
 }

@@ -31,7 +31,7 @@ impl ClientModuleGen for LightningClientGen {
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
-        unimplemented!()
+        Ok(LightningClientModule {})
     }
 }
 
@@ -43,9 +43,7 @@ impl ClientModule for LightningClientModule {
     type ModuleStateMachineContext = ();
     type States = LightningClientStates;
 
-    fn context(&self) -> Self::ModuleStateMachineContext {
-        unimplemented!()
-    }
+    fn context(&self) -> Self::ModuleStateMachineContext {}
 
     fn input_amount(
         &self,

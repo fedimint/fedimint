@@ -169,6 +169,14 @@ impl PrimaryClientModule for MintClientModule {
 }
 
 impl MintClientModule {
+    /// Returns the number of held e-cash notes per denomination
+    pub async fn get_wallet_summary(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> Tiered<usize> {
+        self.available_notes(dbtx).await.summary().iter().collect()
+    }
+
     // TODO: put "notes per denomination" default into cfg
     /// Creates a mint output with exactly the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
