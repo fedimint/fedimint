@@ -27,7 +27,7 @@ use serde::Serialize;
 
 use crate::db::ClientSecretKey;
 use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
-use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
+use crate::module::{ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, Notifier, OperationId,
     OperationState,
@@ -187,6 +187,26 @@ impl Client {
         dbtx.commit_tx().await;
         Ok(txid)
     }
+
+    /// Returns a reference to a typed module client instance. Returns an error
+    /// if the instance isn't registered or the module kind doesn't match.
+    pub fn get_module_client<M: ClientModule>(
+        &self,
+        instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<&M> {
+        let module = self
+            .inner
+            .try_get_module(instance_id)
+            .ok_or(anyhow!("Unknown module instance {}", instance_id))?;
+        module
+            .as_any()
+            .downcast_ref::<M>()
+            .ok_or_else(|| anyhow::anyhow!("Module is not of type {}", std::any::type_name::<M>()))
+    }
+
+    pub fn db(&self) -> &Database {
+        &self.inner.db
+    }
 }
 
 struct ClientInner {
@@ -202,13 +222,18 @@ struct ClientInner {
 impl ClientInner {
     /// Returns a reference to the module, panics if not found
     fn get_module(&self, instance: ModuleInstanceId) -> &maybe_add_send_sync!(dyn IClientModule) {
+        self.try_get_module(instance)
+            .expect("Module instance not found")
+    }
+
+    fn try_get_module(
+        &self,
+        instance: ModuleInstanceId,
+    ) -> Option<&maybe_add_send_sync!(dyn IClientModule)> {
         if instance == self.primary_module_instance {
-            self.primary_module.as_ref()
+            Some(self.primary_module.as_ref())
         } else {
-            self.modules
-                .get(instance)
-                .expect("Module not found")
-                .as_ref()
+            Some(self.modules.get(instance)?.as_ref())
         }
     }
 
