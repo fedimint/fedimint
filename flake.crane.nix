@@ -496,5 +496,32 @@ rec {
       "modules"
     ];
   };
+
+  fedimint-dbtool-pkgs = pkgsBuild {
+    name = "fedimint-dbtool-pkgs";
+    pkgs = {
+      fedimint-dbtool = { };
+    };
+    dirs = [
+      "client/client-lib"
+      "client/cli"
+      "crypto/aead"
+      "crypto/derive-secret"
+      "crypto/hkdf"
+      "crypto/tbs"
+      "fedimintd"
+      "fedimint-bitcoind"
+      "fedimint-build"
+      "fedimint-client"
+      "fedimint-core"
+      "fedimint-derive"
+      "fedimint-dbtool"
+      "fedimint-rocksdb"
+      "fedimint-server"
+      "fedimint-logging"
+      "gateway/ln-gateway"
+      "modules"
+    ];
+  };
 }
 
