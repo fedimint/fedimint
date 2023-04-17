@@ -37,9 +37,7 @@ use fedimint_ln_client::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln_client::LightningConsensusItem;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_server::common::{MintConsensusItem, MintOutputSignatureShare};
-use fedimint_server::consensus::TransactionSubmissionError::{
-    TransactionError, TransactionReplayError,
-};
+use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
 use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
@@ -1380,7 +1378,7 @@ async fn cannot_replay_transactions() -> Result<()> {
 
         // verify resubmitting the tx fails at the API level
         let response = fed.submit_transaction(tx.clone()).await;
-        assert_matches!(response, Err(TransactionReplayError(_)));
+        assert_matches!(response, Ok(()));
         fed.run_empty_epochs(2).await;
         assert!(fed.find_module_item(fed.mint_id).await.is_none());
 

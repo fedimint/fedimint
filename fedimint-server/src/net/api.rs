@@ -25,7 +25,6 @@ use tracing::debug;
 use crate::config::api::ApiResult;
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
-use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::consensus::{
     AcceptedTransaction, ApiEvent, FundingVerifier, TransactionSubmissionError,
 };
@@ -81,7 +80,7 @@ impl ConsensusApi {
             .await
             .is_some()
         {
-            return Err(TransactionReplayError(transaction.tx_hash()));
+            return Ok(());
         }
 
         let tx_hash = transaction.tx_hash();
