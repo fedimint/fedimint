@@ -48,7 +48,10 @@ pub enum BuyPreimage {
 
 #[derive(Clone)]
 struct LightningSenderStream {
+    /// Channel used to stream subscribe and complete requests back to the
+    /// Lightning implementation
     ln_sender: Sender<RouteHtlcRequest>,
+    /// Reference to an ILnRpcClient used for setting up the htlc stream
     lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
 }
 
@@ -142,42 +145,44 @@ impl GatewayActor {
         client: Arc<GatewayClient>,
         lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
         route_hints: Vec<RouteHint>,
-        task_group: TaskGroup,
+        mut task_group: TaskGroup,
         gw_rpc: GatewayRpcSender,
     ) -> Result<Self> {
         let register_client = client.clone();
-        let mut tg = task_group.make_subgroup().await;
-        tg.spawn("Register with federation", |_| async move {
-            loop {
-                // Retry gateway registration
-                match retry(
-                    String::from("Register With Federation"),
-                    #[allow(clippy::unit_arg)]
-                    || async {
-                        let gateway_registration = register_client
-                            .config()
-                            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
-                        Ok(register_client
-                            .register_with_federation(gateway_registration.clone())
-                            .await?)
-                    },
-                    Duration::from_secs(1),
-                    5,
-                )
-                .await
-                {
-                    Ok(_) => {
-                        info!("Connected with federation");
-                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
-                    }
-                    Err(e) => {
-                        warn!("Failed to connect with federation: {}", e);
-                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
+        task_group
+            .spawn("Register with federation", |_| async move {
+                loop {
+                    // Retry gateway registration
+                    match retry(
+                        String::from("Register With Federation"),
+                        #[allow(clippy::unit_arg)]
+                        || async {
+                            let gateway_registration =
+                                register_client.config().to_gateway_registration_info(
+                                    route_hints.clone(),
+                                    GW_ANNOUNCEMENT_TTL,
+                                );
+                            Ok(register_client
+                                .register_with_federation(gateway_registration.clone())
+                                .await?)
+                        },
+                        Duration::from_secs(1),
+                        5,
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            info!("Connected with federation");
+                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
+                        }
+                        Err(e) => {
+                            warn!("Failed to connect with federation: {}", e);
+                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
+                        }
                     }
                 }
-            }
-        })
-        .await;
+            })
+            .await;
 
         // Create a channel that will be used to shutdown the HTLC thread
         let (sender, receiver) = mpsc::channel::<Arc<AtomicBool>>(100);
@@ -185,7 +190,7 @@ impl GatewayActor {
         let mut actor = Self {
             client,
             lnrpc,
-            task_group: tg,
+            task_group,
             gw_rpc,
             sender,
         };
@@ -344,7 +349,10 @@ impl GatewayActor {
 
                         match action {
                             Some(route_htlc_response::Action::SubscribeResponse(htlc)) => {
-                                Self::handle_intercepted_htlc(htlc, ln_sender.clone(), actor.clone()).await.expect("Error occurred while handling intercepted HTLC");
+                                // Swallow result so that we continue processing HTLCs
+                                let _ = Self::handle_intercepted_htlc(htlc, ln_sender.clone(), actor.clone()).await.map_err(|e| {
+                                    error!("Error occurred while handling intercepted HTLC: {:?}", e);
+                                });
                             }
                             Some(route_htlc_response::Action::CompleteResponse(_complete_response)) => {
                                 // TODO: Might need to add some error handling here
@@ -608,10 +616,7 @@ impl GatewayActor {
         Ok(())
     }
 
-    pub async fn restore(&self) -> Result<()> {
-        // TODO: get the task group from `self`
-        let mut task_group = TaskGroup::new();
-
+    pub async fn restore(&self, mut task_group: TaskGroup) -> Result<()> {
         self.client
             .mint_client()
             .restore_ecash_from_federation(10, &mut task_group)
