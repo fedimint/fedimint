@@ -136,6 +136,7 @@ pub enum GatewayRequest {
     Backup(GatewayRequestInner<BackupPayload>),
     Restore(GatewayRequestInner<RestorePayload>),
     LightningReconnect(GatewayRequestInner<LightningReconnectPayload>),
+    Shutdown,
 }
 
 #[derive(Debug)]

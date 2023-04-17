@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::anyhow;
 use axum::http::StatusCode;
@@ -516,112 +516,121 @@ impl Gateway {
     }
 
     pub async fn run(mut self, listen: SocketAddr, password: String) -> Result<()> {
-        let mut tg = self.task_group.clone();
-
         let sender = GatewayRpcSender::new(self.sender.clone());
-        tg.spawn("Gateway Webserver", move |server_ctrl| async move {
-            let mut webserver = tokio::spawn(run_webserver(password, listen, sender));
-
-            // Shut down webserver if requested
-            if server_ctrl.is_shutting_down() {
-                webserver.abort();
-                let _ = futures::executor::block_on(&mut webserver);
-            }
-        })
-        .await;
+        let tx = run_webserver(
+            password,
+            listen,
+            sender,
+            self.task_group.make_subgroup().await,
+        )
+        .await
+        .expect("Failed to start webserver");
 
         // TODO: try to drive forward outgoing and incoming payments that were
         // interrupted
-        let loop_ctrl = tg.make_handle();
-        loop {
+        let loop_ctrl = self.task_group.make_handle();
+        let shutdown_sender = self.sender.clone();
+        loop_ctrl
+            .on_shutdown(Box::new(|| {
+                Box::pin(async move {
+                    // Send shutdown signal to the webserver
+                    let _ = tx.send(());
+
+                    // Send shutdown signal to the handler loop
+                    let _ = shutdown_sender.send(GatewayRequest::Shutdown).await;
+                })
+            }))
+            .await;
+
+        // Handle messages from webserver and plugin
+        while let Some(msg) = self.receiver.recv().await {
+            tracing::trace!("Gateway received message {:?}", msg);
+
             // Shut down main loop if requested
             if loop_ctrl.is_shutting_down() {
                 break;
             }
 
-            let least_wait_until = Instant::now() + Duration::from_millis(100);
-
-            // Handle messages from webserver and plugin
-            while let Ok(msg) = self.receiver.try_recv() {
-                tracing::trace!("Gateway received message {:?}", msg);
-                match msg {
-                    GatewayRequest::Info(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_get_info(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::ConnectFederation(inner) => {
-                        let route_hints: Vec<RouteHint> =
-                            self.lnrpc.read().await.routehints().await?.try_into()?;
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_connect_federation(payload, route_hints.clone())
-                            })
-                            .await;
-                    }
-                    GatewayRequest::PayInvoice(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_pay_invoice_msg(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::Balance(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_balance_msg(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::DepositAddress(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_address_msg(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::Deposit(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_deposit_msg(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::Withdraw(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_withdraw_msg(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::Backup(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_backup_msg(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::Restore(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_restore_msg(payload)
-                            })
-                            .await;
-                    }
-                    GatewayRequest::LightningReconnect(inner) => {
-                        inner
-                            .handle(&mut self, |gateway, payload| {
-                                gateway.handle_lightning_reconnect(payload)
-                            })
-                            .await;
-                    }
+            match msg {
+                GatewayRequest::Info(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_get_info(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::ConnectFederation(inner) => {
+                    let route_hints: Vec<RouteHint> =
+                        self.lnrpc.read().await.routehints().await?.try_into()?;
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_connect_federation(payload, route_hints.clone())
+                        })
+                        .await;
+                }
+                GatewayRequest::PayInvoice(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_pay_invoice_msg(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::Balance(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_balance_msg(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::DepositAddress(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_address_msg(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::Deposit(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_deposit_msg(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::Withdraw(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_withdraw_msg(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::Backup(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_backup_msg(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::Restore(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_restore_msg(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::LightningReconnect(inner) => {
+                    inner
+                        .handle(&mut self, |gateway, payload| {
+                            gateway.handle_lightning_reconnect(payload)
+                        })
+                        .await;
+                }
+                GatewayRequest::Shutdown => {
+                    info!("Gatewayd received shutdown request");
+                    break;
                 }
             }
-
-            fedimint_core::task::sleep_until(least_wait_until).await;
         }
+
         Ok(())
     }
 }
