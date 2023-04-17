@@ -824,6 +824,8 @@
 <a href="#824" id="824">824</a>
 <a href="#825" id="825">825</a>
 <a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -831,7 +833,9 @@
 </span><span class="kw">mod </span>btc;
 <span class="kw">mod </span>secp256k1;
 <span class="kw">mod </span>tbs;
-<span class="kw">mod </span>tls;
+
+<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+</span><span class="kw">mod </span>tls;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
