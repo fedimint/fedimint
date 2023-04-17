@@ -320,7 +320,7 @@ impl Database {
 /// write-write conflicts are prevented).
 ///
 /// Specifically, Fedimint expects the database implementation to prevent the
-/// following anamolies:
+/// following anomalies:
 ///
 /// Non-Readable Write: TX1 writes (K1, V1) at time t but cannot read (K1, V1)
 /// at time (t + i)
@@ -351,7 +351,15 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
+    /// Returns an stream of key-value pairs with keys that start with
+    /// `key_prefix`. No particular ordering is guaranteed.
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_>;
+
+    /// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>>;
 
     /// Default implementation is a combination of [`Self::raw_find_by_prefix`]
     /// + loop over [`Self::raw_remove_entry`]
@@ -401,6 +409,11 @@ pub trait ISingleUseDatabaseTransaction<'a>: 'a + MaybeSend {
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>>;
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
 
@@ -461,6 +474,17 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction
             .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_prefix(key_prefix)
             .await)
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        self.0
+            .as_mut()
+            .context("Cannot retrieve from already consumed transaction")?
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
@@ -571,6 +595,19 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransa
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         let prefix_with_module = IsolatedDatabaseTransaction::prefix_with_module(&self.prefix);
         IsolatedDatabaseTransaction::<u16>::raw_find_by_prefix(
+            prefix_with_module,
+            self.dbtx.as_mut(),
+            key_prefix,
+        )
+        .await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        let prefix_with_module = IsolatedDatabaseTransaction::prefix_with_module(&self.prefix);
+        IsolatedDatabaseTransaction::<u16>::raw_find_by_prefix_sorted_descending(
             prefix_with_module,
             self.dbtx.as_mut(),
             key_prefix,
@@ -821,6 +858,23 @@ impl<'isolated, 'parent: 'isolated, T: MaybeSend + Encodable>
             (stripped_key.to_vec(), value)
         })))
     }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        mut prefix_with_module: Vec<u8>,
+        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'isolated>> {
+        let original_prefix_len = prefix_with_module.len();
+        prefix_with_module.extend_from_slice(key_prefix);
+        let raw_prefix = dbtx
+            .raw_find_by_prefix_sorted_descending(prefix_with_module.as_slice())
+            .await?;
+
+        Ok(Box::pin(raw_prefix.map(move |(key, value)| {
+            let stripped_key = &key[original_prefix_len..];
+            (stripped_key.to_vec(), value)
+        })))
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -854,6 +908,18 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         IsolatedDatabaseTransaction::<T>::raw_find_by_prefix(
+            self.prefix.clone(),
+            self.inner_tx,
+            key_prefix,
+        )
+        .await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        IsolatedDatabaseTransaction::<T>::raw_find_by_prefix_sorted_descending(
             self.prefix.clone(),
             self.inner_tx,
             key_prefix,
@@ -1020,8 +1086,42 @@ impl<'parent> DatabaseTransaction<'parent> {
             .expect("Error doing prefix search in database")
             .map(move |(key_bytes, value_bytes)| {
                 let key = KP::Record::from_bytes(&key_bytes, &decoders)
+                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
                     .expect("Unrecoverable error reading DatabaseKey");
                 let value = decode_value(&value_bytes, &decoders)
+                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                    .expect("Unrecoverable decoding DatabaseValue");
+                (key, value)
+            })
+    }
+
+    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
+    pub async fn find_by_prefix_sorted_descending<KP>(
+        &mut self,
+        key_prefix: &KP,
+    ) -> impl Stream<
+        Item = (
+            KP::Record,
+            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+        ),
+    > + '_
+    where
+        KP: DatabaseLookup,
+        KP::Record: DatabaseKey,
+    {
+        debug!("find by prefix sorted descending");
+        let decoders = self.decoders.clone();
+        let prefix_bytes = key_prefix.to_bytes();
+        self.tx
+            .raw_find_by_prefix_sorted_descending(&prefix_bytes)
+            .await
+            .expect("Error doing prefix search in database")
+            .map(move |(key_bytes, value_bytes)| {
+                let key = KP::Record::from_bytes(&key_bytes, &decoders)
+                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                    .expect("Unrecoverable error reading DatabaseKey");
+                let value = decode_value(&value_bytes, &decoders)
+                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
                     .expect("Unrecoverable decoding DatabaseValue");
                 (key, value)
             })
@@ -1465,7 +1565,7 @@ mod test_utils {
         PercentTestKey = 0x25,
     }
 
-    #[derive(Debug, Encodable, Decodable)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
     pub(super) struct TestKey(pub u64);
 
     #[derive(Debug, Encodable, Decodable)]
@@ -1492,7 +1592,7 @@ mod test_utils {
     );
     impl_db_lookup!(key = TestKeyV0, query_prefix = DbPrefixTestPrefixV0);
 
-    #[derive(Debug, Encodable, Decodable)]
+    #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Encodable, Decodable)]
     struct AltTestKey(u64);
 
     #[derive(Debug, Encodable, Decodable)]
@@ -1518,7 +1618,7 @@ mod test_utils {
     );
 
     impl_db_lookup!(key = PercentTestKey, query_prefix = PercentPrefixTestPrefix);
-    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq, PartialOrd, Ord)]
     pub(super) struct TestVal(pub u64);
 
     const TEST_MODULE_PREFIX: u16 = 1;
@@ -1593,47 +1693,45 @@ mod test_utils {
 
         // Verify finding by prefix returns the correct set of key pairs
         let mut dbtx = db.begin_transaction().await;
-        let expected_keys = 2;
 
-        let returned_keys = dbtx
+        let mut returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, (key, value)| async move {
-                match key {
-                    TestKey(55) => {
-                        assert!(value.eq(&TestVal(9999)));
-                    }
-                    TestKey(54) => {
-                        assert!(value.eq(&TestVal(8888)));
-                    }
-                    _ => {}
-                };
-                returned_keys + 1
-            })
+            .collect::<Vec<_>>()
             .await;
+        returned_keys.sort();
+        let expected = vec![(TestKey(54), TestVal(8888)), (TestKey(55), TestVal(9999))];
+        assert_eq!(returned_keys, expected);
 
-        assert_eq!(returned_keys, expected_keys);
+        let reversed = dbtx
+            .find_by_prefix_sorted_descending(&DbPrefixTestPrefix)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        let mut reversed_expected = expected;
+        reversed_expected.reverse();
+        assert_eq!(reversed, reversed_expected);
 
-        let expected_keys = 2;
-
-        let returned_keys = dbtx
+        let mut returned_keys = dbtx
             .find_by_prefix(&AltDbPrefixTestPrefix)
             .await
-            .fold(0, |returned_keys, (key, value)| async move {
-                match key {
-                    AltTestKey(55) => {
-                        assert!(value.eq(&TestVal(7777)));
-                    }
-                    AltTestKey(54) => {
-                        assert!(value.eq(&TestVal(6666)));
-                    }
-                    _ => {}
-                };
-                returned_keys + 1
-            })
+            .collect::<Vec<_>>()
             .await;
+        returned_keys.sort();
+        let expected = vec![
+            (AltTestKey(54), TestVal(6666)),
+            (AltTestKey(55), TestVal(7777)),
+        ];
+        assert_eq!(returned_keys, expected);
 
-        assert_eq!(returned_keys, expected_keys);
+        let reversed = dbtx
+            .find_by_prefix_sorted_descending(&AltDbPrefixTestPrefix)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+        let mut reversed_expected = expected;
+        reversed_expected.reverse();
+        assert_eq!(reversed, reversed_expected);
     }
 
     pub async fn verify_commit(db: Database) {
@@ -2114,6 +2212,13 @@ mod test_utils {
                 &mut self,
                 _key_prefix: &[u8],
             ) -> crate::db::PrefixStream<'_> {
+                unimplemented!()
+            }
+
+            async fn raw_find_by_prefix_sorted_descending(
+                &mut self,
+                _key_prefix: &[u8],
+            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
 

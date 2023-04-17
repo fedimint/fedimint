@@ -37,6 +37,10 @@ impl<T> Tiered<T> {
         self.0.get(amount).ok_or(InvalidAmountTierError(*amount))
     }
 
+    pub fn count_tiers(&self) -> usize {
+        self.0.len()
+    }
+
     pub fn tiers(&self) -> impl DoubleEndedIterator<Item = &Amount> {
         self.0.keys()
     }

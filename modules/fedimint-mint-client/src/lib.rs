@@ -14,7 +14,7 @@ use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredSummary};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::MintClientConfig;
@@ -128,14 +128,14 @@ impl MintClientModule {
     ) -> (MintOutput, StateGenerator<MintClientStateMachines>) {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
-        let denominations = TieredMulti::represent_amount(
+        let denominations = TieredSummary::represent_amount(
             amount,
-            &self.available_notes(dbtx).await,
+            &self.available_notes_summary(dbtx).await,
             &self.cfg.tbs_pks,
             notes_per_denomination,
         );
         for (amt, num) in denominations.iter() {
-            for _ in 0..*num {
+            for _ in 0..num {
                 let (request, blind_nonce) = self.new_ecash_note(amt, dbtx).await;
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
@@ -167,14 +167,19 @@ impl MintClientModule {
         (sig_req, state_generator)
     }
 
-    async fn available_notes(
+    async fn available_notes_summary(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> TieredMulti<SpendableNote> {
+    ) -> TieredSummary {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
-            .map(|(key, spendable_note)| (key.amount, spendable_note))
-            .collect()
+            .fold(
+                TieredSummary::default(),
+                |mut acc, (key, _note)| async move {
+                    acc.inc(key.amount, 1);
+                    acc
+                },
+            )
             .await
     }
 
