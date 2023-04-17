@@ -303,7 +303,7 @@
                 commonEnvs // {
                   buildInputs = commonArgs.buildInputs;
                   nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
-                    fenix.packages.${system}.rust-analyzer
+                    pkgs.rust-analyzer
                     toolchain.fenixToolchainRustfmt
                     cargo-llvm-cov
                     cargo-udeps
