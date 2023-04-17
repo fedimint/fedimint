@@ -631,6 +631,15 @@
 <a href="#631" id="631">631</a>
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>lnd;
@@ -649,7 +658,7 @@
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::{Duration, Instant};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>axum::http::StatusCode;
@@ -1149,112 +1158,121 @@
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, listen: SocketAddr, password: String) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = <span class="self">self</span>.task_group.clone();
-
         <span class="kw">let </span>sender = GatewayRpcSender::new(<span class="self">self</span>.sender.clone());
-        tg.spawn(<span class="string">&quot;Gateway Webserver&quot;</span>, <span class="kw">move </span>|server_ctrl| <span class="kw">async move </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>webserver = tokio::spawn(run_webserver(password, listen, sender));
-
-            <span class="comment">// Shut down webserver if requested
-            </span><span class="kw">if </span>server_ctrl.is_shutting_down() {
-                webserver.abort();
-                <span class="kw">let _ </span>= futures::executor::block_on(<span class="kw-2">&amp;mut </span>webserver);
-            }
-        })
-        .<span class="kw">await</span>;
+        <span class="kw">let </span>tx = run_webserver(
+            password,
+            listen,
+            sender,
+            <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>,
+        )
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;Failed to start webserver&quot;</span>);
 
         <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were
         // interrupted
-        </span><span class="kw">let </span>loop_ctrl = tg.make_handle();
-        <span class="kw">loop </span>{
+        </span><span class="kw">let </span>loop_ctrl = <span class="self">self</span>.task_group.make_handle();
+        <span class="kw">let </span>shutdown_sender = <span class="self">self</span>.sender.clone();
+        loop_ctrl
+            .on_shutdown(Box::new(|| {
+                Box::pin(<span class="kw">async move </span>{
+                    <span class="comment">// Send shutdown signal to the webserver
+                    </span><span class="kw">let _ </span>= tx.send(());
+
+                    <span class="comment">// Send shutdown signal to the handler loop
+                    </span><span class="kw">let _ </span>= shutdown_sender.send(GatewayRequest::Shutdown).<span class="kw">await</span>;
+                })
+            }))
+            .<span class="kw">await</span>;
+
+        <span class="comment">// Handle messages from webserver and plugin
+        </span><span class="kw">while let </span><span class="prelude-val">Some</span>(msg) = <span class="self">self</span>.receiver.recv().<span class="kw">await </span>{
+            <span class="macro">tracing::trace!</span>(<span class="string">&quot;Gateway received message {:?}&quot;</span>, msg);
+
             <span class="comment">// Shut down main loop if requested
             </span><span class="kw">if </span>loop_ctrl.is_shutting_down() {
                 <span class="kw">break</span>;
             }
 
-            <span class="kw">let </span>least_wait_until = Instant::now() + Duration::from_millis(<span class="number">100</span>);
-
-            <span class="comment">// Handle messages from webserver and plugin
-            </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(msg) = <span class="self">self</span>.receiver.try_recv() {
-                <span class="macro">tracing::trace!</span>(<span class="string">&quot;Gateway received message {:?}&quot;</span>, msg);
-                <span class="kw">match </span>msg {
-                    GatewayRequest::Info(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_get_info(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::ConnectFederation(inner) =&gt; {
-                        <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; =
-                            <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.routehints().<span class="kw">await</span><span class="question-mark">?</span>.try_into()<span class="question-mark">?</span>;
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_connect_federation(payload, route_hints.clone())
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::PayInvoice(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_pay_invoice_msg(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::Balance(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_balance_msg(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::DepositAddress(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_address_msg(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::Deposit(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_deposit_msg(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::Withdraw(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_withdraw_msg(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::Backup(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_backup_msg(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::Restore(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_restore_msg(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
-                    GatewayRequest::LightningReconnect(inner) =&gt; {
-                        inner
-                            .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
-                                gateway.handle_lightning_reconnect(payload)
-                            })
-                            .<span class="kw">await</span>;
-                    }
+            <span class="kw">match </span>msg {
+                GatewayRequest::Info(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_get_info(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::ConnectFederation(inner) =&gt; {
+                    <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; =
+                        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.routehints().<span class="kw">await</span><span class="question-mark">?</span>.try_into()<span class="question-mark">?</span>;
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_connect_federation(payload, route_hints.clone())
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::PayInvoice(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_pay_invoice_msg(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::Balance(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_balance_msg(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::DepositAddress(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_address_msg(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::Deposit(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_deposit_msg(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::Withdraw(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_withdraw_msg(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::Backup(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_backup_msg(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::Restore(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_restore_msg(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::LightningReconnect(inner) =&gt; {
+                    inner
+                        .handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, |gateway, payload| {
+                            gateway.handle_lightning_reconnect(payload)
+                        })
+                        .<span class="kw">await</span>;
+                }
+                GatewayRequest::Shutdown =&gt; {
+                    <span class="macro">info!</span>(<span class="string">&quot;Gatewayd received shutdown request&quot;</span>);
+                    <span class="kw">break</span>;
                 }
             }
-
-            fedimint_core::task::sleep_until(least_wait_until).<span class="kw">await</span>;
         }
+
         <span class="prelude-val">Ok</span>(())
     }
 }

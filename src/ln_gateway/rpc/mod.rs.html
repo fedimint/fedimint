@@ -235,6 +235,7 @@
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -373,6 +374,7 @@
     Backup(GatewayRequestInner&lt;BackupPayload&gt;),
     Restore(GatewayRequestInner&lt;RestorePayload&gt;),
     LightningReconnect(GatewayRequestInner&lt;LightningReconnectPayload&gt;),
+    Shutdown,
 }
 
 <span class="attr">#[derive(Debug)]

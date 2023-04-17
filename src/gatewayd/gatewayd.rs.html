@@ -127,9 +127,13 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -148,6 +152,8 @@
 <span class="kw">use </span>ln_gateway::{Gateway, LightningMode};
 <span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>url::Url;
+
+<span class="kw">const </span>SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
 
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">pub struct </span>GatewayOpts {
@@ -248,7 +254,7 @@
     });
 
     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = gateway.run(listen, password).<span class="kw">await </span>{
-        task_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        task_group.shutdown_join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">error!</span>(<span class="string">&quot;Gateway stopped with error: {}&quot;</span>, e);
         <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
