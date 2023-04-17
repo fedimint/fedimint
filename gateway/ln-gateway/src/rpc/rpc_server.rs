@@ -5,10 +5,12 @@ use axum::routing::post;
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
 use fedimint_client_legacy::ln::PayInvoicePayload;
+use fedimint_core::task::TaskGroup;
 use serde_json::json;
+use tokio::sync::oneshot;
 use tower_http::auth::RequireAuthorizationLayer;
 use tower_http::cors::CorsLayer;
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
@@ -20,7 +22,8 @@ pub async fn run_webserver(
     authkey: String,
     bind_addr: SocketAddr,
     sender: GatewayRpcSender,
-) -> axum::response::Result<()> {
+    mut tg: TaskGroup,
+) -> axum::response::Result<oneshot::Sender<()>> {
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
@@ -43,12 +46,20 @@ pub async fn run_webserver(
         .layer(Extension(sender))
         .layer(CorsLayer::permissive());
 
-    axum::Server::bind(&bind_addr)
-        .serve(app.into_make_service())
-        .await
-        .expect("Failed to start webserver");
+    let (tx, rx) = oneshot::channel::<()>();
+    tg.spawn("Gateway Webserver", move |_| async move {
+        let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
+        let graceful = server.with_graceful_shutdown(async {
+            rx.await.ok();
+        });
 
-    Ok(())
+        if let Err(e) = graceful.await {
+            error!("Error shutting down gatewayd webserver: {:?}", e);
+        }
+    })
+    .await;
+
+    Ok(tx)
 }
 
 /// Display gateway ecash note balance

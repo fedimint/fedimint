@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -108,5 +109,8 @@ where
         testfn(bitcoin, lightning, Some(gateway), rpc).await;
     }
 
-    task_group.shutdown_join_all(None).await
+    // wrap up gatewayd tasks within one second or be killed
+    task_group
+        .shutdown_join_all(Some(Duration::from_secs(1)))
+        .await
 }

@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
+use std::time::Duration;
 
 use clap::Parser;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -19,6 +20,8 @@ use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewa
 use ln_gateway::{Gateway, LightningMode};
 use tracing::{error, info};
 use url::Url;
+
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Parser)]
 pub struct GatewayOpts {
@@ -119,7 +122,7 @@ async fn main() -> Result<(), anyhow::Error> {
     });
 
     if let Err(e) = gateway.run(listen, password).await {
-        task_group.shutdown_join_all(None).await?;
+        task_group.shutdown_join_all(Some(SHUTDOWN_TIMEOUT)).await?;
 
         error!("Gateway stopped with error: {}", e);
         return Err(e.into());
