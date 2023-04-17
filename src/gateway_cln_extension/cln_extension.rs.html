@@ -668,6 +668,9 @@
 <a href="#668" id="668">668</a>
 <a href="#669" id="669">669</a>
 <a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -917,6 +920,7 @@
             action,
             incoming_chan_id,
             htlc_id,
+            ..
         } = complete_request;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(outcome) = interceptors
             .outcomes
@@ -1286,7 +1290,7 @@
                     </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>}),
                 };
 
-            <span class="kw">match </span>subscription
+            <span class="kw">let </span>htlc_ret = <span class="kw">match </span>subscription
                 .send(<span class="prelude-val">Ok</span>(RouteHtlcResponse {
                     action: <span class="prelude-val">Some</span>(route_htlc_response::Action::SubscribeResponse(
                         SubscribeInterceptHtlcsResponse {
@@ -1312,7 +1316,7 @@
 
                     <span class="comment">// If the gateway does not respond within the HTLC expiry,
                     // Automatically respond with a failure message.
-                    </span><span class="kw">return </span>tokio::time::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
+                    </span>tokio::time::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
                         receiver.<span class="kw">await</span>.unwrap_or_else(|e| {
                             <span class="macro">error!</span>(<span class="string">&quot;Failed to receive outcome of intercepted htlc: {:?}&quot;</span>, e);
                             htlc_processing_failure()
@@ -1322,13 +1326,15 @@
                     </span>.unwrap_or_else(|e| {
                         <span class="macro">error!</span>(<span class="string">&quot;await_htlc_processing error {:?}&quot;</span>, e);
                         htlc_processing_failure()
-                    });
+                    })
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(<span class="string">&quot;Failed to send htlc to subscription: {:?}&quot;</span>, e);
-                    <span class="kw">return </span>htlc_processing_failure();
+                    htlc_processing_failure()
                 }
-            }
+            };
+
+            <span class="kw">return </span>htlc_ret;
         }
 
         <span class="comment">// We have no subscription for this HTLC.

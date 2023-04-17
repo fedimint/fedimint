@@ -621,25 +621,6 @@
 <a href="#621" id="621">621</a>
 <a href="#622" id="622">622</a>
 <a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>lnd;
@@ -653,7 +634,7 @@
 }
 
 <span class="kw">use </span>std::borrow::Cow;
-<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -681,7 +662,7 @@
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::sync::{mpsc, Mutex};
+<span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::{error, info, warn};
 <span class="kw">use </span>url::Url;
 
@@ -758,7 +739,7 @@
     module_gens: ClientModuleGenRegistry,
     lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
     lightning_mode: <span class="prelude-ty">Option</span>&lt;LightningMode&gt;,
-    actors: Mutex&lt;HashMap&lt;String, Arc&lt;RwLock&lt;GatewayActor&gt;&gt;&gt;&gt;,
+    actors: Arc&lt;RwLock&lt;BTreeMap&lt;String, GatewayActor&gt;&gt;&gt;,
     client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender&lt;GatewayRequest&gt;,
     receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
@@ -782,9 +763,9 @@
             <span class="self">Self</span>::create_lightning_client(lightning_mode.clone(), task_group.make_subgroup().<span class="kw">await</span>)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>gw = <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>gw = <span class="self">Self </span>{
             lnrpc,
-            actors: Mutex::new(HashMap::new()),
+            actors: Arc::new(RwLock::new(BTreeMap::new())),
             sender,
             receiver,
             client_builder,
@@ -811,9 +792,9 @@
         <span class="comment">// Create message channels for the webserver
         </span><span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;GatewayRequest&gt;(<span class="number">100</span>);
 
-        <span class="kw">let </span>gw = <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>gw = <span class="self">Self </span>{
             lnrpc,
-            actors: Mutex::new(HashMap::new()),
+            actors: Arc::new(RwLock::new(BTreeMap::new())),
             sender,
             receiver,
             client_builder,
@@ -863,7 +844,7 @@
     }
 
     <span class="kw">async fn </span>load_actors(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -919,31 +900,29 @@
     }
 
     <span class="kw">pub async fn </span>load_actor(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         client: Arc&lt;GatewayClient&gt;,
         route_hints: Vec&lt;RouteHint&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;RwLock&lt;GatewayActor&gt;&gt;&gt; {
-        <span class="kw">let </span>actor = Arc::new(RwLock::new(
-            GatewayActor::new(
-                client.clone(),
-                <span class="self">self</span>.lnrpc.clone(),
-                route_hints,
-                <span class="self">self</span>.task_group.clone(),
-                GatewayRpcSender::new(<span class="self">self</span>.sender.clone()),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>,
-        ));
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayActor&gt; {
+        <span class="kw">let </span>actor = GatewayActor::new(
+            client.clone(),
+            <span class="self">self</span>.lnrpc.clone(),
+            route_hints,
+            <span class="self">self</span>.task_group.clone(),
+            GatewayRpcSender::new(<span class="self">self</span>.sender.clone()),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="self">self</span>.actors.lock().<span class="kw">await</span>.insert(
+        <span class="self">self</span>.actors.write().<span class="kw">await</span>.insert(
             client.config().client_config.federation_id.to_string(),
             actor.clone(),
         );
         <span class="prelude-val">Ok</span>(actor)
     }
 
-    <span class="kw">async fn </span>select_actor(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;RwLock&lt;GatewayActor&gt;&gt;&gt; {
+    <span class="kw">async fn </span>select_actor(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayActor&gt; {
         <span class="self">self</span>.actors
-            .lock()
+            .read()
             .<span class="kw">await
             </span>.get(<span class="kw-2">&amp;</span>federation_id.to_string())
             .cloned()
@@ -954,7 +933,7 @@
     }
 
     <span class="kw">async fn </span>handle_connect_federation(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         payload: ConnectFedPayload,
         route_hints: Vec&lt;RouteHint&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
@@ -1001,16 +980,16 @@
             );
         }
 
-        <span class="kw">let </span>federation_info = actor.read().<span class="kw">await</span>.get_info()<span class="question-mark">?</span>;
+        <span class="kw">let </span>federation_info = actor.get_info()<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(federation_info)
     }
 
     <span class="kw">async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: InfoPayload) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayInfo&gt; {
-        <span class="kw">let </span>actors = <span class="self">self</span>.actors.lock().<span class="kw">await</span>;
+        <span class="kw">let </span>actors = <span class="self">self</span>.actors.read().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>federations: Vec&lt;FederationInfo&gt; = Vec::new();
         <span class="kw">for </span>actor <span class="kw">in </span>actors.values() {
-            federations.push(actor.read().<span class="kw">await</span>.get_info()<span class="question-mark">?</span>);
+            federations.push(actor.get_info()<span class="question-mark">?</span>);
         }
 
         <span class="kw">let </span>ln_info = <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.info().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1029,8 +1008,7 @@
             contract_id,
         } = payload;
 
-        <span class="kw">let </span>actor_lock = <span class="self">self</span>.select_actor(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>actor = actor_lock.read().<span class="kw">await</span>;
+        <span class="kw">let </span>actor = <span class="self">self</span>.select_actor(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>outpoint = actor.pay_invoice(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
@@ -1041,8 +1019,6 @@
     <span class="kw">async fn </span>handle_balance_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: BalancePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
         <span class="self">self</span>.select_actor(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.read()
-            .<span class="kw">await
             </span>.get_balance()
             .<span class="kw">await
     </span>}
@@ -1050,8 +1026,6 @@
     <span class="kw">async fn </span>handle_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: DepositAddressPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
         <span class="self">self</span>.select_actor(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.read()
-            .<span class="kw">await
             </span>.get_deposit_address()
             .<span class="kw">await
     </span>}
@@ -1065,8 +1039,6 @@
 
         <span class="self">self</span>.select_actor(federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.read()
-            .<span class="kw">await
             </span>.deposit(txout_proof, transaction)
             .<span class="kw">await
     </span>}
@@ -1080,8 +1052,6 @@
 
         <span class="self">self</span>.select_actor(federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.read()
-            .<span class="kw">await
             </span>.withdraw(amount, address)
             .<span class="kw">await
     </span>}
@@ -1090,12 +1060,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         BackupPayload { federation_id }: BackupPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.select_actor(federation_id)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.read()
-            .<span class="kw">await
-            </span>.backup()
-            .<span class="kw">await
+        <span class="self">self</span>.select_actor(federation_id).<span class="kw">await</span><span class="question-mark">?</span>.backup().<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>handle_restore_msg(
@@ -1104,9 +1069,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.select_actor(federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.read()
-            .<span class="kw">await
-            </span>.restore()
+            </span>.restore(<span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>)
             .<span class="kw">await
     </span>}
 
@@ -1116,12 +1079,12 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>LightningReconnectPayload { node_type } = payload;
 
-        <span class="kw">let </span>actors = <span class="self">self</span>.actors.lock().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>actors = <span class="self">self</span>.actors.write().<span class="kw">await</span>;
 
         <span class="comment">// Stop all threads that are listening for HTLCs
         </span><span class="macro">tracing::info!</span>(<span class="string">&quot;Stopping all HTLC subscription threads.&quot;</span>);
-        <span class="kw">for </span>actor <span class="kw">in </span>actors.values() {
-            actor.write().<span class="kw">await</span>.stop_subscribing_htlcs().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>actor <span class="kw">in </span>actors.values_mut() {
+            actor.stop_subscribing_htlcs().<span class="kw">await</span><span class="question-mark">?</span>;
         }
 
         <span class="self">self</span>.lnrpc = <span class="kw">match </span>node_type {
@@ -1147,11 +1110,10 @@
         </span><span class="macro">tracing::info!</span>(<span class="string">&quot;Restarting HTLC subscription threads.&quot;</span>);
 
         <span class="comment">// Create a channel that will be used to shutdown the HTLC thread
-        </span><span class="kw">for </span>actor <span class="kw">in </span>actors.values() {
+        </span><span class="kw">for </span>actor <span class="kw">in </span>actors.values_mut() {
             <span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;Arc&lt;AtomicBool&gt;&gt;(<span class="number">100</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>a = actor.write().<span class="kw">await</span>;
-            a.route_htlcs(receiver).<span class="kw">await</span><span class="question-mark">?</span>;
-            a.sender = sender;
+            actor.route_htlcs(receiver).<span class="kw">await</span><span class="question-mark">?</span>;
+            actor.sender = sender;
         }
 
         <span class="prelude-val">Ok</span>(())

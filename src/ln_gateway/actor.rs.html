@@ -641,6 +641,11 @@
 <a href="#641" id="641">641</a>
 <a href="#642" id="642">642</a>
 <a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -691,8 +696,11 @@
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">struct </span>LightningSenderStream {
-    ln_sender: Sender&lt;RouteHtlcRequest&gt;,
-    lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
+    <span class="doccomment">/// Channel used to stream subscribe and complete requests back to the
+    /// Lightning implementation
+    </span>ln_sender: Sender&lt;RouteHtlcRequest&gt;,
+    <span class="doccomment">/// Reference to an ILnRpcClient used for setting up the htlc stream
+    </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
 }
 
 <span class="kw">type </span>RouteHTLCStream = BoxStream&lt;<span class="lifetime">&#39;static</span>, std::result::Result&lt;RouteHtlcResponse, Status&gt;&gt;;
@@ -785,42 +793,44 @@
         client: Arc&lt;GatewayClient&gt;,
         lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
         route_hints: Vec&lt;RouteHint&gt;,
-        task_group: TaskGroup,
+        <span class="kw-2">mut </span>task_group: TaskGroup,
         gw_rpc: GatewayRpcSender,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>register_client = client.clone();
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = task_group.make_subgroup().<span class="kw">await</span>;
-        tg.spawn(<span class="string">&quot;Register with federation&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
-            <span class="kw">loop </span>{
-                <span class="comment">// Retry gateway registration
-                </span><span class="kw">match </span>retry(
-                    String::from(<span class="string">&quot;Register With Federation&quot;</span>),
-                    <span class="attr">#[allow(clippy::unit_arg)]
-                    </span>|| <span class="kw">async </span>{
-                        <span class="kw">let </span>gateway_registration = register_client
-                            .config()
-                            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
-                        <span class="prelude-val">Ok</span>(register_client
-                            .register_with_federation(gateway_registration.clone())
-                            .<span class="kw">await</span><span class="question-mark">?</span>)
-                    },
-                    Duration::from_secs(<span class="number">1</span>),
-                    <span class="number">5</span>,
-                )
-                .<span class="kw">await
-                </span>{
-                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;Connected with federation&quot;</span>);
-                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">2</span>).<span class="kw">await</span>;
-                    }
-                    <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">warn!</span>(<span class="string">&quot;Failed to connect with federation: {}&quot;</span>, e);
-                        tokio::time::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">4</span>).<span class="kw">await</span>;
+        task_group
+            .spawn(<span class="string">&quot;Register with federation&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
+                <span class="kw">loop </span>{
+                    <span class="comment">// Retry gateway registration
+                    </span><span class="kw">match </span>retry(
+                        String::from(<span class="string">&quot;Register With Federation&quot;</span>),
+                        <span class="attr">#[allow(clippy::unit_arg)]
+                        </span>|| <span class="kw">async </span>{
+                            <span class="kw">let </span>gateway_registration =
+                                register_client.config().to_gateway_registration_info(
+                                    route_hints.clone(),
+                                    GW_ANNOUNCEMENT_TTL,
+                                );
+                            <span class="prelude-val">Ok</span>(register_client
+                                .register_with_federation(gateway_registration.clone())
+                                .<span class="kw">await</span><span class="question-mark">?</span>)
+                        },
+                        Duration::from_secs(<span class="number">1</span>),
+                        <span class="number">5</span>,
+                    )
+                    .<span class="kw">await
+                    </span>{
+                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="macro">info!</span>(<span class="string">&quot;Connected with federation&quot;</span>);
+                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">2</span>).<span class="kw">await</span>;
+                        }
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="macro">warn!</span>(<span class="string">&quot;Failed to connect with federation: {}&quot;</span>, e);
+                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">4</span>).<span class="kw">await</span>;
+                        }
                     }
                 }
-            }
-        })
-        .<span class="kw">await</span>;
+            })
+            .<span class="kw">await</span>;
 
         <span class="comment">// Create a channel that will be used to shutdown the HTLC thread
         </span><span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;Arc&lt;AtomicBool&gt;&gt;(<span class="number">100</span>);
@@ -828,7 +838,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>actor = <span class="self">Self </span>{
             client,
             lnrpc,
-            task_group: tg,
+            task_group,
             gw_rpc,
             sender,
         };
@@ -987,7 +997,10 @@
 
                         <span class="kw">match </span>action {
                             <span class="prelude-val">Some</span>(route_htlc_response::Action::SubscribeResponse(htlc)) =&gt; {
-                                <span class="self">Self</span>::handle_intercepted_htlc(htlc, ln_sender.clone(), actor.clone()).<span class="kw">await</span>.expect(<span class="string">&quot;Error occurred while handling intercepted HTLC&quot;</span>);
+                                <span class="comment">// Swallow result so that we continue processing HTLCs
+                                </span><span class="kw">let _ </span>= <span class="self">Self</span>::handle_intercepted_htlc(htlc, ln_sender.clone(), actor.clone()).<span class="kw">await</span>.map_err(|e| {
+                                    <span class="macro">error!</span>(<span class="string">&quot;Error occurred while handling intercepted HTLC: {:?}&quot;</span>, e);
+                                });
                             }
                             <span class="prelude-val">Some</span>(route_htlc_response::Action::CompleteResponse(_complete_response)) =&gt; {
                                 <span class="comment">// TODO: Might need to add some error handling here
@@ -1251,10 +1264,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="comment">// TODO: get the task group from `self`
-        </span><span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
-
+    <span class="kw">pub async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.client
             .mint_client()
             .restore_ecash_from_federation(<span class="number">10</span>, <span class="kw-2">&amp;mut </span>task_group)
