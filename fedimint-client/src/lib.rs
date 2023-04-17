@@ -37,9 +37,8 @@ use crate::sm::{
     OperationState,
 };
 use crate::transaction::{
-    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
-    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, TransactionBuilder, TransactionBuilderBalance, TxSubmissionContext,
+    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Database keys used by the client
@@ -286,7 +285,7 @@ impl ClientInner {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let (keys, input, state_machines) = self
+            let input = self
                 .primary_module
                 .create_sufficient_input(
                     self.primary_module_instance,
@@ -295,18 +294,13 @@ impl ClientInner {
                     missing_amount,
                 )
                 .await?;
-
-            partial_transaction.inputs.push(ClientInput {
-                input,
-                keys,
-                state_machines,
-            });
+            partial_transaction.inputs.push(input);
         }
 
         if let TransactionBuilderBalance::Overfunded(excess_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let (output, state_machines) = self
+            let output = self
                 .primary_module
                 .create_exact_output(
                     self.primary_module_instance,
@@ -315,10 +309,7 @@ impl ClientInner {
                     excess_amount,
                 )
                 .await;
-            partial_transaction.outputs.push(ClientOutput {
-                output,
-                state_machines,
-            });
+            partial_transaction.outputs.push(output);
         }
 
         assert!(

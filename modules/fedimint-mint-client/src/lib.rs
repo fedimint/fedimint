@@ -6,11 +6,10 @@ use std::iter::once;
 
 use anyhow::anyhow;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{
-    ClientModule, DynPrimaryClientModule, PrimaryClientModule, StateGenerator,
-};
+use fedimint_client::module::{ClientModule, DynPrimaryClientModule, PrimaryClientModule};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
+use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
@@ -146,11 +145,7 @@ impl PrimaryClientModule for MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<(
-        Vec<KeyPair>,
-        <Self::Common as ModuleCommon>::Input,
-        StateGenerator<Self::States>,
-    )> {
+    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
         self.create_input(dbtx, operation_id, min_amount).await
     }
 
@@ -159,10 +154,7 @@ impl PrimaryClientModule for MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         amount: Amount,
-    ) -> (
-        <Self::Common as ModuleCommon>::Output,
-        StateGenerator<Self::States>,
-    ) {
+    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
         // FIXME: don't hardcode notes per denomination
         self.create_output(dbtx, operation_id, 2, amount).await
     }
@@ -187,7 +179,7 @@ impl MintClientModule {
         operation_id: OperationId,
         notes_per_denomination: u16,
         amount: Amount,
-    ) -> (MintOutput, StateGenerator<MintClientStateMachines>) {
+    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
         let denominations = TieredSummary::represent_amount(
@@ -224,7 +216,10 @@ impl MintClientModule {
             "Generated issuance request"
         );
 
-        (sig_req, state_generator)
+        ClientOutput {
+            output: sig_req,
+            state_machines: state_generator,
+        }
     }
 
     /// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -268,11 +263,7 @@ impl MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<(
-        Vec<KeyPair>,
-        MintInput,
-        StateGenerator<MintClientStateMachines>,
-    )> {
+    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
         let available_notes = self.available_notes(dbtx).await;
         let spendable_selected_notes =
             select_notes(available_notes, min_amount).ok_or(anyhow!("Not enough funds"))?;
@@ -286,11 +277,7 @@ impl MintClientModule {
         &self,
         operation_id: OperationId,
         notes: TieredMulti<SpendableNote>,
-    ) -> anyhow::Result<(
-        Vec<KeyPair>,
-        MintInput,
-        StateGenerator<MintClientStateMachines>,
-    )> {
+    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
         if let Some((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
             let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {return true;};
             !note.note.verify(*mint_key)
@@ -320,7 +307,11 @@ impl MintClientModule {
             })]
         });
 
-        Ok((spend_keys, MintInput(selected_notes), sm_gen))
+        Ok(ClientInput {
+            input: MintInput(selected_notes),
+            keys: spend_keys,
+            state_machines: sm_gen,
+        })
     }
 
     async fn available_notes(

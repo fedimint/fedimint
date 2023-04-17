@@ -1,7 +1,6 @@
 use bitcoin_hashes::Hash;
 use clap::Subcommand;
-use fedimint_client::module::state_gen_to_dyn;
-use fedimint_client::transaction::{ClientInput, TransactionBuilder};
+use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::ClientBuilder;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{IntoDynInstance, LEGACY_HARDCODED_INSTANCE_ID_MINT};
@@ -59,17 +58,13 @@ pub async fn handle_ng_command<D: IDatabase>(
                 .unwrap();
 
             let notes_hash = notes.consensus_hash().unwrap().into_inner();
-            let (keys, input, states) = mint_client
+            let mint_input = mint_client
                 .create_input_from_notes(notes_hash, notes)
                 .await
                 .unwrap();
 
             let mut tx = TransactionBuilder::new();
-            tx.with_input(ClientInput {
-                input: input.into_dyn(LEGACY_HARDCODED_INSTANCE_ID_MINT),
-                keys,
-                state_machines: state_gen_to_dyn(states, LEGACY_HARDCODED_INSTANCE_ID_MINT),
-            });
+            tx.with_input(mint_input.into_dyn(LEGACY_HARDCODED_INSTANCE_ID_MINT));
 
             let txid = client
                 .finalize_and_submit_transaction(notes_hash, tx)
