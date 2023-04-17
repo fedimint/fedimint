@@ -3,8 +3,7 @@ use std::fs;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::HashEngine;
@@ -25,8 +24,6 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
 use itertools::Itertools;
-use jsonrpsee::server::ServerBuilder;
-use jsonrpsee::RpcModule;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Notify;
 use tokio_rustls::rustls;
@@ -35,9 +32,8 @@ use url::Url;
 
 use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
-use crate::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
 use crate::net::peers::DelayCalculator;
-use crate::FedimintServer;
+use crate::HasApiContext;
 
 pub type ApiResult<T> = std::result::Result<T, ApiError>;
 
@@ -54,7 +50,9 @@ pub struct ConfigGenApi {
     /// Notify if we receive connections from peer
     notify_peer_connection: Notify,
     /// Tracks when the config is generated
-    config_generated_tx: Sender<ApiAuth>,
+    config_generated_tx: Sender<ServerConfig>,
+    /// Task group for running DKG
+    task_group: TaskGroup,
 }
 
 impl ConfigGenApi {
@@ -62,7 +60,8 @@ impl ConfigGenApi {
         data_dir: PathBuf,
         settings: ConfigGenSettings,
         db: Database,
-        config_generated_tx: Sender<ApiAuth>,
+        config_generated_tx: Sender<ServerConfig>,
+        task_group: &mut TaskGroup,
     ) -> Self {
         Self {
             data_dir,
@@ -71,6 +70,7 @@ impl ConfigGenApi {
             settings,
             notify_peer_connection: Default::default(),
             config_generated_tx,
+            task_group: task_group.clone(),
         }
     }
 
@@ -223,9 +223,9 @@ impl ConfigGenApi {
 
             let (params, auth) = match &*state {
                 ConfigApiState::VerifyConfigParams(auth, params) => (params.clone(), auth.clone()),
-                ConfigApiState::RunningConsensus(_)
-                | ConfigApiState::VerifyConsensusConfig(_)
-                | ConfigApiState::RunningDkg(_) => return Self::bad_request("DKG already run"),
+                ConfigApiState::VerifyConsensusConfig(_) | ConfigApiState::RunningDkg(_) => {
+                    return Self::bad_request("DKG already run")
+                }
                 ConfigApiState::FailedDkg(_) => return dkg_failed,
                 _ => return Self::bad_request("Must generate configs first"),
             };
@@ -234,17 +234,20 @@ impl ConfigGenApi {
             (params, auth)
         };
 
-        let task_group = TaskGroup::new();
-        let mut subgroup = task_group.make_subgroup().await;
         let module_gens = self.settings.module_gens.clone();
 
+        let mut task_group = self.task_group.make_subgroup().await;
         let config = ServerConfig::distributed_gen(
             &params,
             module_gens,
             DelayCalculator::default(),
-            &mut subgroup,
+            &mut task_group,
         )
         .await;
+        task_group
+            .shutdown_join_all(None)
+            .await
+            .expect("shuts down");
 
         let mut state = self.state.lock().expect("lock poisoned");
         match config {
@@ -314,21 +317,14 @@ impl ConfigGenApi {
         .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
     }
 
-    /// Creates the Fedimint server, decrypting the config files from disk using
-    /// the auth string.  We send a message to the `run_server` task to shutdown
-    /// the API so that the Fedimint API can start.
+    /// Attempts to decrypt the config files from disk using the auth string and
+    /// notify the listeners
     pub async fn start_consensus(&self, auth: ApiAuth) -> ApiResult<()> {
-        {
-            let cfg = read_server_config(&auth.0, self.data_dir.clone())
-                .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
+        let cfg = read_server_config(&auth.0, self.data_dir.clone())
+            .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
 
-            let mut state = self.state.lock().expect("lock poisoned");
-            *state = ConfigApiState::RunningConsensus(cfg);
-        }
-        self.config_generated_tx
-            .send(auth.clone())
-            .await
-            .expect("Can send");
+        self.config_generated_tx.send(cfg).await.expect("Can send");
+
         Ok(())
     }
 
@@ -431,11 +427,11 @@ pub struct ConfigGenSettings {
     /// Url for our API connection
     pub api_url: Url,
     /// The default params for the modules
-    default_params: ConfigGenParamsRequest,
+    pub default_params: ConfigGenParamsRequest,
     /// Modules that will generate configs
-    module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+    pub module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
     /// Registry for config gen
-    registry: ServerModuleGenRegistry,
+    pub registry: ServerModuleGenRegistry,
 }
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -513,10 +509,8 @@ pub enum ConfigApiState {
     RunningDkg(ApiAuth),
     /// DKG failed, user should restart config gen from the beginning
     FailedDkg(ApiAuth),
-    /// Configs are created, awaiting guardian verification
+    /// Awaiting guardian verification to write configs
     VerifyConsensusConfig(ServerConfig),
-    /// We all agree on consensus configs, we can run consensus
-    RunningConsensus(ServerConfig),
 }
 
 #[async_trait]
@@ -543,62 +537,13 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             ConfigApiState::RunningDkg(api_auth) => Some(api_auth) == auth,
             ConfigApiState::FailedDkg(api_auth) => Some(api_auth) == auth,
             ConfigApiState::VerifyConsensusConfig(cfg) => Some(&cfg.private.api_auth) == auth,
-            ConfigApiState::RunningConsensus(cfg) => Some(&cfg.private.api_auth) == auth,
         };
 
         (self, ApiEndpointContext::new(db, dbtx, has_auth))
     }
 }
 
-/// Starts the config gen server
-///
-/// Runs the consensus server once the configuration has been created
-/// If the server exits, restarts config gen
-// TODO: combine with net::run_server and replace DKG CLI with the API
-pub async fn run_server(
-    data_dir: PathBuf,
-    settings: ConfigGenSettings,
-    db: Database,
-    mut task_group: TaskGroup,
-) -> anyhow::Result<()> {
-    loop {
-        let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
-        let state = RpcHandlerCtx {
-            rpc_context: Arc::new(ConfigGenApi::new(
-                data_dir.clone(),
-                settings.clone(),
-                db.clone(),
-                config_generated_tx,
-            )),
-        };
-        let mut rpc_module = RpcModule::new(state);
-
-        attach_endpoints(&mut rpc_module, config_endpoints(), None);
-
-        let server_handle = ServerBuilder::new()
-            .max_connections(10)
-            .ping_interval(Duration::from_secs(10))
-            .build(&settings.api_bind.to_string())
-            .await?
-            .start(rpc_module)?;
-
-        // TODO: Return failures by restarting the config API
-        let auth = config_generated_rx.recv().await.expect("should not close");
-        server_handle.stop().expect("Able to stop server");
-        let cfg = read_server_config(&auth.0, data_dir.clone())?;
-        FedimintServer::run(
-            cfg,
-            db.clone(),
-            settings.registry.clone(),
-            None,
-            &mut task_group,
-        )
-        .await?;
-    }
-}
-
-/// Returns the endpoints that are necessary prior to the config being generated
-fn config_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
+pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
     vec![
         api_endpoint! {
             "set_password",
@@ -723,33 +668,38 @@ mod tests {
     use fedimint_core::PeerId;
     use futures::future::join_all;
     use itertools::Itertools;
+    use tokio::spawn;
     use url::Url;
 
-    use crate::config::api::{run_server, ConfigGenConnectionsRequest, ConfigGenSettings};
+    use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
+    use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
         client: WsAdminClient,
         name: String,
-        our_connections: ConfigGenSettings,
-        task_group: TaskGroup,
+        settings: ConfigGenSettings,
     }
 
     impl TestConfigApi {
         /// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
-        async fn new(port: u16, name_suffix: u16, data_dir: PathBuf) -> TestConfigApi {
+        async fn new(
+            port: u16,
+            name_suffix: u16,
+            data_dir: PathBuf,
+        ) -> (TestConfigApi, FedimintServer) {
             let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
 
-            let name = format!("peer{name_suffix}").to_string();
+            let name = format!("peer{name_suffix}");
             let api_bind = format!("127.0.0.1:{port}").parse().expect("parses");
             let api_url: Url = format!("ws://127.0.0.1:{port}").parse().expect("parses");
             let p2p_bind = format!("127.0.0.1:{}", port + 1).parse().expect("parses");
-            let p2p_url = format!("ws://127.0.0.1:{}", port + 1)
+            let p2p_url = format!("fedimint://127.0.0.1:{}", port + 1)
                 .parse()
                 .expect("parses");
-            let our_connections = ConfigGenSettings {
+            let settings = ConfigGenSettings {
                 download_token_limit: Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
                 p2p_bind,
                 api_bind,
@@ -762,34 +712,46 @@ mod tests {
             let dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
 
-            let connections = our_connections.clone();
-            let mut task_group = TaskGroup::new();
-            let subgroup = task_group.make_subgroup().await;
-            task_group
-                .spawn("run-server", move |_| async move {
-                    run_server(dir, connections, db, subgroup).await
-                })
-                .await;
+            let api = FedimintServer {
+                data_dir: dir,
+                settings: settings.clone(),
+                db,
+                upgrade_epoch: None,
+            };
+
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = WsAdminClient::new(api_url.clone(), PeerId::from(0), auth);
+            let client = WsAdminClient::new(api_url, PeerId::from(0), auth);
 
-            TestConfigApi {
-                client,
-                task_group,
-                name,
-                our_connections,
-            }
+            (
+                TestConfigApi {
+                    client,
+                    name,
+                    settings,
+                },
+                api,
+            )
         }
 
         /// Helper function using the auth we generated, retries until the API
         /// is up
         async fn retry_set_password(&self) {
             while self.client.set_password().await.is_err() {
-                sleep(Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(1000)).await;
                 tracing::info!(
                     target: fedimint_logging::LOG_TEST,
                     "Test retrying set password, waiting for API to start"
+                )
+            }
+        }
+
+        /// Helper function to shutdown consensus with an upgrade signal
+        async fn retry_signal_upgrade(&self) {
+            while self.client.signal_upgrade().await.is_err() {
+                sleep(Duration::from_millis(1000)).await;
+                tracing::info!(
+                    target: fedimint_logging::LOG_TEST,
+                    "Test retrying upgrade signal"
                 )
             }
         }
@@ -818,85 +780,84 @@ mod tests {
                 (directory, Some(guard))
             }
         };
-
         let data_dir = PathBuf::from(parent).join("test-config-api");
 
         // TODO: Choose port in common way with `fedimint_env`
         let base_port = 18103;
-        let mut leader = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
-        // Cannot set the password twice
-        leader.retry_set_password().await;
-        assert!(leader.client.set_password().await.is_err());
-
-        // We can call this twice to change the leader name
-        leader.set_connections(&None).await.unwrap();
-        leader.name = "leader".to_string();
-        leader.set_connections(&None).await.unwrap();
-
-        // Setup followers and send connection info
+        // let mut join_handles = vec![];
+        let mut apis = vec![];
         let mut followers = vec![];
-        for i in 1..=3 {
+        let (mut leader, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+        apis.push(api);
+
+        for i in 1..=2 {
             let port = base_port + (i * 2);
-            let mut follower = TestConfigApi::new(port, i, data_dir.clone()).await;
-            follower.retry_set_password().await;
-            let leader_url = Some(leader.our_connections.api_url.clone());
-            follower.set_connections(&leader_url).await.unwrap();
-            follower.name = format!("{}_", follower.name);
-            follower.set_connections(&leader_url).await.unwrap();
+            let (follower, api) = TestConfigApi::new(port, i, data_dir.clone()).await;
+            apis.push(api);
             followers.push(follower);
         }
 
-        // Confirm we can get peer servers if we are the leader
-        let peers = leader.client.await_config_gen_peers(4).await.unwrap();
-        let names: Vec<_> = peers.into_iter().map(|peer| peer.name).sorted().collect();
-        assert_eq!(names, vec!["leader", "peer1_", "peer2_", "peer3_"]);
+        spawn(async move {
+            // Cannot set the password twice
+            leader.retry_set_password().await;
+            assert!(leader.client.set_password().await.is_err());
 
-        // Leader sets the configs and followers can fetch them
-        let mut configs = vec![];
-        let defaults = leader.client.get_default_config_gen_params().await.unwrap();
-        leader.client.set_config_gen_params(defaults).await.unwrap();
-        configs.push(
-            leader
-                .client
-                .get_consensus_config_gen_params()
-                .await
-                .unwrap(),
-        );
-        for follower in &followers {
-            configs.push(
-                follower
-                    .client
-                    .get_consensus_config_gen_params()
-                    .await
-                    .unwrap(),
-            );
-        }
-        // Confirm all configs are the same
-        configs.dedup();
-        assert_eq!(configs.len(), 1);
+            // We can call this twice to change the leader name
+            leader.set_connections(&None).await.unwrap();
+            leader.name = "leader".to_string();
+            leader.set_connections(&None).await.unwrap();
 
-        // all peers run DKG
-        followers.push(leader);
-        join_all(followers.iter().map(|peer| peer.client.run_dkg())).await;
+            // Setup followers and send connection info
+            for follower in &mut followers {
+                follower.retry_set_password().await;
+                let leader_url = Some(leader.settings.api_url.clone());
+                follower.set_connections(&leader_url).await.unwrap();
+                follower.name = format!("{}_", follower.name);
+                follower.set_connections(&leader_url).await.unwrap();
+            }
 
-        // verify configs for all peers
-        let mut hashes = BTreeSet::new();
-        for peer in &followers {
-            hashes.insert(peer.client.get_verify_config_hash().await.unwrap());
-        }
-        for peer in &followers {
-            peer.client.verify_configs(hashes.clone()).await.unwrap();
-        }
+            // Confirm we can get peer servers if we are the leader
+            let peers = leader.client.await_config_gen_peers(3).await.unwrap();
+            let names: Vec<_> = peers.into_iter().map(|peer| peer.name).sorted().collect();
+            assert_eq!(names, vec!["leader", "peer1_", "peer2_"]);
 
-        // start consensus
-        for peer in &followers {
-            peer.client.start_consensus().await.unwrap();
-        }
+            // Leader sets the configs and followers can fetch them
+            let mut configs = vec![];
+            let defaults = leader.client.get_default_config_gen_params().await.unwrap();
+            leader.client.set_config_gen_params(defaults).await.unwrap();
+            for peer in &followers {
+                configs.push(peer.client.get_consensus_config_gen_params().await.unwrap());
+            }
+            // Confirm all configs are the same
+            configs.dedup();
+            assert_eq!(configs.len(), 1);
 
-        // shutdown
-        for peer in &followers {
-            peer.task_group.shutdown().await;
-        }
+            // all peers run DKG
+            followers.push(leader);
+            join_all(followers.iter().map(|peer| peer.client.run_dkg())).await;
+
+            // verify configs for all peers
+            let mut hashes = BTreeSet::new();
+            for peer in &followers {
+                hashes.insert(peer.client.get_verify_config_hash().await.unwrap());
+            }
+            for peer in &followers {
+                peer.client.verify_configs(hashes.clone()).await.unwrap();
+            }
+
+            // start consensus
+            for peer in &followers {
+                peer.client.start_consensus().await.unwrap();
+            }
+
+            // shutdown
+            for peer in &followers {
+                peer.retry_signal_upgrade().await;
+            }
+        });
+
+        // Spawn the APIs
+        join_all(apis.into_iter().map(|api| api.run(TaskGroup::new()))).await;
     }
 }
