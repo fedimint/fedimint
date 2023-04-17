@@ -241,6 +241,19 @@
 <a href="#241" id="241">241</a>
 <a href="#242" id="242">242</a>
 <a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Mutex;
@@ -357,15 +370,28 @@
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span>data = <span class="self">self
+            </span>.tx_data
+            .range::&lt;Vec&lt;u8&gt;, <span class="kw">_</span>&gt;((key_prefix.to_vec())..)
+            .take_while(|(key, <span class="kw">_</span>)| key.starts_with(key_prefix))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        Box::pin(stream::iter(data))
+    }
+
+    <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        key_prefix: <span class="kw-2">&amp;</span>[u8],
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="self">self
             </span>.tx_data
             .range::&lt;Vec&lt;u8&gt;, <span class="kw">_</span>&gt;((key_prefix.to_vec())..)
             .take_while(|(key, <span class="kw">_</span>)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        data.reverse();
+        data.sort_by(|a, b| a.cmp(b).reverse());
 
-        Box::pin(stream::iter(data))
+        <span class="prelude-val">Ok</span>(Box::pin(stream::iter(data)))
     }
 
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {

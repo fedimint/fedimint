@@ -286,6 +286,30 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::str::FromStr;
 
@@ -359,6 +383,11 @@
     }
 }
 
+<span class="kw">fn </span>get_key_prefix_search_hex(key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; String {
+    <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
+    <span class="macro">format!</span>(<span class="string">&quot;{}%&quot;</span>, key_prefix.to_hex().to_uppercase())
+}
+
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>SqliteDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
@@ -399,16 +428,14 @@
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>str_prefix = <span class="string">&quot;&quot;</span>.to_string();
-        <span class="kw">for </span>prefix <span class="kw">in </span>key_prefix {
-            str_prefix = <span class="macro">format!</span>(<span class="string">&quot;{str_prefix}{prefix:02X?}&quot;</span>);
-        }
-        str_prefix = <span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, str_prefix, <span class="string">&quot;%&quot;</span>);
+        <span class="kw">let </span>str_prefix = get_key_prefix_search_hex(key_prefix);
         <span class="kw">let </span>query = <span class="string">&quot;SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY value DESC&quot;</span>;
         <span class="kw">let </span>query_prepared = sqlx::query(query).bind(str_prefix);
-        <span class="kw">let </span>results = <span class="self">self</span>.tx.fetch_all(query_prepared).<span class="kw">await</span>;
+        <span class="comment">// FIXME: this should be a stream
+        </span><span class="kw">let </span>results = <span class="self">self</span>.tx.fetch_all(query_prepared).<span class="kw">await</span>;
 
-        <span class="kw">if </span>results.is_err() {
+        <span class="comment">// FIXME: this should return an error or panic
+        </span><span class="kw">if </span>results.is_err() {
             <span class="macro">warn!</span>(<span class="string">&quot;sqlite find_by_prefix failed to retrieve key range. Returning empty iterator&quot;</span>);
             <span class="kw">return </span>Box::pin(stream::iter(Vec::new()));
         }
@@ -423,12 +450,28 @@
         Box::pin(stream::iter(rows))
     }
 
+    <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        key_prefix: <span class="kw-2">&amp;</span>[u8],
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+        <span class="kw">let </span>str_prefix = get_key_prefix_search_hex(key_prefix);
+        <span class="kw">let </span>query = <span class="string">&quot;SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY key DESC, value DESC&quot;</span>;
+        <span class="kw">let </span>query_prepared = sqlx::query(query).bind(str_prefix);
+        <span class="comment">// FIXME: this should be a stream
+        </span><span class="kw">let </span>results = <span class="self">self</span>.tx.fetch_all(query_prepared).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>rows = results.into_iter().map(|row| {
+            (
+                row.get::&lt;Vec&lt;u8&gt;, <span class="kw-2">&amp;</span>str&gt;(<span class="string">&quot;key&quot;</span>),
+                row.get::&lt;Vec&lt;u8&gt;, <span class="kw-2">&amp;</span>str&gt;(<span class="string">&quot;value&quot;</span>),
+            )
+        });
+
+        <span class="prelude-val">Ok</span>(Box::pin(stream::iter(rows)))
+    }
+
     <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>str_prefix = <span class="string">&quot;&quot;</span>.to_string();
-        <span class="kw">for </span>prefix <span class="kw">in </span>key_prefix {
-            str_prefix = <span class="macro">format!</span>(<span class="string">&quot;{str_prefix}{prefix:02X?}&quot;</span>);
-        }
-        str_prefix = <span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, str_prefix, <span class="string">&quot;%&quot;</span>);
+        <span class="kw">let </span>str_prefix = get_key_prefix_search_hex(key_prefix);
         <span class="kw">let </span>query = <span class="string">&quot;DELETE FROM kv WHERE hex(key) LIKE ?&quot;</span>;
         <span class="kw">let </span>query_prepared = sqlx::query(query).bind(str_prefix);
         <span class="self">self</span>.error |= <span class="self">self</span>.tx.execute(query_prepared).<span class="kw">await</span>.is_err();
@@ -463,7 +506,7 @@
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>rand::RngCore;
 
-    <span class="kw">use </span><span class="kw">crate</span>::SqliteDb;
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="kw">async fn </span>open_temp_db(db_name: <span class="kw-2">&amp;</span>str) -&gt; Database {
         <span class="kw">let </span>dir = <span class="macro">format!</span>(<span class="string">&quot;/tmp/sqlite-{}/{}&quot;</span>, db_name, OsRng.next_u64());
@@ -572,6 +615,11 @@
             open_temp_module_db(<span class="string">&quot;verify-module-db2&quot;</span>, <span class="number">1</span>).<span class="kw">await</span>,
         )
         .<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_get_key_prefix_search_hex() {
+        <span class="macro">assert_eq!</span>(get_key_prefix_search_hex(<span class="kw-2">&amp;</span>[<span class="number">0x01</span>, <span class="number">0xff</span>, <span class="number">0x03</span>]), <span class="string">&quot;01FF03%&quot;</span>);
     }
 }
 </code></pre></div>

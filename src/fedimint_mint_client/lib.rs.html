@@ -335,6 +335,11 @@
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">mod </span>issuance;
 <span class="kw">mod </span>redemption;
@@ -351,7 +356,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredSummary};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_mint_common::config::MintClientConfig;
@@ -465,14 +470,14 @@
     ) -&gt; (MintOutput, StateGenerator&lt;MintClientStateMachines&gt;) {
         <span class="kw">let </span><span class="kw-2">mut </span>amount_requests: Vec&lt;((Amount, NoteIssuanceRequest), (Amount, BlindNonce))&gt; =
             Vec::new();
-        <span class="kw">let </span>denominations = TieredMulti::represent_amount(
+        <span class="kw">let </span>denominations = TieredSummary::represent_amount(
             amount,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.available_notes(dbtx).<span class="kw">await</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.available_notes_summary(dbtx).<span class="kw">await</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tbs_pks,
             notes_per_denomination,
         );
         <span class="kw">for </span>(amt, num) <span class="kw">in </span>denominations.iter() {
-            <span class="kw">for _ in </span><span class="number">0</span>..<span class="kw-2">*</span>num {
+            <span class="kw">for _ in </span><span class="number">0</span>..num {
                 <span class="kw">let </span>(request, blind_nonce) = <span class="self">self</span>.new_ecash_note(amt, dbtx).<span class="kw">await</span>;
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
@@ -504,14 +509,19 @@
         (sig_req, state_generator)
     }
 
-    <span class="kw">async fn </span>available_notes(
+    <span class="kw">async fn </span>available_notes_summary(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; TieredMulti&lt;SpendableNote&gt; {
+    ) -&gt; TieredSummary {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
-            </span>.map(|(key, spendable_note)| (key.amount, spendable_note))
-            .collect()
+            </span>.fold(
+                TieredSummary::default(),
+                |<span class="kw-2">mut </span>acc, (key, _note)| <span class="kw">async move </span>{
+                    acc.inc(key.amount, <span class="number">1</span>);
+                    acc
+                },
+            )
             .<span class="kw">await
     </span>}
 

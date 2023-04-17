@@ -143,6 +143,10 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -180,6 +184,10 @@
     <span class="doccomment">/// Returns a reference to the key of the specified tier
     </span><span class="kw">pub fn </span>tier(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: <span class="kw-2">&amp;</span>Amount) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>T, InvalidAmountTierError&gt; {
         <span class="self">self</span>.<span class="number">0</span>.get(amount).ok_or(InvalidAmountTierError(<span class="kw-2">*</span>amount))
+    }
+
+    <span class="kw">pub fn </span>count_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.<span class="number">0</span>.len()
     }
 
     <span class="kw">pub fn </span>tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>DoubleEndedIterator&lt;Item = <span class="kw-2">&amp;</span>Amount&gt; {

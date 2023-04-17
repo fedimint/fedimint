@@ -1059,10 +1059,6 @@
 <a href="#1059" id="1059">1059</a>
 <a href="#1060" id="1060">1060</a>
 <a href="#1061" id="1061">1061</a>
-<a href="#1062" id="1062">1062</a>
-<a href="#1063" id="1063">1063</a>
-<a href="#1064" id="1064">1064</a>
-<a href="#1065" id="1065">1065</a>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1796,19 +1792,15 @@
                 ),
             Command::Info =&gt; {
                 <span class="kw">let </span>client = cli.build_client(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>notes = client.notes().<span class="kw">await</span>;
-                <span class="kw">let </span>details_vec = notes
-                    .iter()
-                    .map(|(amount, notes)| (amount.to_owned(), notes.len()))
-                    .collect();
+                <span class="kw">let </span>summary = client.summary().<span class="kw">await</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::Info {
                     federation_id: client.config().as_ref().federation_id.clone(),
                     network: client.wallet_client().config.network,
                     meta: client.config().<span class="number">0</span>.meta,
-                    total_amount: (notes.total_amount()),
-                    total_num_notes: (notes.count_items()),
-                    details: (details_vec),
+                    total_amount: summary.total_amount(),
+                    total_num_notes: summary.count_items(),
+                    details: summary.iter().collect(),
                 })
             }
             Command::PegOut { address, amount } =&gt; {
