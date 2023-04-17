@@ -1379,6 +1379,7 @@ name = "fedimint-ln-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aquamarine",
  "async-trait",
  "bincode",
  "bitcoin_hashes",

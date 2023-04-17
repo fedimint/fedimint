@@ -1,5 +1,6 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that requests the lightning gateway to pay an invoice on
 /// behalf of a federation client.
 ///
