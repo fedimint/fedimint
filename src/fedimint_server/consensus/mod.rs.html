@@ -693,10 +693,18 @@
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
 <span class="kw">pub mod </span>interconnect;
+<span class="kw">pub mod </span>server;
+
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1183,7 +1191,11 @@
             })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        select_all(proposal_futures).<span class="kw">await</span>;
+        <span class="kw">if </span>!proposal_futures.is_empty() {
+            select_all(proposal_futures).<span class="kw">await</span>;
+        } <span class="kw">else </span>{
+            std::future::pending().<span class="kw">await
+        </span>}
     }
 
     <span class="kw">pub async fn </span>get_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusProposal {

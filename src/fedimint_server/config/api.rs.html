@@ -861,52 +861,12 @@
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
-<a href="#893" id="893">893</a>
-<a href="#894" id="894">894</a>
-<a href="#895" id="895">895</a>
-<a href="#896" id="896">896</a>
-<a href="#897" id="897">897</a>
-<a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
-<a href="#900" id="900">900</a>
-<a href="#901" id="901">901</a>
-<a href="#902" id="902">902</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::sync::{Arc, Mutex};
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::sync::Mutex;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
@@ -927,8 +887,6 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>jsonrpsee::server::ServerBuilder;
-<span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tokio_rustls::rustls;
@@ -937,9 +895,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, write_server_config, SALT_FILE};
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
-<span class="kw">use </span><span class="kw">crate</span>::net::api::{attach_endpoints, HasApiContext, RpcHandlerCtx};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
-<span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
+<span class="kw">use </span><span class="kw">crate</span>::HasApiContext;
 
 <span class="kw">pub type </span>ApiResult&lt;T&gt; = std::result::Result&lt;T, ApiError&gt;;
 
@@ -956,7 +913,9 @@
     <span class="doccomment">/// Notify if we receive connections from peer
     </span>notify_peer_connection: Notify,
     <span class="doccomment">/// Tracks when the config is generated
-    </span>config_generated_tx: Sender&lt;ApiAuth&gt;,
+    </span>config_generated_tx: Sender&lt;ServerConfig&gt;,
+    <span class="doccomment">/// Task group for running DKG
+    </span>task_group: TaskGroup,
 }
 
 <span class="kw">impl </span>ConfigGenApi {
@@ -964,7 +923,8 @@
         data_dir: PathBuf,
         settings: ConfigGenSettings,
         db: Database,
-        config_generated_tx: Sender&lt;ApiAuth&gt;,
+        config_generated_tx: Sender&lt;ServerConfig&gt;,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             data_dir,
@@ -973,6 +933,7 @@
             settings,
             notify_peer_connection: Default::default(),
             config_generated_tx,
+            task_group: task_group.clone(),
         }
     }
 
@@ -1125,9 +1086,9 @@
 
             <span class="kw">let </span>(params, auth) = <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
                 ConfigApiState::VerifyConfigParams(auth, params) =&gt; (params.clone(), auth.clone()),
-                ConfigApiState::RunningConsensus(<span class="kw">_</span>)
-                | ConfigApiState::VerifyConsensusConfig(<span class="kw">_</span>)
-                | ConfigApiState::RunningDkg(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;DKG already run&quot;</span>),
+                ConfigApiState::VerifyConsensusConfig(<span class="kw">_</span>) | ConfigApiState::RunningDkg(<span class="kw">_</span>) =&gt; {
+                    <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;DKG already run&quot;</span>)
+                }
                 ConfigApiState::FailedDkg(<span class="kw">_</span>) =&gt; <span class="kw">return </span>dkg_failed,
                 <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;Must generate configs first&quot;</span>),
             };
@@ -1136,17 +1097,20 @@
             (params, auth)
         };
 
-        <span class="kw">let </span>task_group = TaskGroup::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>subgroup = task_group.make_subgroup().<span class="kw">await</span>;
         <span class="kw">let </span>module_gens = <span class="self">self</span>.settings.module_gens.clone();
 
+        <span class="kw">let </span><span class="kw-2">mut </span>task_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
         <span class="kw">let </span>config = ServerConfig::distributed_gen(
             <span class="kw-2">&amp;</span>params,
             module_gens,
             DelayCalculator::default(),
-            <span class="kw-2">&amp;mut </span>subgroup,
+            <span class="kw-2">&amp;mut </span>task_group,
         )
         .<span class="kw">await</span>;
+        task_group
+            .shutdown_join_all(<span class="prelude-val">None</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;shuts down&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
         <span class="kw">match </span>config {
@@ -1216,21 +1180,14 @@
         .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to encrypt configs {e:?}&quot;</span>)))
     }
 
-    <span class="doccomment">/// Creates the Fedimint server, decrypting the config files from disk using
-    /// the auth string.  We send a message to the `run_server` task to shutdown
-    /// the API so that the Fedimint API can start.
+    <span class="doccomment">/// Attempts to decrypt the config files from disk using the auth string and
+    /// notify the listeners
     </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; ApiResult&lt;()&gt; {
-        {
-            <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>auth.<span class="number">0</span>, <span class="self">self</span>.data_dir.clone())
-                .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Unable to decrypt configs {e:?}&quot;</span>)))<span class="question-mark">?</span>;
+        <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>auth.<span class="number">0</span>, <span class="self">self</span>.data_dir.clone())
+            .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Unable to decrypt configs {e:?}&quot;</span>)))<span class="question-mark">?</span>;
 
-            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
-            <span class="kw-2">*</span>state = ConfigApiState::RunningConsensus(cfg);
-        }
-        <span class="self">self</span>.config_generated_tx
-            .send(auth.clone())
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Can send&quot;</span>);
+        <span class="self">self</span>.config_generated_tx.send(cfg).<span class="kw">await</span>.expect(<span class="string">&quot;Can send&quot;</span>);
+
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -1333,11 +1290,11 @@
     <span class="doccomment">/// Url for our API connection
     </span><span class="kw">pub </span>api_url: Url,
     <span class="doccomment">/// The default params for the modules
-    </span>default_params: ConfigGenParamsRequest,
+    </span><span class="kw">pub </span>default_params: ConfigGenParamsRequest,
     <span class="doccomment">/// Modules that will generate configs
-    </span>module_gens: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
+    </span><span class="kw">pub </span>module_gens: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
     <span class="doccomment">/// Registry for config gen
-    </span>registry: ServerModuleGenRegistry,
+    </span><span class="kw">pub </span>registry: ServerModuleGenRegistry,
 }
 
 <span class="doccomment">/// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -1415,10 +1372,8 @@
     </span>RunningDkg(ApiAuth),
     <span class="doccomment">/// DKG failed, user should restart config gen from the beginning
     </span>FailedDkg(ApiAuth),
-    <span class="doccomment">/// Configs are created, awaiting guardian verification
+    <span class="doccomment">/// Awaiting guardian verification to write configs
     </span>VerifyConsensusConfig(ServerConfig),
-    <span class="doccomment">/// We all agree on consensus configs, we can run consensus
-    </span>RunningConsensus(ServerConfig),
 }
 
 <span class="attr">#[async_trait]
@@ -1445,62 +1400,13 @@
             ConfigApiState::RunningDkg(api_auth) =&gt; <span class="prelude-val">Some</span>(api_auth) == auth,
             ConfigApiState::FailedDkg(api_auth) =&gt; <span class="prelude-val">Some</span>(api_auth) == auth,
             ConfigApiState::VerifyConsensusConfig(cfg) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>cfg.private.api_auth) == auth,
-            ConfigApiState::RunningConsensus(cfg) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>cfg.private.api_auth) == auth,
         };
 
         (<span class="self">self</span>, ApiEndpointContext::new(db, dbtx, has_auth))
     }
 }
 
-<span class="doccomment">/// Starts the config gen server
-///
-/// Runs the consensus server once the configuration has been created
-/// If the server exits, restarts config gen
-</span><span class="comment">// TODO: combine with net::run_server and replace DKG CLI with the API
-</span><span class="kw">pub async fn </span>run_server(
-    data_dir: PathBuf,
-    settings: ConfigGenSettings,
-    db: Database,
-    <span class="kw-2">mut </span>task_group: TaskGroup,
-) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">loop </span>{
-        <span class="kw">let </span>(config_generated_tx, <span class="kw-2">mut </span>config_generated_rx) = tokio::sync::mpsc::channel(<span class="number">1</span>);
-        <span class="kw">let </span>state = RpcHandlerCtx {
-            rpc_context: Arc::new(ConfigGenApi::new(
-                data_dir.clone(),
-                settings.clone(),
-                db.clone(),
-                config_generated_tx,
-            )),
-        };
-        <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcModule::new(state);
-
-        attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config_endpoints(), <span class="prelude-val">None</span>);
-
-        <span class="kw">let </span>server_handle = ServerBuilder::new()
-            .max_connections(<span class="number">10</span>)
-            .ping_interval(Duration::from_secs(<span class="number">10</span>))
-            .build(<span class="kw-2">&amp;</span>settings.api_bind.to_string())
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.start(rpc_module)<span class="question-mark">?</span>;
-
-        <span class="comment">// TODO: Return failures by restarting the config API
-        </span><span class="kw">let </span>auth = config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">&quot;should not close&quot;</span>);
-        server_handle.stop().expect(<span class="string">&quot;Able to stop server&quot;</span>);
-        <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>auth.<span class="number">0</span>, data_dir.clone())<span class="question-mark">?</span>;
-        FedimintServer::run(
-            cfg,
-            db.clone(),
-            settings.registry.clone(),
-            <span class="prelude-val">None</span>,
-            <span class="kw-2">&amp;mut </span>task_group,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-    }
-}
-
-<span class="doccomment">/// Returns the endpoints that are necessary prior to the config being generated
-</span><span class="kw">fn </span>config_endpoints() -&gt; Vec&lt;ApiEndpoint&lt;ConfigGenApi&gt;&gt; {
+<span class="kw">pub fn </span>server_endpoints() -&gt; Vec&lt;ApiEndpoint&lt;ConfigGenApi&gt;&gt; {
     <span class="macro">vec!</span>[
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;set_password&quot;</span>,
@@ -1625,33 +1531,38 @@
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::future::join_all;
     <span class="kw">use </span>itertools::Itertools;
+    <span class="kw">use </span>tokio::spawn;
     <span class="kw">use </span>url::Url;
 
-    <span class="kw">use </span><span class="kw">crate</span>::config::api::{run_server, ConfigGenConnectionsRequest, ConfigGenSettings};
+    <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     <span class="kw">use </span><span class="kw">crate</span>::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
+    <span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
 
     <span class="doccomment">/// Helper in config API tests for simulating a guardian&#39;s client and server
     </span><span class="kw">struct </span>TestConfigApi {
         client: WsAdminClient,
         name: String,
-        our_connections: ConfigGenSettings,
-        task_group: TaskGroup,
+        settings: ConfigGenSettings,
     }
 
     <span class="kw">impl </span>TestConfigApi {
         <span class="doccomment">/// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
-        </span><span class="kw">async fn </span>new(port: u16, name_suffix: u16, data_dir: PathBuf) -&gt; TestConfigApi {
+        </span><span class="kw">async fn </span>new(
+            port: u16,
+            name_suffix: u16,
+            data_dir: PathBuf,
+        ) -&gt; (TestConfigApi, FedimintServer) {
             <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
 
-            <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">&quot;peer{name_suffix}&quot;</span>).to_string();
+            <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">&quot;peer{name_suffix}&quot;</span>);
             <span class="kw">let </span>api_bind = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{port}&quot;</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
             <span class="kw">let </span>api_url: Url = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{port}&quot;</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
             <span class="kw">let </span>p2p_bind = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
-            <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>)
+            <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;fedimint://127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>)
                 .parse()
                 .expect(<span class="string">&quot;parses&quot;</span>);
-            <span class="kw">let </span>our_connections = ConfigGenSettings {
+            <span class="kw">let </span>settings = ConfigGenSettings {
                 download_token_limit: <span class="prelude-val">Some</span>(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
                 p2p_bind,
                 api_bind,
@@ -1664,34 +1575,46 @@
             <span class="kw">let </span>dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect(<span class="string">&quot;Unable to create test dir&quot;</span>);
 
-            <span class="kw">let </span>connections = our_connections.clone();
-            <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
-            <span class="kw">let </span>subgroup = task_group.make_subgroup().<span class="kw">await</span>;
-            task_group
-                .spawn(<span class="string">&quot;run-server&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                    run_server(dir, connections, db, subgroup).<span class="kw">await
-                </span>})
-                .<span class="kw">await</span>;
+            <span class="kw">let </span>api = FedimintServer {
+                data_dir: dir,
+                settings: settings.clone(),
+                db,
+                upgrade_epoch: <span class="prelude-val">None</span>,
+            };
+
             <span class="comment">// our id doesn&#39;t really exist at this point
             </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">&quot;password-{port}&quot;</span>));
-            <span class="kw">let </span>client = WsAdminClient::new(api_url.clone(), PeerId::from(<span class="number">0</span>), auth);
+            <span class="kw">let </span>client = WsAdminClient::new(api_url, PeerId::from(<span class="number">0</span>), auth);
 
-            TestConfigApi {
-                client,
-                task_group,
-                name,
-                our_connections,
-            }
+            (
+                TestConfigApi {
+                    client,
+                    name,
+                    settings,
+                },
+                api,
+            )
         }
 
         <span class="doccomment">/// Helper function using the auth we generated, retries until the API
         /// is up
         </span><span class="kw">async fn </span>retry_set_password(<span class="kw-2">&amp;</span><span class="self">self</span>) {
             <span class="kw">while </span><span class="self">self</span>.client.set_password().<span class="kw">await</span>.is_err() {
-                sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
                 <span class="macro">tracing::info!</span>(
                     target: fedimint_logging::LOG_TEST,
                     <span class="string">&quot;Test retrying set password, waiting for API to start&quot;
+                </span>)
+            }
+        }
+
+        <span class="doccomment">/// Helper function to shutdown consensus with an upgrade signal
+        </span><span class="kw">async fn </span>retry_signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+            <span class="kw">while </span><span class="self">self</span>.client.signal_upgrade().<span class="kw">await</span>.is_err() {
+                sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
+                <span class="macro">tracing::info!</span>(
+                    target: fedimint_logging::LOG_TEST,
+                    <span class="string">&quot;Test retrying upgrade signal&quot;
                 </span>)
             }
         }
@@ -1720,86 +1643,85 @@
                 (directory, <span class="prelude-val">Some</span>(guard))
             }
         };
-
         <span class="kw">let </span>data_dir = PathBuf::from(parent).join(<span class="string">&quot;test-config-api&quot;</span>);
 
         <span class="comment">// TODO: Choose port in common way with `fedimint_env`
         </span><span class="kw">let </span>base_port = <span class="number">18103</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>leader = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
 
-        <span class="comment">// Cannot set the password twice
-        </span>leader.retry_set_password().<span class="kw">await</span>;
-        <span class="macro">assert!</span>(leader.client.set_password().<span class="kw">await</span>.is_err());
+        <span class="comment">// let mut join_handles = vec![];
+        </span><span class="kw">let </span><span class="kw-2">mut </span>apis = <span class="macro">vec!</span>[];
+        <span class="kw">let </span><span class="kw-2">mut </span>followers = <span class="macro">vec!</span>[];
+        <span class="kw">let </span>(<span class="kw-2">mut </span>leader, api) = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
+        apis.push(api);
 
-        <span class="comment">// We can call this twice to change the leader name
-        </span>leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
-        leader.name = <span class="string">&quot;leader&quot;</span>.to_string();
-        leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
-
-        <span class="comment">// Setup followers and send connection info
-        </span><span class="kw">let </span><span class="kw-2">mut </span>followers = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=<span class="number">3 </span>{
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=<span class="number">2 </span>{
             <span class="kw">let </span>port = base_port + (i * <span class="number">2</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>follower = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
-            follower.retry_set_password().<span class="kw">await</span>;
-            <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.our_connections.api_url.clone());
-            follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
-            follower.name = <span class="macro">format!</span>(<span class="string">&quot;{}_&quot;</span>, follower.name);
-            follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
+            <span class="kw">let </span>(follower, api) = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
+            apis.push(api);
             followers.push(follower);
         }
 
-        <span class="comment">// Confirm we can get peer servers if we are the leader
-        </span><span class="kw">let </span>peers = leader.client.await_config_gen_peers(<span class="number">4</span>).<span class="kw">await</span>.unwrap();
-        <span class="kw">let </span>names: Vec&lt;<span class="kw">_</span>&gt; = peers.into_iter().map(|peer| peer.name).sorted().collect();
-        <span class="macro">assert_eq!</span>(names, <span class="macro">vec!</span>[<span class="string">&quot;leader&quot;</span>, <span class="string">&quot;peer1_&quot;</span>, <span class="string">&quot;peer2_&quot;</span>, <span class="string">&quot;peer3_&quot;</span>]);
+        spawn(<span class="kw">async move </span>{
+            <span class="comment">// Cannot set the password twice
+            </span>leader.retry_set_password().<span class="kw">await</span>;
+            <span class="macro">assert!</span>(leader.client.set_password().<span class="kw">await</span>.is_err());
 
-        <span class="comment">// Leader sets the configs and followers can fetch them
-        </span><span class="kw">let </span><span class="kw-2">mut </span>configs = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>defaults = leader.client.get_default_config_gen_params().<span class="kw">await</span>.unwrap();
-        leader.client.set_config_gen_params(defaults).<span class="kw">await</span>.unwrap();
-        configs.push(
-            leader
-                .client
-                .get_consensus_config_gen_params()
-                .<span class="kw">await
-                </span>.unwrap(),
-        );
-        <span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
-            configs.push(
-                follower
-                    .client
-                    .get_consensus_config_gen_params()
-                    .<span class="kw">await
-                    </span>.unwrap(),
-            );
-        }
-        <span class="comment">// Confirm all configs are the same
-        </span>configs.dedup();
-        <span class="macro">assert_eq!</span>(configs.len(), <span class="number">1</span>);
+            <span class="comment">// We can call this twice to change the leader name
+            </span>leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
+            leader.name = <span class="string">&quot;leader&quot;</span>.to_string();
+            leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
 
-        <span class="comment">// all peers run DKG
-        </span>followers.push(leader);
-        join_all(followers.iter().map(|peer| peer.client.run_dkg())).<span class="kw">await</span>;
+            <span class="comment">// Setup followers and send connection info
+            </span><span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;mut </span>followers {
+                follower.retry_set_password().<span class="kw">await</span>;
+                <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
+                follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
+                follower.name = <span class="macro">format!</span>(<span class="string">&quot;{}_&quot;</span>, follower.name);
+                follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
+            }
 
-        <span class="comment">// verify configs for all peers
-        </span><span class="kw">let </span><span class="kw-2">mut </span>hashes = BTreeSet::new();
-        <span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
-            hashes.insert(peer.client.get_verify_config_hash().<span class="kw">await</span>.unwrap());
-        }
-        <span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
-            peer.client.verify_configs(hashes.clone()).<span class="kw">await</span>.unwrap();
-        }
+            <span class="comment">// Confirm we can get peer servers if we are the leader
+            </span><span class="kw">let </span>peers = leader.client.await_config_gen_peers(<span class="number">3</span>).<span class="kw">await</span>.unwrap();
+            <span class="kw">let </span>names: Vec&lt;<span class="kw">_</span>&gt; = peers.into_iter().map(|peer| peer.name).sorted().collect();
+            <span class="macro">assert_eq!</span>(names, <span class="macro">vec!</span>[<span class="string">&quot;leader&quot;</span>, <span class="string">&quot;peer1_&quot;</span>, <span class="string">&quot;peer2_&quot;</span>]);
 
-        <span class="comment">// start consensus
-        </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
-            peer.client.start_consensus().<span class="kw">await</span>.unwrap();
-        }
+            <span class="comment">// Leader sets the configs and followers can fetch them
+            </span><span class="kw">let </span><span class="kw-2">mut </span>configs = <span class="macro">vec!</span>[];
+            <span class="kw">let </span>defaults = leader.client.get_default_config_gen_params().<span class="kw">await</span>.unwrap();
+            leader.client.set_config_gen_params(defaults).<span class="kw">await</span>.unwrap();
+            <span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+                configs.push(peer.client.get_consensus_config_gen_params().<span class="kw">await</span>.unwrap());
+            }
+            <span class="comment">// Confirm all configs are the same
+            </span>configs.dedup();
+            <span class="macro">assert_eq!</span>(configs.len(), <span class="number">1</span>);
 
-        <span class="comment">// shutdown
-        </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
-            peer.task_group.shutdown().<span class="kw">await</span>;
-        }
+            <span class="comment">// all peers run DKG
+            </span>followers.push(leader);
+            join_all(followers.iter().map(|peer| peer.client.run_dkg())).<span class="kw">await</span>;
+
+            <span class="comment">// verify configs for all peers
+            </span><span class="kw">let </span><span class="kw-2">mut </span>hashes = BTreeSet::new();
+            <span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+                hashes.insert(peer.client.get_verify_config_hash().<span class="kw">await</span>.unwrap());
+            }
+            <span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+                peer.client.verify_configs(hashes.clone()).<span class="kw">await</span>.unwrap();
+            }
+
+            <span class="comment">// start consensus
+            </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+                peer.client.start_consensus().<span class="kw">await</span>.unwrap();
+            }
+
+            <span class="comment">// shutdown
+            </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+                peer.retry_signal_upgrade().<span class="kw">await</span>;
+            }
+        });
+
+        <span class="comment">// Spawn the APIs
+        </span>join_all(apis.into_iter().map(|api| api.run(TaskGroup::new()))).<span class="kw">await</span>;
     }
 }
 </code></pre></div>

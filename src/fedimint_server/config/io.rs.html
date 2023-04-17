@@ -171,6 +171,11 @@
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
@@ -211,6 +216,10 @@
 <span class="doccomment">/// Salt backup for combining with the private key
 </span><span class="kw">pub const </span>SALT_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;private.salt&quot;</span>;
 
+<span class="doccomment">/// Plain-text stored password, used to restart the server without having to
+/// send a password in via the API
+</span><span class="kw">pub const </span>PLAINTEXT_PASSWORD: <span class="kw-2">&amp;</span>str = <span class="string">&quot;password.private&quot;</span>;
+
 <span class="doccomment">/// Database file name
 </span><span class="kw">pub const </span>DB_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;database&quot;</span>;
 
@@ -221,6 +230,7 @@
 </span><span class="kw">pub const </span>TLS_CERT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-cert&quot;</span>;
 
 <span class="kw">pub const </span>JSON_EXT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;json&quot;</span>;
+
 <span class="kw">const </span>ENCRYPTED_EXT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;encrypt&quot;</span>;
 
 <span class="kw">pub fn </span>create_cert(

@@ -1725,9 +1725,9 @@
     <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::gen_cert_and_key;
-    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectionListener, TlsConfig};
+    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectionListener, Connector, TlsConfig};
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
-    <span class="kw">use crate</span>::{Connector, TlsTcpConnector};
+    <span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
 
     <span class="kw">fn </span>gen_connector_config(count: usize) -&gt; Vec&lt;TlsConfig&gt; {
         <span class="kw">let </span>peer_keys = (<span class="number">0</span>..count)

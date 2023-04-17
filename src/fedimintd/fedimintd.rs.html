@@ -261,7 +261,27 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
 
@@ -277,8 +297,9 @@
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
+<span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{
-    read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG,
+    read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG, PLAINTEXT_PASSWORD,
 };
 <span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
@@ -522,7 +543,24 @@
         decoders.clone(),
     );
 
-    FedimintServer::run(cfg, db, module_gens, opts.upgrade_epoch, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await
+    <span class="comment">// TODO: Fedimintd should use the config gen API
+    </span>fs::write(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)<span class="question-mark">?</span>;
+    <span class="kw">let </span>api = FedimintServer {
+        data_dir: opts.data_dir,
+        settings: ConfigGenSettings {
+            download_token_limit: cfg.local.download_token_limit,
+            p2p_bind: cfg.local.fed_bind,
+            api_bind: cfg.local.api_bind,
+            p2p_url: cfg.local.p2p_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
+            api_url: cfg.consensus.api_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
+            default_params: Default::default(),
+            module_gens: module_gens.legacy_init_modules(),
+            registry: module_gens,
+        },
+        db,
+        upgrade_epoch: opts.upgrade_epoch,
+    };
+    api.run(task_group).<span class="kw">await
 </span>}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
