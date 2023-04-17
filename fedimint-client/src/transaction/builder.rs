@@ -62,12 +62,14 @@ impl TransactionBuilder {
         Self::default()
     }
 
-    pub fn with_input(&mut self, input: ClientInput) {
-        self.inputs.push(input)
+    pub fn with_input(mut self, input: ClientInput) -> Self {
+        self.inputs.push(input);
+        self
     }
 
-    pub fn with_output(&mut self, output: ClientOutput) {
-        self.outputs.push(output)
+    pub fn with_output(mut self, output: ClientOutput) -> Self {
+        self.outputs.push(output);
+        self
     }
 
     pub fn build<C, R: RngCore + CryptoRng>(

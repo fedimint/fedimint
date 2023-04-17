@@ -154,14 +154,11 @@ impl MintInputStateCreated {
             state_machines: Box::new(|_, _| vec![]),
         };
 
-        let mut transaction_builder = TransactionBuilder::new();
-        transaction_builder.with_input(refund_input);
-
         let refund_txid = match global_context
             .finalize_and_submit_transaction(
                 dbtx,
                 old_state.common.operation_id,
-                transaction_builder,
+                TransactionBuilder::new().with_input(refund_input),
             )
             .await
         {

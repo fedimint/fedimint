@@ -63,8 +63,8 @@ pub async fn handle_ng_command<D: IDatabase>(
                 .await
                 .unwrap();
 
-            let mut tx = TransactionBuilder::new();
-            tx.with_input(mint_input.into_dyn(LEGACY_HARDCODED_INSTANCE_ID_MINT));
+            let tx = TransactionBuilder::new()
+                .with_input(mint_input.into_dyn(LEGACY_HARDCODED_INSTANCE_ID_MINT));
 
             let txid = client
                 .finalize_and_submit_transaction(notes_hash, tx)
