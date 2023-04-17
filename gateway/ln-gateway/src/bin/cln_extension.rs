@@ -247,6 +247,7 @@ impl ClnRpcService {
             action,
             incoming_chan_id,
             htlc_id,
+            ..
         } = complete_request;
         if let Some(outcome) = interceptors
             .outcomes
@@ -616,7 +617,7 @@ impl ClnHtlcInterceptor {
                     Err(_) => return serde_json::json!({ "result": "continue" }),
                 };
 
-            match subscription
+            let htlc_ret = match subscription
                 .send(Ok(RouteHtlcResponse {
                     action: Some(route_htlc_response::Action::SubscribeResponse(
                         SubscribeInterceptHtlcsResponse {
@@ -642,7 +643,7 @@ impl ClnHtlcInterceptor {
 
                     // If the gateway does not respond within the HTLC expiry,
                     // Automatically respond with a failure message.
-                    return tokio::time::timeout(Duration::from_secs(30), async {
+                    tokio::time::timeout(Duration::from_secs(30), async {
                         receiver.await.unwrap_or_else(|e| {
                             error!("Failed to receive outcome of intercepted htlc: {:?}", e);
                             htlc_processing_failure()
@@ -652,13 +653,15 @@ impl ClnHtlcInterceptor {
                     .unwrap_or_else(|e| {
                         error!("await_htlc_processing error {:?}", e);
                         htlc_processing_failure()
-                    });
+                    })
                 }
                 Err(e) => {
                     error!("Failed to send htlc to subscription: {:?}", e);
-                    return htlc_processing_failure();
+                    htlc_processing_failure()
                 }
-            }
+            };
+
+            return htlc_ret;
         }
 
         // We have no subscription for this HTLC.

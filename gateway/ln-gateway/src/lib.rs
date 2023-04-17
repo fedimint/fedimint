@@ -11,7 +11,7 @@ pub mod gatewaylnrpc {
 }
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -39,7 +39,7 @@ use rpc::{FederationInfo, LightningReconnectPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use url::Url;
 
@@ -116,7 +116,7 @@ pub struct Gateway {
     module_gens: ClientModuleGenRegistry,
     lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
     lightning_mode: Option<LightningMode>,
-    actors: Mutex<HashMap<String, Arc<RwLock<GatewayActor>>>>,
+    actors: Arc<RwLock<BTreeMap<String, GatewayActor>>>,
     client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
@@ -140,9 +140,9 @@ impl Gateway {
             Self::create_lightning_client(lightning_mode.clone(), task_group.make_subgroup().await)
                 .await?;
 
-        let gw = Self {
+        let mut gw = Self {
             lnrpc,
-            actors: Mutex::new(HashMap::new()),
+            actors: Arc::new(RwLock::new(BTreeMap::new())),
             sender,
             receiver,
             client_builder,
@@ -169,9 +169,9 @@ impl Gateway {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
 
-        let gw = Self {
+        let mut gw = Self {
             lnrpc,
-            actors: Mutex::new(HashMap::new()),
+            actors: Arc::new(RwLock::new(BTreeMap::new())),
             sender,
             receiver,
             client_builder,
@@ -221,7 +221,7 @@ impl Gateway {
     }
 
     async fn load_actors(
-        &self,
+        &mut self,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
     ) -> Result<()> {
@@ -277,31 +277,29 @@ impl Gateway {
     }
 
     pub async fn load_actor(
-        &self,
+        &mut self,
         client: Arc<GatewayClient>,
         route_hints: Vec<RouteHint>,
-    ) -> Result<Arc<RwLock<GatewayActor>>> {
-        let actor = Arc::new(RwLock::new(
-            GatewayActor::new(
-                client.clone(),
-                self.lnrpc.clone(),
-                route_hints,
-                self.task_group.clone(),
-                GatewayRpcSender::new(self.sender.clone()),
-            )
-            .await?,
-        ));
+    ) -> Result<GatewayActor> {
+        let actor = GatewayActor::new(
+            client.clone(),
+            self.lnrpc.clone(),
+            route_hints,
+            self.task_group.clone(),
+            GatewayRpcSender::new(self.sender.clone()),
+        )
+        .await?;
 
-        self.actors.lock().await.insert(
+        self.actors.write().await.insert(
             client.config().client_config.federation_id.to_string(),
             actor.clone(),
         );
         Ok(actor)
     }
 
-    async fn select_actor(&self, federation_id: FederationId) -> Result<Arc<RwLock<GatewayActor>>> {
+    async fn select_actor(&self, federation_id: FederationId) -> Result<GatewayActor> {
         self.actors
-            .lock()
+            .read()
             .await
             .get(&federation_id.to_string())
             .cloned()
@@ -312,7 +310,7 @@ impl Gateway {
     }
 
     async fn handle_connect_federation(
-        &self,
+        &mut self,
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
     ) -> Result<FederationInfo> {
@@ -359,16 +357,16 @@ impl Gateway {
             );
         }
 
-        let federation_info = actor.read().await.get_info()?;
+        let federation_info = actor.get_info()?;
 
         Ok(federation_info)
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        let actors = self.actors.lock().await;
+        let actors = self.actors.read().await;
         let mut federations: Vec<FederationInfo> = Vec::new();
         for actor in actors.values() {
-            federations.push(actor.read().await.get_info()?);
+            federations.push(actor.get_info()?);
         }
 
         let ln_info = self.lnrpc.read().await.info().await?;
@@ -387,8 +385,7 @@ impl Gateway {
             contract_id,
         } = payload;
 
-        let actor_lock = self.select_actor(federation_id).await?;
-        let actor = actor_lock.read().await;
+        let actor = self.select_actor(federation_id).await?;
         let outpoint = actor.pay_invoice(contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
@@ -399,8 +396,6 @@ impl Gateway {
     async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
         self.select_actor(payload.federation_id)
             .await?
-            .read()
-            .await
             .get_balance()
             .await
     }
@@ -408,8 +403,6 @@ impl Gateway {
     async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
         self.select_actor(payload.federation_id)
             .await?
-            .read()
-            .await
             .get_deposit_address()
             .await
     }
@@ -423,8 +416,6 @@ impl Gateway {
 
         self.select_actor(federation_id)
             .await?
-            .read()
-            .await
             .deposit(txout_proof, transaction)
             .await
     }
@@ -438,8 +429,6 @@ impl Gateway {
 
         self.select_actor(federation_id)
             .await?
-            .read()
-            .await
             .withdraw(amount, address)
             .await
     }
@@ -448,12 +437,7 @@ impl Gateway {
         &self,
         BackupPayload { federation_id }: BackupPayload,
     ) -> Result<()> {
-        self.select_actor(federation_id)
-            .await?
-            .read()
-            .await
-            .backup()
-            .await
+        self.select_actor(federation_id).await?.backup().await
     }
 
     async fn handle_restore_msg(
@@ -462,9 +446,7 @@ impl Gateway {
     ) -> Result<()> {
         self.select_actor(federation_id)
             .await?
-            .read()
-            .await
-            .restore()
+            .restore(self.task_group.make_subgroup().await)
             .await
     }
 
@@ -474,12 +456,12 @@ impl Gateway {
     ) -> Result<()> {
         let LightningReconnectPayload { node_type } = payload;
 
-        let actors = self.actors.lock().await;
+        let mut actors = self.actors.write().await;
 
         // Stop all threads that are listening for HTLCs
         tracing::info!("Stopping all HTLC subscription threads.");
-        for actor in actors.values() {
-            actor.write().await.stop_subscribing_htlcs().await?;
+        for actor in actors.values_mut() {
+            actor.stop_subscribing_htlcs().await?;
         }
 
         self.lnrpc = match node_type {
@@ -505,11 +487,10 @@ impl Gateway {
         tracing::info!("Restarting HTLC subscription threads.");
 
         // Create a channel that will be used to shutdown the HTLC thread
-        for actor in actors.values() {
+        for actor in actors.values_mut() {
             let (sender, receiver) = mpsc::channel::<Arc<AtomicBool>>(100);
-            let mut a = actor.write().await;
-            a.route_htlcs(receiver).await?;
-            a.sender = sender;
+            actor.route_htlcs(receiver).await?;
+            actor.sender = sender;
         }
 
         Ok(())

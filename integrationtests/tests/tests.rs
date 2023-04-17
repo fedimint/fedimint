@@ -461,8 +461,6 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
         // Gateway buys offer, triggering preimage decryption
         let (_, contract_id) = gateway
             .actor
-            .read()
-            .await
             .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
             .await
             .unwrap();
@@ -603,8 +601,6 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
         let claim_outpoint = {
             let buy_preimage = gateway
                 .actor
-                .read()
-                .await
                 .pay_invoice_buy_preimage(contract_id)
                 .await
                 .unwrap();
@@ -614,8 +610,6 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
 
             gateway
                 .actor
-                .read()
-                .await
                 .pay_invoice_buy_preimage_finalize_and_claim(contract_id, buy_preimage)
                 .await
                 .unwrap()
@@ -628,8 +622,6 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
 
         gateway
             .actor
-            .read()
-            .await
             .await_outgoing_contract_claimed(contract_id, claim_outpoint)
             .await
             .unwrap();
@@ -693,19 +685,11 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
             .await
             .unwrap();
 
-        let claim_outpoint = gateway
-            .actor
-            .read()
-            .await
-            .pay_invoice(contract_id)
-            .await
-            .unwrap();
+        let claim_outpoint = gateway.actor.pay_invoice(contract_id).await.unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway
             .actor
-            .read()
-            .await
             .await_outgoing_contract_claimed(contract_id, claim_outpoint)
             .await
             .unwrap();
@@ -776,8 +760,6 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
         let response = {
             let buy_preimage = gateway
                 .actor
-                .read()
-                .await
                 .pay_invoice_buy_preimage(contract_id)
                 .await
                 .unwrap();
@@ -787,8 +769,6 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
 
             gateway
                 .actor
-                .read()
-                .await
                 .pay_invoice_buy_preimage_finalize_and_claim(contract_id, buy_preimage)
                 .await
         };
@@ -853,8 +833,6 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         let invoice_amount = preimage_price + sats(50);
         let (outpoint, contract_id) = gateway
             .actor
-            .read()
-            .await
             .buy_preimage_offer(invoice.invoice.payment_hash(), &invoice_amount, rng())
             .await
             .unwrap();
@@ -870,8 +848,6 @@ async fn receive_lightning_payment_valid_preimage() -> Result<()> {
         // Gateway receives decrypted preimage
         let preimage = gateway
             .actor
-            .read()
-            .await
             .await_preimage_decryption(outpoint)
             .await
             .unwrap();
@@ -930,8 +906,6 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
         // Gateway escrows ecash to trigger preimage decryption by the federation
         let (_, contract_id) = gateway
             .actor
-            .read()
-            .await
             .buy_preimage_offer(&payment_hash, &payment_amount, rng())
             .await
             .unwrap();
@@ -1434,19 +1408,11 @@ async fn lightning_gateway_can_reconnect() -> Result<()> {
         let new_lnrpc = create_lightning_adapter(gateway.node, TaskGroup::new()).await;
         gateway.adapter = Arc::new(RwLock::new(new_lnrpc));
 
-        let claim_outpoint = gateway
-            .actor
-            .read()
-            .await
-            .pay_invoice(contract_id)
-            .await
-            .unwrap();
+        let claim_outpoint = gateway.actor.pay_invoice(contract_id).await.unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway
             .actor
-            .read()
-            .await
             .await_outgoing_contract_claimed(contract_id, claim_outpoint)
             .await
             .unwrap();

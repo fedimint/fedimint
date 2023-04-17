@@ -621,7 +621,7 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
 }
 
 pub struct GatewayTest {
-    pub actor: Arc<RwLock<GatewayActor>>,
+    pub actor: GatewayActor,
     pub adapter: Arc<RwLock<LnRpcAdapter>>,
     pub keys: LightningGateway,
     pub user: UserTest<GatewayClientConfig>,
@@ -676,7 +676,7 @@ impl GatewayTest {
         )
         .into();
 
-        let gateway = Gateway::new_with_lightning_connection(
+        let mut gateway = Gateway::new_with_lightning_connection(
             Arc::new(RwLock::new(adapter.clone())),
             client_builder.clone(),
             decoders.clone(),
