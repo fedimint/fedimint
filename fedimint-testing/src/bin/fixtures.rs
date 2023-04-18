@@ -96,7 +96,7 @@ async fn fedimint_client() -> anyhow::Result<UserClient> {
 
 /// Save PID to a $FM_PID_FILE which `kill_fedimint_processes` shell script
 /// reads from and kills every PID it finds on EXIT
-async fn kill_on_exit(process: &Child) -> anyhow::Result<()> {
+async fn kill_on_exit(name: &str, process: &Child) -> anyhow::Result<()> {
     let pid_file = env::var("FM_PID_FILE")?;
     let mut file = OpenOptions::new()
         .write(true)
@@ -112,6 +112,9 @@ async fn kill_on_exit(process: &Child) -> anyhow::Result<()> {
         process.id().ok_or_else(|| anyhow!("PID missing"))?
     )?;
     file.write_all(&buf).await?;
+
+    // TODO: temporarily here, chasing shutdown hang
+    info!(pid = process.id(), name, "Process pid added to FM_PID_FILE");
 
     Ok(())
 }
@@ -157,7 +160,7 @@ async fn run_bitcoind() -> anyhow::Result<()> {
     let mut bitcoind = Command::new("bitcoind")
         .arg(format!("-datadir={btc_dir}"))
         .spawn()?;
-    kill_on_exit(&bitcoind).await?;
+    kill_on_exit("bitcoind", &bitcoind).await?;
     info!("bitcoind started");
 
     // create client
@@ -195,7 +198,7 @@ async fn run_lightningd() -> anyhow::Result<()> {
         .arg(format!("--lightning-dir={cln_dir}"))
         .arg(format!("--plugin={bin_dir}/gateway-cln-extension"))
         .spawn()?;
-    kill_on_exit(&lightningd).await?;
+    kill_on_exit("lightningd", &lightningd).await?;
     info!("lightningd started");
 
     lightningd.wait().await?;
@@ -213,7 +216,7 @@ async fn run_lnd() -> anyhow::Result<()> {
     let mut lnd = Command::new("lnd")
         .arg(format!("--lnddir={lnd_dir}"))
         .spawn()?;
-    kill_on_exit(&lnd).await?;
+    kill_on_exit("lnd", &lnd).await?;
     info!("lnd started");
 
     lnd.wait().await?;
@@ -232,7 +235,7 @@ async fn run_electrs() -> anyhow::Result<()> {
         .arg(format!("--conf-dir={electrs_dir}"))
         .arg(format!("--db-dir={electrs_dir}"))
         .spawn()?;
-    kill_on_exit(&electrs).await?;
+    kill_on_exit("electrs", &electrs).await?;
     info!("electrs started");
 
     electrs.wait().await?;
@@ -257,7 +260,7 @@ async fn run_esplora() -> anyhow::Result<()> {
         .arg("--http-addr=127.0.0.1:50002")
         .arg("--monitoring-addr=127.0.0.1:50003")
         .spawn()?;
-    kill_on_exit(&esplora).await?;
+    kill_on_exit("esplora", &esplora).await?;
     info!("esplora started");
 
     esplora.wait().await?;
@@ -284,7 +287,7 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
         .arg(data_dir)
         .envs(env_vars)
         .spawn()?;
-    kill_on_exit(&fedimintd).await?;
+    kill_on_exit("fedimintd", &fedimintd).await?;
     info!("fedimintd started");
 
     // TODO: pass in optional task group to this function and select on it to wait
@@ -302,7 +305,7 @@ async fn run_gatewayd(node: GatewayNode) -> anyhow::Result<()> {
     let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd"))
         .arg(node.to_string())
         .spawn()?;
-    kill_on_exit(&gatewayd).await?;
+    kill_on_exit("gatewayd", &gatewayd).await?;
     info!("gatewayd started");
 
     // TODO: connect_gateways
@@ -390,7 +393,7 @@ async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
         .arg(format!("--out-dir={out_dir}"))
         .arg(format!("--name={server_name}"))
         .spawn()?;
-    kill_on_exit(&task).await?;
+    kill_on_exit("distributedgen", &task).await?;
 
     task.wait().await?;
     info!("TLS certs created for started {server_name}");
@@ -434,7 +437,7 @@ async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()>
         .arg(format!("--certs={certs}"))
         .spawn()
         .unwrap_or_else(|e| panic!("DKG failed for for {server_name} {e:?}"));
-    kill_on_exit(&task).await?;
+    kill_on_exit("distributedgen", &task).await?;
 
     task.wait().await?;
     info!("DKG created for started {server_name}");
