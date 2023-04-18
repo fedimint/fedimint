@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["BroadcastStreamRecvError","An error returned from the inner stream of a [`BroadcastStream`]."]],"fn":[["make_future",""]],"struct":[["BroadcastStream","A wrapper around `tokio::sync::broadcast::Receiver` that implements `Stream`."]]};

@@ -729,7 +729,7 @@
         modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
         <span class="kw">let </span>key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-        modules.get_expect(key).decode(reader, key)
+        modules.get_expect(key).decode(reader, key, modules)
     }
 }
 

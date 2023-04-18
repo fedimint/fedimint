@@ -755,6 +755,119 @@
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
 <a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -774,8 +887,9 @@
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::sm::notifier::Notifier;
 <span class="kw">use </span><span class="kw">crate</span>::sm::state::{DynContext, DynState};
-<span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId, State, StateTransition};
 
 <span class="doccomment">/// After how many attempts a DB transaction is aborted with an error
 </span><span class="kw">const </span>MAX_DB_ATTEMPTS: <span class="prelude-ty">Option</span>&lt;usize&gt; = <span class="prelude-val">Some</span>(<span class="number">100</span>);
@@ -808,6 +922,7 @@
     db: Database,
     context: Mutex&lt;<span class="prelude-ty">Option</span>&lt;GC&gt;&gt;,
     module_contexts: BTreeMap&lt;ModuleInstanceId, DynContext&gt;,
+    notifier: Notifier&lt;GC&gt;,
 }
 
 <span class="doccomment">/// Builder to which module clients can be attached and used to build an
@@ -873,11 +988,11 @@
             }
 
             <span class="kw">let </span>is_active_state = dbtx
-                .get_value(<span class="kw-2">&amp;</span>ActiveStateKey::&lt;GC&gt;(state.clone()))
+                .get_value(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state.clone()))
                 .<span class="kw">await
                 </span>.is_some();
             <span class="kw">let </span>is_inactive_state = dbtx
-                .get_value(<span class="kw-2">&amp;</span>InactiveStateKey::&lt;GC&gt;(state.clone()))
+                .get_value(<span class="kw-2">&amp;</span>InactiveStateKey::from_state(state.clone()))
                 .<span class="kw">await
                 </span>.is_some();
 
@@ -895,7 +1010,7 @@
                 <span class="macro">bail!</span>(<span class="string">&quot;State is already terminal, adding it to the executor doesn&#39;t make sense.&quot;</span>)
             }
 
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>ActiveStateKey(state), <span class="kw-2">&amp;</span>ActiveState::new())
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state), <span class="kw-2">&amp;</span>ActiveState::new())
                 .<span class="kw">await</span>;
         }
 
@@ -942,12 +1057,15 @@
     <span class="kw">pub async fn </span>await_inactive_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) -&gt; InactiveState {
         <span class="self">self</span>.inner
             .db
-            .wait_key_exists(<span class="kw-2">&amp;</span>InactiveStateKey(state))
+            .wait_key_exists(<span class="kw-2">&amp;</span>InactiveStateKey::from_state(state))
             .<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>await_active_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) -&gt; ActiveState {
-        <span class="self">self</span>.inner.db.wait_key_exists(<span class="kw-2">&amp;</span>ActiveStateKey(state)).<span class="kw">await
+        <span class="self">self</span>.inner
+            .db
+            .wait_key_exists(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state))
+            .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Starts the background thread that runs the state machines. This cannot
@@ -981,6 +1099,12 @@
                 };
             })
             .<span class="kw">await</span>;
+    }
+
+    <span class="doccomment">/// Returns a reference to the [`Notifier`] that can be used to subscribe to
+    /// state transitions
+    </span><span class="kw">pub fn </span>notifier(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Notifier&lt;GC&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.inner.notifier
     }
 }
 
@@ -1043,7 +1167,8 @@
         <span class="kw">let </span>((transition_outcome, state, transition_fn, meta), <span class="kw">_</span>, <span class="kw">_</span>) =
             select_all(transitions).<span class="kw">await</span>;
 
-        <span class="self">self</span>.db
+        <span class="kw">let </span>new_state = <span class="self">self
+            </span>.db
             .autocommit(
                 |dbtx| {
                     <span class="kw">let </span>state = state.clone();
@@ -1056,9 +1181,13 @@
                             state.clone(),
                         )
                         .<span class="kw">await</span>;
-                        dbtx.remove_entry(<span class="kw-2">&amp;</span>ActiveStateKey(state.clone())).<span class="kw">await</span>;
-                        dbtx.insert_entry(<span class="kw-2">&amp;</span>InactiveStateKey(state.clone()), <span class="kw-2">&amp;</span>meta.into_inactive())
+                        dbtx.remove_entry(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state.clone()))
                             .<span class="kw">await</span>;
+                        dbtx.insert_entry(
+                            <span class="kw-2">&amp;</span>InactiveStateKey::from_state(state.clone()),
+                            <span class="kw-2">&amp;</span>meta.into_inactive(),
+                        )
+                        .<span class="kw">await</span>;
 
                         <span class="kw">let </span>context = <span class="kw-2">&amp;</span><span class="self">self
                             </span>.module_contexts
@@ -1069,16 +1198,19 @@
                             <span class="comment">// TODO: log state machine id or something
                             </span><span class="macro">debug!</span>(<span class="string">&quot;State machine reached terminal state&quot;</span>);
                             dbtx.insert_entry(
-                                <span class="kw-2">&amp;</span>InactiveStateKey(new_state),
+                                <span class="kw-2">&amp;</span>InactiveStateKey::from_state(new_state.clone()),
                                 <span class="kw-2">&amp;</span>ActiveState::new().into_inactive(),
                             )
                             .<span class="kw">await</span>;
                         } <span class="kw">else </span>{
-                            dbtx.insert_entry(<span class="kw-2">&amp;</span>ActiveStateKey(new_state), <span class="kw-2">&amp;</span>ActiveState::new())
-                                .<span class="kw">await</span>;
+                            dbtx.insert_entry(
+                                <span class="kw-2">&amp;</span>ActiveStateKey::from_state(new_state.clone()),
+                                <span class="kw-2">&amp;</span>ActiveState::new(),
+                            )
+                            .<span class="kw">await</span>;
                         }
 
-                        <span class="prelude-val">Ok</span>(())
+                        <span class="prelude-val">Ok</span>(new_state)
                     })
                 },
                 <span class="prelude-val">Some</span>(<span class="number">100</span>),
@@ -1092,6 +1224,8 @@
                 AutocommitError::ClosureError { error, .. } =&gt; error,
             })<span class="question-mark">?</span>;
 
+        <span class="self">self</span>.notifier.notify(new_state);
+
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -1101,7 +1235,7 @@
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>ActiveStateKeyPrefix::&lt;GC&gt;::new())
             .<span class="kw">await
-            </span>.map(|(state, meta)| (state.<span class="number">0</span>, meta))
+            </span>.map(|(state, meta)| (state.state, meta))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await
     </span>}
@@ -1112,7 +1246,7 @@
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>InactiveStateKeyPrefix::new())
             .<span class="kw">await
-            </span>.map(|(state, meta)| (state.<span class="number">0</span>, meta))
+            </span>.map(|(state, meta)| (state.state, meta))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await
     </span>}
@@ -1159,7 +1293,7 @@
     <span class="doccomment">/// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    </span><span class="kw">pub async fn </span>build&lt;GC&gt;(<span class="self">self</span>, db: Database) -&gt; Executor&lt;GC&gt;
+    </span><span class="kw">pub async fn </span>build&lt;GC&gt;(<span class="self">self</span>, db: Database, notifier: Notifier&lt;GC&gt;) -&gt; Executor&lt;GC&gt;
     <span class="kw">where
         </span>GC: GlobalContext,
     {
@@ -1167,6 +1301,7 @@
             db,
             context: Mutex::new(<span class="prelude-val">None</span>),
             module_contexts: <span class="self">self</span>.module_contexts,
+            notifier,
         });
 
         <span class="macro">debug!</span>(
@@ -1179,11 +1314,27 @@
 
 <span class="doccomment">/// A state that is able to make progress eventually
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>ActiveStateKey&lt;GC&gt;(<span class="kw">pub </span>DynState&lt;GC&gt;);
+</span><span class="kw">pub struct </span>ActiveStateKey&lt;GC&gt; {
+    <span class="comment">// TODO: remove redundant operation id from state trait
+    </span><span class="kw">pub </span>operation_id: OperationId,
+    <span class="kw">pub </span>state: DynState&lt;GC&gt;,
+}
+
+<span class="kw">impl</span>&lt;GC&gt; ActiveStateKey&lt;GC&gt; {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_state(state: DynState&lt;GC&gt;) -&gt; ActiveStateKey&lt;GC&gt; {
+        ActiveStateKey {
+            operation_id: state.operation_id(),
+            state,
+        }
+    }
+}
 
 <span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>ActiveStateKey&lt;GC&gt; {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.consensus_encode(writer)
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(len)
     }
 }
 
@@ -1195,8 +1346,37 @@
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(ActiveStateKey(DynState::consensus_decode(reader, modules)<span class="question-mark">?</span>))
+        <span class="kw">let </span>operation_id = OperationId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>state = DynState::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(ActiveStateKey {
+            operation_id,
+            state,
+        })
     }
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ActiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+    <span class="kw">pub </span>operation_id: OperationId,
+    <span class="kw">pub </span>module_instance: ModuleInstanceId,
+    <span class="kw">pub </span>_pd: PhantomData&lt;GC&gt;,
+}
+
+<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>ActiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.module_instance.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(len)
+    }
+}
+
+<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>ActiveModuleOperationStateKeyPrefix&lt;GC&gt;
+<span class="kw">where
+    </span>GC: GlobalContext,
+{
+    <span class="kw">type </span>Record = ActiveStateKey&lt;GC&gt;;
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1237,6 +1417,7 @@
 {
     <span class="kw">type </span>Record = ActiveStateKey&lt;GC&gt;;
 }
+
 <span class="kw">impl </span>ActiveState {
     <span class="kw">fn </span>new() -&gt; ActiveState {
         ActiveState {
@@ -1254,14 +1435,30 @@
 
 <span class="doccomment">/// A past or final state of a state machine
 </span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>InactiveStateKey&lt;GC&gt;(<span class="kw">pub </span>DynState&lt;GC&gt;);
+</span><span class="kw">pub struct </span>InactiveStateKey&lt;GC&gt; {
+    <span class="comment">// TODO: remove redundant operation id from state trait
+    </span><span class="kw">pub </span>operation_id: OperationId,
+    <span class="kw">pub </span>state: DynState&lt;GC&gt;,
+}
+
+<span class="kw">impl</span>&lt;GC&gt; InactiveStateKey&lt;GC&gt; {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_state(state: DynState&lt;GC&gt;) -&gt; InactiveStateKey&lt;GC&gt; {
+        InactiveStateKey {
+            operation_id: state.operation_id(),
+            state,
+        }
+    }
+}
 
 <span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>InactiveStateKey&lt;GC&gt;
 <span class="kw">where
     </span>GC: GlobalContext,
 {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.consensus_encode(writer)
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.state.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(len)
     }
 }
 
@@ -1273,10 +1470,37 @@
         reader: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(InactiveStateKey(DynState::consensus_decode(
-            reader, modules,
-        )<span class="question-mark">?</span>))
+        <span class="kw">let </span>operation_id = OperationId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>state = DynState::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(InactiveStateKey {
+            operation_id,
+            state,
+        })
     }
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>InactiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+    <span class="kw">pub </span>operation_id: OperationId,
+    <span class="kw">pub </span>module_instance: ModuleInstanceId,
+    <span class="kw">pub </span>_pd: PhantomData&lt;GC&gt;,
+}
+
+<span class="kw">impl</span>&lt;GC&gt; Encodable <span class="kw">for </span>InactiveModuleOperationStateKeyPrefix&lt;GC&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        len += <span class="self">self</span>.operation_id.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.module_instance.consensus_encode(writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(len)
+    }
+}
+
+<span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseLookup <span class="kw">for </span>InactiveModuleOperationStateKeyPrefix&lt;GC&gt;
+<span class="kw">where
+    </span>GC: GlobalContext,
+{
+    <span class="kw">type </span>Record = InactiveStateKey&lt;GC&gt;;
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -1334,7 +1558,7 @@
     <span class="kw">use </span>tracing::{info, trace};
 
     <span class="kw">use </span><span class="kw">crate</span>::sm::state::{Context, DynContext, DynState};
-    <span class="kw">use </span><span class="kw">crate</span>::sm::{Executor, OperationId, State, StateTransition};
+    <span class="kw">use </span><span class="kw">crate</span>::sm::{Executor, Notifier, OperationId, State, StateTransition};
 
     <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     </span><span class="kw">enum </span>MockStateMachine {
@@ -1452,7 +1676,9 @@
                 broadcast: broadcast.clone(),
             },
         );
-        <span class="kw">let </span>executor = executor_builder.build(db.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>executor = executor_builder
+            .build(db.clone(), Notifier::new(db.clone()))
+            .<span class="kw">await</span>;
         executor.start_executor(tg, ()).<span class="kw">await</span>;
 
         <span class="macro">info!</span>(<span class="string">&quot;Initialized test executor&quot;</span>);

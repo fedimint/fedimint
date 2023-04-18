@@ -411,6 +411,8 @@
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -637,16 +639,14 @@
     <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
     <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
+    <span class="kw">use </span>fedimint_core::util::BoxStream;
     <span class="kw">use </span>fedimint_core::{PeerId, TransactionId};
     <span class="kw">use </span>rand::thread_rng;
     <span class="kw">use </span>serde_json::Value;
     <span class="kw">use </span>tokio::sync::Mutex;
     <span class="kw">use </span>tokio::time::{sleep, timeout};
 
-    <span class="kw">use </span><span class="kw">crate</span>::sm::{
-        ActiveState, ClientSMDatabaseTransaction, DynState, Executor, InactiveState, OperationId,
-        OperationState,
-    };
+    <span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationId, OperationState};
     <span class="kw">use </span><span class="kw">crate</span>::transaction::{
         tx_submission_sm_decoder, TransactionBuilder, TxSubmissionContext, TxSubmissionStates,
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -762,15 +762,17 @@
             <span class="prelude-val">Ok</span>(txid)
         }
 
-        <span class="kw">async fn </span>await_active_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;DynGlobalClientContext&gt;) -&gt; ActiveState {
-            <span class="self">self</span>.executor.await_active_state(state).<span class="kw">await
-        </span>}
-
-        <span class="kw">async fn </span>await_inactive_state(
+        <span class="kw">async fn </span>transaction_update_stream(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            state: DynState&lt;DynGlobalClientContext&gt;,
-        ) -&gt; InactiveState {
-            <span class="self">self</span>.executor.await_inactive_state(state).<span class="kw">await
+            operation_id: OperationId,
+        ) -&gt; BoxStream&lt;OperationState&lt;TxSubmissionStates&gt;&gt; {
+            <span class="self">self</span>.executor
+                .notifier()
+                .module_notifier::&lt;OperationState&lt;TxSubmissionStates&gt;&gt;(
+                    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+                )
+                .subscribe(operation_id)
+                .<span class="kw">await
         </span>}
     }
 
@@ -789,7 +791,9 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::&lt;DynGlobalClientContext&gt;::builder();
         executor_builder.with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
-        <span class="kw">let </span>executor = executor_builder.build(db.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>executor = executor_builder
+            .build(db.clone(), Notifier::new(db.clone()))
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span>context = Arc::new(FakeGlobalContext {
             api: Default::default(),

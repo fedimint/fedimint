@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["ModuleNotifier","State transition notifier for a specific module instance that can only subscribe to transitions belonging to that module"],["Notifier","State transition notifier owned by the modularized client used to inform modules of state transitions."]]};

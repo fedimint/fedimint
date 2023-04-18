@@ -263,27 +263,13 @@
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::ffi;
+</pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
+<span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>fedimint_core::core::{
-    Decoder, DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId,
-};
-<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -291,7 +277,8 @@
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, State};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, OperationId, State};
+<span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput};
 <span class="kw">use </span><span class="kw">crate</span>::DynGlobalClientContext;
 
 <span class="kw">pub mod </span>gen;
@@ -346,6 +333,8 @@
 <span class="doccomment">/// Type-erased version of [`ClientModule`]
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IClientModule: Debug {
+    <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>std::any::Any));
+
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
 
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; DynContext;
@@ -365,6 +354,10 @@
 <span class="kw">where
     </span>T: ClientModule,
 {
+    <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any)) {
+        <span class="self">self
+    </span>}
+
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
         T::decoder()
     }
@@ -437,13 +430,10 @@
     /// to create the requested input.
     </span><span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(
-        Vec&lt;KeyPair&gt;,
-        &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
-        StateGenerator&lt;<span class="self">Self</span>::States&gt;,
-    )&gt;;
+    ) -&gt; anyhow::Result&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;;
 
     <span class="doccomment">/// Creates an output of **exactly** `amount` that will pay into the
     /// holdings managed by the module.
@@ -456,12 +446,10 @@
     ///   of calling `create_change_output` and have to be injected later.
     </span><span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
         amount: Amount,
-    ) -&gt; (
-        &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-        StateGenerator&lt;<span class="self">Self</span>::States&gt;,
-    );
+    ) -&gt; ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;;
 }
 
 <span class="doccomment">/// Type-erased version of [`PrimaryClientModule`]
@@ -471,19 +459,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(
-        Vec&lt;KeyPair&gt;,
-        DynInput,
-        StateGenerator&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-    )&gt;;
+    ) -&gt; anyhow::Result&lt;ClientInput&gt;;
 
     <span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
         amount: Amount,
-    ) -&gt; (DynOutput, StateGenerator&lt;DynState&lt;DynGlobalClientContext&gt;&gt;);
+    ) -&gt; ClientOutput;
 
     <span class="kw">fn </span>as_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>));
 }
@@ -497,51 +483,39 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;(
-        Vec&lt;KeyPair&gt;,
-        DynInput,
-        StateGenerator&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-    )&gt; {
-        <span class="kw">let </span>(keys, input, state_gen) = T::create_sufficient_input(<span class="self">self</span>, dbtx, min_amount).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>dyn_input = DynInput::from_typed(module_instance, input);
-        <span class="kw">let </span>dyn_states = state_gen_to_dyn(state_gen, module_instance);
-
-        <span class="prelude-val">Ok</span>((keys, dyn_input, dyn_states))
+    ) -&gt; anyhow::Result&lt;ClientInput&gt; {
+        <span class="prelude-val">Ok</span>(T::create_sufficient_input(
+            <span class="self">self</span>,
+            <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
+            operation_id,
+            min_amount,
+        )
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_dyn(module_instance))
     }
 
     <span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
         amount: Amount,
-    ) -&gt; (DynOutput, StateGenerator&lt;DynState&lt;DynGlobalClientContext&gt;&gt;) {
-        <span class="kw">let </span>(output, state_gen) = T::create_exact_output(<span class="self">self</span>, dbtx, amount).<span class="kw">await</span>;
-        <span class="kw">let </span>dyn_output = DynOutput::from_typed(module_instance, output);
-        <span class="kw">let </span>dyn_states = state_gen_to_dyn(state_gen, module_instance);
-
-        (dyn_output, dyn_states)
+    ) -&gt; ClientOutput {
+        T::create_exact_output(
+            <span class="self">self</span>,
+            <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
+            operation_id,
+            amount,
+        )
+        .<span class="kw">await
+        </span>.into_dyn(module_instance)
     }
 
     <span class="kw">fn </span>as_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>)) {
         <span class="self">self
     </span>}
-}
-
-<span class="kw">fn </span>state_gen_to_dyn&lt;S&gt;(
-    state_gen: StateGenerator&lt;S&gt;,
-    module_instance: ModuleInstanceId,
-) -&gt; StateGenerator&lt;DynState&lt;DynGlobalClientContext&gt;&gt;
-<span class="kw">where
-    </span>S: State&lt;GlobalContext = DynGlobalClientContext&gt;,
-{
-    Box::new(<span class="kw">move </span>|txid, index| {
-        <span class="kw">let </span>states = state_gen(txid, index);
-        states
-            .into_iter()
-            .map(|state| DynState::from_typed(module_instance, state))
-            .collect()
-    })
 }
 
 <span class="macro">dyn_newtype_define!</span>(

@@ -1059,7 +1059,38 @@
 <a href="#1059" id="1059">1059</a>
 <a href="#1060" id="1060">1060</a>
 <a href="#1061" id="1061">1061</a>
-</pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+</pre><pre class="rust"><code><span class="kw">mod </span>ng;
+
+<span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::io::Write;
@@ -1072,9 +1103,12 @@
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Network, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_aead::get_password_hash;
+<span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
+<span class="kw">use </span>fedimint_client::get_client_root_secret;
 <span class="kw">use </span>fedimint_client::module::gen::{
-    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
+    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt, IClientModuleGen,
 };
+<span class="kw">use </span>fedimint_client::sm::Notifier;
 <span class="kw">use </span>fedimint_client_legacy::mint::backup::Metadata;
 <span class="kw">use </span>fedimint_client_legacy::mint::SpendableNote;
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -1381,9 +1415,14 @@
     ) -&gt; ModuleDecoderRegistry {
         ModuleDecoderRegistry::new(cfg.clone().<span class="number">0</span>.modules.into_iter().filter_map(
             |(id, module_cfg)| {
-                module_gens
-                    .get(module_cfg.kind())
-                    .map(|module_gen| (id, module_gen.as_ref().decoder()))
+                module_gens.get(module_cfg.kind()).map(|module_gen| {
+                    (
+                        id,
+                        IClientModuleGen::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleGen + <span class="lifetime">&#39;static</span>&gt;::as_ref(
+                            module_gen,
+                        )),
+                    )
+                })
             },
         ))
     }
@@ -1575,6 +1614,9 @@
         </span><span class="attr">#[clap(long)]
         </span>arg: Vec&lt;ffi::OsString&gt;,
     },
+
+    <span class="attr">#[clap(subcommand)]
+    </span>Ng(ng::ClientNg),
 }
 
 <span class="attr">#[derive(Clone)]
@@ -2052,6 +2094,8 @@
                 <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
                 <span class="kw">let </span>decoders = cli.load_decoders(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens);
                 <span class="kw">let </span>db = cli.load_db(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+                <span class="kw">let </span>root_secret = get_client_root_secret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+
                 <span class="kw">let </span>(id, module_cfg) = <span class="kw">match </span>id {
                     ModuleSelector::Id(id) =&gt; (
                         id,
@@ -2069,13 +2113,27 @@
                     <span class="self">self</span>.module_gens.get(module_cfg.kind()).unwrap(<span class="comment">/* already checked */</span>);
 
                 <span class="kw">let </span>module = module_gen
-                    .init(module_cfg, db, id)
+                    .init(
+                        module_cfg,
+                        db.clone(),
+                        id,
+                        root_secret.child_key(ChildId(id <span class="kw">as </span>u64)),
+                        Notifier::new(db),
+                    )
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;Loading module failed&quot;</span>)<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     module
                         .handle_cli_command(<span class="kw-2">&amp;</span>arg)
+                        .<span class="kw">await
+                        </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
+                ))
+            }
+            Command::Ng(command) =&gt; {
+                <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(
+                    ng::handle_ng_command(command, cfg.<span class="number">0</span>, cli.load_rocks_db().unwrap())
                         .<span class="kw">await
                         </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
                 ))

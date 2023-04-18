@@ -86,9 +86,11 @@
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
+<a href="#89" id="89">89</a>
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
+<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
 <span class="kw">use </span>fedimint_client::module::ClientModule;
-<span class="kw">use </span>fedimint_client::sm::{DynState, OperationId, State, StateTransition};
+<span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -115,8 +117,10 @@
         _cfg: <span class="self">Self</span>::Config,
         _db: Database,
         _instance_id: ModuleInstanceId,
+        _module_root_secret: DerivableSecret,
+        _notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
-        <span class="macro">unimplemented!</span>()
+        <span class="prelude-val">Ok</span>(LightningClientModule {})
     }
 }
 
@@ -128,9 +132,7 @@
     <span class="kw">type </span>ModuleStateMachineContext = ();
     <span class="kw">type </span>States = LightningClientStates;
 
-    <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
-        <span class="macro">unimplemented!</span>()
-    }
+    <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {}
 
     <span class="kw">fn </span>input_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

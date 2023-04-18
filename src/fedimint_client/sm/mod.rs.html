@@ -40,17 +40,27 @@
 <a href="#40" id="40">40</a>
 <a href="#41" id="41">41</a>
 <a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>dbtx;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>executor;
 <span class="doccomment">/// State machine state interface
 </span><span class="kw">mod </span>state;
 <span class="kw">pub mod </span>util;
 
+<span class="comment">// FIXME: use DB subscriptions? Needs prefix subscriptions :(
+</span><span class="doccomment">/// Helper to notify modules about state transitions
+</span><span class="kw">mod </span>notifier;
+
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">pub use </span>dbtx::ClientSMDatabaseTransaction;
 <span class="kw">pub use </span>executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
+<span class="kw">pub use </span>notifier::{ModuleNotifier, Notifier};
 <span class="kw">pub use </span>state::{Context, DynContext, DynState, OperationState, State, StateTransition};
 
 <span class="doccomment">/// Context given to all state machines
