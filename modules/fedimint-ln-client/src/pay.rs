@@ -8,7 +8,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
-///     CreatedOutgoingLnContract -- await transaction timeout --> Aborted
+///     CreatedOutgoingLnContract -- await transaction failed --> Aborted
 ///     CreatedOutgoingLnContract -- await transaction acceptance --> Funded    
 ///     Funded -- await gateway pay  --> Success
 ///     Funded -- tell gateway about contract --> Funded

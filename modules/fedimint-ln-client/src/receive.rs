@@ -7,11 +7,14 @@ use fedimint_core::encoding::{Decodable, Encodable};
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
-///     CreateAndSubmitInvoice -- await transaction timeout --> Aborted
-///     CreateAndSubmitInvoice -- await decryption error --> CreateAndSubmitInvoice
-///     CreateAndSubmitInvoice -- await invoice confirmation --> ConfirmedInvoice
-///     ConfirmedInvoice -- await claim transaction acceptance  --> Paid
+///     CreateAndSubmitOffer -- await transaction timeout --> Aborted
+///     CreateAndSubmitOffer -- await invoice confirmation --> ConfirmedInvoice
+///     ConfirmedInvoice -- await claim transaction acceptance  --> Funded
 ///     ConfirmedInvoice -- await claim transaction timeout --> Aborted
+///     Funded -- await preimage decryption --> Preimage
+///     Funded -- await preimage decryption failure --> Aborted
+///     Preimage -- claim funds --> Paid
+///     Preimage -- claim funds failure --> Aborted
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum LnReceiveStates {}
