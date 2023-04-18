@@ -588,6 +588,9 @@
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
 <a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
 </pre><pre class="rust"><code><span class="doccomment">/// This tool assumes that `scripts/build.sh` has been sourced in the
 /// environment which calls it
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -686,7 +689,7 @@
 
 <span class="doccomment">/// Save PID to a $FM_PID_FILE which `kill_fedimint_processes` shell script
 /// reads from and kills every PID it finds on EXIT
-</span><span class="kw">async fn </span>kill_on_exit(process: <span class="kw-2">&amp;</span>Child) -&gt; anyhow::Result&lt;()&gt; {
+</span><span class="kw">async fn </span>kill_on_exit(name: <span class="kw-2">&amp;</span>str, process: <span class="kw-2">&amp;</span>Child) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>pid_file = env::var(<span class="string">&quot;FM_PID_FILE&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>file = OpenOptions::new()
         .write(<span class="bool-val">true</span>)
@@ -702,6 +705,9 @@
         process.id().ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;PID missing&quot;</span>))<span class="question-mark">?
     </span>)<span class="question-mark">?</span>;
     file.write_all(<span class="kw-2">&amp;</span>buf).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// TODO: temporarily here, chasing shutdown hang
+    </span><span class="macro">info!</span>(pid = process.id(), name, <span class="string">&quot;Process pid added to FM_PID_FILE&quot;</span>);
 
     <span class="prelude-val">Ok</span>(())
 }
@@ -747,7 +753,7 @@
     </span><span class="kw">let </span><span class="kw-2">mut </span>bitcoind = Command::new(<span class="string">&quot;bitcoind&quot;</span>)
         .arg(<span class="macro">format!</span>(<span class="string">&quot;-datadir={btc_dir}&quot;</span>))
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>bitcoind).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;bitcoind&quot;</span>, <span class="kw-2">&amp;</span>bitcoind).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;bitcoind started&quot;</span>);
 
     <span class="comment">// create client
@@ -785,7 +791,7 @@
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--lightning-dir={cln_dir}&quot;</span>))
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--plugin={bin_dir}/gateway-cln-extension&quot;</span>))
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>lightningd).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;lightningd&quot;</span>, <span class="kw-2">&amp;</span>lightningd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;lightningd started&quot;</span>);
 
     lightningd.wait().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -803,7 +809,7 @@
     </span><span class="kw">let </span><span class="kw-2">mut </span>lnd = Command::new(<span class="string">&quot;lnd&quot;</span>)
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--lnddir={lnd_dir}&quot;</span>))
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;lnd&quot;</span>, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;lnd started&quot;</span>);
 
     lnd.wait().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -822,7 +828,7 @@
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--conf-dir={electrs_dir}&quot;</span>))
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--db-dir={electrs_dir}&quot;</span>))
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>electrs).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;electrs&quot;</span>, <span class="kw-2">&amp;</span>electrs).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;electrs started&quot;</span>);
 
     electrs.wait().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -847,7 +853,7 @@
         .arg(<span class="string">&quot;--http-addr=127.0.0.1:50002&quot;</span>)
         .arg(<span class="string">&quot;--monitoring-addr=127.0.0.1:50003&quot;</span>)
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>esplora).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;esplora&quot;</span>, <span class="kw-2">&amp;</span>esplora).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;esplora started&quot;</span>);
 
     esplora.wait().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -874,7 +880,7 @@
         .arg(data_dir)
         .envs(env_vars)
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>fedimintd).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;fedimintd&quot;</span>, <span class="kw-2">&amp;</span>fedimintd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;fedimintd started&quot;</span>);
 
     <span class="comment">// TODO: pass in optional task group to this function and select on it to wait
@@ -892,7 +898,7 @@
     </span><span class="kw">let </span><span class="kw-2">mut </span>gatewayd = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/gatewayd&quot;</span>))
         .arg(node.to_string())
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>gatewayd).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;gatewayd&quot;</span>, <span class="kw-2">&amp;</span>gatewayd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;gatewayd started&quot;</span>);
 
     <span class="comment">// TODO: connect_gateways
@@ -980,7 +986,7 @@
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--out-dir={out_dir}&quot;</span>))
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--name={server_name}&quot;</span>))
         .spawn()<span class="question-mark">?</span>;
-    kill_on_exit(<span class="kw-2">&amp;</span>task).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;distributedgen&quot;</span>, <span class="kw-2">&amp;</span>task).<span class="kw">await</span><span class="question-mark">?</span>;
 
     task.wait().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;TLS certs created for started {server_name}&quot;</span>);
@@ -1024,7 +1030,7 @@
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--certs={certs}&quot;</span>))
         .spawn()
         .unwrap_or_else(|e| <span class="macro">panic!</span>(<span class="string">&quot;DKG failed for for {server_name} {e:?}&quot;</span>));
-    kill_on_exit(<span class="kw-2">&amp;</span>task).<span class="kw">await</span><span class="question-mark">?</span>;
+    kill_on_exit(<span class="string">&quot;distributedgen&quot;</span>, <span class="kw-2">&amp;</span>task).<span class="kw">await</span><span class="question-mark">?</span>;
 
     task.wait().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;DKG created for started {server_name}&quot;</span>);
