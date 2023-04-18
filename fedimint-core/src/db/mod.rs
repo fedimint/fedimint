@@ -723,6 +723,28 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
             })
     }
 
+    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
+    pub async fn find_by_prefix_sorted_descending<KP>(
+        &mut self,
+        key_prefix: &KP,
+    ) -> impl Stream<
+        Item = (
+            KP::Record,
+            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+        ),
+    > + '_
+    where
+        KP: DatabaseLookup,
+        KP::Record: DatabaseKey,
+    {
+        find_by_prefix_sorted_descending(
+            self.isolated_tx.as_mut(),
+            self.decoders.clone(),
+            key_prefix,
+        )
+        .await
+    }
+
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
     pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
@@ -1109,22 +1131,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         KP: DatabaseLookup,
         KP::Record: DatabaseKey,
     {
-        debug!("find by prefix sorted descending");
-        let decoders = self.decoders.clone();
-        let prefix_bytes = key_prefix.to_bytes();
-        self.tx
-            .raw_find_by_prefix_sorted_descending(&prefix_bytes)
-            .await
-            .expect("Error doing prefix search in database")
-            .map(move |(key_bytes, value_bytes)| {
-                let key = KP::Record::from_bytes(&key_bytes, &decoders)
-                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                    .expect("Unrecoverable error reading DatabaseKey");
-                let value = decode_value(&value_bytes, &decoders)
-                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                    .expect("Unrecoverable decoding DatabaseValue");
-                (key, value)
-            })
+        find_by_prefix_sorted_descending(self.tx.as_mut(), self.decoders.clone(), key_prefix).await
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
@@ -2251,6 +2258,37 @@ mod test_utils {
             AutocommitError::ClosureError { .. } => panic!("Closure did not return error"),
         }
     }
+}
+
+pub async fn find_by_prefix_sorted_descending<'r, 'inner, KP>(
+    tx: &'r mut dyn ISingleUseDatabaseTransaction<'inner>,
+    decoders: ModuleDecoderRegistry,
+    key_prefix: &KP,
+) -> impl Stream<
+    Item = (
+        KP::Record,
+        <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+    ),
+> + 'r
+where
+    'inner: 'r,
+    KP: DatabaseLookup,
+    KP::Record: DatabaseKey,
+{
+    debug!("find by prefix sorted descending");
+    let prefix_bytes = key_prefix.to_bytes();
+    tx.raw_find_by_prefix_sorted_descending(&prefix_bytes)
+        .await
+        .expect("Error doing prefix search in database")
+        .map(move |(key_bytes, value_bytes)| {
+            let key = KP::Record::from_bytes(&key_bytes, &decoders)
+                .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                .expect("Unrecoverable error reading DatabaseKey");
+            let value = decode_value(&value_bytes, &decoders)
+                .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                .expect("Unrecoverable decoding DatabaseValue");
+            (key, value)
+        })
 }
 
 #[cfg(test)]
