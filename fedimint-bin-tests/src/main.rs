@@ -965,6 +965,82 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     Ok(())
 }
 
+async fn upgrade_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        mut fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    let data_dir = env::var("FM_DATA_DIR")?;
+
+    fed.await_block_sync().await?;
+
+    info!("### Signal upgrade peer0");
+    cmd!(
+        fed,
+        "signal-upgrade",
+        "--salt-path={data_dir}/server-0/private.salt",
+        "--our-id=0"
+    )
+    .env("FM_PASSWORD", "pass0")
+    .run()
+    .await?;
+
+    info!("### Signal upgrade peer1");
+    cmd!(
+        fed,
+        "signal-upgrade",
+        "--salt-path={data_dir}/server-1/private.salt",
+        "--our-id=1"
+    )
+    .env("FM_PASSWORD", "pass1")
+    .run()
+    .await?;
+
+    bitcoind.mine_blocks(1).await?;
+    fed.await_block_sync().await?;
+
+    let epoch_count = cmd!(fed, "epoch-count").out_json().await?["count"]
+        .as_u64()
+        .unwrap();
+    let upgrade_epoch = epoch_count + 1;
+
+    info!("### Signal upgrade peer2");
+    cmd!(
+        &fed,
+        "signal-upgrade",
+        "--salt-path={data_dir}/server-2/private.salt",
+        "--our-id=2"
+    )
+    .env("FM_PASSWORD", "pass2")
+    .run()
+    .await?;
+
+    info!("### Wait for server shutdowns");
+    fed.await_server_shutdown(0).await?;
+    fed.await_server_shutdown(1).await?;
+    fed.await_server_shutdown(2).await?;
+    fed.await_server_shutdown(3).await?;
+
+    info!("### Restart federation");
+    let fed = Federation::new(process_mgr, bitcoind.clone(), 0..4, Some(upgrade_epoch)).await?;
+
+    info!("### Federation started");
+
+    bitcoind.mine_blocks(1).await?;
+    fed.await_block_sync().await?;
+    fed.await_all_peers().await?;
+
+    Ok(())
+}
+
 struct DevFed {
     bitcoind: Bitcoind,
     cln: Lightningd,
@@ -999,7 +1075,7 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
         async {
             run_dkg(task_group, 4).await?;
             info!("dkg done");
-            Federation::new(process_mgr, bitcoind.clone(), 0..4).await
+            Federation::new(process_mgr, bitcoind.clone(), 0..4, None).await
         },
     )?;
     info!("federation and gateways started");
@@ -1099,6 +1175,7 @@ enum Cmd {
     Tmuxinator,
     LatencyTests,
     ReconnectTest,
+    UpgradeTest,
     CliTests,
 }
 
@@ -1125,6 +1202,10 @@ async fn main() -> Result<()> {
         Cmd::ReconnectTest => {
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
+        }
+        Cmd::UpgradeTest => {
+            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            upgrade_test(dev_fed, &process_mgr).await?;
         }
         Cmd::CliTests => {
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;

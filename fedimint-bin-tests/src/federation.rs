@@ -54,10 +54,14 @@ impl Federation {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         ids: Range<usize>,
+        upgrade_epoch: Option<u64>,
     ) -> Result<Self> {
         let mut members = BTreeMap::new();
         for id in ids {
-            members.insert(id, Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
+            members.insert(
+                id,
+                Fedimintd::new(process_mgr, bitcoind.clone(), id, upgrade_epoch).await?,
+            );
         }
 
         let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
@@ -88,7 +92,7 @@ impl Federation {
         }
         self.members.insert(
             peer_id,
-            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer_id).await?,
+            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer_id, None).await?,
         );
         Ok(())
     }
@@ -98,6 +102,14 @@ impl Federation {
             return Err(anyhow!("fedimintd-{} does not exist", peer_id));
         };
         fedimintd.kill().await?;
+        Ok(())
+    }
+
+    pub async fn await_server_shutdown(&mut self, peer_id: usize) -> Result<()> {
+        let Some((_, fedimintd)) = self.members.remove_entry(&peer_id) else {
+            return Err(anyhow!("fedimintd-{} does not exist", peer_id));
+        };
+        fedimintd.await_shutdown().await?;
         Ok(())
     }
 
@@ -229,6 +241,7 @@ impl Fedimintd {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         peer_id: usize,
+        upgrade_epoch: Option<u64>,
     ) -> Result<Self> {
         let bin_dir = env::var("FM_BIN_DIR")?;
         let cfg_dir = env::var("FM_DATA_DIR")?;
@@ -245,6 +258,11 @@ impl Fedimintd {
         )
         .envs(env_vars);
 
+        let cmd = match upgrade_epoch {
+            Some(epoch) => cmd.env("FM_UPGRADE_EPOCH", epoch.to_string()),
+            None => cmd,
+        };
+
         info!("fedimintd-{peer_id} started");
         let process = process_mgr
             .spawn_daemon(&format!("fedimintd-{peer_id}"), cmd)
@@ -259,6 +277,11 @@ impl Fedimintd {
 
     pub async fn kill(self) -> Result<()> {
         self.process.kill().await?;
+        Ok(())
+    }
+
+    pub async fn await_shutdown(self) -> Result<()> {
+        self.process.await_shutdown().await?;
         Ok(())
     }
 }

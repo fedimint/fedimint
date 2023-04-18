@@ -1,6 +1,6 @@
 use std::ffi::OsStr;
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
@@ -24,16 +24,27 @@ pub struct ProcessHandle(Arc<ProcessHandleInner>);
 
 impl ProcessHandle {
     pub async fn kill(self) -> Result<()> {
-        let arc_process_handle_inner = self.0;
-        let mut process_handle_inner = match Arc::try_unwrap(arc_process_handle_inner) {
-            Ok(process_handler_inner) => process_handler_inner,
-            Err(_) => return Err(anyhow!("Cannot kill process because of clones")),
-        };
+        let mut process_handle_inner = self.get_inner()?;
         let mut child = std::mem::take(&mut process_handle_inner.child).unwrap();
         info!("killing {}", process_handle_inner.name);
         kill(&child);
         child.wait().await?;
         Ok(())
+    }
+
+    pub async fn await_shutdown(self) -> Result<()> {
+        let mut process_handle_inner = self.get_inner()?;
+        let mut child = std::mem::take(&mut process_handle_inner.child).unwrap();
+        child.wait().await?;
+        Ok(())
+    }
+
+    pub fn get_inner(self) -> Result<ProcessHandleInner> {
+        let arc_process_handle_inner = self.0;
+        match Arc::try_unwrap(arc_process_handle_inner) {
+            Ok(process_handler_inner) => Ok(process_handler_inner),
+            Err(_) => bail!("Cannot kill process because of clones"),
+        }
     }
 }
 
