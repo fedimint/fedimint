@@ -265,7 +265,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize, Clone)]
 pub struct TieredSummary(Tiered<usize>);
 
 impl TieredSummary {
