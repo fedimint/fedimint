@@ -1,11 +1,10 @@
+use std::any::Any;
 use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use fedimint_core::core::{
-    Decoder, DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId,
-};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -13,7 +12,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
 
-use crate::sm::{Context, DynContext, DynState, State};
+use crate::sm::{Context, DynContext, DynState, OperationId, State};
+use crate::transaction::{ClientInput, ClientOutput};
 use crate::DynGlobalClientContext;
 
 pub mod gen;
@@ -68,6 +68,8 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 /// Type-erased version of [`ClientModule`]
 #[apply(async_trait_maybe_send!)]
 pub trait IClientModule: Debug {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn std::any::Any));
+
     fn decoder(&self) -> Decoder;
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
@@ -87,6 +89,10 @@ impl<T> IClientModule for T
 where
     T: ClientModule,
 {
+    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
+        self
+    }
+
     fn decoder(&self) -> Decoder {
         T::decoder()
     }
@@ -159,13 +165,10 @@ pub trait PrimaryClientModule: ClientModule {
     /// to create the requested input.
     async fn create_sufficient_input(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<(
-        Vec<KeyPair>,
-        <Self::Common as ModuleCommon>::Input,
-        StateGenerator<Self::States>,
-    )>;
+    ) -> anyhow::Result<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>;
 
     /// Creates an output of **exactly** `amount` that will pay into the
     /// holdings managed by the module.
@@ -178,12 +181,10 @@ pub trait PrimaryClientModule: ClientModule {
     ///   of calling `create_change_output` and have to be injected later.
     async fn create_exact_output(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        operation_id: OperationId,
         amount: Amount,
-    ) -> (
-        <Self::Common as ModuleCommon>::Output,
-        StateGenerator<Self::States>,
-    );
+    ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>;
 }
 
 /// Type-erased version of [`PrimaryClientModule`]
@@ -193,19 +194,17 @@ pub trait IPrimaryClientModule: IClientModule {
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<(
-        Vec<KeyPair>,
-        DynInput,
-        StateGenerator<DynState<DynGlobalClientContext>>,
-    )>;
+    ) -> anyhow::Result<ClientInput>;
 
     async fn create_exact_output(
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
         amount: Amount,
-    ) -> (DynOutput, StateGenerator<DynState<DynGlobalClientContext>>);
+    ) -> ClientOutput;
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -219,51 +218,39 @@ where
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<(
-        Vec<KeyPair>,
-        DynInput,
-        StateGenerator<DynState<DynGlobalClientContext>>,
-    )> {
-        let (keys, input, state_gen) = T::create_sufficient_input(self, dbtx, min_amount).await?;
-        let dyn_input = DynInput::from_typed(module_instance, input);
-        let dyn_states = state_gen_to_dyn(state_gen, module_instance);
-
-        Ok((keys, dyn_input, dyn_states))
+    ) -> anyhow::Result<ClientInput> {
+        Ok(T::create_sufficient_input(
+            self,
+            &mut dbtx.with_module_prefix(module_instance),
+            operation_id,
+            min_amount,
+        )
+        .await?
+        .into_dyn(module_instance))
     }
 
     async fn create_exact_output(
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
         amount: Amount,
-    ) -> (DynOutput, StateGenerator<DynState<DynGlobalClientContext>>) {
-        let (output, state_gen) = T::create_exact_output(self, dbtx, amount).await;
-        let dyn_output = DynOutput::from_typed(module_instance, output);
-        let dyn_states = state_gen_to_dyn(state_gen, module_instance);
-
-        (dyn_output, dyn_states)
+    ) -> ClientOutput {
+        T::create_exact_output(
+            self,
+            &mut dbtx.with_module_prefix(module_instance),
+            operation_id,
+            amount,
+        )
+        .await
+        .into_dyn(module_instance)
     }
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static)) {
         self
     }
-}
-
-fn state_gen_to_dyn<S>(
-    state_gen: StateGenerator<S>,
-    module_instance: ModuleInstanceId,
-) -> StateGenerator<DynState<DynGlobalClientContext>>
-where
-    S: State<GlobalContext = DynGlobalClientContext>,
-{
-    Box::new(move |txid, index| {
-        let states = state_gen(txid, index);
-        states
-            .into_iter()
-            .map(|state| DynState::from_typed(module_instance, state))
-            .collect()
-    })
 }
 
 dyn_newtype_define!(

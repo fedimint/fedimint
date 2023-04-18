@@ -17,8 +17,9 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
+use crate::sm::notifier::Notifier;
 use crate::sm::state::{DynContext, DynState};
-use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
+use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId, State, StateTransition};
 
 /// After how many attempts a DB transaction is aborted with an error
 const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
@@ -51,6 +52,7 @@ struct ExecutorInner<GC> {
     db: Database,
     context: Mutex<Option<GC>>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
+    notifier: Notifier<GC>,
 }
 
 /// Builder to which module clients can be attached and used to build an
@@ -116,11 +118,11 @@ where
             }
 
             let is_active_state = dbtx
-                .get_value(&ActiveStateKey::<GC>(state.clone()))
+                .get_value(&ActiveStateKey::from_state(state.clone()))
                 .await
                 .is_some();
             let is_inactive_state = dbtx
-                .get_value(&InactiveStateKey::<GC>(state.clone()))
+                .get_value(&InactiveStateKey::from_state(state.clone()))
                 .await
                 .is_some();
 
@@ -138,7 +140,7 @@ where
                 bail!("State is already terminal, adding it to the executor doesn't make sense.")
             }
 
-            dbtx.insert_entry(&ActiveStateKey(state), &ActiveState::new())
+            dbtx.insert_entry(&ActiveStateKey::from_state(state), &ActiveState::new())
                 .await;
         }
 
@@ -185,12 +187,15 @@ where
     pub async fn await_inactive_state(&self, state: DynState<GC>) -> InactiveState {
         self.inner
             .db
-            .wait_key_exists(&InactiveStateKey(state))
+            .wait_key_exists(&InactiveStateKey::from_state(state))
             .await
     }
 
     pub async fn await_active_state(&self, state: DynState<GC>) -> ActiveState {
-        self.inner.db.wait_key_exists(&ActiveStateKey(state)).await
+        self.inner
+            .db
+            .wait_key_exists(&ActiveStateKey::from_state(state))
+            .await
     }
 
     /// Starts the background thread that runs the state machines. This cannot
@@ -224,6 +229,12 @@ where
                 };
             })
             .await;
+    }
+
+    /// Returns a reference to the [`Notifier`] that can be used to subscribe to
+    /// state transitions
+    pub fn notifier(&self) -> &Notifier<GC> {
+        &self.inner.notifier
     }
 }
 
@@ -286,7 +297,8 @@ where
         let ((transition_outcome, state, transition_fn, meta), _, _) =
             select_all(transitions).await;
 
-        self.db
+        let new_state = self
+            .db
             .autocommit(
                 |dbtx| {
                     let state = state.clone();
@@ -299,9 +311,13 @@ where
                             state.clone(),
                         )
                         .await;
-                        dbtx.remove_entry(&ActiveStateKey(state.clone())).await;
-                        dbtx.insert_entry(&InactiveStateKey(state.clone()), &meta.into_inactive())
+                        dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
                             .await;
+                        dbtx.insert_entry(
+                            &InactiveStateKey::from_state(state.clone()),
+                            &meta.into_inactive(),
+                        )
+                        .await;
 
                         let context = &self
                             .module_contexts
@@ -312,16 +328,19 @@ where
                             // TODO: log state machine id or something
                             debug!("State machine reached terminal state");
                             dbtx.insert_entry(
-                                &InactiveStateKey(new_state),
+                                &InactiveStateKey::from_state(new_state.clone()),
                                 &ActiveState::new().into_inactive(),
                             )
                             .await;
                         } else {
-                            dbtx.insert_entry(&ActiveStateKey(new_state), &ActiveState::new())
-                                .await;
+                            dbtx.insert_entry(
+                                &ActiveStateKey::from_state(new_state.clone()),
+                                &ActiveState::new(),
+                            )
+                            .await;
                         }
 
-                        Ok(())
+                        Ok(new_state)
                     })
                 },
                 Some(100),
@@ -335,6 +354,8 @@ where
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 
+        self.notifier.notify(new_state);
+
         Ok(())
     }
 
@@ -344,7 +365,7 @@ where
             .await
             .find_by_prefix(&ActiveStateKeyPrefix::<GC>::new())
             .await
-            .map(|(state, meta)| (state.0, meta))
+            .map(|(state, meta)| (state.state, meta))
             .collect::<Vec<_>>()
             .await
     }
@@ -355,7 +376,7 @@ where
             .await
             .find_by_prefix(&InactiveStateKeyPrefix::new())
             .await
-            .map(|(state, meta)| (state.0, meta))
+            .map(|(state, meta)| (state.state, meta))
             .collect::<Vec<_>>()
             .await
     }
@@ -402,7 +423,7 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build<GC>(self, db: Database) -> Executor<GC>
+    pub async fn build<GC>(self, db: Database, notifier: Notifier<GC>) -> Executor<GC>
     where
         GC: GlobalContext,
     {
@@ -410,6 +431,7 @@ impl ExecutorBuilder {
             db,
             context: Mutex::new(None),
             module_contexts: self.module_contexts,
+            notifier,
         });
 
         debug!(
@@ -422,11 +444,27 @@ impl ExecutorBuilder {
 
 /// A state that is able to make progress eventually
 #[derive(Debug)]
-pub struct ActiveStateKey<GC>(pub DynState<GC>);
+pub struct ActiveStateKey<GC> {
+    // TODO: remove redundant operation id from state trait
+    pub operation_id: OperationId,
+    pub state: DynState<GC>,
+}
+
+impl<GC> ActiveStateKey<GC> {
+    pub(crate) fn from_state(state: DynState<GC>) -> ActiveStateKey<GC> {
+        ActiveStateKey {
+            operation_id: state.operation_id(),
+            state,
+        }
+    }
+}
 
 impl<GC> Encodable for ActiveStateKey<GC> {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.0.consensus_encode(writer)
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += self.state.consensus_encode(writer)?;
+        Ok(len)
     }
 }
 
@@ -438,8 +476,37 @@ where
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(ActiveStateKey(DynState::consensus_decode(reader, modules)?))
+        let operation_id = OperationId::consensus_decode(reader, modules)?;
+        let state = DynState::consensus_decode(reader, modules)?;
+
+        Ok(ActiveStateKey {
+            operation_id,
+            state,
+        })
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct ActiveModuleOperationStateKeyPrefix<GC> {
+    pub operation_id: OperationId,
+    pub module_instance: ModuleInstanceId,
+    pub _pd: PhantomData<GC>,
+}
+
+impl<GC> Encodable for ActiveModuleOperationStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += self.module_instance.consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl<GC> ::fedimint_core::db::DatabaseLookup for ActiveModuleOperationStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = ActiveStateKey<GC>;
 }
 
 #[derive(Debug)]
@@ -480,6 +547,7 @@ where
 {
     type Record = ActiveStateKey<GC>;
 }
+
 impl ActiveState {
     fn new() -> ActiveState {
         ActiveState {
@@ -497,14 +565,30 @@ impl ActiveState {
 
 /// A past or final state of a state machine
 #[derive(Debug, Clone)]
-pub struct InactiveStateKey<GC>(pub DynState<GC>);
+pub struct InactiveStateKey<GC> {
+    // TODO: remove redundant operation id from state trait
+    pub operation_id: OperationId,
+    pub state: DynState<GC>,
+}
+
+impl<GC> InactiveStateKey<GC> {
+    pub(crate) fn from_state(state: DynState<GC>) -> InactiveStateKey<GC> {
+        InactiveStateKey {
+            operation_id: state.operation_id(),
+            state,
+        }
+    }
+}
 
 impl<GC> Encodable for InactiveStateKey<GC>
 where
     GC: GlobalContext,
 {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.0.consensus_encode(writer)
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += self.state.consensus_encode(writer)?;
+        Ok(len)
     }
 }
 
@@ -516,10 +600,37 @@ where
         reader: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(InactiveStateKey(DynState::consensus_decode(
-            reader, modules,
-        )?))
+        let operation_id = OperationId::consensus_decode(reader, modules)?;
+        let state = DynState::consensus_decode(reader, modules)?;
+
+        Ok(InactiveStateKey {
+            operation_id,
+            state,
+        })
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct InactiveModuleOperationStateKeyPrefix<GC> {
+    pub operation_id: OperationId,
+    pub module_instance: ModuleInstanceId,
+    pub _pd: PhantomData<GC>,
+}
+
+impl<GC> Encodable for InactiveModuleOperationStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += self.operation_id.consensus_encode(writer)?;
+        len += self.module_instance.consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl<GC> ::fedimint_core::db::DatabaseLookup for InactiveModuleOperationStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = InactiveStateKey<GC>;
 }
 
 #[derive(Debug, Clone)]
@@ -577,7 +688,7 @@ mod tests {
     use tracing::{info, trace};
 
     use crate::sm::state::{Context, DynContext, DynState};
-    use crate::sm::{Executor, OperationId, State, StateTransition};
+    use crate::sm::{Executor, Notifier, OperationId, State, StateTransition};
 
     #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     enum MockStateMachine {
@@ -695,7 +806,9 @@ mod tests {
                 broadcast: broadcast.clone(),
             },
         );
-        let executor = executor_builder.build(db.clone()).await;
+        let executor = executor_builder
+            .build(db.clone(), Notifier::new(db.clone()))
+            .await;
         executor.start_executor(tg, ()).await;
 
         info!("Initialized test executor");

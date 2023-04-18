@@ -1,3 +1,5 @@
+mod ng;
+
 use core::fmt;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -11,9 +13,12 @@ use std::{ffi, fs, result};
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
+use fedimint_client::derivable_secret::ChildId;
+use fedimint_client::get_client_root_secret;
 use fedimint_client::module::gen::{
-    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt,
+    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt, IClientModuleGen,
 };
+use fedimint_client::sm::Notifier;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -320,9 +325,14 @@ impl Opts {
     ) -> ModuleDecoderRegistry {
         ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().filter_map(
             |(id, module_cfg)| {
-                module_gens
-                    .get(module_cfg.kind())
-                    .map(|module_gen| (id, module_gen.as_ref().decoder()))
+                module_gens.get(module_cfg.kind()).map(|module_gen| {
+                    (
+                        id,
+                        IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(
+                            module_gen,
+                        )),
+                    )
+                })
             },
         ))
     }
@@ -514,6 +524,9 @@ enum Command {
         #[clap(long)]
         arg: Vec<ffi::OsString>,
     },
+
+    #[clap(subcommand)]
+    Ng(ng::ClientNg),
 }
 
 #[derive(Clone)]
@@ -991,6 +1004,8 @@ impl FedimintCli {
                 let cfg = cli.load_config()?;
                 let decoders = cli.load_decoders(&cfg, &self.module_gens);
                 let db = cli.load_db(&decoders)?;
+                let root_secret = get_client_root_secret(&db).await;
+
                 let (id, module_cfg) = match id {
                     ModuleSelector::Id(id) => (
                         id,
@@ -1008,13 +1023,27 @@ impl FedimintCli {
                     self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
 
                 let module = module_gen
-                    .init(module_cfg, db, id)
+                    .init(
+                        module_cfg,
+                        db.clone(),
+                        id,
+                        root_secret.child_key(ChildId(id as u64)),
+                        Notifier::new(db),
+                    )
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;
 
                 Ok(CliOutput::Raw(
                     module
                         .handle_cli_command(&arg)
+                        .await
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                ))
+            }
+            Command::Ng(command) => {
+                let cfg = cli.load_config()?;
+                Ok(CliOutput::Raw(
+                    ng::handle_ng_command(command, cfg.0, cli.load_rocks_db().unwrap())
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))

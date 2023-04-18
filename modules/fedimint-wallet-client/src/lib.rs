@@ -1,6 +1,7 @@
+use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
-use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
+use fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
@@ -27,8 +28,10 @@ impl ClientModuleGen for WalletClientGen {
         _cfg: Self::Config,
         _db: Database,
         _instance_id: ModuleInstanceId,
+        _module_root_secret: DerivableSecret,
+        _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
-        unimplemented!()
+        Ok(WalletClientModule {})
     }
 }
 
@@ -40,9 +43,7 @@ impl ClientModule for WalletClientModule {
     type ModuleStateMachineContext = ();
     type States = WalletClientStates;
 
-    fn context(&self) -> Self::ModuleStateMachineContext {
-        unimplemented!()
-    }
+    fn context(&self) -> Self::ModuleStateMachineContext {}
 
     fn input_amount(
         &self,

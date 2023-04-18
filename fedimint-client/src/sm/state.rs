@@ -297,7 +297,7 @@ where
         modules: &::fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
         let key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
-        modules.get_expect(key).decode(reader, key)
+        modules.get_expect(key).decode(reader, key, modules)
     }
 }
 

@@ -1,4 +1,4 @@
-use fedimint_core::core::{DynInput, DynOutput, KeyPair};
+use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::Amount;
 use itertools::multiunzip;
@@ -9,15 +9,46 @@ use crate::module::StateGenerator;
 use crate::sm::DynState;
 use crate::DynGlobalClientContext;
 
-pub struct ClientInput {
-    pub input: DynInput,
+pub struct ClientInput<I = DynInput, S = DynState<DynGlobalClientContext>> {
+    pub input: I,
     pub keys: Vec<KeyPair>,
-    pub state_machines: StateGenerator<DynState<DynGlobalClientContext>>,
+    pub state_machines: StateGenerator<S>,
 }
 
-pub struct ClientOutput {
-    pub output: DynOutput,
-    pub state_machines: StateGenerator<DynState<DynGlobalClientContext>>,
+impl<I, S> IntoDynInstance for ClientInput<I, S>
+where
+    I: IntoDynInstance<DynType = DynInput> + 'static,
+    S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+{
+    type DynType = ClientInput;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientInput {
+        ClientInput {
+            input: self.input.into_dyn(module_instance_id),
+            keys: self.keys,
+            state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
+        }
+    }
+}
+
+pub struct ClientOutput<O = DynOutput, S = DynState<DynGlobalClientContext>> {
+    pub output: O,
+    pub state_machines: StateGenerator<S>,
+}
+
+impl<O, S> IntoDynInstance for ClientOutput<O, S>
+where
+    O: IntoDynInstance<DynType = DynOutput> + 'static,
+    S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+{
+    type DynType = ClientOutput;
+
+    fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientOutput {
+        ClientOutput {
+            output: self.output.into_dyn(module_instance_id),
+            state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -31,12 +62,14 @@ impl TransactionBuilder {
         Self::default()
     }
 
-    pub fn with_input(&mut self, input: ClientInput) {
-        self.inputs.push(input)
+    pub fn with_input(mut self, input: ClientInput) -> Self {
+        self.inputs.push(input);
+        self
     }
 
-    pub fn with_output(&mut self, output: ClientOutput) {
-        self.outputs.push(output)
+    pub fn with_output(mut self, output: ClientOutput) -> Self {
+        self.outputs.push(output);
+        self
     }
 
     pub fn build<C, R: RngCore + CryptoRng>(
@@ -92,4 +125,20 @@ pub(crate) enum TransactionBuilderBalance {
     Underfunded(Amount),
     Balanced,
     Overfunded(Amount),
+}
+
+fn state_gen_to_dyn<S>(
+    state_gen: StateGenerator<S>,
+    module_instance: ModuleInstanceId,
+) -> StateGenerator<DynState<DynGlobalClientContext>>
+where
+    S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+{
+    Box::new(move |txid, index| {
+        let states = state_gen(txid, index);
+        states
+            .into_iter()
+            .map(|state| state.into_dyn(module_instance))
+            .collect()
+    })
 }

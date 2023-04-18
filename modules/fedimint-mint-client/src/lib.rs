@@ -1,36 +1,43 @@
 mod db;
-mod issuance;
-mod redemption;
+mod input;
+mod output;
 
 use std::iter::once;
 
+use anyhow::anyhow;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{ClientModule, StateGenerator};
+use fedimint_client::module::{ClientModule, DynPrimaryClientModule, PrimaryClientModule};
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, OperationId, State, StateTransition};
+use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
+use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredSummary};
+use fedimint_core::util::NextOrPending;
+use fedimint_core::{
+    apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
+};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
-use futures::StreamExt;
+use futures::{pin_mut, StreamExt};
 use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tbs::AggregatePublicKey;
 use tracing::debug;
 
 use crate::db::{NextECashNoteIndexKey, NoteKeyPrefix};
-use crate::issuance::{
-    MintIssuanceCommon, MintIssuanceStateMachine, MintIssuanceStates, MintIssuanceStatesCreated,
-    NoteIssuanceRequest, NoteIssuanceRequests,
+use crate::input::{
+    MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
-use crate::redemption::MintRedemptionStateMachine;
+use crate::output::{
+    MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
+    MultiNoteIssuanceRequest, NoteIssuanceRequest,
+};
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
@@ -48,20 +55,33 @@ impl ClientModuleGen for MintClientGen {
 
     async fn init(
         &self,
-        _cfg: Self::Config,
+        cfg: Self::Config,
         _db: Database,
-        _instance_id: ModuleInstanceId,
+        instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
+        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
-        unimplemented!()
-        /*
-        // FIXME: give module secret to module on init
         Ok(MintClientModule {
             instance_id,
             cfg,
-            secret: ,
+            secret: module_root_secret,
             secp: Secp256k1::new(),
+            notifier,
         })
-         */
+    }
+
+    async fn init_primary(
+        &self,
+        cfg: Self::Config,
+        db: Database,
+        instance_id: ModuleInstanceId,
+        module_root_secret: DerivableSecret,
+        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+    ) -> anyhow::Result<DynPrimaryClientModule> {
+        Ok(self
+            .init(cfg, db, instance_id, module_root_secret, notifier)
+            .await?
+            .into())
     }
 }
 
@@ -71,6 +91,7 @@ pub struct MintClientModule {
     cfg: MintClientConfig,
     secret: DerivableSecret,
     secp: Secp256k1<All>,
+    notifier: ModuleNotifier<DynGlobalClientContext, MintClientStateMachines>,
 }
 
 // TODO: wrap in Arc
@@ -117,20 +138,53 @@ impl ClientModule for MintClientModule {
     }
 }
 
+#[apply(async_trait_maybe_send)]
+impl PrimaryClientModule for MintClientModule {
+    async fn create_sufficient_input(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        operation_id: OperationId,
+        min_amount: Amount,
+    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
+        self.create_input(dbtx, operation_id, min_amount).await
+    }
+
+    async fn create_exact_output(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        operation_id: OperationId,
+        amount: Amount,
+    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
+        // FIXME: don't hardcode notes per denomination
+        self.create_output(dbtx, operation_id, 2, amount).await
+    }
+}
+
 impl MintClientModule {
+    /// Returns the number of held e-cash notes per denomination
+    pub async fn get_wallet_summary(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> Tiered<usize> {
+        self.available_notes(dbtx).await.summary().iter().collect()
+    }
+
     // TODO: put "notes per denomination" default into cfg
-    pub async fn create_issuance(
+    /// Creates a mint output with exactly the given `amount`, issuing e-cash
+    /// notes such that the client holds `notes_per_denomination` notes of each
+    /// e-cash note denomination held.
+    pub async fn create_output(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         notes_per_denomination: u16,
         amount: Amount,
-    ) -> (MintOutput, StateGenerator<MintClientStateMachines>) {
+    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
         let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
             Vec::new();
         let denominations = TieredSummary::represent_amount(
             amount,
-            &self.available_notes_summary(dbtx).await,
+            &self.available_notes(dbtx).await.summary(), // TODO: create direct summary fn
             &self.cfg.tbs_pks,
             notes_per_denomination,
         );
@@ -140,21 +194,19 @@ impl MintClientModule {
                 amount_requests.push(((amt, request), (amt, blind_nonce)));
             }
         }
-        let (note_issuance, sig_req): (NoteIssuanceRequests, MintOutput) =
+        let (note_issuance, sig_req): (MultiNoteIssuanceRequest, MintOutput) =
             amount_requests.into_iter().unzip();
 
         let state_generator = Box::new(move |txid, out_idx| {
-            vec![MintClientStateMachines::Issuance(
-                MintIssuanceStateMachine {
-                    common: MintIssuanceCommon {
-                        operation_id,
-                        out_point: OutPoint { txid, out_idx },
-                    },
-                    state: MintIssuanceStates::Created(MintIssuanceStatesCreated {
-                        note_issuance: note_issuance.clone(),
-                    }),
+            vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                common: MintOutputCommon {
+                    operation_id,
+                    out_point: OutPoint { txid, out_idx },
                 },
-            )]
+                state: MintOutputStates::Created(MintOutputStatesCreated {
+                    note_issuance: note_issuance.clone(),
+                }),
+            })]
         });
 
         debug!(
@@ -164,22 +216,112 @@ impl MintClientModule {
             "Generated issuance request"
         );
 
-        (sig_req, state_generator)
+        ClientOutput {
+            output: sig_req,
+            state_machines: state_generator,
+        }
     }
 
-    async fn available_notes_summary(
+    /// Wait for the e-cash notes to be retrieved. If this is not possible
+    /// because another terminal state was reached an error describing the
+    /// failure is returned.
+    pub async fn await_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<()> {
+        let stream = self
+            .notifier
+            .subscribe(operation_id)
+            .await
+            .filter_map(|state| async move {
+                let MintClientStateMachines::Output(state) = state else { return None };
+
+                if state.common.out_point != out_point {
+                    return None;
+                }
+
+                match state.state {
+                    MintOutputStates::Succeeded(_) => Some(Ok(())),
+                    MintOutputStates::Aborted(_) => Some(Err(anyhow!("Transaction was rejected"))),
+                    MintOutputStates::Failed(failed) => Some(Err(anyhow!(
+                        "Failed to finalize transaction: {}",
+                        failed.error
+                    ))),
+                    _ => None,
+                }
+            });
+        pin_mut!(stream);
+
+        stream.next_or_pending().await
+    }
+
+    // FIXME: use lazy e-cash note loading implemented in #2183
+    /// Creates a mint input of at least `min_amount`.
+    pub async fn create_input(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> TieredSummary {
+        operation_id: OperationId,
+        min_amount: Amount,
+    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
+        let available_notes = self.available_notes(dbtx).await;
+        let spendable_selected_notes =
+            select_notes(available_notes, min_amount).ok_or(anyhow!("Not enough funds"))?;
+
+        self.create_input_from_notes(operation_id, spendable_selected_notes)
+            .await
+    }
+
+    /// Create a mint input from external, potentially untrusted notes
+    pub async fn create_input_from_notes(
+        &self,
+        operation_id: OperationId,
+        notes: TieredMulti<SpendableNote>,
+    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
+        if let Some((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
+            let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {return true;};
+            !note.note.verify(*mint_key)
+        }) {
+            return Err(anyhow!(
+                "Invalid note in input: amt={} note={:?}",
+                amt,
+                invalid_note
+            ));
+        }
+
+        let (spend_keys, selected_notes) = notes
+            .iter_items()
+            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note)))
+            .unzip();
+
+        let sm_gen = Box::new(move |txid, input_idx| {
+            vec![MintClientStateMachines::Input(MintInputStateMachine {
+                common: MintInputCommon {
+                    operation_id,
+                    txid,
+                    input_idx,
+                },
+                state: MintInputStates::Created(MintInputStateCreated {
+                    notes: notes.clone(),
+                }),
+            })]
+        });
+
+        Ok(ClientInput {
+            input: MintInput(selected_notes),
+            keys: spend_keys,
+            state_machines: sm_gen,
+        })
+    }
+
+    async fn available_notes(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> TieredMulti<SpendableNote> {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
-            .fold(
-                TieredSummary::default(),
-                |mut acc, (key, _note)| async move {
-                    acc.inc(key.amount, 1);
-                    acc
-                },
-            )
+            .map(|(key, spendable_note)| (key.amount, spendable_note))
+            .collect()
             .await
     }
 
@@ -235,10 +377,35 @@ impl MintClientModule {
     }
 }
 
+// TODO: remove once streaming selection is implemented
+pub fn select_notes<C: Clone>(notes: TieredMulti<C>, mut amount: Amount) -> Option<TieredMulti<C>> {
+    if amount > notes.total_amount() {
+        return None;
+    }
+
+    let mut selected = vec![];
+    let mut remaining = notes.total_amount();
+
+    for (note_amount, note) in notes.iter_items().rev() {
+        remaining -= note_amount;
+
+        if note_amount <= amount {
+            amount -= note_amount;
+            selected.push((note_amount, (*note).clone()))
+        } else if remaining < amount {
+            // we can't make exact change, so just use this note
+            selected.push((note_amount, (*note).clone()));
+            break;
+        }
+    }
+
+    Some(selected.into_iter().collect::<TieredMulti<C>>())
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum MintClientStateMachines {
-    Issuance(MintIssuanceStateMachine),
-    Redemption(MintRedemptionStateMachine),
+    Output(MintOutputStateMachine),
+    Input(MintInputStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -259,16 +426,16 @@ impl State for MintClientStateMachines {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self {
-            MintClientStateMachines::Issuance(issuance_state) => {
+            MintClientStateMachines::Output(issuance_state) => {
                 sm_enum_variant_translation!(
                     issuance_state.transitions(context, global_context),
-                    MintClientStateMachines::Issuance
+                    MintClientStateMachines::Output
                 )
             }
-            MintClientStateMachines::Redemption(redemption_state) => {
+            MintClientStateMachines::Input(redemption_state) => {
                 sm_enum_variant_translation!(
                     redemption_state.transitions(context, global_context),
-                    MintClientStateMachines::Redemption
+                    MintClientStateMachines::Input
                 )
             }
         }
@@ -276,10 +443,8 @@ impl State for MintClientStateMachines {
 
     fn operation_id(&self) -> OperationId {
         match self {
-            MintClientStateMachines::Issuance(issuance_state) => issuance_state.operation_id(),
-            MintClientStateMachines::Redemption(redemption_state) => {
-                redemption_state.operation_id()
-            }
+            MintClientStateMachines::Output(issuance_state) => issuance_state.operation_id(),
+            MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
         }
     }
 }

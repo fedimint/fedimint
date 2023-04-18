@@ -5,6 +5,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_mint_common::{BlindNonce, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note};
@@ -16,6 +17,12 @@ use tracing::error;
 
 use crate::db::NoteKey;
 use crate::{MintClientContext, SpendableNote};
+
+/// Child ID used to derive the spend key from a note's [`DerivableSecret`]
+const SPEND_KEY_CHILD_ID: ChildId = ChildId(0);
+
+/// Child ID used to derive the blinding key from a note's [`DerivableSecret`]
+const BLINDING_KEY_CHILD_ID: ChildId = ChildId(1);
 
 /// State machine managing the e-cash issuance process related to a mint output.
 ///
@@ -31,34 +38,35 @@ use crate::{MintClientContext, SpendableNote};
 ///     end
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub enum MintIssuanceStates {
+pub enum MintOutputStates {
     /// Issuance request was created, we are waiting for blind signatures
-    Created(MintIssuanceStatesCreated),
+    Created(MintOutputStatesCreated),
     /// The transaction containing the issuance was rejected, we can stop
-    /// looking for preimages
-    Aborted(MintIssuanceStatesAborted),
+    /// looking for decryption shares
+    Aborted(MintOutputStatesAborted),
+    // FIXME: handle offline federation failure mode more gracefully
     /// The transaction containing the issuance was accepted but an unexpected
     /// error occurred, this should never happen with a honest federation and
     /// bug-free code.
-    Failed(MintIssuanceStatesFailed),
+    Failed(MintOutputStatesFailed),
     /// The issuance was completed successfully and the e-cash notes added to
     /// our wallet
-    Succeeded(MintIssuanceStatesSucceeded),
+    Succeeded(MintOutputStatesSucceeded),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceCommon {
+pub struct MintOutputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) out_point: OutPoint,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStateMachine {
-    pub(crate) common: MintIssuanceCommon,
-    pub(crate) state: MintIssuanceStates,
+pub struct MintOutputStateMachine {
+    pub(crate) common: MintOutputCommon,
+    pub(crate) state: MintOutputStates,
 }
 
-impl State for MintIssuanceStateMachine {
+impl State for MintOutputStateMachine {
     type ModuleContext = MintClientContext;
     type GlobalContext = DynGlobalClientContext;
 
@@ -68,16 +76,16 @@ impl State for MintIssuanceStateMachine {
         global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
-            MintIssuanceStates::Created(created) => {
+            MintOutputStates::Created(created) => {
                 created.transitions(context, global_context, self.common)
             }
-            MintIssuanceStates::Aborted(_) => {
+            MintOutputStates::Aborted(_) => {
                 vec![]
             }
-            MintIssuanceStates::Failed(_) => {
+            MintOutputStates::Failed(_) => {
                 vec![]
             }
-            MintIssuanceStates::Succeeded(_) => {
+            MintOutputStates::Succeeded(_) => {
                 vec![]
             }
         }
@@ -88,34 +96,30 @@ impl State for MintIssuanceStateMachine {
     }
 }
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesCreated {
-    pub(crate) note_issuance: NoteIssuanceRequests,
+pub struct MintOutputStatesCreated {
+    pub(crate) note_issuance: MultiNoteIssuanceRequest,
 }
 
-impl MintIssuanceStatesCreated {
+impl MintOutputStatesCreated {
     fn transitions(
         &self,
         // TODO: make cheaper to clone (Arc?)
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
-        common: MintIssuanceCommon,
-    ) -> Vec<StateTransition<MintIssuanceStateMachine>> {
+        common: MintOutputCommon,
+    ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let mint_keys = context.mint_keys.clone();
         vec![
             // Check if transaction was rejected
             StateTransition::new(
-                Self::trigger_tx_rejected(global_context.clone(), common),
+                Self::await_tx_rejected(global_context.clone(), common),
                 |_dbtx, (), state| Box::pin(Self::transition_tx_rejected(state)),
             ),
             // Check for output outcome
             StateTransition::new(
-                Self::trigger_outcome_ready(
-                    global_context.clone(),
-                    common,
-                    context.decoders.clone(),
-                ),
+                Self::await_outcome_ready(global_context.clone(), common, context.decoders.clone()),
                 move |dbtx, bsigs, old_state| {
                     Box::pin(Self::transition_outcome_ready(
                         dbtx,
@@ -129,50 +133,53 @@ impl MintIssuanceStatesCreated {
         ]
     }
 
-    async fn trigger_tx_rejected(
-        global_context: DynGlobalClientContext,
-        common: MintIssuanceCommon,
-    ) {
+    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
         global_context
             .await_tx_rejected(common.operation_id, common.out_point.txid)
             .await;
     }
 
     async fn transition_tx_rejected<'a>(
-        old_state: MintIssuanceStateMachine,
-    ) -> MintIssuanceStateMachine {
-        assert!(matches!(old_state.state, MintIssuanceStates::Created(_)));
+        old_state: MintOutputStateMachine,
+    ) -> MintOutputStateMachine {
+        assert!(matches!(old_state.state, MintOutputStates::Created(_)));
 
-        MintIssuanceStateMachine {
+        MintOutputStateMachine {
             common: old_state.common,
-            state: MintIssuanceStates::Aborted(MintIssuanceStatesAborted),
+            state: MintOutputStates::Aborted(MintOutputStatesAborted),
         }
     }
 
-    async fn trigger_outcome_ready(
+    async fn await_outcome_ready(
         global_context: DynGlobalClientContext,
-        common: MintIssuanceCommon,
+        common: MintOutputCommon,
         decoders: ModuleDecoderRegistry,
     ) -> Result<MintOutputBlindSignatures, String> {
-        let outcome: MintOutputOutcome = global_context
-            .api()
-            .await_output_outcome(common.out_point, Duration::MAX, &decoders)
-            .await
-            .map_err(|e| e.to_string())?;
+        loop {
+            let outcome: MintOutputOutcome = global_context
+                .api()
+                .await_output_outcome(common.out_point, Duration::MAX, &decoders)
+                .await
+                .map_err(|e| e.to_string())?;
 
-        outcome
-            .0
-            .ok_or("await_output_outcome returned a non-final outcome".to_owned())
+            match outcome.0 {
+                Some(bsigs) => return Ok(bsigs),
+                None => {
+                    // FIXME: hack since we can't await outpoints yet?! may return non-final outcome
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
     }
 
     async fn transition_outcome_ready(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         bsig_res: Result<MintOutputBlindSignatures, String>,
-        old_state: MintIssuanceStateMachine,
+        old_state: MintOutputStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,
-    ) -> MintIssuanceStateMachine {
+    ) -> MintOutputStateMachine {
         let issuance = match old_state.state {
-            MintIssuanceStates::Created(created) => created.note_issuance,
+            MintOutputStates::Created(created) => created.note_issuance,
             _ => panic!("Unexpected prior state"),
         };
         let notes_res = bsig_res.and_then(|bsigs| {
@@ -201,34 +208,34 @@ impl MintIssuanceStatesCreated {
                         )
                     }
                 }
-                MintIssuanceStateMachine {
+                MintOutputStateMachine {
                     common: old_state.common,
-                    state: MintIssuanceStates::Succeeded(MintIssuanceStatesSucceeded {
+                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
                         amount: notes.total_amount(),
                     }),
                 }
             }
-            Err(error) => MintIssuanceStateMachine {
+            Err(error) => MintOutputStateMachine {
                 common: old_state.common,
-                state: MintIssuanceStates::Failed(MintIssuanceStatesFailed { error }),
+                state: MintOutputStates::Failed(MintOutputStatesFailed { error }),
             },
         }
     }
 }
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesAborted;
+pub struct MintOutputStatesAborted;
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesFailed {
-    error: String,
+pub struct MintOutputStatesFailed {
+    pub error: String,
 }
 
-/// See [`MintIssuanceStates`]
+/// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintIssuanceStatesSucceeded {
+pub struct MintOutputStatesSucceeded {
     amount: Amount,
 }
 
@@ -256,9 +263,9 @@ impl NoteIssuanceRequest {
     where
         C: Signing,
     {
-        let spend_key = secret.child_key(ChildId(0)).to_secp_key(ctx);
+        let spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
         let nonce = Nonce(spend_key.x_only_public_key().0);
-        let blinding_key = BlindingKey(secret.child_key(ChildId(1)).to_bls12_381_key());
+        let blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
         let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
         let cr = NoteIssuanceRequest {
@@ -306,12 +313,12 @@ impl NoteIssuanceRequest {
 /// Keeps all the data to generate [`SpendableNote`]s once the
 /// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
-pub struct NoteIssuanceRequests {
+pub struct MultiNoteIssuanceRequest {
     /// Finalization data for all note outputs in this request
     notes: TieredMulti<NoteIssuanceRequest>,
 }
 
-impl NoteIssuanceRequests {
+impl MultiNoteIssuanceRequest {
     /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from
     /// the mint containing the blind signatures for all notes in this
     /// `IssuanceRequest`. It also takes the mint's [`AggregatePublicKey`]
@@ -349,7 +356,7 @@ impl NoteIssuanceRequests {
     }
 }
 
-impl Extend<(Amount, NoteIssuanceRequest)> for NoteIssuanceRequests {
+impl Extend<(Amount, NoteIssuanceRequest)> for MultiNoteIssuanceRequest {
     fn extend<T: IntoIterator<Item = (Amount, NoteIssuanceRequest)>>(&mut self, iter: T) {
         self.notes.extend(iter)
     }

@@ -1,35 +1,48 @@
 //! Client library for fedimintd
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 use anyhow::anyhow;
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
-use fedimint_core::config::ClientConfig;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
-use rand::thread_rng;
+pub use fedimint_derive_secret as derivable_secret;
+use fedimint_derive_secret::{ChildId, DerivableSecret};
+use futures::StreamExt;
+use rand::distributions::{Distribution, Standard};
+use rand::{thread_rng, Rng};
 use secp256k1_zkp::Secp256k1;
+use serde::Serialize;
 
-use crate::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
-use crate::module::{ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
+use crate::db::ClientSecretKey;
+use crate::module::gen::{
+    ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
+};
+use crate::module::{ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
 use crate::sm::{
-    ActiveState, ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, InactiveState,
-    OperationId, OperationState,
+    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, Notifier, OperationId,
+    OperationState,
 };
 use crate::transaction::{
-    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
-    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, TransactionBuilder, TransactionBuilderBalance, TxSubmissionContext,
+    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
+/// Database keys used by the client
+mod db;
 /// Module client interface definitions
 pub mod module;
 /// Client state machine interfaces and executor implementation
@@ -55,11 +68,10 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId>;
 
-    /// Wait for any active state to appear in the database
-    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState;
-
-    /// Wait for any inactive state to appear in the database
-    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState;
+    async fn transaction_update_stream(
+        &self,
+        operation_id: OperationId,
+    ) -> BoxStream<OperationState<TxSubmissionStates>>;
 }
 
 dyn_newtype_define! {
@@ -70,34 +82,34 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
-    /// Waits till consensus has been achieved on the transaction and it was
-    /// accepted by consensus.
-    pub async fn await_tx_accepted(
-        &self,
-        operation_id: OperationId,
-        txid: TransactionId,
-    ) -> InactiveState {
-        let state = OperationState {
-            operation_id,
-            state: TxSubmissionStates::Accepted { txid },
-        };
-        self.await_inactive_state(state.into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE))
-            .await
+    pub async fn await_tx_accepted(&self, operation_id: OperationId, txid: TransactionId) {
+        let update_stream = self.transaction_update_stream(operation_id).await;
+
+        let query_txid = txid;
+        update_stream
+            .filter(move |tx_submission_state| {
+                std::future::ready(matches!(
+                    tx_submission_state.state,
+                    TxSubmissionStates::Accepted { txid, .. } if txid == query_txid
+                ))
+            })
+            .next_or_pending()
+            .await;
     }
 
-    /// Waits till the transaction is either rejected on submission or after
-    /// consensus has been achieved on it.
-    pub async fn await_tx_rejected(
-        &self,
-        operation_id: OperationId,
-        txid: TransactionId,
-    ) -> InactiveState {
-        let state = OperationState {
-            operation_id,
-            state: TxSubmissionStates::Rejected { txid },
-        };
-        self.await_inactive_state(state.into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE))
-            .await
+    pub async fn await_tx_rejected(&self, operation_id: OperationId, txid: TransactionId) {
+        let update_stream = self.transaction_update_stream(operation_id).await;
+
+        let query_txid = txid;
+        update_stream
+            .filter(move |tx_submission_state| {
+                std::future::ready(matches!(
+                    tx_submission_state.state,
+                    TxSubmissionStates::Rejected { txid, .. } if txid == query_txid
+                ))
+            })
+            .next_or_pending()
+            .await;
     }
 }
 
@@ -140,12 +152,17 @@ impl IGlobalClientContext for ClientInner {
         .await
     }
 
-    async fn await_active_state(&self, state: DynState<DynGlobalClientContext>) -> ActiveState {
-        ClientInner::await_active_state(self, state).await
-    }
-
-    async fn await_inactive_state(&self, state: DynState<DynGlobalClientContext>) -> InactiveState {
-        ClientInner::await_inactive_state(self, state).await
+    async fn transaction_update_stream(
+        &self,
+        operation_id: OperationId,
+    ) -> BoxStream<OperationState<TxSubmissionStates>> {
+        self.executor
+            .notifier()
+            .module_notifier::<OperationState<TxSubmissionStates>>(
+                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            )
+            .subscribe(operation_id)
+            .await
     }
 }
 
@@ -173,6 +190,26 @@ impl Client {
         dbtx.commit_tx().await;
         Ok(txid)
     }
+
+    /// Returns a reference to a typed module client instance. Returns an error
+    /// if the instance isn't registered or the module kind doesn't match.
+    pub fn get_module_client<M: ClientModule>(
+        &self,
+        instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<&M> {
+        let module = self
+            .inner
+            .try_get_module(instance_id)
+            .ok_or(anyhow!("Unknown module instance {}", instance_id))?;
+        module
+            .as_any()
+            .downcast_ref::<M>()
+            .ok_or_else(|| anyhow::anyhow!("Module is not of type {}", std::any::type_name::<M>()))
+    }
+
+    pub fn db(&self) -> &Database {
+        &self.inner.db
+    }
 }
 
 struct ClientInner {
@@ -188,13 +225,18 @@ struct ClientInner {
 impl ClientInner {
     /// Returns a reference to the module, panics if not found
     fn get_module(&self, instance: ModuleInstanceId) -> &maybe_add_send_sync!(dyn IClientModule) {
+        self.try_get_module(instance)
+            .expect("Module instance not found")
+    }
+
+    fn try_get_module(
+        &self,
+        instance: ModuleInstanceId,
+    ) -> Option<&maybe_add_send_sync!(dyn IClientModule)> {
         if instance == self.primary_module_instance {
-            self.primary_module.as_ref()
+            Some(self.primary_module.as_ref())
         } else {
-            self.modules
-                .get(instance)
-                .expect("Module not found")
-                .as_ref()
+            Some(self.modules.get(instance)?.as_ref())
         }
     }
 
@@ -237,34 +279,37 @@ impl ClientInner {
     async fn finalize_transaction(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState<DynGlobalClientContext>>)> {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let (keys, input, state_machines) = self
+            let input = self
                 .primary_module
-                .create_sufficient_input(self.primary_module_instance, dbtx, missing_amount)
+                .create_sufficient_input(
+                    self.primary_module_instance,
+                    dbtx,
+                    operation_id,
+                    missing_amount,
+                )
                 .await?;
-
-            partial_transaction.inputs.push(ClientInput {
-                input,
-                keys,
-                state_machines,
-            });
+            partial_transaction.inputs.push(input);
         }
 
         if let TransactionBuilderBalance::Overfunded(excess_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let (output, state_machines) = self
+            let output = self
                 .primary_module
-                .create_exact_output(self.primary_module_instance, dbtx, excess_amount)
+                .create_exact_output(
+                    self.primary_module_instance,
+                    dbtx,
+                    operation_id,
+                    excess_amount,
+                )
                 .await;
-            partial_transaction.outputs.push(ClientOutput {
-                output,
-                state_machines,
-            });
+            partial_transaction.outputs.push(output);
         }
 
         assert!(
@@ -284,7 +329,9 @@ impl ClientInner {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId> {
-        let (transaction, mut states) = self.finalize_transaction(dbtx, tx_builder).await?;
+        let (transaction, mut states) = self
+            .finalize_transaction(dbtx, operation_id, tx_builder)
+            .await?;
         let txid = transaction.tx_hash();
 
         let tx_submission_sm = DynState::from_typed(
@@ -356,10 +403,13 @@ impl ClientBuilder {
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
 
-        let mut decoders =
-            self.module_gens.decoders(config.modules.iter().map(
-                |(module_instance, module_config)| (*module_instance, module_config.kind()),
-            ))?;
+        let mut decoders = client_decoders(
+            &self.module_gens,
+            config
+                .modules
+                .iter()
+                .map(|(module_instance, module_config)| (*module_instance, module_config.kind())),
+        )?;
         decoders.register_module(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
             tx_submission_sm_decoder(),
@@ -367,7 +417,11 @@ impl ClientBuilder {
 
         let db = Database::new(db, decoders);
 
+        let notifier = Notifier::new(db.clone());
+
         let api = DynFederationApi::from(WsFederationApi::from_config(&config));
+
+        let root_secret = get_client_root_secret(&db).await;
 
         let (modules, primary_module) = {
             let mut modules = ClientModuleRegistry::default();
@@ -378,16 +432,32 @@ impl ClientBuilder {
                         .module_gens
                         .get(module_config.kind())
                         .ok_or(anyhow!("Unknown module kind in config"))?
-                        .init_primary(module_config, db.clone())
+                        .init_primary(
+                            module_config,
+                            db.clone(),
+                            module_instance,
+                            root_secret.child_key(ChildId(module_instance as u64)),
+                            notifier.clone(),
+                        )
                         .await?;
-                    let replaced = primary_module.replace(module).is_some();
-                    assert!(replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
+                    let not_replaced = primary_module.replace(module).is_none();
+                    assert!(not_replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
                 } else {
                     let module = self
                         .module_gens
                         .get(module_config.kind())
                         .ok_or(anyhow!("Unknown module kind in config"))?
-                        .init(module_config, db.clone(), module_instance)
+                        .init(
+                            module_config,
+                            db.clone(),
+                            module_instance,
+                            // This is a divergence from the legacy client, where the child secret
+                            // keys were derived using *module kind*-specific derivation paths.
+                            // Since the new client has to support multiple, segregated modules of
+                            // the same kind we have to use the instance id instead.
+                            root_secret.child_key(ChildId(module_instance as u64)),
+                            notifier.clone(),
+                        )
                         .await?;
                     modules.register_module(module_instance, module);
                 }
@@ -408,7 +478,7 @@ impl ClientBuilder {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
             }
 
-            executor_builder.build(db.clone()).await
+            executor_builder.build(db.clone(), notifier).await
         };
 
         let client_inner = Arc::new(ClientInner {
@@ -432,4 +502,77 @@ impl ClientBuilder {
             inner: client_inner,
         })
     }
+}
+
+/// Fetches the client secret from the database or generates a new one if
+/// none is present
+pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
+    let mut tx = db.begin_transaction().await;
+    let client_secret = tx.get_value(&ClientSecretKey).await;
+    let secret = if let Some(client_secret) = client_secret {
+        client_secret
+    } else {
+        let secret: ClientSecret = thread_rng().gen();
+        let no_replacement = tx.insert_entry(&ClientSecretKey, &secret).await.is_none();
+        assert!(
+            no_replacement,
+            "We would have overwritten our secret key, aborting!"
+        );
+        secret
+    };
+    tx.commit_tx().await;
+    secret.into_root_secret()
+}
+
+/// Secret input key material from which the [`DerivableSecret`] used by the
+/// client will be seeded
+#[derive(Encodable, Decodable)]
+pub struct ClientSecret([u8; 64]);
+
+impl ClientSecret {
+    fn into_root_secret(self) -> DerivableSecret {
+        const FEDIMINT_CLIENT_NONCE: &[u8] = b"Fedimint Client Salt";
+        DerivableSecret::new_root(&self.0, FEDIMINT_CLIENT_NONCE)
+    }
+}
+
+impl Distribution<ClientSecret> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ClientSecret {
+        let mut secret = [0u8; 64];
+        rng.fill(&mut secret);
+        ClientSecret(secret)
+    }
+}
+
+impl Debug for ClientSecret {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ClientSecret([redacted])")
+    }
+}
+
+impl Serialize for ClientSecret {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
+pub fn client_decoders<'a>(
+    registry: &ModuleGenRegistry<DynClientModuleGen>,
+    module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+) -> anyhow::Result<ModuleDecoderRegistry> {
+    let mut modules = BTreeMap::new();
+    for (id, kind) in module_kinds {
+        let Some(init) = registry.get(kind) else {
+                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
+            };
+
+        modules.insert(
+            id,
+            IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(init)),
+        );
+    }
+    Ok(ModuleDecoderRegistry::from_iter(modules))
 }

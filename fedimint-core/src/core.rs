@@ -12,9 +12,11 @@ use std::fmt::{Debug, Display, Formatter};
 use std::io::Read;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 pub use bitcoin::KeyPair;
 use fedimint_core::dyn_newtype_define;
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -107,7 +109,7 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, fedimint_core::encoding::DecodeError> {
                 let key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
-                modules.get_expect(key).decode(reader, key)
+                modules.get_expect(key).decode(reader, key, modules)
             }
         }
     };
@@ -273,8 +275,11 @@ pub trait IntoDynInstance {
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType;
 }
 
-type DecodeFn =
-    for<'a> fn(Box<dyn Read + 'a>, ModuleInstanceId) -> Result<Box<dyn Any>, DecodeError>;
+type DecodeFn = for<'a> fn(
+    Box<dyn Read + 'a>,
+    ModuleInstanceId,
+    &ModuleDecoderRegistry,
+) -> Result<Box<dyn Any>, DecodeError>;
 
 #[derive(Default)]
 pub struct DecoderBuilder {
@@ -305,8 +310,8 @@ impl DecoderBuilder {
     {
         // TODO: enforce that all decoders are for the same module kind (+fix docs
         // after)
-        let decode_fn: DecodeFn = |mut reader, instance| {
-            let typed_val = Type::consensus_decode(&mut reader, &Default::default())?;
+        let decode_fn: DecodeFn = |mut reader, instance, modules| {
+            let typed_val = Type::consensus_decode(&mut reader, modules)?;
             let dyn_val = typed_val.into_dyn(instance);
             let any_val: Box<dyn Any> = Box::new(dyn_val);
             Ok(any_val)
@@ -342,12 +347,20 @@ impl Decoder {
         &self,
         reader: &mut dyn Read,
         instance_id: ModuleInstanceId,
+        modules: &ModuleDecoderRegistry,
     ) -> Result<DynType, DecodeError> {
         let decode_fn = self
             .decode_fns
             .get(&TypeId::of::<DynType>())
-            .expect("Type unknown to decoder");
-        Ok(*decode_fn(Box::new(reader), instance_id)?
+            .ok_or_else(|| {
+                anyhow!(
+                    "Type unknown to decoder: {}, (registered decoders={})",
+                    std::any::type_name::<DynType>(),
+                    self.decode_fns.len()
+                )
+            })
+            .expect("Types being decoded must be registered");
+        Ok(*decode_fn(Box::new(reader), instance_id, modules)?
             .downcast::<DynType>()
             .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))
     }

@@ -17,9 +17,10 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.66"
+base64 = "0.20.0"
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
-clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
+clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-aead = { path = "../crypto/aead" }
@@ -28,6 +29,7 @@ fedimint-core ={ path = "../fedimint-core" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
+fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }

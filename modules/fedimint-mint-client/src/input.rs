@@ -22,28 +22,28 @@ use crate::{MintClientContext, SpendableNote};
 ///     Refund -- refund tx accepted --> RS[Refund Success]
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub enum MintRedemptionStates {
-    Created(MintRedemptionStateCreated),
-    Refund(MintRedemptionStateRefund),
-    Success(MintRedemptionStateSuccess),
-    Error(MintRedemptionStateError),
-    RefundSuccess(MintRedemptionStateRefundSuccess),
+pub enum MintInputStates {
+    Created(MintInputStateCreated),
+    Refund(MintInputStateRefund),
+    Success(MintInputStateSuccess),
+    Error(MintInputStateError),
+    RefundSuccess(MintInputStateRefundSuccess),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRedemptionCommon {
+pub struct MintInputCommon {
     pub(crate) operation_id: OperationId,
     pub(crate) txid: TransactionId,
     pub(crate) input_idx: u64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRedemptionStateMachine {
-    pub(crate) common: MintRedemptionCommon,
-    pub(crate) state: MintRedemptionStates,
+pub struct MintInputStateMachine {
+    pub(crate) common: MintInputCommon,
+    pub(crate) state: MintInputStates,
 }
 
-impl State for MintRedemptionStateMachine {
+impl State for MintInputStateMachine {
     type ModuleContext = MintClientContext;
     type GlobalContext = DynGlobalClientContext;
 
@@ -53,19 +53,17 @@ impl State for MintRedemptionStateMachine {
         global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
-            MintRedemptionStates::Created(created) => {
+            MintInputStates::Created(created) => {
                 created.transitions(&self.common, context, global_context)
             }
-            MintRedemptionStates::Refund(refund) => {
-                refund.transitions(&self.common, global_context)
-            }
-            MintRedemptionStates::Success(_) => {
+            MintInputStates::Refund(refund) => refund.transitions(&self.common, global_context),
+            MintInputStates::Success(_) => {
                 vec![]
             }
-            MintRedemptionStates::Error(_) => {
+            MintInputStates::Error(_) => {
                 vec![]
             }
-            MintRedemptionStates::RefundSuccess(_) => {
+            MintInputStates::RefundSuccess(_) => {
                 vec![]
             }
         }
@@ -77,28 +75,28 @@ impl State for MintRedemptionStateMachine {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRedemptionStateCreated {
-    notes: TieredMulti<SpendableNote>,
+pub struct MintInputStateCreated {
+    pub(crate) notes: TieredMulti<SpendableNote>,
 }
 
-impl MintRedemptionStateCreated {
+impl MintInputStateCreated {
     fn transitions(
         &self,
-        common: &MintRedemptionCommon,
+        common: &MintInputCommon,
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
-    ) -> Vec<StateTransition<MintRedemptionStateMachine>> {
+    ) -> Vec<StateTransition<MintInputStateMachine>> {
         let rejected_context = context.clone();
         let rejected_global_context = global_context.clone();
         vec![
             // Success case: containing transaction is accepted
             StateTransition::new(
-                Self::trigger_success(*common, global_context.clone()),
+                Self::await_success(*common, global_context.clone()),
                 |_dbtx, (), old_state| Box::pin(Self::transition_success(old_state)),
             ),
             // Transaction rejected: attempting to refund
             StateTransition::new(
-                Self::trigger_refund(*common, global_context.clone()),
+                Self::await_refund(*common, global_context.clone()),
                 move |dbtx, (), old_state| {
                     Box::pin(Self::transition_refund(
                         dbtx,
@@ -111,24 +109,22 @@ impl MintRedemptionStateCreated {
         ]
     }
 
-    async fn trigger_success(common: MintRedemptionCommon, global_context: DynGlobalClientContext) {
+    async fn await_success(common: MintInputCommon, global_context: DynGlobalClientContext) {
         global_context
             .await_tx_accepted(common.operation_id, common.txid)
             .await;
     }
 
-    async fn transition_success(
-        old_state: MintRedemptionStateMachine,
-    ) -> MintRedemptionStateMachine {
-        assert!(matches!(old_state.state, MintRedemptionStates::Created(_)));
+    async fn transition_success(old_state: MintInputStateMachine) -> MintInputStateMachine {
+        assert!(matches!(old_state.state, MintInputStates::Created(_)));
 
-        MintRedemptionStateMachine {
+        MintInputStateMachine {
             common: old_state.common,
-            state: MintRedemptionStates::Success(MintRedemptionStateSuccess {}),
+            state: MintInputStates::Success(MintInputStateSuccess {}),
         }
     }
 
-    async fn trigger_refund(common: MintRedemptionCommon, global_context: DynGlobalClientContext) {
+    async fn await_refund(common: MintInputCommon, global_context: DynGlobalClientContext) {
         global_context
             .await_tx_rejected(common.operation_id, common.txid)
             .await;
@@ -136,12 +132,12 @@ impl MintRedemptionStateCreated {
 
     async fn transition_refund(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        old_state: MintRedemptionStateMachine,
+        old_state: MintInputStateMachine,
         context: MintClientContext,
         global_context: DynGlobalClientContext,
-    ) -> MintRedemptionStateMachine {
+    ) -> MintInputStateMachine {
         let notes = match old_state.state {
-            MintRedemptionStates::Created(created) => created.notes,
+            MintInputStates::Created(created) => created.notes,
             _ => panic!("Invalid state transition"),
         };
 
@@ -158,62 +154,59 @@ impl MintRedemptionStateCreated {
             state_machines: Box::new(|_, _| vec![]),
         };
 
-        let mut transaction_builder = TransactionBuilder::new();
-        transaction_builder.with_input(refund_input);
-
         let refund_txid = match global_context
             .finalize_and_submit_transaction(
                 dbtx,
                 old_state.common.operation_id,
-                transaction_builder,
+                TransactionBuilder::new().with_input(refund_input),
             )
             .await
         {
             Ok(refund_txid) => refund_txid,
             Err(e) => {
-                return MintRedemptionStateMachine {
+                return MintInputStateMachine {
                     common: old_state.common,
-                    state: MintRedemptionStates::Error(MintRedemptionStateError {
+                    state: MintInputStates::Error(MintInputStateError {
                         error: format!("Failed to create refund transaction: {e}"),
                     }),
                 }
             }
         };
 
-        MintRedemptionStateMachine {
+        MintInputStateMachine {
             common: old_state.common,
-            state: MintRedemptionStates::Refund(MintRedemptionStateRefund { refund_txid }),
+            state: MintInputStates::Refund(MintInputStateRefund { refund_txid }),
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRedemptionStateRefund {
+pub struct MintInputStateRefund {
     refund_txid: TransactionId,
 }
 
-impl MintRedemptionStateRefund {
+impl MintInputStateRefund {
     fn transitions(
         &self,
-        common: &MintRedemptionCommon,
+        common: &MintInputCommon,
         global_context: &DynGlobalClientContext,
-    ) -> Vec<StateTransition<MintRedemptionStateMachine>> {
+    ) -> Vec<StateTransition<MintInputStateMachine>> {
         vec![
             // Refund successful
             StateTransition::new(
-                Self::trigger_refund_success(*common, global_context.clone(), self.refund_txid),
+                Self::await_refund_success(*common, global_context.clone(), self.refund_txid),
                 |_dbtx, (), old_state| Box::pin(Self::transition_refund_success(old_state)),
             ),
             // Refund failed
             StateTransition::new(
-                Self::trigger_refund_failed(*common, global_context.clone(), self.refund_txid),
+                Self::await_refund_failed(*common, global_context.clone(), self.refund_txid),
                 |_dbtx, (), old_state| Box::pin(Self::transition_refund_failed(old_state)),
             ),
         ]
     }
 
-    async fn trigger_refund_success(
-        common: MintRedemptionCommon,
+    async fn await_refund_success(
+        common: MintInputCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) {
@@ -222,23 +215,19 @@ impl MintRedemptionStateRefund {
             .await;
     }
 
-    async fn transition_refund_success(
-        old_state: MintRedemptionStateMachine,
-    ) -> MintRedemptionStateMachine {
+    async fn transition_refund_success(old_state: MintInputStateMachine) -> MintInputStateMachine {
         let refund_txid = match old_state.state {
-            MintRedemptionStates::Refund(refund) => refund.refund_txid,
+            MintInputStates::Refund(refund) => refund.refund_txid,
             _ => panic!("Invalid state transition"),
         };
 
-        MintRedemptionStateMachine {
+        MintInputStateMachine {
             common: old_state.common,
-            state: MintRedemptionStates::RefundSuccess(MintRedemptionStateRefundSuccess {
-                refund_txid,
-            }),
+            state: MintInputStates::RefundSuccess(MintInputStateRefundSuccess { refund_txid }),
         }
     }
-    async fn trigger_refund_failed(
-        common: MintRedemptionCommon,
+    async fn await_refund_failed(
+        common: MintInputCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) {
@@ -247,18 +236,16 @@ impl MintRedemptionStateRefund {
             .await;
     }
 
-    async fn transition_refund_failed(
-        old_state: MintRedemptionStateMachine,
-    ) -> MintRedemptionStateMachine {
+    async fn transition_refund_failed(old_state: MintInputStateMachine) -> MintInputStateMachine {
         let refund_txid = match old_state.state {
-            MintRedemptionStates::Refund(refund) => refund.refund_txid,
+            MintInputStates::Refund(refund) => refund.refund_txid,
             _ => panic!("Invalid state transition"),
         };
 
         // TODO: include e-cash notes for recovery? Although, they are in the log …
-        MintRedemptionStateMachine {
+        MintInputStateMachine {
             common: old_state.common,
-            state: MintRedemptionStates::Error(MintRedemptionStateError {
+            state: MintInputStates::Error(MintInputStateError {
                 error: format!("Refund transaction {refund_txid} was rejected"),
             }),
         }
@@ -266,14 +253,14 @@ impl MintRedemptionStateRefund {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRedemptionStateSuccess {}
+pub struct MintInputStateSuccess {}
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRedemptionStateError {
+pub struct MintInputStateError {
     error: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct MintRedemptionStateRefundSuccess {
+pub struct MintInputStateRefundSuccess {
     refund_txid: TransactionId,
 }
