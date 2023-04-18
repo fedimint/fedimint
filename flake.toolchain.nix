@@ -130,6 +130,15 @@ let
     "llvm-tools-preview"
   ]);
 
+  fenixToolchainNightly = (fenixChannelNightly.withComponents [
+    "rustc"
+    "cargo"
+    "clippy"
+    "rust-analysis"
+    "rust-src"
+    "llvm-tools-preview"
+  ]);
+
   fenixToolchainRustfmt = (fenixChannelNightly.withComponents [
     "rustfmt"
   ]);
@@ -174,4 +183,4 @@ let
     crossTargets
   ;
 in
-{ inherit crossTargets androidCrossEnvVars wasm32CrossEnvVars fenixToolchain fenixChannel fenixToolchainRustfmt fenixToolchainCargoFmt fenixToolchainCrossAll fenixToolchainCrossWasm fenixToolchainCross craneLibNative craneLibNativeDocExport craneLibCross; }
+{ inherit crossTargets androidCrossEnvVars wasm32CrossEnvVars fenixToolchain fenixToolchainNightly fenixChannel fenixToolchainRustfmt fenixToolchainCargoFmt fenixToolchainCrossAll fenixToolchainCrossWasm fenixToolchainCross craneLibNative craneLibNativeDocExport craneLibCross; }

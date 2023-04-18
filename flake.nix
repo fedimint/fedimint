@@ -392,6 +392,10 @@
                 nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ toolchain.fenixToolchain ];
               });
 
+              nightly = pkgs.mkShell (shellCommonNative
+                // {
+                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ toolchain.fenixToolchainNightly pkgs.cargo-fuzz ];
+              });
 
               # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
               #
