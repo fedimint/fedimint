@@ -252,6 +252,13 @@ impl<GC> DynState<GC> {
     {
         Self(Box::new(typed), module_instance_id)
     }
+
+    pub fn from_parts(
+        module_instance_id: ::fedimint_core::core::ModuleInstanceId,
+        dynbox: Box<maybe_add_send_sync!(dyn IState<GC> + 'static)>,
+    ) -> Self {
+        Self(dynbox, module_instance_id)
+    }
 }
 
 impl<GC> std::fmt::Debug for DynState<GC> {

@@ -9,6 +9,7 @@ use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::maybe_add_send_sync;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use futures::future::select_all;
@@ -27,6 +28,9 @@ const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
 /// Wait time till checking the DB for new state machines when there are no
 /// active ones
 const EXECUTOR_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+pub type ContextGen<GC> =
+    Arc<maybe_add_send_sync!(dyn Fn(ModuleInstanceId, OperationId) -> GC + 'static)>;
 
 /// Prefixes for executor DB entries
 enum ExecutorDbPrefixes {
@@ -50,7 +54,7 @@ pub struct Executor<GC: GlobalContext> {
 
 struct ExecutorInner<GC> {
     db: Database,
-    context: Mutex<Option<GC>>,
+    context: Mutex<Option<ContextGen<GC>>>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
     notifier: Notifier<GC>,
 }
@@ -130,12 +134,20 @@ where
                 bail!("State already exists in database!")
             }
 
+            let context = {
+                let context_gen_guard = self.inner.context.lock().await;
+                let context_gen = context_gen_guard
+                    .as_ref()
+                    .expect("should be initialized at this point");
+                context_gen(state.module_instance_id(), state.operation_id())
+            };
+
             if state.is_terminal(
                 self.inner
                     .module_contexts
                     .get(&state.module_instance_id())
                     .expect("No such module"),
-                self.inner.context.lock().await.as_ref().expect(""),
+                &context,
             ) {
                 bail!("State is already terminal, adding it to the executor doesn't make sense.")
             }
@@ -204,13 +216,13 @@ where
     ///
     /// ## Panics
     /// If called more than once.
-    pub async fn start_executor(&self, tg: &mut TaskGroup, context: GC) {
+    pub async fn start_executor(&self, tg: &mut TaskGroup, context_gen: ContextGen<GC>) {
         let replaced_old = self
             .inner
             .context
             .lock()
             .await
-            .replace(context.clone())
+            .replace(context_gen.clone())
             .is_some();
         assert!(!replaced_old, "start_executor was called previously");
 
@@ -218,7 +230,7 @@ where
         let _handle = tg
             .spawn("state_machine_executor", move |handle| async move {
                 let shutdown_future = handle.make_shutdown_rx().await;
-                let executor_runner = task_runner_inner.run(&context);
+                let executor_runner = task_runner_inner.run(context_gen);
                 select! {
                     _ = shutdown_future => {
                         info!("Shutting down state machine executor runner");
@@ -242,10 +254,13 @@ impl<GC> ExecutorInner<GC>
 where
     GC: GlobalContext,
 {
-    async fn run(&self, global_context: &GC) {
+    async fn run(&self, global_context_gen: ContextGen<GC>) {
         info!("Starting state machine executor task");
         loop {
-            if let Err(err) = self.execute_next_state_transition(global_context).await {
+            if let Err(err) = self
+                .execute_next_state_transition(&global_context_gen)
+                .await
+            {
                 warn!(
                     %err,
                     "An unexpected error occurred during a state transition"
@@ -254,7 +269,10 @@ where
         }
     }
 
-    async fn execute_next_state_transition(&self, global_context: &GC) -> anyhow::Result<()> {
+    async fn execute_next_state_transition(
+        &self,
+        global_context_gen: &ContextGen<GC>,
+    ) -> anyhow::Result<()> {
         let active_states = self.get_active_states().await;
 
         if active_states.is_empty() {
@@ -273,7 +291,10 @@ where
                     .get(&module_instance)
                     .expect("Unknown module");
                 state
-                    .transitions(context, global_context)
+                    .transitions(
+                        context,
+                        &global_context_gen(module_instance, state.operation_id()),
+                    )
                     .into_iter()
                     .map(move |transition| {
                         Box::pin(async move {
@@ -324,7 +345,9 @@ where
                             .get(&state.module_instance_id())
                             .expect("Unknown module");
 
-                        if new_state.is_terminal(context, global_context) {
+                        let global_context =
+                            global_context_gen(state.module_instance_id(), state.operation_id());
+                        if new_state.is_terminal(context, &global_context) {
                             // TODO: log state machine id or something
                             debug!("State machine reached terminal state");
                             dbtx.insert_entry(
@@ -676,6 +699,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
+    use std::sync::Arc;
     use std::time::Duration;
 
     use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
@@ -809,7 +833,7 @@ mod tests {
         let executor = executor_builder
             .build(db.clone(), Notifier::new(db.clone()))
             .await;
-        executor.start_executor(tg, ()).await;
+        executor.start_executor(tg, Arc::new(|_, _| ())).await;
 
         info!("Initialized test executor");
         (executor, broadcast, db)

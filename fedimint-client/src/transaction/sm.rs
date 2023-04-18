@@ -236,7 +236,10 @@ mod tests {
         tx_submission_sm_decoder, TransactionBuilder, TxSubmissionContext, TxSubmissionStates,
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
     };
-    use crate::{DynGlobalClientContext, IGlobalClientContext};
+    use crate::{
+        DynGlobalClientContext, IGlobalClientContext, InstancelessDynClientInput,
+        InstancelessDynClientOutput,
+    };
 
     #[derive(Debug)]
     struct FakeApiClient {
@@ -308,18 +311,7 @@ mod tests {
         executor: Executor<DynGlobalClientContext>,
     }
 
-    impl Debug for FakeGlobalContext {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(f, "FakeGlobalContext({:?})", self.api)
-        }
-    }
-
-    #[async_trait]
-    impl IGlobalClientContext for FakeGlobalContext {
-        fn api(&self) -> &(dyn IFederationApi + 'static) {
-            &self.api
-        }
-
+    impl FakeGlobalContext {
         async fn finalize_and_submit_transaction(
             &self,
             dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
@@ -345,6 +337,35 @@ mod tests {
                 .await?;
 
             Ok(txid)
+        }
+    }
+
+    impl Debug for FakeGlobalContext {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "FakeGlobalContext({:?})", self.api)
+        }
+    }
+
+    #[async_trait]
+    impl IGlobalClientContext for FakeGlobalContext {
+        fn api(&self) -> &(dyn IFederationApi + 'static) {
+            &self.api
+        }
+
+        async fn claim_input_dyn(
+            &self,
+            _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+            _input: InstancelessDynClientInput,
+        ) -> TransactionId {
+            unimplemented!()
+        }
+
+        async fn fund_output_dyn(
+            &self,
+            _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+            _output: InstancelessDynClientOutput,
+        ) -> anyhow::Result<TransactionId> {
+            unimplemented!()
         }
 
         async fn transaction_update_stream(
@@ -385,8 +406,10 @@ mod tests {
             executor: executor.clone(),
         });
         let dyn_context = DynGlobalClientContext::from(context.clone());
-
-        executor.start_executor(&mut tg, dyn_context.clone()).await;
+        let dyn_context_gen_clone = dyn_context.clone();
+        executor
+            .start_executor(&mut tg, Arc::new(move |_, _| dyn_context_gen_clone.clone()))
+            .await;
 
         let operation_id = [0x42; 32];
 

@@ -1,12 +1,11 @@
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, TransactionBuilder};
+use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::core::DynInput;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{TieredMulti, TransactionId};
 use fedimint_mint_common::MintInput;
 
-use crate::{MintClientContext, SpendableNote};
+use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 // TODO: add retry with valid subset of e-cash notes
 /// State machine managing the e-cash redemption process related to a mint
@@ -49,13 +48,11 @@ impl State for MintInputStateMachine {
 
     fn transitions(
         &self,
-        context: &Self::ModuleContext,
+        _context: &Self::ModuleContext,
         global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
-            MintInputStates::Created(created) => {
-                created.transitions(&self.common, context, global_context)
-            }
+            MintInputStates::Created(created) => created.transitions(&self.common, global_context),
             MintInputStates::Refund(refund) => refund.transitions(&self.common, global_context),
             MintInputStates::Success(_) => {
                 vec![]
@@ -83,10 +80,8 @@ impl MintInputStateCreated {
     fn transitions(
         &self,
         common: &MintInputCommon,
-        context: &MintClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<MintInputStateMachine>> {
-        let rejected_context = context.clone();
         let rejected_global_context = global_context.clone();
         vec![
             // Success case: containing transaction is accepted
@@ -101,7 +96,6 @@ impl MintInputStateCreated {
                     Box::pin(Self::transition_refund(
                         dbtx,
                         old_state,
-                        rejected_context.clone(),
                         rejected_global_context.clone(),
                     ))
                 },
@@ -133,7 +127,6 @@ impl MintInputStateCreated {
     async fn transition_refund(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: MintInputStateMachine,
-        context: MintClientContext,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
         let notes = match old_state.state {
@@ -146,32 +139,15 @@ impl MintInputStateCreated {
             .map(|(amt, note)| (note.spend_key, (amt, note.note)))
             .unzip();
 
-        let refund_input = ClientInput {
-            input: DynInput::from_typed(context.instance_id, MintInput(notes)),
+        let refund_input = ClientInput::<MintInput, MintClientStateMachines> {
+            input: MintInput(notes),
             keys: spend_keys,
-            // The refund tx is managed by this state machine, so no new state machines need to be
-            // created
+            // The input of the refund tx is managed by this state machine, so no new state machines
+            // need to be created
             state_machines: Box::new(|_, _| vec![]),
         };
 
-        let refund_txid = match global_context
-            .finalize_and_submit_transaction(
-                dbtx,
-                old_state.common.operation_id,
-                TransactionBuilder::new().with_input(refund_input),
-            )
-            .await
-        {
-            Ok(refund_txid) => refund_txid,
-            Err(e) => {
-                return MintInputStateMachine {
-                    common: old_state.common,
-                    state: MintInputStates::Error(MintInputStateError {
-                        error: format!("Failed to create refund transaction: {e}"),
-                    }),
-                }
-            }
-        };
+        let refund_txid = global_context.claim_input(dbtx, refund_input).await;
 
         MintInputStateMachine {
             common: old_state.common,
