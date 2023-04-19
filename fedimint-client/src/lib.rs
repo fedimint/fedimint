@@ -3,14 +3,15 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
+use std::io::{Error, Read, Write};
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
@@ -25,16 +26,21 @@ use futures::StreamExt;
 use rand::distributions::{Distribution, Standard};
 use rand::{thread_rng, Rng};
 use secp256k1_zkp::Secp256k1;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::db::ClientSecretKey;
+use crate::db::{
+    ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, ClientSecretKey,
+    OperationLogKey,
+};
 use crate::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
 };
 use crate::module::{
     ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule, StateGenerator,
 };
-use crate::sm::executor::ContextGen;
+use crate::sm::executor::{
+    ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
+};
 use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
     OperationState,
@@ -317,18 +323,86 @@ pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 impl Client {
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
-    pub async fn finalize_and_submit_transaction(
+    pub async fn finalize_and_submit_transaction<F, M>(
         &self,
         operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<TransactionId> {
+    ) -> anyhow::Result<TransactionId>
+    where
+        F: Fn(TransactionId) -> M,
+        M: serde::Serialize,
+    {
         let mut dbtx = self.inner.db.begin_transaction().await;
+
+        if ClientInner::operation_exists(&mut dbtx, operation_id).await {
+            bail!("There already exists an operation with id {operation_id:?}")
+        }
+
         let txid = self
             .inner
             .finalize_and_submit_transaction(&mut dbtx, operation_id, tx_builder)
             .await?;
+
+        dbtx.insert_entry(
+            &OperationLogKey { operation_id },
+            &OperationLogEntry {
+                operation_type: operation_type.to_string(),
+                meta: serde_json::to_value(operation_meta(txid))?,
+            },
+        )
+        .await;
+        dbtx.insert_entry(
+            &ChronologicalOperationLogKey {
+                creation_time: fedimint_core::time::now(),
+                operation_id,
+            },
+            &(),
+        )
+        .await;
+
         dbtx.commit_tx().await;
         Ok(txid)
+    }
+
+    // TODO: allow fetching pages
+    /// Returns the last `limit` operations.
+    pub async fn get_operations(
+        &self,
+        limit: usize,
+    ) -> Vec<(ChronologicalOperationLogKey, OperationLogEntry)> {
+        let mut dbtx = self.inner.db.begin_transaction().await;
+        let operations: Vec<ChronologicalOperationLogKey> = dbtx
+            .find_by_prefix_sorted_descending(&ChronologicalOperationLogKeyPrefix)
+            .await
+            .map(|(key, _)| key)
+            .take(limit)
+            .collect::<Vec<_>>()
+            .await;
+
+        let mut operation_entries = Vec::with_capacity(operations.len());
+
+        for operation in operations {
+            let entry = dbtx
+                .get_value(&OperationLogKey {
+                    operation_id: operation.operation_id,
+                })
+                .await
+                .expect("Inconsistent DB");
+            operation_entries.push((operation, entry));
+        }
+
+        operation_entries
+    }
+
+    pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
+        self.inner
+            .db
+            .begin_transaction()
+            .await
+            .get_value(&OperationLogKey { operation_id })
+            .await
     }
 
     /// Returns a reference to a typed module client instance. Returns an error
@@ -519,6 +593,33 @@ impl ClientInner {
             )
             .subscribe(operation_id)
             .await
+    }
+
+    async fn operation_exists(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool {
+        let active_state_exists = dbtx
+            .find_by_prefix(&ActiveOperationStateKeyPrefix::<DynGlobalClientContext> {
+                operation_id,
+                _pd: Default::default(),
+            })
+            .await
+            .next()
+            .await
+            .is_some();
+
+        let inactive_state_exists = dbtx
+            .find_by_prefix(&InactiveOperationStateKeyPrefix::<DynGlobalClientContext> {
+                operation_id,
+                _pd: Default::default(),
+            })
+            .await
+            .next()
+            .await
+            .is_some();
+
+        active_state_exists || inactive_state_exists
     }
 }
 
@@ -742,4 +843,37 @@ pub fn client_decoders<'a>(
         );
     }
     Ok(ModuleDecoderRegistry::from_iter(modules))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OperationLogEntry {
+    operation_type: String,
+    meta: serde_json::Value,
+}
+
+impl Encodable for OperationLogEntry {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += self.operation_type.consensus_encode(writer)?;
+        len += serde_json::to_string(&self.meta)
+            .expect("JSON serialization should not fail")
+            .consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for OperationLogEntry {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let operation_type = String::consensus_decode(r, modules)?;
+        let meta_str = String::consensus_decode(r, modules)?;
+        let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
+
+        Ok(OperationLogEntry {
+            operation_type,
+            meta,
+        })
+    }
 }

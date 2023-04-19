@@ -67,7 +67,7 @@ pub async fn handle_ng_command<D: IDatabase>(
                 .with_input(mint_input.into_dyn(LEGACY_HARDCODED_INSTANCE_ID_MINT));
 
             let txid = client
-                .finalize_and_submit_transaction(notes_hash, tx)
+                .finalize_and_submit_transaction(notes_hash, "test", |_| (), tx)
                 .await
                 .unwrap();
 
