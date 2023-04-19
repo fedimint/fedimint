@@ -50,7 +50,7 @@ use fedimint_server::consensus::{
 };
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
-use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
+use fedimint_server::net::peers::PeerConnector;
 use fedimint_server::{consensus, FedimintServer};
 use fedimint_testing::btc::bitcoind::FakeWalletGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
@@ -559,7 +559,7 @@ async fn distributed_config(
             let cfg = ServerConfig::distributed_gen(
                 &our_params,
                 registry.legacy_init_modules(),
-                DelayCalculator::TEST_DEFAULT,
+                Default::default(),
                 &mut task_group,
             );
             (*peer, cfg.await.expect("generation failed"))
@@ -1264,7 +1264,7 @@ impl FederationTest {
                 db.clone(),
                 module_inits.clone(),
                 connect_gen(cfg),
-                DelayCalculator::TEST_DEFAULT,
+                Default::default(),
                 &mut task_group,
             )
             .await
