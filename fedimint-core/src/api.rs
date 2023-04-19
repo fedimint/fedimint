@@ -39,7 +39,7 @@ use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
-use crate::core::OutputOutcome;
+use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::ApiRequestErased;
 use crate::outcome::TransactionStatus;
@@ -335,7 +335,7 @@ pub trait GlobalFederationApi {
     async fn fetch_output_outcome<R>(
         &self,
         out_point: OutPoint,
-        decoders: &ModuleDecoderRegistry,
+        module_decoder: &Decoder,
     ) -> OutputOutcomeResult<Option<R>>
     where
         R: OutputOutcome;
@@ -344,7 +344,7 @@ pub trait GlobalFederationApi {
         &self,
         outpoint: OutPoint,
         timeout: Duration,
-        decoders: &ModuleDecoderRegistry,
+        module_decoder: &Decoder,
     ) -> OutputOutcomeResult<R>
     where
         R: OutputOutcome;
@@ -362,7 +362,7 @@ pub trait GlobalFederationApi {
 fn map_tx_outcome_outpoint<R>(
     tx_outcome: TransactionStatus,
     out_point: OutPoint,
-    decoders: &ModuleDecoderRegistry,
+    module_decoder: &Decoder,
 ) -> OutputOutcomeResult<R>
 where
     R: OutputOutcome + MaybeSend,
@@ -379,8 +379,10 @@ where
                     out_idx: out_point.out_idx,
                 })
                 .and_then(|output| {
+
+
                     let dyn_outcome = output
-                        .try_into_inner(decoders)
+                        .try_into_inner_known_module_kind(module_decoder)
                         .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?;
 
                     let source_instance = dyn_outcome.module_instance_id();
@@ -484,7 +486,7 @@ where
     async fn fetch_output_outcome<R>(
         &self,
         out_point: OutPoint,
-        decoders: &ModuleDecoderRegistry,
+        module_decoder: &Decoder,
     ) -> OutputOutcomeResult<Option<R>>
     where
         R: OutputOutcome,
@@ -492,7 +494,7 @@ where
         Ok(self
             .fetch_tx_outcome(&out_point.txid)
             .await?
-            .map(move |tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, decoders))
+            .map(move |tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, module_decoder))
             .transpose()?)
     }
 
@@ -501,14 +503,14 @@ where
         &self,
         outpoint: OutPoint,
         timeout: Duration,
-        decoders: &ModuleDecoderRegistry,
+        module_decoder: &Decoder,
     ) -> OutputOutcomeResult<R>
     where
         R: OutputOutcome,
     {
         fedimint_core::task::timeout(timeout, async move {
             let tx_outcome = self.await_tx_outcome(&outpoint.txid).await?;
-            map_tx_outcome_outpoint(tx_outcome, outpoint, decoders)
+            map_tx_outcome_outpoint(tx_outcome, outpoint, module_decoder)
         })
         .await
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?

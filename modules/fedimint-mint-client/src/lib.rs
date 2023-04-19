@@ -4,19 +4,19 @@ mod output;
 
 use std::cmp::Ordering;
 use std::fmt::Formatter;
-use std::iter::once;
 
 use anyhow::anyhow;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{ClientModule, DynPrimaryClientModule, PrimaryClientModule};
+use fedimint_client::module::{
+    ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
+};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{
@@ -100,8 +100,7 @@ pub struct MintClientModule {
 // TODO: wrap in Arc
 #[derive(Debug, Clone)]
 pub struct MintClientContext {
-    /// Decoders for this module's types
-    pub decoders: ModuleDecoderRegistry,
+    pub mint_decoder: Decoder,
     pub mint_keys: Tiered<AggregatePublicKey>,
     pub instance_id: ModuleInstanceId,
 }
@@ -114,9 +113,8 @@ impl ClientModule for MintClientModule {
     type States = MintClientStateMachines;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
-        let decoders = ModuleDecoderRegistry::new(once((self.instance_id, Self::decoder())));
         MintClientContext {
-            decoders,
+            mint_decoder: self.decoder(),
             mint_keys: self.cfg.tbs_pks.clone(),
             instance_id: self.instance_id,
         }

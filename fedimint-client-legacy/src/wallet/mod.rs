@@ -8,6 +8,7 @@ use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::Amount;
+use fedimint_wallet_client::WalletClientModule;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
@@ -162,7 +163,11 @@ impl WalletClient {
         let outcome = self
             .context
             .api
-            .await_output_outcome::<WalletOutputOutcome>(out_point, timeout, &self.context.decoders)
+            .await_output_outcome::<WalletOutputOutcome>(
+                out_point,
+                timeout,
+                &<WalletClientModule as fedimint_client::module::ClientModule>::decoder(),
+            )
             .await?;
         Ok(outcome.0)
     }

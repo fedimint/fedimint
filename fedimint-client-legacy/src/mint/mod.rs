@@ -486,7 +486,7 @@ impl MintClient {
         let bsig = self
             .context
             .api
-            .fetch_output_outcome::<MintOutputOutcome>(outpoint, &self.context.decoders)
+            .fetch_output_outcome::<MintOutputOutcome>(outpoint, &ClientModule::decoder(self))
             .await?
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?
             .as_ref()

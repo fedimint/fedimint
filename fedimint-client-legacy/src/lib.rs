@@ -44,9 +44,9 @@ use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
+use fedimint_ln_client::{LightningClientModule, LightningModuleTypes, LightningOutputOutcome};
 use fedimint_logging::LOG_WALLET;
-use fedimint_mint_client::MintModuleTypes;
+use fedimint_mint_client::{MintClientModule, MintModuleTypes};
 use fedimint_wallet_client::WalletModuleTypes;
 use fedimint_wallet_common::Rbf;
 use futures::stream::{self, FuturesUnordered};
@@ -896,7 +896,7 @@ impl Client<UserClientConfig> {
             .await_output_outcome::<LightningOutputOutcome>(
                 outpoint,
                 Duration::from_secs(30),
-                &self.context.decoders,
+                &<LightningClientModule as fedimint_client::module::ClientModule>::decoder(),
             )
             .await?;
         Ok(())
@@ -916,7 +916,7 @@ impl Client<UserClientConfig> {
                     .await_output_outcome::<MintOutputOutcome>(
                         outpoint,
                         Duration::from_secs(30),
-                        &self.context.decoders,
+                        &<MintClientModule as fedimint_client::module::ClientModule>::decoder(),
                     )
                     .await;
                 if matches!(res, Ok(MintOutputOutcome(Some(_)))) {
@@ -1077,7 +1077,7 @@ impl Client<UserClientConfig> {
             .await_output_outcome::<LightningOutputOutcome>(
                 outpoint,
                 timeout,
-                &self.context.decoders,
+                &<LightningClientModule as fedimint_client::module::ClientModule>::decoder(),
             )
             .await?;
         let confirmed = ConfirmedInvoice {
@@ -1432,7 +1432,8 @@ impl Client<GatewayClientConfig> {
                     .await_output_outcome::<LightningOutputOutcome>(
                         outpoint,
                         deadline.saturating_duration_since(Instant::now()),
-                        &self.context.decoders,
+                        &<LightningClientModule as fedimint_client::module::ClientModule>::decoder(
+                        ),
                     )
                     .await
                     .map(OutputOutcome::LN)
@@ -1479,7 +1480,7 @@ impl Client<GatewayClientConfig> {
             .await_output_outcome::<MintOutputOutcome>(
                 outpoint,
                 Duration::from_secs(10),
-                &self.context.decoders,
+                &<MintClientModule as fedimint_client::module::ClientModule>::decoder(),
             )
             .await?;
         // We remove the entry that indicates we are still waiting for transaction

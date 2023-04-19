@@ -956,10 +956,31 @@ impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding<T> {
     }
 }
 
-impl<T: Encodable + Decodable> SerdeModuleEncoding<T> {
+impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
     pub fn try_into_inner(&self, modules: &ModuleDecoderRegistry) -> Result<T, DecodeError> {
         let mut reader = std::io::Cursor::new(&self.0);
         Decodable::consensus_decode(&mut reader, modules)
+    }
+
+    /// In cases where we know exactly which module kind we expect but don't
+    /// have access to all decoders this function can be used instead.
+    ///
+    /// Note that it just assumes the decoded module instance id to be valid
+    /// since it cannot validate against the decoder registry. The lack of
+    /// access to a decoder registry also makes decoding structs impossible that
+    /// themselves contain module dyn-types (e.g. a module output containing a
+    /// fedimint transaction).
+    pub fn try_into_inner_known_module_kind(&self, decoder: &Decoder) -> Result<T, DecodeError> {
+        let mut reader = std::io::Cursor::new(&self.0);
+        let module_instance =
+            ModuleInstanceId::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
+        // No recursive module decoding is supported since we give an empty decoder
+        // registry to the decode function
+        decoder.decode(
+            &mut reader,
+            module_instance,
+            &ModuleDecoderRegistry::default(),
+        )
     }
 }
 
