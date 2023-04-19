@@ -104,7 +104,7 @@ const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 /// Mint module's secret key derivation child id
 pub const MINT_SECRET_CHILD_ID: ChildId = ChildId(0);
 
-type Result<T> = std::result::Result<T, ClientError>;
+pub type Result<T> = std::result::Result<T, ClientError>;
 pub type GatewayClient = Client<GatewayClientConfig>;
 pub type UserClient = Client<UserClientConfig>;
 
@@ -451,16 +451,11 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     /// OutPoint in `create_tx` Payer can use the `pay_to_blind_nonces`
     /// function Allows transfer of e-cash without risk of double-spend or
     /// not having exact change
-    pub async fn receive_notes<F, Fut>(&self, amount: Amount, create_tx: F)
-    where
-        F: FnMut(TieredMulti<BlindNonce>) -> Fut,
-        Fut: futures::Future<Output = OutPoint>,
-    {
-        let mut dbtx = self.context.db.begin_transaction().await;
-        self.mint_client()
-            .receive_notes(amount, &mut dbtx, create_tx)
-            .await;
-        dbtx.commit_tx().await;
+    pub async fn receive_notes(
+        &self,
+        amount: Amount,
+    ) -> (TieredMulti<BlindNonce>, Box<dyn Fn(OutPoint)>) {
+        self.mint_client().receive_notes(amount).await
     }
 
     pub async fn new_peg_out_with_fees(
@@ -586,6 +581,20 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         dbtx.commit_tx().await;
 
         Ok(final_notes)
+    }
+
+    /// Removes spent ecash from the database
+    pub async fn remove_ecash(&self, ecash: TieredMulti<SpendableNote>) {
+        let mut dbtx = self.context.db.begin_transaction().await;
+
+        for (amount, note) in ecash.iter_items() {
+            dbtx.remove_entry(&NoteKey {
+                amount,
+                nonce: note.note.0,
+            })
+            .await;
+        }
+        dbtx.commit_tx().await;
     }
 
     /// For tests only: Select notes of a given amount, and then remint them,

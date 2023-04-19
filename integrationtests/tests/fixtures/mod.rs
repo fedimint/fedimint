@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::future::Future;
-use std::iter::repeat;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -11,19 +10,15 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::{secp256k1, Address, KeyPair};
+use bitcoin::{secp256k1, KeyPair};
 use cln_rpc::ClnRpc;
 use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
-use fedimint_client_legacy::transaction::legacy::Transaction;
-use fedimint_client_legacy::transaction::TransactionBuilder;
-use fedimint_client_legacy::{
-    module_decode_stubs, Client, GatewayClient, GatewayClientConfig, UserClient, UserClientConfig,
-};
+use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
 use fedimint_core::admin_client::PeerServerParams;
-use fedimint_core::api::{WsClientConnectInfo, WsFederationApi};
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
@@ -65,13 +60,13 @@ use fedimint_testing::ln::LightningTest;
 use fedimint_wallet_client::{WalletClientGen, WalletConsensusItem};
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
-use fedimint_wallet_server::common::{PegOutFees, SpendableUTXO};
+use fedimint_wallet_server::common::SpendableUTXO;
 use fedimint_wallet_server::{Wallet, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
-use itertools::Itertools;
+use legacy::LegacyTestUser;
 use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
@@ -86,10 +81,13 @@ use tonic_lnd::connect;
 use tracing::{debug, info};
 use url::Url;
 
+use crate::fixtures::user::{IGatewayClient, ILegacyTestClient};
 use crate::fixtures::utils::LnRpcAdapter;
 use crate::ConsensusItem;
 
+mod legacy;
 mod real;
+pub mod user;
 mod utils;
 
 const DEFAULT_P2P_PORT: u16 = 8173;
@@ -119,35 +117,11 @@ pub enum GatewayNode {
 #[non_exhaustive]
 pub struct Fixtures {
     pub fed: FederationTest,
-    pub user: UserTest<UserClientConfig>,
+    pub user: Box<dyn ILegacyTestClient>,
     pub bitcoin: Box<dyn BitcoinTest>,
     pub gateway: GatewayTest,
     pub lightning: Box<dyn LightningTest>,
     pub task_group: TaskGroup,
-}
-
-pub trait TestFn<B>:
-    FnOnce(
-        FederationTest,
-        UserTest<UserClientConfig>,
-        Box<dyn BitcoinTest>,
-        GatewayTest,
-        Box<dyn LightningTest>,
-    ) -> B
-    + std::marker::Copy
-{
-}
-
-impl<F, B> TestFn<B> for F where
-    F: FnOnce(
-            FederationTest,
-            UserTest<UserClientConfig>,
-            Box<dyn BitcoinTest>,
-            GatewayTest,
-            Box<dyn LightningTest>,
-        ) -> B
-        + std::marker::Copy
-{
 }
 
 /// Helper for generating fixtures, passing them into test code, then shutting
@@ -157,7 +131,14 @@ impl<F, B> TestFn<B> for F where
 async fn test<B>(
     num_peers: u16,
     gateway_nodes: Vec<GatewayNode>,
-    f: impl TestFn<B>,
+    f: impl FnOnce(
+            FederationTest,
+            Box<dyn ILegacyTestClient>,
+            Box<dyn BitcoinTest>,
+            GatewayTest,
+            Box<dyn LightningTest>,
+        ) -> B
+        + Copy,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
@@ -184,18 +165,34 @@ where
 }
 
 /// Helper for running tests that don't involve lightning payments
-pub async fn non_lightning_test<B>(num_peers: u16, f: impl TestFn<B>) -> anyhow::Result<()>
+pub async fn non_lightning_test<B>(
+    num_peers: u16,
+    f: impl FnOnce(FederationTest, Box<dyn ILegacyTestClient>, Box<dyn BitcoinTest>) -> B + Copy,
+) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
 {
     // default to using LND
     let gateway_nodes = vec![GatewayNode::Lnd];
-    test(num_peers, gateway_nodes, f).await
+    test(num_peers, gateway_nodes, |fed, client, btc, _, _| {
+        f(fed, client, btc)
+    })
+    .await
 }
 
 /// Helper for running tests that involve lightning payments. Test callback will
 /// be run twice - once using LND as the gateway, once using CLN as the gateway.
-pub async fn lightning_test<B>(num_peers: u16, f: impl TestFn<B>) -> anyhow::Result<()>
+pub async fn lightning_test<B>(
+    num_peers: u16,
+    f: impl FnOnce(
+            FederationTest,
+            Box<dyn ILegacyTestClient>,
+            Box<dyn BitcoinTest>,
+            GatewayTest,
+            Box<dyn LightningTest>,
+        ) -> B
+        + Copy,
+) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
 {
@@ -326,15 +323,12 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 Database::new(rocks(dir.clone()), decoders.clone())
             };
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(Arc::new(
-                create_user_client(
-                    user_cfg,
-                    decoders.clone(),
-                    client_module_inits.clone(),
-                    peers,
-                    user_db,
-                )
-                .await,
+            let user = Box::new(LegacyTestUser::new(
+                user_cfg,
+                decoders.clone(),
+                client_module_inits.clone(),
+                peers,
+                user_db,
             ));
             user.client.await_consensus_block_height(0).await?;
 
@@ -404,15 +398,12 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
             let user_db = Database::new(MemDatabase::new(), module_decode_stubs());
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(Arc::new(
-                create_user_client(
-                    user_cfg,
-                    decoders.clone(),
-                    client_module_inits.clone(),
-                    peers,
-                    user_db,
-                )
-                .await,
+            let user = Box::new(LegacyTestUser::new(
+                user_cfg,
+                decoders.clone(),
+                client_module_inits.clone(),
+                peers,
+                user_db,
             ));
             user.client.await_consensus_block_height(0).await?;
 
@@ -442,7 +433,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     };
 
     // Wait till the gateway has registered itself
-    while fixtures.user.client.fetch_active_gateway().await.is_err() {
+    while fixtures.user.fetch_active_gateway().await.is_err() {
         tokio::time::sleep(Duration::from_millis(100)).await;
         info!("Waiting for gateway to register");
     }
@@ -550,28 +541,6 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
         .collect::<Vec<PeerId>>()
 }
 
-/// Creates a new user client connected to the given peers
-pub async fn create_user_client(
-    config: UserClientConfig,
-    decoders: ModuleDecoderRegistry,
-    module_gens: ClientModuleGenRegistry,
-    peers: Vec<PeerId>,
-    db: Database,
-) -> UserClient {
-    let api = WsFederationApi::new(
-        config
-            .0
-            .api_endpoints
-            .iter()
-            .filter(|(id, _)| peers.contains(id))
-            .map(|(id, endpoint)| (*id, endpoint.url.clone()))
-            .collect(),
-    )
-    .into();
-
-    UserClient::new_with_api(config, decoders, module_gens, db, api, Default::default()).await
-}
-
 async fn distributed_config(
     peers: &[PeerId],
     params: HashMap<PeerId, ConfigGenParams>,
@@ -624,8 +593,8 @@ pub struct GatewayTest {
     pub actor: GatewayActor,
     pub adapter: Arc<RwLock<LnRpcAdapter>>,
     pub keys: LightningGateway,
-    pub user: UserTest<GatewayClientConfig>,
-    pub client: Arc<GatewayClient>,
+    pub user: Box<dyn ILegacyTestClient>,
+    pub client: Box<dyn IGatewayClient>,
     pub node: GatewayNode,
 }
 
@@ -688,7 +657,7 @@ impl GatewayTest {
 
         let client = Arc::new(
             client_builder
-                .build(gw_client_cfg.clone(), decoders, module_gens)
+                .build(gw_client_cfg.clone(), decoders.clone(), module_gens.clone())
                 .await
                 .expect("Could not build gateway client"),
         );
@@ -700,7 +669,15 @@ impl GatewayTest {
         // Note: We don't run the gateway in test scenarios
 
         // Create a user test from gateway federation client
-        let user = UserTest::new(client.clone());
+        let config = client.config();
+        let user = Box::new(LegacyTestUser::new(
+            UserClientConfig(config.client_config.clone()),
+            decoders.clone(),
+            module_gens.clone(),
+            config.client_config.api_endpoints.keys().cloned().collect(),
+            client.context().db.clone(),
+        ));
+        let client = Box::new(LegacyTestUser { client, config });
 
         GatewayTest {
             actor,
@@ -710,92 +687,6 @@ impl GatewayTest {
             client,
             node,
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct UserTest<C> {
-    pub client: Arc<Client<C>>,
-    pub config: C,
-}
-
-impl UserTest<UserClientConfig> {
-    /// Create a user that communicates only with a subset of peers
-    pub async fn new_user_with_peers(&self, peers: Vec<PeerId>) -> UserTest<UserClientConfig> {
-        let user = create_user_client(
-            self.config.clone(),
-            self.client.decoders().clone(),
-            self.client.module_gens().clone(),
-            peers,
-            Database::new(MemDatabase::new(), module_decode_stubs()),
-        )
-        .await;
-        UserTest::new(Arc::new(user))
-    }
-}
-
-impl<T: AsRef<ClientConfig> + Clone + Send> UserTest<T> {
-    pub fn new(client: Arc<Client<T>>) -> Self {
-        let config = client.config();
-        UserTest { client, config }
-    }
-
-    /// Creates a transaction for testing submissions to the federation
-    pub async fn tx_with_change(&self, builder: TransactionBuilder, change: Amount) -> Transaction {
-        let mint = self.client.mint_client();
-        let mut dbtx = mint.start_dbtx().await;
-
-        builder
-            .build_with_change(
-                self.client.mint_client(),
-                &mut dbtx,
-                rng(),
-                vec![change],
-                &secp(),
-            )
-            .await
-    }
-
-    /// Helper for readability
-    pub async fn set_notes_per_denomination(&self, notes: u16) {
-        self.client
-            .mint_client()
-            .set_notes_per_denomination(notes)
-            .await;
-    }
-
-    /// Helper to simplify the peg_out method calls
-    pub async fn peg_out(&self, amount: u64, address: &Address) -> (PegOutFees, OutPoint) {
-        let peg_out = self
-            .client
-            .new_peg_out_with_fees(bitcoin::Amount::from_sat(amount), address.clone())
-            .await
-            .unwrap();
-        let out_point = self.client.peg_out(peg_out.clone(), rng()).await.unwrap();
-        (peg_out.fees, out_point)
-    }
-
-    /// Returns sum total of all notes
-    pub async fn total_notes(&self) -> Amount {
-        self.client.summary().await.total_amount()
-    }
-
-    pub async fn assert_total_notes(&self, amount: Amount) {
-        self.client.fetch_all_notes().await.unwrap();
-        assert_eq!(self.total_notes().await, amount);
-    }
-
-    /// Asserts the amounts are equal to the denominations held by the user
-    pub fn assert_note_amounts(&self, amounts: Vec<Amount>) {
-        block_on(self.client.fetch_all_notes()).unwrap();
-        let summary = block_on(self.client.summary());
-        let user_amounts = summary
-            .iter()
-            .flat_map(|(a, len)| repeat(a).take(len))
-            .sorted()
-            .collect::<Vec<Amount>>();
-
-        assert_eq!(user_amounts, amounts);
     }
 }
 
@@ -944,28 +835,32 @@ impl FederationTest {
         }
     }
 
-    /// Helper to issue change for a user
-    pub async fn spend_ecash<C: AsRef<ClientConfig> + Clone + Send>(
+    /// Spends ecash whether or not the user has exact change
+    ///
+    /// If the change is not exact, reissues ecash and runs epochs
+    pub async fn spend_ecash(
         &self,
-        user: &UserTest<C>,
+        user: &dyn ILegacyTestClient,
         amount: Amount,
     ) -> TieredMulti<SpendableNote> {
-        // We mimic the logic in the spend_ecash function because we need to know
-        // whether we will be running 2 epochs for a reissue or not
-        let notes = user.client.mint_client().select_notes(amount).await;
-        if notes.unwrap().total_amount() == amount {
-            return user.client.spend_ecash(amount, rng()).await.unwrap();
+        let notes = user.get_stored_ecash(amount).await.unwrap();
+        if notes.total_amount() != amount {
+            user.reissue(notes).await.unwrap();
+            self.run_consensus_epochs(2).await;
+            user.await_all_issued().await.unwrap();
         }
-        user.client.remint_ecash(amount, rng()).await.unwrap();
-        self.run_consensus_epochs(2).await;
-        user.client.remint_ecash_await(amount).await.unwrap()
+
+        let notes = user.get_stored_ecash(amount).await.unwrap();
+        assert_eq!(notes.total_amount(), amount);
+        user.remove_stored_ecash(notes.clone()).await;
+        notes
     }
 
     /// Mines a UTXO then mints notes for user, assuring that the balance sheet
     /// of the federation nets out to zero.
-    pub async fn mine_and_mint<C: AsRef<ClientConfig> + Clone + Send>(
+    pub async fn mine_and_mint(
         &self,
-        user: &UserTest<C>,
+        user: &dyn ILegacyTestClient,
         bitcoin: &dyn BitcoinTest,
         amount: Amount,
     ) {
@@ -977,31 +872,22 @@ impl FederationTest {
 
     /// Inserts notes directly into the databases of federation nodes, runs
     /// consensus to sign them then fetches the notes for the user client.
-    pub async fn mint_notes_for_user<C: AsRef<ClientConfig> + Clone + Send>(
-        &self,
-        user: &UserTest<C>,
-        amount: Amount,
-    ) {
+    pub async fn mint_notes_for_user(&self, user: &dyn ILegacyTestClient, amount: Amount) {
         self.database_add_notes_for_user(user, amount).await;
         self.run_consensus_epochs(1).await;
-        user.client.fetch_all_notes().await.unwrap();
+        user.await_all_issued().await.unwrap();
     }
 
     /// Mines a UTXO owned by the federation.
-    pub async fn mine_spendable_utxo<C: AsRef<ClientConfig> + Clone + Send>(
+    pub async fn mine_spendable_utxo(
         &self,
-        user: &UserTest<C>,
+        user: &dyn ILegacyTestClient,
         bitcoin: &dyn BitcoinTest,
         amount: bitcoin::Amount,
     ) {
-        let address = user.client.get_new_pegin_address(rng()).await;
+        let address = user.get_new_peg_in_address().await;
         let (txout_proof, btc_transaction) = bitcoin.send_and_mine_block(&address, amount).await;
-        let (_, input) = user
-            .client
-            .wallet_client()
-            .create_pegin_input(txout_proof, btc_transaction)
-            .await
-            .unwrap();
+        let input = user.create_peg_in_proof(txout_proof, btc_transaction);
 
         for server in &self.servers {
             let svr = server.lock().await;
@@ -1022,9 +908,7 @@ impl FederationTest {
 
             dbtx.commit_tx().await;
         }
-        bitcoin
-            .mine_blocks(user.client.wallet_client().config.finality_delay as u64)
-            .await;
+        bitcoin.mine_blocks(10).await;
     }
 
     /// Removes the ecash nonces from the fed DB to simulate the fed losing
@@ -1066,9 +950,9 @@ impl FederationTest {
     }
 
     /// Inserts notes directly into the databases of federation nodes
-    pub async fn database_add_notes_for_user<C: AsRef<ClientConfig> + Clone + Send>(
+    pub async fn database_add_notes_for_user(
         &self,
-        user: &UserTest<C>,
+        user: &dyn ILegacyTestClient,
         amount: Amount,
     ) -> OutPoint {
         let bytes: [u8; 32] = rand::random();
@@ -1077,45 +961,43 @@ impl FederationTest {
             out_idx: 0,
         };
 
-        user.client
-            .receive_notes(amount, |notes| async move {
-                for server in &self.servers {
-                    let svr = server.lock().await;
-                    let mut dbtx = svr.database.begin_transaction().await;
-                    let transaction = fedimint_server::transaction::Transaction {
-                        inputs: vec![],
-                        outputs: vec![core::DynOutput::from_typed(
-                            self.mint_id,
-                            MintOutput(notes.clone()),
-                        )],
-                        signature: None,
-                    };
+        let (notes, callback) = user.payable_ecash_tx(amount).await;
 
-                    dbtx.insert_entry(
-                        &fedimint_server::db::AcceptedTransactionKey(out_point.txid),
-                        &fedimint_server::consensus::AcceptedTransaction {
-                            epoch: 0,
-                            transaction,
-                        },
-                    )
-                    .await;
+        for server in &self.servers {
+            let svr = server.lock().await;
+            let mut dbtx = svr.database.begin_transaction().await;
+            let transaction = fedimint_server::transaction::Transaction {
+                inputs: vec![],
+                outputs: vec![core::DynOutput::from_typed(
+                    self.mint_id,
+                    MintOutput(notes.clone()),
+                )],
+                signature: None,
+            };
 
-                    svr.fedimint
-                        .consensus
-                        .modules
-                        .get_expect(self.mint_id)
-                        .apply_output(
-                            &mut dbtx.with_module_prefix(self.mint_id),
-                            &core::DynOutput::from_typed(self.mint_id, MintOutput(notes.clone())),
-                            out_point,
-                        )
-                        .await
-                        .unwrap();
-                    dbtx.commit_tx().await;
-                }
-                out_point
-            })
+            dbtx.insert_entry(
+                &fedimint_server::db::AcceptedTransactionKey(out_point.txid),
+                &fedimint_server::consensus::AcceptedTransaction {
+                    epoch: 0,
+                    transaction,
+                },
+            )
             .await;
+
+            svr.fedimint
+                .consensus
+                .modules
+                .get_expect(self.mint_id)
+                .apply_output(
+                    &mut dbtx.with_module_prefix(self.mint_id),
+                    &core::DynOutput::from_typed(self.mint_id, MintOutput(notes.clone())),
+                    out_point,
+                )
+                .await
+                .unwrap();
+            dbtx.commit_tx().await;
+        }
+        callback(out_point);
         out_point
     }
 
