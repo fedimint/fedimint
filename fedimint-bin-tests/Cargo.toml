@@ -12,7 +12,7 @@ clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error
 cln-rpc = "0.1.1"
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-client  = { path = "../fedimint-client" }
-fedimint-bitcoind = { path = "../fedimint-bitcoind" }
+fedimint-bitcoind = { path = "../fedimint-bitcoind", features = ["bitcoincore-rpc"] }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
