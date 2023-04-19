@@ -1,4 +1,7 @@
 *target/
+# in case it's a symlink
+/target
+
 /result
 .idea
 .tmpenv
