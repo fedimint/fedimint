@@ -1668,6 +1668,15 @@
 <a href="#1668" id="1668">1668</a>
 <a href="#1669" id="1669">1669</a>
 <a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1774,7 +1783,7 @@
 <span class="doccomment">/// Mint module&#39;s secret key derivation child id
 </span><span class="kw">pub const </span>MINT_SECRET_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
-<span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ClientError&gt;;
+<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ClientError&gt;;
 <span class="kw">pub type </span>GatewayClient = Client&lt;GatewayClientConfig&gt;;
 <span class="kw">pub type </span>UserClient = Client&lt;UserClientConfig&gt;;
 
@@ -2121,17 +2130,12 @@
     /// OutPoint in `create_tx` Payer can use the `pay_to_blind_nonces`
     /// function Allows transfer of e-cash without risk of double-spend or
     /// not having exact change
-    </span><span class="kw">pub async fn </span>receive_notes&lt;F, Fut&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount, create_tx: F)
-    <span class="kw">where
-        </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
-        Fut: futures::Future&lt;Output = OutPoint&gt;,
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
-        <span class="self">self</span>.mint_client()
-            .receive_notes(amount, <span class="kw-2">&amp;mut </span>dbtx, create_tx)
-            .<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>;
-    }
+    </span><span class="kw">pub async fn </span>receive_notes(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+    ) -&gt; (TieredMulti&lt;BlindNonce&gt;, Box&lt;<span class="kw">dyn </span>Fn(OutPoint)&gt;) {
+        <span class="self">self</span>.mint_client().receive_notes(amount).<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>new_peg_out_with_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2256,6 +2260,20 @@
         dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(final_notes)
+    }
+
+    <span class="doccomment">/// Removes spent ecash from the database
+    </span><span class="kw">pub async fn </span>remove_ecash(<span class="kw-2">&amp;</span><span class="self">self</span>, ecash: TieredMulti&lt;SpendableNote&gt;) {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
+
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>ecash.iter_items() {
+            dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
+                amount,
+                nonce: note.note.<span class="number">0</span>,
+            })
+            .<span class="kw">await</span>;
+        }
+        dbtx.commit_tx().<span class="kw">await</span>;
     }
 
     <span class="doccomment">/// For tests only: Select notes of a given amount, and then remint them,

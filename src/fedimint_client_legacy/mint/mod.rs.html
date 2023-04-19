@@ -1239,6 +1239,7 @@
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TieredSummary, TransactionId};
 <span class="kw">use </span>fedimint_mint_client::MintModuleTypes;
+<span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>futures::{Future, StreamExt};
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1703,22 +1704,26 @@
         }
     }
 
-    <span class="kw">pub async fn </span>receive_notes&lt;<span class="lifetime">&#39;a</span>, F, Fut&gt;(
+    <span class="kw">pub async fn </span>receive_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="kw-2">mut </span>create_tx: F,
-    ) <span class="kw">where
-        </span>F: FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; Fut,
-        Fut: futures::Future&lt;Output = OutPoint&gt;,
-    {
-        <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(dbtx).<span class="kw">await</span>;
+    ) -&gt; (TieredMulti&lt;BlindNonce&gt;, Box&lt;<span class="kw">dyn </span>Fn(OutPoint)&gt;) {
+        <span class="kw">let </span>db = <span class="self">self</span>.context.db.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>notes_per_denomination = <span class="self">self</span>.notes_per_denomination(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await</span>;
         <span class="kw">let </span>(finalization, notes) = <span class="self">self
-            </span>.create_ecash(amount, notes_per_denomination, dbtx)
+            </span>.create_ecash(amount, notes_per_denomination, <span class="kw-2">&amp;mut </span>dbtx)
             .<span class="kw">await</span>;
-        <span class="kw">let </span>out_point = create_tx(notes).<span class="kw">await</span>;
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization)
-            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+
+        (
+            notes,
+            Box::new(<span class="kw">move </span>|out_point| {
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = block_on(db.begin_transaction());
+                block_on(dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutputFinalizationKey(out_point), <span class="kw-2">&amp;</span>finalization));
+                block_on(dbtx.commit_tx());
+            }),
+        )
     }
 
     <span class="kw">pub async fn </span>await_fetch_notes&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -2090,25 +2095,20 @@
     <span class="kw">async fn </span>issue_notes&lt;<span class="lifetime">&#39;a</span>&gt;(
         fed: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>tokio::sync::Mutex&lt;Fed&gt;,
         client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintClient,
-        client_db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
+        _client_db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
         amt: Amount,
     ) {
         <span class="kw">let </span>txid = TransactionId::from_inner([<span class="number">0x42</span>; <span class="number">32</span>]);
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_db.begin_transaction().<span class="kw">await</span>;
-        client
-            .receive_notes(amt, <span class="kw-2">&amp;mut </span>dbtx, |output| <span class="kw">async </span>{
-                <span class="comment">// Agree on output
-                </span><span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
-                block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, MintOutput(output))]));
-                <span class="comment">// Generate signatures
-                </span>block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]));
-
-                out_point
-            })
-            .<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>;
+        <span class="kw">let </span>(output, callback) = block_on(client.receive_notes(amt));
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>fed = block_on(fed.lock());
+            block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[(out_point, MintOutput(output))]));
+            <span class="comment">// Generate signatures
+            </span>block_on(fed.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]));
+        }
+        callback(out_point);
 
         client.fetch_all_notes().<span class="kw">await</span>;
     }
