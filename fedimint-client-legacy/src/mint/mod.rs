@@ -17,6 +17,7 @@ use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TieredSummary, TransactionId};
 use fedimint_mint_client::MintModuleTypes;
+use futures::executor::block_on;
 use futures::{Future, StreamExt};
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -481,22 +482,26 @@ impl MintClient {
         }
     }
 
-    pub async fn receive_notes<'a, F, Fut>(
+    pub async fn receive_notes(
         &self,
         amount: Amount,
-        dbtx: &mut DatabaseTransaction<'a>,
-        mut create_tx: F,
-    ) where
-        F: FnMut(TieredMulti<BlindNonce>) -> Fut,
-        Fut: futures::Future<Output = OutPoint>,
-    {
-        let notes_per_denomination = self.notes_per_denomination(dbtx).await;
+    ) -> (TieredMulti<BlindNonce>, Box<dyn Fn(OutPoint)>) {
+        let db = self.context.db.clone();
+        let mut dbtx = self.context.db.begin_transaction().await;
+        let notes_per_denomination = self.notes_per_denomination(&mut dbtx).await;
         let (finalization, notes) = self
-            .create_ecash(amount, notes_per_denomination, dbtx)
+            .create_ecash(amount, notes_per_denomination, &mut dbtx)
             .await;
-        let out_point = create_tx(notes).await;
-        dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
-            .await;
+        dbtx.commit_tx().await;
+
+        (
+            notes,
+            Box::new(move |out_point| {
+                let mut dbtx = block_on(db.begin_transaction());
+                block_on(dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization));
+                block_on(dbtx.commit_tx());
+            }),
+        )
     }
 
     pub async fn await_fetch_notes<'a>(
@@ -868,25 +873,20 @@ mod tests {
     async fn issue_notes<'a>(
         fed: &'a tokio::sync::Mutex<Fed>,
         client: &'a MintClient,
-        client_db: &'a Database,
+        _client_db: &'a Database,
         amt: Amount,
     ) {
         let txid = TransactionId::from_inner([0x42; 32]);
         let out_point = OutPoint { txid, out_idx: 0 };
 
-        let mut dbtx = client_db.begin_transaction().await;
-        client
-            .receive_notes(amt, &mut dbtx, |output| async {
-                // Agree on output
-                let mut fed = block_on(fed.lock());
-                block_on(fed.consensus_round(&[], &[(out_point, MintOutput(output))]));
-                // Generate signatures
-                block_on(fed.consensus_round(&[], &[]));
-
-                out_point
-            })
-            .await;
-        dbtx.commit_tx().await;
+        let (output, callback) = block_on(client.receive_notes(amt));
+        {
+            let mut fed = block_on(fed.lock());
+            block_on(fed.consensus_round(&[], &[(out_point, MintOutput(output))]));
+            // Generate signatures
+            block_on(fed.consensus_round(&[], &[]));
+        }
+        callback(out_point);
 
         client.fetch_all_notes().await;
     }
