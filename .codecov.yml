@@ -14,9 +14,10 @@ coverage:
   status:
     project:
       default:
+        # fail if the total coverage drops by no more than 5%
+        # https://docs.codecov.com/docs/commit-status#threshold
         target: auto
-        threshold: 50%
+        threshold: 5%
     patch:
       default:
-        target: auto
-        threshold: 0%
+        target: 0 # we don't require any specific coverage for each PR
