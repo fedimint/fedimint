@@ -27,7 +27,6 @@ impl ClientModuleGen for LightningClientGen {
         &self,
         _cfg: Self::Config,
         _db: Database,
-        _instance_id: ModuleInstanceId,
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {

@@ -60,12 +60,10 @@ impl ClientModuleGen for MintClientGen {
         &self,
         cfg: Self::Config,
         _db: Database,
-        instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
         Ok(MintClientModule {
-            instance_id,
             cfg,
             secret: module_root_secret,
             secp: Secp256k1::new(),
@@ -77,12 +75,11 @@ impl ClientModuleGen for MintClientGen {
         &self,
         cfg: Self::Config,
         db: Database,
-        instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<DynPrimaryClientModule> {
         Ok(self
-            .init(cfg, db, instance_id, module_root_secret, notifier)
+            .init(cfg, db, module_root_secret, notifier)
             .await?
             .into())
     }
@@ -90,7 +87,6 @@ impl ClientModuleGen for MintClientGen {
 
 #[derive(Debug)]
 pub struct MintClientModule {
-    instance_id: ModuleInstanceId,
     cfg: MintClientConfig,
     secret: DerivableSecret,
     secp: Secp256k1<All>,
@@ -102,7 +98,6 @@ pub struct MintClientModule {
 pub struct MintClientContext {
     pub mint_decoder: Decoder,
     pub mint_keys: Tiered<AggregatePublicKey>,
-    pub instance_id: ModuleInstanceId,
 }
 
 impl Context for MintClientContext {}
@@ -116,7 +111,6 @@ impl ClientModule for MintClientModule {
         MintClientContext {
             mint_decoder: self.decoder(),
             mint_keys: self.cfg.tbs_pks.clone(),
-            instance_id: self.instance_id,
         }
     }
 
