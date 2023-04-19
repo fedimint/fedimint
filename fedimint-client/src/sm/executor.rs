@@ -510,6 +510,25 @@ where
 }
 
 #[derive(Debug)]
+pub(crate) struct ActiveOperationStateKeyPrefix<GC> {
+    pub operation_id: OperationId,
+    pub _pd: PhantomData<GC>,
+}
+
+impl<GC> Encodable for ActiveOperationStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.operation_id.consensus_encode(writer)
+    }
+}
+
+impl<GC> ::fedimint_core::db::DatabaseLookup for ActiveOperationStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = ActiveStateKey<GC>;
+}
+
+#[derive(Debug)]
 pub(crate) struct ActiveModuleOperationStateKeyPrefix<GC> {
     pub operation_id: OperationId,
     pub module_instance: ModuleInstanceId,
@@ -631,6 +650,25 @@ where
             state,
         })
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct InactiveOperationStateKeyPrefix<GC> {
+    pub operation_id: OperationId,
+    pub _pd: PhantomData<GC>,
+}
+
+impl<GC> Encodable for InactiveOperationStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.operation_id.consensus_encode(writer)
+    }
+}
+
+impl<GC> ::fedimint_core::db::DatabaseLookup for InactiveOperationStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = InactiveStateKey<GC>;
 }
 
 #[derive(Debug)]
