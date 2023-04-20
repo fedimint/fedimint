@@ -1,5 +1,6 @@
 use std::io::{Error, Write};
 
+use anyhow::format_err;
 use bitcoin::hashes::Hash as BitcoinHash;
 use miniscript::descriptor::WshInner;
 use miniscript::{Descriptor, MiniscriptKey};
@@ -61,6 +62,18 @@ impl<T: Encodable + MiniscriptKey> Encodable for Descriptor<T> {
 impl Encodable for bitcoin::Network {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.magic().consensus_encode(writer)
+    }
+}
+
+impl Decodable for bitcoin::Network {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let magic = u32::consensus_decode(d, modules)?;
+        bitcoin::Network::from_magic(magic).ok_or_else(|| {
+            DecodeError::new_custom(format_err!("Unknown network magic: {:x}", magic))
+        })
     }
 }
 

@@ -25,7 +25,6 @@ use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
-use fedimint_core::config::CommonModuleGenRegistry;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{msats, sats, TieredMulti};
@@ -1209,25 +1208,21 @@ async fn limits_client_config_downloads() -> Result<()> {
     non_lightning_test(2, |fed, user, _| async move {
         let connect = &fed.connect_info.clone();
         let api = WsFederationApi::from_connect_info(&[connect.clone()]);
-        let reg = CommonModuleGenRegistry::default();
 
         // consensus hash should be the same amoung all peers
         let res = api.consensus_config_hash().await;
         assert!(res.is_ok());
 
         // fed needs to run an epoch to combine shares and verify sig
-        let res = api.download_client_config(connect, reg.clone()).await;
+        let res = api.download_client_config(connect).await;
         assert_matches!(res, Err(_));
 
         fed.run_consensus_epochs(1).await;
-        let cfg = api
-            .download_client_config(connect, reg.clone())
-            .await
-            .unwrap();
+        let cfg = api.download_client_config(connect).await.unwrap();
         assert_eq!(cfg, user.config());
 
         // cannot download more than once with test settings
-        let res = api.download_client_config(connect, reg.clone()).await;
+        let res = api.download_client_config(connect).await;
         assert_matches!(res, Err(_));
     })
     .await

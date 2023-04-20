@@ -1,14 +1,12 @@
 use std::hash::Hasher;
 
 use bitcoin::hashes::hex::ToHex;
-use bitcoin::hashes::sha256;
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
-use fedimint_core::module::__reexports::serde_json;
-use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Feerate, PeerId};
 use impl_tools::autoimpl;
 use miniscript::Descriptor;
@@ -16,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::config::WalletClientConfig;
 use crate::db::UTXOKey;
 use crate::keys::CompressedPublicKey;
 use crate::txoproof::{PegInProof, PegInProofError};
@@ -28,6 +25,7 @@ pub mod tweakable;
 pub mod txoproof;
 
 const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
+const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 pub const CONFIRMATION_TARGET: u16 = 10;
 
@@ -188,10 +186,6 @@ impl CommonModuleGen for WalletCommonGen {
     const KIND: ModuleKind = KIND;
     fn decoder() -> Decoder {
         WalletModuleTypes::decoder()
-    }
-
-    fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
-        Ok(serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash())
     }
 }
 

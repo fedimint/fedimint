@@ -117,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
         let base_key = wallet_cfg.private.peg_in_key;
         let network = wallet_cfg.consensus.network;
 
-        (base_descriptor, base_key, network)
+        (base_descriptor.0, base_key, network)
     } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {
         (descriptor, key, opts.network)
     } else {

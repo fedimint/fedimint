@@ -5,8 +5,6 @@ use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{bail, format_err};
-use bitcoin::hashes::sha256;
-use bitcoin::hashes::sha256::HashEngine;
 use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
 use fedimint_core::admin_client::{
     ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
@@ -15,8 +13,8 @@ use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
-    ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, ModuleConfigResponse,
-    PeerUrl, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
+    ClientConfig, ClientConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl,
+    ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
@@ -44,7 +42,7 @@ use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
 use crate::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TLS_PK};
 use crate::fedimint_core::encoding::Encodable;
-use crate::fedimint_core::{BitcoinHash, NumPeers};
+use crate::fedimint_core::NumPeers;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};
@@ -136,8 +134,10 @@ pub struct ServerConfigConsensus {
     #[serde(with = "serde_tls_cert_map")]
     pub tls_certs: BTreeMap<PeerId, rustls::Certificate>,
     /// All configuration that needs to be the same for modules
+    pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
     #[encodable_ignore]
-    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+    /// Human readable representation of [`Self::modules`]
+    pub modules_json: BTreeMap<ModuleInstanceId, JsonWithKind>,
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
 }
@@ -176,57 +176,47 @@ impl ServerConfigConsensus {
     pub fn iter_module_instances(
         &self,
     ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
-        self.modules.iter().map(|(k, v)| (*k, v.kind()))
+        self.modules.iter().map(|(k, v)| (*k, &v.kind))
     }
 
-    /// encodes the fields into a sha256 hash for comparison
-    /// TODO use the derive macro to automatically pick up new fields here
     pub fn try_to_config_response(
         &self,
+        // TODO: remove
         module_config_gens: &ServerModuleGenRegistry,
-    ) -> anyhow::Result<ConfigResponse> {
-        let modules: BTreeMap<ModuleInstanceId, ModuleConfigResponse> = self
-            .modules
-            .iter()
-            .map(|(module_instance_id, v)| {
-                let kind = v.kind();
-                Ok((
-                    *module_instance_id,
-                    module_config_gens
-                        .get(kind)
-                        .ok_or_else(|| format_err!("module config gen not found: {kind}"))?
-                        .to_config_response(v.value().clone())?,
-                ))
-            })
-            .collect::<anyhow::Result<_>>()?;
+    ) -> anyhow::Result<ClientConfigResponse> {
+        Ok(ClientConfigResponse {
+            client_config: self.to_client_config(module_config_gens)?,
+            signature: None,
+        })
+    }
 
-        let mut engine = HashEngine::default();
-        self.consensus_encode(&mut engine)?;
-        for (k, v) in modules.iter() {
-            k.consensus_encode(&mut engine)?;
-            v.consensus_hash.consensus_encode(&mut engine)?;
-        }
-        let consensus_hash = sha256::Hash::from_engine(engine);
-
+    fn to_client_config(
+        &self,
+        module_config_gens: &ModuleGenRegistry<DynServerModuleGen>,
+    ) -> Result<ClientConfig, anyhow::Error> {
         let client = ClientConfig {
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
             api_endpoints: self.api_endpoints.clone(),
-            modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
+            modules: self
+                .modules
+                .iter()
+                .map(|(k, v)| {
+                    let gen = module_config_gens
+                        .get(&v.kind)
+                        .ok_or_else(|| format_err!("Module gen kind={} not found", v.kind))?;
+                    Ok((*k, gen.get_client_config(v)?))
+                })
+                .collect::<anyhow::Result<BTreeMap<_, _>>>()?,
             meta: self.meta.clone(),
         };
-
-        Ok(ConfigResponse {
-            client,
-            consensus_hash,
-            client_hash_signature: None,
-        })
+        Ok(client)
     }
 
     pub fn to_config_response(
         &self,
         module_config_gens: &ServerModuleGenRegistry,
-    ) -> ConfigResponse {
+    ) -> ClientConfigResponse {
         self.try_to_config_response(module_config_gens)
             .expect("configuration mismatch")
     }
@@ -279,6 +269,7 @@ impl ServerConfig {
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),
+            modules_json: Default::default(),
             meta: params.consensus.requested.meta,
         };
         let mut cfg = Self {
@@ -310,11 +301,13 @@ impl ServerConfig {
                 local,
                 private,
                 consensus,
+                consensus_json,
             } = config;
 
             self.local.modules.insert(name, local);
             self.private.modules.insert(name, private);
             self.consensus.modules.insert(name, consensus);
+            self.consensus.modules_json.insert(name, consensus_json);
         }
     }
 
@@ -325,8 +318,14 @@ impl ServerConfig {
     ) -> anyhow::Result<T> {
         let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
         let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
-        let consensus = Self::get_module_cfg_by_instance_id(&self.consensus.modules, id)?;
-        let module = ServerModuleConfig::from(local, private, consensus);
+        let consensus = self
+            .consensus
+            .modules
+            .get(&id)
+            .ok_or_else(|| format_err!("Module {id} not found"))?
+            .clone();
+        let consensus_json = Self::get_module_cfg_by_instance_id(&self.consensus.modules_json, id)?;
+        let module = ServerModuleConfig::from(local, private, consensus, consensus_json);
 
         module.to_typed()
     }
@@ -339,17 +338,28 @@ impl ServerConfig {
             .consensus
             .modules
             .iter()
-            .find(|(_, v)| v.is_kind(&kind))
+            .find(|(_, v)| v.kind == kind)
             .ok_or_else(|| format_err!("Module {kind} not found"))?
             .0)
     }
 
-    /// Constructs a module config by name
+    /// Constructs a module config by id
     pub fn get_module_config(&self, id: ModuleInstanceId) -> anyhow::Result<ServerModuleConfig> {
         let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
         let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
-        let consensus = Self::get_module_cfg_by_instance_id(&self.consensus.modules, id)?;
-        Ok(ServerModuleConfig::from(local, private, consensus))
+        let consensus = self
+            .consensus
+            .modules
+            .get(&id)
+            .ok_or_else(|| format_err!("Module {id} not found"))?
+            .clone();
+        let consensus_json = Self::get_module_cfg_by_instance_id(&self.consensus.modules_json, id)?;
+        Ok(ServerModuleConfig::from(
+            local,
+            private,
+            consensus,
+            consensus_json,
+        ))
     }
 
     fn get_module_cfg_by_instance_id(
@@ -390,7 +400,7 @@ impl ServerConfig {
             .consensus
             .modules
             .iter()
-            .map(|(id, config)| Ok((*id, config.kind())))
+            .map(|(id, config)| Ok((*id, config.kind.clone())))
             .collect::<anyhow::Result<BTreeSet<_>>>()?
             .iter()
         {

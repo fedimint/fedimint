@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_client::module::gen::{ClientModuleGenRegistry, ClientModuleGenRegistryExt};
+use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
 use fedimint_core::api::{
     DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
@@ -142,13 +142,12 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        module_gens: ClientModuleGenRegistry,
+        // TODO: delme
+        _module_gens: ClientModuleGenRegistry,
     ) -> Result<GatewayClientConfig> {
         let api: DynFederationApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
 
-        let client_config = api
-            .download_client_config(&connect, module_gens.to_common())
-            .await?;
+        let client_config = api.download_client_config(&connect).await?;
 
         let mut rng = rand::rngs::OsRng;
         let ctx = secp256k1::Secp256k1::new();

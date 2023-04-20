@@ -168,7 +168,8 @@ impl FedimintServer {
             .cfg
             .consensus
             .to_config_response(&self.settings.registry)
-            .consensus_hash;
+            .client_config
+            .consensus_hash();
 
         loop {
             info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");

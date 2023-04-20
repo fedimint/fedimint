@@ -29,14 +29,13 @@ use fedimint_core::bitcoin_rpc::{
     FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
 };
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
+    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
@@ -178,21 +177,17 @@ impl ServerModuleGen for WalletGen {
         Ok(wallet_cfg.to_erased())
     }
 
-    fn to_config_response(
-        &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<ModuleConfigResponse> {
-        let config = serde_json::from_value::<WalletConfigConsensus>(config)?;
-
-        Ok(ModuleConfigResponse {
-            client: config.to_client_config(),
-            consensus_hash: config.consensus_hash(),
-        })
-    }
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<WalletConfig>()?.validate_config(identity)
     }
+
+    fn get_client_config(
+        &self,
+        config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        Ok(WalletConfigConsensus::from_erased(config)?.to_client_config())
+    }
+
     async fn dump_database(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
@@ -399,7 +394,7 @@ impl ServerModule for Wallet {
         }
 
         input
-            .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)
+            .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor.0)
             .into_module_error_other()?;
 
         if dbtx.get_value(&UTXOKey(input.outpoint())).await.is_some() {
@@ -1040,6 +1035,7 @@ impl Wallet {
             .cfg
             .consensus
             .peg_in_descriptor
+            .0
             .tweak(&pending_tx.tweak, &self.secp)
             .script_pubkey();
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
@@ -1171,7 +1167,7 @@ impl Wallet {
 
     fn offline_wallet(&self) -> StatelessWallet {
         StatelessWallet {
-            descriptor: &self.cfg.consensus.peg_in_descriptor,
+            descriptor: &self.cfg.consensus.peg_in_descriptor.0,
             secret_key: &self.cfg.private.peg_in_key,
             secp: &self.secp,
         }
