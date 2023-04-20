@@ -199,7 +199,7 @@ macro_rules! cmd {
     };
 }
 
-const POLL_INTERVAL: Duration = Duration::from_secs(1);
+const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 pub async fn poll<Fut>(name: &str, f: impl Fn() -> Fut) -> Result<()>
 where
