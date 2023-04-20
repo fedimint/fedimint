@@ -46,7 +46,8 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{
-    LightningClientModule, LightningCommonGen, LightningModuleTypes, LightningOutputOutcome,
+    serde_routing_fees, LightningClientModule, LightningCommonGen, LightningModuleTypes,
+    LightningOutputOutcome,
 };
 use fedimint_logging::LOG_WALLET;
 use fedimint_mint_client::{MintClientModule, MintCommonGen, MintModuleTypes};
@@ -135,6 +136,9 @@ pub struct GatewayClientConfig {
     /// `short_channel_id` when creating invoices to be settled by this
     /// gateway.
     pub mint_channel_id: u64,
+    // Gateway configured routing fees
+    #[serde(with = "serde_routing_fees")]
+    pub fees: RoutingFees,
 }
 
 impl GatewayClientConfig {
@@ -150,6 +154,7 @@ impl GatewayClientConfig {
             api: self.api.clone(),
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
+            fees: self.fees,
         }
     }
 }

@@ -18,6 +18,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
+use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -171,6 +172,9 @@ pub struct LightningGateway {
     pub route_hints: Vec<route_hints::RouteHint>,
     /// Limits the validity of the announcement to allow updates
     pub valid_until: SystemTime,
+    /// Gateway configured routing fees
+    #[serde(with = "serde_routing_fees")]
+    pub fees: RoutingFees,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
