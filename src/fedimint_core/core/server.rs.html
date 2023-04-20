@@ -461,8 +461,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::ModuleDatabaseTransaction;
 <span class="kw">use </span><span class="kw">crate</span>::maybe_add_send_sync;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ApiVersion, ConsensusProposal, InputMeta,
-    ModuleCommon, ModuleConsensusVersion, ModuleError, ServerModule, TransactionItemAmount,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal, InputMeta, ModuleCommon,
+    ModuleError, ServerModule, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, MaybeSync};
 
@@ -501,7 +501,7 @@
     <span class="doccomment">/// Returns the decoder belonging to the server module
     </span><span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
 
-    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleConsensusVersion, <span class="kw-2">&amp;</span>[ApiVersion]);
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions;
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
     </span><span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);
@@ -648,8 +648,8 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleConsensusVersion, <span class="kw-2">&amp;</span>[ApiVersion]) {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::versions(<span class="self">self</span>)
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::supported_api_versions(<span class="self">self</span>)
     }
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.

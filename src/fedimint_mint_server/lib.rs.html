@@ -1394,9 +1394,6 @@
 <a href="#1394" id="1394">1394</a>
 <a href="#1395" id="1395">1395</a>
 <a href="#1396" id="1396">1396</a>
-<a href="#1397" id="1397">1397</a>
-<a href="#1398" id="1398">1398</a>
-<a href="#1399" id="1399">1399</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1412,9 +1409,9 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
+    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleGen, TransactionItemAmount,
+    PeerHandle, ServerModuleGen, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, TaskGroup};
@@ -1697,11 +1694,8 @@
         </span>}
     }
 
-    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (ModuleConsensusVersion, <span class="kw-2">&amp;</span>[ApiVersion]) {
-        (
-            ModuleConsensusVersion(<span class="number">0</span>),
-            <span class="kw-2">&amp;</span>[ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}],
-        )
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(<span class="number">0</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
     }
 
     <span class="kw">async fn </span>consensus_proposal(

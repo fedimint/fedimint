@@ -627,6 +627,7 @@
 <a href="#627" id="627">627</a>
 <a href="#628" id="628">628</a>
 <a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::os::unix::ffi::OsStrExt;
@@ -849,6 +850,7 @@
             modules: modules.clone(),
             client_cfg,
             api_sender,
+            supported_api_versions: ServerConfig::supported_api_versions_summary(<span class="kw-2">&amp;</span>modules),
         };
 
         <span class="comment">// Build consensus processor
