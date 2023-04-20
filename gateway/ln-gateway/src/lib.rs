@@ -34,6 +34,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{Amount, TransactionId};
 use gatewaylnrpc::GetNodeInfoResponse;
+use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::ILnRpcClient;
 use rpc::{FederationInfo, LightningReconnectPayload};
 use secp256k1::PublicKey;
@@ -122,6 +123,7 @@ pub struct Gateway {
     receiver: mpsc::Receiver<GatewayRequest>,
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
+    fees: RoutingFees,
 }
 
 impl Gateway {
@@ -132,6 +134,7 @@ impl Gateway {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
+        fees: RoutingFees,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -151,6 +154,7 @@ impl Gateway {
             decoders: decoders.clone(),
             module_gens: module_gens.clone(),
             lightning_mode: Some(lightning_mode),
+            fees,
         };
 
         gw.load_actors(decoders, module_gens).await?;
@@ -165,6 +169,7 @@ impl Gateway {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
+        fees: RoutingFees,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -180,6 +185,7 @@ impl Gateway {
             decoders: decoders.clone(),
             module_gens: module_gens.clone(),
             lightning_mode: None,
+            fees,
         };
 
         gw.load_actors(decoders, module_gens).await?;
@@ -313,6 +319,7 @@ impl Gateway {
         &mut self,
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
+        fees: RoutingFees,
     ) -> Result<FederationInfo> {
         let connect = WsClientConnectInfo::from_str(&payload.connect).map_err(|e| {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
@@ -329,7 +336,13 @@ impl Gateway {
 
         let gw_client_cfg = self
             .client_builder
-            .create_config(connect, channel_id, node_pub_key, self.module_gens.clone())
+            .create_config(
+                connect,
+                channel_id,
+                node_pub_key,
+                self.module_gens.clone(),
+                fees,
+            )
             .await?;
 
         let client = Arc::new(
@@ -543,9 +556,11 @@ impl Gateway {
                 GatewayRequest::ConnectFederation(inner) => {
                     let route_hints: Vec<RouteHint> =
                         self.lnrpc.read().await.routehints().await?.try_into()?;
+                    let fees = self.fees;
+
                     inner
                         .handle(&mut self, |gateway, payload| {
-                            gateway.handle_connect_federation(payload, route_hints.clone())
+                            gateway.handle_connect_federation(payload, route_hints.clone(), fees)
                         })
                         .await;
                 }

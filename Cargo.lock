@@ -2882,6 +2882,7 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-testing",
  "futures",
+ "lightning",
  "lightning-invoice",
  "portpicker",
  "prost 0.11.9",
