@@ -240,7 +240,7 @@ impl ConfigGenApi {
         let config = ServerConfig::distributed_gen(
             &params,
             module_gens,
-            DelayCalculator::default(),
+            DelayCalculator::PROD_DEFAULT,
             &mut task_group,
         )
         .await;

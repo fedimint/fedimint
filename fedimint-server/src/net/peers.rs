@@ -33,9 +33,6 @@ use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 
-/// Maximum connection failures we consider for our back-off strategy
-const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
-
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
 pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
@@ -85,33 +82,34 @@ struct PeerConnectionStateMachine<M> {
 /// The default values are in the order of seconds
 #[derive(Debug, Clone, Copy)]
 pub struct DelayCalculator {
-    scaling_factor: f64,
+    max_fail_reconnect_counter: u64,
 }
 
 impl DelayCalculator {
-    fn new() -> Self {
-        Self {
-            scaling_factor: 1.0,
-        }
-    }
+    /// Maximum connection failures we consider for our back-off strategy,
+    /// production default
+    const PROD_MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
 
-    /// This instance is tuned for tests and scales delays down to milliseconds.
-    /// This makes it feasible to run tests where errors
+    /// Maximum connection failures we consider for our back-off strategy, test
+    /// default
+    const TEST_MAX_FAIL_RECONNECT_COUNTER: u64 = 1;
+
+    pub const PROD_DEFAULT: Self = Self {
+        max_fail_reconnect_counter: Self::PROD_MAX_FAIL_RECONNECT_COUNTER,
+    };
+
+    /// This instance is tuned for tests and scales delays down to a few
+    /// seconds. This makes it feasible to run tests where errors
     /// and disconnections are common.
     pub const TEST_DEFAULT: Self = Self {
-        scaling_factor: 0.1e-3,
+        max_fail_reconnect_counter: Self::TEST_MAX_FAIL_RECONNECT_COUNTER,
     };
 
     fn reconnection_delay(&self, disconnect_count: u64) -> Duration {
-        let scaling_factor = disconnect_count as f64 * self.scaling_factor;
+        let max_disconnect_count = min(disconnect_count, self.max_fail_reconnect_counter);
+        let scaling_factor = max_disconnect_count as f64;
         let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor..4.0 * scaling_factor);
         Duration::from_secs_f64(delay)
-    }
-}
-
-impl Default for DelayCalculator {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -432,7 +430,7 @@ where
 
         PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
             reconnect_at,
-            failed_reconnect_counter: min(disconnect_count, MAX_FAIL_RECONNECT_COUNTER),
+            failed_reconnect_counter: disconnect_count,
         })
     }
 
@@ -765,12 +763,12 @@ mod tests {
 
     #[test]
     fn test_delay_calculator() {
-        // Test delays should be on the order of milliseconds, not seconds.
+        // Test delays should within a range of a just a few seconds.
         let c = DelayCalculator::TEST_DEFAULT;
-        assert!(c.reconnection_delay(1).as_millis() < 1);
-        assert!(c.reconnection_delay(100).as_millis() < 100);
-        // Default/prod delays should be on the order of seconds.
-        let c = DelayCalculator::default();
+        assert!(c.reconnection_delay(1).as_secs() < 5);
+        assert!(c.reconnection_delay(100).as_secs() < 5);
+        // Production delays may reach several seconds.
+        let c = DelayCalculator::PROD_DEFAULT;
         assert!((1..10).contains(&c.reconnection_delay(1).as_secs()));
         assert!((100..1000).contains(&c.reconnection_delay(100).as_secs()));
     }
