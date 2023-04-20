@@ -1254,6 +1254,7 @@ dependencies = [
  "jsonrpsee-types 0.18.0",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
+ "lightning",
  "lightning-invoice",
  "macro_rules_attribute",
  "miniscript",
