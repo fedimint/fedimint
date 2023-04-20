@@ -191,7 +191,7 @@ impl CommonModuleGen for WalletCommonGen {
     }
 
     fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash> {
-        serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash()
+        Ok(serde_json::from_value::<WalletClientConfig>(config)?.consensus_hash())
     }
 }
 

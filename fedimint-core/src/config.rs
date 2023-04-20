@@ -565,7 +565,7 @@ impl ClientModuleConfig {
     ) -> anyhow::Result<Self> {
         Ok(Self {
             kind,
-            consensus_hash: value.consensus_hash()?,
+            consensus_hash: value.consensus_hash(),
             config: serde_json::to_value(value)?,
         })
     }

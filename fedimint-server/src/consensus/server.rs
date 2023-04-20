@@ -345,7 +345,7 @@ impl ConsensusServer {
                         last_outcome.epoch,
                         self.last_processed_epoch
                             .as_ref()
-                            .and_then(|epoch| epoch.outcome.consensus_hash().ok()),
+                            .map(|epoch| epoch.outcome.consensus_hash()),
                         None,
                         true,
                     )

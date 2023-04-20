@@ -57,7 +57,7 @@ pub async fn handle_ng_command<D: IDatabase>(
                 .get_module_client::<MintClientModule>(LEGACY_HARDCODED_INSTANCE_ID_MINT)
                 .unwrap();
 
-            let notes_hash = notes.consensus_hash().unwrap().into_inner();
+            let notes_hash = notes.consensus_hash().into_inner();
             let mint_input = mint_client
                 .create_input_from_notes(notes_hash, notes)
                 .await

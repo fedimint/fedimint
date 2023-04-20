@@ -101,7 +101,7 @@ impl CommonModuleGen for MintCommonGen {
     fn hash_client_module(
         config: serde_json::Value,
     ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
-        serde_json::from_value::<MintClientConfig>(config)?.consensus_hash()
+        Ok(serde_json::from_value::<MintClientConfig>(config)?.consensus_hash())
     }
 }
 

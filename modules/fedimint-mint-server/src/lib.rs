@@ -200,7 +200,7 @@ impl ServerModuleGen for MintGen {
 
         Ok(ModuleConfigResponse {
             client: config.to_client_config(),
-            consensus_hash: config.consensus_hash()?,
+            consensus_hash: config.consensus_hash(),
         })
     }
 
