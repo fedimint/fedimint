@@ -165,7 +165,7 @@ jobs:
           - on: linux
             runs-on: ubuntu-22.04
             build-in-pr: true
-            timeout: 15
+            timeout: 20
           - host: macos
             runs-on: macos-12
             build-in-pr: false
