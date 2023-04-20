@@ -208,11 +208,14 @@ impl Lnd {
             lnd_macaroon.clone(),
         )
         .await?;
-        Ok(Self {
+        let this = Self {
             _bitcoind: bitcoind,
             client: Arc::new(Mutex::new(client)),
             _process: process,
-        })
+        };
+        // wait for lnd rpc to be active
+        poll("lnd", || async { Ok(this.pub_key().await.is_ok()) }).await?;
+        Ok(this)
     }
 
     pub async fn client_lock(&self) -> Result<MappedMutexGuard<'_, tonic_lnd::LightningClient>> {
@@ -980,23 +983,30 @@ struct DevFed {
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
     let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let (cln, lnd, electrs, esplora) = tokio::try_join!(
-        Lightningd::new(process_mgr, bitcoind.clone()),
-        Lnd::new(process_mgr, bitcoind.clone()),
+    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = tokio::try_join!(
+        async {
+            let (cln, lnd) = tokio::try_join!(
+                Lightningd::new(process_mgr, bitcoind.clone()),
+                Lnd::new(process_mgr, bitcoind.clone())
+            )?;
+            info!("lightning started");
+            let (gw_cln, gw_lnd, _) = tokio::try_join!(
+                Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())),
+                Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())),
+                open_channel(&bitcoind, &cln, &lnd),
+            )?;
+            info!("gateways started");
+            Ok((cln, lnd, gw_cln, gw_lnd))
+        },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
+        async {
+            run_dkg(task_group, 4).await?;
+            info!("dkg done");
+            Federation::new(process_mgr, bitcoind.clone(), 0..4).await
+        },
     )?;
-    info!("lightning and bitcoind started");
-    run_dkg(task_group, 4).await?;
-    info!("dkg done");
-    open_channel(&bitcoind, &cln, &lnd).await?;
-
-    info!("channel open");
-    let fed = Federation::new(process_mgr, bitcoind.clone(), 0..4).await?;
-    info!("federation started");
-    let gw_cln = Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())).await?;
-    let gw_lnd = Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())).await?;
-    info!("gateway started");
+    info!("federation and gateways started");
     tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed))?;
     fed.await_gateways_registered().await?;
     info!("gateways registered");
