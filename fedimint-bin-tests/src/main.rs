@@ -978,6 +978,7 @@ struct DevFed {
 }
 
 async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
+    let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let (cln, lnd, electrs, esplora) = tokio::try_join!(
         Lightningd::new(process_mgr, bitcoind.clone()),
@@ -1000,6 +1001,7 @@ async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result
     fed.await_gateways_registered().await?;
     info!("gateways registered");
     fed.use_gateway(&gw_cln).await?;
+    info!("starting dev federation took {:?}", start_time.elapsed()?);
     Ok(DevFed {
         bitcoind,
         cln,
