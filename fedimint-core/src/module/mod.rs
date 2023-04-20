@@ -490,7 +490,7 @@ impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynServerModuleG
 ///
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable)]
 pub struct CoreConsensusVersion(pub u32);
 
 /// Consensus version of a specific module instance
@@ -516,7 +516,7 @@ pub struct CoreConsensusVersion(pub u32);
 /// by running two instances of the module at the same time (each of different
 /// `ModuleKind` version), allow users to slowly migrate to a new one.
 /// This avoids complex and error-prone server-side consensus-migration logic.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable)]
 pub struct ModuleConsensusVersion(pub u32);
 
 /// Api version supported by a core server or a client/server module at a given
@@ -536,7 +536,7 @@ pub struct ModuleConsensusVersion(pub u32);
 /// backward compatibility on both client and server side to accommodate end
 /// user client devices receiving updates at a pace hard to control, and
 /// technical and coordination challenges of upgrading servers.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ApiVersion {
     /// Major API version
     ///
@@ -553,6 +553,39 @@ pub struct ApiVersion {
     /// * For servers this means *maximum* supported minor version of the
     ///   `major` version implemented by the server implementation
     pub minor: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SupportedCoreApiVersions {
+    pub consensus: CoreConsensusVersion,
+    pub api: Vec<ApiVersion>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SupportedModuleApiVersions {
+    pub core: CoreConsensusVersion,
+    pub module: ModuleConsensusVersion,
+    pub api: Vec<ApiVersion>,
+}
+
+impl SupportedModuleApiVersions {
+    pub fn from_raw(core: u32, module: u32, api_versions: &[(u32, u32)]) -> Self {
+        Self {
+            core: CoreConsensusVersion(core),
+            module: ModuleConsensusVersion(module),
+            api: api_versions
+                .iter()
+                .copied()
+                .map(|(major, minor)| ApiVersion { major, minor })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SupportedApiVersionsSummary {
+    pub core: SupportedCoreApiVersions,
+    pub modules: BTreeMap<ModuleInstanceId, SupportedModuleApiVersions>,
 }
 
 pub trait CommonModuleGen: Debug + Sized {
@@ -810,7 +843,7 @@ pub trait ServerModule: Debug + Sized {
 
     /// Module consensus version this module is running with and the API
     /// versions it supports in it
-    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut ModuleDatabaseTransaction<'_>);

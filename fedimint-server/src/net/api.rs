@@ -12,6 +12,7 @@ use fedimint_core::epoch::{SerdeEpochHistory, SerdeSignature, SignedEpochOutcome
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
+    SupportedApiVersionsSummary,
 };
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::server::DynServerModule;
@@ -67,9 +68,15 @@ pub struct ConsensusApi {
     pub client_cfg: ConfigResponse,
     /// For sending API events to consensus such as transactions
     pub api_sender: Sender<ApiEvent>,
+
+    pub supported_api_versions: SupportedApiVersionsSummary,
 }
 
 impl ConsensusApi {
+    pub fn api_versions_summary(&self) -> &SupportedApiVersionsSummary {
+        &self.supported_api_versions
+    }
+
     pub async fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -320,6 +327,12 @@ impl HasApiContext<DynServerModule> for ConsensusApi {
 
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
     vec![
+        api_endpoint! {
+            "version",
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> SupportedApiVersionsSummary {
+                Ok(fedimint.api_versions_summary().to_owned())
+            }
+        },
         api_endpoint! {
             "/transaction",
             async |fedimint: &ConsensusApi, _context, serde_transaction: SerdeTransaction| -> TransactionId {

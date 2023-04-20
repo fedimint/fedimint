@@ -12,9 +12,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleGen, InputMeta, ModuleConsensusVersion, ModuleError, PeerHandle,
-    ServerModuleGen, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
+    InputMeta, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
+    SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
@@ -138,11 +138,8 @@ impl ServerModule for Dummy {
     type Gen = DummyServerGen;
     type VerificationCache = DummyVerificationCache;
 
-    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
-        (
-            ModuleConsensusVersion(0),
-            &[ApiVersion { major: 0, minor: 0 }],
-        )
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
     }
 
     async fn await_consensus_proposal(&self, _dbtx: &mut ModuleDatabaseTransaction<'_>) {

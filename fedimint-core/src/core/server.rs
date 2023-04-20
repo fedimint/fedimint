@@ -15,8 +15,8 @@ use super::*;
 use crate::db::ModuleDatabaseTransaction;
 use crate::maybe_add_send_sync;
 use crate::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ApiVersion, ConsensusProposal, InputMeta,
-    ModuleCommon, ModuleConsensusVersion, ModuleError, ServerModule, TransactionItemAmount,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal, InputMeta, ModuleCommon,
+    ModuleError, ServerModule, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use crate::task::{MaybeSend, MaybeSync};
 
@@ -55,7 +55,7 @@ pub trait IServerModule: Debug {
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> Decoder;
 
-    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]);
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>);
@@ -202,8 +202,8 @@ where
         self
     }
 
-    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
-        <Self as ServerModule>::versions(self)
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        <Self as ServerModule>::supported_api_versions(self)
     }
 
     /// Blocks until a new `consensus_proposal` is available.

@@ -21,7 +21,11 @@ use fedimint_core::config::{
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
 };
-use fedimint_core::module::{ApiAuth, DynServerModuleGen, PeerHandle};
+use fedimint_core::module::registry::ServerModuleRegistry;
+use fedimint_core::module::{
+    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, PeerHandle,
+    SupportedApiVersionsSummary, SupportedCoreApiVersions,
+};
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::{timing, PeerId};
@@ -74,6 +78,18 @@ impl ServerConfig {
     ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
         self.consensus.iter_module_instances()
     }
+
+    pub(crate) fn supported_api_versions_summary(
+        modules: &ServerModuleRegistry,
+    ) -> SupportedApiVersionsSummary {
+        SupportedApiVersionsSummary {
+            core: Self::supported_api_versions(),
+            modules: modules
+                .iter_modules()
+                .map(|(id, module)| (id, module.supported_api_versions()))
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +116,8 @@ pub struct ServerConfigPrivate {
 pub struct ServerConfigConsensus {
     /// The version of the binary code running
     pub code_version: String,
+    /// Agreed on core consensus version
+    pub version: CoreConsensusVersion,
     /// Public keys authenticating members of the federation and the configs
     #[serde(with = "serde_binary_human_readable")]
     pub auth_pk_set: hbbft::crypto::PublicKeySet,
@@ -211,7 +229,16 @@ impl ServerConfigConsensus {
     }
 }
 
+pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion(0);
+
 impl ServerConfig {
+    /// Api versions supported by this server
+    pub fn supported_api_versions() -> SupportedCoreApiVersions {
+        SupportedCoreApiVersions {
+            consensus: CORE_CONSENSUS_VERSION,
+            api: vec![ApiVersion { major: 0, minor: 0 }],
+        }
+    }
     /// Creates a new config from the results of a trusted or distributed key
     /// setup
     pub fn from(
@@ -242,6 +269,7 @@ impl ServerConfig {
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
+            version: CORE_CONSENSUS_VERSION,
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,

@@ -13,9 +13,9 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, ConsensusProposal, CoreConsensusVersion,
+    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleGen, TransactionItemAmount,
+    PeerHandle, ServerModuleGen, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
@@ -298,11 +298,8 @@ impl ServerModule for Mint {
         }
     }
 
-    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
-        (
-            ModuleConsensusVersion(0),
-            &[ApiVersion { major: 0, minor: 0 }],
-        )
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
     }
 
     async fn consensus_proposal(
