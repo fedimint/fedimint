@@ -932,6 +932,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     use futures::StreamExt;
+    use lightning::routing::gossip::RoutingFees;
     use lightning_invoice::Invoice;
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
@@ -1035,6 +1036,10 @@ mod fedimint_migration_tests {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
             valid_until: SystemTime::now(),
+            fees: RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            },
         };
         dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
             .await;

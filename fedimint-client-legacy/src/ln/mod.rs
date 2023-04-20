@@ -341,6 +341,7 @@ mod tests {
     use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
     use fedimint_ln_server::{Lightning, LightningGen};
     use fedimint_testing::FakeFed;
+    use lightning::routing::gossip::RoutingFees;
     use lightning_invoice::Invoice;
     use tokio::sync::Mutex;
     use url::Url;
@@ -516,6 +517,10 @@ mod tests {
                     .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
                 route_hints: vec![],
                 valid_until: fedimint_core::time::now(),
+                fees: RoutingFees {
+                    base_msat: 0,
+                    proportional_millionths: 0,
+                },
             }
         };
         let timelock = 42;
