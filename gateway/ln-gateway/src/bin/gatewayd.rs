@@ -21,7 +21,7 @@ use fedimint_ln_client::LightningCommonGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintCommonGen;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::{Gateway, LightningMode};
+use ln_gateway::{Gateway, LightningMode, DEFAULT_FEES};
 use tracing::{error, info};
 use url::Url;
 
@@ -121,6 +121,7 @@ async fn main() -> Result<(), anyhow::Error> {
         decoders,
         module_gens,
         task_group.make_subgroup().await,
+        DEFAULT_FEES,
     )
     .await
     .unwrap_or_else(|e| {
