@@ -9,6 +9,7 @@ mod tbs;
 #[cfg(not(target_family = "wasm"))]
 mod tls;
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
@@ -332,6 +333,12 @@ impl Decodable for () {
     }
 }
 
+impl Encodable for &str {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.as_bytes().consensus_encode(writer)
+    }
+}
+
 impl Encodable for String {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.as_bytes().consensus_encode(writer)
@@ -524,6 +531,21 @@ where
             }
         }
         Ok(res)
+    }
+}
+
+impl Encodable for Cow<'static, str> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        self.as_ref().consensus_encode(writer)
+    }
+}
+
+impl Decodable for Cow<'static, str> {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Cow::Owned(String::consensus_decode(d, modules)?))
     }
 }
 
