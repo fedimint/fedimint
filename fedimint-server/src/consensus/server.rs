@@ -220,6 +220,7 @@ impl ConsensusServer {
             modules: modules.clone(),
             client_cfg,
             api_sender,
+            supported_api_versions: ServerConfig::supported_api_versions_summary(&modules),
         };
 
         // Build consensus processor

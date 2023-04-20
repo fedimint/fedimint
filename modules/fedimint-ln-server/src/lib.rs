@@ -13,9 +13,10 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiRequestErased, ApiVersion, ConsensusProposal,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal,
     CoreConsensusVersion, ExtendsCommonModuleGen, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, TransactionItemAmount,
+    ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
@@ -257,11 +258,8 @@ impl ServerModule for Lightning {
     type Gen = LightningGen;
     type VerificationCache = LightningVerificationCache;
 
-    fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
-        (
-            ModuleConsensusVersion(0),
-            &[ApiVersion { major: 0, minor: 0 }],
-        )
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
