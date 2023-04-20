@@ -423,10 +423,13 @@ impl ServerModule for Mint {
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
         output: &MintOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        if output.longest_tier_len() > self.cfg.consensus.max_notes_per_denomination.into() {
+        let max_tier = self.cfg.private.tbs_sks.max_tier();
+        if output.longest_tier_except(max_tier)
+            > self.cfg.consensus.max_notes_per_denomination.into()
+        {
             return Err(MintError::ExceededMaxNotes(
                 self.cfg.consensus.max_notes_per_denomination,
-                output.longest_tier_len(),
+                output.longest_tier_except(max_tier),
             ))
             .into_module_error_other();
         }

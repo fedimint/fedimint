@@ -33,7 +33,7 @@ use fedimint_core::module::{ApiAuth, DynServerModuleGen, ModuleCommon};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{timeout, RwLock, TaskGroup};
 use fedimint_core::{
-    core, sats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
+    core, msats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
 };
 use fedimint_ln_client::{LightningClientGen, LightningGateway};
 use fedimint_ln_server::LightningGen;
@@ -90,6 +90,8 @@ mod real;
 pub mod user;
 mod utils;
 
+// 21 denominations, up to ~1048 sats which is big enough for our tests
+const MAX_MSAT_DENOMINATION: u64 = u64::pow(2, 20);
 const DEFAULT_P2P_PORT: u16 = 8173;
 const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 20000;
 static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
@@ -218,7 +220,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
     let mut module_gens_params = ServerModuleGenParamsRegistry::default();
     fedimintd::attach_default_module_gen_params(
         &mut module_gens_params,
-        sats(100000),
+        msats(MAX_MSAT_DENOMINATION),
         bitcoin::network::constants::Network::Regtest,
         10,
     );

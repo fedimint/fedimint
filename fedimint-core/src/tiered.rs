@@ -28,6 +28,11 @@ impl<T> Default for Tiered<T> {
 }
 
 impl<T> Tiered<T> {
+    /// Returns the highest tier amount
+    pub fn max_tier(&self) -> &Amount {
+        self.0.keys().max().expect("has tiers")
+    }
+
     pub fn structural_eq<O>(&self, other: &Tiered<O>) -> bool {
         self.0.keys().eq(other.0.keys())
     }
