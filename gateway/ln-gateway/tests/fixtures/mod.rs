@@ -17,7 +17,7 @@ use futures::Future;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::RpcClient;
-use ln_gateway::Gateway;
+use ln_gateway::{Gateway, DEFAULT_FEES};
 use url::Url;
 
 pub mod client;
@@ -55,6 +55,7 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
         decoders,
         module_gens,
         task_group.clone(),
+        DEFAULT_FEES,
     )
     .await
     .unwrap();
