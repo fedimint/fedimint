@@ -16,6 +16,7 @@ use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::timeout;
 use fedimint_core::Amount;
 use futures::StreamExt;
+use lightning::routing::gossip::RoutingFees;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -89,15 +90,7 @@ impl LnClient {
         timelock: u32,
         mut rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<LightningOutput> {
-        let contract_amount = {
-            let invoice_amount_msat = invoice
-                .amount_milli_satoshis()
-                .ok_or(LnClientError::MissingInvoiceAmount)?;
-            // TODO: better define fee handling
-            // Add 1% fee margin
-            let contract_amount_msat = invoice_amount_msat + (invoice_amount_msat / 100);
-            Amount::from_msats(contract_amount_msat)
-        };
+        let contract_amount = self.compute_outgoing_contract_amount(&invoice, gateway.fees)?;
 
         let user_sk = bitcoin::KeyPair::new(&self.context.secp, &mut rng);
 
@@ -291,6 +284,29 @@ impl LnClient {
             contract: contract_id,
             gateway_signature: signature,
         }
+    }
+
+    pub fn compute_outgoing_contract_amount(
+        &self,
+        invoice: &Invoice,
+        fees: RoutingFees,
+    ) -> Result<Amount> {
+        let invoice_amount_msat = invoice
+            .amount_milli_satoshis()
+            .ok_or(LnClientError::MissingInvoiceAmount)?;
+
+        let base_fee = fees.base_msat as u64;
+        let margin_fee: u64 = if fees.proportional_millionths > 0 {
+            let fee_percent = 1000000 / fees.proportional_millionths as u64;
+            invoice_amount_msat / fee_percent
+        } else {
+            0
+        };
+
+        // Add base and margin routing fees
+        let contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
+
+        Ok(Amount::from_msats(contract_amount_msat))
     }
 }
 
@@ -505,7 +521,6 @@ mod tests {
         vgdsgy3sqphsc92"
                 .parse()
                 .unwrap();
-        let invoice_amt_msat = invoice.amount_milli_satoshis().unwrap();
         let gateway = {
             let mint_pub_key = secp256k1_zkp::XOnlyPublicKey::from_slice(&[42; 32][..]).unwrap();
             let node_pub_key = secp256k1_zkp::PublicKey::from_slice(&[2; 33][..]).unwrap();
@@ -555,8 +570,10 @@ mod tests {
         assert_eq!(contract_acc.contract.gateway_key, gateway.mint_pub_key);
         // TODO: test that the client has its key
 
-        let expected_amount_msat = invoice_amt_msat + (invoice_amt_msat / 100);
-        let expected_amount = Amount::from_msats(expected_amount_msat);
+        let expected_amount = client
+            .compute_outgoing_contract_amount(&invoice, gateway.fees)
+            .unwrap();
+
         assert_eq!(contract_acc.amount, expected_amount);
 
         // We need to compensate for the wallet's confirmation target
