@@ -25,7 +25,7 @@ use fedimint_core::{NumPeers, OutPoint, PeerId, TransactionId};
 // use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
 // use crate::query::{
-//     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
+//     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
 //     ValidHistory,
 // };
 use bitcoin::{Address, Amount};
