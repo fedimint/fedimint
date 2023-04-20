@@ -142,8 +142,17 @@ impl WsAdminClient {
 
     /// Reads the configs from the disk, starts the consensus server, and shuts
     /// down the config gen API to start the Fedimint API
+    ///
+    /// Clients may receive an error due to forced shutdown, should call the
+    /// `server_status` to see if consensus has started.
     pub async fn start_consensus(&self) -> FederationResult<()> {
         self.request_auth("start_consensus", ApiRequestErased::new(self.auth.clone()))
+            .await
+    }
+
+    /// Returns the status of the server
+    pub async fn server_status(&self) -> FederationResult<ServerStatus> {
+        self.request_auth("server_status", ApiRequestErased::default())
             .await
     }
 
@@ -168,6 +177,19 @@ impl WsAdminClient {
             .request_current_consensus(method.to_owned(), params)
             .await
     }
+}
+
+/// The state of the server returned via APIs
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub enum ServerStatus {
+    /// Server needs a password to read configs
+    AwaitingPassword,
+    /// Configs were not found, need to run config gen
+    GeneratingConfig,
+    /// Restarted from a planned upgrade (requires action to start)
+    Upgrading,
+    /// Consensus is running
+    ConsensusRunning,
 }
 
 /// Sent by admin user to the API

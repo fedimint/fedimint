@@ -24,7 +24,8 @@ use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use rand::rngs::OsRng;
-use tracing::{debug, error, info, warn};
+use tokio::runtime::Runtime;
+use tracing::{error, info, warn};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::PLAINTEXT_PASSWORD;
@@ -73,32 +74,34 @@ pub struct FedimintServer {
     pub settings: ConfigGenSettings,
     /// Database shared by the API and consensus
     pub db: Database,
-    /// Upgrade epoch if we shutdown due to an upgrade
-    // TODO: should be replaced by requiring an API call instead
-    pub upgrade_epoch: Option<u64>,
 }
 
 impl FedimintServer {
     /// Starts the `ConfigGenApi` unless configs already exist
     /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
-    pub async fn run(mut self, mut task_group: TaskGroup) -> anyhow::Result<()> {
-        let task = &mut task_group;
-
+    pub async fn run(&mut self, mut task_group: TaskGroup) -> anyhow::Result<()> {
         info!(target: LOG_CONSENSUS, "Starting config gen");
-        let cfg = self.run_config_gen(task).await?;
+        let cfg = self
+            .run_config_gen(task_group.make_subgroup().await)
+            .await?;
 
-        let server =
-            ConsensusServer::new(cfg, self.db.clone(), self.settings.registry.clone(), task)
-                .await
-                .unwrap();
+        let server = ConsensusServer::new(
+            cfg,
+            self.db.clone(),
+            self.settings.registry.clone(),
+            &mut task_group,
+        )
+        .await
+        .unwrap();
 
         info!(target: LOG_CONSENSUS, "Starting consensus API");
-        let handle = self.run_consensus_api(&server.consensus.api, task).await?;
+        self.run_consensus_api(&server.consensus.api, &mut task_group)
+            .await;
 
-        self.run_consensus(server, task).await?;
+        self.run_consensus(server, &mut task_group).await?;
 
-        info!(target: LOG_CONSENSUS, "Stopping consensus API");
-        handle.stop()?;
+        info!(target: LOG_CONSENSUS, "Shutting down tasks");
+        task_group.shutdown().await;
 
         Ok(())
     }
@@ -107,14 +110,14 @@ impl FedimintServer {
     ///
     /// If a local password file exists, will try to read the configs from the
     /// filesystem.  Otherwise, it will start the `ConfigGenApi`.
-    async fn run_config_gen(&self, task_group: &mut TaskGroup) -> anyhow::Result<ServerConfig> {
+    async fn run_config_gen(&self, mut task_group: TaskGroup) -> anyhow::Result<ServerConfig> {
         let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
         let config_gen = ConfigGenApi::new(
             self.data_dir.clone(),
             self.settings.clone(),
             self.db.clone(),
             config_generated_tx,
-            task_group,
+            &mut task_group,
         );
 
         // Attempt get the config with local password, otherwise start config gen
@@ -124,7 +127,9 @@ impl FedimintServer {
                 .map_err(|_| format_err!("Unable to use local password"))?;
             info!(target: LOG_CONSENSUS, "Setting password from local file");
 
-            if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
+            if config_gen.has_upgrade_flag().await {
+                info!(target: LOG_CONSENSUS, "Restarted from an upgrade");
+            } else if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
                 info!(target: LOG_CONSENSUS, "Configs found locally");
                 return Ok(config_generated_rx.recv().await.expect("should not close"));
             }
@@ -132,31 +137,24 @@ impl FedimintServer {
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
-        let server_handle = self.spawn_api(rpc_module, 10, task_group).await;
+        self.spawn_api(rpc_module, 10, &mut task_group).await;
 
         let cfg = config_generated_rx.recv().await.expect("should not close");
-        server_handle.stop().expect("Unable to stop server");
-        server_handle.stopped().await;
+        task_group.shutdown_join_all(None).await?;
         Ok(cfg)
     }
 
     /// Runs the `ConsensusApi` which serves endpoints while consensus is
     /// running
-    pub async fn run_consensus_api(
-        &self,
-        api: &ConsensusApi,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<ServerHandle> {
+    pub async fn run_consensus_api(&self, api: &ConsensusApi, task_group: &mut TaskGroup) {
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
         for (id, module) in api.modules.iter_modules() {
             Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
         }
 
-        let handle = self
-            .spawn_api(rpc_module, api.cfg.local.max_connections, task_group)
-            .await;
-        Ok(handle)
+        self.spawn_api(rpc_module, api.cfg.local.max_connections, task_group)
+            .await
     }
 
     /// Runs the `FedimintServer` which runs P2P consensus
@@ -171,10 +169,6 @@ impl FedimintServer {
             .consensus
             .to_config_response(&self.settings.registry)
             .consensus_hash;
-
-        if let Some(epoch) = self.upgrade_epoch {
-            server.consensus.remove_upgrade_items(epoch).await?;
-        }
 
         loop {
             info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
@@ -199,9 +193,11 @@ impl FedimintServer {
         module: RpcModule<RpcHandlerCtx<T>>,
         max_connections: u32,
         task_group: &mut TaskGroup,
-    ) -> ServerHandle {
-        let server_handle = ServerBuilder::new()
+    ) {
+        let runtime = Runtime::new().expect("Creates runtime");
+        let handle = ServerBuilder::new()
             .max_connections(max_connections)
+            .custom_tokio_runtime(runtime.handle().clone())
             .ping_interval(Duration::from_secs(10))
             .build(&self.settings.api_bind.to_string())
             .await
@@ -210,20 +206,17 @@ impl FedimintServer {
             .start(module)
             .expect("Could not start API server");
 
-        let stop_handle = server_handle.clone();
+        let handler = FedimintApiHandler { runtime, handle };
 
         task_group
             .make_handle()
             .on_shutdown(Box::new(move || {
                 Box::pin(async move {
-                    debug!(target: LOG_TASK, "Shutting down jsonrpcsee server");
-                    // ignore errors: we don't care if already stopped
-                    let _ = stop_handle.stop();
+                    info!(target: LOG_TASK, "Shutting down jsonrpcsee server");
+                    handler.stop().await;
                 })
             }))
             .await;
-
-        server_handle
     }
 
     /// Attaches `endpoints` to the `RpcModule`
@@ -293,5 +286,20 @@ impl FedimintServer {
                 })
                 .expect("Failed to register async method");
         }
+    }
+}
+
+pub struct FedimintApiHandler {
+    runtime: Runtime,
+    handle: ServerHandle,
+}
+
+impl FedimintApiHandler {
+    /// Forces the server to stop and awaits it stopping
+    pub async fn stop(self) {
+        self.handle.stop().expect("Unable to stop server");
+        // Forces jsonrpsee to stop even if responding to clients
+        self.runtime.shutdown_background();
+        self.handle.stopped().await;
     }
 }

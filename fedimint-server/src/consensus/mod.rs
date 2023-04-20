@@ -7,7 +7,6 @@ pub mod server;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::FromIterator;
 
-use anyhow::format_err;
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
@@ -405,23 +404,6 @@ impl FedimintConsensus {
             .await
             .filter(|peers| peers.len() >= self.cfg.consensus.api_endpoints.threshold())
             .is_some()
-    }
-
-    /// Called to remove the upgrade items after the upgrade is complete
-    pub async fn remove_upgrade_items(&self, epoch: u64) -> anyhow::Result<()> {
-        let last_epoch = self.api.get_epoch_count().await;
-        let mut tx = self.db.begin_transaction().await;
-        if last_epoch == epoch {
-            tx.remove_entry(&ConsensusUpgradeKey).await;
-            tx.commit_tx().await;
-            Ok(())
-        } else {
-            Err(format_err!(
-                "Wrong upgrade epoch {}, last epoch was {}",
-                epoch,
-                last_epoch
-            ))
-        }
     }
 
     async fn save_epoch_history<'a>(

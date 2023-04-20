@@ -11,7 +11,7 @@ use bitcoin_hashes::{sha256, Hash};
 use fedimint_aead::random_salt;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    PeerServerParams, WsAdminClient,
+    PeerServerParams, ServerStatus, WsAdminClient,
 };
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -32,6 +32,7 @@ use url::Url;
 
 use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
+use crate::db::ConsensusUpgradeKey;
 use crate::net::peers::DelayCalculator;
 use crate::HasApiContext;
 
@@ -317,15 +318,40 @@ impl ConfigGenApi {
         .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
     }
 
-    /// Attempts to decrypt the config files from disk using the auth string and
-    /// notify the listeners
+    /// Attempts to decrypt the config files from disk using the auth string.
+    ///
+    /// Will force shut down the config gen API so the consensus API can start.
+    /// Removes the upgrade flag when called.
     pub async fn start_consensus(&self, auth: ApiAuth) -> ApiResult<()> {
         let cfg = read_server_config(&auth.0, self.data_dir.clone())
             .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
 
+        let mut tx = self.db.begin_transaction().await;
+        tx.remove_entry(&ConsensusUpgradeKey).await;
+        tx.commit_tx().await;
+
         self.config_generated_tx.send(cfg).await.expect("Can send");
 
         Ok(())
+    }
+
+    /// Returns the server status
+    pub async fn server_status(&self) -> ServerStatus {
+        let has_upgrade_flag = { self.has_upgrade_flag().await };
+
+        let state = self.state.lock().expect("lock poisoned");
+        match &*state {
+            ConfigApiState::SetPassword => ServerStatus::AwaitingPassword,
+            _ if has_upgrade_flag => ServerStatus::Upgrading,
+            _ => ServerStatus::GeneratingConfig,
+        }
+    }
+
+    /// Returns true if the upgrade flag is set indicating that the server was
+    /// shutdown due to a planned upgrade
+    pub async fn has_upgrade_flag(&self) -> bool {
+        let mut tx = self.db.begin_transaction().await;
+        tx.get_value(&ConsensusUpgradeKey).await.is_some()
     }
 
     fn get_hashes(&self, config: &ServerConfigConsensus) -> BTreeMap<PeerId, sha256::Hash> {
@@ -630,6 +656,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                 config.start_consensus(auth).await
             }
         },
+        api_endpoint! {
+            "server_status",
+            async |config: &ConfigGenApi, context, _v: ()| -> ServerStatus {
+                if context.has_auth() {
+                    Ok(config.server_status().await)
+                } else {
+                    Err(ApiError::unauthorized())
+                }
+            }
+        },
     ]
 }
 
@@ -658,7 +694,7 @@ mod tests {
     use std::time::Duration;
     use std::{env, fs};
 
-    use fedimint_core::admin_client::WsAdminClient;
+    use fedimint_core::admin_client::{ServerStatus, WsAdminClient};
     use fedimint_core::api::FederationResult;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
@@ -668,18 +704,19 @@ mod tests {
     use fedimint_core::PeerId;
     use futures::future::join_all;
     use itertools::Itertools;
-    use tokio::spawn;
     use url::Url;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
-    use crate::FedimintServer;
+    use crate::{FedimintServer, PLAINTEXT_PASSWORD};
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
         client: WsAdminClient,
         name: String,
         settings: ConfigGenSettings,
+        auth: ApiAuth,
+        dir: PathBuf,
     }
 
     impl TestConfigApi {
@@ -713,36 +750,25 @@ mod tests {
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
 
             let api = FedimintServer {
-                data_dir: dir,
+                data_dir: dir.clone(),
                 settings: settings.clone(),
                 db,
-                upgrade_epoch: None,
             };
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = WsAdminClient::new(api_url, PeerId::from(0), auth);
+            let client = WsAdminClient::new(api_url, PeerId::from(0), auth.clone());
 
             (
                 TestConfigApi {
                     client,
                     name,
                     settings,
+                    auth,
+                    dir,
                 },
                 api,
             )
-        }
-
-        /// Helper function using the auth we generated, retries until the API
-        /// is up
-        async fn retry_set_password(&self) {
-            while self.client.set_password().await.is_err() {
-                sleep(Duration::from_millis(1000)).await;
-                tracing::info!(
-                    target: fedimint_logging::LOG_TEST,
-                    "Test retrying set password, waiting for API to start"
-                )
-            }
         }
 
         /// Helper function to shutdown consensus with an upgrade signal
@@ -764,6 +790,25 @@ mod tests {
                     leader_api_url: leader.clone(),
                 })
                 .await
+        }
+
+        /// Helper for getting server status
+        async fn server_status(&self) -> ServerStatus {
+            loop {
+                match self.client.server_status().await {
+                    Ok(status) => return status,
+                    Err(_) => sleep(Duration::from_millis(1000)).await,
+                }
+                tracing::info!(
+                    target: fedimint_logging::LOG_TEST,
+                    "Test retrying server status"
+                )
+            }
+        }
+
+        /// Helper for writing the password file to bypass the API
+        fn write_password_file(&self) {
+            fs::write(self.dir.join(PLAINTEXT_PASSWORD), &self.auth.0).unwrap();
         }
     }
 
@@ -798,10 +843,13 @@ mod tests {
             followers.push(follower);
         }
 
-        spawn(async move {
+        let test = async {
+            assert_eq!(leader.server_status().await, ServerStatus::AwaitingPassword);
+
             // Cannot set the password twice
-            leader.retry_set_password().await;
+            leader.client.set_password().await.unwrap();
             assert!(leader.client.set_password().await.is_err());
+            assert_eq!(leader.server_status().await, ServerStatus::GeneratingConfig);
 
             // We can call this twice to change the leader name
             leader.set_connections(&None).await.unwrap();
@@ -810,7 +858,11 @@ mod tests {
 
             // Setup followers and send connection info
             for follower in &mut followers {
-                follower.retry_set_password().await;
+                assert_eq!(
+                    follower.server_status().await,
+                    ServerStatus::AwaitingPassword
+                );
+                follower.client.set_password().await.unwrap();
                 let leader_url = Some(leader.settings.api_url.clone());
                 follower.set_connections(&leader_url).await.unwrap();
                 follower.name = format!("{}_", follower.name);
@@ -848,16 +900,45 @@ mod tests {
 
             // start consensus
             for peer in &followers {
-                peer.client.start_consensus().await.unwrap();
+                peer.client.start_consensus().await.ok();
+                assert_eq!(peer.server_status().await, ServerStatus::ConsensusRunning);
             }
 
             // shutdown
             for peer in &followers {
                 peer.retry_signal_upgrade().await;
             }
-        });
+        };
 
-        // Spawn the APIs
-        join_all(apis.into_iter().map(|api| api.run(TaskGroup::new()))).await;
+        // Run the Fedimint servers and test concurrently
+        tokio::join!(
+            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
+            test
+        );
+
+        // Test writing the password file to bypass the API
+        for peer in &followers {
+            peer.write_password_file();
+        }
+
+        let test2 = async {
+            // Confirm we are stuck in upgrading after an upgrade
+            for peer in &followers {
+                assert_eq!(peer.server_status().await, ServerStatus::Upgrading);
+                peer.client.start_consensus().await.ok();
+                assert_eq!(peer.server_status().await, ServerStatus::ConsensusRunning);
+            }
+
+            // shutdown again
+            for peer in &followers {
+                peer.retry_signal_upgrade().await;
+            }
+        };
+
+        //  Restart the Fedimint servers and a new test concurrently
+        tokio::join!(
+            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
+            test2
+        );
     }
 }

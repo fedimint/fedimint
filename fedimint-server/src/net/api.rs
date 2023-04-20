@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
+use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::ConfigResponse;
 use fedimint_core::core::ModuleInstanceId;
@@ -389,6 +390,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 if context.has_auth() {
                     fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
                     Ok(())
+                } else {
+                    Err(ApiError::unauthorized())
+                }
+            }
+        },
+        api_endpoint! {
+            "server_status",
+            async |_fedimint: &ConsensusApi, context, _v: ()| -> ServerStatus {
+                if context.has_auth() {
+                    Ok(ServerStatus::ConsensusRunning)
                 } else {
                     Err(ApiError::unauthorized())
                 }

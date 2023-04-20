@@ -43,9 +43,6 @@ pub struct ServerOpts {
     /// Port to run admin UI on
     #[arg(long, env = "FM_LISTEN_UI")]
     pub listen_ui: Option<SocketAddr>,
-    /// After an upgrade the epoch must be passed in
-    #[arg(long, env = "FM_UPGRADE_EPOCH")]
-    pub upgrade_epoch: Option<u64>,
     /// Enable tokio console logging
     #[arg(long, env = "FM_TOKIO_CONSOLE_BIND")]
     pub tokio_console_bind: Option<SocketAddr>,
@@ -263,7 +260,7 @@ async fn run(
 
     // TODO: Fedimintd should use the config gen API
     fs::write(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)?;
-    let api = FedimintServer {
+    let mut api = FedimintServer {
         data_dir: opts.data_dir,
         settings: ConfigGenSettings {
             download_token_limit: cfg.local.download_token_limit,
@@ -276,7 +273,6 @@ async fn run(
             registry: module_gens,
         },
         db,
-        upgrade_epoch: opts.upgrade_epoch,
     };
     api.run(task_group).await
 }

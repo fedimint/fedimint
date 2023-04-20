@@ -1283,11 +1283,9 @@ impl FederationTest {
                     registry: module_inits.clone(),
                 },
                 db: db.clone(),
-                upgrade_epoch: None,
             };
             api.run_consensus_api(&fedimint.consensus.api, &mut task_group)
-                .await
-                .expect("api starts");
+                .await;
 
             Arc::new(Mutex::new(ServerTest {
                 fedimint,
