@@ -368,7 +368,7 @@ mod tests {
         FederationApiFaker::new(fed, members)
             // TODO: is the output here is supposed to be a mint or wallet?
             .with(
-                "/fetch_transaction",
+                "fetch_transaction",
                 move |mint: Arc<Mutex<FakeFed<Lightning>>>, tx: TransactionId| async move {
                     let mint = mint.lock().await;
                     Ok(Some(TransactionStatus::Accepted {
@@ -386,7 +386,7 @@ mod tests {
                 },
             )
             .with(
-                "/wait_transaction",
+                "wait_transaction",
                 move |mint: Arc<Mutex<FakeFed<Lightning>>>, tx: TransactionId| async move {
                     let mint = mint.lock().await;
                     Ok(TransactionStatus::Accepted {
@@ -404,7 +404,7 @@ mod tests {
                 },
             )
             .with(
-                format!("/module/{module_id}/account"),
+                format!("module_{module_id}_account"),
                 |mint: Arc<Mutex<FakeFed<Lightning>>>, contract: ContractId| async move {
                     Ok(Some(
                         mint.lock()
@@ -425,7 +425,7 @@ mod tests {
                 },
             )
             .with(
-                format!("/module/{module_id}/wait_account"),
+                format!("module_{module_id}_wait_account"),
                 |mint: Arc<Mutex<FakeFed<Lightning>>>, contract: ContractId| async move {
                     Ok(mint
                         .lock()

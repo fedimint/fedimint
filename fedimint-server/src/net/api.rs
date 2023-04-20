@@ -334,7 +334,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "/transaction",
+            "transaction",
             async |fedimint: &ConsensusApi, _context, serde_transaction: SerdeTransaction| -> TransactionId {
                 let transaction = serde_transaction.try_into_inner(&fedimint.modules.decoder_registry()).map_err(|e| ApiError::bad_request(e.to_string()))?;
 
@@ -348,7 +348,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "/fetch_transaction",
+            "fetch_transaction",
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> Option<TransactionStatus> {
                 debug!(transaction = %tx_hash, "Received request");
 
@@ -360,7 +360,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "/wait_transaction",
+            "wait_transaction",
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Received request");
 
@@ -372,26 +372,26 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "/fetch_epoch_history",
+            "fetch_epoch_history",
             async |fedimint: &ConsensusApi, _context, epoch: u64| -> SerdeEpochHistory {
                 let epoch = fedimint.epoch_history(epoch).await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
                 Ok((&epoch).into())
             }
         },
         api_endpoint! {
-            "/fetch_epoch_count",
+            "fetch_epoch_count",
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
                 Ok(fedimint.get_epoch_count().await)
             }
         },
         api_endpoint! {
-            "/config",
+            "config",
             async |fedimint: &ConsensusApi, context, info: WsClientConnectInfo| -> ConfigResponse {
                 fedimint.download_config_with_token(info, &mut context.dbtx()).await
             }
         },
         api_endpoint! {
-            "/config_hash",
+            "config_hash",
             async |fedimint: &ConsensusApi, context, _v: ()| -> sha256::Hash {
                 Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await.consensus_hash)
             }

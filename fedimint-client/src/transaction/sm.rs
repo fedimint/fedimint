@@ -266,7 +266,7 @@ mod tests {
             params: &[Value],
         ) -> JsonRpcResult<Value> {
             match method {
-                "/transaction" => {
+                "transaction" => {
                     let api_req: ApiRequestErased =
                         serde_json::from_value(params[0].clone()).unwrap();
                     let serde_tx: SerdeTransaction =
@@ -277,7 +277,7 @@ mod tests {
 
                     Ok(serde_json::to_value(tx.tx_hash()).unwrap())
                 }
-                "/wait_transaction" => {
+                "wait_transaction" => {
                     let api_req: ApiRequestErased =
                         serde_json::from_value(params[0].clone()).unwrap();
                     let txid: TransactionId = serde_json::from_value(api_req.params).unwrap();

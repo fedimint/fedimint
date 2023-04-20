@@ -268,7 +268,7 @@ type HandlerFn<M> = Box<
 pub struct ApiEndpoint<M> {
     /// Path under which the API endpoint can be reached. It should start with a
     /// `/` e.g. `/transaction`. E.g. this API endpoint would be reachable
-    /// under `/module/module_instance_id/transaction` depending on the
+    /// under `module_module_instance_id_transaction` depending on the
     /// module name returned by `[FedertionModule::api_base_name]`.
     pub path: &'static str,
     /// Handler for the API call that takes the following arguments:

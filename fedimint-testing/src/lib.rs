@@ -484,7 +484,7 @@ impl FakeInterconnect {
     fn new_block_height_responder(bh: Arc<AtomicU64>) -> FakeInterconnect {
         FakeInterconnect(Box::new(move |module, path, _data| {
             assert_eq!(module, LEGACY_HARDCODED_INSTANCE_ID_WALLET);
-            assert_eq!(path, "/block_height");
+            assert_eq!(path, "block_height");
 
             let height = bh.load(Ordering::Relaxed);
             Ok(serde_json::to_value(height).expect("encoding error"))

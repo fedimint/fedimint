@@ -226,7 +226,7 @@ impl ServerModule for Dummy {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![api_endpoint! {
-            "/dummy",
+            "dummy",
             async |_module: &Dummy, _dbtx, _request: ()| -> () {
                 Ok(())
             }

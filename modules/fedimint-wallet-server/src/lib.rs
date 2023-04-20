@@ -607,13 +607,13 @@ impl ServerModule for Wallet {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "/block_height",
+                "block_height",
                 async |module: &Wallet, context, _params: ()| -> u32 {
                     Ok(module.consensus_height(&mut context.dbtx()).await.unwrap_or(0))
                 }
             },
             api_endpoint! {
-                "/peg_out_fees",
+                "peg_out_fees",
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
                     let consensus = module.current_round_consensus(&mut context.dbtx()).await.unwrap();

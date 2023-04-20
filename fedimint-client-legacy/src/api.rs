@@ -39,7 +39,7 @@ where
 {
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
         self.request_current_consensus(
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_account"),
+            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_account"),
             ApiRequestErased::new(contract),
         )
         .await
@@ -49,7 +49,7 @@ where
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer> {
         self.request_current_consensus(
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_offer"),
+            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_offer"),
             ApiRequestErased::new(payment_hash),
         )
         .await
@@ -58,7 +58,7 @@ where
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
         self.request_with_strategy(
             UnionResponses::new(self.all_members().threshold()),
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/list_gateways"),
+            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_list_gateways"),
             ApiRequestErased::default(),
         )
         .await
@@ -67,7 +67,7 @@ where
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.request_with_strategy(
             CurrentConsensus::new(self.all_members().threshold()),
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/register_gateway"),
+            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_register_gateway"),
             ApiRequestErased::new(gateway),
         )
         .await
@@ -76,7 +76,7 @@ where
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool> {
         Ok(self
             .request_current_consensus::<Option<IncomingContractOffer>>(
-                format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/offer"),
+                format!("module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_offer"),
                 ApiRequestErased::new(payment_hash),
             )
             .await?
@@ -107,7 +107,7 @@ where
     ) -> FederationResult<()> {
         self.request_with_strategy(
             CurrentConsensus::new(self.all_members().threshold()),
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/backup"),
+            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_MINT}_backup"),
             ApiRequestErased::new(request),
         )
         .await
@@ -121,7 +121,7 @@ where
                 UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
                     self.all_members().threshold(),
                 ),
-                format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/recover"),
+                format!("module_{LEGACY_HARDCODED_INSTANCE_ID_MINT}_recover"),
                 ApiRequestErased::new(id),
             )
             .await?
@@ -149,7 +149,7 @@ where
     async fn fetch_consensus_block_height(&self) -> FederationResult<u64> {
         self.request_with_strategy(
             EventuallyConsistent::new(self.all_members().one_honest()),
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/block_height"),
+            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height"),
             ApiRequestErased::default(),
         )
         .await
@@ -161,7 +161,7 @@ where
         amount: bitcoin::Amount,
     ) -> FederationResult<Option<PegOutFees>> {
         self.request_eventually_consistent(
-            format!("/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/peg_out_fees"),
+            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_peg_out_fees"),
             ApiRequestErased::new((address, amount.to_sat())),
         )
         .await
