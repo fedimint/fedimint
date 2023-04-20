@@ -209,7 +209,7 @@ impl DistributedGen {
                 let server = match ServerConfig::distributed_gen(
                     &params,
                     self.module_gens.clone().legacy_init_modules(),
-                    DelayCalculator::default(),
+                    DelayCalculator::PROD_DEFAULT,
                     &mut task_group,
                 )
                 .await
