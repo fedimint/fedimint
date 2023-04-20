@@ -942,14 +942,10 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
 
     // test a peer missing out on epochs and needing to rejoin
     fed.kill_server(0).await?;
-    // FIXME increase this number once we can avoid processing epoch messages too
-    // far in the future
-    fed.generate_epochs(1).await?;
+    fed.generate_epochs(10).await?;
 
     fed.start_server(process_mgr, 0).await?;
-    // FIXME increase this number once we can avoid processing epoch messages too
-    // far in the future
-    fed.generate_epochs(1).await?;
+    fed.generate_epochs(10).await?;
     fed.await_all_peers().await?;
     info!("Server 0 successfully rejoined!");
     bitcoind.mine_blocks(100).await?;
