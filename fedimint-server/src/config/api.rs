@@ -358,14 +358,11 @@ impl ConfigGenApi {
         let mut hashes = BTreeMap::new();
         for (peer, cert) in config.tls_certs.iter() {
             let mut engine = HashEngine::default();
-            let hashed = config
+            let client_config_resp = config
                 .try_to_config_response(&self.settings.registry)
                 .expect("hashes");
 
-            hashed
-                .consensus_hash
-                .consensus_encode(&mut engine)
-                .expect("hashes");
+            client_config_resp.client_config.consensus_hash();
             cert.consensus_encode(&mut engine).expect("hashes");
 
             let hash = sha256::Hash::from_engine(engine);

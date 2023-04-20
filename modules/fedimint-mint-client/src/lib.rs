@@ -604,7 +604,7 @@ impl MintClientModule {
     ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
         if let Some((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
             let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {return true;};
-            !note.note.verify(*mint_key)
+            !note.note.verify(mint_key.0)
         }) {
             return Err(anyhow!(
                 "Invalid note in input: amt={} note={:?}",

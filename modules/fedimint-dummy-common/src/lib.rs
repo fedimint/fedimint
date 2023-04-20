@@ -1,22 +1,19 @@
 use std::fmt;
 
 use async_trait::async_trait;
-use bitcoin_hashes::sha256;
 use fedimint_core::config::ModuleGenParams;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::__reexports::serde_json;
-use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::plugin_types_trait_impl_common;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::config::DummyClientConfig;
-use crate::serde_json::Value;
 pub mod config;
 pub mod db;
 
 const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
+pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct DummyConsensusItem;
@@ -30,10 +27,6 @@ impl CommonModuleGen for DummyCommonGen {
 
     fn decoder() -> Decoder {
         DummyModuleTypes::decoder_builder().build()
-    }
-
-    fn hash_client_module(config: Value) -> anyhow::Result<sha256::Hash> {
-        Ok(serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash())
     }
 }
 

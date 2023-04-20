@@ -8,17 +8,17 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use bitcoin_hashes::sha256;
-use bitcoin_hashes::sha256::Hash;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::config::{ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig};
+use crate::config::{
+    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig,
+    ServerModuleConsensusConfig,
+};
 use crate::core::{
     Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
     OutputOutcome,
@@ -269,7 +269,7 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
-use fedimint_core::config::{DkgResult, ModuleConfigResponse};
+use fedimint_core::config::DkgResult;
 
 use self::registry::ModuleDecoderRegistry;
 
@@ -388,8 +388,6 @@ pub trait IDynCommonModuleGen: Debug {
 
     fn module_kind(&self) -> ModuleKind;
 
-    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
-
     fn to_dyn_common(&self) -> DynCommonModuleGen;
 }
 
@@ -407,10 +405,6 @@ where
 
     fn module_kind(&self) -> ModuleKind {
         T::Common::KIND
-    }
-
-    fn hash_client_module(&self, config: Value) -> anyhow::Result<Hash> {
-        T::Common::hash_client_module(config)
     }
 
     fn to_dyn_common(&self) -> DynCommonModuleGen {
@@ -459,12 +453,12 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig>;
 
-    fn to_config_response(&self, config: serde_json::Value)
-        -> anyhow::Result<ModuleConfigResponse>;
-
-    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+
+    fn get_client_config(
+        &self,
+        config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<ClientModuleConfig>;
 
     async fn dump_database(
         &self,
@@ -533,7 +527,7 @@ pub struct CoreConsensusVersion(pub u32);
 /// by running two instances of the module at the same time (each of different
 /// `ModuleKind` version), allow users to slowly migrate to a new one.
 /// This avoids complex and error-prone server-side consensus-migration logic.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ModuleConsensusVersion(pub u32);
 
 /// Api version supported by a core server or a client/server module at a given
@@ -609,8 +603,6 @@ pub trait CommonModuleGen: Debug + Sized {
     const KIND: ModuleKind;
 
     fn decoder() -> Decoder;
-
-    fn hash_client_module(config: serde_json::Value) -> anyhow::Result<sha256::Hash>;
 }
 
 /// Module Generation trait with associated types
@@ -675,10 +667,12 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig>;
 
-    fn to_config_response(&self, config: serde_json::Value)
-        -> anyhow::Result<ModuleConfigResponse>;
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
+
+    fn get_client_config(
+        &self,
+        config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<ClientModuleConfig>;
 
     async fn dump_database(
         &self,
@@ -730,19 +724,15 @@ where
         <Self as ServerModuleGen>::distributed_gen(self, peers, params).await
     }
 
-    fn to_config_response(
-        &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<ModuleConfigResponse> {
-        <Self as ServerModuleGen>::to_config_response(self, config)
-    }
-
-    fn hash_client_module(&self, config: serde_json::Value) -> anyhow::Result<Hash> {
-        <Self as ExtendsCommonModuleGen>::Common::hash_client_module(config)
-    }
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         <Self as ServerModuleGen>::validate_config(self, identity, config)
+    }
+
+    fn get_client_config(
+        &self,
+        config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        <Self as ServerModuleGen>::get_client_config(self, config)
     }
 
     async fn dump_database(

@@ -7,7 +7,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable, SerdeEncodable};
 use fedimint_core::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
@@ -36,12 +36,12 @@ pub struct WalletConfigPrivate {
     pub peg_in_key: SecretKey,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletConfigConsensus {
     /// Bitcoin network (e.g. testnet, bitcoin)
     pub network: Network,
     /// The federations public peg-in-descriptor
-    pub peg_in_descriptor: PegInDescriptor,
+    pub peg_in_descriptor: SerdeEncodable<PegInDescriptor>,
     /// The public keys for the bitcoin multisig
     pub peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey>,
     /// How many bitcoin blocks to wait before considering a transaction
@@ -54,10 +54,10 @@ pub struct WalletConfigConsensus {
     pub fee_consensus: FeeConsensus,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletClientConfig {
     /// The federations public peg-in-descriptor
-    pub peg_in_descriptor: PegInDescriptor,
+    pub peg_in_descriptor: SerdeEncodable<PegInDescriptor>,
     /// The bitcoin network the client will use
     pub network: Network,
     /// Confirmations required for a peg in to be accepted by federation
@@ -69,9 +69,13 @@ impl TypedClientModuleConfig for WalletClientConfig {
     fn kind(&self) -> ModuleKind {
         crate::KIND
     }
+
+    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+        crate::CONSENSUS_VERSION
+    }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
     pub peg_in_abs: fedimint_core::Amount,
     pub peg_out_abs: fedimint_core::Amount,
@@ -90,6 +94,7 @@ impl TypedServerModuleConsensusConfig for WalletConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
         ClientModuleConfig::from_typed(
             crate::KIND,
+            crate::CONSENSUS_VERSION,
             &WalletClientConfig {
                 peg_in_descriptor: self.peg_in_descriptor.clone(),
                 network: self.network,
@@ -98,6 +103,14 @@ impl TypedServerModuleConsensusConfig for WalletConfigConsensus {
             },
         )
         .expect("Serialization can't fail")
+    }
+
+    fn kind(&self) -> ModuleKind {
+        crate::KIND
+    }
+
+    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+        crate::CONSENSUS_VERSION
     }
 }
 
@@ -152,7 +165,7 @@ impl WalletConfig {
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
-                peg_in_descriptor,
+                peg_in_descriptor: SerdeEncodable(peg_in_descriptor),
                 peer_peg_in_keys: pubkeys,
                 finality_delay,
                 default_fee: Feerate { sats_per_kvb: 1000 },
@@ -169,7 +182,7 @@ impl WalletClientConfig {
         finality_delay: u32,
     ) -> Self {
         Self {
-            peg_in_descriptor,
+            peg_in_descriptor: SerdeEncodable(peg_in_descriptor),
             network,
             finality_delay,
             fee_consensus: Default::default(),

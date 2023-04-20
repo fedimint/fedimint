@@ -3,8 +3,7 @@ use std::hash::Hash;
 pub use common::{BackupRequest, SignedBackupRequest};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::__reexports::serde_json;
-use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{plugin_types_trait_impl_common, Amount, OutPoint, PeerId, TieredMulti};
 use impl_tools::autoimpl;
@@ -12,14 +11,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::config::MintClientConfig;
-
 pub mod config;
 
 pub mod common;
 pub mod db;
 
 const KIND: ModuleKind = ModuleKind::from_static_str("mint");
+const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 /// By default, the maximum notes per denomination when change-making for users
 pub const DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = 3;
@@ -96,12 +94,6 @@ impl CommonModuleGen for MintCommonGen {
 
     fn decoder() -> Decoder {
         MintModuleTypes::decoder_builder().build()
-    }
-
-    fn hash_client_module(
-        config: serde_json::Value,
-    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
-        Ok(serde_json::from_value::<MintClientConfig>(config)?.consensus_hash())
     }
 }
 

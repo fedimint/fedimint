@@ -26,7 +26,10 @@ use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective, Signature};
 use url::Url;
 
-use crate::module::{DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen};
+use crate::encoding::Decodable;
+use crate::module::{
+    DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen, ModuleConsensusVersion,
+};
 use crate::task::{MaybeSend, MaybeSync};
 use crate::{maybe_add_send_sync, PeerId};
 
@@ -113,22 +116,19 @@ pub struct ClientConfig {
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
     /// Configs from other client modules
-    #[encodable_ignore]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
 }
 
-/// The API response for configuration requests
+/// The API response for client config requests, signed by the Federation
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ConfigResponse {
+pub struct ClientConfigResponse {
     /// The client config
-    pub client: ClientConfig,
-    /// Hash of the consensus config (for validating against peers)
-    pub consensus_hash: sha256::Hash,
-    /// Auth key signature of the client config hash if it exists
-    pub client_hash_signature: Option<Signature>,
+    pub client_config: ClientConfig,
+    /// Auth key signature over the `client_config`
+    pub signature: Option<Signature>,
 }
 
 /// The federation id is a copy of the authentication threshold public key of
@@ -173,38 +173,19 @@ impl FromStr for FederationId {
 
 impl ClientConfig {
     /// Returns the consensus hash for a given client config
-    pub fn consensus_hash(
-        &self,
-        module_config_gens: &CommonModuleGenRegistry,
-    ) -> anyhow::Result<sha256::Hash> {
-        let modules: BTreeMap<ModuleInstanceId, sha256::Hash> = self
-            .modules
-            .iter()
-            .map(|(module_instance_id, v)| {
-                let kind = v.kind();
-                Ok((
-                    *module_instance_id,
-                    module_config_gens
-                        .get(kind)
-                        .map(|gen| gen.hash_client_module(v.value().clone()))
-                        .unwrap_or(Ok(v.consensus_hash))?,
-                ))
-            })
-            .collect::<anyhow::Result<_>>()?;
-
+    pub fn consensus_hash(&self) -> sha256::Hash {
         let mut engine = HashEngine::default();
-        self.consensus_encode(&mut engine)?;
-        for (k, v) in modules.iter() {
-            k.consensus_encode(&mut engine)?;
-            v.consensus_encode(&mut engine)?;
-        }
-
-        Ok(sha256::Hash::from_engine(engine))
+        self.consensus_encode(&mut engine)
+            .expect("Consensus hashing should never fail");
+        sha256::Hash::from_engine(engine)
     }
 
-    pub fn get_module<T: DeserializeOwned>(&self, id: ModuleInstanceId) -> anyhow::Result<T> {
+    pub fn get_module<T: Decodable>(&self, id: ModuleInstanceId) -> anyhow::Result<T> {
         if let Some(client_cfg) = self.modules.get(&id) {
-            Ok(serde_json::from_value(client_cfg.value().clone())?)
+            Ok(Decodable::consensus_decode(
+                &mut &client_cfg.config[..],
+                &Default::default(),
+            )?)
         } else {
             Err(format_err!("Client config for module id {id} not found"))
         }
@@ -226,7 +207,7 @@ impl ClientConfig {
     /// mint, wallet, ln module code in the client, this is useful, but
     /// please write any new code that avoids assumptions about available
     /// modules.
-    pub fn get_first_module_by_kind<T: DeserializeOwned>(
+    pub fn get_first_module_by_kind<T: Decodable>(
         &self,
         kind: impl Into<ModuleKind>,
     ) -> anyhow::Result<(ModuleInstanceId, T)> {
@@ -234,8 +215,10 @@ impl ClientConfig {
         let Some((id, module_cfg)) = self.modules.iter().find(|(_, v)| v.is_kind(&kind)) else {
             anyhow::bail!("Module kind {kind} not found")
         };
-
-        Ok((*id, serde_json::from_value(module_cfg.value().clone())?))
+        Ok((
+            *id,
+            T::consensus_decode(&mut &module_cfg.config[..], &Default::default())?,
+        ))
     }
 
     // TODO: rename this and above
@@ -537,13 +520,12 @@ pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
     }
 }
 
-/// Response from the API for this particular module
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleConfigResponse {
-    /// The client configuration
-    pub client: ClientModuleConfig,
-    /// Hash of the consensus configuration
-    pub consensus_hash: sha256::Hash,
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ServerModuleConsensusConfig {
+    pub kind: ModuleKind,
+    pub version: ModuleConsensusVersion,
+    #[serde(with = "::hex::serde")]
+    pub config: Vec<u8>,
 }
 
 /// Config for the client-side of a particular Federation module
@@ -551,22 +533,24 @@ pub struct ModuleConfigResponse {
 /// Since modules are (tbd.) pluggable into Federations,
 /// it needs to be some form of an abstract type-erased-like
 /// value.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ClientModuleConfig {
-    kind: ModuleKind,
-    consensus_hash: sha256::Hash,
-    config: serde_json::Value,
+    pub kind: ModuleKind,
+    pub version: ModuleConsensusVersion,
+    #[serde(with = "::hex::serde")]
+    pub config: Vec<u8>,
 }
 
 impl ClientModuleConfig {
     pub fn from_typed<T: Encodable + Serialize>(
         kind: ModuleKind,
+        version: ModuleConsensusVersion,
         value: &T,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             kind,
-            consensus_hash: value.consensus_hash(),
-            config: serde_json::to_value(value)?,
+            version,
+            config: value.consensus_encode_to_vec()?,
         })
     }
 
@@ -578,14 +562,17 @@ impl ClientModuleConfig {
         &self.kind
     }
 
-    pub fn value(&self) -> &serde_json::Value {
+    pub fn value(&self) -> &[u8] {
         &self.config
     }
 }
 
 impl ClientModuleConfig {
     pub fn cast<T: TypedClientModuleConfig>(&self) -> anyhow::Result<T> {
-        Ok(serde_json::from_value(self.config.clone())?)
+        Ok(T::consensus_decode(
+            &mut &self.config[..],
+            &Default::default(),
+        )?)
     }
 }
 
@@ -596,22 +583,30 @@ impl ClientModuleConfig {
 pub struct ServerModuleConfig {
     pub local: JsonWithKind,
     pub private: JsonWithKind,
-    pub consensus: JsonWithKind,
+    pub consensus: ServerModuleConsensusConfig,
+    pub consensus_json: JsonWithKind,
 }
 
 impl ServerModuleConfig {
-    pub fn from(local: JsonWithKind, private: JsonWithKind, consensus: JsonWithKind) -> Self {
+    pub fn from(
+        local: JsonWithKind,
+        private: JsonWithKind,
+        consensus: ServerModuleConsensusConfig,
+        consensus_json: JsonWithKind,
+    ) -> Self {
         Self {
             local,
             private,
             consensus,
+            consensus_json,
         }
     }
 
     pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
         let local = serde_json::from_value(self.local.value().clone())?;
         let private = serde_json::from_value(self.private.value().clone())?;
-        let consensus = serde_json::from_value(self.consensus.value().clone())?;
+        let consensus =
+            <T::Consensus>::consensus_decode(&mut &self.consensus.config[..], &Default::default())?;
 
         Ok(TypedServerModuleConfig::from_parts(
             local, private, consensus,
@@ -620,12 +615,25 @@ impl ServerModuleConfig {
 }
 
 /// Consensus-critical part of a server side module config
-pub trait TypedServerModuleConsensusConfig: DeserializeOwned + Serialize + Encodable {
+pub trait TypedServerModuleConsensusConfig:
+    DeserializeOwned + Serialize + Encodable + Decodable
+{
+    fn kind(&self) -> ModuleKind;
+
+    fn version(&self) -> ModuleConsensusVersion;
+
+    fn from_erased(erased: &ServerModuleConsensusConfig) -> anyhow::Result<Self> {
+        Ok(Self::consensus_decode(
+            &mut &erased.config[..],
+            &Default::default(),
+        )?)
+    }
+
     /// Derive client side config for this module (type-erased)
     fn to_client_config(&self) -> ClientModuleConfig;
 }
 
-/// Module (server side) config
+/// Module (server side) config, typed
 pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
     /// Local non-consensus, not security-sensitive settings
     type Local: DeserializeOwned + Serialize;
@@ -654,7 +662,14 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
                 kind.clone(),
                 serde_json::to_value(private).expect("serialization can't fail"),
             ),
-            consensus: JsonWithKind::new(
+            consensus: ServerModuleConsensusConfig {
+                kind: consensus.kind(),
+                version: consensus.version(),
+                config: consensus
+                    .consensus_encode_to_vec()
+                    .expect("serialization can't fail"),
+            },
+            consensus_json: JsonWithKind::new(
                 kind,
                 serde_json::to_value(consensus).expect("serialization can't fail"),
             ),
@@ -667,12 +682,15 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 
 /// Typed client side module config
 pub trait TypedClientModuleConfig:
-    DeserializeOwned + Serialize + Encodable + MaybeSend + MaybeSync
+    DeserializeOwned + Serialize + Decodable + Encodable + MaybeSend + MaybeSync
 {
     fn kind(&self) -> ModuleKind;
 
+    fn version(&self) -> ModuleConsensusVersion;
+
     fn to_erased(&self) -> ClientModuleConfig {
-        ClientModuleConfig::from_typed(self.kind(), self).expect("serialization can't fail")
+        ClientModuleConfig::from_typed(self.kind(), self.version(), self)
+            .expect("serialization can't fail")
     }
 }
 

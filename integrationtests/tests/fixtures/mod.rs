@@ -383,7 +383,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
                 .to_config_response(&server_module_inits)
-                .client;
+                .client_config;
 
             let lightning = FakeLightningTest::new();
             let ln_arc = Arc::new(RwLock::new(lightning.clone()));
@@ -587,7 +587,7 @@ async fn distributed_config(
 
     Ok((
         configs.into_iter().collect(),
-        config.consensus.to_config_response(&registry).client,
+        config.consensus.to_config_response(&registry).client_config,
     ))
 }
 

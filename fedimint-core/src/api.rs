@@ -12,7 +12,7 @@ use anyhow::{anyhow, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin_hashes::sha256;
-use fedimint_core::config::{ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId};
+use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -353,7 +353,6 @@ pub trait GlobalFederationApi {
     async fn download_client_config(
         &self,
         info: &WsClientConnectInfo,
-        module_gens: CommonModuleGenRegistry,
     ) -> FederationResult<ClientConfig>;
 
     /// Fetches the server consensus hash if enough peers agree on it
@@ -519,16 +518,15 @@ where
     async fn download_client_config(
         &self,
         info: &WsClientConnectInfo,
-        module_gens: CommonModuleGenRegistry,
     ) -> FederationResult<ClientConfig> {
         let id = info.id.clone();
         let qs = VerifiableResponse::new(
             self.all_members().total(),
             false,
-            move |config: &ConfigResponse| {
-                let hash = config.client.consensus_hash(&module_gens).expect("Hashes");
+            move |config: &ClientConfigResponse| {
+                let hash = config.client_config.consensus_hash();
 
-                if let Some(sig) = &config.client_hash_signature {
+                if let Some(sig) = &config.signature {
                     id.0.verify(sig, hash)
                 } else {
                     false
@@ -538,7 +536,7 @@ where
 
         self.request_with_strategy(qs, "config".to_owned(), ApiRequestErased::new(info.clone()))
             .await
-            .map(|cfg: ConfigResponse| cfg.client)
+            .map(|cfg: ClientConfigResponse| cfg.client_config)
     }
 
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
