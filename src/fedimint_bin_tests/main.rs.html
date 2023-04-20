@@ -1125,6 +1125,18 @@
 <a href="#1125" id="1125">1125</a>
 <a href="#1126" id="1126">1126</a>
 <a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::future::Future;
@@ -1335,11 +1347,14 @@
             lnd_macaroon.clone(),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+        <span class="kw">let </span>this = <span class="self">Self </span>{
             _bitcoind: bitcoind,
             client: Arc::new(Mutex::new(client)),
             _process: process,
-        })
+        };
+        <span class="comment">// wait for lnd rpc to be active
+        </span>poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(this.pub_key().<span class="kw">await</span>.is_ok()) }).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(this)
     }
 
     <span class="kw">pub async fn </span>client_lock(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;MappedMutexGuard&lt;<span class="lifetime">&#39;_</span>, tonic_lnd::LightningClient&gt;&gt; {
@@ -2105,28 +2120,37 @@
 }
 
 <span class="kw">async fn </span>dev_fed(task_group: <span class="kw-2">&amp;</span>TaskGroup, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
+    <span class="kw">let </span>start_time = fedimint_core::time::now();
     <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>(cln, lnd, electrs, esplora) = <span class="macro">tokio::try_join!</span>(
-        Lightningd::new(process_mgr, bitcoind.clone()),
-        Lnd::new(process_mgr, bitcoind.clone()),
+    <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = <span class="macro">tokio::try_join!</span>(
+        <span class="kw">async </span>{
+            <span class="kw">let </span>(cln, lnd) = <span class="macro">tokio::try_join!</span>(
+                Lightningd::new(process_mgr, bitcoind.clone()),
+                Lnd::new(process_mgr, bitcoind.clone())
+            )<span class="question-mark">?</span>;
+            <span class="macro">info!</span>(<span class="string">&quot;lightning started&quot;</span>);
+            <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
+                Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())),
+                Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())),
+                open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
+            )<span class="question-mark">?</span>;
+            <span class="macro">info!</span>(<span class="string">&quot;gateways started&quot;</span>);
+            <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd))
+        },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
+        <span class="kw">async </span>{
+            run_dkg(task_group, <span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">info!</span>(<span class="string">&quot;dkg done&quot;</span>);
+            Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..<span class="number">4</span>).<span class="kw">await
+        </span>},
     )<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;lightning and bitcoind started&quot;</span>);
-    run_dkg(task_group, <span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;dkg done&quot;</span>);
-    open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="macro">info!</span>(<span class="string">&quot;channel open&quot;</span>);
-    <span class="kw">let </span>fed = Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..<span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;federation started&quot;</span>);
-    <span class="kw">let </span>gw_cln = Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>gw_lnd = Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;gateway started&quot;</span>);
+    <span class="macro">info!</span>(<span class="string">&quot;federation and gateways started&quot;</span>);
     <span class="macro">tokio::try_join!</span>(gw_cln.connect_fed(<span class="kw-2">&amp;</span>fed), gw_lnd.connect_fed(<span class="kw-2">&amp;</span>fed))<span class="question-mark">?</span>;
     fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;gateways registered&quot;</span>);
     fed.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">info!</span>(<span class="string">&quot;starting dev federation took {:?}&quot;</span>, start_time.elapsed()<span class="question-mark">?</span>);
     <span class="prelude-val">Ok</span>(DevFed {
         bitcoind,
         cln,
