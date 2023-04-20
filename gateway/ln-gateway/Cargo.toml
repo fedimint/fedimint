@@ -47,6 +47,7 @@ fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"
+lightning = "0.0.113"
 lightning-invoice = "0.21.0"
 fedimint-client-legacy = { path = "../../fedimint-client-legacy" }
 prost = "0.11"

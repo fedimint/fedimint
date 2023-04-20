@@ -14,6 +14,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::dyn_newtype_define;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use lightning::routing::gossip::RoutingFees;
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
 use url::Url;
@@ -85,6 +86,7 @@ pub trait IGatewayClientBuilder: Debug {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         module_gens: ClientModuleGenRegistry,
+        fees: RoutingFees,
     ) -> Result<GatewayClientConfig>;
 
     /// Save and persist the configuration of the gateway federation client
@@ -144,6 +146,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         node_pubkey: PublicKey,
         // TODO: delme
         _module_gens: ClientModuleGenRegistry,
+        fees: RoutingFees,
     ) -> Result<GatewayClientConfig> {
         let api: DynFederationApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
 
@@ -160,6 +163,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
             timelock_delta: 10,
             node_pub_key: node_pubkey,
             api: self.gateway_api.clone(),
+            fees,
         })
     }
 

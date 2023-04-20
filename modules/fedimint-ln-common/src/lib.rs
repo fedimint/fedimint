@@ -18,7 +18,6 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
-use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -211,6 +210,7 @@ plugin_types_trait_impl_common!(
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
     use fedimint_core::encoding::{Decodable, Encodable};
+    use lightning::routing::gossip::RoutingFees;
     use secp256k1::PublicKey;
     use serde::{Deserialize, Serialize};
 
@@ -246,7 +246,7 @@ pub mod route_hints {
                     .map(|hop| lightning::routing::router::RouteHintHop {
                         src_node_id: hop.src_node_id,
                         short_channel_id: hop.short_channel_id,
-                        fees: lightning::routing::gossip::RoutingFees {
+                        fees: RoutingFees {
                             base_msat: hop.base_msat,
                             proportional_millionths: hop.proportional_millionths,
                         },
