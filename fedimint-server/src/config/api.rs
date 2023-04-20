@@ -336,7 +336,7 @@ impl ConfigGenApi {
     }
 
     /// Returns the server status
-    pub async fn server_status(&self) -> ServerStatus {
+    pub async fn status(&self) -> ServerStatus {
         let has_upgrade_flag = { self.has_upgrade_flag().await };
 
         let state = self.state.lock().expect("lock poisoned");
@@ -657,10 +657,10 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            "server_status",
+            "status",
             async |config: &ConfigGenApi, context, _v: ()| -> ServerStatus {
                 if context.has_auth() {
-                    Ok(config.server_status().await)
+                    Ok(config.status().await)
                 } else {
                     Err(ApiError::unauthorized())
                 }
@@ -795,7 +795,7 @@ mod tests {
         /// Helper for getting server status
         async fn server_status(&self) -> ServerStatus {
             loop {
-                match self.client.server_status().await {
+                match self.client.status().await {
                     Ok(status) => return status,
                     Err(_) => sleep(Duration::from_millis(1000)).await,
                 }

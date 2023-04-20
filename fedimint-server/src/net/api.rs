@@ -396,7 +396,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "server_status",
+            "status",
             async |_fedimint: &ConsensusApi, context, _v: ()| -> ServerStatus {
                 if context.has_auth() {
                     Ok(ServerStatus::ConsensusRunning)
