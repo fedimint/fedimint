@@ -426,7 +426,32 @@ impl Client {
     }
 
     pub async fn await_tx_accepted(&self, operation_id: OperationId, txid: TransactionId) {
-        self.inner.transaction_update_stream(operation_id).await.filter(|tx_update| std::future::ready(matches!(tx_update.state, TxSubmissionStates::Accepted {txid: event_txid} if event_txid == txid))).next_or_pending().await;
+        self.inner
+            .transaction_update_stream(operation_id)
+            .await
+            .filter(|tx_update| {
+                std::future::ready(matches!(
+                    tx_update.state,
+                    TxSubmissionStates::Accepted {txid: event_txid} if event_txid == txid
+                ))
+            })
+            .next_or_pending()
+            .await;
+    }
+
+    /// Returns the instance id of the first module of the given kind. The
+    /// primary module will always be returned before any other modules (which
+    /// themselves are ordered by their instance id).
+    pub fn get_first_instance(&self, module_kind: &ModuleKind) -> Option<ModuleInstanceId> {
+        if &self.inner.primary_module_kind == module_kind {
+            return Some(self.inner.primary_module_instance);
+        }
+
+        self.inner
+            .modules
+            .iter_modules()
+            .find(|(_, kind, _module)| *kind == module_kind)
+            .map(|(instance_id, _, _)| instance_id)
     }
 }
 
@@ -434,6 +459,7 @@ struct ClientInner {
     db: Database,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
+    primary_module_kind: ModuleKind,
     modules: ClientModuleRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynFederationApi,
@@ -682,6 +708,7 @@ impl ClientBuilder {
         )?;
         decoders.register_module(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            ModuleKind::from_static_str("tx_submission"),
             tx_submission_sm_decoder(),
         );
 
@@ -693,14 +720,15 @@ impl ClientBuilder {
 
         let root_secret = get_client_root_secret(&db).await;
 
-        let (modules, primary_module) = {
+        let (modules, (primary_module_kind, primary_module)) = {
             let mut modules = ClientModuleRegistry::default();
             let mut primary_module = None;
             for (module_instance, module_config) in config.modules {
+                let kind = module_config.kind().clone();
                 if module_instance == primary_module_instance {
                     let module = self
                         .module_gens
-                        .get(module_config.kind())
+                        .get(&kind)
                         .ok_or(anyhow!("Unknown module kind in config"))?
                         .init_primary(
                             module_config,
@@ -710,12 +738,12 @@ impl ClientBuilder {
                             notifier.clone(),
                         )
                         .await?;
-                    let not_replaced = primary_module.replace(module).is_none();
+                    let not_replaced = primary_module.replace((kind, module)).is_none();
                     assert!(not_replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
                 } else {
                     let module = self
                         .module_gens
-                        .get(module_config.kind())
+                        .get(&kind)
                         .ok_or(anyhow!("Unknown module kind in config"))?
                         .init(
                             module_config,
@@ -729,7 +757,7 @@ impl ClientBuilder {
                             notifier.clone(),
                         )
                         .await?;
-                    modules.register_module(module_instance, module);
+                    modules.register_module(module_instance, kind, module);
                 }
             }
             (
@@ -744,7 +772,7 @@ impl ClientBuilder {
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
             executor_builder.with_module_dyn(primary_module.context(primary_module_instance));
 
-            for (module_instance_id, module) in modules.iter_modules() {
+            for (module_instance_id, _, module) in modules.iter_modules() {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
             }
 
@@ -755,6 +783,7 @@ impl ClientBuilder {
             db,
             primary_module,
             primary_module_instance,
+            primary_module_kind,
             modules,
             executor,
             api,
@@ -839,10 +868,13 @@ pub fn client_decoders<'a>(
 
         modules.insert(
             id,
-            IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(init)),
+            (
+                kind.clone(),
+                IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(init)),
+            ),
         );
     }
-    Ok(ModuleDecoderRegistry::from_iter(modules))
+    Ok(ModuleDecoderRegistry::from(modules))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

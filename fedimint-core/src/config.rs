@@ -471,9 +471,9 @@ where
                 anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
             };
 
-            modules.insert(id, init.as_ref().decoder());
+            modules.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
-        Ok(ModuleDecoderRegistry::from_iter(modules))
+        Ok(ModuleDecoderRegistry::from(modules))
     }
 }
 

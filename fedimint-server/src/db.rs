@@ -161,9 +161,10 @@ mod fedimint_migration_tests {
         SignedEpochOutcome,
     };
     use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::CommonModuleGen;
     use fedimint_core::transaction::Transaction;
     use fedimint_core::{PeerId, ServerModule, TransactionId};
-    use fedimint_dummy_common::{DummyInput, DummyOutput};
+    use fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
     use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
     use futures::StreamExt;
@@ -274,7 +275,11 @@ mod fedimint_migration_tests {
                     create_db_with_v0_data(dbtx).await;
                 })
             },
-            ModuleDecoderRegistry::from_iter([(0, <Dummy as ServerModule>::decoder())]),
+            ModuleDecoderRegistry::from_iter([(
+                0,
+                DummyCommonGen::KIND,
+                <Dummy as ServerModule>::decoder(),
+            )]),
         )
         .await;
     }
@@ -385,6 +390,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 0,
+                DummyCommonGen::KIND,
                 <Dummy as ServerModule>::decoder(),
             )]),
         )

@@ -2901,6 +2901,7 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-testing",
+ "fedimint-wallet-client",
  "futures",
  "lightning-invoice",
  "portpicker",

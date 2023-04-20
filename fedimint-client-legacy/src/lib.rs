@@ -38,17 +38,19 @@ use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::ModuleCommon;
+use fedimint_core::module::{CommonModuleGen, ModuleCommon};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_ln_client::{LightningClientModule, LightningModuleTypes, LightningOutputOutcome};
+use fedimint_ln_client::{
+    LightningClientModule, LightningCommonGen, LightningModuleTypes, LightningOutputOutcome,
+};
 use fedimint_logging::LOG_WALLET;
-use fedimint_mint_client::{MintClientModule, MintModuleTypes};
+use fedimint_mint_client::{MintClientModule, MintCommonGen, MintModuleTypes};
 use fedimint_wallet_client::WalletModuleTypes;
-use fedimint_wallet_common::Rbf;
+use fedimint_wallet_common::{Rbf, WalletCommonGen};
 use futures::stream::{self, FuturesUnordered};
 use futures::StreamExt;
 use itertools::{Either, Itertools};
@@ -1542,14 +1544,17 @@ pub fn module_decode_stubs() -> ModuleDecoderRegistry {
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
+            LightningCommonGen::KIND,
             LightningModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            WalletCommonGen::KIND,
             WalletModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            MintCommonGen::KIND,
             MintModuleTypes::decoder(),
         ),
     ])

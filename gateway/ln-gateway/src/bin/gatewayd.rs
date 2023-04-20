@@ -7,15 +7,19 @@ use clap::Parser;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::modules::ln::{LightningClientGen, LightningModuleTypes};
 use fedimint_client_legacy::modules::mint::{MintClientGen, MintModuleTypes};
-use fedimint_client_legacy::modules::wallet::{WalletClientGen, WalletModuleTypes};
+use fedimint_client_legacy::modules::wallet::{
+    WalletClientGen, WalletCommonGen, WalletModuleTypes,
+};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::ModuleCommon;
+use fedimint_core::module::{CommonModuleGen, ModuleCommon};
 use fedimint_core::task::TaskGroup;
+use fedimint_ln_client::LightningCommonGen;
 use fedimint_logging::TracingSetup;
+use fedimint_mint_client::MintCommonGen;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::{Gateway, LightningMode};
 use tracing::{error, info};
@@ -88,14 +92,17 @@ async fn main() -> Result<(), anyhow::Error> {
     let decoders = ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
+            LightningCommonGen::KIND,
             LightningModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            MintCommonGen::KIND,
             MintModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            WalletCommonGen::KIND,
             WalletModuleTypes::decoder(),
         ),
     ]);

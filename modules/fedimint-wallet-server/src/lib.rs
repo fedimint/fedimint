@@ -1740,7 +1740,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::DynServerModuleGen;
+    use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, ServerModule, TransactionId};
     use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
     use fedimint_wallet_common::db::{
@@ -1751,7 +1751,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_wallet_common::{
         PegOutFees, PendingTransaction, Rbf, RoundConsensus, SpendableUTXO, UnsignedTransaction,
-        WalletOutputOutcome,
+        WalletCommonGen, WalletOutputOutcome,
     };
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -1922,6 +1922,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonGen::KIND,
                 <Wallet as ServerModule>::decoder(),
             )]),
         )
@@ -2033,6 +2034,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonGen::KIND,
                 <Wallet as ServerModule>::decoder(),
             )]),
         )

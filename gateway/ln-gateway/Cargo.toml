@@ -42,6 +42,9 @@ fedimint-client = { path = "../../fedimint-client" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
+fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
+fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"
 lightning-invoice = "0.21.0"
 fedimint-client-legacy = { path = "../../fedimint-client-legacy" }

@@ -325,9 +325,11 @@ impl Opts {
     ) -> ModuleDecoderRegistry {
         ModuleDecoderRegistry::new(cfg.clone().0.modules.into_iter().filter_map(
             |(id, module_cfg)| {
-                module_gens.get(module_cfg.kind()).map(|module_gen| {
+                let kind = module_cfg.kind().clone();
+                module_gens.get(&kind).map(|module_gen| {
                     (
                         id,
+                        kind,
                         IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(
                             module_gen,
                         )),

@@ -740,7 +740,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
@@ -858,7 +858,8 @@ mod tests {
         decoder_builder.with_decodable_type::<MockStateMachine>();
         let decoder = decoder_builder.build();
 
-        let decoders = ModuleDecoderRegistry::new(vec![(42, decoder)]);
+        let decoders =
+            ModuleDecoderRegistry::new(vec![(42, ModuleKind::from_static_str("test"), decoder)]);
         let db = Database::new(MemDatabase::new(), decoders);
 
         let mut executor_builder = Executor::<()>::builder();

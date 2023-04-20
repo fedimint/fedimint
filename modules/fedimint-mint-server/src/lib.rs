@@ -1181,7 +1181,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::DynServerModuleGen;
+    use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     use fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
     use fedimint_mint_common::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
@@ -1189,7 +1189,9 @@ mod fedimint_migration_tests {
         OutputOutcomeKeyPrefix, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
         ReceivedPartialSignatureKey, ReceivedPartialSignaturesKeyPrefix,
     };
-    use fedimint_mint_common::{MintOutputBlindSignatures, MintOutputSignatureShare, Nonce};
+    use fedimint_mint_common::{
+        MintCommonGen, MintOutputBlindSignatures, MintOutputSignatureShare, Nonce,
+    };
     use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -1286,6 +1288,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                MintCommonGen::KIND,
                 <Mint as ServerModule>::decoder(),
             )]),
         )
@@ -1391,6 +1394,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                MintCommonGen::KIND,
                 <Mint as ServerModule>::decoder(),
             )]),
         )

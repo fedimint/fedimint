@@ -310,7 +310,7 @@ impl FedimintConsensus {
             .save_epoch_history(outcome.clone(), dbtx, &mut drop_peers, rejected_txs)
             .await;
 
-        for (module_key, module) in self.modules.iter_modules() {
+        for (module_key, _, module) in self.modules.iter_modules() {
             let module_drop_peers = module
                 .end_consensus_epoch(consensus_peers, &mut dbtx.with_module_prefix(module_key))
                 .await;
@@ -463,7 +463,7 @@ impl FedimintConsensus {
         let proposal_futures = self
             .modules
             .iter_modules()
-            .map(|(module_instance_id, module)| {
+            .map(|(module_instance_id, _kind, module)| {
                 Box::pin(async move {
                     let mut dbtx = self.db.begin_transaction().await;
                     let mut module_dbtx = dbtx.with_module_prefix(module_instance_id);
@@ -500,7 +500,7 @@ impl FedimintConsensus {
             .collect();
         let mut force_new_epoch = false;
 
-        for (instance_id, module) in self.modules.iter_modules() {
+        for (instance_id, _, module) in self.modules.iter_modules() {
             let consensus_proposal = module
                 .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
                 .await;
@@ -627,7 +627,7 @@ impl FedimintConsensus {
     pub async fn audit(&self) -> Audit {
         let mut dbtx = self.db.begin_transaction().await;
         let mut audit = Audit::default();
-        for (module_instance_id, module) in self.modules.iter_modules() {
+        for (module_instance_id, _, module) in self.modules.iter_modules() {
             module
                 .audit(&mut dbtx.with_module_prefix(module_instance_id), &mut audit)
                 .await

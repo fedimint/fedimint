@@ -217,7 +217,7 @@ mod tests {
 
     use async_trait::async_trait;
     use fedimint_core::api::{IFederationApi, JsonRpcResult};
-    use fedimint_core::core::IntoDynInstance;
+    use fedimint_core::core::{IntoDynInstance, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -389,6 +389,7 @@ mod tests {
             MemDatabase::new(),
             ModuleDecoderRegistry::new([(
                 TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+                ModuleKind::from_static_str("test_transaction_submission"),
                 tx_submission_sm_decoder(),
             )]),
         );
