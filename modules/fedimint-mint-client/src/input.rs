@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -144,7 +146,7 @@ impl MintInputStateCreated {
             keys: spend_keys,
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created
-            state_machines: Box::new(|_, _| vec![]),
+            state_machines: Arc::new(|_, _| vec![]),
         };
 
         let refund_txid = global_context.claim_input(dbtx, refund_input).await;

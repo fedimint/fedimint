@@ -141,7 +141,7 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
 }
 
 pub type StateGenerator<S> =
-    Box<maybe_add_send_sync!(dyn Fn(TransactionId, u64) -> Vec<S> + 'static)>;
+    Arc<maybe_add_send_sync!(dyn Fn(TransactionId, u64) -> Vec<S> + 'static)>;
 
 /// A client module that can be used as funding source and to generate arbitrary
 /// change outputs for unbalanced transactions.

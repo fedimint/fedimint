@@ -4,6 +4,7 @@ mod output;
 
 use std::cmp::Ordering;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use fedimint_client::module::gen::ClientModuleGen;
@@ -201,7 +202,7 @@ impl MintClientModule {
         let (note_issuance, sig_req): (MultiNoteIssuanceRequest, MintOutput) =
             amount_requests.into_iter().unzip();
 
-        let state_generator = Box::new(move |txid, out_idx| {
+        let state_generator = Arc::new(move |txid, out_idx| {
             vec![MintClientStateMachines::Output(MintOutputStateMachine {
                 common: MintOutputCommon {
                     operation_id,
@@ -296,7 +297,7 @@ impl MintClientModule {
             .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note)))
             .unzip();
 
-        let sm_gen = Box::new(move |txid, input_idx| {
+        let sm_gen = Arc::new(move |txid, input_idx| {
             vec![MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id,

@@ -10,7 +10,7 @@ use anyhow::{anyhow, bail};
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
@@ -199,7 +199,7 @@ fn states_to_instanceless_dyn<
 >(
     state_gen: StateGenerator<S>,
 ) -> StateGenerator<Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>> {
-    Box::new(move |txid, out_idx| {
+    Arc::new(move |txid, out_idx| {
         let states: Vec<S> = state_gen(txid, out_idx);
         states
             .into_iter()
@@ -304,7 +304,7 @@ fn states_add_instance(
         Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
     >,
 ) -> StateGenerator<DynState<DynGlobalClientContext>> {
-    Box::new(move |txid, out_idx| {
+    Arc::new(move |txid, out_idx| {
         let states = state_gen(txid, out_idx);
         Iterator::collect(
             states
@@ -331,39 +331,63 @@ impl Client {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId>
     where
-        F: Fn(TransactionId) -> M,
-        M: serde::Serialize,
+        F: Fn(TransactionId) -> M + Clone + MaybeSend + MaybeSync,
+        M: serde::Serialize + MaybeSend,
     {
-        let mut dbtx = self.inner.db.begin_transaction().await;
+        let operation_type = operation_type.to_owned();
 
-        if ClientInner::operation_exists(&mut dbtx, operation_id).await {
-            bail!("There already exists an operation with id {operation_id:?}")
-        }
-
-        let txid = self
+        let autocommit_res = self
             .inner
-            .finalize_and_submit_transaction(&mut dbtx, operation_id, tx_builder)
-            .await?;
+            .db
+            .autocommit(
+                |dbtx| {
+                    let operation_type = operation_type.clone();
+                    let tx_builder = tx_builder.clone();
+                    let operation_meta = operation_meta.clone();
+                    Box::pin(async move {
+                        if ClientInner::operation_exists(dbtx, operation_id).await {
+                            bail!("There already exists an operation with id {operation_id:?}")
+                        }
 
-        dbtx.insert_entry(
-            &OperationLogKey { operation_id },
-            &OperationLogEntry {
-                operation_type: operation_type.to_string(),
-                meta: serde_json::to_value(operation_meta(txid))?,
-            },
-        )
-        .await;
-        dbtx.insert_entry(
-            &ChronologicalOperationLogKey {
-                creation_time: fedimint_core::time::now(),
-                operation_id,
-            },
-            &(),
-        )
-        .await;
+                        let txid = self
+                            .inner
+                            .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
+                            .await?;
 
-        dbtx.commit_tx().await;
-        Ok(txid)
+                        dbtx.insert_entry(
+                            &OperationLogKey { operation_id },
+                            &OperationLogEntry {
+                                operation_type: operation_type.to_string(),
+                                meta: serde_json::to_value(operation_meta(txid))?,
+                            },
+                        )
+                        .await;
+                        dbtx.insert_entry(
+                            &ChronologicalOperationLogKey {
+                                creation_time: fedimint_core::time::now(),
+                                operation_id,
+                            },
+                            &(),
+                        )
+                        .await;
+
+                        Ok(txid)
+                    })
+                },
+                Some(100), // TODO: handle what happens after 100 retries
+            )
+            .await;
+
+        match autocommit_res {
+            Ok(txid) => Ok(txid),
+            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
+            Err(AutocommitError::CommitFailed {
+                attempts,
+                last_error,
+            }) => panic!(
+                "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
+            ),
+        }
     }
 
     // TODO: allow fetching pages
