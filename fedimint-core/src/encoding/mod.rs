@@ -11,7 +11,7 @@ mod tls;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
-use std::io::{self, Error, Read, Write};
+use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::format_err;
@@ -19,7 +19,6 @@ use bitcoin_hashes::hex::ToHex;
 use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::{sha256, Hash};
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
 
@@ -515,63 +514,6 @@ where
     }
 }
 
-/// A wrapper counting bytes written
-struct CountWrite<'a, W> {
-    inner: &'a mut W,
-    count: usize,
-}
-
-impl<'a, W> CountWrite<'a, W> {
-    fn new(inner: &'a mut W) -> Self {
-        Self { inner, count: 0 }
-    }
-}
-
-impl<'a, W> io::Write for CountWrite<'a, W>
-where
-    W: io::Write,
-{
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let count = self.inner.write(buf)?;
-        self.count += count;
-        Ok(count)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
-}
-/// Wrappers for `T` that are `De-Serializable`, while we need them in
-/// `Encodable` context
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
-pub struct SerdeEncodable<T>(pub T);
-
-impl<T> Encodable for SerdeEncodable<T>
-where
-    T: serde::Serialize,
-{
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        let mut count_writer = CountWrite::new(writer);
-        bincode::serialize_into(&mut count_writer, &self.0)
-            .map_err(|e| std::io::Error::new(io::ErrorKind::Other, e))?;
-        Ok(count_writer.count)
-    }
-}
-
-impl<T> Decodable for SerdeEncodable<T>
-where
-    T: for<'de> serde::Deserialize<'de>,
-{
-    fn consensus_decode<R: std::io::Read>(
-        r: &mut R,
-        _modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        Ok(Self(
-            bincode::deserialize_from(r).map_err(|e| DecodeError(e.into()))?,
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
@@ -683,11 +625,6 @@ mod tests {
 			j5r6drg6k6zcqj0fcwg";
         let invoice = invoice_str.parse::<lightning_invoice::Invoice>().unwrap();
         test_roundtrip(invoice);
-    }
-
-    #[test_log::test]
-    fn test_serde_encodable() {
-        test_roundtrip(SerdeEncodable(6usize));
     }
 
     #[test_log::test]
