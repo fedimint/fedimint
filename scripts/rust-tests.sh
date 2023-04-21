@@ -20,7 +20,7 @@ export FM_TEST_USE_REAL_DAEMONS=1
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
   >&2 echo "### Testing against bitcoind"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-tests -- --test-threads=16 "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
   >&2 echo "### Testing against bitcoind - complete"
 fi
 
