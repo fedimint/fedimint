@@ -35,7 +35,8 @@ use fedimint_core::task::{timeout, RwLock, TaskGroup};
 use fedimint_core::{
     core, sats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
 };
-use fedimint_ln_client::{GatewayFeeStructure, LightningClientGen, LightningGateway};
+use fedimint_ln_client::{LightningClientGen, LightningGateway};
+use fedimint_ln_common::{GatewayFeeStructure, DEFAULT_ROUTING_FEES};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintClientGen;
@@ -71,7 +72,7 @@ use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
-use ln_gateway::{Gateway, DEFAULT_FEES};
+use ln_gateway::Gateway;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
@@ -341,7 +342,9 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
                 gateway_node,
-                DEFAULT_FEES,
+                GatewayFeeStructure::LnRouting {
+                    fees: DEFAULT_ROUTING_FEES,
+                },
             )
             .await;
 
@@ -416,7 +419,9 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
                 gateway_node.clone(),
-                DEFAULT_FEES,
+                GatewayFeeStructure::LnRouting {
+                    fees: DEFAULT_ROUTING_FEES,
+                },
             )
             .await;
 

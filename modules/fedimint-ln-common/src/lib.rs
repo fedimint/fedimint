@@ -279,6 +279,15 @@ pub enum GatewayFeeStructure {
     },
 }
 
+/// Default Lightning routing fees for the gateway.
+pub const DEFAULT_ROUTING_FEES: RoutingFees = RoutingFees {
+    /// Base routing fee. Default is 0 msat
+    base_msat: 0,
+    /// Liquidity-based routing fee in millionths of a routed amount.
+    /// In other words, 10000 is 1%. The default is 10000 (1%).
+    proportional_millionths: 10000,
+};
+
 // TODO: Upstream serde serialization for
 // lightning::routing::gossip::RoutingFees
 // See https://github.com/lightningdevkit/rust-lightning/blob/b8ed4d2608e32128dd5a1dee92911638a4301138/lightning/src/routing/gossip.rs#L1057-L1065

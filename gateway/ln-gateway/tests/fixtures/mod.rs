@@ -8,6 +8,7 @@ use fedimint_client_legacy::module_decode_stubs;
 use fedimint_client_legacy::modules::wallet::WalletClientGen;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_ln_client::LightningClientGen;
+use fedimint_ln_common::{GatewayFeeStructure, DEFAULT_ROUTING_FEES};
 use fedimint_mint_client::MintClientGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
@@ -17,7 +18,7 @@ use futures::Future;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::RpcClient;
-use ln_gateway::{Gateway, DEFAULT_FEES};
+use ln_gateway::Gateway;
 use url::Url;
 
 pub mod client;
@@ -55,7 +56,9 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
         decoders,
         module_gens,
         task_group.clone(),
-        DEFAULT_FEES,
+        GatewayFeeStructure::LnRouting {
+            fees: DEFAULT_ROUTING_FEES,
+        },
     )
     .await
     .unwrap();

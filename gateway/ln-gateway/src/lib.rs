@@ -35,7 +35,6 @@ use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_common::GatewayFeeStructure;
 use gatewaylnrpc::GetNodeInfoResponse;
-use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::ILnRpcClient;
 use rpc::{FederationInfo, LightningReconnectPayload};
 use secp256k1::PublicKey;
@@ -59,16 +58,6 @@ const ROUTE_HINT_RETRIES: usize = 10;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 /// LND HTLC interceptor can't handle SCID of 0, so start from 1
 const INITIAL_SCID: u64 = 1;
-
-pub const DEFAULT_FEES: GatewayFeeStructure = GatewayFeeStructure::LnRouting {
-    fees: RoutingFees {
-        /// Base routing fee. Default is 0 msat
-        base_msat: 0,
-        /// Liquidity-based routing fee in millionths of a routed amount.
-        /// In other words, 10000 is 1%. The default is 10000 (1%).
-        proportional_millionths: 10000,
-    },
-};
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
 

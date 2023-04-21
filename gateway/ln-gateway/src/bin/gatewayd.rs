@@ -15,9 +15,10 @@ use fedimint_core::core::{
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::task::TaskGroup;
+use fedimint_ln_common::{GatewayFeeStructure, DEFAULT_ROUTING_FEES};
 use fedimint_logging::TracingSetup;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::{Gateway, LightningMode, DEFAULT_FEES};
+use ln_gateway::{Gateway, LightningMode};
 use tracing::{error, info};
 use url::Url;
 
@@ -114,7 +115,9 @@ async fn main() -> Result<(), anyhow::Error> {
         decoders,
         module_gens,
         task_group.make_subgroup().await,
-        DEFAULT_FEES,
+        GatewayFeeStructure::LnRouting {
+            fees: DEFAULT_ROUTING_FEES,
+        },
     )
     .await
     .unwrap_or_else(|e| {
