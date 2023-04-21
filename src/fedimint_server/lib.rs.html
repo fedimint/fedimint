@@ -291,10 +291,6 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -314,14 +310,15 @@
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
-<span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API, LOG_TASK};
+<span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>jsonrpsee::server::{ServerBuilder, ServerHandle};
 <span class="kw">use </span>jsonrpsee::types::error::CallError;
 <span class="kw">use </span>jsonrpsee::types::ErrorObject;
 <span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>tracing::{debug, error, info, warn};
+<span class="kw">use </span>tokio::runtime::Runtime;
+<span class="kw">use </span>tracing::{error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenApi, ConfigGenSettings};
 <span class="kw">use </span><span class="kw">crate</span>::config::io::PLAINTEXT_PASSWORD;
@@ -370,32 +367,34 @@
     </span><span class="kw">pub </span>settings: ConfigGenSettings,
     <span class="doccomment">/// Database shared by the API and consensus
     </span><span class="kw">pub </span>db: Database,
-    <span class="doccomment">/// Upgrade epoch if we shutdown due to an upgrade
-    </span><span class="comment">// TODO: should be replaced by requiring an API call instead
-    </span><span class="kw">pub </span>upgrade_epoch: <span class="prelude-ty">Option</span>&lt;u64&gt;,
 }
 
 <span class="kw">impl </span>FedimintServer {
     <span class="doccomment">/// Starts the `ConfigGenApi` unless configs already exist
     /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
-    </span><span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>task = <span class="kw-2">&amp;mut </span>task_group;
-
+    </span><span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Starting config gen&quot;</span>);
-        <span class="kw">let </span>cfg = <span class="self">self</span>.run_config_gen(task).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>cfg = <span class="self">self
+            </span>.run_config_gen(task_group.make_subgroup().<span class="kw">await</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>server =
-            ConsensusServer::new(cfg, <span class="self">self</span>.db.clone(), <span class="self">self</span>.settings.registry.clone(), task)
-                .<span class="kw">await
-                </span>.unwrap();
+        <span class="kw">let </span>server = ConsensusServer::new(
+            cfg,
+            <span class="self">self</span>.db.clone(),
+            <span class="self">self</span>.settings.registry.clone(),
+            <span class="kw-2">&amp;mut </span>task_group,
+        )
+        .<span class="kw">await
+        </span>.unwrap();
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Starting consensus API&quot;</span>);
-        <span class="kw">let </span>handle = <span class="self">self</span>.run_consensus_api(<span class="kw-2">&amp;</span>server.consensus.api, task).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>handler = <span class="self">self</span>.run_consensus_api(<span class="kw-2">&amp;</span>server.consensus.api).<span class="kw">await</span>;
 
-        <span class="self">self</span>.run_consensus(server, task).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.run_consensus(server, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
+        handler.stop().<span class="kw">await</span>;
 
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Stopping consensus API&quot;</span>);
-        handle.stop()<span class="question-mark">?</span>;
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Shutting down tasks&quot;</span>);
+        task_group.shutdown().<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -404,14 +403,14 @@
     ///
     /// If a local password file exists, will try to read the configs from the
     /// filesystem.  Otherwise, it will start the `ConfigGenApi`.
-    </span><span class="kw">async fn </span>run_config_gen(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+    </span><span class="kw">async fn </span>run_config_gen(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;ServerConfig&gt; {
         <span class="kw">let </span>(config_generated_tx, <span class="kw-2">mut </span>config_generated_rx) = tokio::sync::mpsc::channel(<span class="number">1</span>);
         <span class="kw">let </span>config_gen = ConfigGenApi::new(
             <span class="self">self</span>.data_dir.clone(),
             <span class="self">self</span>.settings.clone(),
             <span class="self">self</span>.db.clone(),
             config_generated_tx,
-            task_group,
+            <span class="kw-2">&amp;mut </span>task_group,
         );
 
         <span class="comment">// Attempt get the config with local password, otherwise start config gen
@@ -421,7 +420,9 @@
                 .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to use local password&quot;</span>))<span class="question-mark">?</span>;
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Setting password from local file&quot;</span>);
 
-            <span class="kw">if </span>config_gen.start_consensus(ApiAuth(password)).<span class="kw">await</span>.is_ok() {
+            <span class="kw">if </span>config_gen.has_upgrade_flag().<span class="kw">await </span>{
+                <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Restarted from an upgrade&quot;</span>);
+            } <span class="kw">else if </span>config_gen.start_consensus(ApiAuth(password)).<span class="kw">await</span>.is_ok() {
                 <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Configs found locally&quot;</span>);
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">&quot;should not close&quot;</span>));
             }
@@ -429,32 +430,25 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config::api::server_endpoints(), <span class="prelude-val">None</span>);
-        <span class="kw">let </span>server_handle = <span class="self">self</span>.spawn_api(rpc_module, <span class="number">10</span>, task_group).<span class="kw">await</span>;
+        <span class="kw">let </span>handler = <span class="self">self</span>.spawn_api(rpc_module, <span class="number">10</span>).<span class="kw">await</span>;
 
         <span class="kw">let </span>cfg = config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">&quot;should not close&quot;</span>);
-        server_handle.stop().expect(<span class="string">&quot;Unable to stop server&quot;</span>);
-        server_handle.stopped().<span class="kw">await</span>;
+        handler.stop().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(cfg)
     }
 
     <span class="doccomment">/// Runs the `ConsensusApi` which serves endpoints while consensus is
     /// running
-    </span><span class="kw">pub async fn </span>run_consensus_api(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        api: <span class="kw-2">&amp;</span>ConsensusApi,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;ServerHandle&gt; {
+    </span><span class="kw">pub async fn </span>run_consensus_api(<span class="kw-2">&amp;</span><span class="self">self</span>, api: <span class="kw-2">&amp;</span>ConsensusApi) -&gt; FedimintApiHandler {
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, net::api::server_endpoints(), <span class="prelude-val">None</span>);
         <span class="kw">for </span>(id, module) <span class="kw">in </span>api.modules.iter_modules() {
             <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
         }
 
-        <span class="kw">let </span>handle = <span class="self">self
-            </span>.spawn_api(rpc_module, api.cfg.local.max_connections, task_group)
-            .<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(handle)
-    }
+        <span class="self">self</span>.spawn_api(rpc_module, api.cfg.local.max_connections)
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Runs the `FedimintServer` which runs P2P consensus
     </span><span class="kw">async fn </span>run_consensus(
@@ -468,10 +462,6 @@
             .consensus
             .to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>.settings.registry)
             .consensus_hash;
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = <span class="self">self</span>.upgrade_epoch {
-            server.consensus.remove_upgrade_items(epoch).<span class="kw">await</span><span class="question-mark">?</span>;
-        }
 
         <span class="kw">loop </span>{
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Waiting for peers config {our_hash}&quot;</span>);
@@ -495,11 +485,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module: RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
         max_connections: u32,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; ServerHandle {
-        <span class="kw">let </span>server_handle = ServerBuilder::new()
+    ) -&gt; FedimintApiHandler {
+        <span class="kw">let </span>runtime = Runtime::new().expect(<span class="string">&quot;Creates runtime&quot;</span>);
+        <span class="kw">let </span>handle = ServerBuilder::new()
             .max_connections(max_connections)
             .ping_interval(Duration::from_secs(<span class="number">10</span>))
+            .custom_tokio_runtime(runtime.handle().clone())
             .build(<span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind.to_string())
             .<span class="kw">await
             </span>.context(<span class="macro">format!</span>(<span class="string">&quot;Bind address: {}&quot;</span>, <span class="self">self</span>.settings.api_bind))
@@ -507,20 +498,7 @@
             .start(module)
             .expect(<span class="string">&quot;Could not start API server&quot;</span>);
 
-        <span class="kw">let </span>stop_handle = server_handle.clone();
-
-        task_group
-            .make_handle()
-            .on_shutdown(Box::new(<span class="kw">move </span>|| {
-                Box::pin(<span class="kw">async move </span>{
-                    <span class="macro">debug!</span>(target: LOG_TASK, <span class="string">&quot;Shutting down jsonrpcsee server&quot;</span>);
-                    <span class="comment">// ignore errors: we don&#39;t care if already stopped
-                    </span><span class="kw">let _ </span>= stop_handle.stop();
-                })
-            }))
-            .<span class="kw">await</span>;
-
-        server_handle
+        FedimintApiHandler { handle, runtime }
     }
 
     <span class="doccomment">/// Attaches `endpoints` to the `RpcModule`
@@ -590,6 +568,20 @@
                 })
                 .expect(<span class="string">&quot;Failed to register async method&quot;</span>);
         }
+    }
+}
+
+<span class="kw">pub struct </span>FedimintApiHandler {
+    runtime: Runtime,
+    handle: ServerHandle,
+}
+
+<span class="kw">impl </span>FedimintApiHandler {
+    <span class="doccomment">/// Attempts to stop the API
+    </span><span class="kw">pub async fn </span>stop(<span class="self">self</span>) {
+        <span class="kw">let _ </span>= <span class="self">self</span>.handle.stop();
+        <span class="self">self</span>.runtime.shutdown_background();
+        <span class="self">self</span>.handle.stopped().<span class="kw">await</span>;
     }
 }
 </code></pre></div>

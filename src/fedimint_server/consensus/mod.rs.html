@@ -681,24 +681,6 @@
 <a href="#681" id="681">681</a>
 <a href="#682" id="682">682</a>
 <a href="#683" id="683">683</a>
-<a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a>
-<a href="#687" id="687">687</a>
-<a href="#688" id="688">688</a>
-<a href="#689" id="689">689</a>
-<a href="#690" id="690">690</a>
-<a href="#691" id="691">691</a>
-<a href="#692" id="692">692</a>
-<a href="#693" id="693">693</a>
-<a href="#694" id="694">694</a>
-<a href="#695" id="695">695</a>
-<a href="#696" id="696">696</a>
-<a href="#697" id="697">697</a>
-<a href="#698" id="698">698</a>
-<a href="#699" id="699">699</a>
-<a href="#700" id="700">700</a>
-<a href="#701" id="701">701</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -708,7 +690,6 @@
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::iter::FromIterator;
 
-<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
@@ -1106,23 +1087,6 @@
             .<span class="kw">await
             </span>.filter(|peers| peers.len() &gt;= <span class="self">self</span>.cfg.consensus.api_endpoints.threshold())
             .is_some()
-    }
-
-    <span class="doccomment">/// Called to remove the upgrade items after the upgrade is complete
-    </span><span class="kw">pub async fn </span>remove_upgrade_items(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>last_epoch = <span class="self">self</span>.api.get_epoch_count().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">if </span>last_epoch == epoch {
-            tx.remove_entry(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>;
-            tx.commit_tx().<span class="kw">await</span>;
-            <span class="prelude-val">Ok</span>(())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(
-                <span class="string">&quot;Wrong upgrade epoch {}, last epoch was {}&quot;</span>,
-                epoch,
-                last_epoch
-            ))
-        }
     }
 
     <span class="kw">async fn </span>save_epoch_history&lt;<span class="lifetime">&#39;a</span>&gt;(

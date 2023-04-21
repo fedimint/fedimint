@@ -861,6 +861,87 @@
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::iter::once;
@@ -874,7 +955,7 @@
 <span class="kw">use </span>fedimint_aead::random_salt;
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    PeerServerParams, WsAdminClient,
+    PeerServerParams, ServerStatus, WsAdminClient,
 };
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -895,6 +976,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, write_server_config, SALT_FILE};
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig, ServerConfigConsensus};
+<span class="kw">use </span><span class="kw">crate</span>::db::ConsensusUpgradeKey;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
 <span class="kw">use </span><span class="kw">crate</span>::HasApiContext;
 
@@ -1180,15 +1262,40 @@
         .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to encrypt configs {e:?}&quot;</span>)))
     }
 
-    <span class="doccomment">/// Attempts to decrypt the config files from disk using the auth string and
-    /// notify the listeners
+    <span class="doccomment">/// Attempts to decrypt the config files from disk using the auth string.
+    ///
+    /// Will force shut down the config gen API so the consensus API can start.
+    /// Removes the upgrade flag when called.
     </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>auth.<span class="number">0</span>, <span class="self">self</span>.data_dir.clone())
             .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Unable to decrypt configs {e:?}&quot;</span>)))<span class="question-mark">?</span>;
 
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        tx.remove_entry(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>;
+        tx.commit_tx().<span class="kw">await</span>;
+
         <span class="self">self</span>.config_generated_tx.send(cfg).<span class="kw">await</span>.expect(<span class="string">&quot;Can send&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Returns the server status
+    </span><span class="kw">pub async fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerStatus {
+        <span class="kw">let </span>has_upgrade_flag = { <span class="self">self</span>.has_upgrade_flag().<span class="kw">await </span>};
+
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
+            ConfigApiState::SetPassword =&gt; ServerStatus::AwaitingPassword,
+            <span class="kw">_ if </span>has_upgrade_flag =&gt; ServerStatus::Upgrading,
+            <span class="kw">_ </span>=&gt; ServerStatus::GeneratingConfig,
+        }
+    }
+
+    <span class="doccomment">/// Returns true if the upgrade flag is set indicating that the server was
+    /// shutdown due to a planned upgrade
+    </span><span class="kw">pub async fn </span>has_upgrade_flag(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        tx.get_value(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>.is_some()
     }
 
     <span class="kw">fn </span>get_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>, config: <span class="kw-2">&amp;</span>ServerConfigConsensus) -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
@@ -1493,6 +1600,16 @@
                 config.start_consensus(auth).<span class="kw">await
             </span>}
         },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;status&quot;</span>,
+            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; ServerStatus {
+                <span class="kw">if </span>context.has_auth() {
+                    <span class="prelude-val">Ok</span>(config.status().<span class="kw">await</span>)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Err</span>(ApiError::unauthorized())
+                }
+            }
+        },
     ]
 }
 
@@ -1521,7 +1638,7 @@
     <span class="kw">use </span>std::time::Duration;
     <span class="kw">use </span>std::{env, fs};
 
-    <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
+    <span class="kw">use </span>fedimint_core::admin_client::{ServerStatus, WsAdminClient};
     <span class="kw">use </span>fedimint_core::api::FederationResult;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
@@ -1531,18 +1648,19 @@
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::future::join_all;
     <span class="kw">use </span>itertools::Itertools;
-    <span class="kw">use </span>tokio::spawn;
     <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     <span class="kw">use </span><span class="kw">crate</span>::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
-    <span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
+    <span class="kw">use crate</span>::{FedimintServer, PLAINTEXT_PASSWORD};
 
     <span class="doccomment">/// Helper in config API tests for simulating a guardian&#39;s client and server
     </span><span class="kw">struct </span>TestConfigApi {
         client: WsAdminClient,
         name: String,
         settings: ConfigGenSettings,
+        auth: ApiAuth,
+        dir: PathBuf,
     }
 
     <span class="kw">impl </span>TestConfigApi {
@@ -1576,36 +1694,25 @@
             fs::create_dir_all(dir.clone()).expect(<span class="string">&quot;Unable to create test dir&quot;</span>);
 
             <span class="kw">let </span>api = FedimintServer {
-                data_dir: dir,
+                data_dir: dir.clone(),
                 settings: settings.clone(),
                 db,
-                upgrade_epoch: <span class="prelude-val">None</span>,
             };
 
             <span class="comment">// our id doesn&#39;t really exist at this point
             </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">&quot;password-{port}&quot;</span>));
-            <span class="kw">let </span>client = WsAdminClient::new(api_url, PeerId::from(<span class="number">0</span>), auth);
+            <span class="kw">let </span>client = WsAdminClient::new(api_url, PeerId::from(<span class="number">0</span>), auth.clone());
 
             (
                 TestConfigApi {
                     client,
                     name,
                     settings,
+                    auth,
+                    dir,
                 },
                 api,
             )
-        }
-
-        <span class="doccomment">/// Helper function using the auth we generated, retries until the API
-        /// is up
-        </span><span class="kw">async fn </span>retry_set_password(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-            <span class="kw">while </span><span class="self">self</span>.client.set_password().<span class="kw">await</span>.is_err() {
-                sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
-                <span class="macro">tracing::info!</span>(
-                    target: fedimint_logging::LOG_TEST,
-                    <span class="string">&quot;Test retrying set password, waiting for API to start&quot;
-                </span>)
-            }
         }
 
         <span class="doccomment">/// Helper function to shutdown consensus with an upgrade signal
@@ -1628,6 +1735,25 @@
                 })
                 .<span class="kw">await
         </span>}
+
+        <span class="doccomment">/// Helper for getting server status
+        </span><span class="kw">async fn </span>server_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerStatus {
+            <span class="kw">loop </span>{
+                <span class="kw">match </span><span class="self">self</span>.client.status().<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(status) =&gt; <span class="kw">return </span>status,
+                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>,
+                }
+                <span class="macro">tracing::info!</span>(
+                    target: fedimint_logging::LOG_TEST,
+                    <span class="string">&quot;Test retrying server status&quot;
+                </span>)
+            }
+        }
+
+        <span class="doccomment">/// Helper for writing the password file to bypass the API
+        </span><span class="kw">fn </span>write_password_file(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+            fs::write(<span class="self">self</span>.dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span><span class="self">self</span>.auth.<span class="number">0</span>).unwrap();
+        }
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
@@ -1661,10 +1787,13 @@
             followers.push(follower);
         }
 
-        spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span>test = <span class="kw">async </span>{
+            <span class="macro">assert_eq!</span>(leader.server_status().<span class="kw">await</span>, ServerStatus::AwaitingPassword);
+
             <span class="comment">// Cannot set the password twice
-            </span>leader.retry_set_password().<span class="kw">await</span>;
+            </span>leader.client.set_password().<span class="kw">await</span>.unwrap();
             <span class="macro">assert!</span>(leader.client.set_password().<span class="kw">await</span>.is_err());
+            <span class="macro">assert_eq!</span>(leader.server_status().<span class="kw">await</span>, ServerStatus::GeneratingConfig);
 
             <span class="comment">// We can call this twice to change the leader name
             </span>leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
@@ -1673,7 +1802,11 @@
 
             <span class="comment">// Setup followers and send connection info
             </span><span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;mut </span>followers {
-                follower.retry_set_password().<span class="kw">await</span>;
+                <span class="macro">assert_eq!</span>(
+                    follower.server_status().<span class="kw">await</span>,
+                    ServerStatus::AwaitingPassword
+                );
+                follower.client.set_password().<span class="kw">await</span>.unwrap();
                 <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
                 follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
                 follower.name = <span class="macro">format!</span>(<span class="string">&quot;{}_&quot;</span>, follower.name);
@@ -1711,17 +1844,46 @@
 
             <span class="comment">// start consensus
             </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
-                peer.client.start_consensus().<span class="kw">await</span>.unwrap();
+                peer.client.start_consensus().<span class="kw">await</span>.ok();
+                <span class="macro">assert_eq!</span>(peer.server_status().<span class="kw">await</span>, ServerStatus::ConsensusRunning);
             }
 
             <span class="comment">// shutdown
             </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
                 peer.retry_signal_upgrade().<span class="kw">await</span>;
             }
-        });
+        };
 
-        <span class="comment">// Spawn the APIs
-        </span>join_all(apis.into_iter().map(|api| api.run(TaskGroup::new()))).<span class="kw">await</span>;
+        <span class="comment">// Run the Fedimint servers and test concurrently
+        </span><span class="macro">tokio::join!</span>(
+            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
+            test
+        );
+
+        <span class="comment">// Test writing the password file to bypass the API
+        </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+            peer.write_password_file();
+        }
+
+        <span class="kw">let </span>test2 = <span class="kw">async </span>{
+            <span class="comment">// Confirm we are stuck in upgrading after an upgrade
+            </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+                <span class="macro">assert_eq!</span>(peer.server_status().<span class="kw">await</span>, ServerStatus::Upgrading);
+                peer.client.start_consensus().<span class="kw">await</span>.ok();
+                <span class="macro">assert_eq!</span>(peer.server_status().<span class="kw">await</span>, ServerStatus::ConsensusRunning);
+            }
+
+            <span class="comment">// shutdown again
+            </span><span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+                peer.retry_signal_upgrade().<span class="kw">await</span>;
+            }
+        };
+
+        <span class="comment">//  Restart the Fedimint servers and a new test concurrently
+        </span><span class="macro">tokio::join!</span>(
+            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
+            test2
+        );
     }
 }
 </code></pre></div>
