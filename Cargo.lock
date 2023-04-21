@@ -1504,6 +1504,7 @@ dependencies = [
  "test-log",
  "thiserror",
  "threshold_crypto",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

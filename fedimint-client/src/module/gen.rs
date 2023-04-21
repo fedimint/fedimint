@@ -41,7 +41,6 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
         &self,
         cfg: Self::Config,
         db: Database,
-        instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module>;
@@ -58,7 +57,6 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     ///     &self,
     ///     cfg: Self::Config,
     ///     db: Database,
-    ///     instance_id: ModuleInstanceId,
     ///     module_root_secret: DerivableSecret,
     ///     notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     /// ) -> anyhow::Result<DynPrimaryClientModule> {
@@ -69,7 +67,6 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
         &self,
         _cfg: Self::Config,
         _db: Database,
-        _instance_id: ModuleInstanceId,
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<DynPrimaryClientModule> {
@@ -143,7 +140,6 @@ where
             .init(
                 typed_cfg,
                 db,
-                instance_id,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
             )
@@ -164,7 +160,6 @@ where
             .init_primary(
                 typed_cfg,
                 db,
-                instance_id,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
             )

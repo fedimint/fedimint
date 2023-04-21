@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -31,14 +31,18 @@ use crate::db::ClientSecretKey;
 use crate::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
 };
-use crate::module::{ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule};
+use crate::module::{
+    ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule, StateGenerator,
+};
+use crate::sm::executor::ContextGen;
 use crate::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, Notifier, OperationId,
+    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
     OperationState,
 };
 use crate::transaction::{
-    tx_submission_sm_decoder, TransactionBuilder, TransactionBuilderBalance, TxSubmissionContext,
-    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
+    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
+    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Database keys used by the client
@@ -50,6 +54,16 @@ pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
 
+pub type InstancelessDynClientInput = ClientInput<
+    Box<maybe_add_send_sync!(dyn IInput + 'static)>,
+    Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
+>;
+
+pub type InstancelessDynClientOutput = ClientOutput<
+    Box<maybe_add_send_sync!(dyn IOutput + 'static)>,
+    Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
+>;
+
 #[apply(async_trait_maybe_send!)]
 pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// Returns a reference to the client's federation API client. The provided
@@ -58,14 +72,20 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
     fn api(&self) -> &(dyn IFederationApi + 'static);
 
-    /// Add funding and/or change to the transaction builder as needed, finalize
-    /// the transaction and submit it to the federation once `dbtx` is
-    /// committed.
-    async fn finalize_and_submit_transaction(
+    /// This function is mostly meant for internal use, you are probably looking
+    /// for [`DynGlobalClientContext::claim_input`].
+    async fn claim_input_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        operation_id: OperationId,
-        tx_builder: TransactionBuilder,
+        input: InstancelessDynClientInput,
+    ) -> TransactionId;
+
+    /// This function is mostly meant for internal use, you are probably looking
+    /// for [`DynGlobalClientContext::fund_output`].
+    async fn fund_output_dyn(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        output: InstancelessDynClientOutput,
     ) -> anyhow::Result<TransactionId>;
 
     async fn transaction_update_stream(
@@ -111,6 +131,83 @@ impl DynGlobalClientContext {
             .next_or_pending()
             .await;
     }
+
+    /// Creates a transaction that with an output of the primary module,
+    /// claiming the given input and transferring its value into the client's
+    /// wallet.
+    ///
+    /// The transactions submission state machine as well as the state
+    /// machines responsible for the generated output are generated
+    /// automatically. The caller is responsible for the input's state machines,
+    /// should there be any required.
+    pub async fn claim_input<I, S>(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        input: ClientInput<I, S>,
+    ) -> TransactionId
+    where
+        I: IInput + MaybeSend + MaybeSync + 'static,
+        S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+    {
+        self.claim_input_dyn(
+            dbtx,
+            InstancelessDynClientInput {
+                input: Box::new(input.input),
+                keys: input.keys,
+                state_machines: states_to_instanceless_dyn(input.state_machines),
+            },
+        )
+        .await
+    }
+
+    /// Creates a transaction with the supplied output and funding added by the
+    /// primary module if possible. If the primary module does not have the
+    /// required funds this function fails.
+    ///
+    /// The transactions submission state machine as well as the state machines
+    /// for the funding inputs are generated automatically. The caller is
+    /// responsible for the output's state machines, should there be any
+    /// required.
+    pub async fn fund_output<O, S>(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        output: ClientOutput<O, S>,
+    ) -> anyhow::Result<TransactionId>
+    where
+        O: IOutput + MaybeSend + MaybeSync + 'static,
+        S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+    {
+        self.fund_output_dyn(
+            dbtx,
+            InstancelessDynClientOutput {
+                output: Box::new(output.output),
+                state_machines: states_to_instanceless_dyn(output.state_machines),
+            },
+        )
+        .await
+    }
+}
+
+fn states_to_instanceless_dyn<
+    S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+>(
+    state_gen: StateGenerator<S>,
+) -> StateGenerator<Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>> {
+    Box::new(move |txid, out_idx| {
+        let states: Vec<S> = state_gen(txid, out_idx);
+        states
+            .into_iter()
+            .map(|state| box_up_state(state))
+            .collect()
+    })
+}
+
+/// Not sure why I couldn't just directly call `Box::new` ins
+/// [`states_to_instanceless_dyn`], but this fixed it.
+fn box_up_state(
+    state: impl IState<DynGlobalClientContext> + 'static,
+) -> Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)> {
+    Box::new(state)
 }
 
 impl<T> From<Arc<T>> for DynGlobalClientContext
@@ -131,50 +228,93 @@ impl Debug for ClientInner {
     }
 }
 
+/// Global state given to a specific client module and state. It is aware inside
+/// which module instance and operation it is used and to avoid module being
+/// aware of their instance id etc.
+#[derive(Clone, Debug)]
+struct ModuleGlobalClientContext {
+    client: Arc<ClientInner>,
+    module_instance: ModuleInstanceId,
+    operation: OperationId,
+}
+
 #[apply(async_trait_maybe_send!)]
-impl IGlobalClientContext for ClientInner {
+impl IGlobalClientContext for ModuleGlobalClientContext {
     fn api(&self) -> &(dyn IFederationApi + 'static) {
-        self.api.as_ref()
+        self.client.api.as_ref()
     }
 
-    async fn finalize_and_submit_transaction(
+    async fn claim_input_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        operation_id: OperationId,
-        tx_builder: TransactionBuilder,
+        input: InstancelessDynClientInput,
+    ) -> TransactionId {
+        let instance_input = ClientInput {
+            input: DynInput::from_parts(self.module_instance, input.input),
+            keys: input.keys,
+            state_machines: states_add_instance(self.module_instance, input.state_machines),
+        };
+
+        self.client
+            .finalize_and_submit_transaction(
+                dbtx.global_tx(),
+                self.operation,
+                TransactionBuilder::new().with_input(instance_input),
+            )
+            .await
+            .expect("Can obly fail if additional funding is needed")
+    }
+
+    async fn fund_output_dyn(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        output: InstancelessDynClientOutput,
     ) -> anyhow::Result<TransactionId> {
-        ClientInner::finalize_and_submit_transaction(
-            self,
-            dbtx.global_tx(),
-            operation_id,
-            tx_builder,
-        )
-        .await
+        let instance_output = ClientOutput {
+            output: DynOutput::from_parts(self.module_instance, output.output),
+            state_machines: states_add_instance(self.module_instance, output.state_machines),
+        };
+
+        self.client
+            .finalize_and_submit_transaction(
+                dbtx.global_tx(),
+                self.operation,
+                TransactionBuilder::new().with_output(instance_output),
+            )
+            .await
     }
 
     async fn transaction_update_stream(
         &self,
         operation_id: OperationId,
     ) -> BoxStream<OperationState<TxSubmissionStates>> {
-        self.executor
-            .notifier()
-            .module_notifier::<OperationState<TxSubmissionStates>>(
-                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            )
-            .subscribe(operation_id)
-            .await
+        self.client.transaction_update_stream(operation_id).await
     }
+}
+
+fn states_add_instance(
+    module_instance_id: ModuleInstanceId,
+    state_gen: StateGenerator<
+        Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
+    >,
+) -> StateGenerator<DynState<DynGlobalClientContext>> {
+    Box::new(move |txid, out_idx| {
+        let states = state_gen(txid, out_idx);
+        Iterator::collect(
+            states
+                .into_iter()
+                .map(|state| DynState::from_parts(module_instance_id, state)),
+        )
+    })
 }
 
 pub struct Client {
     inner: Arc<ClientInner>,
 }
 
-impl Client {
-    pub fn context(&self) -> DynGlobalClientContext {
-        DynGlobalClientContext::from(self.inner.clone())
-    }
+pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 
+impl Client {
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
     pub async fn finalize_and_submit_transaction(
@@ -210,6 +350,10 @@ impl Client {
     pub fn db(&self) -> &Database {
         &self.inner.db
     }
+
+    pub async fn await_tx_accepted(&self, operation_id: OperationId, txid: TransactionId) {
+        self.inner.transaction_update_stream(operation_id).await.filter(|tx_update| std::future::ready(matches!(tx_update.state, TxSubmissionStates::Accepted {txid: event_txid} if event_txid == txid))).next_or_pending().await;
+    }
 }
 
 struct ClientInner {
@@ -223,6 +367,18 @@ struct ClientInner {
 }
 
 impl ClientInner {
+    fn context_gen(self: &Arc<Self>) -> ModuleGlobalContextGen {
+        let client_inner = self.clone();
+        Arc::new(move |module_instance, operation| {
+            ModuleGlobalClientContext {
+                client: client_inner.clone(),
+                module_instance,
+                operation,
+            }
+            .into()
+        })
+    }
+
     /// Returns a reference to the module, panics if not found
     fn get_module(&self, instance: ModuleInstanceId) -> &maybe_add_send_sync!(dyn IClientModule) {
         self.try_get_module(instance)
@@ -350,6 +506,19 @@ impl ClientInner {
         self.executor.add_state_machines_dbtx(dbtx, states).await?;
 
         Ok(txid)
+    }
+
+    async fn transaction_update_stream(
+        &self,
+        operation_id: OperationId,
+    ) -> BoxStream<OperationState<TxSubmissionStates>> {
+        self.executor
+            .notifier()
+            .module_notifier::<OperationState<TxSubmissionStates>>(
+                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            )
+            .subscribe(operation_id)
+            .await
     }
 }
 
@@ -491,11 +660,9 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
         });
 
-        let global_client_context = DynGlobalClientContext::from(client_inner.clone());
-
         client_inner
             .executor
-            .start_executor(tg, global_client_context)
+            .start_executor(tg, client_inner.context_gen())
             .await;
 
         Ok(Client {

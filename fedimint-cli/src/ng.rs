@@ -72,7 +72,7 @@ pub async fn handle_ng_command<D: IDatabase>(
                 .unwrap();
 
             info!("Transaction submitted: {}", txid);
-            client.context().await_tx_accepted(notes_hash, txid).await;
+            client.await_tx_accepted(notes_hash, txid).await;
             info!("Transaction accepted");
             mint_client
                 .await_output_finalized(notes_hash, OutPoint { txid, out_idx: 0 })

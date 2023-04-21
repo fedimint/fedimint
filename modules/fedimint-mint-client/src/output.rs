@@ -3,8 +3,8 @@ use std::time::Duration;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::core::Decoder;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -119,7 +119,11 @@ impl MintOutputStatesCreated {
             ),
             // Check for output outcome
             StateTransition::new(
-                Self::await_outcome_ready(global_context.clone(), common, context.decoders.clone()),
+                Self::await_outcome_ready(
+                    global_context.clone(),
+                    common,
+                    context.mint_decoder.clone(),
+                ),
                 move |dbtx, bsigs, old_state| {
                     Box::pin(Self::transition_outcome_ready(
                         dbtx,
@@ -153,12 +157,12 @@ impl MintOutputStatesCreated {
     async fn await_outcome_ready(
         global_context: DynGlobalClientContext,
         common: MintOutputCommon,
-        decoders: ModuleDecoderRegistry,
+        module_decoder: Decoder,
     ) -> Result<MintOutputBlindSignatures, String> {
         loop {
             let outcome: MintOutputOutcome = global_context
                 .api()
-                .await_output_outcome(common.out_point, Duration::MAX, &decoders)
+                .await_output_outcome(common.out_point, Duration::MAX, &module_decoder)
                 .await
                 .map_err(|e| e.to_string())?;
 

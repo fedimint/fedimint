@@ -167,6 +167,10 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
 
                 Self($container::new(typed), module_instance_id)
             }
+
+            pub fn from_parts(module_instance_id: $crate::core::ModuleInstanceId, dynbox: $container<$crate::maybe_add_send_sync!(dyn $trait + 'static)>) -> Self {
+                Self(dynbox, module_instance_id)
+            }
         }
 
         impl std::fmt::Debug for $name {
