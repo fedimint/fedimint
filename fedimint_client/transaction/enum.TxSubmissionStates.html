@@ -12,24 +12,67 @@
     },
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>State machine to (re-)submit a transaction till it is either confirmed or
 rejected by the federation</p>
-<script>window.mermaid || document.write('<script src="../mermaid.min.js"><\/script>')</script>
-<script>window.mermaid || document.write('<script src="../../mermaid.min.js"><\/script>')</script>
-<script>window.mermaid || document.write('<script src="../../../mermaid.min.js"><\/script>')</script>
-<script>window.mermaid || document.write('<script src="../../../../mermaid.min.js"><\/script>')</script>
-<script>window.mermaid || document.write('<script src="../../../../../mermaid.min.js"><\/script>')</script>
-<script>window.mermaid || document.write('<script src="https://unpkg.com/mermaid@9.3.0/dist/mermaid.min.js" crossorigin="anonymous"><\/script>')</script>
-<script>
-    var amrn_mermaid_theme = 'default';
-    if(typeof currentTheme !== 'undefined') {
-        let docs_theme = currentTheme.href;
-        let is_dark = /.*(dark|ayu).*\.css/.test(docs_theme)
-        if(is_dark) {
-            amrn_mermaid_theme = 'dark'
-        }
-    } else {
-        console.log("currentTheme is undefined, are we not inside rustdoc?");
+<script type="module">
+    const mermaidModuleFile = "static.files.mermaid/mermaid.esm.min.mjs";
+    const fallbackRemoteUrl = "https://unpkg.com/mermaid@10/dist/mermaid.esm.min.mjs";
+    const rustdocVarsId= "rustdoc-vars";
+    const dataRootPathAttr = "data-root-path";
+
+
+    function initializeMermaid(mermaid) {
+     var amrn_mermaid_theme =
+         window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+         ? 'dark'
+         : 'default';
+
+      mermaid.initialize({
+        'startOnLoad':'true',
+        'theme': amrn_mermaid_theme,
+        'logLevel': 3 });
+      mermaid.run();
     }
-    mermaid.initialize({'startOnLoad':'true', 'theme': amrn_mermaid_theme, 'logLevel': 3 });
+
+	function failedToLoadWarnings() {
+		for(var elem of document.getElementsByClassName("mermaid")) {
+			 elem.innerHTML =
+			 `<div> <mark>
+			  &#9888; Cannot render diagram! Failed to import module from local
+			  file and remote location also!
+			  Either access the rustdocs via HTTP/S using a
+			  <a href="https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Tools_and_setup/set_up_a_local_testing_server">
+			   local web server
+			  </a>, for example:
+			   python3 -m http.server --directory target/doc/, <br> or enable local file access in your
+			   Safari/Firefox/Chrome browser, for example
+			  starting Chrome with flag '--allow-file-access-from-files'.
+			  </mark></div> `;
+		}
+	}
+
+
+    // If rustdoc is read from file directly, the import of mermaid module
+    // from file will fail. In this case falling back to remote location.
+    // If neither succeeds, the mermaid markdown is replaced by notice to
+    // enable file acecss in browser.
+    try {
+       var rootPath = document
+         .getElementById(rustdocVarsId)
+         .attributes[dataRootPathAttr]
+         .value;
+       const {
+         default: mermaid,
+       } = await import(rootPath + mermaidModuleFile);
+	   initializeMermaid(mermaid);
+    } catch (e) {
+       try {
+         const {
+            default: mermaid,
+         } = await import(fallbackRemoteUrl);
+	     initializeMermaid(mermaid);
+       } catch (e) {
+		 failedToLoadWarnings();
+	   }
+    }
 </script>
 <div class="mermaid">
  flowchart LR
