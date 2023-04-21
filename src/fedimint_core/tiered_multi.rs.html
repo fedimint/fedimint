@@ -686,7 +686,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, PartialEq, Default)]
+<span class="attr">#[derive(Debug, PartialEq, Default, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>TieredSummary(Tiered&lt;usize&gt;);
 
 <span class="kw">impl </span>TieredSummary {

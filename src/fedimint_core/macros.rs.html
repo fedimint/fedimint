@@ -257,6 +257,10 @@
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Define &quot;dyn newtype&quot; (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
@@ -425,6 +429,10 @@
                 </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">&#39;static </span>{
 
                 <span class="self">Self</span>(<span class="macro-nonterminal">$container::new</span>(typed), module_instance_id)
+            }
+
+            <span class="kw">pub fn </span>from_parts(module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>, dynbox: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt;) -&gt; <span class="macro-nonterminal">Self </span>{
+                <span class="self">Self</span>(dynbox, module_instance_id)
             }
         }
 

@@ -263,6 +263,7 @@
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
@@ -405,7 +406,8 @@
     }
 }
 
-<span class="kw">pub type </span>StateGenerator&lt;S&gt; = Box&lt;<span class="kw">dyn </span>Fn(TransactionId, u64) -&gt; Vec&lt;S&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
+<span class="kw">pub type </span>StateGenerator&lt;S&gt; =
+    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(TransactionId, u64) -&gt; Vec&lt;S&gt; + <span class="lifetime">&#39;static</span>)&gt;;
 
 <span class="doccomment">/// A client module that can be used as funding source and to generate arbitrary
 /// change outputs for unbalanced transactions.

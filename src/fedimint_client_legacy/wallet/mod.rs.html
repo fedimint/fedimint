@@ -414,6 +414,11 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::{Address, KeyPair};
@@ -424,6 +429,7 @@
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_wallet_client::WalletClientModule;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
@@ -578,7 +584,11 @@
         <span class="kw">let </span>outcome = <span class="self">self
             </span>.context
             .api
-            .await_output_outcome::&lt;WalletOutputOutcome&gt;(out_point, timeout, <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders)
+            .await_output_outcome::&lt;WalletOutputOutcome&gt;(
+                out_point,
+                timeout,
+                <span class="kw-2">&amp;</span>&lt;WalletClientModule <span class="kw">as </span>fedimint_client::module::ClientModule&gt;::decoder(),
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(outcome.<span class="number">0</span>)
     }

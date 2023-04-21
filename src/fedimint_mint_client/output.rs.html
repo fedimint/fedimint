@@ -377,13 +377,17 @@
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
+<span class="kw">use </span>fedimint_core::core::Decoder;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -498,7 +502,11 @@
             ),
             <span class="comment">// Check for output outcome
             </span>StateTransition::new(
-                <span class="self">Self</span>::await_outcome_ready(global_context.clone(), common, context.decoders.clone()),
+                <span class="self">Self</span>::await_outcome_ready(
+                    global_context.clone(),
+                    common,
+                    context.mint_decoder.clone(),
+                ),
                 <span class="kw">move </span>|dbtx, bsigs, old_state| {
                     Box::pin(<span class="self">Self</span>::transition_outcome_ready(
                         dbtx,
@@ -532,12 +540,12 @@
     <span class="kw">async fn </span>await_outcome_ready(
         global_context: DynGlobalClientContext,
         common: MintOutputCommon,
-        decoders: ModuleDecoderRegistry,
+        module_decoder: Decoder,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;MintOutputBlindSignatures, String&gt; {
         <span class="kw">loop </span>{
             <span class="kw">let </span>outcome: MintOutputOutcome = global_context
                 .api()
-                .await_output_outcome(common.out_point, Duration::MAX, <span class="kw-2">&amp;</span>decoders)
+                .await_output_outcome(common.out_point, Duration::MAX, <span class="kw-2">&amp;</span>module_decoder)
                 .<span class="kw">await
                 </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
 

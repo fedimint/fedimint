@@ -2400,6 +2400,44 @@
 <a href="#2400" id="2400">2400</a>
 <a href="#2401" id="2401">2401</a>
 <a href="#2402" id="2402">2402</a>
+<a href="#2403" id="2403">2403</a>
+<a href="#2404" id="2404">2404</a>
+<a href="#2405" id="2405">2405</a>
+<a href="#2406" id="2406">2406</a>
+<a href="#2407" id="2407">2407</a>
+<a href="#2408" id="2408">2408</a>
+<a href="#2409" id="2409">2409</a>
+<a href="#2410" id="2410">2410</a>
+<a href="#2411" id="2411">2411</a>
+<a href="#2412" id="2412">2412</a>
+<a href="#2413" id="2413">2413</a>
+<a href="#2414" id="2414">2414</a>
+<a href="#2415" id="2415">2415</a>
+<a href="#2416" id="2416">2416</a>
+<a href="#2417" id="2417">2417</a>
+<a href="#2418" id="2418">2418</a>
+<a href="#2419" id="2419">2419</a>
+<a href="#2420" id="2420">2420</a>
+<a href="#2421" id="2421">2421</a>
+<a href="#2422" id="2422">2422</a>
+<a href="#2423" id="2423">2423</a>
+<a href="#2424" id="2424">2424</a>
+<a href="#2425" id="2425">2425</a>
+<a href="#2426" id="2426">2426</a>
+<a href="#2427" id="2427">2427</a>
+<a href="#2428" id="2428">2428</a>
+<a href="#2429" id="2429">2429</a>
+<a href="#2430" id="2430">2430</a>
+<a href="#2431" id="2431">2431</a>
+<a href="#2432" id="2432">2432</a>
+<a href="#2433" id="2433">2433</a>
+<a href="#2434" id="2434">2434</a>
+<a href="#2435" id="2435">2435</a>
+<a href="#2436" id="2436">2436</a>
+<a href="#2437" id="2437">2437</a>
+<a href="#2438" id="2438">2438</a>
+<a href="#2439" id="2439">2439</a>
+<a href="#2440" id="2440">2440</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3125,6 +3163,28 @@
             })
     }
 
+    <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(key = <span class="question-mark">?</span>key_prefix))]
+    </span><span class="kw">pub async fn </span>find_by_prefix_sorted_descending&lt;KP&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        key_prefix: <span class="kw-2">&amp;</span>KP,
+    ) -&gt; <span class="kw">impl </span>Stream&lt;
+        Item = (
+            KP::Record,
+            &lt;&lt;KP <span class="kw">as </span>DatabaseLookup&gt;::Record <span class="kw">as </span>DatabaseRecord&gt;::Value,
+        ),
+    &gt; + <span class="lifetime">&#39;_
+    </span><span class="kw">where
+        </span>KP: DatabaseLookup,
+        KP::Record: DatabaseKey,
+    {
+        find_by_prefix_sorted_descending(
+            <span class="self">self</span>.isolated_tx.as_mut(),
+            <span class="self">self</span>.decoders.clone(),
+            key_prefix,
+        )
+        .<span class="kw">await
+    </span>}
+
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key, <span class="question-mark">?</span>value), ret)]
     </span><span class="kw">pub async fn </span>insert_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Option</span>&lt;K::Value&gt;
     <span class="kw">where
@@ -3511,23 +3571,8 @@
         </span>KP: DatabaseLookup,
         KP::Record: DatabaseKey,
     {
-        <span class="macro">debug!</span>(<span class="string">&quot;find by prefix sorted descending&quot;</span>);
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
-        <span class="kw">let </span>prefix_bytes = key_prefix.to_bytes();
-        <span class="self">self</span>.tx
-            .raw_find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>prefix_bytes)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Error doing prefix search in database&quot;</span>)
-            .map(<span class="kw">move </span>|(key_bytes, value_bytes)| {
-                <span class="kw">let </span>key = KP::Record::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)
-                    .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;key: {}&quot;</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                    .expect(<span class="string">&quot;Unrecoverable error reading DatabaseKey&quot;</span>);
-                <span class="kw">let </span>value = decode_value(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)
-                    .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;key: {}&quot;</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
-                    .expect(<span class="string">&quot;Unrecoverable decoding DatabaseValue&quot;</span>);
-                (key, value)
-            })
-    }
+        find_by_prefix_sorted_descending(<span class="self">self</span>.tx.as_mut(), <span class="self">self</span>.decoders.clone(), key_prefix).<span class="kw">await
+    </span>}
 
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key, <span class="question-mark">?</span>value), ret)]
     </span><span class="kw">pub async fn </span>insert_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Option</span>&lt;K::Value&gt;
@@ -4653,6 +4698,37 @@
             AutocommitError::ClosureError { .. } =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Closure did not return error&quot;</span>),
         }
     }
+}
+
+<span class="kw">pub async fn </span>find_by_prefix_sorted_descending&lt;<span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;inner</span>, KP&gt;(
+    tx: <span class="kw-2">&amp;</span><span class="lifetime">&#39;r </span><span class="kw-2">mut </span><span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;inner</span>&gt;,
+    decoders: ModuleDecoderRegistry,
+    key_prefix: <span class="kw-2">&amp;</span>KP,
+) -&gt; <span class="kw">impl </span>Stream&lt;
+    Item = (
+        KP::Record,
+        &lt;&lt;KP <span class="kw">as </span>DatabaseLookup&gt;::Record <span class="kw">as </span>DatabaseRecord&gt;::Value,
+    ),
+&gt; + <span class="lifetime">&#39;r
+</span><span class="kw">where
+    </span><span class="lifetime">&#39;inner</span>: <span class="lifetime">&#39;r</span>,
+    KP: DatabaseLookup,
+    KP::Record: DatabaseKey,
+{
+    <span class="macro">debug!</span>(<span class="string">&quot;find by prefix sorted descending&quot;</span>);
+    <span class="kw">let </span>prefix_bytes = key_prefix.to_bytes();
+    tx.raw_find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>prefix_bytes)
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;Error doing prefix search in database&quot;</span>)
+        .map(<span class="kw">move </span>|(key_bytes, value_bytes)| {
+            <span class="kw">let </span>key = KP::Record::from_bytes(<span class="kw-2">&amp;</span>key_bytes, <span class="kw-2">&amp;</span>decoders)
+                .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;key: {}&quot;</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
+                .expect(<span class="string">&quot;Unrecoverable error reading DatabaseKey&quot;</span>);
+            <span class="kw">let </span>value = decode_value(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>decoders)
+                .with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;key: {}&quot;</span>, AbbreviateHexBytes(<span class="kw-2">&amp;</span>key_bytes)))
+                .expect(<span class="string">&quot;Unrecoverable decoding DatabaseValue&quot;</span>);
+            (key, value)
+        })
 }
 
 <span class="attr">#[cfg(test)]

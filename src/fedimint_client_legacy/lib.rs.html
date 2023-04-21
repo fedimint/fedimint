@@ -1677,6 +1677,7 @@
 <a href="#1677" id="1677">1677</a>
 <a href="#1678" id="1678">1678</a>
 <a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1723,9 +1724,9 @@
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_ln_client::{LightningModuleTypes, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_ln_client::{LightningClientModule, LightningModuleTypes, LightningOutputOutcome};
 <span class="kw">use </span>fedimint_logging::LOG_WALLET;
-<span class="kw">use </span>fedimint_mint_client::MintModuleTypes;
+<span class="kw">use </span>fedimint_mint_client::{MintClientModule, MintModuleTypes};
 <span class="kw">use </span>fedimint_wallet_client::WalletModuleTypes;
 <span class="kw">use </span>fedimint_wallet_common::Rbf;
 <span class="kw">use </span>futures::stream::{<span class="self">self</span>, FuturesUnordered};
@@ -2575,7 +2576,7 @@
             .await_output_outcome::&lt;LightningOutputOutcome&gt;(
                 outpoint,
                 Duration::from_secs(<span class="number">30</span>),
-                <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+                <span class="kw-2">&amp;</span>&lt;LightningClientModule <span class="kw">as </span>fedimint_client::module::ClientModule&gt;::decoder(),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -2595,7 +2596,7 @@
                     .await_output_outcome::&lt;MintOutputOutcome&gt;(
                         outpoint,
                         Duration::from_secs(<span class="number">30</span>),
-                        <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+                        <span class="kw-2">&amp;</span>&lt;MintClientModule <span class="kw">as </span>fedimint_client::module::ClientModule&gt;::decoder(),
                     )
                     .<span class="kw">await</span>;
                 <span class="kw">if </span><span class="macro">matches!</span>(res, <span class="prelude-val">Ok</span>(MintOutputOutcome(<span class="prelude-val">Some</span>(<span class="kw">_</span>)))) {
@@ -2756,7 +2757,7 @@
             .await_output_outcome::&lt;LightningOutputOutcome&gt;(
                 outpoint,
                 timeout,
-                <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+                <span class="kw-2">&amp;</span>&lt;LightningClientModule <span class="kw">as </span>fedimint_client::module::ClientModule&gt;::decoder(),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>confirmed = ConfirmedInvoice {
@@ -3111,7 +3112,8 @@
                     .await_output_outcome::&lt;LightningOutputOutcome&gt;(
                         outpoint,
                         deadline.saturating_duration_since(Instant::now()),
-                        <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+                        <span class="kw-2">&amp;</span>&lt;LightningClientModule <span class="kw">as </span>fedimint_client::module::ClientModule&gt;::decoder(
+                        ),
                     )
                     .<span class="kw">await
                     </span>.map(OutputOutcome::LN)
@@ -3158,7 +3160,7 @@
             .await_output_outcome::&lt;MintOutputOutcome&gt;(
                 outpoint,
                 Duration::from_secs(<span class="number">10</span>),
-                <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders,
+                <span class="kw-2">&amp;</span>&lt;MintClientModule <span class="kw">as </span>fedimint_client::module::ClientModule&gt;::decoder(),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// We remove the entry that indicates we are still waiting for transaction

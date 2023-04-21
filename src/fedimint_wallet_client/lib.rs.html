@@ -86,7 +86,6 @@
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
 <span class="kw">use </span>fedimint_client::module::ClientModule;
@@ -116,7 +115,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _cfg: <span class="self">Self</span>::Config,
         _db: Database,
-        _instance_id: ModuleInstanceId,
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {

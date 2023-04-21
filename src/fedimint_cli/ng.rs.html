@@ -166,7 +166,7 @@
                 </span>.unwrap();
 
             <span class="macro">info!</span>(<span class="string">&quot;Transaction submitted: {}&quot;</span>, txid);
-            client.context().await_tx_accepted(notes_hash, txid).<span class="kw">await</span>;
+            client.await_tx_accepted(notes_hash, txid).<span class="kw">await</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Transaction accepted&quot;</span>);
             mint_client
                 .await_output_finalized(notes_hash, OutPoint { txid, out_idx: <span class="number">0 </span>})

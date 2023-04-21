@@ -1092,6 +1092,8 @@
 <a href="#1092" id="1092">1092</a>
 <a href="#1093" id="1093">1093</a>
 <a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1133,7 +1135,7 @@
 <span class="kw">use </span>tracing::{debug, error, instrument, trace};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::core::OutputOutcome;
+<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::module::ApiRequestErased;
 <span class="kw">use </span><span class="kw">crate</span>::outcome::TransactionStatus;
@@ -1429,7 +1431,7 @@
     <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         out_point: OutPoint,
-        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+        module_decoder: <span class="kw-2">&amp;</span>Decoder,
     ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
     <span class="kw">where
         </span>R: OutputOutcome;
@@ -1438,7 +1440,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
-        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+        module_decoder: <span class="kw-2">&amp;</span>Decoder,
     ) -&gt; OutputOutcomeResult&lt;R&gt;
     <span class="kw">where
         </span>R: OutputOutcome;
@@ -1456,7 +1458,7 @@
 <span class="kw">fn </span>map_tx_outcome_outpoint&lt;R&gt;(
     tx_outcome: TransactionStatus,
     out_point: OutPoint,
-    decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    module_decoder: <span class="kw-2">&amp;</span>Decoder,
 ) -&gt; OutputOutcomeResult&lt;R&gt;
 <span class="kw">where
     </span>R: OutputOutcome + MaybeSend,
@@ -1473,8 +1475,10 @@
                     out_idx: out_point.out_idx,
                 })
                 .and_then(|output| {
+
+
                     <span class="kw">let </span>dyn_outcome = output
-                        .try_into_inner(decoders)
+                        .try_into_inner_known_module_kind(module_decoder)
                         .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))<span class="question-mark">?</span>;
 
                     <span class="kw">let </span>source_instance = dyn_outcome.module_instance_id();
@@ -1578,7 +1582,7 @@
     <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         out_point: OutPoint,
-        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+        module_decoder: <span class="kw-2">&amp;</span>Decoder,
     ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
     <span class="kw">where
         </span>R: OutputOutcome,
@@ -1586,7 +1590,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.fetch_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.map(<span class="kw">move </span>|tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, decoders))
+            </span>.map(<span class="kw">move </span>|tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, module_decoder))
             .transpose()<span class="question-mark">?</span>)
     }
 
@@ -1595,14 +1599,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
-        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+        module_decoder: <span class="kw-2">&amp;</span>Decoder,
     ) -&gt; OutputOutcomeResult&lt;R&gt;
     <span class="kw">where
         </span>R: OutputOutcome,
     {
         fedimint_core::task::timeout(timeout, <span class="kw">async move </span>{
             <span class="kw">let </span>tx_outcome = <span class="self">self</span>.await_tx_outcome(<span class="kw-2">&amp;</span>outpoint.txid).<span class="kw">await</span><span class="question-mark">?</span>;
-            map_tx_outcome_outpoint(tx_outcome, outpoint, decoders)
+            map_tx_outcome_outpoint(tx_outcome, outpoint, module_decoder)
         })
         .<span class="kw">await
         </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
