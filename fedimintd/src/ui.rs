@@ -225,6 +225,9 @@ async fn post_guardians(
 struct UrlConnection {
     ro_bitcoin_rpc_type: &'static str,
     ro_bitcoin_rpc_url: String,
+    bitcoin_network: String,
+    federation_name: String,
+    guardians_count: String,
     bind_p2p: String,
     p2p_url: String,
     bind_api: String,
@@ -253,6 +256,9 @@ async fn params_page(
     UrlConnection {
         ro_bitcoin_rpc_type,
         ro_bitcoin_rpc_url,
+        bitcoin_network: env::var("FM_BITCOIN_NETWORK").unwrap_or("".to_string()),
+        federation_name: env::var("FM_FED_NAME").unwrap_or("".to_string()),
+        guardians_count: env::var("FM_FED_SIZE").unwrap_or("".to_string()),
         bind_p2p: env::var("FM_BIND_P2P").unwrap_or("".to_string()),
         p2p_url: env::var("FM_P2P_URL").unwrap_or("".to_string()),
         bind_api: env::var("FM_BIND_API").unwrap_or("".to_string()),
