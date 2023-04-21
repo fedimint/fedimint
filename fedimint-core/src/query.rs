@@ -4,8 +4,6 @@ use std::mem;
 
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{maybe_add_send_sync, PeerId};
-use jsonrpsee_core::Error as JsonRpcError;
-use jsonrpsee_types::error::CallError as RpcCallError;
 use tracing::debug;
 
 use crate::api;
@@ -156,32 +154,6 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R>
                 // handle error case using the CurrentConsensus method
                 self.current.process(peer, Err(e))
             }
-        }
-    }
-}
-
-/// Returns when `required` responses are equal, retrying on 404 errors
-pub struct Retry404<R> {
-    current: CurrentConsensus<R>,
-}
-
-impl<R> Retry404<R> {
-    pub fn new(required: usize) -> Self {
-        Self {
-            current: CurrentConsensus::new(required),
-        }
-    }
-}
-
-impl<R: Debug + Eq + Clone> QueryStrategy<R> for Retry404<R> {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
-        match result {
-            Err(MemberError::Rpc(JsonRpcError::Call(RpcCallError::Custom(e))))
-                if e.code() == 404 =>
-            {
-                QueryStep::RetryMembers(BTreeSet::from([peer]))
-            }
-            result => self.current.process(peer, result),
         }
     }
 }
