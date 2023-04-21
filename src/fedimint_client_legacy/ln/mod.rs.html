@@ -957,7 +957,7 @@
         FederationApiFaker::new(fed, members)
             <span class="comment">// TODO: is the output here is supposed to be a mint or wallet?
             </span>.with(
-                <span class="string">&quot;/fetch_transaction&quot;</span>,
+                <span class="string">&quot;fetch_transaction&quot;</span>,
                 <span class="kw">move </span>|mint: Arc&lt;Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt;, tx: TransactionId| <span class="kw">async move </span>{
                     <span class="kw">let </span>mint = mint.lock().<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(TransactionStatus::Accepted {
@@ -975,7 +975,7 @@
                 },
             )
             .with(
-                <span class="string">&quot;/wait_transaction&quot;</span>,
+                <span class="string">&quot;wait_transaction&quot;</span>,
                 <span class="kw">move </span>|mint: Arc&lt;Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt;, tx: TransactionId| <span class="kw">async move </span>{
                     <span class="kw">let </span>mint = mint.lock().<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
@@ -993,7 +993,7 @@
                 },
             )
             .with(
-                <span class="macro">format!</span>(<span class="string">&quot;/module/{module_id}/account&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">&quot;module_{module_id}_account&quot;</span>),
                 |mint: Arc&lt;Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt;, contract: ContractId| <span class="kw">async move </span>{
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
                         mint.lock()
@@ -1014,7 +1014,7 @@
                 },
             )
             .with(
-                <span class="macro">format!</span>(<span class="string">&quot;/module/{module_id}/wait_account&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">&quot;module_{module_id}_wait_account&quot;</span>),
                 |mint: Arc&lt;Mutex&lt;FakeFed&lt;Lightning&gt;&gt;&gt;, contract: ContractId| <span class="kw">async move </span>{
                     <span class="prelude-val">Ok</span>(mint
                         .lock()

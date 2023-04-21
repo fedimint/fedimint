@@ -208,7 +208,7 @@
 {
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
         <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_account&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_account&quot;</span>),
             ApiRequestErased::new(contract),
         )
         .<span class="kw">await
@@ -218,7 +218,7 @@
         payment_hash: Sha256Hash,
     ) -&gt; FederationResult&lt;IncomingContractOffer&gt; {
         <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/wait_offer&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_offer&quot;</span>),
             ApiRequestErased::new(payment_hash),
         )
         .<span class="kw">await
@@ -227,7 +227,7 @@
     <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt; {
         <span class="self">self</span>.request_with_strategy(
             UnionResponses::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/list_gateways&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_list_gateways&quot;</span>),
             ApiRequestErased::default(),
         )
         .<span class="kw">await
@@ -236,7 +236,7 @@
     <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_with_strategy(
             CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/register_gateway&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_register_gateway&quot;</span>),
             ApiRequestErased::new(gateway),
         )
         .<span class="kw">await
@@ -245,7 +245,7 @@
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.request_current_consensus::&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt;&gt;(
-                <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_LN}/offer&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_offer&quot;</span>),
                 ApiRequestErased::new(payment_hash),
             )
             .<span class="kw">await</span><span class="question-mark">?
@@ -276,7 +276,7 @@
     ) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_with_strategy(
             CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/backup&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_MINT}_backup&quot;</span>),
             ApiRequestErased::new(request),
         )
         .<span class="kw">await
@@ -290,7 +290,7 @@
                 UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
                     <span class="self">self</span>.all_members().threshold(),
                 ),
-                <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_MINT}/recover&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_MINT}_recover&quot;</span>),
                 ApiRequestErased::new(id),
             )
             .<span class="kw">await</span><span class="question-mark">?
@@ -318,7 +318,7 @@
     <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_with_strategy(
             EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/block_height&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height&quot;</span>),
             ApiRequestErased::default(),
         )
         .<span class="kw">await
@@ -330,7 +330,7 @@
         amount: bitcoin::Amount,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
         <span class="self">self</span>.request_eventually_consistent(
-            <span class="macro">format!</span>(<span class="string">&quot;/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/peg_out_fees&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_peg_out_fees&quot;</span>),
             ApiRequestErased::new((address, amount.to_sat())),
         )
         .<span class="kw">await

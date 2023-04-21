@@ -1909,7 +1909,7 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/account&quot;</span>,
+                <span class="string">&quot;account&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .get_contract_account(<span class="kw-2">&amp;mut </span>context.dbtx(), contract_id)
@@ -1917,7 +1917,7 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/wait_account&quot;</span>,
+                <span class="string">&quot;wait_account&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
                     <span class="prelude-val">Ok</span>(module
                         .wait_contract_account(context, contract_id)
@@ -1925,7 +1925,7 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/offer&quot;</span>,
+                <span class="string">&quot;offer&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .get_offer(<span class="kw-2">&amp;mut </span>context.dbtx(), payment_hash)
@@ -1933,7 +1933,7 @@
                }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/wait_offer&quot;</span>,
+                <span class="string">&quot;wait_offer&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
                     <span class="prelude-val">Ok</span>(module
                         .wait_offer(context, payment_hash)
@@ -1941,13 +1941,13 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/list_gateways&quot;</span>,
+                <span class="string">&quot;list_gateways&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
                     <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/register_gateway&quot;</span>,
+                <span class="string">&quot;register_gateway&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, gateway: LightningGateway| -&gt; () {
                     module.register_gateway(<span class="kw-2">&amp;mut </span>context.dbtx(), gateway).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())
@@ -2059,7 +2059,7 @@
     </span><span class="kw">let </span>body = interconnect
         .call(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            <span class="string">&quot;/block_height&quot;</span>.to_owned(),
+            <span class="string">&quot;block_height&quot;</span>.to_owned(),
             ApiRequestErased::default(),
         )
         .<span class="kw">await

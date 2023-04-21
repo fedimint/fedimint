@@ -757,7 +757,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/transaction&quot;</span>,
+            <span class="string">&quot;transaction&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, serde_transaction: SerdeTransaction| -&gt; TransactionId {
                 <span class="kw">let </span>transaction = serde_transaction.try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry()).map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
@@ -771,7 +771,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/fetch_transaction&quot;</span>,
+            <span class="string">&quot;fetch_transaction&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; <span class="prelude-ty">Option</span>&lt;TransactionStatus&gt; {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
 
@@ -783,7 +783,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/wait_transaction&quot;</span>,
+            <span class="string">&quot;wait_transaction&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionStatus {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
 
@@ -795,26 +795,26 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/fetch_epoch_history&quot;</span>,
+            <span class="string">&quot;fetch_epoch_history&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, epoch: u64| -&gt; SerdeEpochHistory {
                 <span class="kw">let </span>epoch = fedimint.epoch_history(epoch).<span class="kw">await</span>.ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>epoch).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/fetch_epoch_count&quot;</span>,
+            <span class="string">&quot;fetch_epoch_count&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; u64 {
                 <span class="prelude-val">Ok</span>(fedimint.get_epoch_count().<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/config&quot;</span>,
+            <span class="string">&quot;config&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, info: WsClientConnectInfo| -&gt; ConfigResponse {
                 fedimint.download_config_with_token(info, <span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;/config_hash&quot;</span>,
+            <span class="string">&quot;config_hash&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; sha256::Hash {
                 <span class="prelude-val">Ok</span>(fedimint.get_config_with_sig(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>.consensus_hash)
             }

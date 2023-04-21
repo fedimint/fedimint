@@ -989,7 +989,7 @@
     <span class="kw">fn </span>new_block_height_responder(bh: Arc&lt;AtomicU64&gt;) -&gt; FakeInterconnect {
         FakeInterconnect(Box::new(<span class="kw">move </span>|module, path, _data| {
             <span class="macro">assert_eq!</span>(module, LEGACY_HARDCODED_INSTANCE_ID_WALLET);
-            <span class="macro">assert_eq!</span>(path, <span class="string">&quot;/block_height&quot;</span>);
+            <span class="macro">assert_eq!</span>(path, <span class="string">&quot;block_height&quot;</span>);
 
             <span class="kw">let </span>height = bh.load(Ordering::Relaxed);
             <span class="prelude-val">Ok</span>(serde_json::to_value(height).expect(<span class="string">&quot;encoding error&quot;</span>))

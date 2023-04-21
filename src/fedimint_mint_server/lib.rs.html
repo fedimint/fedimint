@@ -2031,7 +2031,7 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/backup&quot;</span>,
+                <span class="string">&quot;backup&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, request: SignedBackupRequest| -&gt; () {
                     module
                         .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx(), request).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2039,7 +2039,7 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;/recover&quot;</span>,
+                <span class="string">&quot;recover&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx(), id).<span class="kw">await</span>)

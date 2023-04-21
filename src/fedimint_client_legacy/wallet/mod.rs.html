@@ -662,7 +662,7 @@
             .collect();
         FederationApiFaker::new(fed, members)
             .with(
-                <span class="string">&quot;/fetch_transaction&quot;</span>,
+                <span class="string">&quot;fetch_transaction&quot;</span>,
                 <span class="kw">move </span>|_mint: Arc&lt;Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt;, _tx: TransactionId| <span class="kw">async move </span>{
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(TransactionStatus::Accepted {
                         epoch: <span class="number">0</span>,
@@ -674,7 +674,7 @@
                 },
             )
             .with(
-                <span class="string">&quot;/wait_transaction&quot;</span>,
+                <span class="string">&quot;wait_transaction&quot;</span>,
                 <span class="kw">move </span>|_mint: Arc&lt;Mutex&lt;FakeFed&lt;Wallet&gt;&gt;&gt;, _tx: TransactionId| <span class="kw">async move </span>{
                     <span class="prelude-val">Ok</span>(TransactionStatus::Accepted {
                         epoch: <span class="number">0</span>,

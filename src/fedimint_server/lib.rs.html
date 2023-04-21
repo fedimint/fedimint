@@ -291,6 +291,10 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -515,11 +519,15 @@
                 <span class="comment">// This memory leak is fine because it only happens on server startup
                 // and path has to live till the end of program anyways.
                 </span>Box::leak(
-                    <span class="macro">format!</span>(<span class="string">&quot;/module/{}{}&quot;</span>, module_instance_id, endpoint.path).into_boxed_str(),
+                    <span class="macro">format!</span>(<span class="string">&quot;module_{}_{}&quot;</span>, module_instance_id, endpoint.path).into_boxed_str(),
                 )
             } <span class="kw">else </span>{
                 endpoint.path
             };
+            <span class="comment">// Check if paths contain any abnormal characters
+            </span><span class="kw">if </span>path.contains(|c: char| !<span class="macro">matches!</span>(c, <span class="string">&#39;0&#39;</span>..=<span class="string">&#39;9&#39; </span>| <span class="string">&#39;a&#39;</span>..=<span class="string">&#39;z&#39; </span>| <span class="string">&#39;_&#39;</span>)) {
+                <span class="macro">panic!</span>(<span class="string">&quot;Constructing bad path name {path}&quot;</span>);
+            }
 
             <span class="comment">// Another memory leak that is fine because the function is only called once at
             // startup

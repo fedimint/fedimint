@@ -1090,10 +1090,6 @@
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
 <a href="#1092" id="1092">1092</a>
-<a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1499,7 +1495,7 @@
     <span class="doccomment">/// Submit a transaction for inclusion
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt; {
         <span class="self">self</span>.request_current_consensus(
-            <span class="string">&quot;/transaction&quot;</span>.to_owned(),
+            <span class="string">&quot;transaction&quot;</span>.to_owned(),
             ApiRequestErased::new(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
         )
         .<span class="kw">await
@@ -1510,13 +1506,13 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: <span class="kw-2">&amp;</span>TransactionId,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;TransactionStatus&gt;&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/fetch_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;fetch_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
             .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Await the outcome of an entire transaction
     </span><span class="kw">async fn </span>await_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/wait_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
             .<span class="kw">await
     </span>}
 
@@ -1565,7 +1561,7 @@
 
         <span class="self">self</span>.request_with_strategy::&lt;SerdeEpochHistory, <span class="kw">_</span>&gt;(
             qs,
-            <span class="string">&quot;/fetch_epoch_history&quot;</span>.to_owned(),
+            <span class="string">&quot;fetch_epoch_history&quot;</span>.to_owned(),
             ApiRequestErased::new(epoch),
         )
         .<span class="kw">await
@@ -1573,7 +1569,7 @@
 
     <span class="kw">async fn </span>fetch_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_eventually_consistent(
-            <span class="string">&quot;/fetch_epoch_count&quot;</span>.to_owned(),
+            <span class="string">&quot;fetch_epoch_count&quot;</span>.to_owned(),
             ApiRequestErased::default(),
         )
         .<span class="kw">await
@@ -1632,17 +1628,13 @@
             },
         );
 
-        <span class="self">self</span>.request_with_strategy(
-            qs,
-            <span class="string">&quot;/config&quot;</span>.to_owned(),
-            ApiRequestErased::new(info.clone()),
-        )
-        .<span class="kw">await
-        </span>.map(|cfg: ConfigResponse| cfg.client)
+        <span class="self">self</span>.request_with_strategy(qs, <span class="string">&quot;config&quot;</span>.to_owned(), ApiRequestErased::new(info.clone()))
+            .<span class="kw">await
+            </span>.map(|cfg: ConfigResponse| cfg.client)
     }
 
     <span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;/config_hash&quot;</span>.to_owned(), ApiRequestErased::default())
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;config_hash&quot;</span>.to_owned(), ApiRequestErased::default())
             .<span class="kw">await
     </span>}
 }
