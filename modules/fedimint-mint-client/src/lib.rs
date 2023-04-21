@@ -6,20 +6,24 @@ use std::cmp::Ordering;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
+use async_stream::stream;
+use bitcoin_hashes::Hash;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{
     ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
 };
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput};
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
-use fedimint_core::util::NextOrPending;
+use fedimint_core::module::{
+    CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
+};
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
 };
@@ -34,7 +38,7 @@ use tbs::AggregatePublicKey;
 use thiserror::Error;
 use tracing::debug;
 
-use crate::db::{NextECashNoteIndexKey, NoteKeyPrefix};
+use crate::db::{NextECashNoteIndexKey, NoteKey, NoteKeyPrefix};
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
@@ -44,6 +48,138 @@ use crate::output::{
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
+
+#[apply(async_trait_maybe_send!)]
+pub trait MintClientExt {
+    /// Try to reissue e-cash notes received from a third party to receive them
+    /// in our wallet. The progress and outcome can be observed using
+    /// [`MintClientExt::subscribe_reissue_external_notes_updates`].
+    async fn reissue_external_notes(
+        &self,
+        notes: TieredMulti<SpendableNote>,
+    ) -> anyhow::Result<OperationId>;
+
+    /// Subscribe to updates on the progress of a reissue operation started with
+    /// [`MintClientExt::reissue_external_notes`].
+    async fn subscribe_reissue_external_notes_updates(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<BoxStream<ReissueExternalNotesState>>;
+}
+
+/// The high-level state of a reissue operation started with
+/// [`MintClientExt::reissue_external_notes`].
+#[derive(Debug, Clone)]
+pub enum ReissueExternalNotesState {
+    /// The operation has been created and is waiting to be accepted by the
+    /// federation.
+    Created,
+    /// We are waiting for blind signatures to arrive but can already assume the
+    /// transaction to be successful.
+    Issuing,
+    /// The operation has been completed successfully.
+    Done,
+    /// Some error happened and the operation failed.
+    Failed(String),
+}
+
+#[apply(async_trait_maybe_send!)]
+impl MintClientExt for Client {
+    async fn reissue_external_notes(
+        &self,
+        notes: TieredMulti<SpendableNote>,
+    ) -> anyhow::Result<OperationId> {
+        let (mint_client_instance, mint_client) = mint_client(self);
+
+        let operation_id: OperationId = notes.consensus_hash().into_inner();
+        if self.get_operation(operation_id).await.is_some() {
+            bail!("We already reissued these notes");
+        }
+
+        let mint_input = mint_client
+            .create_input_from_notes(operation_id, notes)
+            .await?;
+
+        let tx = TransactionBuilder::new().with_input(mint_input.into_dyn(mint_client_instance));
+
+        let operation_meta_gen = |txid| MintMeta::Reissuance {
+            out_point: OutPoint { txid, out_idx: 0 },
+        };
+
+        self.finalize_and_submit_transaction(
+            operation_id,
+            MintCommonGen::KIND.as_str(),
+            operation_meta_gen,
+            tx,
+        )
+        .await
+        .expect("Transactions can only fail if the operation already exists, which we checked previously");
+
+        Ok(operation_id)
+    }
+
+    async fn subscribe_reissue_external_notes_updates(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<BoxStream<ReissueExternalNotesState>> {
+        let operation = self
+            .get_operation(operation_id)
+            .await
+            .ok_or(anyhow!("Operation not found"))?;
+
+        if operation.operation_type() != MintCommonGen::KIND.as_str() {
+            bail!("Operation is not a mint operation");
+        }
+
+        let out_point = match operation.meta() {
+            MintMeta::Reissuance { out_point } => out_point,
+        };
+
+        let (_, mint_client) = mint_client(self);
+
+        let tx_accepted_future = self.await_tx_accepted(operation_id, out_point.txid);
+        let output_finalized_future = mint_client.await_output_finalized(operation_id, out_point);
+
+        Ok(Box::pin(stream! {
+            yield ReissueExternalNotesState::Created;
+
+            match tx_accepted_future.await {
+                Ok(()) => {
+                    yield ReissueExternalNotesState::Issuing;
+                },
+                Err(()) => {
+                    yield ReissueExternalNotesState::Failed("Transaction not accepted".to_string());
+                }
+            }
+
+            match output_finalized_future.await {
+                Ok(_) => {
+                    yield ReissueExternalNotesState::Done;
+                },
+                Err(e) => {
+                    yield ReissueExternalNotesState::Failed(e.to_string());
+                },
+            }
+        }))
+    }
+}
+
+fn mint_client(client: &Client) -> (ModuleInstanceId, &MintClientModule) {
+    let mint_client_instance = client
+        .get_first_instance(&MintCommonGen::KIND)
+        .expect("No mint module attached to client");
+
+    let mint_client = client
+        .get_module_client::<MintClientModule>(mint_client_instance)
+        .expect("Instance ID exists, we just fetched it");
+
+    (mint_client_instance, mint_client)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum MintMeta {
+    Reissuance { out_point: OutPoint },
+}
 
 #[derive(Debug, Clone)]
 pub struct MintClientGen;
@@ -271,6 +407,14 @@ impl MintClientModule {
     ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
         let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
 
+        for (amount, note) in spendable_selected_notes.iter_items() {
+            dbtx.remove_entry(&NoteKey {
+                amount,
+                nonce: note.note.0,
+            })
+            .await;
+        }
+
         self.create_input_from_notes(operation_id, spendable_selected_notes)
             .await
     }
@@ -322,7 +466,7 @@ impl MintClientModule {
     /// couldn't be made, and the next smallest amount will be returned.
     ///
     /// The caller can request change from the federation.
-    pub async fn select_notes(
+    async fn select_notes(
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         amount: Amount,
     ) -> Result<TieredMulti<SpendableNote>, InsufficientBalanceError> {
@@ -333,7 +477,7 @@ impl MintClientModule {
         select_notes_from_stream(note_stream, amount).await
     }
 
-    pub async fn get_next_note_index(
+    async fn get_next_note_index(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         amount: Amount,

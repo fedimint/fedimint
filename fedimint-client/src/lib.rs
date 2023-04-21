@@ -26,6 +26,7 @@ use futures::StreamExt;
 use rand::distributions::{Distribution, Standard};
 use rand::{thread_rng, Rng};
 use secp256k1_zkp::Secp256k1;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::db::{
@@ -449,18 +450,27 @@ impl Client {
         &self.inner.db
     }
 
-    pub async fn await_tx_accepted(&self, operation_id: OperationId, txid: TransactionId) {
+    pub async fn await_tx_accepted(
+        &self,
+        operation_id: OperationId,
+        txid: TransactionId,
+    ) -> Result<(), ()> {
         self.inner
             .transaction_update_stream(operation_id)
             .await
-            .filter(|tx_update| {
-                std::future::ready(matches!(
-                    tx_update.state,
-                    TxSubmissionStates::Accepted {txid: event_txid} if event_txid == txid
-                ))
+            .filter_map(|tx_update| {
+                std::future::ready(match tx_update.state {
+                    TxSubmissionStates::Accepted { txid: event_txid } if event_txid == txid => {
+                        Some(Ok(()))
+                    }
+                    TxSubmissionStates::Rejected { txid: event_txid } if event_txid == txid => {
+                        Some(Err(()))
+                    }
+                    _ => None,
+                })
             })
             .next_or_pending()
-            .await;
+            .await
     }
 
     /// Returns the instance id of the first module of the given kind. The
@@ -905,6 +915,16 @@ pub fn client_decoders<'a>(
 pub struct OperationLogEntry {
     operation_type: String,
     meta: serde_json::Value,
+}
+
+impl OperationLogEntry {
+    pub fn operation_type(&self) -> &str {
+        &self.operation_type
+    }
+
+    pub fn meta<M: DeserializeOwned>(&self) -> M {
+        serde_json::from_value(self.meta.clone()).expect("JSON deserialization should not fail")
+    }
 }
 
 impl Encodable for OperationLogEntry {
