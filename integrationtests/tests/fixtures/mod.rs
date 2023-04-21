@@ -35,7 +35,7 @@ use fedimint_core::task::{timeout, RwLock, TaskGroup};
 use fedimint_core::{
     core, sats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
 };
-use fedimint_ln_client::{LightningClientGen, LightningGateway};
+use fedimint_ln_client::{GatewayFeeStructure, LightningClientGen, LightningGateway};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintClientGen;
@@ -67,7 +67,6 @@ use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
-use lightning::routing::gossip::RoutingFees;
 use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
@@ -599,7 +598,7 @@ pub struct GatewayTest {
     pub user: Box<dyn ILegacyTestClient>,
     pub client: Box<dyn IGatewayClient>,
     pub node: GatewayNode,
-    pub fees: RoutingFees,
+    pub fee_structure: GatewayFeeStructure,
 }
 
 impl GatewayTest {
@@ -612,7 +611,7 @@ impl GatewayTest {
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
         node: GatewayNode,
-        fees: RoutingFees,
+        fee_structure: GatewayFeeStructure,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -628,7 +627,7 @@ impl GatewayTest {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
             valid_until: fedimint_core::time::now(),
-            fees,
+            fee_structure,
         };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();
@@ -642,7 +641,7 @@ impl GatewayTest {
             timelock_delta: 10,
             api: announce_addr.clone(),
             node_pub_key,
-            fees,
+            fee_structure,
         };
 
         // Create federation client builder for the gateway
@@ -659,7 +658,7 @@ impl GatewayTest {
             decoders.clone(),
             module_gens.clone(),
             TaskGroup::new(),
-            fees,
+            fee_structure,
         )
         .await
         .unwrap();
@@ -695,7 +694,7 @@ impl GatewayTest {
             user,
             client,
             node,
-            fees,
+            fee_structure,
         }
     }
 }

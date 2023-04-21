@@ -15,12 +15,13 @@ use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::timeout;
 use fedimint_core::Amount;
+use fedimint_ln_client::GatewayFeeStructure;
 use futures::StreamExt;
-use lightning::routing::gossip::RoutingFees;
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::log::warn;
 
 use self::db::ConfirmedInvoiceKey;
 use self::incoming::ConfirmedInvoice;
@@ -90,7 +91,8 @@ impl LnClient {
         timelock: u32,
         mut rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<LightningOutput> {
-        let contract_amount = self.compute_outgoing_contract_amount(&invoice, gateway.fees)?;
+        let contract_amount =
+            self.compute_outgoing_contract_amount(&invoice, gateway.fee_structure)?;
 
         let user_sk = bitcoin::KeyPair::new(&self.context.secp, &mut rng);
 
@@ -289,24 +291,32 @@ impl LnClient {
     pub fn compute_outgoing_contract_amount(
         &self,
         invoice: &Invoice,
-        fees: RoutingFees,
+        fee_structure: GatewayFeeStructure,
     ) -> Result<Amount> {
         let invoice_amount_msat = invoice
             .amount_milli_satoshis()
             .ok_or(LnClientError::MissingInvoiceAmount)?;
 
-        let base_fee = fees.base_msat as u64;
-        let margin_fee: u64 = if fees.proportional_millionths > 0 {
-            let fee_percent = 1000000 / fees.proportional_millionths as u64;
-            invoice_amount_msat / fee_percent
-        } else {
-            0
-        };
+        match fee_structure {
+            GatewayFeeStructure::LnRouting { fees } => {
+                let base_fee = fees.base_msat as u64;
+                let margin_fee: u64 = if fees.proportional_millionths > 0 {
+                    let fee_percent = 1000000 / fees.proportional_millionths as u64;
+                    invoice_amount_msat / fee_percent
+                } else {
+                    0
+                };
 
-        // Add base and margin routing fees
-        let contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
+                // Add base and margin routing fees
+                let contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
 
-        Ok(Amount::from_msats(contract_amount_msat))
+                Ok(Amount::from_msats(contract_amount_msat))
+            }
+            _ => {
+                warn!("Unsupported fee structure: {:?}", fee_structure);
+                Ok(Amount::from_msats(invoice_amount_msat))
+            }
+        }
     }
 }
 
@@ -355,6 +365,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
+    use fedimint_ln_client::GatewayFeeStructure;
     use fedimint_ln_server::{Lightning, LightningGen};
     use fedimint_testing::FakeFed;
     use lightning::routing::gossip::RoutingFees;
@@ -532,9 +543,11 @@ mod tests {
                     .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
                 route_hints: vec![],
                 valid_until: fedimint_core::time::now(),
-                fees: RoutingFees {
-                    base_msat: 0,
-                    proportional_millionths: 0,
+                fee_structure: GatewayFeeStructure::LnRouting {
+                    fees: RoutingFees {
+                        base_msat: 0,
+                        proportional_millionths: 0,
+                    },
                 },
             }
         };
@@ -571,7 +584,7 @@ mod tests {
         // TODO: test that the client has its key
 
         let expected_amount = client
-            .compute_outgoing_contract_amount(&invoice, gateway.fees)
+            .compute_outgoing_contract_amount(&invoice, gateway.fee_structure)
             .unwrap();
 
         assert_eq!(contract_acc.amount, expected_amount);

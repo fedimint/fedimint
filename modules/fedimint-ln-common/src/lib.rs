@@ -169,9 +169,8 @@ pub struct LightningGateway {
     pub route_hints: Vec<route_hints::RouteHint>,
     /// Limits the validity of the announcement to allow updates
     pub valid_until: SystemTime,
-    // Gateway configured routing fees
-    #[serde(with = "serde_routing_fees")]
-    pub fees: RoutingFees,
+    // Gateway configured fee structure
+    pub fee_structure: GatewayFeeStructure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
@@ -269,6 +268,15 @@ pub mod route_hints {
             )
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[non_exhaustive]
+pub enum GatewayFeeStructure {
+    LnRouting {
+        #[serde(with = "serde_routing_fees")]
+        fees: RoutingFees,
+    },
 }
 
 // TODO: Upstream serde serialization for

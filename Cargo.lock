@@ -2877,6 +2877,7 @@ dependencies = [
  "fedimint-client-legacy",
  "fedimint-core",
  "fedimint-ln-client",
+ "fedimint-ln-common",
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-rocksdb",

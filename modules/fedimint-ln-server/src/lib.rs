@@ -930,6 +930,7 @@ mod fedimint_migration_tests {
         LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
         ProposeDecryptionShareKeyPrefix,
     };
+    use fedimint_ln_common::GatewayFeeStructure;
     use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     use futures::StreamExt;
     use lightning::routing::gossip::RoutingFees;
@@ -1036,9 +1037,11 @@ mod fedimint_migration_tests {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
             valid_until: SystemTime::now(),
-            fees: RoutingFees {
-                base_msat: 0,
-                proportional_millionths: 0,
+            fee_structure: GatewayFeeStructure::LnRouting {
+                fees: RoutingFees {
+                    base_msat: 0,
+                    proportional_millionths: 0,
+                },
             },
         };
         dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)

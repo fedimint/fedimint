@@ -33,6 +33,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{Amount, TransactionId};
+use fedimint_ln_common::GatewayFeeStructure;
 use gatewaylnrpc::GetNodeInfoResponse;
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::ILnRpcClient;
@@ -59,12 +60,14 @@ const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 /// LND HTLC interceptor can't handle SCID of 0, so start from 1
 const INITIAL_SCID: u64 = 1;
 
-pub const DEFAULT_FEES: RoutingFees = RoutingFees {
-    /// Base routing fee. Default is 0 msat
-    base_msat: 0,
-    /// Liquidity-based routing fee in millionths of a routed amount.
-    /// In other words, 10000 is 1%. The default is 10000 (1%).
-    proportional_millionths: 10000,
+pub const DEFAULT_FEES: GatewayFeeStructure = GatewayFeeStructure::LnRouting {
+    fees: RoutingFees {
+        /// Base routing fee. Default is 0 msat
+        base_msat: 0,
+        /// Liquidity-based routing fee in millionths of a routed amount.
+        /// In other words, 10000 is 1%. The default is 10000 (1%).
+        proportional_millionths: 10000,
+    },
 };
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
@@ -131,7 +134,7 @@ pub struct Gateway {
     receiver: mpsc::Receiver<GatewayRequest>,
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
-    fees: RoutingFees,
+    fee_structure: GatewayFeeStructure,
 }
 
 impl Gateway {
@@ -142,7 +145,7 @@ impl Gateway {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
-        fees: RoutingFees,
+        fee_structure: GatewayFeeStructure,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -162,7 +165,7 @@ impl Gateway {
             decoders: decoders.clone(),
             module_gens: module_gens.clone(),
             lightning_mode: Some(lightning_mode),
-            fees,
+            fee_structure,
         };
 
         gw.load_actors(decoders, module_gens).await?;
@@ -177,7 +180,7 @@ impl Gateway {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
-        fees: RoutingFees,
+        fee_structure: GatewayFeeStructure,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -193,7 +196,7 @@ impl Gateway {
             decoders: decoders.clone(),
             module_gens: module_gens.clone(),
             lightning_mode: None,
-            fees,
+            fee_structure,
         };
 
         gw.load_actors(decoders, module_gens).await?;
@@ -327,7 +330,7 @@ impl Gateway {
         &mut self,
         payload: ConnectFedPayload,
         route_hints: Vec<RouteHint>,
-        fees: RoutingFees,
+        fee_structure: GatewayFeeStructure,
     ) -> Result<FederationInfo> {
         let connect = WsClientConnectInfo::from_str(&payload.connect).map_err(|e| {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
@@ -349,7 +352,7 @@ impl Gateway {
                 channel_id,
                 node_pub_key,
                 self.module_gens.clone(),
-                fees,
+                fee_structure,
             )
             .await?;
 
@@ -564,11 +567,15 @@ impl Gateway {
                 GatewayRequest::ConnectFederation(inner) => {
                     let route_hints: Vec<RouteHint> =
                         self.lnrpc.read().await.routehints().await?.try_into()?;
-                    let fees = self.fees;
+                    let fee_structure = self.fee_structure;
 
                     inner
                         .handle(&mut self, |gateway, payload| {
-                            gateway.handle_connect_federation(payload, route_hints.clone(), fees)
+                            gateway.handle_connect_federation(
+                                payload,
+                                route_hints.clone(),
+                                fee_structure,
+                            )
                         })
                         .await;
                 }

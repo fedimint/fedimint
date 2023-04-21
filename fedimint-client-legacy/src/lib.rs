@@ -44,7 +44,7 @@ use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_ln_client::{serde_routing_fees, LightningModuleTypes, LightningOutputOutcome};
+use fedimint_ln_client::{GatewayFeeStructure, LightningModuleTypes, LightningOutputOutcome};
 use fedimint_logging::LOG_WALLET;
 use fedimint_mint_client::MintModuleTypes;
 use fedimint_wallet_client::WalletModuleTypes;
@@ -133,9 +133,8 @@ pub struct GatewayClientConfig {
     /// `short_channel_id` when creating invoices to be settled by this
     /// gateway.
     pub mint_channel_id: u64,
-    // Gateway configured routing fees
-    #[serde(with = "serde_routing_fees")]
-    pub fees: RoutingFees,
+    // Gateway configured fee structure
+    pub fee_structure: GatewayFeeStructure,
 }
 
 impl GatewayClientConfig {
@@ -151,7 +150,7 @@ impl GatewayClientConfig {
             api: self.api.clone(),
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
-            fees: self.fees,
+            fee_structure: self.fee_structure,
         }
     }
 }

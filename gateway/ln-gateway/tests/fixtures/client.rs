@@ -11,7 +11,7 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::PeerId;
-use lightning::routing::gossip::RoutingFees;
+use fedimint_ln_client::GatewayFeeStructure;
 use ln_gateway::client::{DynDbFactory, IGatewayClientBuilder};
 use ln_gateway::GatewayError;
 use secp256k1::{PublicKey, Secp256k1};
@@ -73,7 +73,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         _module_gens: ClientModuleGenRegistry,
-        fees: RoutingFees,
+        fee_structure: GatewayFeeStructure,
     ) -> Result<GatewayClientConfig, GatewayError> {
         // TODO: use the connect info urls to get the federation name?
         // Simulate clients in the same federation by seeding the generated
@@ -99,7 +99,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
             timelock_delta: 10,
             node_pub_key: node_pubkey,
             api: self.gateway_api.clone(),
-            fees,
+            fee_structure,
         })
     }
 
