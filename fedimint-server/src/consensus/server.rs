@@ -27,7 +27,7 @@ use rand::{CryptoRng, RngCore};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::config::ServerConfig;
 use crate::consensus::{
@@ -251,14 +251,6 @@ impl ConsensusServer {
 
     /// Loop `run_conensus_epoch` until shut down
     pub async fn run_consensus(mut self, task_handle: TaskHandle) {
-        if self.consensus.is_at_upgrade_threshold().await {
-            error!(
-                target: LOG_CORE,
-                "Restarted fedimintd after upgrade without passing in flag, shutting down"
-            );
-            return self.task_group.shutdown().await;
-        }
-
         // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a
         // problem for change, but maybe later for other use cases
         let mut rng = OsRng;
@@ -289,7 +281,6 @@ impl ConsensusServer {
                     target: LOG_CONSENSUS,
                     "Received a threshold of upgrade signals, shutting down"
                 );
-                self.task_group.shutdown().await;
                 break;
             }
         }

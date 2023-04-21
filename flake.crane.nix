@@ -281,13 +281,6 @@ rec {
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/reconnect-test.sh";
   });
 
-  cliTestUpgrade = craneLib.mkCargoDerivation (commonCliTestArgs // {
-    pname = "${commonCliTestArgs.pname}-upgrade";
-    version = "0.0.1";
-    cargoArtifacts = workspaceBuild;
-    buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/upgrade-test.sh";
-  });
-
   cliTestLatency = craneLib.mkCargoDerivation (commonCliTestArgs // {
     pname = "${commonCliTestArgs.pname}-latency";
     version = "0.0.1";

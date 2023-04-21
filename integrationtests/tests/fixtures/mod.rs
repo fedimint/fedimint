@@ -51,7 +51,7 @@ use fedimint_server::consensus::{
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
 use fedimint_server::net::peers::PeerConnector;
-use fedimint_server::{consensus, FedimintServer};
+use fedimint_server::{consensus, FedimintApiHandler, FedimintServer};
 use fedimint_testing::btc::bitcoind::FakeWalletGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
@@ -122,6 +122,7 @@ pub struct Fixtures {
     pub gateway: GatewayTest,
     pub lightning: Box<dyn LightningTest>,
     pub task_group: TaskGroup,
+    pub handles: Vec<FedimintApiHandler>,
 }
 
 /// Helper for generating fixtures, passing them into test code, then shutting
@@ -154,6 +155,11 @@ where
             fixtures.lightning,
         )
         .await;
+
+        for handle in fixtures.handles {
+            handle.stop().await;
+        }
+
         fixtures
             .task_group
             // it's a test; you have 1 second to wrap up, or you
@@ -314,6 +320,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 &mut task_group,
             )
             .await;
+            let handles = fed.run_consensus_apis().await;
 
             // user
             let user_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
@@ -351,6 +358,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 gateway,
                 lightning: Box::new(lightning),
                 task_group,
+                handles,
             }
         }
         _ => {
@@ -395,6 +403,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 &mut task_group.clone(),
             )
             .await;
+            let handles = fed.run_consensus_apis().await;
 
             let user_db = Database::new(MemDatabase::new(), module_decode_stubs());
             let user_cfg = UserClientConfig(client_config.clone());
@@ -428,6 +437,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 gateway,
                 lightning: Box::new(lightning),
                 task_group,
+                handles,
             }
         }
     };
@@ -1174,6 +1184,30 @@ impl FederationTest {
         Ok(())
     }
 
+    pub async fn run_consensus_apis(&self) -> Vec<FedimintApiHandler> {
+        let mut handles = vec![];
+        for server in &self.servers {
+            let s = server.lock().await;
+            let cfg = s.fedimint.cfg.clone();
+            let api = FedimintServer {
+                data_dir: Default::default(),
+                settings: ConfigGenSettings {
+                    download_token_limit: cfg.local.download_token_limit,
+                    p2p_bind: cfg.local.fed_bind,
+                    api_bind: cfg.local.api_bind,
+                    p2p_url: cfg.local.p2p_endpoints[&cfg.local.identity].url.clone(),
+                    api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
+                    default_params: Default::default(),
+                    module_gens: s.fedimint.consensus.module_inits.legacy_init_modules(),
+                    registry: s.fedimint.consensus.module_inits.clone(),
+                },
+                db: s.fedimint.consensus.db.clone(),
+            };
+            handles.push(api.run_consensus_api(&s.fedimint.consensus.api).await);
+        }
+        handles
+    }
+
     // Necessary to allow servers to progress concurrently, should be fine since the
     // same server will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
@@ -1270,7 +1304,7 @@ impl FederationTest {
             .await
             .expect("failed to init server");
 
-            let api = FedimintServer {
+            let _api = FedimintServer {
                 data_dir: Default::default(),
                 settings: ConfigGenSettings {
                     download_token_limit: cfg.local.download_token_limit,
@@ -1283,11 +1317,7 @@ impl FederationTest {
                     registry: module_inits.clone(),
                 },
                 db: db.clone(),
-                upgrade_epoch: None,
             };
-            api.run_consensus_api(&fedimint.consensus.api, &mut task_group)
-                .await
-                .expect("api starts");
 
             Arc::new(Mutex::new(ServerTest {
                 fedimint,

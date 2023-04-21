@@ -33,16 +33,6 @@ function cli_test_reconnect() {
 }
 export -f cli_test_reconnect
 
-function cli_test_upgrade() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/upgrade-test.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
-}
-export -f cli_test_upgrade
-
 function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
@@ -130,7 +120,6 @@ if parallel \
   cli_test_rust_tests_esplora \
   cli_test_latency \
   cli_test_reconnect \
-  cli_test_upgrade \
   cli_test_cli ; then
   >&2 echo "All tests successful"
 else
