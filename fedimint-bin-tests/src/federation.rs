@@ -192,7 +192,7 @@ impl Federation {
         cmd!(
             self,
             "api",
-            "/module/{LEGACY_HARDCODED_INSTANCE_ID_WALLET}/block_height"
+            "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height"
         )
         .run()
         .await?;

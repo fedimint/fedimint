@@ -26,7 +26,7 @@ function await_fedimint_block_sync() {
 }
 
 function await_all_peers() {
-  $FM_MINT_CLIENT api /module/${LEGACY_HARDCODED_INSTANCE_ID_WALLET}/block_height
+  $FM_MINT_CLIENT api module_${LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height
 }
 
 function await_server_on_port() {

@@ -635,7 +635,7 @@ impl ServerModule for Mint {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "/backup",
+                "backup",
                 async |module: &Mint, context, request: SignedBackupRequest| -> () {
                     module
                         .handle_backup_request(&mut context.dbtx(), request).await?;
@@ -643,7 +643,7 @@ impl ServerModule for Mint {
                 }
             },
             api_endpoint! {
-                "/recover",
+                "recover",
                 async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
                         .handle_recover_request(&mut context.dbtx(), id).await)

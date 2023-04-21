@@ -745,7 +745,7 @@ impl ServerModule for Lightning {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "/account",
+                "account",
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
                     Ok(module
                         .get_contract_account(&mut context.dbtx(), contract_id)
@@ -753,7 +753,7 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                "/wait_account",
+                "wait_account",
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     Ok(module
                         .wait_contract_account(context, contract_id)
@@ -761,7 +761,7 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                "/offer",
+                "offer",
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     Ok(module
                         .get_offer(&mut context.dbtx(), payment_hash)
@@ -769,7 +769,7 @@ impl ServerModule for Lightning {
                }
             },
             api_endpoint! {
-                "/wait_offer",
+                "wait_offer",
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     Ok(module
                         .wait_offer(context, payment_hash)
@@ -777,13 +777,13 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                "/list_gateways",
+                "list_gateways",
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGateway> {
                     Ok(module.list_gateways(&mut context.dbtx()).await)
                 }
             },
             api_endpoint! {
-                "/register_gateway",
+                "register_gateway",
                 async |module: &Lightning, context, gateway: LightningGateway| -> () {
                     module.register_gateway(&mut context.dbtx(), gateway).await;
                     Ok(())
@@ -895,7 +895,7 @@ async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     let body = interconnect
         .call(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            "/block_height".to_owned(),
+            "block_height".to_owned(),
             ApiRequestErased::default(),
         )
         .await

@@ -222,11 +222,15 @@ impl FedimintServer {
                 // This memory leak is fine because it only happens on server startup
                 // and path has to live till the end of program anyways.
                 Box::leak(
-                    format!("/module/{}{}", module_instance_id, endpoint.path).into_boxed_str(),
+                    format!("module_{}_{}", module_instance_id, endpoint.path).into_boxed_str(),
                 )
             } else {
                 endpoint.path
             };
+            // Check if paths contain any abnormal characters
+            if path.contains(|c: char| !matches!(c, '0'..='9' | 'a'..='z' | '_')) {
+                panic!("Constructing bad path name {path}");
+            }
 
             // Another memory leak that is fine because the function is only called once at
             // startup

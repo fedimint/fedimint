@@ -724,7 +724,7 @@ mod tests {
             .collect();
         FederationApiFaker::new(fed, members)
             .with(
-                "/fetch_transaction",
+                "fetch_transaction",
                 move |mint: Arc<Mutex<FakeFed<Mint>>>, tx: TransactionId| async move {
                     let mint = mint.lock().await;
                     Ok(Some(TransactionStatus::Accepted {
@@ -742,7 +742,7 @@ mod tests {
                 },
             )
             .with(
-                "/wait_transaction",
+                "wait_transaction",
                 move |mint: Arc<Mutex<FakeFed<Mint>>>, tx: TransactionId| async move {
                     let mint = mint.lock().await;
                     Ok(TransactionStatus::Accepted {

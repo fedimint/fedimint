@@ -403,7 +403,7 @@ where
     /// Submit a transaction for inclusion
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
         self.request_current_consensus(
-            "/transaction".to_owned(),
+            "transaction".to_owned(),
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
         )
         .await
@@ -414,13 +414,13 @@ where
         &self,
         tx: &TransactionId,
     ) -> FederationResult<Option<TransactionStatus>> {
-        self.request_current_consensus("/fetch_transaction".to_owned(), ApiRequestErased::new(tx))
+        self.request_current_consensus("fetch_transaction".to_owned(), ApiRequestErased::new(tx))
             .await
     }
 
     /// Await the outcome of an entire transaction
     async fn await_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
-        self.request_current_consensus("/wait_transaction".to_owned(), ApiRequestErased::new(tx))
+        self.request_current_consensus("wait_transaction".to_owned(), ApiRequestErased::new(tx))
             .await
     }
 
@@ -469,7 +469,7 @@ where
 
         self.request_with_strategy::<SerdeEpochHistory, _>(
             qs,
-            "/fetch_epoch_history".to_owned(),
+            "fetch_epoch_history".to_owned(),
             ApiRequestErased::new(epoch),
         )
         .await
@@ -477,7 +477,7 @@ where
 
     async fn fetch_epoch_count(&self) -> FederationResult<u64> {
         self.request_eventually_consistent(
-            "/fetch_epoch_count".to_owned(),
+            "fetch_epoch_count".to_owned(),
             ApiRequestErased::default(),
         )
         .await
@@ -536,17 +536,13 @@ where
             },
         );
 
-        self.request_with_strategy(
-            qs,
-            "/config".to_owned(),
-            ApiRequestErased::new(info.clone()),
-        )
-        .await
-        .map(|cfg: ConfigResponse| cfg.client)
+        self.request_with_strategy(qs, "config".to_owned(), ApiRequestErased::new(info.clone()))
+            .await
+            .map(|cfg: ConfigResponse| cfg.client)
     }
 
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
-        self.request_current_consensus("/config_hash".to_owned(), ApiRequestErased::default())
+        self.request_current_consensus("config_hash".to_owned(), ApiRequestErased::default())
             .await
     }
 }
