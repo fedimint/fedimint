@@ -88,7 +88,7 @@ pub struct ConsensusServer {
     /// The list of all other peers
     pub other_peers: BTreeSet<PeerId>,
     /// If `Some` then we restarted and look for the epoch to rejoin at
-    pub rejoin_at_epoch: Option<HashMap<u64, HashSet<PeerId>>>,
+    pub rejoin_at_epoch: HashMap<u64, HashSet<PeerId>>,
     /// How many empty epochs peers requested we run
     pub run_empty_epochs: u64,
     /// Tracks the last epoch outcome from consensus
@@ -242,7 +242,7 @@ impl ConsensusServer {
             cfg: cfg.clone(),
             api: api.into(),
             other_peers,
-            rejoin_at_epoch: None,
+            rejoin_at_epoch: Default::default(),
             run_empty_epochs: 0,
             last_processed_epoch: None,
             decoders: modules.decoder_registry(),
@@ -313,7 +313,7 @@ impl ConsensusServer {
             "Starting consensus at epoch {}", epoch
         );
         self.hbbft.skip_to_epoch(epoch);
-        self.rejoin_at_epoch = Some(HashMap::new());
+        self.rejoin_at_epoch = HashMap::new();
         self.request_rejoin(1).await;
     }
 
@@ -337,8 +337,8 @@ impl ConsensusServer {
         let mut epochs: Vec<_> = vec![];
         // for checking the hashes of the epoch history
         let mut prev_epoch: Option<SignedEpochOutcome> = self.last_processed_epoch.clone();
-        // once we produce an outcome we no longer need to rejoin
-        self.rejoin_at_epoch = None;
+        // we can remove tracking past epochs
+        self.rejoin_at_epoch.retain(|k, _| k > &last_outcome.epoch);
 
         let next_epoch_to_process = self.next_epoch_to_process();
         for epoch_num in next_epoch_to_process..=last_outcome.epoch {
@@ -563,20 +563,18 @@ impl ConsensusServer {
     /// `NUM_EPOCHS_REJOIN_AHEAD` so we can ensure we receive enough HBBFT
     /// messages to produce an outcome.
     async fn rejoin_at_epoch(&mut self, epoch: u64, peer: PeerId) {
-        if let Some(epochs) = self.rejoin_at_epoch.as_mut() {
-            let peers = epochs.entry(epoch).or_default();
-            peers.insert(peer);
-            let threshold = self.cfg.local.p2p_endpoints.threshold();
+        let peers = self.rejoin_at_epoch.entry(epoch).or_default();
+        peers.insert(peer);
+        let threshold = self.cfg.local.p2p_endpoints.threshold();
 
-            if peers.len() >= threshold && self.hbbft.epoch() < epoch {
-                info!(
-                    target: LOG_CONSENSUS,
-                    "Skipping to epoch {}",
-                    epoch + NUM_EPOCHS_REJOIN_AHEAD
-                );
-                self.hbbft.skip_to_epoch(epoch + NUM_EPOCHS_REJOIN_AHEAD);
-                self.request_rejoin(NUM_EPOCHS_REJOIN_AHEAD).await;
-            }
+        if peers.len() >= threshold && self.hbbft.epoch() < epoch {
+            info!(
+                target: LOG_CONSENSUS,
+                "Skipping to epoch {}",
+                epoch + NUM_EPOCHS_REJOIN_AHEAD
+            );
+            self.hbbft.skip_to_epoch(epoch + NUM_EPOCHS_REJOIN_AHEAD);
+            self.request_rejoin(NUM_EPOCHS_REJOIN_AHEAD).await;
         }
     }
 
