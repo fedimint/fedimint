@@ -162,7 +162,7 @@ jobs:
           - i686-linux-android
           - wasm32-unknown-unknown
         include:
-          - on: linux
+          - host: linux
             runs-on: ubuntu-22.04
             build-in-pr: true
             timeout: 20
@@ -171,6 +171,17 @@ jobs:
             build-in-pr: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             timeout: 60
+        exclude:
+            # there's not enough macos runners available for our CI, so test only the more important cross-compilation targets
+            # if they work, rest probably works as well
+          - host: macos
+            target: armv7-linux-androideabi
+          - host: macos
+            target: i686-linux-android
+          - host: macos
+            target: x86_64-linux-android
+
+
 
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
