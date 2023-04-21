@@ -31,6 +31,8 @@ use tracing::{info, warn};
 mod util;
 use util::*;
 
+mod dirs;
+
 #[derive(Clone)]
 pub struct Bitcoind {
     client: Arc<bitcoincore_rpc::Client>,
