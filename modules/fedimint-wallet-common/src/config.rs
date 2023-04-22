@@ -7,7 +7,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::{Decodable, Encodable, SerdeEncodable};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
@@ -41,7 +41,7 @@ pub struct WalletConfigConsensus {
     /// Bitcoin network (e.g. testnet, bitcoin)
     pub network: Network,
     /// The federations public peg-in-descriptor
-    pub peg_in_descriptor: SerdeEncodable<PegInDescriptor>,
+    pub peg_in_descriptor: PegInDescriptor,
     /// The public keys for the bitcoin multisig
     pub peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey>,
     /// How many bitcoin blocks to wait before considering a transaction
@@ -57,7 +57,7 @@ pub struct WalletConfigConsensus {
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletClientConfig {
     /// The federations public peg-in-descriptor
-    pub peg_in_descriptor: SerdeEncodable<PegInDescriptor>,
+    pub peg_in_descriptor: PegInDescriptor,
     /// The bitcoin network the client will use
     pub network: Network,
     /// Confirmations required for a peg in to be accepted by federation
@@ -165,7 +165,7 @@ impl WalletConfig {
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
-                peg_in_descriptor: SerdeEncodable(peg_in_descriptor),
+                peg_in_descriptor,
                 peer_peg_in_keys: pubkeys,
                 finality_delay,
                 default_fee: Feerate { sats_per_kvb: 1000 },
@@ -182,7 +182,7 @@ impl WalletClientConfig {
         finality_delay: u32,
     ) -> Self {
         Self {
-            peg_in_descriptor: SerdeEncodable(peg_in_descriptor),
+            peg_in_descriptor,
             network,
             finality_delay,
             fee_consensus: Default::default(),

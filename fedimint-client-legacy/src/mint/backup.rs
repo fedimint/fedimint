@@ -291,12 +291,8 @@ impl MintClient {
             backup,
             self.secret.clone(),
             gap_limit,
-            self.config.tbs_pks.iter().map(|(k, v)| (k, v.0)).collect(),
-            self.config
-                .peer_tbs_pks
-                .iter()
-                .map(|(k, v)| (*k, v.iter().map(|(k, v)| (k, v.0)).collect()))
-                .collect(),
+            self.config.tbs_pks.clone(),
+            self.config.peer_tbs_pks.clone(),
         );
         let task_handle = task_group.make_handle();
 
