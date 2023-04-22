@@ -775,6 +775,21 @@
 <a href="#775" id="775">775</a>
 <a href="#776" id="776">776</a>
 <a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -782,7 +797,7 @@
 //! its main implementation is [`ReconnectPeerConnections`], see these for
 //! details.
 
-</span><span class="kw">use </span>std::cmp::min;
+</span><span class="kw">use </span>std::cmp::{max, min};
 <span class="kw">use </span>std::collections::{BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -809,9 +824,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
 <span class="kw">use </span><span class="kw">crate</span>::net::queue::{MessageId, MessageQueue, UniqueMessage};
-
-<span class="doccomment">/// Maximum connection failures we consider for our back-off strategy
-</span><span class="kw">const </span>MAX_FAIL_RECONNECT_COUNTER: u64 = <span class="number">300</span>;
 
 <span class="doccomment">/// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
@@ -859,36 +871,50 @@
 }
 
 <span class="doccomment">/// Calculates delays for reconnecting to peers
-/// The default values are in the order of seconds
 </span><span class="attr">#[derive(Debug, Clone, Copy)]
 </span><span class="kw">pub struct </span>DelayCalculator {
-    scaling_factor: f64,
+    min_retry_duration_ms: u64,
+    max_retry_duration_ms: u64,
 }
 
 <span class="kw">impl </span>DelayCalculator {
-    <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            scaling_factor: <span class="number">1.0</span>,
-        }
-    }
+    <span class="doccomment">/// Production defaults will try to reconnect fast but then fallback to
+    /// larger values if the error persists
+    </span><span class="kw">const </span>PROD_MAX_RETRY_DURATION_MS: u64 = <span class="number">10_000</span>;
+    <span class="kw">const </span>PROD_MIN_RETRY_DURATION_MS: u64 = <span class="number">10</span>;
 
-    <span class="doccomment">/// This instance is tuned for tests and scales delays down to milliseconds.
-    /// This makes it feasible to run tests where errors
-    /// and disconnections are common.
-    </span><span class="kw">pub const </span>TEST_DEFAULT: <span class="self">Self </span>= <span class="self">Self </span>{
-        scaling_factor: <span class="number">0.1e-3</span>,
+    <span class="doccomment">/// For tests we don&#39;t want low min/floor delays because they can generate
+    /// too much logging/warnings and make debugging harder
+    </span><span class="kw">const </span>TEST_MAX_RETRY_DURATION_MS: u64 = <span class="number">10_000</span>;
+    <span class="kw">const </span>TEST_MIN_RETRY_DURATION_MS: u64 = <span class="number">2_000</span>;
+
+    <span class="kw">pub const </span>PROD_DEFAULT: <span class="self">Self </span>= <span class="self">Self </span>{
+        min_retry_duration_ms: <span class="self">Self</span>::PROD_MIN_RETRY_DURATION_MS,
+        max_retry_duration_ms: <span class="self">Self</span>::PROD_MAX_RETRY_DURATION_MS,
     };
 
-    <span class="kw">fn </span>reconnection_delay(<span class="kw-2">&amp;</span><span class="self">self</span>, disconnect_count: u64) -&gt; Duration {
-        <span class="kw">let </span>scaling_factor = disconnect_count <span class="kw">as </span>f64 * <span class="self">self</span>.scaling_factor;
-        <span class="kw">let </span>delay: f64 = thread_rng().gen_range(<span class="number">1.0 </span>* scaling_factor..<span class="number">4.0 </span>* scaling_factor);
-        Duration::from_secs_f64(delay)
-    }
-}
+    <span class="kw">pub const </span>TEST_DEFAULT: <span class="self">Self </span>= <span class="self">Self </span>{
+        min_retry_duration_ms: <span class="self">Self</span>::TEST_MIN_RETRY_DURATION_MS,
+        max_retry_duration_ms: <span class="self">Self</span>::TEST_MAX_RETRY_DURATION_MS,
+    };
 
-<span class="kw">impl </span>Default <span class="kw">for </span>DelayCalculator {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new()
+    <span class="kw">const </span>BASE_MS: u64 = <span class="number">4</span>;
+
+    <span class="comment">// exponential back-off with jitter
+    </span><span class="kw">fn </span>reconnection_delay(<span class="kw-2">&amp;</span><span class="self">self</span>, disconnect_count: u64) -&gt; Duration {
+        <span class="kw">let </span>exponent = disconnect_count.try_into().unwrap_or(u32::MAX);
+        <span class="comment">// initial value
+        </span><span class="kw">let </span>delay_ms = <span class="self">Self</span>::BASE_MS.saturating_pow(exponent);
+        <span class="comment">// sets a floor using the min_retry_duration_ms
+        </span><span class="kw">let </span>delay_ms = max(delay_ms, <span class="self">self</span>.min_retry_duration_ms);
+        <span class="comment">// sets a ceiling using the max_retry_duration_ms
+        </span><span class="kw">let </span>delay_ms = min(delay_ms, <span class="self">self</span>.max_retry_duration_ms);
+        <span class="comment">// add a small jitter of up to 10% to smooth out the load on the target peer if
+        // many peers are reconnecting at the same time
+        </span><span class="kw">let </span>jitter_max = delay_ms / <span class="number">10</span>;
+        <span class="kw">let </span>jitter_ms = thread_rng().gen_range(<span class="number">0</span>..max(jitter_max, <span class="number">1</span>));
+        <span class="kw">let </span>delay_secs = delay_ms.saturating_add(jitter_ms) <span class="kw">as </span>f64 / <span class="number">1000.0</span>;
+        Duration::from_secs_f64(delay_secs)
     }
 }
 
@@ -1209,7 +1235,7 @@
 
         PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
             reconnect_at,
-            failed_reconnect_counter: min(disconnect_count, MAX_FAIL_RECONNECT_COUNTER),
+            failed_reconnect_counter: disconnect_count,
         })
     }
 
@@ -1542,14 +1568,18 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_delay_calculator() {
-        <span class="comment">// Test delays should be on the order of milliseconds, not seconds.
-        </span><span class="kw">let </span>c = DelayCalculator::TEST_DEFAULT;
-        <span class="macro">assert!</span>(c.reconnection_delay(<span class="number">1</span>).as_millis() &lt; <span class="number">1</span>);
-        <span class="macro">assert!</span>(c.reconnection_delay(<span class="number">100</span>).as_millis() &lt; <span class="number">100</span>);
-        <span class="comment">// Default/prod delays should be on the order of seconds.
-        </span><span class="kw">let </span>c = DelayCalculator::default();
-        <span class="macro">assert!</span>((<span class="number">1</span>..<span class="number">10</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">1</span>).as_secs()));
-        <span class="macro">assert!</span>((<span class="number">100</span>..<span class="number">1000</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">100</span>).as_secs()));
+        <span class="kw">let </span>c = DelayCalculator::TEST_DEFAULT;
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=<span class="number">20 </span>{
+            <span class="macro">println!</span>(<span class="string">&quot;{}: {:?}&quot;</span>, i, c.reconnection_delay(i));
+        }
+        <span class="macro">assert!</span>((<span class="number">2000</span>..<span class="number">3000</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">1</span>).as_millis()));
+        <span class="macro">assert!</span>((<span class="number">10000</span>..<span class="number">11000</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">10</span>).as_millis()));
+        <span class="kw">let </span>c = DelayCalculator::PROD_DEFAULT;
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..=<span class="number">20 </span>{
+            <span class="macro">println!</span>(<span class="string">&quot;{}: {:?}&quot;</span>, i, c.reconnection_delay(i));
+        }
+        <span class="macro">assert!</span>((<span class="number">10</span>..<span class="number">20</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">1</span>).as_millis()));
+        <span class="macro">assert!</span>((<span class="number">10000</span>..<span class="number">11000</span>).contains(<span class="kw-2">&amp;</span>c.reconnection_delay(<span class="number">10</span>).as_millis()));
     }
 }
 </code></pre></div>
