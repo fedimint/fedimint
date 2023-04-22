@@ -1394,6 +1394,9 @@
 <a href="#1394" id="1394">1394</a>
 <a href="#1395" id="1395">1395</a>
 <a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -1819,10 +1822,13 @@
         _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>MintOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">if </span>output.longest_tier_len() &gt; <span class="self">self</span>.cfg.consensus.max_notes_per_denomination.into() {
+        <span class="kw">let </span>max_tier = <span class="self">self</span>.cfg.private.tbs_sks.max_tier();
+        <span class="kw">if </span>output.longest_tier_except(max_tier)
+            &gt; <span class="self">self</span>.cfg.consensus.max_notes_per_denomination.into()
+        {
             <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::ExceededMaxNotes(
                 <span class="self">self</span>.cfg.consensus.max_notes_per_denomination,
-                output.longest_tier_len(),
+                output.longest_tier_except(max_tier),
             ))
             .into_module_error_other();
         }

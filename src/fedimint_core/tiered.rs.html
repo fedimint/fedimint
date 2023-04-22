@@ -147,6 +147,11 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -177,6 +182,11 @@
 }
 
 <span class="kw">impl</span>&lt;T&gt; Tiered&lt;T&gt; {
+    <span class="doccomment">/// Returns the highest tier amount
+    </span><span class="kw">pub fn </span>max_tier(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Amount {
+        <span class="self">self</span>.<span class="number">0</span>.keys().max().expect(<span class="string">&quot;has tiers&quot;</span>)
+    }
+
     <span class="kw">pub fn </span>structural_eq&lt;O&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Tiered&lt;O&gt;) -&gt; bool {
         <span class="self">self</span>.<span class="number">0</span>.keys().eq(other.<span class="number">0</span>.keys())
     }
