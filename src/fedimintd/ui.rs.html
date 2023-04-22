@@ -429,6 +429,12 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -656,6 +662,9 @@
 </span><span class="kw">struct </span>UrlConnection {
     ro_bitcoin_rpc_type: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
     ro_bitcoin_rpc_url: String,
+    bitcoin_network: String,
+    federation_name: String,
+    guardians_count: String,
     bind_p2p: String,
     p2p_url: String,
     bind_api: String,
@@ -684,6 +693,9 @@
     UrlConnection {
         ro_bitcoin_rpc_type,
         ro_bitcoin_rpc_url,
+        bitcoin_network: env::var(<span class="string">&quot;FM_BITCOIN_NETWORK&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
+        federation_name: env::var(<span class="string">&quot;FM_FED_NAME&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
+        guardians_count: env::var(<span class="string">&quot;FM_FED_SIZE&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
         bind_p2p: env::var(<span class="string">&quot;FM_BIND_P2P&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
         p2p_url: env::var(<span class="string">&quot;FM_P2P_URL&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
         bind_api: env::var(<span class="string">&quot;FM_BIND_API&quot;</span>).unwrap_or(<span class="string">&quot;&quot;</span>.to_string()),
