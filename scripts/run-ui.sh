@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
+export FM_BITCOIN_NETWORK="regtest"
 export FM_FED_SIZE=${1:-2}
+export FM_FED_NAME=${2:-"Cypherpunk Federation"}
 
 source scripts/build.sh $FM_FED_SIZE
 
