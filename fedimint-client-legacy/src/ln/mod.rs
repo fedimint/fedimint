@@ -237,7 +237,7 @@ impl LnClient {
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
                 payment_secret,
-                &self.config.threshold_pub_key.0,
+                &self.config.threshold_pub_key,
             ),
             expiry_time,
         })

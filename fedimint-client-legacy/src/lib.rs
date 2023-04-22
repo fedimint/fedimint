@@ -406,7 +406,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     pub async fn validate_note_signatures(&self, notes: &TieredMulti<SpendableNote>) -> Result<()> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
         notes.iter_items().try_for_each(|(amt, note)| {
-            if note.note.verify(tbs_pks.tier(&amt)?.0) {
+            if note.note.verify(*tbs_pks.tier(&amt)?) {
                 Ok(())
             } else {
                 Err(ClientError::InvalidSignature)

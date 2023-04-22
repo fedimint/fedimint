@@ -9,7 +9,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
-use fedimint_core::encoding::{Decodable, Encodable, SerdeEncodable};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
@@ -93,7 +93,7 @@ impl ServerModuleGen for LightningGen {
                     peer,
                     LightningConfig {
                         consensus: LightningConfigConsensus {
-                            threshold_pub_keys: SerdeEncodable(pks.clone()),
+                            threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
                         },
                         private: LightningConfigPrivate {
@@ -119,7 +119,7 @@ impl ServerModuleGen for LightningGen {
 
         let server = LightningConfig {
             consensus: LightningConfigConsensus {
-                threshold_pub_keys: SerdeEncodable(keys.public_key_set),
+                threshold_pub_keys: keys.public_key_set,
                 fee_consensus: Default::default(),
             },
             private: LightningConfigPrivate {
@@ -647,7 +647,7 @@ impl ServerModule for Lightning {
                 continue;
             }
 
-            let preimage_vec = match self.cfg.consensus.threshold_pub_keys.0.decrypt(
+            let preimage_vec = match self.cfg.consensus.threshold_pub_keys.decrypt(
                 valid_shares
                     .iter()
                     .map(|(peer, share)| (peer.to_usize(), &share.0)),
@@ -801,7 +801,6 @@ impl Lightning {
         self.cfg
             .consensus
             .threshold_pub_keys
-            .0
             .public_key_share(peer.to_usize())
             .verify_decryption_share(&share.0, &message.0)
     }

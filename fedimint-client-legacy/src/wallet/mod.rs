@@ -81,7 +81,6 @@ impl WalletClient {
         let script = self
             .config
             .peg_in_descriptor
-            .0
             .tweak(&peg_in_pub_key, &self.context.secp)
             .script_pubkey();
         debug!(?script);
@@ -141,7 +140,7 @@ impl WalletClient {
         .map_err(WalletClientError::PegInProofError)?;
 
         peg_in_proof
-            .verify(&self.context.secp, &self.config.peg_in_descriptor.0)
+            .verify(&self.context.secp, &self.config.peg_in_descriptor)
             .map_err(WalletClientError::PegInProofError)?;
 
         let amount = Amount::from_sats(peg_in_proof.tx_output().value)

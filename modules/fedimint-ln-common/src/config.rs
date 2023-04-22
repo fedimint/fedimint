@@ -4,7 +4,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::{Decodable, Encodable, SerdeEncodable};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
@@ -23,7 +23,7 @@ pub struct LightningConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningConfigConsensus {
     /// The threshold public keys for encrypting the LN preimage
-    pub threshold_pub_keys: SerdeEncodable<threshold_crypto::PublicKeySet>,
+    pub threshold_pub_keys: threshold_crypto::PublicKeySet,
     /// Fees charged for LN transactions
     pub fee_consensus: FeeConsensus,
 }
@@ -31,7 +31,7 @@ pub struct LightningConfigConsensus {
 impl LightningConfigConsensus {
     /// The number of decryption shares required
     pub fn threshold(&self) -> usize {
-        self.threshold_pub_keys.0.threshold() + 1
+        self.threshold_pub_keys.threshold() + 1
     }
 }
 
@@ -54,7 +54,7 @@ impl TypedClientModuleConfig for LightningClientConfig {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningClientConfig {
-    pub threshold_pub_key: SerdeEncodable<threshold_crypto::PublicKey>,
+    pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
 }
 
@@ -64,7 +64,7 @@ impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
             KIND,
             CONSENSUS_VERSION,
             &LightningClientConfig {
-                threshold_pub_key: SerdeEncodable(self.threshold_pub_keys.0.public_key()),
+                threshold_pub_key: self.threshold_pub_keys.public_key(),
                 fee_consensus: self.fee_consensus.clone(),
             },
         )
@@ -98,7 +98,6 @@ impl TypedServerModuleConfig for LightningConfig {
             != self
                 .consensus
                 .threshold_pub_keys
-                .0
                 .public_key_share(identity.to_usize())
         {
             bail!("Lightning private key doesn't match pubkey share");

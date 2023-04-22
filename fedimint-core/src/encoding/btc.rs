@@ -1,8 +1,8 @@
 use std::io::{Error, Write};
+use std::str::FromStr;
 
 use anyhow::format_err;
 use bitcoin::hashes::Hash as BitcoinHash;
-use miniscript::descriptor::WshInner;
 use miniscript::{Descriptor, MiniscriptKey};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -40,22 +40,28 @@ impl_encode_decode_bridge!(bitcoin::Txid);
 impl_encode_decode_bridge!(bitcoin::util::merkleblock::PartialMerkleTree);
 impl_encode_decode_bridge!(bitcoin::util::psbt::PartiallySignedTransaction);
 
-impl<T: Encodable + MiniscriptKey> Encodable for Descriptor<T> {
+impl<K> Encodable for miniscript::Descriptor<K>
+where
+    K: miniscript::MiniscriptKey,
+{
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        let mut len = 0;
-        match self {
-            Descriptor::Wsh(multi) => match multi.clone().into_inner() {
-                WshInner::SortedMulti(keys) => {
-                    for key in keys.pks {
-                        len += key.consensus_encode(writer)?;
-                    }
-                    len += (keys.k as u16).consensus_encode(writer)?;
-                }
-                _ => unimplemented!(),
-            },
-            _ => unimplemented!(),
-        }
-        Ok(len)
+        let descriptor_str = self.to_string();
+        descriptor_str.consensus_encode(writer)
+    }
+}
+
+impl<K> Decodable for miniscript::Descriptor<K>
+where
+    Self: FromStr,
+    <Self as FromStr>::Err: ToString + std::error::Error + Send + Sync + 'static,
+    K: MiniscriptKey,
+{
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let descriptor_str = String::consensus_decode(d, modules)?;
+        Descriptor::<K>::from_str(&descriptor_str).map_err(DecodeError::from_err)
     }
 }
 

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::iter::FromIterator;
 
 use anyhow::bail;
@@ -7,7 +7,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::{Decodable, Encodable, SerdeEncodable};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ pub struct MintConfig {
 pub struct MintConfigConsensus {
     /// The set of public keys for blind-signing all peers and note
     /// denominations
-    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<SerdeEncodable<PublicKeyShare>>>,
+    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     /// Fees charged for ecash transactions
     pub fee_consensus: FeeConsensus,
     /// The maximum amount of change a client can request
@@ -43,9 +43,9 @@ pub struct MintConfigPrivate {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct MintClientConfig {
-    pub tbs_pks: Tiered<SerdeEncodable<AggregatePublicKey>>,
+    pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
-    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<SerdeEncodable<tbs::PublicKeyShare>>>,
+    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
     pub max_notes_per_denomination: u16,
 }
 
@@ -66,30 +66,24 @@ impl TypedClientModuleConfig for MintClientConfig {
 
 impl TypedServerModuleConsensusConfig for MintConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        let pub_key: HashMap<Amount, AggregatePublicKey> =
-            TieredMultiZip::new(self.peer_tbs_pks.values().map(|keys| keys.iter()).collect())
-                .map(|(amt, keys)| {
-                    // TODO: avoid this through better aggregation API allowing references or
-                    let keys = keys.into_iter().copied().collect::<Vec<_>>();
-                    (
-                        amt,
-                        keys.iter()
-                            .map(|k| k.0)
-                            .collect::<Vec<_>>()
-                            .aggregate(self.peer_tbs_pks.threshold()),
-                    )
-                })
-                .collect();
+        let pub_keys = TieredMultiZip::new(
+            self.peer_tbs_pks.values().map(|keys| keys.iter()).collect(),
+        )
+        .map(|(amt, keys)| {
+            // TODO: avoid this through better aggregation API allowing references or
+            let agg_key = keys
+                .into_iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .aggregate(self.peer_tbs_pks.threshold());
+            (amt, agg_key)
+        });
 
         ClientModuleConfig::from_typed(
             KIND,
             CONSENSUS_VERSION,
             &MintClientConfig {
-                tbs_pks: Tiered::from_iter(
-                    pub_key
-                        .into_iter()
-                        .map(|(amount, key)| (amount, SerdeEncodable(key))),
-                ),
+                tbs_pks: Tiered::from_iter(pub_keys),
                 fee_consensus: self.fee_consensus.clone(),
                 peer_tbs_pks: self.peer_tbs_pks.clone(),
                 max_notes_per_denomination: self.max_notes_per_denomination,
@@ -134,7 +128,7 @@ impl TypedServerModuleConfig for MintConfig {
             .unwrap()
             .as_map()
             .iter()
-            .map(|(k, v)| (*k, v.0))
+            .map(|(k, v)| (*k, *v))
             .collect();
         if sks != pks {
             bail!("Mint private key doesn't match pubkey share");

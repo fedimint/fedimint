@@ -394,7 +394,7 @@ impl ServerModule for Wallet {
         }
 
         input
-            .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor.0)
+            .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)
             .into_module_error_other()?;
 
         if dbtx.get_value(&UTXOKey(input.outpoint())).await.is_some() {
@@ -1035,7 +1035,6 @@ impl Wallet {
             .cfg
             .consensus
             .peg_in_descriptor
-            .0
             .tweak(&pending_tx.tweak, &self.secp)
             .script_pubkey();
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
@@ -1167,7 +1166,7 @@ impl Wallet {
 
     fn offline_wallet(&self) -> StatelessWallet {
         StatelessWallet {
-            descriptor: &self.cfg.consensus.peg_in_descriptor.0,
+            descriptor: &self.cfg.consensus.peg_in_descriptor,
             secret_key: &self.cfg.private.peg_in_key,
             secp: &self.secp,
         }

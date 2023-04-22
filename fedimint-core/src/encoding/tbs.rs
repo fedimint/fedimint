@@ -1,6 +1,7 @@
-use std::io::{Error, Write};
+use std::io::{Error, Read, Write};
 
 use threshold_crypto::group::Curve;
+use threshold_crypto::{G1Affine, G1Projective, G2Affine};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
@@ -42,6 +43,8 @@ impl_external_encode_bls!(tbs::Signature, tbs::MessagePoint, 48);
 impl Encodable for threshold_crypto::PublicKeySet {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
+        let num_coeff = self.coefficients().len() as u64;
+        len += num_coeff.consensus_encode(writer)?;
         for coefficient in self.coefficients() {
             len += coefficient
                 .to_affine()
@@ -52,9 +55,47 @@ impl Encodable for threshold_crypto::PublicKeySet {
     }
 }
 
+impl Decodable for threshold_crypto::PublicKeySet {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let num_coeff = u64::consensus_decode(r, modules)?;
+        (0..num_coeff)
+            .map(|_| {
+                let bytes: [u8; 48] = Decodable::consensus_decode(r, modules)?;
+                let point = G1Affine::from_compressed(&bytes);
+                if point.is_some().unwrap_u8() == 1 {
+                    let affine = point.unwrap();
+                    Ok(G1Projective::from(affine))
+                } else {
+                    Err(crate::encoding::DecodeError::from_str(
+                        "Error decoding public key",
+                    ))
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|coefficients| {
+                threshold_crypto::PublicKeySet::from(threshold_crypto::poly::Commitment::from(
+                    coefficients,
+                ))
+            })
+    }
+}
+
 impl Encodable for threshold_crypto::PublicKey {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.to_bytes().consensus_encode(writer)
+    }
+}
+
+impl Decodable for threshold_crypto::PublicKey {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let bytes: [u8; 48] = Decodable::consensus_decode(r, modules)?;
+        threshold_crypto::PublicKey::from_bytes(bytes).map_err(DecodeError::from_err)
     }
 }
 
@@ -64,9 +105,43 @@ impl Encodable for tbs::AggregatePublicKey {
     }
 }
 
+impl Decodable for tbs::AggregatePublicKey {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let bytes: [u8; 96] = Decodable::consensus_decode(r, modules)?;
+        let point = G2Affine::from_compressed(&bytes);
+        if point.is_some().unwrap_u8() == 1 {
+            Ok(tbs::AggregatePublicKey(point.unwrap()))
+        } else {
+            Err(crate::encoding::DecodeError::from_str(
+                "Error decoding public key",
+            ))
+        }
+    }
+}
+
 impl Encodable for tbs::PublicKeyShare {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.0.to_compressed().consensus_encode(writer)
+    }
+}
+
+impl Decodable for tbs::PublicKeyShare {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let bytes: [u8; 96] = Decodable::consensus_decode(r, modules)?;
+        let point = G2Affine::from_compressed(&bytes);
+        if point.is_some().unwrap_u8() == 1 {
+            Ok(tbs::PublicKeyShare(point.unwrap()))
+        } else {
+            Err(crate::encoding::DecodeError::from_str(
+                "Error decoding public key",
+            ))
+        }
     }
 }
 
