@@ -344,6 +344,10 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         user_receive.set_notes_per_denomination(10).await;
         let notes = user_receive.all_stored_ecash().await;
         assert_matches!(user_receive.reissue(notes).await, Err(_));
+
+        // verify we can still issue large amounts (using highest denomination)
+        fed.mine_and_mint(&*user_send, &*bitcoin, sats(10_000))
+            .await;
     })
     .await
 }

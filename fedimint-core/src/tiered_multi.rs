@@ -124,9 +124,20 @@ impl<T> TieredMulti<T> {
             .flat_map(|(amt, notes)| notes.into_iter().map(move |c| (amt, c)))
     }
 
-    /// Returns the length of the longest vector of all tiers
-    pub fn longest_tier_len(&self) -> usize {
-        self.0.values().map(|notes| notes.len()).max().unwrap_or(0)
+    /// Returns the length of the longest vector of all tiers, ignoring the
+    /// `except` tier
+    pub fn longest_tier_except(&self, except: &Amount) -> usize {
+        self.0
+            .iter()
+            .filter_map(|(amt, notes)| {
+                if amt != except {
+                    Some(notes.len())
+                } else {
+                    None
+                }
+            })
+            .max()
+            .unwrap_or_default()
     }
 
     /// Verifies that all keys in `self` are present in the keys of the given

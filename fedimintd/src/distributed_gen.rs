@@ -79,8 +79,8 @@ enum Command {
         certs: Vec<String>,
 
         /// Max denomination of notes issued by the federation (in millisats)
-        /// default = 1 BTC
-        #[arg(long = "max_denomination", default_value = "100000000000")]
+        /// default = 10 BTC
+        #[arg(long = "max_denomination", default_value = "1000000000000")]
         max_denomination: Amount,
 
         /// The bitcoin network that fedimint will be running on
