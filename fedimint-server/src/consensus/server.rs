@@ -113,7 +113,7 @@ impl ConsensusServer {
             db,
             module_inits,
             connector,
-            DelayCalculator::default(),
+            DelayCalculator::PROD_DEFAULT,
             task_group,
         )
         .await

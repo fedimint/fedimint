@@ -5,7 +5,7 @@
 //! its main implementation is [`ReconnectPeerConnections`], see these for
 //! details.
 
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::net::SocketAddr;
@@ -32,9 +32,6 @@ use url::Url;
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
-
-/// Maximum connection failures we consider for our back-off strategy
-const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
 
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
@@ -82,36 +79,50 @@ struct PeerConnectionStateMachine<M> {
 }
 
 /// Calculates delays for reconnecting to peers
-/// The default values are in the order of seconds
 #[derive(Debug, Clone, Copy)]
 pub struct DelayCalculator {
-    scaling_factor: f64,
+    min_retry_duration_ms: u64,
+    max_retry_duration_ms: u64,
 }
 
 impl DelayCalculator {
-    fn new() -> Self {
-        Self {
-            scaling_factor: 1.0,
-        }
-    }
+    /// Production defaults will try to reconnect fast but then fallback to
+    /// larger values if the error persists
+    const PROD_MAX_RETRY_DURATION_MS: u64 = 10_000;
+    const PROD_MIN_RETRY_DURATION_MS: u64 = 10;
 
-    /// This instance is tuned for tests and scales delays down to milliseconds.
-    /// This makes it feasible to run tests where errors
-    /// and disconnections are common.
-    pub const TEST_DEFAULT: Self = Self {
-        scaling_factor: 0.1e-3,
+    /// For tests we don't want low min/floor delays because they can generate
+    /// too much logging/warnings and make debugging harder
+    const TEST_MAX_RETRY_DURATION_MS: u64 = 10_000;
+    const TEST_MIN_RETRY_DURATION_MS: u64 = 2_000;
+
+    pub const PROD_DEFAULT: Self = Self {
+        min_retry_duration_ms: Self::PROD_MIN_RETRY_DURATION_MS,
+        max_retry_duration_ms: Self::PROD_MAX_RETRY_DURATION_MS,
     };
 
-    fn reconnection_delay(&self, disconnect_count: u64) -> Duration {
-        let scaling_factor = disconnect_count as f64 * self.scaling_factor;
-        let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor..4.0 * scaling_factor);
-        Duration::from_secs_f64(delay)
-    }
-}
+    pub const TEST_DEFAULT: Self = Self {
+        min_retry_duration_ms: Self::TEST_MIN_RETRY_DURATION_MS,
+        max_retry_duration_ms: Self::TEST_MAX_RETRY_DURATION_MS,
+    };
 
-impl Default for DelayCalculator {
-    fn default() -> Self {
-        Self::new()
+    const BASE_MS: u64 = 4;
+
+    // exponential back-off with jitter
+    fn reconnection_delay(&self, disconnect_count: u64) -> Duration {
+        let exponent = disconnect_count.try_into().unwrap_or(u32::MAX);
+        // initial value
+        let delay_ms = Self::BASE_MS.saturating_pow(exponent);
+        // sets a floor using the min_retry_duration_ms
+        let delay_ms = max(delay_ms, self.min_retry_duration_ms);
+        // sets a ceiling using the max_retry_duration_ms
+        let delay_ms = min(delay_ms, self.max_retry_duration_ms);
+        // add a small jitter of up to 10% to smooth out the load on the target peer if
+        // many peers are reconnecting at the same time
+        let jitter_max = delay_ms / 10;
+        let jitter_ms = thread_rng().gen_range(0..max(jitter_max, 1));
+        let delay_secs = delay_ms.saturating_add(jitter_ms) as f64 / 1000.0;
+        Duration::from_secs_f64(delay_secs)
     }
 }
 
@@ -432,7 +443,7 @@ where
 
         PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
             reconnect_at,
-            failed_reconnect_counter: min(disconnect_count, MAX_FAIL_RECONNECT_COUNTER),
+            failed_reconnect_counter: disconnect_count,
         })
     }
 
@@ -765,13 +776,17 @@ mod tests {
 
     #[test]
     fn test_delay_calculator() {
-        // Test delays should be on the order of milliseconds, not seconds.
         let c = DelayCalculator::TEST_DEFAULT;
-        assert!(c.reconnection_delay(1).as_millis() < 1);
-        assert!(c.reconnection_delay(100).as_millis() < 100);
-        // Default/prod delays should be on the order of seconds.
-        let c = DelayCalculator::default();
-        assert!((1..10).contains(&c.reconnection_delay(1).as_secs()));
-        assert!((100..1000).contains(&c.reconnection_delay(100).as_secs()));
+        for i in 1..=20 {
+            println!("{}: {:?}", i, c.reconnection_delay(i));
+        }
+        assert!((2000..3000).contains(&c.reconnection_delay(1).as_millis()));
+        assert!((10000..11000).contains(&c.reconnection_delay(10).as_millis()));
+        let c = DelayCalculator::PROD_DEFAULT;
+        for i in 1..=20 {
+            println!("{}: {:?}", i, c.reconnection_delay(i));
+        }
+        assert!((10..20).contains(&c.reconnection_delay(1).as_millis()));
+        assert!((10000..11000).contains(&c.reconnection_delay(10).as_millis()));
     }
 }
