@@ -763,69 +763,6 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a>
-<a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -839,7 +776,7 @@
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
-<span class="kw">use </span>std::io::{<span class="self">self</span>, Error, Read, Write};
+<span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::format_err;
@@ -847,7 +784,6 @@
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable, UnzipConsensus};
-<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
 
@@ -1343,63 +1279,6 @@
     }
 }
 
-<span class="doccomment">/// A wrapper counting bytes written
-</span><span class="kw">struct </span>CountWrite&lt;<span class="lifetime">&#39;a</span>, W&gt; {
-    inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>W,
-    count: usize,
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, W&gt; CountWrite&lt;<span class="lifetime">&#39;a</span>, W&gt; {
-    <span class="kw">fn </span>new(inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>W) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ inner, count: <span class="number">0 </span>}
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, W&gt; io::Write <span class="kw">for </span>CountWrite&lt;<span class="lifetime">&#39;a</span>, W&gt;
-<span class="kw">where
-    </span>W: io::Write,
-{
-    <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; io::Result&lt;usize&gt; {
-        <span class="kw">let </span>count = <span class="self">self</span>.inner.write(buf)<span class="question-mark">?</span>;
-        <span class="self">self</span>.count += count;
-        <span class="prelude-val">Ok</span>(count)
-    }
-
-    <span class="kw">fn </span>flush(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;()&gt; {
-        <span class="self">self</span>.inner.flush()
-    }
-}
-<span class="doccomment">/// Wrappers for `T` that are `De-Serializable`, while we need them in
-/// `Encodable` context
-</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>SerdeEncodable&lt;T&gt;(<span class="kw">pub </span>T);
-
-<span class="kw">impl</span>&lt;T&gt; Encodable <span class="kw">for </span>SerdeEncodable&lt;T&gt;
-<span class="kw">where
-    </span>T: serde::Serialize,
-{
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>count_writer = CountWrite::new(writer);
-        bincode::serialize_into(<span class="kw-2">&amp;mut </span>count_writer, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
-            .map_err(|e| std::io::Error::new(io::ErrorKind::Other, e))<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(count_writer.count)
-    }
-}
-
-<span class="kw">impl</span>&lt;T&gt; Decodable <span class="kw">for </span>SerdeEncodable&lt;T&gt;
-<span class="kw">where
-    </span>T: <span class="kw">for</span>&lt;<span class="lifetime">&#39;de</span>&gt; serde::Deserialize&lt;<span class="lifetime">&#39;de</span>&gt;,
-{
-    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-        r: <span class="kw-2">&amp;mut </span>R,
-        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(
-            bincode::deserialize_from(r).map_err(|e| DecodeError(e.into()))<span class="question-mark">?</span>,
-        ))
-    }
-}
-
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::fmt::Debug;
@@ -1511,11 +1390,6 @@
 			j5r6drg6k6zcqj0fcwg&quot;</span>;
         <span class="kw">let </span>invoice = invoice_str.parse::&lt;lightning_invoice::Invoice&gt;().unwrap();
         test_roundtrip(invoice);
-    }
-
-    <span class="attr">#[test_log::test]
-    </span><span class="kw">fn </span>test_serde_encodable() {
-        test_roundtrip(SerdeEncodable(<span class="number">6usize</span>));
     }
 
     <span class="attr">#[test_log::test]
