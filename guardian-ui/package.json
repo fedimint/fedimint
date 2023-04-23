@@ -15,6 +15,7 @@
 		"@types/react-dom": "^18.0.0",
 		"@types/valid-url": "^1.0.3",
 		"framer-motion": "^6",
+		"jsonrpc-client-websocket": "^1.5.2",
 		"qrcode.react": "^3.1.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",

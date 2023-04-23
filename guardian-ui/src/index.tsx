@@ -4,15 +4,21 @@ import { ChakraProvider } from '@chakra-ui/react';
 import { Admin } from './Admin';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
+import { ApiProvider } from './components/ApiProvider';
+import { Api } from './api';
 
 const root = ReactDOM.createRoot(
 	document.getElementById('root') as HTMLElement
 );
 
+const api = new Api();
+
 root.render(
 	<React.StrictMode>
 		<ChakraProvider>
-			<Admin />
+			<ApiProvider props={{ api }}>
+				<Admin />
+			</ApiProvider>
 		</ChakraProvider>
 	</React.StrictMode>
 );
