@@ -144,13 +144,24 @@ content %}
         type="radio"
         id="network3"
         name="network"
+        value="signet"
+        required
+        {% if bitcoin_network == "signet" %}
+        checked
+        {% endif %}
+      />
+      <label for="network3">Signet</label>
+      <input
+        type="radio"
+        id="network4"
+        name="network"
         value="bitcoin"
         required
         {% if bitcoin_network == "bitcoin" %}
         checked
         {% endif %}
       />
-      <label for="network3">Mainnet</label>
+      <label for="network4">Mainnet</label>
     </div>
     <button class="btn btn-primary mt-3" type="submit">Next</button>
   </form>
