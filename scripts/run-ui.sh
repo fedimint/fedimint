@@ -6,6 +6,8 @@ export FM_FED_NAME=${2:-"Cypherpunk Federation"}
 
 source scripts/build.sh $FM_FED_SIZE
 
+export RUST_BACKTRACE=1
+
 start_bitcoind | show_verbose_output &
 start_federation
 

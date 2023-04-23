@@ -356,7 +356,7 @@ fn fedimint_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
         ),
         ("FM_BIND_API".into(), format!("127.0.0.1:{api_port}")),
         ("FM_API_URL".into(), format!("ws://127.0.0.1:{api_port}")),
-        ("FM_LISTEN_UI".into(), format!("127.0.0.1:{ui_port}")),
+        // ("FM_LISTEN_UI".into(), format!("127.0.0.1:{ui_port}")),
         (
             "FM_FEDIMINT_DATA_DIR".into(),
             format!("{cfg_dir}/server-{id}"),

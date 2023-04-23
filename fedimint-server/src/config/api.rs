@@ -228,7 +228,7 @@ impl ConfigGenApi {
                     return Self::bad_request("DKG already run")
                 }
                 ConfigApiState::FailedDkg(_) => return dkg_failed,
-                _ => return Self::bad_request("Must generate configs first"),
+                state => return Self::bad_request(&format!("Must generate configs first {:?}", state)),
             };
 
             *state = ConfigApiState::RunningDkg(auth.clone());
@@ -659,6 +659,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             "start_consensus",
             async |config: &ConfigGenApi, context, auth: ApiAuth| -> () {
                 check_auth(context)?;
+                // FIXME: why more auth here?
                 config.start_consensus(auth).await
             }
         },

@@ -7,7 +7,7 @@ use clap::Parser;
 use fedimint_core::config::{
     ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
 };
-use fedimint_core::core::ModuleKind;
+use fedimint_core::core::{ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -249,28 +249,46 @@ async fn run(
         }
     }
 
-    info!("Starting consensus");
+    // info!("Starting consensus");
 
-    let cfg = read_server_config(&opts.password, opts.data_dir.clone())?;
-    let decoders = module_gens.decoders(cfg.iter_module_instances())?;
+    // let cfg = read_server_config(&opts.password, opts.data_dir.clone())?;
+    // let mods = module_gens.legacy_init_order_iter()
+    //     .map(|(_k, v)|  v.to_dyn_common())
+    //     .collect();
+    let ln_kind = ModuleKind::from_static_str("ln");
+    let mint_kind = ModuleKind::from_static_str("mint");
+    let wallet_kind = ModuleKind::from_static_str("wallet");
+    let module_kinds = vec![
+        (LEGACY_HARDCODED_INSTANCE_ID_MINT, &mint_kind),
+        (LEGACY_HARDCODED_INSTANCE_ID_LN, &ln_kind),
+        (LEGACY_HARDCODED_INSTANCE_ID_WALLET, &wallet_kind),
+    ];
+    let decoders = module_gens.decoders(module_kinds.into_iter())?;
     let db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
         decoders.clone(),
     );
+
+    let bind_p2p= std::env::var("FM_BIND_P2P").unwrap().parse().unwrap();
+    let p2p_url= std::env::var("FM_P2P_URL").unwrap().parse().unwrap();
+    let bind_api= std::env::var("FM_BIND_API").unwrap().parse().unwrap();
+    let api_url= std::env::var("FM_API_URL").unwrap().parse().unwrap();
 
     // TODO: Fedimintd should use the config gen API
     fs::write(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)?;
     let mut api = FedimintServer {
         data_dir: opts.data_dir,
         settings: ConfigGenSettings {
-            download_token_limit: cfg.local.download_token_limit,
-            p2p_bind: cfg.local.fed_bind,
-            api_bind: cfg.local.api_bind,
-            p2p_url: cfg.local.p2p_endpoints[&cfg.local.identity].url.clone(),
-            api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
+            download_token_limit: None,
+            p2p_bind: bind_p2p,
+            api_bind: bind_api,
+            p2p_url,
+            api_url,
             default_params: Default::default(),
-            module_gens: module_gens.legacy_init_modules(),
-            registry: module_gens,
+            // module_gens: module_gens.legacy_init_modules(),
+            module_gens: Default::default(),
+            // registry: module_gens,
+            registry: Default::default(),
         },
         db,
     };
