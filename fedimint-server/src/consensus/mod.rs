@@ -71,6 +71,7 @@ pub struct ConsensusProposal {
 pub enum ApiEvent {
     Transaction(Transaction),
     UpgradeSignal,
+    ForceProcessOutcome(EpochOutcome),
 }
 
 // TODO: we should make other fields private and get rid of this
@@ -493,9 +494,10 @@ impl FedimintConsensus {
             .api_event_cache
             .iter()
             .cloned()
-            .map(|event| match event {
-                ApiEvent::Transaction(tx) => ConsensusItem::Transaction(tx),
-                ApiEvent::UpgradeSignal => ConsensusItem::ConsensusUpgrade(ConsensusUpgrade),
+            .filter_map(|event| match event {
+                ApiEvent::Transaction(tx) => Some(ConsensusItem::Transaction(tx)),
+                ApiEvent::UpgradeSignal => Some(ConsensusItem::ConsensusUpgrade(ConsensusUpgrade)),
+                ApiEvent::ForceProcessOutcome(_) => None,
             })
             .collect();
         let mut force_new_epoch = false;

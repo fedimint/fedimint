@@ -10,7 +10,7 @@ use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::{apply_migrations, Database};
 use fedimint_core::encoding::DecodeError;
 use fedimint_core::epoch::{
-    ConsensusItem, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
+    ConsensusItem, EpochOutcome, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
@@ -31,8 +31,8 @@ use tracing::{info, warn};
 
 use crate::config::ServerConfig;
 use crate::consensus::{
-    ApiEvent, ConsensusProposal, FedimintConsensus, HbbftConsensusOutcome,
-    HbbftSerdeConsensusOutcome,
+    ApiEvent, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
+    HbbftConsensusOutcome, HbbftSerdeConsensusOutcome,
 };
 use crate::db::{get_global_database_migrations, LastEpochKey, GLOBAL_DATABASE_VERSION};
 use crate::fedimint_core::encoding::Encodable;
@@ -330,6 +330,8 @@ impl ConsensusServer {
         let mut prev_epoch: Option<SignedEpochOutcome> = self.last_processed_epoch.clone();
         // we can remove tracking past epochs
         self.rejoin_at_epoch.retain(|k, _| k > &last_outcome.epoch);
+        // ensure HBBFT is at the next epoch after we process this one
+        self.hbbft.skip_to_epoch(last_outcome.epoch + 1);
 
         let next_epoch_to_process = self.next_epoch_to_process();
         for epoch_num in next_epoch_to_process..=last_outcome.epoch {
@@ -452,11 +454,24 @@ impl ConsensusServer {
         override_proposal: Option<ConsensusProposal>,
     ) -> ConsensusProposal {
         while let Some(Some(event)) = self.api_receiver.next().now_or_never() {
-            self.consensus.api_event_cache.insert(event);
+            match event {
+                ApiEvent::ForceProcessOutcome(outcome) => self.force_process_epoch(outcome).await,
+                event => {
+                    self.consensus.api_event_cache.insert(event);
+                }
+            };
         }
         let consensus_proposal = self.consensus.get_consensus_proposal().await;
         self.consensus.api_event_cache.clear();
         override_proposal.unwrap_or(consensus_proposal)
+    }
+
+    async fn force_process_epoch(&mut self, outcome: EpochOutcome) {
+        let convert = ConsensusOutcomeConversion::from(outcome).0;
+        match self.process_outcome(convert).await {
+            Ok(_) => {}
+            Err(err) => warn!("Unable to force process epoch {:?}", err),
+        }
     }
 
     /// Handles one step of the HBBFT algorithm, sending messages to peers and

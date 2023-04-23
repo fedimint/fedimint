@@ -28,8 +28,9 @@ use fedimint_core::core::{
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
+use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiAuth, DynServerModuleGen, ModuleCommon};
+use fedimint_core::module::{ApiAuth, DynServerModuleGen, ModuleCommon, SerdeModuleEncoding};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{timeout, RwLock, TaskGroup};
 use fedimint_core::{
@@ -722,6 +723,7 @@ struct ServerTest {
     database: Database,
     override_proposal: Option<ConsensusProposal>,
     dropped_peers: Vec<PeerId>,
+    process_outcomes: bool,
 }
 
 /// Represents a collection of fedimint peer servers
@@ -1186,6 +1188,8 @@ impl FederationTest {
         Ok(())
     }
 
+    /// Runs the consensus APIs for clients to communicate with, returning the
+    /// API handles
     pub async fn run_consensus_apis(&self) -> Vec<FedimintApiHandler> {
         let mut handles = vec![];
         for server in &self.servers {
@@ -1210,6 +1214,29 @@ impl FederationTest {
         handles
     }
 
+    /// Sets whether or not the servers will process outcomes to simulate
+    /// servers failing to write to the database
+    pub fn set_process_outcomes(&self, process_outcomes: bool) {
+        for server in &self.servers {
+            let mut s = block_on(server.lock());
+            s.process_outcomes = process_outcomes;
+        }
+    }
+
+    /// Calls the API to force processing an outcome
+    pub fn force_process_outcome(&self, outcome: SignedEpochOutcome) {
+        for server in &self.servers {
+            let s = block_on(server.lock());
+            block_on(
+                s.fedimint
+                    .consensus
+                    .api
+                    .force_process_outcome(SerdeModuleEncoding::from(&outcome)),
+            )
+            .unwrap();
+        }
+    }
+
     // Necessary to allow servers to progress concurrently, should be fine since the
     // same server will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
@@ -1230,11 +1257,13 @@ impl FederationTest {
             .await?;
 
         for outcome in server.last_consensus.clone() {
-            server
-                .fedimint
-                .process_outcome(outcome)
-                .await
-                .expect("failed");
+            if server.process_outcomes {
+                server
+                    .fedimint
+                    .process_outcome(outcome)
+                    .await
+                    .expect("failed");
+            }
         }
 
         Ok(())
@@ -1328,6 +1357,7 @@ impl FederationTest {
                 last_consensus: vec![],
                 override_proposal: None,
                 dropped_peers: vec![],
+                process_outcomes: true,
             }))
         }))
         .await;
