@@ -15,7 +15,7 @@ use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::format_err;
-use bitcoin_hashes::hex::ToHex;
+use bitcoin_hashes::hex::{FromHex, ToHex};
 use bitcoin_hashes::sha256::HashEngine;
 use bitcoin_hashes::{sha256, Hash};
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
@@ -98,6 +98,18 @@ pub trait Decodable: Sized {
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError>;
+
+    /// Decode an object from hex
+    fn consensus_decode_hex(
+        hex: &str,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let bytes = Vec::<u8>::from_hex(hex)
+            .map_err(anyhow::Error::from)
+            .map_err(DecodeError::new_custom)?;
+        let mut reader = std::io::Cursor::new(bytes);
+        Decodable::consensus_decode(&mut reader, modules)
+    }
 }
 
 impl Encodable for Url {

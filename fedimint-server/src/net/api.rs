@@ -387,7 +387,8 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             "fetch_epoch_history",
             async |fedimint: &ConsensusApi, _context, epoch: u64| -> SerdeEpochHistory {
-                let epoch = fedimint.epoch_history(epoch).await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
+                let epoch = fedimint.epoch_history(epoch).await
+                  .ok_or_else(|| ApiError::not_found(format!("epoch {epoch} not found")))?;
                 Ok((&epoch).into())
             }
         },
