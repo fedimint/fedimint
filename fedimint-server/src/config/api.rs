@@ -228,7 +228,7 @@ impl ConfigGenApi {
                     return Self::bad_request("DKG already run")
                 }
                 ConfigApiState::FailedDkg(_) => return dkg_failed,
-                state => return Self::bad_request(&format!("Must generate configs first {:?}", state)),
+                _ => return Self::bad_request("Must generate configs first"),
             };
 
             *state = ConfigApiState::RunningDkg(auth.clone());
