@@ -217,7 +217,7 @@ pub mod __reexports {
 /// struct State;
 ///
 /// let _: ApiEndpoint<State> = api_endpoint! {
-///     "/foobar",
+///     "foobar",
 ///     async |state: &State, _dbtx, params: ()| -> i32 {
 ///         Ok(0)
 ///     }

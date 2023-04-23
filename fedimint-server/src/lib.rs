@@ -120,20 +120,20 @@ impl FedimintServer {
             &mut task_group,
         );
 
-        // Attempt get the config with local password, otherwise start config gen
-        if let Ok(password) = fs::read_to_string(self.data_dir.join(PLAINTEXT_PASSWORD)) {
-            config_gen
-                .set_password(ApiAuth(password.clone()))
-                .map_err(|_| format_err!("Unable to use local password"))?;
-            info!(target: LOG_CONSENSUS, "Setting password from local file");
+        // // Attempt get the config with local password, otherwise start config gen
+        // if let Ok(password) = fs::read_to_string(self.data_dir.join(PLAINTEXT_PASSWORD)) {
+        //     config_gen
+        //         .set_password(ApiAuth(password.clone()))
+        //         .map_err(|_| format_err!("Unable to use local password"))?;
+        //     info!(target: LOG_CONSENSUS, "Setting password from local file");
 
-            if config_gen.has_upgrade_flag().await {
-                info!(target: LOG_CONSENSUS, "Restarted from an upgrade");
-            } else if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
-                info!(target: LOG_CONSENSUS, "Configs found locally");
-                return Ok(config_generated_rx.recv().await.expect("should not close"));
-            }
-        }
+        //     if config_gen.has_upgrade_flag().await {
+        //         info!(target: LOG_CONSENSUS, "Restarted from an upgrade");
+        //     } else if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
+        //         info!(target: LOG_CONSENSUS, "Configs found locally");
+        //         return Ok(config_generated_rx.recv().await.expect("should not close"));
+        //     }
+        // }
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
@@ -227,10 +227,12 @@ impl FedimintServer {
             } else {
                 endpoint.path
             };
+            info!("attaching {:?}", path);
             // Check if paths contain any abnormal characters
             if path.contains(|c: char| !matches!(c, '0'..='9' | 'a'..='z' | '_')) {
                 panic!("Constructing bad path name {path}");
             }
+
 
             // Another memory leak that is fine because the function is only called once at
             // startup

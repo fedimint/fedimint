@@ -572,6 +572,12 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
     vec![
         api_endpoint! {
+            "ping",
+            async |config: &ConfigGenApi, context, _v: ()| -> String {
+                Ok("pong".to_string())
+            }
+        },
+        api_endpoint! {
             "set_password",
             async |config: &ConfigGenApi, context, auth: ApiAuth| -> () {
                 check_auth(context)?;

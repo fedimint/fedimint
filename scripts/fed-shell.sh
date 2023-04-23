@@ -17,6 +17,7 @@ echo "Running in temporary directory $FM_TEST_DIR"
 export FM_READY_FILE=$FM_TMP_DIR/ready
 mkfifo $FM_READY_FILE
 
+export RUST_LOG=info,jsonrpsee=trace
 $FM_BIN_DIR/fedimint-bin-tests tmuxinator &>$FM_LOGS_DIR/fedimint-dev.log &
 echo $! >> $FM_PID_FILE
 

@@ -1,0 +1,5 @@
+{"jsonrpc":"2.0","method":"ping","params":[],"id":1}
+{"jsonrpc":"2.0","method":"set_password","params":[],"id":1}
+{"jsonrpc":"2.0","method":"version","params":[{"auth":null,"params":null}],"id":1}
+{"jsonrpc":"2.0","id":0,"method":"version","params":[{"auth":null,"params":null}]}
+{"jsonrpc":"2.0","id":0,"method":"ping","params":[{"auth":"foobar","params":null}]}
