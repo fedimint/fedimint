@@ -306,6 +306,7 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
                 db,
                 dbtx,
                 request.auth == Some(self.cfg.private.api_auth.clone()),
+                request.auth.clone(),
             ),
         )
     }

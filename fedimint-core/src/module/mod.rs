@@ -148,18 +148,35 @@ pub struct ApiEndpointContext<'a> {
     db: Database,
     dbtx: DatabaseTransaction<'a>,
     has_auth: bool,
+    request_auth: Option<ApiAuth>,
 }
 
 impl<'a> ApiEndpointContext<'a> {
     /// `db` and `dbtx` should be isolated.
-    pub fn new(db: Database, dbtx: DatabaseTransaction<'a>, has_auth: bool) -> Self {
-        Self { db, dbtx, has_auth }
+    pub fn new(
+        db: Database,
+        dbtx: DatabaseTransaction<'a>,
+        has_auth: bool,
+        request_auth: Option<ApiAuth>,
+    ) -> Self {
+        Self {
+            db,
+            dbtx,
+            has_auth,
+            request_auth,
+        }
     }
 
     /// Database tx handle, will be committed
     pub fn dbtx(&mut self) -> ModuleDatabaseTransaction<'_> {
         // dbtx is already isolated.
         self.dbtx.get_isolated()
+    }
+
+    /// Returns the auth set on the request (regardless of whether it was
+    /// correct)
+    pub fn request_auth(&self) -> Option<ApiAuth> {
+        self.request_auth.clone()
     }
 
     /// Whether the request was authenticated as the guardian who controls this

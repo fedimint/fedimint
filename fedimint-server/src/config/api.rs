@@ -565,7 +565,10 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             ConfigApiState::VerifyConsensusConfig(cfg) => Some(&cfg.private.api_auth) == auth,
         };
 
-        (self, ApiEndpointContext::new(db, dbtx, has_auth))
+        (
+            self,
+            ApiEndpointContext::new(db, dbtx, has_auth, request.auth.clone()),
+        )
     }
 }
 
@@ -573,9 +576,11 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
     vec![
         api_endpoint! {
             "set_password",
-            async |config: &ConfigGenApi, context, auth: ApiAuth| -> () {
-                check_auth(context)?;
-                config.set_password(auth)
+            async |config: &ConfigGenApi, context, _v: ()| -> () {
+                match context.request_auth() {
+                    None => return Err(ApiError::bad_request("Missing password".to_string())),
+                    Some(auth) => config.set_password(auth)
+                }
             }
         },
         api_endpoint! {
@@ -651,9 +656,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         },
         api_endpoint! {
             "start_consensus",
-            async |config: &ConfigGenApi, context, auth: ApiAuth| -> () {
+            async |config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
-                config.start_consensus(auth).await
+                let request_auth = context.request_auth();
+                match request_auth {
+                    None => return Err(ApiError::bad_request("Missing password".to_string())),
+                    Some(auth) => config.start_consensus(auth).await
+                }
             }
         },
         api_endpoint! {
