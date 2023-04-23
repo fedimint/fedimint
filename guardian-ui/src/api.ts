@@ -1,7 +1,6 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
 
 export interface ApiInterface {
-	ping: () => Promise<string>;
 	loggedIn: () => boolean;
 	setPassword: (password: string) => Promise<void>;
 	setPasswordLocal: (password: string) => void;
@@ -37,10 +36,6 @@ export class Api implements ApiInterface {
 
 	loggedIn = (): boolean => {
 		return this.password !== null;
-	};
-
-	ping = async (): Promise<string> => {
-		return await rpc('ping', null);
 	};
 
 	setPassword = async (password: string): Promise<void> => {

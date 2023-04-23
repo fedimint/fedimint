@@ -68,17 +68,8 @@ const LoggedIn = () => {
 
 export const Admin = () => {
 	const { api } = React.useContext(ApiContext);
-	const [response, setResponse] = useState('');
 	const [password, setPassword] = useState('');
 	const [loggedIn, setLoggedIn] = useState(false);
-
-	useEffect(() => {
-		async function ping() {
-			const result = await api.ping();
-			setResponse(result);
-		}
-		ping();
-	}, [response, setResponse]);
 
 	async function onSignup() {
 		try {
