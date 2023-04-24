@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use clap::Subcommand;
 use fedimint_client::ClientBuilder;
 use fedimint_core::config::ClientConfig;
@@ -20,6 +22,9 @@ pub enum ClientNg {
     Reissue {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
+    },
+    Spend {
+        amount: Amount,
     },
 }
 
@@ -72,6 +77,12 @@ pub async fn handle_ng_command<D: IDatabase>(
             }
 
             Ok(serde_json::to_value(amount).unwrap())
+        }
+        ClientNg::Spend { amount } => {
+            let (operation, notes) = client.spend_notes(amount, Duration::from_secs(30)).await?;
+            info!("Spend e-cash operation: {operation:?}");
+
+            Ok(serde_json::to_value(notes).unwrap())
         }
     }
 }

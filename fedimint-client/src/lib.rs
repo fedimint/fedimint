@@ -355,20 +355,11 @@ impl Client {
                             .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
                             .await?;
 
-                        dbtx.insert_entry(
-                            &OperationLogKey { operation_id },
-                            &OperationLogEntry {
-                                operation_type: operation_type.to_string(),
-                                meta: serde_json::to_value(operation_meta(txid))?,
-                            },
-                        )
-                        .await;
-                        dbtx.insert_entry(
-                            &ChronologicalOperationLogKey {
-                                creation_time: fedimint_core::time::now(),
-                                operation_id,
-                            },
-                            &(),
+                        self.add_operation_log_entry(
+                            dbtx,
+                            operation_id,
+                            &operation_type,
+                            operation_meta(txid),
                         )
                         .await;
 
@@ -389,6 +380,43 @@ impl Client {
                 "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
             ),
         }
+    }
+
+    pub async fn add_state_machines(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> anyhow::Result<()> {
+        self.inner
+            .executor
+            .add_state_machines_dbtx(dbtx, states)
+            .await
+    }
+
+    pub async fn add_operation_log_entry(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
+        dbtx.insert_entry(
+            &OperationLogKey { operation_id },
+            &OperationLogEntry {
+                operation_type: operation_type.to_string(),
+                meta: serde_json::to_value(operation_meta)
+                    .expect("Can only fail if meta is not serializable"),
+            },
+        )
+        .await;
+        dbtx.insert_entry(
+            &ChronologicalOperationLogKey {
+                creation_time: now(),
+                operation_id,
+            },
+            &(),
+        )
+        .await;
     }
 
     // TODO: allow fetching pages
