@@ -450,27 +450,12 @@ impl Client {
         &self.inner.db
     }
 
-    pub async fn await_tx_accepted(
-        &self,
-        operation_id: OperationId,
-        txid: TransactionId,
-    ) -> Result<(), ()> {
-        self.inner
-            .transaction_update_stream(operation_id)
-            .await
-            .filter_map(|tx_update| {
-                std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid: event_txid } if event_txid == txid => {
-                        Some(Ok(()))
-                    }
-                    TxSubmissionStates::Rejected { txid: event_txid } if event_txid == txid => {
-                        Some(Err(()))
-                    }
-                    _ => None,
-                })
-            })
-            .next_or_pending()
-            .await
+    /// Returns a stream of transaction updates for the given operation id that
+    /// can later be used to watch for a specific transaction being accepted.
+    pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
+        TransactionUpdates {
+            update_stream: self.inner.transaction_update_stream(operation_id).await,
+        }
     }
 
     /// Returns the instance id of the first module of the given kind. The
@@ -645,7 +630,7 @@ impl ClientInner {
     async fn transaction_update_stream(
         &self,
         operation_id: OperationId,
-    ) -> BoxStream<OperationState<TxSubmissionStates>> {
+    ) -> BoxStream<'static, OperationState<TxSubmissionStates>> {
         self.executor
             .notifier()
             .module_notifier::<OperationState<TxSubmissionStates>>(
@@ -680,6 +665,32 @@ impl ClientInner {
             .is_some();
 
         active_state_exists || inactive_state_exists
+    }
+}
+
+/// See [`Client::transaction_updates`]
+pub struct TransactionUpdates {
+    update_stream: BoxStream<'static, OperationState<TxSubmissionStates>>,
+}
+
+impl TransactionUpdates {
+    /// Waits for the transaction to be accepted or rejected as part of the
+    /// operation to which the `TransactionUpdates` object is subscribed.
+    pub async fn await_tx_accepted(self, txid: TransactionId) -> Result<(), ()> {
+        self.update_stream
+            .filter_map(|tx_update| {
+                std::future::ready(match tx_update.state {
+                    TxSubmissionStates::Accepted { txid: event_txid } if event_txid == txid => {
+                        Some(Ok(()))
+                    }
+                    TxSubmissionStates::Rejected { txid: event_txid } if event_txid == txid => {
+                        Some(Err(()))
+                    }
+                    _ => None,
+                })
+            })
+            .next_or_pending()
+            .await
     }
 }
 

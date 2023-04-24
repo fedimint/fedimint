@@ -137,7 +137,10 @@ impl MintClientExt for Client {
 
         let (_, mint_client) = mint_client(self);
 
-        let tx_accepted_future = self.await_tx_accepted(operation_id, out_point.txid);
+        let tx_accepted_future = self
+            .transaction_updates(operation_id)
+            .await
+            .await_tx_accepted(out_point.txid);
         let output_finalized_future = mint_client.await_output_finalized(operation_id, out_point);
 
         Ok(Box::pin(stream! {
