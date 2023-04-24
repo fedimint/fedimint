@@ -193,7 +193,7 @@ impl CommonModuleGen for LightningCommonGen {
     fn hash_client_module(
         config: serde_json::Value,
     ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
-        serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash()
+        Ok(serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash())
     }
 }
 

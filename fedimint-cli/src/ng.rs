@@ -1,17 +1,19 @@
-use bitcoin_hashes::Hash;
+use std::time::Duration;
+
 use clap::Subcommand;
-use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::ClientBuilder;
 use fedimint_core::config::ClientConfig;
-use fedimint_core::core::{IntoDynInstance, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::db::IDatabase;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{OutPoint, TieredMulti};
+use fedimint_core::{Amount, TieredMulti, TieredSummary};
 use fedimint_ln_client::LightningClientGen;
-use fedimint_mint_client::{MintClientGen, MintClientModule, SpendableNote};
+use fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
 use fedimint_wallet_client::WalletClientGen;
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 #[derive(Debug, Clone, Subcommand)]
@@ -20,6 +22,9 @@ pub enum ClientNg {
     Reissue {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
+    },
+    Spend {
+        amount: Amount,
     },
 }
 
@@ -43,46 +48,49 @@ pub async fn handle_ng_command<D: IDatabase>(
             let mint_client = client
                 .get_module_client::<MintClientModule>(LEGACY_HARDCODED_INSTANCE_ID_MINT)
                 .unwrap();
-            let info = mint_client
+            let summary = mint_client
                 .get_wallet_summary(
                     &mut client.db().begin_transaction().await.with_module_prefix(1),
                 )
                 .await;
-            Ok(serde_json::to_value(info).unwrap())
+            Ok(serde_json::to_value(InfoResponse {
+                total_msat: summary.total_amount(),
+                denominations_msat: summary,
+            })
+            .unwrap())
         }
         ClientNg::Reissue { notes } => {
-            let amt = notes.total_amount();
+            let amount = notes.total_amount();
 
-            let mint_client = client
-                .get_module_client::<MintClientModule>(LEGACY_HARDCODED_INSTANCE_ID_MINT)
-                .unwrap();
-
-            let notes_hash = notes.consensus_hash().unwrap().into_inner();
-            let mint_input = mint_client
-                .create_input_from_notes(notes_hash, notes)
+            let operation_id = client.reissue_external_notes(notes).await?;
+            let mut updates = client
+                .subscribe_reissue_external_notes_updates(operation_id)
                 .await
                 .unwrap();
 
-            let tx = TransactionBuilder::new()
-                .with_input(mint_input.into_dyn(LEGACY_HARDCODED_INSTANCE_ID_MINT));
+            while let Some(update) = updates.next().await {
+                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                    return Err(anyhow::Error::msg(format!("Reissue failed: {e}")));
+                }
 
-            let txid = client
-                .finalize_and_submit_transaction(notes_hash, tx)
-                .await
-                .unwrap();
+                info!("Update: {:?}", update);
+            }
 
-            info!("Transaction submitted: {}", txid);
-            client.await_tx_accepted(notes_hash, txid).await;
-            info!("Transaction accepted");
-            mint_client
-                .await_output_finalized(notes_hash, OutPoint { txid, out_idx: 0 })
-                .await
-                .unwrap();
-            info!("Output finalized");
+            Ok(serde_json::to_value(amount).unwrap())
+        }
+        ClientNg::Spend { amount } => {
+            let (operation, notes) = client.spend_notes(amount, Duration::from_secs(30)).await?;
+            info!("Spend e-cash operation: {operation:?}");
 
-            Ok(serde_json::to_value(amt).unwrap())
+            Ok(serde_json::to_value(notes).unwrap())
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct InfoResponse {
+    total_msat: Amount,
+    denominations_msat: TieredSummary,
 }
 
 pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {

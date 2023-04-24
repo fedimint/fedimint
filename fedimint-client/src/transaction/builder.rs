@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::Amount;
@@ -9,6 +11,7 @@ use crate::module::StateGenerator;
 use crate::sm::DynState;
 use crate::DynGlobalClientContext;
 
+#[derive(Clone)]
 pub struct ClientInput<I = DynInput, S = DynState<DynGlobalClientContext>> {
     pub input: I,
     pub keys: Vec<KeyPair>,
@@ -31,6 +34,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct ClientOutput<O = DynOutput, S = DynState<DynGlobalClientContext>> {
     pub output: O,
     pub state_machines: StateGenerator<S>,
@@ -51,7 +55,7 @@ where
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TransactionBuilder {
     pub(crate) inputs: Vec<ClientInput>,
     pub(crate) outputs: Vec<ClientOutput>,
@@ -134,7 +138,7 @@ fn state_gen_to_dyn<S>(
 where
     S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
 {
-    Box::new(move |txid, index| {
+    Arc::new(move |txid, index| {
         let states = state_gen(txid, index);
         states
             .into_iter()

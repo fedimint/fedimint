@@ -148,9 +148,9 @@ impl ConsensusServer {
         .await?;
 
         for (module_id, module_cfg) in &cfg.consensus.modules {
-            let kind = module_cfg.kind();
+            let kind = module_cfg.kind().clone();
 
-            let Some(init) = module_inits.get(kind) else {
+            let Some(init) = module_inits.get(&kind) else {
                 bail!("Detected configuration for unsupported module kind: {kind}")
             };
             info!(target: LOG_CORE,
@@ -173,7 +173,7 @@ impl ConsensusServer {
                     task_group,
                 )
                 .await?;
-            modules.insert(*module_id, module);
+            modules.insert(*module_id, (kind, module));
         }
 
         // Check the configs are valid
@@ -345,7 +345,7 @@ impl ConsensusServer {
                         last_outcome.epoch,
                         self.last_processed_epoch
                             .as_ref()
-                            .and_then(|epoch| epoch.outcome.consensus_hash().ok()),
+                            .map(|epoch| epoch.outcome.consensus_hash()),
                         None,
                         true,
                     )

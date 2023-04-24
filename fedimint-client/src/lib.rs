@@ -3,14 +3,15 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
+use std::io::{Error, Read, Write};
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabase};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
@@ -25,16 +26,22 @@ use futures::StreamExt;
 use rand::distributions::{Distribution, Standard};
 use rand::{thread_rng, Rng};
 use secp256k1_zkp::Secp256k1;
-use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 
-use crate::db::ClientSecretKey;
+use crate::db::{
+    ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, ClientSecretKey,
+    OperationLogKey,
+};
 use crate::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
 };
 use crate::module::{
     ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule, StateGenerator,
 };
-use crate::sm::executor::ContextGen;
+use crate::sm::executor::{
+    ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
+};
 use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
     OperationState,
@@ -193,7 +200,7 @@ fn states_to_instanceless_dyn<
 >(
     state_gen: StateGenerator<S>,
 ) -> StateGenerator<Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>> {
-    Box::new(move |txid, out_idx| {
+    Arc::new(move |txid, out_idx| {
         let states: Vec<S> = state_gen(txid, out_idx);
         states
             .into_iter()
@@ -234,7 +241,7 @@ impl Debug for ClientInner {
 #[derive(Clone, Debug)]
 struct ModuleGlobalClientContext {
     client: Arc<ClientInner>,
-    module_instance: ModuleInstanceId,
+    module_instance_id: ModuleInstanceId,
     operation: OperationId,
 }
 
@@ -250,9 +257,9 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         input: InstancelessDynClientInput,
     ) -> TransactionId {
         let instance_input = ClientInput {
-            input: DynInput::from_parts(self.module_instance, input.input),
+            input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
-            state_machines: states_add_instance(self.module_instance, input.state_machines),
+            state_machines: states_add_instance(self.module_instance_id, input.state_machines),
         };
 
         self.client
@@ -271,8 +278,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         output: InstancelessDynClientOutput,
     ) -> anyhow::Result<TransactionId> {
         let instance_output = ClientOutput {
-            output: DynOutput::from_parts(self.module_instance, output.output),
-            state_machines: states_add_instance(self.module_instance, output.state_machines),
+            output: DynOutput::from_parts(self.module_instance_id, output.output),
+            state_machines: states_add_instance(self.module_instance_id, output.state_machines),
         };
 
         self.client
@@ -298,7 +305,7 @@ fn states_add_instance(
         Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
     >,
 ) -> StateGenerator<DynState<DynGlobalClientContext>> {
-    Box::new(move |txid, out_idx| {
+    Arc::new(move |txid, out_idx| {
         let states = state_gen(txid, out_idx);
         Iterator::collect(
             states
@@ -317,18 +324,138 @@ pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 impl Client {
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
-    pub async fn finalize_and_submit_transaction(
+    pub async fn finalize_and_submit_transaction<F, M>(
         &self,
         operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<TransactionId> {
-        let mut dbtx = self.inner.db.begin_transaction().await;
-        let txid = self
+    ) -> anyhow::Result<TransactionId>
+    where
+        F: Fn(TransactionId) -> M + Clone + MaybeSend + MaybeSync,
+        M: serde::Serialize + MaybeSend,
+    {
+        let operation_type = operation_type.to_owned();
+
+        let autocommit_res = self
             .inner
-            .finalize_and_submit_transaction(&mut dbtx, operation_id, tx_builder)
-            .await?;
-        dbtx.commit_tx().await;
-        Ok(txid)
+            .db
+            .autocommit(
+                |dbtx| {
+                    let operation_type = operation_type.clone();
+                    let tx_builder = tx_builder.clone();
+                    let operation_meta = operation_meta.clone();
+                    Box::pin(async move {
+                        if ClientInner::operation_exists(dbtx, operation_id).await {
+                            bail!("There already exists an operation with id {operation_id:?}")
+                        }
+
+                        let txid = self
+                            .inner
+                            .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
+                            .await?;
+
+                        self.add_operation_log_entry(
+                            dbtx,
+                            operation_id,
+                            &operation_type,
+                            operation_meta(txid),
+                        )
+                        .await;
+
+                        Ok(txid)
+                    })
+                },
+                Some(100), // TODO: handle what happens after 100 retries
+            )
+            .await;
+
+        match autocommit_res {
+            Ok(txid) => Ok(txid),
+            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
+            Err(AutocommitError::CommitFailed {
+                attempts,
+                last_error,
+            }) => panic!(
+                "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
+            ),
+        }
+    }
+
+    pub async fn add_state_machines(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> anyhow::Result<()> {
+        self.inner
+            .executor
+            .add_state_machines_dbtx(dbtx, states)
+            .await
+    }
+
+    pub async fn add_operation_log_entry(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
+        dbtx.insert_entry(
+            &OperationLogKey { operation_id },
+            &OperationLogEntry {
+                operation_type: operation_type.to_string(),
+                meta: serde_json::to_value(operation_meta)
+                    .expect("Can only fail if meta is not serializable"),
+            },
+        )
+        .await;
+        dbtx.insert_entry(
+            &ChronologicalOperationLogKey {
+                creation_time: now(),
+                operation_id,
+            },
+            &(),
+        )
+        .await;
+    }
+
+    // TODO: allow fetching pages
+    /// Returns the last `limit` operations.
+    pub async fn get_operations(
+        &self,
+        limit: usize,
+    ) -> Vec<(ChronologicalOperationLogKey, OperationLogEntry)> {
+        let mut dbtx = self.inner.db.begin_transaction().await;
+        let operations: Vec<ChronologicalOperationLogKey> = dbtx
+            .find_by_prefix_sorted_descending(&ChronologicalOperationLogKeyPrefix)
+            .await
+            .map(|(key, _)| key)
+            .take(limit)
+            .collect::<Vec<_>>()
+            .await;
+
+        let mut operation_entries = Vec::with_capacity(operations.len());
+
+        for operation in operations {
+            let entry = dbtx
+                .get_value(&OperationLogKey {
+                    operation_id: operation.operation_id,
+                })
+                .await
+                .expect("Inconsistent DB");
+            operation_entries.push((operation, entry));
+        }
+
+        operation_entries
+    }
+
+    pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
+        self.inner
+            .db
+            .begin_transaction()
+            .await
+            .get_value(&OperationLogKey { operation_id })
+            .await
     }
 
     /// Returns a reference to a typed module client instance. Returns an error
@@ -351,8 +478,27 @@ impl Client {
         &self.inner.db
     }
 
-    pub async fn await_tx_accepted(&self, operation_id: OperationId, txid: TransactionId) {
-        self.inner.transaction_update_stream(operation_id).await.filter(|tx_update| std::future::ready(matches!(tx_update.state, TxSubmissionStates::Accepted {txid: event_txid} if event_txid == txid))).next_or_pending().await;
+    /// Returns a stream of transaction updates for the given operation id that
+    /// can later be used to watch for a specific transaction being accepted.
+    pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
+        TransactionUpdates {
+            update_stream: self.inner.transaction_update_stream(operation_id).await,
+        }
+    }
+
+    /// Returns the instance id of the first module of the given kind. The
+    /// primary module will always be returned before any other modules (which
+    /// themselves are ordered by their instance id).
+    pub fn get_first_instance(&self, module_kind: &ModuleKind) -> Option<ModuleInstanceId> {
+        if &self.inner.primary_module_kind == module_kind {
+            return Some(self.inner.primary_module_instance);
+        }
+
+        self.inner
+            .modules
+            .iter_modules()
+            .find(|(_, kind, _module)| *kind == module_kind)
+            .map(|(instance_id, _, _)| instance_id)
     }
 }
 
@@ -360,6 +506,7 @@ struct ClientInner {
     db: Database,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
+    primary_module_kind: ModuleKind,
     modules: ClientModuleRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynFederationApi,
@@ -372,7 +519,7 @@ impl ClientInner {
         Arc::new(move |module_instance, operation| {
             ModuleGlobalClientContext {
                 client: client_inner.clone(),
-                module_instance,
+                module_instance_id: module_instance,
                 operation,
             }
             .into()
@@ -511,13 +658,66 @@ impl ClientInner {
     async fn transaction_update_stream(
         &self,
         operation_id: OperationId,
-    ) -> BoxStream<OperationState<TxSubmissionStates>> {
+    ) -> BoxStream<'static, OperationState<TxSubmissionStates>> {
         self.executor
             .notifier()
             .module_notifier::<OperationState<TxSubmissionStates>>(
                 TRANSACTION_SUBMISSION_MODULE_INSTANCE,
             )
             .subscribe(operation_id)
+            .await
+    }
+
+    async fn operation_exists(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> bool {
+        let active_state_exists = dbtx
+            .find_by_prefix(&ActiveOperationStateKeyPrefix::<DynGlobalClientContext> {
+                operation_id,
+                _pd: Default::default(),
+            })
+            .await
+            .next()
+            .await
+            .is_some();
+
+        let inactive_state_exists = dbtx
+            .find_by_prefix(&InactiveOperationStateKeyPrefix::<DynGlobalClientContext> {
+                operation_id,
+                _pd: Default::default(),
+            })
+            .await
+            .next()
+            .await
+            .is_some();
+
+        active_state_exists || inactive_state_exists
+    }
+}
+
+/// See [`Client::transaction_updates`]
+pub struct TransactionUpdates {
+    update_stream: BoxStream<'static, OperationState<TxSubmissionStates>>,
+}
+
+impl TransactionUpdates {
+    /// Waits for the transaction to be accepted or rejected as part of the
+    /// operation to which the `TransactionUpdates` object is subscribed.
+    pub async fn await_tx_accepted(self, txid: TransactionId) -> Result<(), ()> {
+        self.update_stream
+            .filter_map(|tx_update| {
+                std::future::ready(match tx_update.state {
+                    TxSubmissionStates::Accepted { txid: event_txid } if event_txid == txid => {
+                        Some(Ok(()))
+                    }
+                    TxSubmissionStates::Rejected { txid: event_txid } if event_txid == txid => {
+                        Some(Err(()))
+                    }
+                    _ => None,
+                })
+            })
+            .next_or_pending()
             .await
     }
 }
@@ -581,6 +781,7 @@ impl ClientBuilder {
         )?;
         decoders.register_module(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            ModuleKind::from_static_str("tx_submission"),
             tx_submission_sm_decoder(),
         );
 
@@ -592,14 +793,15 @@ impl ClientBuilder {
 
         let root_secret = get_client_root_secret(&db).await;
 
-        let (modules, primary_module) = {
+        let (modules, (primary_module_kind, primary_module)) = {
             let mut modules = ClientModuleRegistry::default();
             let mut primary_module = None;
             for (module_instance, module_config) in config.modules {
+                let kind = module_config.kind().clone();
                 if module_instance == primary_module_instance {
                     let module = self
                         .module_gens
-                        .get(module_config.kind())
+                        .get(&kind)
                         .ok_or(anyhow!("Unknown module kind in config"))?
                         .init_primary(
                             module_config,
@@ -609,12 +811,12 @@ impl ClientBuilder {
                             notifier.clone(),
                         )
                         .await?;
-                    let not_replaced = primary_module.replace(module).is_none();
+                    let not_replaced = primary_module.replace((kind, module)).is_none();
                     assert!(not_replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
                 } else {
                     let module = self
                         .module_gens
-                        .get(module_config.kind())
+                        .get(&kind)
                         .ok_or(anyhow!("Unknown module kind in config"))?
                         .init(
                             module_config,
@@ -628,7 +830,7 @@ impl ClientBuilder {
                             notifier.clone(),
                         )
                         .await?;
-                    modules.register_module(module_instance, module);
+                    modules.register_module(module_instance, kind, module);
                 }
             }
             (
@@ -643,7 +845,7 @@ impl ClientBuilder {
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
             executor_builder.with_module_dyn(primary_module.context(primary_module_instance));
 
-            for (module_instance_id, module) in modules.iter_modules() {
+            for (module_instance_id, _, module) in modules.iter_modules() {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
             }
 
@@ -654,6 +856,7 @@ impl ClientBuilder {
             db,
             primary_module,
             primary_module_instance,
+            primary_module_kind,
             modules,
             executor,
             api,
@@ -738,8 +941,54 @@ pub fn client_decoders<'a>(
 
         modules.insert(
             id,
-            IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(init)),
+            (
+                kind.clone(),
+                IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(init)),
+            ),
         );
     }
-    Ok(ModuleDecoderRegistry::from_iter(modules))
+    Ok(ModuleDecoderRegistry::from(modules))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OperationLogEntry {
+    operation_type: String,
+    meta: serde_json::Value,
+}
+
+impl OperationLogEntry {
+    pub fn operation_type(&self) -> &str {
+        &self.operation_type
+    }
+
+    pub fn meta<M: DeserializeOwned>(&self) -> M {
+        serde_json::from_value(self.meta.clone()).expect("JSON deserialization should not fail")
+    }
+}
+
+impl Encodable for OperationLogEntry {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += self.operation_type.consensus_encode(writer)?;
+        len += serde_json::to_string(&self.meta)
+            .expect("JSON serialization should not fail")
+            .consensus_encode(writer)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for OperationLogEntry {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let operation_type = String::consensus_decode(r, modules)?;
+        let meta_str = String::consensus_decode(r, modules)?;
+        let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
+
+        Ok(OperationLogEntry {
+            operation_type,
+            meta,
+        })
+    }
 }

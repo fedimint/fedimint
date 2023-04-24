@@ -690,8 +690,10 @@ mod tests {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::CommonModuleGen;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TransactionId};
+    use fedimint_mint_client::MintCommonGen;
     use fedimint_mint_server::{Mint, MintGen, MintGenParams};
     use fedimint_testing::FakeFed;
     use futures::executor::block_on;
@@ -793,6 +795,7 @@ mod tests {
         let client_context = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(
                 module_id,
+                MintCommonGen::KIND,
                 <Mint as ServerModule>::decoder(),
             )]),
             module_gens: Default::default(),
@@ -989,6 +992,7 @@ mod tests {
             context: Arc::new(ClientContext {
                 decoders: ModuleDecoderRegistry::from_iter([(
                     module_id,
+                    MintCommonGen::KIND,
                     <Mint as ServerModule>::decoder(),
                 )]),
                 module_gens: Default::default(),

@@ -149,7 +149,7 @@ impl FedimintServer {
     pub async fn run_consensus_api(&self, api: &ConsensusApi) -> FedimintApiHandler {
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
-        for (id, module) in api.modules.iter_modules() {
+        for (id, _, module) in api.modules.iter_modules() {
             Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
         }
 

@@ -85,7 +85,7 @@ impl SignedEpochOutcome {
         };
 
         SignedEpochOutcome {
-            hash: outcome.consensus_hash().expect("Hashes"),
+            hash: outcome.consensus_hash(),
             outcome,
             signature: None,
         }
@@ -151,14 +151,14 @@ impl SignedEpochOutcome {
             match prev_epoch {
                 None => return Err(EpochVerifyError::MissingPreviousEpoch),
                 Some(prev_epoch) => {
-                    if prev_epoch.outcome.consensus_hash().ok() != self.outcome.last_hash {
+                    if Some(prev_epoch.outcome.consensus_hash()) != self.outcome.last_hash {
                         return Err(EpochVerifyError::InvalidPreviousEpochHash);
                     }
                 }
             }
         }
 
-        if Some(self.hash) == self.outcome.consensus_hash().ok() {
+        if self.hash == self.outcome.consensus_hash() {
             Ok(())
         } else {
             Err(EpochVerifyError::InvalidEpochHash)
@@ -233,7 +233,7 @@ mod tests {
         sk: &SecretKey,
     ) -> SignedEpochOutcome {
         let missing_sig = history(epoch, prev_epoch, None);
-        let signature = sk.sign(missing_sig.outcome.consensus_hash().expect("Hashes"));
+        let signature = sk.sign(missing_sig.outcome.consensus_hash());
         history(epoch, prev_epoch, Some(SerdeSignature(signature)))
     }
 
@@ -252,7 +252,7 @@ mod tests {
         };
 
         SignedEpochOutcome {
-            hash: outcome.consensus_hash().expect("Hashes"),
+            hash: outcome.consensus_hash(),
             outcome,
             signature,
         }

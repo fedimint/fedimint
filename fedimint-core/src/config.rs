@@ -471,9 +471,9 @@ where
                 anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
             };
 
-            modules.insert(id, init.as_ref().decoder());
+            modules.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
-        Ok(ModuleDecoderRegistry::from_iter(modules))
+        Ok(ModuleDecoderRegistry::from(modules))
     }
 }
 
@@ -565,7 +565,7 @@ impl ClientModuleConfig {
     ) -> anyhow::Result<Self> {
         Ok(Self {
             kind,
-            consensus_hash: value.consensus_hash()?,
+            consensus_hash: value.consensus_hash(),
             config: serde_json::to_value(value)?,
         })
     }

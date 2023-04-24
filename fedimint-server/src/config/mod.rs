@@ -86,7 +86,7 @@ impl ServerConfig {
             core: Self::supported_api_versions(),
             modules: modules
                 .iter_modules()
-                .map(|(id, module)| (id, module.supported_api_versions()))
+                .map(|(id, _, module)| (id, module.supported_api_versions()))
                 .collect(),
         }
     }

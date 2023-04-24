@@ -510,6 +510,25 @@ where
 }
 
 #[derive(Debug)]
+pub(crate) struct ActiveOperationStateKeyPrefix<GC> {
+    pub operation_id: OperationId,
+    pub _pd: PhantomData<GC>,
+}
+
+impl<GC> Encodable for ActiveOperationStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.operation_id.consensus_encode(writer)
+    }
+}
+
+impl<GC> ::fedimint_core::db::DatabaseLookup for ActiveOperationStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = ActiveStateKey<GC>;
+}
+
+#[derive(Debug)]
 pub(crate) struct ActiveModuleOperationStateKeyPrefix<GC> {
     pub operation_id: OperationId,
     pub module_instance: ModuleInstanceId,
@@ -634,6 +653,25 @@ where
 }
 
 #[derive(Debug)]
+pub(crate) struct InactiveOperationStateKeyPrefix<GC> {
+    pub operation_id: OperationId,
+    pub _pd: PhantomData<GC>,
+}
+
+impl<GC> Encodable for InactiveOperationStateKeyPrefix<GC> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.operation_id.consensus_encode(writer)
+    }
+}
+
+impl<GC> ::fedimint_core::db::DatabaseLookup for InactiveOperationStateKeyPrefix<GC>
+where
+    GC: GlobalContext,
+{
+    type Record = InactiveStateKey<GC>;
+}
+
+#[derive(Debug)]
 pub(crate) struct InactiveModuleOperationStateKeyPrefix<GC> {
     pub operation_id: OperationId,
     pub module_instance: ModuleInstanceId,
@@ -702,7 +740,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
@@ -820,7 +858,8 @@ mod tests {
         decoder_builder.with_decodable_type::<MockStateMachine>();
         let decoder = decoder_builder.build();
 
-        let decoders = ModuleDecoderRegistry::new(vec![(42, decoder)]);
+        let decoders =
+            ModuleDecoderRegistry::new(vec![(42, ModuleKind::from_static_str("test"), decoder)]);
         let db = Database::new(MemDatabase::new(), decoders);
 
         let mut executor_builder = Executor::<()>::builder();

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::env;
 use std::future::Future;
 use std::path::PathBuf;
@@ -919,6 +919,62 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .into_inner()
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+
+    // # Clinet-NG tests
+    // ## reissue e-cash
+
+    const CLIENT_NG_REISSE_AMOUNT: u64 = 420;
+    const CLIENT_NG_SPEND_AMOUNT: u64 = 42;
+
+    let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(initial_clientng_balance, 0);
+
+    let reissue_notes = cmd!(fed, "spend", CLIENT_NG_REISSE_AMOUNT)
+        .out_json()
+        .await?["note"]
+        .as_str()
+        .map(|s| s.to_owned())
+        .unwrap();
+    let client_ng_reissue_amt = cmd!(fed, "ng", "reissue", reissue_notes)
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSE_AMOUNT);
+
+    let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(initial_clientng_balance, CLIENT_NG_REISSE_AMOUNT);
+
+    // # Spend from client ng
+    let reissue_notes_denominations = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
+        .out_json()
+        .await?
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|s| s.to_owned())
+        .collect::<BTreeSet<_>>();
+
+    let expected_denominations = vec!["2", "8", "32"]
+        .into_iter()
+        .map(|s| s.to_owned())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(reissue_notes_denominations, expected_denominations);
+
+    let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(
+        clientng_post_spend_balance,
+        CLIENT_NG_REISSE_AMOUNT - CLIENT_NG_SPEND_AMOUNT
+    );
+
+    // TODO: test cancel/timeout
 
     Ok(())
 }

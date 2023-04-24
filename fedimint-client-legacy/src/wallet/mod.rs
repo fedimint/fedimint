@@ -205,11 +205,13 @@ mod tests {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::CommonModuleGen;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Feerate, OutPoint, ServerModule, TransactionId};
     use fedimint_testing::btc::bitcoind::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use fedimint_testing::FakeFed;
+    use fedimint_wallet_common::WalletCommonGen;
     use fedimint_wallet_server::{Wallet, WalletGen, WalletGenParams};
     use tokio::sync::Mutex;
 
@@ -312,6 +314,7 @@ mod tests {
         let client = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(
                 module_id,
+                WalletCommonGen::KIND,
                 <Wallet as ServerModule>::decoder(),
             )]),
             module_gens: Default::default(),

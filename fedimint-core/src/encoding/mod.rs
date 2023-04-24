@@ -84,10 +84,11 @@ pub trait Encodable {
     ///
     /// Can be used to validate all federation members agree on state without
     /// revealing the object
-    fn consensus_hash(&self) -> anyhow::Result<sha256::Hash> {
+    fn consensus_hash(&self) -> sha256::Hash {
         let mut engine = HashEngine::default();
-        self.consensus_encode(&mut engine)?;
-        Ok(sha256::Hash::from_engine(engine))
+        self.consensus_encode(&mut engine)
+            .expect("writing to HashEngine cannot fail");
+        sha256::Hash::from_engine(engine)
     }
 }
 

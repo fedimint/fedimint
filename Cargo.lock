@@ -1140,6 +1140,7 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-wallet-client",
+ "futures",
  "lightning-invoice",
  "rand",
  "serde",
@@ -1484,6 +1485,8 @@ name = "fedimint-mint-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aquamarine",
+ "async-stream",
  "async-trait",
  "bincode",
  "bitcoin_hashes",
@@ -2901,6 +2904,7 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-testing",
+ "fedimint-wallet-client",
  "futures",
  "lightning-invoice",
  "portpicker",

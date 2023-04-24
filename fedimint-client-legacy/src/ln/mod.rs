@@ -337,8 +337,10 @@ mod tests {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::CommonModuleGen;
     use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
+    use fedimint_ln_client::LightningCommonGen;
     use fedimint_ln_server::{Lightning, LightningGen};
     use fedimint_testing::FakeFed;
     use lightning_invoice::Invoice;
@@ -469,6 +471,7 @@ mod tests {
         let client_context = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonGen::KIND,
                 <Lightning as ServerModule>::decoder(),
             )]),
             module_gens: Default::default(),

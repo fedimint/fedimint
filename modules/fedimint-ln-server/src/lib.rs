@@ -138,7 +138,7 @@ impl ServerModuleGen for LightningGen {
 
         Ok(ModuleConfigResponse {
             client: config.to_client_config(),
-            consensus_hash: config.consensus_hash()?,
+            consensus_hash: config.consensus_hash(),
         })
     }
 
@@ -913,7 +913,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::DynServerModuleGen;
+    use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     use fedimint_core::{OutPoint, ServerModule, TransactionId};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
@@ -928,6 +928,7 @@ mod fedimint_migration_tests {
         LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
         ProposeDecryptionShareKeyPrefix,
     };
+    use fedimint_ln_common::LightningCommonGen;
     use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     use futures::StreamExt;
     use lightning_invoice::Invoice;
@@ -1051,6 +1052,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonGen::KIND,
                 <Lightning as ServerModule>::decoder(),
             )]),
         )
@@ -1156,6 +1158,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonGen::KIND,
                 <Lightning as ServerModule>::decoder(),
             )]),
         )

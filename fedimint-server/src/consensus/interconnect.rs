@@ -19,7 +19,7 @@ impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
         path: String,
         data: ApiRequestErased,
     ) -> Result<Value, ApiError> {
-        for (module_id, module) in self.fedimint.modules.iter_modules() {
+        for (module_id, _, module) in self.fedimint.modules.iter_modules() {
             if module_id == id {
                 let endpoint = module
                     .api_endpoints()

@@ -71,6 +71,7 @@ where
                 MemDatabase::new(),
                 ModuleDecoderRegistry::from_iter([(
                     module_instance_id,
+                    ConfGen::kind(),
                     <ConfGen as ExtendsCommonModuleGen>::Common::decoder(),
                 )]),
             );

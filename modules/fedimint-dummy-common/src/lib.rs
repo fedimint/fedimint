@@ -33,7 +33,7 @@ impl CommonModuleGen for DummyCommonGen {
     }
 
     fn hash_client_module(config: Value) -> anyhow::Result<sha256::Hash> {
-        serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash()
+        Ok(serde_json::from_value::<DummyClientConfig>(config)?.consensus_hash())
     }
 }
 
