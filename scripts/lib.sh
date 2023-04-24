@@ -112,10 +112,6 @@ function use_lnd_gw() {
 
 ### Start Daemons ###
 
-function run_dkg() {
-  fixtures dkg $FM_FED_SIZE
-}
-
 function start_bitcoind() {
   fixtures bitcoind
   echo $! >> $FM_PID_FILE

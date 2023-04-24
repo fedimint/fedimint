@@ -12,11 +12,9 @@ use bitcoincore_rpc::{Client as BitcoinClient, RpcApi};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_logging::TracingSetup;
-use fedimint_testing::ln::GatewayNode;
 use tokio::fs::{self, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
-use tokio::sync::mpsc::{self, Receiver, Sender};
 use tracing::{error, info};
 use url::Url;
 
@@ -24,13 +22,6 @@ use url::Url;
 enum Cmd {
     // daemons
     Bitcoind,
-    Lightningd,
-    Lnd,
-    Electrs,
-    Esplora,
-    Dkg { servers: usize },
-    Fedimintd { id: usize },
-    Gatewayd { node: GatewayNode },
     Federation { start_id: usize, stop_id: usize },
 
     // commands
@@ -123,90 +114,6 @@ async fn run_bitcoind() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run_lightningd() -> anyhow::Result<()> {
-    // wait for bitcoin RPC to be ready ...
-    await_bitcoind_ready("lightningd").await?;
-
-    let cln_dir = env::var("FM_CLN_DIR")?;
-    let bin_dir = env::var("FM_BIN_DIR")?;
-
-    // spawn lightningd
-    let mut lightningd = Command::new("lightningd")
-        .arg("--dev-fast-gossip")
-        .arg("--dev-bitcoind-poll=1")
-        .arg(format!("--lightning-dir={cln_dir}"))
-        .arg(format!("--plugin={bin_dir}/gateway-cln-extension"))
-        .spawn()?;
-    kill_on_exit("lightningd", &lightningd).await?;
-    info!("lightningd started");
-
-    lightningd.wait().await?;
-
-    Ok(())
-}
-
-async fn run_lnd() -> anyhow::Result<()> {
-    // wait for bitcoin RPC to be ready ...
-    await_bitcoind_ready("lnd").await?;
-
-    let lnd_dir = env::var("FM_LND_DIR")?;
-
-    // spawn lnd
-    let mut lnd = Command::new("lnd")
-        .arg(format!("--lnddir={lnd_dir}"))
-        .spawn()?;
-    kill_on_exit("lnd", &lnd).await?;
-    info!("lnd started");
-
-    lnd.wait().await?;
-
-    Ok(())
-}
-
-async fn run_electrs() -> anyhow::Result<()> {
-    // wait for bitcoin RPC to be ready ...
-    await_bitcoind_ready("electrs").await?;
-
-    let electrs_dir = env::var("FM_ELECTRS_DIR")?;
-
-    // spawn electrs
-    let mut electrs = Command::new("electrs")
-        .arg(format!("--conf-dir={electrs_dir}"))
-        .arg(format!("--db-dir={electrs_dir}"))
-        .spawn()?;
-    kill_on_exit("electrs", &electrs).await?;
-    info!("electrs started");
-
-    electrs.wait().await?;
-
-    Ok(())
-}
-
-async fn run_esplora() -> anyhow::Result<()> {
-    // wait for bitcoin RPC to be ready ...
-    await_bitcoind_ready("esplora").await?;
-
-    let daemon_dir = env::var("FM_BTC_DIR")?;
-    let esplora_dir = env::var("FM_ESPLORA_DIR")?;
-
-    // spawn esplora
-    let mut esplora = Command::new("esplora")
-        .arg(format!("--daemon-dir={daemon_dir}"))
-        .arg(format!("--db-dir={esplora_dir}"))
-        .arg("--cookie=bitcoin:bitcoin")
-        .arg("--network=regtest")
-        .arg("--daemon-rpc-addr=127.0.0.1:18443")
-        .arg("--http-addr=127.0.0.1:50002")
-        .arg("--monitoring-addr=127.0.0.1:50003")
-        .spawn()?;
-    kill_on_exit("esplora", &esplora).await?;
-    info!("esplora started");
-
-    esplora.wait().await?;
-
-    Ok(())
-}
-
 async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoind_ready(&format!("fedimint-{id}")).await?;
@@ -231,20 +138,6 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // TODO: pass in optional task group to this function and select on it to wait
     // for shutdown (because multiple can be spawned by run_federation)
     fedimintd.wait().await?;
-
-    Ok(())
-}
-
-async fn run_gatewayd(node: GatewayNode) -> anyhow::Result<()> {
-    // TODO: await_fedimint_block_sync()
-
-    let mut gatewayd = Command::new("gatewayd").arg(node.to_string()).spawn()?;
-    kill_on_exit("gatewayd", &gatewayd).await?;
-    info!("gatewayd started");
-
-    // TODO: connect_gateways
-
-    gatewayd.wait().await?;
 
     Ok(())
 }
@@ -299,157 +192,6 @@ fn fedimint_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
     ]))
 }
 
-async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
-    // set env vars
-    let server_name = format!("Server {id}!");
-    let env_vars = fedimint_env(id)?;
-    let p2p_url = env_vars
-        .get("FM_P2P_URL")
-        .ok_or_else(|| anyhow!("FM_P2P_URL not found"))?;
-    let api_url = env_vars
-        .get("FM_API_URL")
-        .ok_or_else(|| anyhow!("FM_API_URL not found"))?;
-    let out_dir = env_vars
-        .get("FM_FEDIMINT_DATA_DIR")
-        .ok_or_else(|| anyhow!("FM_FEDIMINT_DATA_DIR not found"))?;
-    let cert_path = format!("{out_dir}/tls-cert");
-
-    // create out-dir
-    fs::create_dir(&out_dir).await?;
-
-    info!("creating TLS certs created for started {server_name} in {out_dir}");
-    let mut task = Command::new("distributedgen")
-        .envs(fedimint_env(id)?)
-        .arg("create-cert")
-        .arg(format!("--p2p-url={p2p_url}"))
-        .arg(format!("--api-url={api_url}"))
-        .arg(format!("--out-dir={out_dir}"))
-        .arg(format!("--name={server_name}"))
-        .spawn()?;
-    kill_on_exit("distributedgen", &task).await?;
-
-    task.wait().await?;
-    info!("TLS certs created for started {server_name}");
-
-    // TODO: read TLS cert from disk and return if over channel
-    let cert = fs::read_to_string(cert_path)
-        .await
-        .map_err(|_| anyhow!("Could not read TLS cert from disk"))?;
-    sender
-        .send(cert)
-        .await
-        .map_err(|_| anyhow!("failed to send cert over channel"))?;
-
-    Ok(())
-}
-
-async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()> {
-    let certs = certs.join(",");
-    let bin_dir = env::var("FM_BIN_DIR")?;
-    let cfg_dir = env::var("FM_DATA_DIR")?;
-    let server_name = format!("Server-{id}");
-
-    let env_vars = fedimint_env(id)?;
-    let bind_p2p = env_vars
-        .get("FM_BIND_P2P")
-        .expect("fedimint_env sets this key");
-    let bind_api = env_vars
-        .get("FM_BIND_API")
-        .expect("fedimint_env sets this key");
-    let out_dir = env_vars
-        .get("FM_FEDIMINT_DATA_DIR")
-        .expect("fedimint_env sets this key");
-
-    info!("creating TLS certs created for started {server_name} in {out_dir}");
-    let mut task = Command::new(format!("{bin_dir}/distributedgen"))
-        .envs(&env_vars)
-        .arg("run")
-        .arg(format!("--bind-p2p={bind_p2p}"))
-        .arg(format!("--bind-api={bind_api}"))
-        .arg(format!("--out-dir={out_dir}"))
-        .arg(format!("--certs={certs}"))
-        .spawn()
-        .unwrap_or_else(|e| panic!("DKG failed for for {server_name} {e:?}"));
-    kill_on_exit("distributedgen", &task).await?;
-
-    task.wait().await?;
-    info!("DKG created for started {server_name}");
-
-    // copy configs to config directory
-    fs::rename(
-        format!("{out_dir}/client-connect"),
-        format!("{cfg_dir}/client-connect"),
-    )
-    .await?;
-    fs::rename(
-        format!("{out_dir}/client.json"),
-        format!("{cfg_dir}/client.json"),
-    )
-    .await?;
-    info!("copied client configs");
-
-    Ok(())
-}
-
-async fn run_dkg(servers: usize) -> anyhow::Result<()> {
-    let root_task_group = TaskGroup::new();
-    root_task_group.install_kill_handler();
-    let mut task_group = root_task_group.make_subgroup().await;
-
-    // generate TLS certs
-    let (sender, mut receiver): (Sender<String>, Receiver<String>) = mpsc::channel(1000);
-    for id in 0..servers {
-        let sender = sender.clone();
-        task_group
-            .spawn(
-                format!("create TLS certs for server {id}"),
-                move |_| async move {
-                    info!("generating certs for server {}", id);
-                    create_tls(id, sender).await.expect("create_tls failed");
-                    info!("generating certs for server {}", id);
-                },
-            )
-            .await;
-    }
-    task_group.join_all(None).await?;
-    info!("Generated TLS certs");
-
-    // collect TLS certs
-    let mut certs = vec![];
-    while certs.len() < servers {
-        let cert = receiver
-            .recv()
-            .await
-            .expect("couldn't receive cert over channel");
-        certs.push(cert)
-    }
-    let certs_string = certs.join(",");
-    info!("Collected TLS certs: {certs_string}");
-
-    // generate keys
-    let mut task_group = root_task_group.make_subgroup().await;
-    for id in 0..servers {
-        let certs = certs.clone();
-        task_group
-            .spawn(
-                format!("create TLS certs for server {id}"),
-                move |_| async move {
-                    info!("generating keys for server {}", id);
-                    run_distributedgen(id, certs)
-                        .await
-                        .expect("run_distributedgen failed");
-                    info!("generating keys for server {}", id);
-                },
-            )
-            .await;
-    }
-
-    task_group.join_all(None).await?;
-    info!("DKG complete");
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
@@ -466,13 +208,6 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         // daemons
         Cmd::Bitcoind => run_bitcoind().await.expect("bitcoind failed"),
-        Cmd::Lightningd => run_lightningd().await.expect("lightningd failed"),
-        Cmd::Lnd => run_lnd().await.expect("lnd failed"),
-        Cmd::Electrs => run_electrs().await.expect("electrs failed"),
-        Cmd::Esplora => run_esplora().await.expect("esplora failed"),
-        Cmd::Fedimintd { id } => run_fedimintd(id).await.expect("fedimint failed"),
-        Cmd::Gatewayd { node } => run_gatewayd(node).await.expect("gatewayd failed"),
-        Cmd::Dkg { servers } => run_dkg(servers).await.expect("dkg failed"),
         Cmd::Federation { start_id, stop_id } => run_federation(start_id, stop_id)
             .await
             .expect("federation failed"),
