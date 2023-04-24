@@ -236,11 +236,21 @@ pub async fn print_response(response: reqwest::Response) {
 }
 
 pub fn source_password(rpcpassword: Option<String>) -> String {
-    match rpcpassword {
-        None => rpassword::prompt_password("Enter gateway password:").unwrap(),
-        Some(password) => {
-            eprintln!("WARNING: Passing in a password from the command line may be less secure!");
-            password
+    match env::var("FM_PASSWORD") {
+        Ok(password) => password,
+        Err(_) => {
+            match rpcpassword {
+                Some(password) => {
+                    eprintln!("WARNING: Passing in a password from the command line may be less secure!");
+                    password
+                },
+                None => {
+                    match rpassword::prompt_password("Enter gateway password:") {
+                        Ok(password) => (password),
+                        Err(_) => Err("Error: incorrect password!")
+                    }
+                }
+            }
         }
     }
 }
