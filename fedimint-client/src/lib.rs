@@ -241,7 +241,7 @@ impl Debug for ClientInner {
 #[derive(Clone, Debug)]
 struct ModuleGlobalClientContext {
     client: Arc<ClientInner>,
-    module_instance: ModuleInstanceId,
+    module_instance_id: ModuleInstanceId,
     operation: OperationId,
 }
 
@@ -257,9 +257,9 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         input: InstancelessDynClientInput,
     ) -> TransactionId {
         let instance_input = ClientInput {
-            input: DynInput::from_parts(self.module_instance, input.input),
+            input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
-            state_machines: states_add_instance(self.module_instance, input.state_machines),
+            state_machines: states_add_instance(self.module_instance_id, input.state_machines),
         };
 
         self.client
@@ -278,8 +278,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         output: InstancelessDynClientOutput,
     ) -> anyhow::Result<TransactionId> {
         let instance_output = ClientOutput {
-            output: DynOutput::from_parts(self.module_instance, output.output),
-            state_machines: states_add_instance(self.module_instance, output.state_machines),
+            output: DynOutput::from_parts(self.module_instance_id, output.output),
+            state_machines: states_add_instance(self.module_instance_id, output.state_machines),
         };
 
         self.client
@@ -519,7 +519,7 @@ impl ClientInner {
         Arc::new(move |module_instance, operation| {
             ModuleGlobalClientContext {
                 client: client_inner.clone(),
-                module_instance,
+                module_instance_id: module_instance,
                 operation,
             }
             .into()
