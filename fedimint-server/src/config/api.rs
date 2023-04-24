@@ -413,6 +413,7 @@ impl ConfigGenApi {
             p2p_bind: connection.settings.p2p_bind,
             api_bind: connection.settings.api_bind,
             download_token_limit: connection.settings.download_token_limit,
+            max_connections: connection.settings.max_connections,
         };
 
         let params = ConfigGenParams { local, consensus };
@@ -422,7 +423,7 @@ impl ConfigGenApi {
     }
 }
 
-/// Config params that are only used locally, shouldn't be shared
+/// Config gen params that are only used locally, shouldn't be shared
 #[derive(Debug, Clone)]
 pub struct ConfigGenParamsLocal {
     /// Our peer id
@@ -437,9 +438,11 @@ pub struct ConfigGenParamsLocal {
     pub api_bind: SocketAddr,
     /// Limit on the number of times a config download token can be used
     pub download_token_limit: Option<u64>,
+    /// How many API connections we will accept
+    pub max_connections: u32,
 }
 
-/// All the connections info we configure locally without talking to peers
+/// All the info we configure prior to config gen starting
 #[derive(Debug, Clone)]
 pub struct ConfigGenSettings {
     /// Limit on the number of times a config download token can be used
@@ -456,6 +459,8 @@ pub struct ConfigGenSettings {
     pub default_params: ConfigGenParamsRequest,
     /// Modules that will generate configs
     pub module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+    /// How many API connections we will accept
+    pub max_connections: u32,
     /// Registry for config gen
     pub registry: ServerModuleGenRegistry,
 }
@@ -717,7 +722,7 @@ mod tests {
     use url::Url;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    use crate::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
+    use crate::config::{DEFAULT_CONFIG_DOWNLOAD_LIMIT, DEFAULT_MAX_CLIENT_CONNECTIONS};
     use crate::{FedimintServer, PLAINTEXT_PASSWORD};
 
     /// Helper in config API tests for simulating a guardian's client and server
@@ -754,6 +759,7 @@ mod tests {
                 api_url: api_url.clone(),
                 default_params: Default::default(),
                 module_gens: Default::default(),
+                max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
                 registry: Default::default(),
             };
             let dir = data_dir.join(name_suffix.to_string());
