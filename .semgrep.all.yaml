@@ -7,3 +7,10 @@ rules:
   pattern: std::time::SystemTime::now
 
   severity: WARNING
+
+- id: ban-fs-write
+  languages:
+    - rust
+  message: Use fedimint-core::util::write_overwrite if you are really sure you want to overwrite existing data or `write_new` if you don't. Alternatively use `fs::File::options` and express intention explicitly.
+  pattern: std::fs::write
+  severity: WARNING

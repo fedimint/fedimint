@@ -1,4 +1,3 @@
-use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -12,6 +11,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
+use fedimint_core::util::write_new;
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
@@ -259,7 +259,7 @@ async fn run(
     );
 
     // TODO: Fedimintd should use the config gen API
-    fs::write(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)?;
+    write_new(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)?;
     let mut api = FedimintServer {
         data_dir: opts.data_dir,
         settings: ConfigGenSettings {

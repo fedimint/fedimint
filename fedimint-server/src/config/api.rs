@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -22,6 +21,7 @@ use fedimint_core::module::{
     DynServerModuleGen,
 };
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::write_new;
 use fedimint_core::PeerId;
 use itertools::Itertools;
 use tokio::sync::mpsc::Sender;
@@ -307,7 +307,7 @@ impl ConfigGenApi {
         }
 
         let auth = config.private.api_auth.0.clone();
-        fs::write(self.data_dir.join(SALT_FILE), random_salt())
+        write_new(self.data_dir.join(SALT_FILE), random_salt())
             .map_err(|e| ApiError::server_error(format!("Unable to write to data dir {e:?}")))?;
         write_server_config(
             &config,
@@ -710,6 +710,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::task::{sleep, TaskGroup};
+    use fedimint_core::util::write_new;
     use fedimint_core::PeerId;
     use futures::future::join_all;
     use itertools::Itertools;
@@ -817,7 +818,7 @@ mod tests {
 
         /// Helper for writing the password file to bypass the API
         fn write_password_file(&self) {
-            fs::write(self.dir.join(PLAINTEXT_PASSWORD), &self.auth.0).unwrap();
+            write_new(self.dir.join(PLAINTEXT_PASSWORD), &self.auth.0).unwrap();
         }
     }
 
