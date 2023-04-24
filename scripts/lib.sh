@@ -25,17 +25,6 @@ function await_fedimint_block_sync() {
   $FM_BIN_DIR/fixtures await-fedimint-block-sync
 }
 
-function await_all_peers() {
-  $FM_MINT_CLIENT api module_${LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height
-}
-
-function await_server_on_port() {
-  until nc -z 127.0.0.1 $1
-  do
-      sleep $FM_POLL_INTERVAL
-  done
-}
-
 # Check that lightning block-processing is caught up
 # CLI integration tests should call this before attempting to pay invoices
 function await_lightning_node_block_processing() {
@@ -65,45 +54,6 @@ function kill_fedimint_processes {
     kill $PIDS 2>/dev/null
   fi
   rm -f $FM_PID_FILE
-}
-
-function await_gateway_cln_extension() {
-  while ! echo exit | nc localhost 8177; do sleep $FM_POLL_INTERVAL; done
-}
-
-function connect_cln_gateway() {
-  # get connection string ... retry in case fedimint-cli command fails
-  FM_CONNECT_STR=""
-  while [[ $FM_CONNECT_STR = "" ]]
-  do
-    FM_CONNECT_STR=$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info') || true
-    echo "fedimint-cli connect-info failed ... retrying"
-    sleep $FM_POLL_INTERVAL
-  done
-
-  # connect CLN gateway w/ federation
-  while ! $FM_GWCLI_CLN connect-fed "$FM_CONNECT_STR"
-  do
-    echo "Failed to connect CLN gateway w/ federation ... retrying"
-    sleep $FM_POLL_INTERVAL
-  done
-}
-
-function connect_lnd_gateway() {
-  # get connection string ... retry in case fedimint-cli command fails
-  FM_CONNECT_STR=""
-  while [[ $FM_CONNECT_STR = "" ]]
-  do
-    FM_CONNECT_STR=$($FM_MINT_CLIENT connect-info | jq -e -r '.connect_info') || true
-    echo "fedimint-cli connect-info failed ... retrying"
-    sleep $FM_POLL_INTERVAL
-  done
-  # connect LND gateway w/ federation
-  while ! $FM_GWCLI_LND connect-fed "$FM_CONNECT_STR"
-  do
-    echo "Failed to connect LND gateway w/ federation ... retrying"
-    sleep $FM_POLL_INTERVAL
-  done
 }
 
 function get_finality_delay() {
@@ -158,12 +108,6 @@ function show_verbose_output()
     fi
 }
 
-function await_gateways_registered() {
-    until [ "$($FM_MINT_CLIENT list-gateways | jq -e ".num_gateways")" = "2" ]; do
-        sleep $FM_POLL_INTERVAL
-    done
-}
-
 function await_bitcoind_ready() {
   $FM_BIN_DIR/fixtures await-bitcoind-ready
 }
@@ -188,58 +132,6 @@ function run_dkg() {
 
 function start_bitcoind() {
   $FM_BIN_DIR/fixtures bitcoind
-  echo $! >> $FM_PID_FILE
-}
-
-function start_lightningd() {
-  $FM_BIN_DIR/fixtures lightningd
-  echo $! >> $FM_PID_FILE
-}
-
-function start_lnd() {
-  $FM_BIN_DIR/fixtures lnd
-  echo $! >> $FM_PID_FILE
-}
-
-function start_cln_gateway() {
-  await_server_on_port 8177 # grpc port
-
-  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw-cln
-  export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:8175"
-  export FM_GATEWAY_API_ADDR="http://127.0.0.1:8175"
-  $FM_BIN_DIR/fixtures gatewayd cln &
-  echo $! >> $FM_PID_FILE
-  echo "started cln gateway"
-
-  connect_cln_gateway
-}
-
-function start_lnd_gateway() {
-  await_server_on_port 11009
-
-  # start lnd gw
-  export FM_GATEWAY_DATA_DIR=$FM_TEST_DIR/gw-lnd
-  export FM_GATEWAY_LISTEN_ADDR="127.0.0.1:28175"
-  export FM_GATEWAY_API_ADDR="http://127.0.0.1:28175"
-  $FM_BIN_DIR/fixtures gatewayd lnd &
-  echo $! >> $FM_PID_FILE
-  echo "started lnd gateway"
-
-  connect_lnd_gateway
-}
-
-function start_gateways() {
-  start_cln_gateway
-  start_lnd_gateway
-}
-
-function start_electrs() {
-  $FM_BIN_DIR/fixtures electrs
-  echo $! >> $FM_PID_FILE
-}
-
-function start_esplora() {
-  $FM_BIN_DIR/fixtures esplora
   echo $! >> $FM_PID_FILE
 }
 
