@@ -88,17 +88,27 @@
 <a href="#88" id="88">88</a>
 <a href="#89" id="89">89</a>
 <a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::anyhow;
 
-<span class="kw">use </span><span class="kw">crate</span>::core::Decoder;
 <span class="kw">pub use </span><span class="kw">crate</span>::core::ModuleInstanceId;
+<span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, ModuleKind};
 <span class="kw">use </span><span class="kw">crate</span>::server::DynServerModule;
 
 <span class="doccomment">/// Module Registry hold module-specific data `M` by the `ModuleInstanceId`
 </span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>ModuleRegistry&lt;M&gt;(BTreeMap&lt;ModuleInstanceId, M&gt;);
+</span><span class="kw">pub struct </span>ModuleRegistry&lt;M&gt;(BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;);
 
 <span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
@@ -106,32 +116,36 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; From&lt;BTreeMap&lt;ModuleInstanceId, M&gt;&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
-    <span class="kw">fn </span>from(value: BTreeMap&lt;ModuleInstanceId, M&gt;) -&gt; <span class="self">Self </span>{
+<span class="kw">impl</span>&lt;M&gt; From&lt;BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
+    <span class="kw">fn </span>from(value: BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(value)
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; FromIterator&lt;(ModuleInstanceId, M)&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
-    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (ModuleInstanceId, M)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
+<span class="kw">impl</span>&lt;M&gt; FromIterator&lt;(ModuleInstanceId, ModuleKind, M)&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
+    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (ModuleInstanceId, ModuleKind, M)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(iter)
     }
 }
 
 <span class="kw">impl</span>&lt;M&gt; ModuleRegistry&lt;M&gt; {
     <span class="doccomment">/// Create [`Self`] from an iterator of pairs
-    </span><span class="kw">pub fn </span>new(iter: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleInstanceId, M)&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(iter.into_iter().collect())
+    </span><span class="kw">pub fn </span>new(iter: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleInstanceId, ModuleKind, M)&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(
+            iter.into_iter()
+                .map(|(id, kind, module)| (id, (kind, module)))
+                .collect(),
+        )
     }
 
     <span class="doccomment">/// Return an iterator over all module data
-    </span><span class="kw">pub fn </span>iter_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>M)&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.iter().map(|(id, m)| (<span class="kw-2">*</span>id, m))
+    </span><span class="kw">pub fn </span>iter_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.iter().map(|(id, (kind, m))| (<span class="kw-2">*</span>id, kind, m))
     }
 
     <span class="doccomment">/// Get module data by instance id
     </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>M&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>id)
+        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>id).map(|m| <span class="kw-2">&amp;</span>m.<span class="number">1</span>)
     }
 }
 
@@ -142,7 +156,8 @@
     /// # Panics
     /// If the module isn&#39;t in the registry
     </span><span class="kw">pub fn </span>get_expect(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>M {
-        <span class="self">self</span>.<span class="number">0
+        <span class="kw-2">&amp;</span><span class="self">self
+            </span>.<span class="number">0
             </span>.get(<span class="kw-2">&amp;</span>id)
             .ok_or_else(|| {
                 <span class="macro">anyhow!</span>(
@@ -152,13 +167,14 @@
                 )
             })
             .expect(<span class="string">&quot;Only existing instance should be fetched&quot;</span>)
-    }
+            .<span class="number">1
+    </span>}
 
     <span class="doccomment">/// Add a module to the registry
-    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, module: M) {
+    </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, kind: ModuleKind, module: M) {
         <span class="comment">// FIXME: return result
         </span><span class="macro">assert!</span>(
-            <span class="self">self</span>.<span class="number">0</span>.insert(id, module).is_none(),
+            <span class="self">self</span>.<span class="number">0</span>.insert(id, (kind, module)).is_none(),
             <span class="string">&quot;Module was already registered!&quot;
         </span>)
     }
@@ -171,7 +187,11 @@
     <span class="doccomment">/// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
     </span><span class="kw">pub fn </span>decoder_registry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="comment">// TODO: cache decoders
-        </span>ModuleDecoderRegistry::from_iter(<span class="self">self</span>.<span class="number">0</span>.iter().map(|(<span class="kw-2">&amp;</span>id, module)| (id, module.decoder())))
+        </span>ModuleDecoderRegistry::from_iter(
+            <span class="self">self</span>.<span class="number">0
+                </span>.iter()
+                .map(|(<span class="kw-2">&amp;</span>id, (kind, module))| (id, kind.clone(), module.decoder())),
+        )
     }
 }
 

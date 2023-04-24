@@ -407,7 +407,7 @@
 }
 
 <span class="kw">pub type </span>StateGenerator&lt;S&gt; =
-    Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(TransactionId, u64) -&gt; Vec&lt;S&gt; + <span class="lifetime">&#39;static</span>)&gt;;
+    Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(TransactionId, u64) -&gt; Vec&lt;S&gt; + <span class="lifetime">&#39;static</span>)&gt;;
 
 <span class="doccomment">/// A client module that can be used as funding source and to generate arbitrary
 /// change outputs for unbalanced transactions.

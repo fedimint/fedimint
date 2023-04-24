@@ -763,6 +763,7 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -849,10 +850,11 @@
     ///
     /// Can be used to validate all federation members agree on state without
     /// revealing the object
-    </span><span class="kw">fn </span>consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;sha256::Hash&gt; {
+    </span><span class="kw">fn </span>consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; sha256::Hash {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(sha256::Hash::from_engine(engine))
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)
+            .expect(<span class="string">&quot;writing to HashEngine cannot fail&quot;</span>);
+        sha256::Hash::from_engine(engine)
     }
 }
 

@@ -536,7 +536,7 @@
     }
 
     <span class="kw">fn </span>hash_client_module(config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt; {
-        serde_json::from_value::&lt;WalletClientConfig&gt;(config)<span class="question-mark">?</span>.consensus_hash()
+        <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;WalletClientConfig&gt;(config)<span class="question-mark">?</span>.consensus_hash())
     }
 }
 

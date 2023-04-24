@@ -1049,6 +1049,10 @@
 <a href="#1049" id="1049">1049</a>
 <a href="#1050" id="1050">1050</a>
 <a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -1741,8 +1745,10 @@
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>fedimint_core::module::CommonModuleGen;
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, ServerModule, Tiered, TransactionId};
+    <span class="kw">use </span>fedimint_mint_client::MintCommonGen;
     <span class="kw">use </span>fedimint_mint_server::{Mint, MintGen, MintGenParams};
     <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>futures::executor::block_on;
@@ -1844,6 +1850,7 @@
         <span class="kw">let </span>client_context = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(
                 module_id,
+                MintCommonGen::KIND,
                 &lt;Mint <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
             module_gens: Default::default(),
@@ -2040,6 +2047,7 @@
             context: Arc::new(ClientContext {
                 decoders: ModuleDecoderRegistry::from_iter([(
                     module_id,
+                    MintCommonGen::KIND,
                     &lt;Mint <span class="kw">as </span>ServerModule&gt;::decoder(),
                 )]),
                 module_gens: Default::default(),

@@ -993,7 +993,7 @@
             </span>.save_epoch_history(outcome.clone(), dbtx, <span class="kw-2">&amp;mut </span>drop_peers, rejected_txs)
             .<span class="kw">await</span>;
 
-        <span class="kw">for </span>(module_key, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+        <span class="kw">for </span>(module_key, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="kw">let </span>module_drop_peers = module
                 .end_consensus_epoch(consensus_peers, <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_key))
                 .<span class="kw">await</span>;
@@ -1146,7 +1146,7 @@
         <span class="kw">let </span>proposal_futures = <span class="self">self
             </span>.modules
             .iter_modules()
-            .map(|(module_instance_id, module)| {
+            .map(|(module_instance_id, _kind, module)| {
                 Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
                     <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(module_instance_id);
@@ -1183,7 +1183,7 @@
             .collect();
         <span class="kw">let </span><span class="kw-2">mut </span>force_new_epoch = <span class="bool-val">false</span>;
 
-        <span class="kw">for </span>(instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+        <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             <span class="kw">let </span>consensus_proposal = module
                 .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance_id), instance_id)
                 .<span class="kw">await</span>;
@@ -1310,7 +1310,7 @@
     <span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
-        <span class="kw">for </span>(module_instance_id, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+        <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             module
                 .audit(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id), <span class="kw-2">&amp;mut </span>audit)
                 .<span class="kw">await

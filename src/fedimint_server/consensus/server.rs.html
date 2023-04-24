@@ -767,9 +767,9 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
-            <span class="kw">let </span>kind = module_cfg.kind();
+            <span class="kw">let </span>kind = module_cfg.kind().clone();
 
-            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = module_inits.get(kind) <span class="kw">else </span>{
+            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
                 <span class="macro">bail!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>)
             };
             <span class="macro">info!</span>(target: LOG_CORE,
@@ -792,7 +792,7 @@
                     task_group,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            modules.insert(<span class="kw-2">*</span>module_id, module);
+            modules.insert(<span class="kw-2">*</span>module_id, (kind, module));
         }
 
         <span class="comment">// Check the configs are valid
@@ -964,7 +964,7 @@
                         last_outcome.epoch,
                         <span class="self">self</span>.last_processed_epoch
                             .as_ref()
-                            .and_then(|epoch| epoch.outcome.consensus_hash().ok()),
+                            .map(|epoch| epoch.outcome.consensus_hash()),
                         <span class="prelude-val">None</span>,
                         <span class="bool-val">true</span>,
                     )

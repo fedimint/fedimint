@@ -92,20 +92,30 @@
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
-</pre><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::Hash;
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+
 <span class="kw">use </span>clap::Subcommand;
-<span class="kw">use </span>fedimint_client::transaction::TransactionBuilder;
 <span class="kw">use </span>fedimint_client::ClientBuilder;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
-<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 <span class="kw">use </span>fedimint_core::db::IDatabase;
-<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::{OutPoint, TieredMulti};
+<span class="kw">use </span>fedimint_core::{Amount, TieredMulti, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
-<span class="kw">use </span>fedimint_mint_client::{MintClientGen, MintClientModule, SpendableNote};
+<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
+<span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::info;
 
 <span class="attr">#[derive(Debug, Clone, Subcommand)]
@@ -114,6 +124,9 @@
     Reissue {
         <span class="attr">#[clap(value_parser = parse_ecash)]
         </span>notes: TieredMulti&lt;SpendableNote&gt;,
+    },
+    Spend {
+        amount: Amount,
     },
 }
 
@@ -137,46 +150,49 @@
             <span class="kw">let </span>mint_client = client
                 .get_module_client::&lt;MintClientModule&gt;(LEGACY_HARDCODED_INSTANCE_ID_MINT)
                 .unwrap();
-            <span class="kw">let </span>info = mint_client
+            <span class="kw">let </span>summary = mint_client
                 .get_wallet_summary(
                     <span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>),
                 )
                 .<span class="kw">await</span>;
-            <span class="prelude-val">Ok</span>(serde_json::to_value(info).unwrap())
+            <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {
+                total_msat: summary.total_amount(),
+                denominations_msat: summary,
+            })
+            .unwrap())
         }
         ClientNg::Reissue { notes } =&gt; {
-            <span class="kw">let </span>amt = notes.total_amount();
+            <span class="kw">let </span>amount = notes.total_amount();
 
-            <span class="kw">let </span>mint_client = client
-                .get_module_client::&lt;MintClientModule&gt;(LEGACY_HARDCODED_INSTANCE_ID_MINT)
-                .unwrap();
-
-            <span class="kw">let </span>notes_hash = notes.consensus_hash().unwrap().into_inner();
-            <span class="kw">let </span>mint_input = mint_client
-                .create_input_from_notes(notes_hash, notes)
+            <span class="kw">let </span>operation_id = client.reissue_external_notes(notes).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+                .subscribe_reissue_external_notes_updates(operation_id)
                 .<span class="kw">await
                 </span>.unwrap();
 
-            <span class="kw">let </span>tx = TransactionBuilder::new()
-                .with_input(mint_input.into_dyn(LEGACY_HARDCODED_INSTANCE_ID_MINT));
+            <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
+                <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(anyhow::Error::msg(<span class="macro">format!</span>(<span class="string">&quot;Reissue failed: {e}&quot;</span>)));
+                }
 
-            <span class="kw">let </span>txid = client
-                .finalize_and_submit_transaction(notes_hash, tx)
-                .<span class="kw">await
-                </span>.unwrap();
+                <span class="macro">info!</span>(<span class="string">&quot;Update: {:?}&quot;</span>, update);
+            }
 
-            <span class="macro">info!</span>(<span class="string">&quot;Transaction submitted: {}&quot;</span>, txid);
-            client.await_tx_accepted(notes_hash, txid).<span class="kw">await</span>;
-            <span class="macro">info!</span>(<span class="string">&quot;Transaction accepted&quot;</span>);
-            mint_client
-                .await_output_finalized(notes_hash, OutPoint { txid, out_idx: <span class="number">0 </span>})
-                .<span class="kw">await
-                </span>.unwrap();
-            <span class="macro">info!</span>(<span class="string">&quot;Output finalized&quot;</span>);
+            <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
+        }
+        ClientNg::Spend { amount } =&gt; {
+            <span class="kw">let </span>(operation, notes) = client.spend_notes(amount, Duration::from_secs(<span class="number">30</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation:?}&quot;</span>);
 
-            <span class="prelude-val">Ok</span>(serde_json::to_value(amt).unwrap())
+            <span class="prelude-val">Ok</span>(serde_json::to_value(notes).unwrap())
         }
     }
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">struct </span>InfoResponse {
+    total_msat: Amount,
+    denominations_msat: TieredSummary,
 }
 
 <span class="kw">pub fn </span>parse_ecash(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {

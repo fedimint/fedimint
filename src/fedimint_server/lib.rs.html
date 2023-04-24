@@ -446,7 +446,7 @@
     </span><span class="kw">pub async fn </span>run_consensus_api(<span class="kw-2">&amp;</span><span class="self">self</span>, api: <span class="kw-2">&amp;</span>ConsensusApi) -&gt; FedimintApiHandler {
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, net::api::server_endpoints(), <span class="prelude-val">None</span>);
-        <span class="kw">for </span>(id, module) <span class="kw">in </span>api.modules.iter_modules() {
+        <span class="kw">for </span>(id, <span class="kw">_</span>, module) <span class="kw">in </span>api.modules.iter_modules() {
             <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
         }
 

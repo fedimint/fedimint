@@ -130,6 +130,13 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
@@ -139,15 +146,19 @@
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::{LightningClientGen, LightningModuleTypes};
 <span class="kw">use </span>fedimint_client_legacy::modules::mint::{MintClientGen, MintModuleTypes};
-<span class="kw">use </span>fedimint_client_legacy::modules::wallet::{WalletClientGen, WalletModuleTypes};
+<span class="kw">use </span>fedimint_client_legacy::modules::wallet::{
+    WalletClientGen, WalletCommonGen, WalletModuleTypes,
+};
 <span class="kw">use </span>fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::module::ModuleCommon;
+<span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_ln_client::LightningCommonGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
+<span class="kw">use </span>fedimint_mint_client::MintCommonGen;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
 <span class="kw">use </span>ln_gateway::{Gateway, LightningMode};
 <span class="kw">use </span>tracing::{error, info};
@@ -220,14 +231,17 @@
     </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
+            LightningCommonGen::KIND,
             LightningModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            MintCommonGen::KIND,
             MintModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            WalletCommonGen::KIND,
             WalletModuleTypes::decoder(),
         ),
     ]);

@@ -1088,6 +1088,8 @@
 <a href="#1088" id="1088">1088</a>
 <a href="#1089" id="1089">1089</a>
 <a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1415,9 +1417,11 @@
     ) -&gt; ModuleDecoderRegistry {
         ModuleDecoderRegistry::new(cfg.clone().<span class="number">0</span>.modules.into_iter().filter_map(
             |(id, module_cfg)| {
-                module_gens.get(module_cfg.kind()).map(|module_gen| {
+                <span class="kw">let </span>kind = module_cfg.kind().clone();
+                module_gens.get(<span class="kw-2">&amp;</span>kind).map(|module_gen| {
                     (
                         id,
+                        kind,
                         IClientModuleGen::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleGen + <span class="lifetime">&#39;static</span>&gt;::as_ref(
                             module_gen,
                         )),

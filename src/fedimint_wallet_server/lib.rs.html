@@ -2039,6 +2039,8 @@
 <a href="#2039" id="2039">2039</a>
 <a href="#2040" id="2040">2040</a>
 <a href="#2041" id="2041">2041</a>
+<a href="#2042" id="2042">2042</a>
+<a href="#2043" id="2043">2043</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -2227,7 +2229,7 @@
 
         <span class="prelude-val">Ok</span>(ModuleConfigResponse {
             client: config.to_client_config(),
-            consensus_hash: config.consensus_hash()<span class="question-mark">?</span>,
+            consensus_hash: config.consensus_hash(),
         })
     }
 
@@ -3781,7 +3783,7 @@
     <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_core::module::DynServerModuleGen;
+    <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     <span class="kw">use </span>fedimint_core::{BitcoinHash, Feerate, OutPoint, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
     <span class="kw">use </span>fedimint_wallet_common::db::{
@@ -3792,7 +3794,7 @@
     };
     <span class="kw">use </span>fedimint_wallet_common::{
         PegOutFees, PendingTransaction, Rbf, RoundConsensus, SpendableUTXO, UnsignedTransaction,
-        WalletOutputOutcome,
+        WalletCommonGen, WalletOutputOutcome,
     };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
@@ -3963,6 +3965,7 @@
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonGen::KIND,
                 &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
@@ -4074,6 +4077,7 @@
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonGen::KIND,
                 &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )

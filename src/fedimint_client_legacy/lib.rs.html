@@ -1678,6 +1678,11 @@
 <a href="#1678" id="1678">1678</a>
 <a href="#1679" id="1679">1679</a>
 <a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1718,17 +1723,19 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::module::ModuleCommon;
+<span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_ln_client::{LightningClientModule, LightningModuleTypes, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_ln_client::{
+    LightningClientModule, LightningCommonGen, LightningModuleTypes, LightningOutputOutcome,
+};
 <span class="kw">use </span>fedimint_logging::LOG_WALLET;
-<span class="kw">use </span>fedimint_mint_client::{MintClientModule, MintModuleTypes};
+<span class="kw">use </span>fedimint_mint_client::{MintClientModule, MintCommonGen, MintModuleTypes};
 <span class="kw">use </span>fedimint_wallet_client::WalletModuleTypes;
-<span class="kw">use </span>fedimint_wallet_common::Rbf;
+<span class="kw">use </span>fedimint_wallet_common::{Rbf, WalletCommonGen};
 <span class="kw">use </span>futures::stream::{<span class="self">self</span>, FuturesUnordered};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::{Either, Itertools};
@@ -3222,14 +3229,17 @@
     ModuleDecoderRegistry::from_iter([
         (
             LEGACY_HARDCODED_INSTANCE_ID_LN,
+            LightningCommonGen::KIND,
             LightningModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            WalletCommonGen::KIND,
             WalletModuleTypes::decoder(),
         ),
         (
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            MintCommonGen::KIND,
             MintModuleTypes::decoder(),
         ),
     ])

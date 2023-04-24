@@ -436,6 +436,7 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -655,7 +656,7 @@
 
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>fedimint_core::api::{IFederationApi, JsonRpcResult};
-    <span class="kw">use </span>fedimint_core::core::IntoDynInstance;
+    <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleKind};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -827,6 +828,7 @@
             MemDatabase::new(),
             ModuleDecoderRegistry::new([(
                 TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+                ModuleKind::from_static_str(<span class="string">&quot;test_transaction_submission&quot;</span>),
                 tx_submission_sm_decoder(),
             )]),
         );

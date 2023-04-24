@@ -488,7 +488,7 @@
     <span class="kw">fn </span>hash_client_module(
         config: serde_json::Value,
     ) -&gt; anyhow::Result&lt;bitcoin_hashes::sha256::Hash&gt; {
-        serde_json::from_value::&lt;LightningClientConfig&gt;(config)<span class="question-mark">?</span>.consensus_hash()
+        <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;LightningClientConfig&gt;(config)<span class="question-mark">?</span>.consensus_hash())
     }
 }
 

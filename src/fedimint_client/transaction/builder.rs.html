@@ -142,7 +142,13 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>itertools::multiunzip;
@@ -153,7 +159,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::sm::DynState;
 <span class="kw">use </span><span class="kw">crate</span>::DynGlobalClientContext;
 
-<span class="kw">pub struct </span>ClientInput&lt;I = DynInput, S = DynState&lt;DynGlobalClientContext&gt;&gt; {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>ClientInput&lt;I = DynInput, S = DynState&lt;DynGlobalClientContext&gt;&gt; {
     <span class="kw">pub </span>input: I,
     <span class="kw">pub </span>keys: Vec&lt;KeyPair&gt;,
     <span class="kw">pub </span>state_machines: StateGenerator&lt;S&gt;,
@@ -175,7 +182,8 @@
     }
 }
 
-<span class="kw">pub struct </span>ClientOutput&lt;O = DynOutput, S = DynState&lt;DynGlobalClientContext&gt;&gt; {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>ClientOutput&lt;O = DynOutput, S = DynState&lt;DynGlobalClientContext&gt;&gt; {
     <span class="kw">pub </span>output: O,
     <span class="kw">pub </span>state_machines: StateGenerator&lt;S&gt;,
 }
@@ -195,7 +203,7 @@
     }
 }
 
-<span class="attr">#[derive(Default)]
+<span class="attr">#[derive(Default, Clone)]
 </span><span class="kw">pub struct </span>TransactionBuilder {
     <span class="kw">pub</span>(<span class="kw">crate</span>) inputs: Vec&lt;ClientInput&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) outputs: Vec&lt;ClientOutput&gt;,
@@ -278,7 +286,7 @@
 <span class="kw">where
     </span>S: IntoDynInstance&lt;DynType = DynState&lt;DynGlobalClientContext&gt;&gt; + <span class="lifetime">&#39;static</span>,
 {
-    Box::new(<span class="kw">move </span>|txid, index| {
+    Arc::new(<span class="kw">move </span>|txid, index| {
         <span class="kw">let </span>states = state_gen(txid, index);
         states
             .into_iter()

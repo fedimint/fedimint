@@ -587,6 +587,9 @@
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -926,8 +929,10 @@
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>fedimint_core::module::CommonModuleGen;
     <span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
+    <span class="kw">use </span>fedimint_ln_client::LightningCommonGen;
     <span class="kw">use </span>fedimint_ln_server::{Lightning, LightningGen};
     <span class="kw">use </span>fedimint_testing::FakeFed;
     <span class="kw">use </span>lightning_invoice::Invoice;
@@ -1058,6 +1063,7 @@
         <span class="kw">let </span>client_context = ClientContext {
             decoders: ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
+                LightningCommonGen::KIND,
                 &lt;Lightning <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
             module_gens: Default::default(),

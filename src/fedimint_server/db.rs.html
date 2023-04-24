@@ -391,6 +391,12 @@
 <a href="#391" id="391">391</a>
 <a href="#392" id="392">392</a>
 <a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -554,9 +560,10 @@
         SignedEpochOutcome,
     };
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>fedimint_core::module::CommonModuleGen;
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>fedimint_core::{PeerId, ServerModule, TransactionId};
-    <span class="kw">use </span>fedimint_dummy_common::{DummyInput, DummyOutput};
+    <span class="kw">use </span>fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
     <span class="kw">use </span>fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
     <span class="kw">use </span>futures::StreamExt;
@@ -667,7 +674,11 @@
                     create_db_with_v0_data(dbtx).<span class="kw">await</span>;
                 })
             },
-            ModuleDecoderRegistry::from_iter([(<span class="number">0</span>, &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder())]),
+            ModuleDecoderRegistry::from_iter([(
+                <span class="number">0</span>,
+                DummyCommonGen::KIND,
+                &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder(),
+            )]),
         )
         .<span class="kw">await</span>;
     }
@@ -778,6 +789,7 @@
             },
             ModuleDecoderRegistry::from_iter([(
                 <span class="number">0</span>,
+                DummyCommonGen::KIND,
                 &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )

@@ -472,6 +472,12 @@
 <a href="#472" id="472">472</a>
 <a href="#473" id="473">473</a>
 <a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
@@ -490,9 +496,12 @@
 };
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::CommonModuleGen;
 <span class="kw">use </span>fedimint_core::ServerModule;
+<span class="kw">use </span>fedimint_ln_server::common::LightningCommonGen;
 <span class="kw">use </span>fedimint_ln_server::Lightning;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
+<span class="kw">use </span>fedimint_mint_server::common::MintCommonGen;
 <span class="kw">use </span>fedimint_mint_server::Mint;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
@@ -504,7 +513,7 @@
 <span class="kw">use </span>fedimint_wallet_server::common::keys::CompressedPublicKey;
 <span class="kw">use </span>fedimint_wallet_server::common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_server::common::{
-    PegInDescriptor, SpendableUTXO, WalletConsensusItem, WalletInput,
+    PegInDescriptor, SpendableUTXO, WalletCommonGen, WalletConsensusItem, WalletInput,
 };
 <span class="kw">use </span>fedimint_wallet_server::Wallet;
 <span class="kw">use </span>futures::stream::StreamExt;
@@ -639,14 +648,17 @@
             <span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_LN,
+                    LightningCommonGen::KIND,
                     &lt;Lightning <span class="kw">as </span>ServerModule&gt;::decoder(),
                 ),
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_MINT,
+                    MintCommonGen::KIND,
                     &lt;Mint <span class="kw">as </span>ServerModule&gt;::decoder(),
                 ),
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                    WalletCommonGen::KIND,
                     &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
                 ),
             ]);

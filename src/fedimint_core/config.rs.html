@@ -1329,9 +1329,9 @@
                 <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>)
             };
 
-            modules.insert(id, init.as_ref().decoder());
+            modules.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
-        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from_iter(modules))
+        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(modules))
     }
 }
 
@@ -1423,7 +1423,7 @@
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             kind,
-            consensus_hash: value.consensus_hash()<span class="question-mark">?</span>,
+            consensus_hash: value.consensus_hash(),
             config: serde_json::to_value(value)<span class="question-mark">?</span>,
         })
     }
