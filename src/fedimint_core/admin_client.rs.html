@@ -297,7 +297,7 @@
     ///
     /// Must be called first before any other calls to the API
     </span><span class="kw">pub async fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;set_password&quot;</span>, ApiRequestErased::new(<span class="self">self</span>.auth.clone()))
+        <span class="self">self</span>.request_auth(<span class="string">&quot;set_password&quot;</span>, ApiRequestErased::default())
             .<span class="kw">await
     </span>}
 
@@ -412,7 +412,7 @@
     /// Clients may receive an error due to forced shutdown, should call the
     /// `server_status` to see if consensus has started.
     </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;start_consensus&quot;</span>, ApiRequestErased::new(<span class="self">self</span>.auth.clone()))
+        <span class="self">self</span>.request_auth(<span class="string">&quot;start_consensus&quot;</span>, ApiRequestErased::default())
             .<span class="kw">await
     </span>}
 

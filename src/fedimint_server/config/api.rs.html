@@ -942,6 +942,15 @@
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
 <a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::iter::once;
@@ -1509,7 +1518,10 @@
             ConfigApiState::VerifyConsensusConfig(cfg) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>cfg.private.api_auth) == auth,
         };
 
-        (<span class="self">self</span>, ApiEndpointContext::new(db, dbtx, has_auth))
+        (
+            <span class="self">self</span>,
+            ApiEndpointContext::new(db, dbtx, has_auth, request.auth.clone()),
+        )
     }
 }
 
@@ -1517,9 +1529,11 @@
     <span class="macro">vec!</span>[
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;set_password&quot;</span>,
-            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, auth: ApiAuth| -&gt; () {
-                check_auth(context)<span class="question-mark">?</span>;
-                config.set_password(auth)
+            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
+                <span class="kw">match </span>context.request_auth() {
+                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Missing password&quot;</span>.to_string())),
+                    <span class="prelude-val">Some</span>(auth) =&gt; config.set_password(auth)
+                }
             }
         },
         <span class="macro">api_endpoint! </span>{
@@ -1595,10 +1609,14 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;start_consensus&quot;</span>,
-            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, auth: ApiAuth| -&gt; () {
+            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
-                config.start_consensus(auth).<span class="kw">await
-            </span>}
+                <span class="kw">let </span>request_auth = context.request_auth();
+                <span class="kw">match </span>request_auth {
+                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Missing password&quot;</span>.to_string())),
+                    <span class="prelude-val">Some</span>(auth) =&gt; config.start_consensus(auth).<span class="kw">await
+                </span>}
+            }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;status&quot;</span>,

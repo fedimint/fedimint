@@ -1055,6 +1055,23 @@
 <a href="#1055" id="1055">1055</a>
 <a href="#1056" id="1056">1056</a>
 <a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1205,18 +1222,35 @@
     db: Database,
     dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
     has_auth: bool,
+    request_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ApiEndpointContext&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="doccomment">/// `db` and `dbtx` should be isolated.
-    </span><span class="kw">pub fn </span>new(db: Database, dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;, has_auth: bool) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ db, dbtx, has_auth }
+    </span><span class="kw">pub fn </span>new(
+        db: Database,
+        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        has_auth: bool,
+        request_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            db,
+            dbtx,
+            has_auth,
+            request_auth,
+        }
     }
 
     <span class="doccomment">/// Database tx handle, will be committed
     </span><span class="kw">pub fn </span>dbtx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
         <span class="comment">// dbtx is already isolated.
         </span><span class="self">self</span>.dbtx.get_isolated()
+    }
+
+    <span class="doccomment">/// Returns the auth set on the request (regardless of whether it was
+    /// correct)
+    </span><span class="kw">pub fn </span>request_auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ApiAuth&gt; {
+        <span class="self">self</span>.request_auth.clone()
     }
 
     <span class="doccomment">/// Whether the request was authenticated as the guardian who controls this
