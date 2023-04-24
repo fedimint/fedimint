@@ -24,8 +24,6 @@ use fedimint_derive::Decodable;
 use fedimint_logging::LOG_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
-#[cfg(not(target_family = "wasm"))]
-use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 #[cfg(target_family = "wasm")]
@@ -73,9 +71,11 @@ impl MemberError {
             MemberError::ResponseDeserialization(_) => false,
             MemberError::InvalidPeerId { peer_id: _ } => false,
             MemberError::Rpc(rpc_e) => match rpc_e {
+                // TODO: Does this cover all retryable cases?
                 JsonRpcError::Transport(_) => true,
-                JsonRpcError::Internal(_) => true,
-                JsonRpcError::Call(jsonrpsee_types::error::CallError::Custom(e)) => e.code() == 404,
+                JsonRpcError::MaxSlotsExceeded => true,
+                JsonRpcError::RequestTimeout => true,
+                JsonRpcError::Call(e) => e.code() == 404,
                 _ => false,
             },
             MemberError::InvalidResponse(_) => false,
@@ -692,7 +692,7 @@ impl JsonRpcClient for WsClient {
     async fn connect(url: &Url) -> result::Result<Self, JsonRpcError> {
         #[cfg(not(target_family = "wasm"))]
         return WsClientBuilder::default()
-            .certificate_store(CertificateStore::WebPki)
+            .use_webpki_rustls()
             .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
             .await;
 
