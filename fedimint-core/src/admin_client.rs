@@ -31,7 +31,7 @@ impl WsAdminClient {
     ///
     /// Must be called first before any other calls to the API
     pub async fn set_password(&self) -> FederationResult<()> {
-        self.request_auth("set_password", ApiRequestErased::new(self.auth.clone()))
+        self.request_auth("set_password", ApiRequestErased::default())
             .await
     }
 
@@ -146,7 +146,7 @@ impl WsAdminClient {
     /// Clients may receive an error due to forced shutdown, should call the
     /// `server_status` to see if consensus has started.
     pub async fn start_consensus(&self) -> FederationResult<()> {
-        self.request_auth("start_consensus", ApiRequestErased::new(self.auth.clone()))
+        self.request_auth("start_consensus", ApiRequestErased::default())
             .await
     }
 
