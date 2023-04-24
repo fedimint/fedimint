@@ -7,20 +7,6 @@ function mine_blocks() {
     $FM_BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR
 }
 
-function open_channel() {
-    # check that both nodes are synced
-    await_lightning_node_block_processing
-
-    LN_ADDR="$($FM_LIGHTNING_CLI newaddr | jq -e -r '.bech32')"
-    $FM_BTC_CLIENT sendtoaddress $LN_ADDR 1
-    mine_blocks 10
-    LND_PUBKEY="$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')"
-    $FM_LIGHTNING_CLI connect $LND_PUBKEY@127.0.0.1:9734
-    until $FM_LIGHTNING_CLI -k fundchannel id=$LND_PUBKEY amount=0.1btc push_msat=5000000000; do sleep $FM_POLL_INTERVAL; done
-    mine_blocks 10
-    until [[ $($FM_LIGHTNING_CLI listpeers | jq -e -r ".peers[] | select(.id == \"$LND_PUBKEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $FM_POLL_INTERVAL; done
-}
-
 function await_fedimint_block_sync() {
   BLOCKS="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
   FINALITY_DELAY=10
@@ -100,7 +86,7 @@ function get_federation_id() {
 
 function show_verbose_output()
 {
-    if [[ $FM_VERBOSE_OUTPUT -ne 1 ]] 
+    if [[ $FM_VERBOSE_OUTPUT -ne 1 ]]
     then
         cat > /dev/null 2>&1
     else
@@ -143,13 +129,4 @@ function start_federation() {
   # before moving on and letting other scripts rely on it.
   # See https://github.com/fedimint/fedimint/issues/2236
   sleep 2
-}
-
-function start_all_daemons() {
-  fixtures all-daemons &
-  # BUG: Give daemons some time to write to `FM_PID_FILE`
-  # before touching it from here.
-  # See https://github.com/fedimint/fedimint/issues/2236
-  sleep 2
-  echo $! >> $FM_PID_FILE
 }

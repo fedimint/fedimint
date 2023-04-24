@@ -4,16 +4,31 @@
 set -euo pipefail
 export RUST_LOG="${RUST_LOG:-info,timing=debug}"
 
+source scripts/build.sh
 
 >&2 echo "### Setting up tests"
+
+export FM_READY_FILE=$FM_TMP_DIR/ready
+mkfifo $FM_READY_FILE
+
 # Convert RUST_LOG to lowercase
 # if RUST_LOG is none, don't show output of test setup
 if [ "${RUST_LOG,,}" = "none" ]; then
-  source ./scripts/setup-tests.sh "" >/dev/null
+  $FM_BIN_DIR/fedimint-bin-tests external-daemons >/dev/null &
+  echo $! >> $FM_PID_FILE
 else
-  set -x
-  source ./scripts/setup-tests.sh ""
+  $FM_BIN_DIR/fedimint-bin-tests external-daemons &
+  echo $! >> $FM_PID_FILE
 fi
+
+# waits for rust to write to this pipe
+STATUS=$(cat $FM_READY_FILE)
+if [ "$STATUS" = "ERROR" ]
+then
+    echo "base daemons didn't start correctly"
+    exit 1
+fi
+
 >&2 echo "### Setting up tests - complete"
 
 export FM_TEST_USE_REAL_DAEMONS=1

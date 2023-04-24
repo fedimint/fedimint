@@ -28,7 +28,6 @@ enum Cmd {
     Lnd,
     Electrs,
     Esplora,
-    AllDaemons,
     Dkg { servers: usize },
     Fedimintd { id: usize },
     Gatewayd { node: GatewayNode },
@@ -451,46 +450,6 @@ async fn run_dkg(servers: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Run bitcoind, lightningd, lnd, electrs, esplora
-async fn all_daemons() -> anyhow::Result<()> {
-    let mut root_task_group = TaskGroup::new();
-    root_task_group.install_kill_handler();
-
-    root_task_group
-        .spawn("bitcoind", move |_| async move {
-            run_bitcoind().await.expect("bitcoind failed")
-        })
-        .await;
-
-    root_task_group
-        .spawn("lightningd", move |_| async move {
-            run_lightningd().await.expect("lightningd failed")
-        })
-        .await;
-
-    root_task_group
-        .spawn("lnd", move |_| async move {
-            run_lnd().await.expect("lnd failed")
-        })
-        .await;
-
-    root_task_group
-        .spawn("electrs", move |_| async move {
-            run_electrs().await.expect("electrs failed")
-        })
-        .await;
-
-    root_task_group
-        .spawn("esplora", move |_| async move {
-            run_esplora().await.expect("esplora failed")
-        })
-        .await;
-
-    root_task_group.join_all(None).await?;
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
@@ -517,7 +476,6 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Federation { start_id, stop_id } => run_federation(start_id, stop_id)
             .await
             .expect("federation failed"),
-        Cmd::AllDaemons => all_daemons().await.expect("daemons failed"),
         // commands
         Cmd::AwaitBitcoindReady => await_bitcoind_ready("").await.expect("daemons failed"),
     }

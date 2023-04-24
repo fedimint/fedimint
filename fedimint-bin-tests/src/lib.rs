@@ -472,6 +472,35 @@ pub async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Re
     })
 }
 
+#[allow(unused)]
+pub struct ExternalDaemons {
+    pub bitcoind: Bitcoind,
+    pub cln: Lightningd,
+    pub lnd: Lnd,
+    pub electrs: Electrs,
+    pub esplora: Esplora,
+}
+
+pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDaemons> {
+    let start_time = fedimint_core::time::now();
+    let bitcoind = Bitcoind::new(process_mgr).await?;
+    let (cln, lnd, electrs, esplora) = tokio::try_join!(
+        Lightningd::new(process_mgr, bitcoind.clone()),
+        Lnd::new(process_mgr, bitcoind.clone()),
+        Electrs::new(process_mgr, bitcoind.clone()),
+        Esplora::new(process_mgr, bitcoind.clone()),
+    )?;
+    open_channel(&bitcoind, &cln, &lnd).await?;
+    info!("starting base deamons took {:?}", start_time.elapsed()?);
+    Ok(ExternalDaemons {
+        bitcoind,
+        cln,
+        lnd,
+        electrs,
+        esplora,
+    })
+}
+
 #[derive(Clone)]
 pub struct Electrs {
     _process: ProcessHandle,
