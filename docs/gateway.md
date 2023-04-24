@@ -98,7 +98,7 @@ To interact with and develop Mintgate, open a new terminal and change directorie
 
 ```sh
 cd /gateway/ui
-nix develop .#gateway-ui
+nix develop .#fedimint-ui
 ```
 
 Install the required dependencies and run the Mintgate client

@@ -444,7 +444,7 @@
                 ];
               };
 
-              gateway-ui = pkgs.mkShell (shellCommonNative
+              fedimint-ui = pkgs.mkShell (shellCommonNative
                 // {
                 nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ pkgs.yarn ];
               });
