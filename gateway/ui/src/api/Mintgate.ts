@@ -120,9 +120,7 @@ export class RealMintgate implements Mintgate {
 				return Promise.resolve(info);
 			}
 
-			throw new Error(
-				`Error fetching gateway info\nStatus : ${res.status}\nReason : ${res.statusText}\n`
-			);
+			throw ResponseToError('fetching gateway info', res);
 		} catch (err) {
 			return Promise.reject(err);
 		}
@@ -146,17 +144,31 @@ export class RealMintgate implements Mintgate {
 				return Promise.resolve(address);
 			}
 
-			throw new Error(
-				`Error fetching federation address\nStatus : ${res.status}\nReason : ${res.statusText}\n`
-			);
+			throw ResponseToError('fetching federation address', res);
 		} catch (err) {
 			return Promise.reject(err);
 		}
 	};
 
-	connectFederation = async (_connectInfo: string): Promise<Federation> => {
+	connectFederation = async (connectInfo: string): Promise<Federation> => {
 		try {
-			throw new Error('Not implemented');
+			const res: Response = await fetch(`${this.baseUrl}/connect-fed`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.password}`,
+				},
+				body: JSON.stringify({
+					connect: connectInfo,
+				}),
+			});
+
+			if (res.ok) {
+				const federation: Federation = await res.json();
+				return Promise.resolve(federation);
+			}
+
+			throw ResponseToError('connecting federation', res);
 		} catch (err) {
 			return Promise.reject(err);
 		}
@@ -186,3 +198,9 @@ export class RealMintgate implements Mintgate {
 		}
 	};
 }
+
+const ResponseToError = (scenario: string, res: Response): Error => {
+	return new Error(
+		`${scenario} \nStatus : ${res.status} \nReason : ${res.statusText}\n`
+	);
+};
