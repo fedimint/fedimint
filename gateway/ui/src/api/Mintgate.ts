@@ -98,3 +98,54 @@ export class MockMintgate implements Mintgate {
 		);
 	};
 }
+
+// RealMintgate makes API calls to a given Mintgate API
+export class RealMintgate implements Mintgate {
+	fetchInfo = async (): Promise<GatewayInfo> => {
+		try {
+			throw new Error('Not implemented');
+		} catch (err) {
+			return Promise.reject(err);
+		}
+	};
+
+	fetchAddress = async (_federationId: string): Promise<string> => {
+		try {
+			throw new Error('Not implemented');
+		} catch (err) {
+			return Promise.reject(err);
+		}
+	};
+
+	connectFederation = async (_connectInfo: string): Promise<Federation> => {
+		try {
+			throw new Error('Not implemented');
+		} catch (err) {
+			return Promise.reject(err);
+		}
+	};
+
+	completeDeposit = async (
+		_federationId: string,
+		_txOutProof: string,
+		_tx: string
+	): Promise<string> => {
+		try {
+			throw new Error('Not implemented');
+		} catch (err) {
+			return Promise.reject(err);
+		}
+	};
+
+	requestWithdrawal = async (
+		_federationId: string,
+		_amountSat: number,
+		_address: string
+	): Promise<string> => {
+		try {
+			throw new Error('Not implemented');
+		} catch (err) {
+			return Promise.reject(err);
+		}
+	};
+}

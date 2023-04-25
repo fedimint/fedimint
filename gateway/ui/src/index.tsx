@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ChakraProvider } from '@chakra-ui/react';
 import { Admin } from './Admin';
-import { BlockstreamExplorer, MockMintgate } from './api';
+import { BlockstreamExplorer, MockMintgate, RealMintgate } from './api';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
 import { ApiProvider } from './components';
@@ -11,7 +11,7 @@ import { ApiProvider } from './components';
 const gateway_api = process.env.REACT_APP_FEDIMINT_GATEWAY_API;
 
 // TODO: Implement and use real Mintgate API calling into gateway_api server
-const mintgate = gateway_api ? new MockMintgate() : new MockMintgate();
+const mintgate = gateway_api ? new RealMintgate() : new MockMintgate();
 
 // TODO: Enable configuration to different block explorers
 const explorer = new BlockstreamExplorer('https://blockstream.info/api/');
