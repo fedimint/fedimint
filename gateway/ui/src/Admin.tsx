@@ -7,7 +7,12 @@ import {
 	ApiContext,
 } from './components';
 import { GatewayInfo, NullGatewayInfo } from './api';
-import { Federation, Filter, Sort } from './federation.types';
+import {
+	Federation,
+	FederationDetails,
+	Filter,
+	Sort,
+} from './federation.types';
 
 export const Admin = React.memo(function Admin(): JSX.Element {
 	const { mintgate } = React.useContext(ApiContext);
@@ -19,10 +24,16 @@ export const Admin = React.memo(function Admin(): JSX.Element {
 	const [showConnectFed, toggleShowConnectFed] = useState<boolean>(false);
 
 	useEffect(() => {
-		mintgate.fetchInfo().then((gatewayInfo) => {
-			setGatewayInfo(gatewayInfo);
-			setFedlist(gatewayInfo.federations);
-		});
+		mintgate
+			.fetchInfo()
+			.then((gatewayInfo) => {
+				setGatewayInfo(gatewayInfo);
+				setFedlist(gatewayInfo.federations);
+			})
+			.catch((err) => {
+				console.log(err);
+				// TODO: Show Error UI
+			});
 	}, [mintgate]);
 
 	const filterFederations = (filter: Filter) => {
@@ -30,14 +41,24 @@ export const Admin = React.memo(function Admin(): JSX.Element {
 			filter === undefined
 				? gatewayInfo.federations
 				: gatewayInfo.federations.filter(
-					(federation: Federation) => federation.details.active === filter
+					(federation: Federation) => federation.details?.active === filter
 					// eslint-disable-next-line no-mixed-spaces-and-tabs
 				  );
 		setFedlist(federations);
 	};
 
 	const sortFederations = (sort: Sort) => {
-		const fedListCopy = [...fedlist];
+		const defultDetail: FederationDetails = {
+			name: '',
+			description: '',
+			date_created: '',
+			active: true,
+		};
+
+		const fedListCopy = [...fedlist].map((federation) => ({
+			...federation,
+			details: federation.details || defultDetail,
+		}));
 
 		switch (sort) {
 		case Sort.Ascending: {
@@ -112,7 +133,6 @@ export const Admin = React.memo(function Admin(): JSX.Element {
 							<FederationCard
 								key={federation.mint_pubkey}
 								federation={federation}
-								onClick={() => console.log('clicked')}
 							/>
 						);
 					})}

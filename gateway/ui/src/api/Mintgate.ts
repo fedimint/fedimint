@@ -20,7 +20,6 @@ export class MockMintgate implements Mintgate {
 						description: 'Hals Trusty Mint',
 						date_created: '2018-01-01T00:00:00Z',
 						name: 'Hals_trusty_mint',
-						url: '',
 						active: true,
 					},
 				},
@@ -33,7 +32,6 @@ export class MockMintgate implements Mintgate {
 						description: 'FTX yield generator',
 						date_created: '2019-01-01T00:00:00Z',
 						name: 'FTX_yield_gen',
-						url: '',
 						active: true,
 					},
 				},
@@ -46,7 +44,6 @@ export class MockMintgate implements Mintgate {
 						description: 'Qala_devs stacking sats',
 						date_created: '2020-01-01T00:00:00Z',
 						name: 'Qala_devs',
-						url: '',
 						active: false,
 					},
 				},
@@ -101,9 +98,31 @@ export class MockMintgate implements Mintgate {
 
 // RealMintgate makes API calls to a given Mintgate API
 export class RealMintgate implements Mintgate {
+	private readonly password: string;
+
+	constructor(private readonly baseUrl: string) {
+		this.password = process.env.REACT_APP_FM_GATEWAY_API_PASSWORD || '';
+	}
+
 	fetchInfo = async (): Promise<GatewayInfo> => {
 		try {
-			throw new Error('Not implemented');
+			const res: Response = await fetch(`${this.baseUrl}/info`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.password}`,
+				},
+				body: JSON.stringify({}),
+			});
+
+			if (res.ok) {
+				const info: GatewayInfo = await res.json();
+				return Promise.resolve(info);
+			}
+
+			throw new Error(
+				`Error fetching gateway info\nStatus : ${res.status}\nReason : ${res.statusText}\n`
+			);
 		} catch (err) {
 			return Promise.reject(err);
 		}

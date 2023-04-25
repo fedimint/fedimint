@@ -8,10 +8,12 @@ import reportWebVitals from './reportWebVitals';
 import { ApiProvider } from './components';
 
 // Read environment variables
-const gateway_api = process.env.REACT_APP_FEDIMINT_GATEWAY_API;
+const gateway_api = process.env.REACT_APP_FM_GATEWAY_API_ADDR;
 
 // TODO: Implement and use real Mintgate API calling into gateway_api server
-const mintgate = gateway_api ? new RealMintgate() : new MockMintgate();
+const mintgate = gateway_api
+	? new RealMintgate(gateway_api)
+	: new MockMintgate();
 
 // TODO: Enable configuration to different block explorers
 const explorer = new BlockstreamExplorer('https://blockstream.info/api/');

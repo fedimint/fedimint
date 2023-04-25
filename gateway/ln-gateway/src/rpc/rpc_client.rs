@@ -26,7 +26,7 @@ impl RpcClient {
 
     pub async fn get_info(&self, password: String) -> Result<Response, Error> {
         let url = self.base_url.join("/info").expect("invalid base url");
-        self.call(url, password, ()).await
+        self.call(url, password, {}).await
     }
 
     pub async fn get_balance(
