@@ -32,7 +32,7 @@
 	"lint-staged": {
 		"**/*.{js,jsx,ts,tsx}": [
 			"npx prettier --write",
-			"npx eslint --fix -c ./gateway/ui/.eslintrc.json"
+			"npx eslint --fix -c .eslintrc.json"
 		]
 	},
 	"browserslist": {

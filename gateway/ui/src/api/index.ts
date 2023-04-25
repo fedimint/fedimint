@@ -1,7 +1,3 @@
-export { type Mintgate, type GatewayInfo, NullGatewayInfo } from './Mintgate';
-export { MockMintgate } from './Mintgate.mock';
-export {
-	type Explorer,
-	type TransactionStatus,
-	BlockstreamExplorer,
-} from './Explorer';
+export * from './api.types';
+export { MockMintgate, NullGatewayInfo } from './Mintgate';
+export { BlockstreamExplorer } from './Explorer';
