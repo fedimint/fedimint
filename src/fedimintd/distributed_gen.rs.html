@@ -264,6 +264,9 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -499,8 +502,11 @@
                 <span class="kw">let </span>key = get_encryption_key(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
                 <span class="kw">let </span>decrypted_bytes = encrypted_read(<span class="kw-2">&amp;</span>key, in_file)<span class="question-mark">?</span>;
 
-                <span class="kw">let </span><span class="kw-2">mut </span>out_file_handle =
-                    fs::File::create(out_file).expect(<span class="string">&quot;Could not create output cfg file&quot;</span>);
+                <span class="kw">let </span><span class="kw-2">mut </span>out_file_handle = fs::File::options()
+                    .create_new(<span class="bool-val">true</span>)
+                    .write(<span class="bool-val">true</span>)
+                    .open(out_file)
+                    .expect(<span class="string">&quot;Could not create output cfg file&quot;</span>);
                 out_file_handle.write_all(<span class="kw-2">&amp;</span>decrypted_bytes)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())
             }

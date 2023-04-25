@@ -220,6 +220,10 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -405,7 +409,11 @@
         </span>}
 
         <span class="macro">debug!</span>(<span class="string">&quot;Saving gateway cfg in {}&quot;</span>, path.display());
-        <span class="kw">let </span>file = File::create(path).expect(<span class="string">&quot;Could not create gateway cfg file&quot;</span>);
+        <span class="kw">let </span>file = File::options()
+            .create_new(<span class="bool-val">true</span>)
+            .write(<span class="bool-val">true</span>)
+            .open(path)
+            .expect(<span class="string">&quot;Could not create gateway cfg file&quot;</span>);
         serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>config).expect(<span class="string">&quot;Could not write gateway cfg&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())

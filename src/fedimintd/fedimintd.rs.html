@@ -276,8 +276,9 @@
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fs;
-<span class="kw">use </span>std::net::SocketAddr;
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
 
@@ -290,6 +291,7 @@
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::timing;
+<span class="kw">use </span>fedimint_core::util::write_overwrite;
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
@@ -537,7 +539,9 @@
     );
 
     <span class="comment">// TODO: Fedimintd should use the config gen API
-    </span>fs::write(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)<span class="question-mark">?</span>;
+    // on each run we want to pass the currently passed passsword, so we need to
+    // overwrite
+    </span>write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>api = FedimintServer {
         data_dir: opts.data_dir,
         settings: ConfigGenSettings {

@@ -154,7 +154,10 @@
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::{bail, format_err, <span class="prelude-ty">Result</span>};
@@ -209,10 +212,11 @@
 <span class="doccomment">/// Write `data` encrypted to a `file` with a random `nonce` that will be
 /// encoded in the file
 </span><span class="kw">pub fn </span>encrypted_write(data: Vec&lt;u8&gt;, key: <span class="kw-2">&amp;</span>LessSafeKey, file: PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>bytes = encrypt(data, key)<span class="question-mark">?</span>;
-    fs::write(file.clone(), hex::encode(bytes))
-        .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to write file {:?}&quot;</span>, file))<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(())
+    <span class="prelude-val">Ok</span>(fs::File::options()
+        .write(<span class="bool-val">true</span>)
+        .create_new(<span class="bool-val">true</span>)
+        .open(file)<span class="question-mark">?
+        </span>.write_all(hex::encode(encrypt(data, key)<span class="question-mark">?</span>).as_bytes())<span class="question-mark">?</span>)
 }
 
 <span class="doccomment">/// Reads encrypted data from a file

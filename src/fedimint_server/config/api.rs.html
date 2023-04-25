@@ -951,8 +951,8 @@
 <a href="#951" id="951">951</a>
 <a href="#952" id="952">952</a>
 <a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
-<span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -975,6 +975,7 @@
     DynServerModuleGen,
 };
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::util::write_new;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
@@ -1260,7 +1261,7 @@
         }
 
         <span class="kw">let </span>auth = config.private.api_auth.<span class="number">0</span>.clone();
-        fs::write(<span class="self">self</span>.data_dir.join(SALT_FILE), random_salt())
+        write_new(<span class="self">self</span>.data_dir.join(SALT_FILE), random_salt())
             .map_err(|e| ApiError::server_error(<span class="macro">format!</span>(<span class="string">&quot;Unable to write to data dir {e:?}&quot;</span>)))<span class="question-mark">?</span>;
         write_server_config(
             <span class="kw-2">&amp;</span>config,
@@ -1663,6 +1664,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiAuth;
     <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+    <span class="kw">use </span>fedimint_core::util::write_new;
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::future::join_all;
     <span class="kw">use </span>itertools::Itertools;
@@ -1770,7 +1772,7 @@
 
         <span class="doccomment">/// Helper for writing the password file to bypass the API
         </span><span class="kw">fn </span>write_password_file(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-            fs::write(<span class="self">self</span>.dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span><span class="self">self</span>.auth.<span class="number">0</span>).unwrap();
+            write_new(<span class="self">self</span>.dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span><span class="self">self</span>.auth.<span class="number">0</span>).unwrap();
         }
     }
 

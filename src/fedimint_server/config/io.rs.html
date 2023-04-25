@@ -176,18 +176,28 @@
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
-<span class="kw">use </span>anyhow::{ensure, format_err};
+<span class="kw">use </span>anyhow::{ensure, Context};
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
 <span class="kw">use </span>fedimint_aead::{
     encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
 };
 <span class="kw">use </span>fedimint_core::admin_client::PeerServerParams;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::util::write_new;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tokio_rustls::rustls;
@@ -240,8 +250,9 @@
     guardian_name: String,
     password: <span class="kw-2">&amp;</span>str,
 ) -&gt; anyhow::Result&lt;String&gt; {
-    fs::write(dir_out_path.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
-    <span class="kw">let </span>salt = fs::read_to_string(dir_out_path.join(SALT_FILE))<span class="question-mark">?</span>;
+    <span class="kw">let </span>salt = random_salt();
+    write_new(dir_out_path.join(SALT_FILE), <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
+
     <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
     gen_tls(<span class="kw-2">&amp;</span>dir_out_path, p2p_url, api_url, guardian_name, <span class="kw-2">&amp;</span>key)
 }
@@ -269,11 +280,14 @@
     key: <span class="kw-2">&amp;</span>LessSafeKey,
 ) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>(cert, pk) = gen_cert_and_key(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>;
-    encrypted_write(pk.<span class="number">0</span>, key, dir_out_path.join(TLS_PK))<span class="question-mark">?</span>;
+    encrypted_write(pk.<span class="number">0</span>, key, dir_out_path.join(TLS_PK))
+        .context(<span class="string">&quot;Failed to write tls private key&quot;</span>)<span class="question-mark">?</span>;
 
     <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string
     </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}@{}@{}@{}&quot;</span>, p2p_url, api_url, name, cert.<span class="number">0</span>.to_hex());
-    fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>cert_path = dir_out_path.join(TLS_CERT);
+    write_new(cert_path, <span class="kw-2">&amp;</span>cert_url)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(cert_url)
 }
 
@@ -331,16 +345,20 @@
     obj: <span class="kw-2">&amp;</span>T,
     path: PathBuf,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>filename = path.with_extension(JSON_EXT);
-    <span class="kw">let </span>file = fs::File::create(filename.clone())
-        .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to create file {:?}&quot;</span>, filename))<span class="question-mark">?</span>;
+    <span class="kw">let </span>file = fs::File::options()
+        .create_new(<span class="bool-val">true</span>)
+        .write(<span class="bool-val">true</span>)
+        .open(path.with_extension(JSON_EXT))<span class="question-mark">?</span>;
+
     serde_json::to_writer_pretty(file, obj)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">fn </span>plaintext_display_write&lt;T: Display&gt;(obj: <span class="kw-2">&amp;</span>T, path: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>file =
-        fs::File::create(path).map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">&quot;Unable to create file {:?}&quot;</span>, path))<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>file = fs::File::options()
+        .create_new(<span class="bool-val">true</span>)
+        .write(<span class="bool-val">true</span>)
+        .open(path)<span class="question-mark">?</span>;
     file.write_all(obj.to_string().as_bytes())<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
