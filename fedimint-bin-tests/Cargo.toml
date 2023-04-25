@@ -5,6 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "fedimint-bin-tests"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = { version = "1.0.69", features = ["backtrace"] }
 bitcoincore-rpc = "0.16.0"

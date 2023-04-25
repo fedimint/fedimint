@@ -142,6 +142,7 @@
             gateway-pkgs = craneBuildNative.gateway-pkgs;
             client-pkgs = craneBuildNative.client-pkgs { };
             fedimint-dbtool-pkgs = craneBuildNative.fedimint-dbtool-pkgs;
+            fedimint-bin-tests = craneBuildNative.fedimint-bin-tests;
           };
 
           # rust packages outputs with git hash replaced

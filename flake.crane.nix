@@ -516,5 +516,33 @@ rec {
       "modules"
     ];
   };
+
+  fedimint-bin-tests = pkgsBuild {
+    name = "fedimint-bin-tests";
+    pkgs = {
+      fedimint-bin-tests = { };
+    };
+    dirs = [
+      "client/client-lib"
+      "client/cli"
+      "crypto/aead"
+      "crypto/derive-secret"
+      "crypto/hkdf"
+      "crypto/tbs"
+      "fedimintd"
+      "fedimint-bitcoind"
+      "fedimint-build"
+      "fedimint-client"
+      "fedimint-client-legacy"
+      "fedimint-bin-tests"
+      "fedimint-core"
+      "fedimint-derive"
+      "fedimint-rocksdb"
+      "fedimint-server"
+      "fedimint-logging"
+      "gateway/ln-gateway"
+      "modules"
+    ];
+  };
 }
 
