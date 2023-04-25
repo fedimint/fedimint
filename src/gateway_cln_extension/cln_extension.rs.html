@@ -877,7 +877,7 @@
             ))
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(ClnExtensionError::Error(<span class="macro">anyhow!</span>(
-                <span class="string">&quot;Failed to start cln plugin&quot;
+                <span class="string">&quot;Failed to start cln plugin - another instance of lightningd may already be running.&quot;
             </span>)))
         }
     }
