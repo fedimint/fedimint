@@ -175,12 +175,30 @@ export class RealMintgate implements Mintgate {
 	};
 
 	completeDeposit = async (
-		_federationId: string,
-		_txOutProof: string,
-		_tx: string
+		federationId: string,
+		txOutProof: string,
+		tx: string
 	): Promise<string> => {
 		try {
-			throw new Error('Not implemented');
+			const res: Response = await fetch(`${this.baseUrl}/deposit`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.password}`,
+				},
+				body: JSON.stringify({
+					federation_id: federationId,
+					txout_proof: txOutProof,
+					transaction: tx,
+				}),
+			});
+
+			if (res.ok) {
+				const txid: string = await res.json();
+				return Promise.resolve(txid);
+			}
+
+			throw ResponseToError('completing deposit', res);
 		} catch (err) {
 			return Promise.reject(err);
 		}
