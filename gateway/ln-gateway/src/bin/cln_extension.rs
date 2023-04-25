@@ -204,7 +204,7 @@ impl ClnRpcService {
             ))
         } else {
             Err(ClnExtensionError::Error(anyhow!(
-                "Failed to start cln plugin"
+                "Failed to start cln plugin - another instance of lightningd may already be running."
             )))
         }
     }
