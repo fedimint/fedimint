@@ -128,9 +128,27 @@ export class RealMintgate implements Mintgate {
 		}
 	};
 
-	fetchAddress = async (_federationId: string): Promise<string> => {
+	fetchAddress = async (federationId: string): Promise<string> => {
 		try {
-			throw new Error('Not implemented');
+			const res: Response = await fetch(`${this.baseUrl}/address`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.password}`,
+				},
+				body: JSON.stringify({
+					federation_id: federationId,
+				}),
+			});
+
+			if (res.ok) {
+				const address: string = (await res.json()).address;
+				return Promise.resolve(address);
+			}
+
+			throw new Error(
+				`Error fetching federation address\nStatus : ${res.status}\nReason : ${res.statusText}\n`
+			);
 		} catch (err) {
 			return Promise.reject(err);
 		}
