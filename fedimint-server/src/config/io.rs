@@ -3,13 +3,14 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{ensure, format_err};
+use anyhow::{ensure, Context};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_aead::{
     encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
 };
 use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::util::write_new;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_rustls::rustls;
@@ -62,8 +63,9 @@ pub fn create_cert(
     guardian_name: String,
     password: &str,
 ) -> anyhow::Result<String> {
-    fs::write(dir_out_path.join(SALT_FILE), random_salt())?;
-    let salt = fs::read_to_string(dir_out_path.join(SALT_FILE))?;
+    let salt = random_salt();
+    write_new(dir_out_path.join(SALT_FILE), &salt)?;
+
     let key = get_encryption_key(password, &salt)?;
     gen_tls(&dir_out_path, p2p_url, api_url, guardian_name, &key)
 }
@@ -91,11 +93,14 @@ fn gen_tls(
     key: &LessSafeKey,
 ) -> anyhow::Result<String> {
     let (cert, pk) = gen_cert_and_key(&name)?;
-    encrypted_write(pk.0, key, dir_out_path.join(TLS_PK))?;
+    encrypted_write(pk.0, key, dir_out_path.join(TLS_PK))
+        .context("Failed to write tls private key")?;
 
     // TODO Base64 encode name, hash fingerprint cert_string
     let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, cert.0.to_hex());
-    fs::write(dir_out_path.join(TLS_CERT), &cert_url)?;
+
+    let cert_path = dir_out_path.join(TLS_CERT);
+    write_new(cert_path, &cert_url)?;
     Ok(cert_url)
 }
 
@@ -153,16 +158,20 @@ fn plaintext_json_write<T: Serialize + DeserializeOwned>(
     obj: &T,
     path: PathBuf,
 ) -> anyhow::Result<()> {
-    let filename = path.with_extension(JSON_EXT);
-    let file = fs::File::create(filename.clone())
-        .map_err(|_| format_err!("Unable to create file {:?}", filename))?;
+    let file = fs::File::options()
+        .create_new(true)
+        .write(true)
+        .open(path.with_extension(JSON_EXT))?;
+
     serde_json::to_writer_pretty(file, obj)?;
     Ok(())
 }
 
 fn plaintext_display_write<T: Display>(obj: &T, path: &Path) -> anyhow::Result<()> {
-    let mut file =
-        fs::File::create(path).map_err(|_| format_err!("Unable to create file {:?}", path))?;
+    let mut file = fs::File::options()
+        .create_new(true)
+        .write(true)
+        .open(path)?;
     file.write_all(obj.to_string().as_bytes())?;
     Ok(())
 }

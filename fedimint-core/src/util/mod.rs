@@ -4,7 +4,10 @@ pub mod broadcaststream;
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
+use std::io::Write;
+use std::path::Path;
 use std::pin::Pin;
+use std::{fs, io};
 
 use futures::StreamExt;
 use tracing::debug;
@@ -95,6 +98,24 @@ impl<'a> Debug for SanitizedUrl<'a> {
         write!(f, ")")?;
         Ok(())
     }
+}
+
+/// Write out a new file (like [`std::fs::write`] but fails if file already
+/// exists)
+pub fn write_new<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
+    fs::File::options()
+        .write(true)
+        .create_new(true)
+        .open(path)?
+        .write_all(contents.as_ref())
+}
+
+pub fn write_overwrite<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
+    fs::File::options()
+        .write(true)
+        .create(true)
+        .open(path)?
+        .write_all(contents.as_ref())
 }
 
 #[cfg(test)]

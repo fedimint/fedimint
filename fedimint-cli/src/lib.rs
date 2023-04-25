@@ -628,7 +628,10 @@ impl FedimintCli {
                 std::fs::create_dir_all(cli.workdir()?)
                     .map_err_cli_msg(CliErrorKind::IOError, "failed to create config directory")?;
                 let cfg_path = cli.workdir()?.join("client.json");
-                let writer = std::fs::File::create(cfg_path)
+                let writer = std::fs::File::options()
+                    .create_new(true)
+                    .write(true)
+                    .open(cfg_path)
                     .map_err_cli_msg(CliErrorKind::IOError, "couldn't create config.json")?;
                 serde_json::to_writer_pretty(writer, &cfg)
                     .map_err_cli_msg(CliErrorKind::IOError, "couldn't write config")?;

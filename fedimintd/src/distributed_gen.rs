@@ -233,8 +233,11 @@ impl DistributedGen {
                 let key = get_encryption_key(&password, &salt)?;
                 let decrypted_bytes = encrypted_read(&key, in_file)?;
 
-                let mut out_file_handle =
-                    fs::File::create(out_file).expect("Could not create output cfg file");
+                let mut out_file_handle = fs::File::options()
+                    .create_new(true)
+                    .write(true)
+                    .open(out_file)
+                    .expect("Could not create output cfg file");
                 out_file_handle.write_all(&decrypted_bytes)?;
                 Ok(())
             }

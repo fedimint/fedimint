@@ -183,7 +183,11 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         }
 
         debug!("Saving gateway cfg in {}", path.display());
-        let file = File::create(path).expect("Could not create gateway cfg file");
+        let file = File::options()
+            .create_new(true)
+            .write(true)
+            .open(path)
+            .expect("Could not create gateway cfg file");
         serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
 
         Ok(())

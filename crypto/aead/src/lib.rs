@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::{bail, format_err, Result};
@@ -53,10 +54,11 @@ pub fn decrypt<'c>(ciphertext: &'c mut [u8], key: &LessSafeKey) -> Result<&'c [u
 /// Write `data` encrypted to a `file` with a random `nonce` that will be
 /// encoded in the file
 pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> Result<()> {
-    let bytes = encrypt(data, key)?;
-    fs::write(file.clone(), hex::encode(bytes))
-        .map_err(|_| format_err!("Unable to write file {:?}", file))?;
-    Ok(())
+    Ok(fs::File::options()
+        .write(true)
+        .create_new(true)
+        .open(file)?
+        .write_all(hex::encode(encrypt(data, key)?).as_bytes())?)
 }
 
 /// Reads encrypted data from a file
