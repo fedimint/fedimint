@@ -106,7 +106,7 @@ export const FederationCard = (props: FederationCardProps): JSX.Element => {
 						<Divider />
 						<TabPanels>
 							<InfoTab {...details} />
-							<DepositTab {...details} />
+							<DepositTab {...details} federation_id={federation_id} />
 							<WithdrawTab {...details} federationId={federation_id} />
 						</TabPanels>
 					</Collapse>

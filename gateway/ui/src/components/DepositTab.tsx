@@ -29,15 +29,21 @@ const truncateStringFormat = (arg: string): string => {
 	)}`;
 };
 
-export const DepositTab = React.memo(function DepositTab(): JSX.Element {
+interface DepositTabProps {
+	federation_id: string;
+}
+
+export const DepositTab = React.memo(function DepositTab({
+	federation_id,
+}: DepositTabProps): JSX.Element {
 	const { mintgate, explorer } = React.useContext(ApiContext);
 
 	const [address, setAddress] = useState<string>('');
 	const [txStatus, setTxStatus] = useState<TransactionStatus | null>(null);
 
 	useEffect(() => {
-		mintgate.fetchAddress().then((newAddress) => {
-			setAddress(newAddress);
+		mintgate.fetchAddress(federation_id).then((new_address) => {
+			setAddress(new_address);
 		});
 	}, [mintgate]);
 

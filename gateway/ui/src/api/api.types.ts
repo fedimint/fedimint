@@ -3,7 +3,7 @@ import { Federation } from '../federation.types';
 // Mintgate is an API to interact with the Gateway server
 export interface Mintgate {
 	fetchInfo: () => Promise<GatewayInfo>;
-	fetchAddress: () => Promise<string>;
+	fetchAddress: (federationId: string) => Promise<string>;
 	connectFederation: (connectInfo: string) => Promise<Federation>;
 	/**
 	 * Complete a deposit to a federation served by the Gateway

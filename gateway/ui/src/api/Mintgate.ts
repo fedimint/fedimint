@@ -55,7 +55,7 @@ export class MockMintgate implements Mintgate {
 		};
 	};
 
-	fetchAddress = async (): Promise<string> => {
+	fetchAddress = async (_federationId: string): Promise<string> => {
 		// Use IP's bitcoin address as a mock
 		return 'bc1qgf60crqtlxn7279tgh8lsxzagmu97cyuwtykxwv026s9hwg427fsjvw7uz';
 	};
