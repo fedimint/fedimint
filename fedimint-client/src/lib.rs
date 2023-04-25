@@ -400,7 +400,7 @@ impl Client {
         operation_type: &str,
         operation_meta: impl serde::Serialize,
     ) {
-        dbtx.insert_entry(
+        dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry {
                 operation_type: operation_type.to_string(),
@@ -409,7 +409,7 @@ impl Client {
             },
         )
         .await;
-        dbtx.insert_entry(
+        dbtx.insert_new_entry(
             &ChronologicalOperationLogKey {
                 creation_time: now(),
                 operation_id,
