@@ -205,12 +205,30 @@ export class RealMintgate implements Mintgate {
 	};
 
 	requestWithdrawal = async (
-		_federationId: string,
-		_amountSat: number,
-		_address: string
+		federationId: string,
+		amountSat: number,
+		address: string
 	): Promise<string> => {
 		try {
-			throw new Error('Not implemented');
+			const res: Response = await fetch(`${this.baseUrl}/withdraw`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.password}`,
+				},
+				body: JSON.stringify({
+					federation_id: federationId,
+					amount: amountSat * 1000,
+					address,
+				}),
+			});
+
+			if (res.ok) {
+				const txid: string = await res.json();
+				return Promise.resolve(txid);
+			}
+
+			throw ResponseToError('requesting withdrawal', res);
 		} catch (err) {
 			return Promise.reject(err);
 		}
