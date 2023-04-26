@@ -45,6 +45,7 @@ pub mod tiered_multi;
 pub mod time;
 pub mod timing;
 pub mod transaction;
+pub mod txoproof;
 pub mod util;
 
 hash_newtype!(

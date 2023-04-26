@@ -22,7 +22,6 @@ use fedimint_client::sm::Notifier;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
-use fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
 use fedimint_client_legacy::modules::wallet::WalletClientGen;
 use fedimint_client_legacy::utils::{
     from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
@@ -43,6 +42,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
