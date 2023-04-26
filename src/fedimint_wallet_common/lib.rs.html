@@ -678,7 +678,7 @@
     </span>ErrorFinalizingPsbt(Vec&lt;miniscript::psbt::Error&gt;),
 }
 
-<span class="comment">// FIXME: make FakeFed not require Eq
+<span class="comment">// FIXME: make tests not require Eq
 </span><span class="doccomment">/// **WARNING**: this is only intended to be used for testing
 </span><span class="kw">impl </span>PartialEq <span class="kw">for </span>WalletError {
     <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
