@@ -1176,14 +1176,14 @@ async fn ecash_can_be_recovered() -> Result<()> {
 
         let mut task_group = TaskGroup::new();
 
-        user_send.restore_ecash(10, &mut task_group);
+        user_send.restore_ecash(10, &mut task_group).await;
         assert_eq!(user_send.ecash_total(), sats(5000));
 
         let ecash = fed.spend_ecash(&*user_send, sats(3500)).await;
         user_receive.reissue(ecash).await.unwrap();
         fed.run_consensus_epochs(2).await; // process transaction + sign new notes
 
-        user_send.restore_ecash(10, &mut task_group);
+        user_send.restore_ecash(10, &mut task_group).await;
         assert_eq!(user_send.ecash_total(), sats(1500));
 
         // Generate a lot of epochs, to test multi-threaded fetching
@@ -1196,7 +1196,7 @@ async fn ecash_can_be_recovered() -> Result<()> {
                                                // notes
         }
 
-        user_send.restore_ecash(10, &mut task_group);
+        user_send.restore_ecash(10, &mut task_group).await;
         assert_eq!(user_send.ecash_total(), sats(1400));
 
         task_group.join_all(None).await.unwrap();

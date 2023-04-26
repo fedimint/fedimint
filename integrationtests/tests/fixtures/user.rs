@@ -267,11 +267,12 @@ pub trait ILegacyLightningClient {
 /// Interface used just for running our tests
 // TODO: Implement for new client so we can test it and remove the legacy client
 pub trait ILegacyTestClient:
-    ILegacyWalletClient + ILegacyMintClient + ILegacyLightningClient
+    Sync + ILegacyWalletClient + ILegacyMintClient + ILegacyLightningClient
 {
     /// Helper to make restore ecash less verbose
-    fn restore_ecash(&self, gap_limit: usize, task_group: &mut TaskGroup) -> Metadata {
-        block_on(self.restore_ecash_from_federation(gap_limit, task_group))
+    async fn restore_ecash(&self, gap_limit: usize, task_group: &mut TaskGroup) -> Metadata {
+        self.restore_ecash_from_federation(gap_limit, task_group)
+            .await
             .unwrap()
             .unwrap()
     }
