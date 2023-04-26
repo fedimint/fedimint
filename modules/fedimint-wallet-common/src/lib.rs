@@ -333,7 +333,7 @@ pub enum ProcessPegOutSigError {
     ErrorFinalizingPsbt(Vec<miniscript::psbt::Error>),
 }
 
-// FIXME: make FakeFed not require Eq
+// FIXME: make tests not require Eq
 /// **WARNING**: this is only intended to be used for testing
 impl PartialEq for WalletError {
     fn eq(&self, other: &Self) -> bool {
