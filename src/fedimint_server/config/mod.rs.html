@@ -877,24 +877,11 @@
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::time::Duration;
-<span class="kw">use </span>std::{env, fs};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>bitcoin::hashes::sha256;
@@ -946,11 +933,8 @@
 <span class="kw">pub mod </span>distributedgen;
 <span class="kw">pub mod </span>io;
 
-<span class="doccomment">/// The default maximum open connections the API can handle
+<span class="doccomment">/// The maximum open connections the API can handle
 </span><span class="kw">const </span>DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = <span class="number">1000</span>;
-
-<span class="doccomment">/// The env var for maximum open connections the API can handle
-</span><span class="kw">const </span>ENV_MAX_CLIENT_CONNECTIONS: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_MAX_CLIENT_CONNECTIONS&quot;</span>;
 
 <span class="doccomment">/// How many times a config download token can be used by a client
 </span><span class="kw">const </span>DEFAULT_CONFIG_DOWNLOAD_LIMIT: u64 = <span class="number">100</span>;
@@ -1634,7 +1618,6 @@
     }
 
     <span class="doccomment">/// Generates the parameters necessary for running server config generation
-    </span><span class="comment">// TODO: Move into testing once new config gen UI is written
     </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>new(
         api_auth: ApiAuth,
@@ -1655,7 +1638,6 @@
                 p2p_bind,
                 api_bind,
                 download_token_limit,
-                max_connections: max_connections(),
             },
             consensus: ConfigGenParamsConsensus {
                 peers,
@@ -1666,14 +1648,6 @@
             },
         }
     }
-}
-
-<span class="comment">// TODO: Remove once new config gen UI is written
-</span><span class="kw">pub fn </span>max_connections() -&gt; u32 {
-    env::var(ENV_MAX_CLIENT_CONNECTIONS)
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(DEFAULT_MAX_CLIENT_CONNECTIONS)
 }
 
 <span class="kw">pub async fn </span>connect&lt;T&gt;(

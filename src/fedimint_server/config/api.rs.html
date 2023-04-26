@@ -952,12 +952,6 @@
 <a href="#952" id="952">952</a>
 <a href="#953" id="953">953</a>
 <a href="#954" id="954">954</a>
-<a href="#955" id="955">955</a>
-<a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a>
-<a href="#958" id="958">958</a>
-<a href="#959" id="959">959</a>
-<a href="#960" id="960">960</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1373,7 +1367,6 @@
             p2p_bind: connection.settings.p2p_bind,
             api_bind: connection.settings.api_bind,
             download_token_limit: connection.settings.download_token_limit,
-            max_connections: connection.settings.max_connections,
         };
 
         <span class="kw">let </span>params = ConfigGenParams { local, consensus };
@@ -1383,7 +1376,7 @@
     }
 }
 
-<span class="doccomment">/// Config gen params that are only used locally, shouldn&#39;t be shared
+<span class="doccomment">/// Config params that are only used locally, shouldn&#39;t be shared
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ConfigGenParamsLocal {
     <span class="doccomment">/// Our peer id
@@ -1398,11 +1391,9 @@
     </span><span class="kw">pub </span>api_bind: SocketAddr,
     <span class="doccomment">/// Limit on the number of times a config download token can be used
     </span><span class="kw">pub </span>download_token_limit: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    <span class="doccomment">/// How many API connections we will accept
-    </span><span class="kw">pub </span>max_connections: u32,
 }
 
-<span class="doccomment">/// All the info we configure prior to config gen starting
+<span class="doccomment">/// All the connections info we configure locally without talking to peers
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ConfigGenSettings {
     <span class="doccomment">/// Limit on the number of times a config download token can be used
@@ -1419,8 +1410,6 @@
     </span><span class="kw">pub </span>default_params: ConfigGenParamsRequest,
     <span class="doccomment">/// Modules that will generate configs
     </span><span class="kw">pub </span>module_gens: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
-    <span class="doccomment">/// How many API connections we will accept
-    </span><span class="kw">pub </span>max_connections: u32,
     <span class="doccomment">/// Registry for config gen
     </span><span class="kw">pub </span>registry: ServerModuleGenRegistry,
 }
@@ -1682,7 +1671,7 @@
     <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    <span class="kw">use </span><span class="kw">crate</span>::config::{DEFAULT_CONFIG_DOWNLOAD_LIMIT, DEFAULT_MAX_CLIENT_CONNECTIONS};
+    <span class="kw">use </span><span class="kw">crate</span>::config::DEFAULT_CONFIG_DOWNLOAD_LIMIT;
     <span class="kw">use crate</span>::{FedimintServer, PLAINTEXT_PASSWORD};
 
     <span class="doccomment">/// Helper in config API tests for simulating a guardian&#39;s client and server
@@ -1719,7 +1708,6 @@
                 api_url: api_url.clone(),
                 default_params: Default::default(),
                 module_gens: Default::default(),
-                max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
                 registry: Default::default(),
             };
             <span class="kw">let </span>dir = data_dir.join(name_suffix.to_string());
