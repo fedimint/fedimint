@@ -22,7 +22,7 @@ function open_channel() {
 }
 
 function await_fedimint_block_sync() {
-  $FM_BIN_DIR/fixtures await-fedimint-block-sync
+  fixtures await-fedimint-block-sync
 }
 
 # Check that lightning block-processing is caught up
@@ -109,7 +109,7 @@ function show_verbose_output()
 }
 
 function await_bitcoind_ready() {
-  $FM_BIN_DIR/fixtures await-bitcoind-ready
+  fixtures await-bitcoind-ready
 }
 
 function use_cln_gw() {
@@ -127,18 +127,18 @@ function use_lnd_gw() {
 ### Start Daemons ###
 
 function run_dkg() {
-  $FM_BIN_DIR/fixtures dkg $FM_FED_SIZE
+  fixtures dkg $FM_FED_SIZE
 }
 
 function start_bitcoind() {
-  $FM_BIN_DIR/fixtures bitcoind
+  fixtures bitcoind
   echo $! >> $FM_PID_FILE
 }
 
 function start_federation() {
   START_SERVER=${1:-0}
   END_SERVER=${2:-$FM_FED_SIZE}
-  $FM_BIN_DIR/fixtures federation $START_SERVER $END_SERVER &
+  fixtures federation $START_SERVER $END_SERVER &
   # BUG: Give daemons some time to write to `FM_PID_FILE`
   # before moving on and letting other scripts rely on it.
   # See https://github.com/fedimint/fedimint/issues/2236
@@ -146,7 +146,7 @@ function start_federation() {
 }
 
 function start_all_daemons() {
-  $FM_BIN_DIR/fixtures all-daemons &
+  fixtures all-daemons &
   # BUG: Give daemons some time to write to `FM_PID_FILE`
   # before touching it from here.
   # See https://github.com/fedimint/fedimint/issues/2236

@@ -106,9 +106,8 @@ impl Federation {
     }
 
     pub async fn cmd(&self) -> Command {
-        let bin_dir = env::var("FM_BIN_DIR").unwrap();
         let cfg_dir = env::var("FM_DATA_DIR").unwrap();
-        cmd!("{bin_dir}/fedimint-cli", "--data-dir={cfg_dir}")
+        cmd!("fedimint-cli", "--data-dir={cfg_dir}")
     }
 
     pub async fn pegin(&self, amt: u64) -> Result<()> {
@@ -230,7 +229,6 @@ impl Fedimintd {
         bitcoind: Bitcoind,
         peer_id: usize,
     ) -> Result<Self> {
-        let bin_dir = env::var("FM_BIN_DIR")?;
         let cfg_dir = env::var("FM_DATA_DIR")?;
         let env_vars = fedimint_env(peer_id)?;
         let data_dir = env_vars
@@ -239,11 +237,7 @@ impl Fedimintd {
         fs::create_dir_all(data_dir).await?;
 
         // spawn fedimintd
-        let cmd = cmd!(
-            "{bin_dir}/fedimintd",
-            "--data-dir={cfg_dir}/server-{peer_id}"
-        )
-        .envs(env_vars);
+        let cmd = cmd!("fedimintd", "--data-dir={cfg_dir}/server-{peer_id}").envs(env_vars);
 
         info!("fedimintd-{peer_id} started");
         let process = process_mgr
@@ -266,7 +260,6 @@ impl Fedimintd {
 pub async fn run_dkg(root_task_group: &TaskGroup, servers: usize) -> anyhow::Result<()> {
     async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
         // set env vars
-        let bin_dir = env::var("FM_BIN_DIR")?;
         let server_name = format!("Server {id}!");
         let env_vars = fedimint_env(id)?;
         let p2p_url = env_vars.get("FM_P2P_URL").context("FM_P2P_URL not found")?;
@@ -281,7 +274,7 @@ pub async fn run_dkg(root_task_group: &TaskGroup, servers: usize) -> anyhow::Res
 
         info!("creating TLS certs created for started {server_name} in {out_dir}");
         cmd!(
-            "{bin_dir}/distributedgen",
+            "distributedgen",
             "create-cert",
             "--p2p-url={p2p_url}",
             "--api-url={api_url}",
@@ -309,7 +302,6 @@ pub async fn run_dkg(root_task_group: &TaskGroup, servers: usize) -> anyhow::Res
 
     async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()> {
         let certs = certs.join(",");
-        let bin_dir = env::var("FM_BIN_DIR")?;
         let cfg_dir = env::var("FM_DATA_DIR")?;
         let server_name = format!("Server-{id}");
 
@@ -326,7 +318,7 @@ pub async fn run_dkg(root_task_group: &TaskGroup, servers: usize) -> anyhow::Res
 
         info!("creating TLS certs created for started {server_name} in {out_dir}");
         cmd!(
-            "{bin_dir}/distributedgen",
+            "distributedgen",
             "run",
             "--bind-p2p={bind_p2p}",
             "--bind-api={bind_api}",

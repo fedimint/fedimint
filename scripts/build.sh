@@ -32,6 +32,7 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 # Define temporary directories to not overwrite manually created config if run locally
 export FM_TEST_DIR=$FM_TMP_DIR
 export FM_BIN_DIR="$SRC_DIR/target/${CARGO_PROFILE:-debug}"
+export PATH="$FM_BIN_DIR:$PATH"
 export FM_PID_FILE="$FM_TMP_DIR/.pid"
 export FM_LOGS_DIR="$FM_TEST_DIR/logs"
 export FM_CLN_DIR="$FM_TEST_DIR/cln"
@@ -75,12 +76,9 @@ mkdir -p $FM_GATEWAY_DATA_DIR
 export FM_LIGHTNING_CLI="lightning-cli --network regtest --lightning-dir=$FM_CLN_DIR"
 export FM_LNCLI="lncli -n regtest --lnddir=$FM_LND_DIR --rpcserver=localhost:11009"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
-export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --data-dir $FM_DATA_DIR"
-export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
-export FM_GWCLI_CLN="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
-export FM_GWCLI_LND="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:28175/"
-export FM_DB_TOOL="$FM_BIN_DIR/dbtool"
-export FM_DISTRIBUTEDGEN="$FM_BIN_DIR/distributedgen"
+export FM_MINT_CLIENT="fedimint-cli --data-dir $FM_DATA_DIR"
+export FM_GWCLI_CLN="gateway-cli --rpcpassword=theresnosecondbest"
+export FM_GWCLI_LND="gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:28175/"
 
 # Fedimint config variables
 export FM_TEST_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
@@ -91,10 +89,7 @@ alias lightning-cli="\$FM_LIGHTNING_CLI"
 alias lncli="\$FM_LNCLI"
 alias bitcoin-cli="\$FM_BTC_CLIENT"
 alias mint_client="\$FM_MINT_CLIENT"
-alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 alias gateway-cln="\$FM_GWCLI_CLN"
 alias gateway-lnd="\$FM_GWCLI_LND"
-alias dbtool="\$FM_DB_TOOL"
-alias distributedgen="\$FM_DISTRIBUTEDGEN"
 
 trap kill_fedimint_processes EXIT
