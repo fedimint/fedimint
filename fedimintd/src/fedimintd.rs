@@ -272,6 +272,7 @@ async fn run(
             api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
             default_params: Default::default(),
             module_gens: module_gens.legacy_init_modules(),
+            max_connections: fedimint_server::config::max_connections(),
             registry: module_gens,
         },
         db,

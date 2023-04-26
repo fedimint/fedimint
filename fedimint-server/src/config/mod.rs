@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
+use std::{env, fs};
 
 use anyhow::{bail, format_err};
 use bitcoin::hashes::sha256;
@@ -54,8 +54,11 @@ pub mod api;
 pub mod distributedgen;
 pub mod io;
 
-/// The maximum open connections the API can handle
+/// The default maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
+
+/// The env var for maximum open connections the API can handle
+const ENV_MAX_CLIENT_CONNECTIONS: &str = "FM_MAX_CLIENT_CONNECTIONS";
 
 /// How many times a config download token can be used by a client
 const DEFAULT_CONFIG_DOWNLOAD_LIMIT: u64 = 100;
@@ -739,6 +742,7 @@ impl ConfigGenParams {
     }
 
     /// Generates the parameters necessary for running server config generation
+    // TODO: Move into testing once new config gen UI is written
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         api_auth: ApiAuth,
@@ -759,6 +763,7 @@ impl ConfigGenParams {
                 p2p_bind,
                 api_bind,
                 download_token_limit,
+                max_connections: max_connections(),
             },
             consensus: ConfigGenParamsConsensus {
                 peers,
@@ -769,6 +774,14 @@ impl ConfigGenParams {
             },
         }
     }
+}
+
+// TODO: Remove once new config gen UI is written
+pub fn max_connections() -> u32 {
+    env::var(ENV_MAX_CLIENT_CONNECTIONS)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_MAX_CLIENT_CONNECTIONS)
 }
 
 pub async fn connect<T>(
