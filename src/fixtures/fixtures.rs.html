@@ -585,12 +585,6 @@
 <a href="#585" id="585">585</a>
 <a href="#586" id="586">586</a>
 <a href="#587" id="587">587</a>
-<a href="#588" id="588">588</a>
-<a href="#589" id="589">589</a>
-<a href="#590" id="590">590</a>
-<a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
 </pre><pre class="rust"><code><span class="doccomment">/// This tool assumes that `scripts/build.sh` has been sourced in the
 /// environment which calls it
 </span><span class="kw">use </span>std::collections::HashMap;
@@ -865,7 +859,6 @@
     <span class="comment">// wait for bitcoin RPC to be ready ...
     </span>await_bitcoind_ready(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fedimint-{id}&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>env_vars = fedimint_env(id)<span class="question-mark">?</span>;
     <span class="kw">let </span>data_dir = env_vars
         .get(<span class="string">&quot;FM_FEDIMINT_DATA_DIR&quot;</span>)
@@ -875,7 +868,7 @@
     </span>fs::create_dir_all(<span class="kw-2">&amp;</span>data_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// spawn fedimintd
-    </span><span class="kw">let </span><span class="kw-2">mut </span>fedimintd = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/fedimintd&quot;</span>))
+    </span><span class="kw">let </span><span class="kw-2">mut </span>fedimintd = Command::new(<span class="string">&quot;fedimintd&quot;</span>)
         .arg(<span class="string">&quot;--data-dir&quot;</span>)
         .arg(data_dir)
         .envs(env_vars)
@@ -891,13 +884,9 @@
 }
 
 <span class="kw">async fn </span>run_gatewayd(node: GatewayNode) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
-
     <span class="comment">// TODO: await_fedimint_block_sync()
 
-    </span><span class="kw">let </span><span class="kw-2">mut </span>gatewayd = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/gatewayd&quot;</span>))
-        .arg(node.to_string())
-        .spawn()<span class="question-mark">?</span>;
+    </span><span class="kw">let </span><span class="kw-2">mut </span>gatewayd = Command::new(<span class="string">&quot;gatewayd&quot;</span>).arg(node.to_string()).spawn()<span class="question-mark">?</span>;
     kill_on_exit(<span class="string">&quot;gatewayd&quot;</span>, <span class="kw-2">&amp;</span>gatewayd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;gatewayd started&quot;</span>);
 
@@ -960,8 +949,7 @@
 
 <span class="kw">async fn </span>create_tls(id: usize, sender: Sender&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
     <span class="comment">// set env vars
-    </span><span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server {id}!&quot;</span>);
+    </span><span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server {id}!&quot;</span>);
     <span class="kw">let </span>env_vars = fedimint_env(id)<span class="question-mark">?</span>;
     <span class="kw">let </span>p2p_url = env_vars
         .get(<span class="string">&quot;FM_P2P_URL&quot;</span>)
@@ -978,7 +966,7 @@
     </span>fs::create_dir(<span class="kw-2">&amp;</span>out_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">info!</span>(<span class="string">&quot;creating TLS certs created for started {server_name} in {out_dir}&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>task = Command::new(<span class="macro">format!</span>(<span class="string">&quot;{bin_dir}/distributedgen&quot;</span>))
+    <span class="kw">let </span><span class="kw-2">mut </span>task = Command::new(<span class="string">&quot;distributedgen&quot;</span>)
         .envs(fedimint_env(id)<span class="question-mark">?</span>)
         .arg(<span class="string">&quot;create-cert&quot;</span>)
         .arg(<span class="macro">format!</span>(<span class="string">&quot;--p2p-url={p2p_url}&quot;</span>))

@@ -403,14 +403,6 @@
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
 <a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::ops::Range;
 
@@ -519,9 +511,8 @@
     }
 
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
-        <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>).unwrap();
         <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>).unwrap();
-        <span class="macro">cmd!</span>(<span class="string">&quot;{bin_dir}/fedimint-cli&quot;</span>, <span class="string">&quot;--data-dir={cfg_dir}&quot;</span>)
+        <span class="macro">cmd!</span>(<span class="string">&quot;fedimint-cli&quot;</span>, <span class="string">&quot;--data-dir={cfg_dir}&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -643,7 +634,6 @@
         bitcoind: Bitcoind,
         peer_id: usize,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>env_vars = fedimint_env(peer_id)<span class="question-mark">?</span>;
         <span class="kw">let </span>data_dir = env_vars
@@ -652,11 +642,7 @@
         fs::create_dir_all(data_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// spawn fedimintd
-        </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
-            <span class="string">&quot;{bin_dir}/fedimintd&quot;</span>,
-            <span class="string">&quot;--data-dir={cfg_dir}/server-{peer_id}&quot;
-        </span>)
-        .envs(env_vars);
+        </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(<span class="string">&quot;fedimintd&quot;</span>, <span class="string">&quot;--data-dir={cfg_dir}/server-{peer_id}&quot;</span>).envs(env_vars);
 
         <span class="macro">info!</span>(<span class="string">&quot;fedimintd-{peer_id} started&quot;</span>);
         <span class="kw">let </span>process = process_mgr
@@ -679,8 +665,7 @@
 <span class="kw">pub async fn </span>run_dkg(root_task_group: <span class="kw-2">&amp;</span>TaskGroup, servers: usize) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">async fn </span>create_tls(id: usize, sender: Sender&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// set env vars
-        </span><span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server {id}!&quot;</span>);
+        </span><span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server {id}!&quot;</span>);
         <span class="kw">let </span>env_vars = fedimint_env(id)<span class="question-mark">?</span>;
         <span class="kw">let </span>p2p_url = env_vars.get(<span class="string">&quot;FM_P2P_URL&quot;</span>).context(<span class="string">&quot;FM_P2P_URL not found&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>api_url = env_vars.get(<span class="string">&quot;FM_API_URL&quot;</span>).context(<span class="string">&quot;FM_API_URL not found&quot;</span>)<span class="question-mark">?</span>;
@@ -694,7 +679,7 @@
 
         <span class="macro">info!</span>(<span class="string">&quot;creating TLS certs created for started {server_name} in {out_dir}&quot;</span>);
         <span class="macro">cmd!</span>(
-            <span class="string">&quot;{bin_dir}/distributedgen&quot;</span>,
+            <span class="string">&quot;distributedgen&quot;</span>,
             <span class="string">&quot;create-cert&quot;</span>,
             <span class="string">&quot;--p2p-url={p2p_url}&quot;</span>,
             <span class="string">&quot;--api-url={api_url}&quot;</span>,
@@ -722,7 +707,6 @@
 
     <span class="kw">async fn </span>run_distributedgen(id: usize, certs: Vec&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>certs = certs.join(<span class="string">&quot;,&quot;</span>);
-        <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server-{id}&quot;</span>);
 
@@ -739,7 +723,7 @@
 
         <span class="macro">info!</span>(<span class="string">&quot;creating TLS certs created for started {server_name} in {out_dir}&quot;</span>);
         <span class="macro">cmd!</span>(
-            <span class="string">&quot;{bin_dir}/distributedgen&quot;</span>,
+            <span class="string">&quot;distributedgen&quot;</span>,
             <span class="string">&quot;run&quot;</span>,
             <span class="string">&quot;--bind-p2p={bind_p2p}&quot;</span>,
             <span class="string">&quot;--bind-api={bind_api}&quot;</span>,

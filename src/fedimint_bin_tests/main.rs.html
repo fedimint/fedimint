@@ -1333,14 +1333,17 @@
 <span class="kw">impl </span>Lightningd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>cln_dir = env::var(<span class="string">&quot;FM_CLN_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>extension_path = <span class="macro">cmd!</span>(<span class="string">&quot;which&quot;</span>, <span class="string">&quot;gateway-cln-extension&quot;</span>)
+            .out_string()
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;gateway-cln-extension not on path&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="string">&quot;lightningd&quot;</span>,
             <span class="string">&quot;--dev-fast-gossip&quot;</span>,
             <span class="string">&quot;--dev-bitcoind-poll=1&quot;</span>,
             <span class="string">&quot;--lightning-dir={cln_dir}&quot;</span>,
-            <span class="string">&quot;--plugin={bin_dir}/gateway-cln-extension&quot;
+            <span class="string">&quot;--plugin={extension_path}&quot;
         </span>);
 
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;lightningd&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1536,7 +1539,6 @@
 
 <span class="kw">impl </span>Gatewayd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, ln: ClnOrLnd) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_name = ln.name();
         <span class="kw">let </span>test_dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>gateway_env: HashMap&lt;String, String&gt; = <span class="kw">match </span>ln {
@@ -1572,7 +1574,7 @@
         <span class="kw">let </span>process = process_mgr
             .spawn_daemon(
                 <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;gatewayd-{ln_name}&quot;</span>),
-                <span class="macro">cmd!</span>(<span class="string">&quot;{bin_dir}/gatewayd&quot;</span>, ln_name).envs(gateway_env),
+                <span class="macro">cmd!</span>(<span class="string">&quot;gatewayd&quot;</span>, ln_name).envs(gateway_env),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1583,14 +1585,13 @@
     }
 
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
-        <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>).expect(<span class="string">&quot;FM_BIN_DIR not found&quot;</span>);
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ln {
             ClnOrLnd::Cln(<span class="kw">_</span>) =&gt; {
-                <span class="macro">cmd!</span>(<span class="string">&quot;{bin_dir}/gateway-cli&quot;</span>, <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>)
+                <span class="macro">cmd!</span>(<span class="string">&quot;gateway-cli&quot;</span>, <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>)
             }
             ClnOrLnd::Lnd(<span class="kw">_</span>) =&gt; {
                 <span class="macro">cmd!</span>(
-                    <span class="string">&quot;{bin_dir}/gateway-cli&quot;</span>,
+                    <span class="string">&quot;gateway-cli&quot;</span>,
                     <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>,
                     <span class="string">&quot;-a&quot;</span>,
                     <span class="string">&quot;http://127.0.0.1:28175&quot;
@@ -1733,7 +1734,6 @@
 }
 
 <span class="kw">async fn </span>cli_tests(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>bin_dir = env::var(<span class="string">&quot;FM_BIN_DIR&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>data_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
 
     <span class="attr">#[allow(unused_variables)]
@@ -1749,7 +1749,7 @@
     } = dev_fed;
 
     <span class="macro">cmd!</span>(
-        <span class="string">&quot;{bin_dir}/distributedgen&quot;</span>,
+        <span class="string">&quot;distributedgen&quot;</span>,
         <span class="string">&quot;config-decrypt&quot;</span>,
         <span class="string">&quot;--in-file={data_dir}/server-0/private.encrypt&quot;</span>,
         <span class="string">&quot;--out-file={data_dir}/server-0/config-plaintext.json&quot;
@@ -1759,7 +1759,7 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">cmd!</span>(
-        <span class="string">&quot;{bin_dir}/distributedgen&quot;</span>,
+        <span class="string">&quot;distributedgen&quot;</span>,
         <span class="string">&quot;config-encrypt&quot;</span>,
         <span class="string">&quot;--in-file={data_dir}/server-0/config-plaintext.json&quot;</span>,
         <span class="string">&quot;--out-file={data_dir}/server-0/config-2&quot;
@@ -1769,7 +1769,7 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">cmd!</span>(
-        <span class="string">&quot;{bin_dir}/distributedgen&quot;</span>,
+        <span class="string">&quot;distributedgen&quot;</span>,
         <span class="string">&quot;config-decrypt&quot;</span>,
         <span class="string">&quot;--in-file={data_dir}/server-0/config-2&quot;</span>,
         <span class="string">&quot;--out-file={data_dir}/server-0/config-plaintext-2.json&quot;
