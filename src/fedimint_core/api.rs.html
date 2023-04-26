@@ -1116,8 +1116,6 @@
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
-<span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-</span><span class="kw">use </span>jsonrpsee_core::client::CertificateStore;
 <span class="kw">use </span>jsonrpsee_core::client::ClientT;
 <span class="kw">use </span>jsonrpsee_core::Error <span class="kw">as </span>JsonRpcError;
 <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
@@ -1165,9 +1163,11 @@
             MemberError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
             MemberError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">false</span>,
             MemberError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
-                JsonRpcError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcError::Internal(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcError::Call(jsonrpsee_types::error::CallError::Custom(e)) =&gt; e.code() == <span class="number">404</span>,
+                <span class="comment">// TODO: Does this cover all retryable cases?
+                </span>JsonRpcError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                JsonRpcError::MaxSlotsExceeded =&gt; <span class="bool-val">true</span>,
+                JsonRpcError::RequestTimeout =&gt; <span class="bool-val">true</span>,
+                JsonRpcError::Call(e) =&gt; e.code() == <span class="number">404</span>,
                 <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
             },
             MemberError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
@@ -1784,7 +1784,7 @@
     <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">return </span>WsClientBuilder::default()
-            .certificate_store(CertificateStore::WebPki)
+            .use_webpki_rustls()
             .build(url_to_string_with_default_port(url)) <span class="comment">// Hack for default ports, see fn docs
             </span>.<span class="kw">await</span>;
 
