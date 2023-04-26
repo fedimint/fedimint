@@ -22,7 +22,11 @@ function open_channel() {
 }
 
 function await_fedimint_block_sync() {
-  fixtures await-fedimint-block-sync
+  BLOCKS="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
+  FINALITY_DELAY=$(get_finality_delay)
+  AWAIT="$((BLOCKS - FINALITY_DELAY))"
+  echo "await_fedimint_block_sync $AWAIT"
+  $FM_MINT_CLIENT wait-block-height "$AWAIT"
 }
 
 # Check that lightning block-processing is caught up

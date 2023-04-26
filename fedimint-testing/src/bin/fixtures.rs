@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::env;
 use std::io::Write;
-use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,17 +10,8 @@ use std::time::Duration;
 use anyhow::anyhow;
 use bitcoincore_rpc::{Client as BitcoinClient, RpcApi};
 use clap::{Parser, Subcommand, ValueEnum};
-use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
-use fedimint_client_legacy::modules::mint::MintClientGen;
-use fedimint_client_legacy::{module_decode_stubs, Client, UserClient, UserClientConfig};
-use fedimint_core::config::load_from_file;
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
-use fedimint_wallet_client::config::WalletClientConfig;
-use fedimint_wallet_client::WalletClientGen;
 use tokio::fs::{self, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
@@ -60,7 +50,6 @@ enum Cmd {
     Federation { start_id: usize, stop_id: usize },
 
     // commands
-    AwaitFedimintBlockSync,
     AwaitBitcoindReady,
 }
 
@@ -76,22 +65,6 @@ fn bitcoin_rpc() -> anyhow::Result<Arc<BitcoinClient>> {
     let (host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(&url)?;
     let client = Arc::new(BitcoinClient::new(&host, auth)?);
     Ok(client)
-}
-
-async fn fedimint_client() -> anyhow::Result<UserClient> {
-    let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
-    let cfg_path = workdir.join("client.json");
-    let db_path = workdir.join("client.db");
-    let cfg: UserClientConfig = load_from_file(&cfg_path)?;
-    let db = fedimint_rocksdb::RocksDb::open(db_path)?;
-    let decoders = module_decode_stubs();
-    let db = Database::new(db, module_decode_stubs());
-    let module_gens = ClientModuleGenRegistry::from(vec![
-        DynClientModuleGen::from(WalletClientGen),
-        DynClientModuleGen::from(MintClientGen),
-        DynClientModuleGen::from(LightningClientGen),
-    ]);
-    Ok(Client::new(cfg.clone(), decoders, module_gens, db, Default::default()).await)
 }
 
 /// Save PID to a $FM_PID_FILE which `kill_fedimint_processes` shell script
@@ -132,24 +105,6 @@ async fn await_bitcoind_ready(waiter_name: &str) -> anyhow::Result<()> {
         sleep(Duration::from_secs(1)).await;
     }
 
-    Ok(())
-}
-
-async fn await_fedimint_block_sync() -> anyhow::Result<()> {
-    await_bitcoind_ready("await_fedimint_block_sync").await?;
-    let fedimint_client = fedimint_client().await?;
-    let wallet_cfg: WalletClientConfig = fedimint_client
-        .config()
-        .0
-        .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)?;
-    let finality_delay = wallet_cfg.finality_delay;
-    let bitcoin_rpc = bitcoin_rpc()?;
-    let bitcoin_block_height = bitcoin_rpc.get_blockchain_info()?.blocks;
-    let expected_block_height = bitcoin_block_height - (finality_delay as u64);
-
-    fedimint_client
-        .await_consensus_block_height(expected_block_height)
-        .await?;
     Ok(())
 }
 
@@ -579,7 +534,6 @@ async fn main() -> anyhow::Result<()> {
             .expect("federation failed"),
         Cmd::AllDaemons => all_daemons().await.expect("daemons failed"),
         // commands
-        Cmd::AwaitFedimintBlockSync => await_fedimint_block_sync().await.expect("daemons failed"),
         Cmd::AwaitBitcoindReady => await_bitcoind_ready("").await.expect("daemons failed"),
     }
 
