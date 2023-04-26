@@ -4,11 +4,16 @@ use std::fmt::Debug;
 use bitcoin_hashes::sha256;
 use fedimint_core::task::MaybeSend;
 use serde::{Deserialize, Serialize};
+use threshold_crypto::PublicKey;
 use tokio_rustls::rustls;
 use url::Url;
 
-use crate::api::{DynFederationApi, FederationApiExt, FederationResult, WsFederationApi};
+use crate::api::{
+    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, WsFederationApi,
+};
 use crate::config::ServerModuleGenParamsRegistry;
+use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+use crate::module::registry::ModuleDecoderRegistry;
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
 
@@ -82,6 +87,25 @@ impl WsAdminClient {
     /// and upgrade
     pub async fn signal_upgrade(&self) -> FederationResult<()> {
         self.request_auth("upgrade", ApiRequestErased::default())
+            .await
+    }
+
+    /// Sends a signal to consensus that we want to force running an epoch
+    /// outcome
+    pub async fn force_process_epoch(&self, outcome: SerdeEpochHistory) -> FederationResult<()> {
+        self.request_auth("process_outcome", ApiRequestErased::new(outcome))
+            .await
+    }
+
+    /// Delegates to `fetch_epoch_history`
+    pub async fn fetch_last_epoch_history(
+        &self,
+        epoch_pk: PublicKey,
+        decoders: &ModuleDecoderRegistry,
+    ) -> FederationResult<SignedEpochOutcome> {
+        let epoch = self.inner.fetch_epoch_count().await? - 1;
+        self.inner
+            .fetch_epoch_history(epoch, epoch_pk, decoders)
             .await
     }
 

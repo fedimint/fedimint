@@ -37,7 +37,8 @@ use fedimint_core::api::{
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseValue};
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
@@ -154,6 +155,12 @@ enum CliOutput {
         count: u64,
     },
 
+    LastEpoch {
+        hex_outcome: String,
+    },
+
+    ForceEpoch,
+
     Raw(serde_json::Value),
 }
 
@@ -176,6 +183,7 @@ enum CliErrorKind {
     InsufficientBalance,
     SerializationError,
     GeneralFailure,
+    MissingAuth,
 }
 
 /// `Result` with `CliError` as `Error`
@@ -296,6 +304,18 @@ struct Opts {
     #[arg(long = "data-dir", alias = "workdir", env = "FM_DATA_DIR")]
     workdir: Option<PathBuf>,
 
+    /// Location of the salt file
+    #[arg(env = "FM_SALT_PATH")]
+    salt_path: Option<PathBuf>,
+
+    /// Peer id of the guardian
+    #[arg(env = "FM_OUR_ID", value_parser = parse_peer_id)]
+    our_id: Option<PeerId>,
+
+    /// Guardian password for authentication
+    #[arg(long, env = "FM_PASSWORD")]
+    password: Option<String>,
+
     #[clap(subcommand)]
     command: Command,
 }
@@ -305,6 +325,32 @@ impl Opts {
         self.workdir
             .as_ref()
             .ok_or_cli_msg(CliErrorKind::IOError, "`--data-dir=` argument not set.")
+    }
+
+    async fn admin_client(&self) -> CliResult<WsAdminClient> {
+        let salt_path = self.salt_path.clone().ok_or_cli_msg(
+            CliErrorKind::MissingAuth,
+            "Admin client needs salt-path set",
+        )?;
+        let password = self
+            .password
+            .clone()
+            .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs password set")?;
+        let our_id = &self
+            .our_id
+            .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
+        let salt = fs::read_to_string(salt_path)
+            .map_err_cli_msg(CliErrorKind::IOError, "Unable to open salt file")?;
+        let auth = ApiAuth(get_password_hash(&password, &salt).map_err_cli_io()?);
+        let url = self
+            .load_config()?
+            .0
+            .api_endpoints
+            .get(our_id)
+            .expect("Endpoint exists")
+            .url
+            .clone();
+        Ok(WsAdminClient::new(url, *our_id, auth))
     }
 
     fn load_config(&self) -> CliResult<UserClientConfig> {
@@ -502,20 +548,16 @@ enum Command {
     DecodeTransaction { hex_string: String },
 
     /// Signal a consensus upgrade
-    SignalUpgrade {
-        /// Location of the salt file
-        #[clap(long)]
-        salt_path: PathBuf,
-        /// Peer id of the guardian
-        #[arg(long, value_parser = parse_peer_id)]
-        our_id: PeerId,
-        /// Guardian password for authentication
-        #[arg(long, env = "FM_PASSWORD")]
-        password: String,
-    },
+    SignalUpgrade,
 
     /// Gets the current epoch count
     EpochCount,
+
+    /// Gets the last epoch
+    LastEpoch,
+
+    /// Force processing an epoch
+    ForceEpoch { hex_outcome: String },
 
     /// Call module-specific commands
     Module {
@@ -973,26 +1015,8 @@ impl FedimintCli {
                     transaction: (format!("{tx:?}")),
                 })
             }
-            Command::SignalUpgrade {
-                password,
-                salt_path,
-                our_id,
-            } => {
-                let salt = fs::read_to_string(salt_path)
-                    .map_err_cli_msg(CliErrorKind::IOError, "Unable to open salt file")?;
-                let auth = ApiAuth(get_password_hash(&password, &salt).map_err_cli_io()?);
-                let url = cli
-                    .build_client(&self.module_gens)
-                    .await?
-                    .config()
-                    .as_ref()
-                    .api_endpoints
-                    .get(&our_id)
-                    .expect("Endpoint exists")
-                    .url
-                    .clone();
-                let auth_api = WsAdminClient::new(url, our_id, auth);
-                auth_api.signal_upgrade().await?;
+            Command::SignalUpgrade => {
+                cli.admin_client().await?.signal_upgrade().await?;
                 Ok(CliOutput::SignalUpgrade)
             }
             Command::EpochCount => {
@@ -1004,6 +1028,31 @@ impl FedimintCli {
                     .fetch_epoch_count()
                     .await?;
                 Ok(CliOutput::EpochCount { count })
+            }
+            Command::LastEpoch => {
+                let cfg = cli.load_config()?;
+                let decoders = cli.load_decoders(&cfg, &self.module_gens);
+                let client = cli.admin_client().await?;
+                let last_epoch = client
+                    .fetch_last_epoch_history(cfg.0.epoch_pk, &decoders)
+                    .await?;
+
+                let hex_outcome = last_epoch.consensus_encode_to_hex().map_err_cli_io()?;
+                Ok(CliOutput::LastEpoch { hex_outcome })
+            }
+            Command::ForceEpoch { hex_outcome } => {
+                let cfg = cli.load_config()?;
+                let decoders = cli.load_decoders(&cfg, &self.module_gens);
+                let outcome: SignedEpochOutcome = Decodable::consensus_decode_hex(
+                    &hex_outcome,
+                    &decoders,
+                )
+                .map_err_cli_msg(CliErrorKind::SerializationError, "failed to decode outcome")?;
+                let client = cli.admin_client().await?;
+                client
+                    .force_process_epoch(SerdeEpochHistory::from(&outcome))
+                    .await?;
+                Ok(CliOutput::ForceEpoch)
             }
             Command::Module { id, arg } => {
                 let cfg = cli.load_config()?;

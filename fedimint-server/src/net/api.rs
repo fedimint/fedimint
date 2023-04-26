@@ -285,6 +285,17 @@ impl ConsensusApi {
     pub async fn signal_upgrade(&self) -> Result<(), SendError<ApiEvent>> {
         self.api_sender.send(ApiEvent::UpgradeSignal).await
     }
+
+    /// Force process an outcome
+    pub async fn force_process_outcome(&self, outcome: SerdeEpochHistory) -> ApiResult<()> {
+        let event = outcome
+            .try_into_inner(&self.modules.decoder_registry())
+            .map_err(|_| ApiError::bad_request("Unable to decode outcome".to_string()))?;
+        self.api_sender
+            .send(ApiEvent::ForceProcessOutcome(event.outcome))
+            .await
+            .map_err(|_| ApiError::server_error("Unable send event".to_string()))
+    }
 }
 
 #[async_trait]
@@ -376,7 +387,8 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             "fetch_epoch_history",
             async |fedimint: &ConsensusApi, _context, epoch: u64| -> SerdeEpochHistory {
-                let epoch = fedimint.epoch_history(epoch).await.ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
+                let epoch = fedimint.epoch_history(epoch).await
+                  .ok_or_else(|| ApiError::not_found(format!("epoch {epoch} not found")))?;
                 Ok((&epoch).into())
             }
         },
@@ -403,6 +415,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, context, _v: ()| -> () {
                 if context.has_auth() {
                     fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
+                    Ok(())
+                } else {
+                    Err(ApiError::unauthorized())
+                }
+            }
+        },
+        api_endpoint! {
+            "process_outcome",
+            async |fedimint: &ConsensusApi, context, outcome: SerdeEpochHistory| -> () {
+                if context.has_auth() {
+                    fedimint.force_process_outcome(outcome).await
+                      .map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
                     Ok(())
                 } else {
                     Err(ApiError::unauthorized())

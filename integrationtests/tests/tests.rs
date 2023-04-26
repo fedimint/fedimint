@@ -1087,12 +1087,40 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn rejoin_consensus_threshold_peers() -> Result<()> {
     non_lightning_test(2, |fed, _user, bitcoin| async move {
+        // Simulate a rejoin where all nodes stop
         bitcoin.mine_blocks(110).await;
         fed.run_consensus_epochs(1).await;
         fed.rejoin_consensus().await.unwrap();
         fed.run_consensus_epochs_wait(1).await.unwrap();
         bitcoin.mine_blocks(100).await;
         fed.run_consensus_epochs(1).await;
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejoin_consensus_split_peers() -> Result<()> {
+    non_lightning_test(4, |fed, user, bitcoin| async move {
+        // Simulate a rejoin where half the nodes didn't process the outcomes
+        fed.subset_peers(&[0, 1]).await.set_process_outcomes(false);
+        bitcoin.mine_blocks(100).await;
+        fed.run_consensus_epochs(1).await;
+        fed.subset_peers(&[0, 1]).await.set_process_outcomes(true);
+        let pubkey = fed.cfg.consensus.epoch_pk_set.public_key();
+        let epoch = user
+            .new_client_with_peers(peers(&[2]))
+            .fetch_epoch_history(0, pubkey);
+
+        fed.force_process_outcome(epoch.clone());
+        fed.run_consensus_epochs_wait(1).await.unwrap();
+        bitcoin.mine_blocks(100).await;
+        fed.run_consensus_epochs(1).await;
+
+        // We cannot process a past epoch and reverse the block height
+        let height = user.await_consensus_block_height(0).await.unwrap();
+        fed.force_process_outcome(epoch);
+        fed.run_consensus_epochs_wait(1).await.unwrap();
+        user.await_consensus_block_height(height).await.unwrap();
     })
     .await
 }
