@@ -46,8 +46,8 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Address, Transaction, Txid};
+<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::Amount;
-<span class="kw">use </span>fedimint_wallet_client::txoproof::TxOutProof;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>BitcoinTest {

@@ -1727,6 +1727,7 @@
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, sleep};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_ln_client::{
@@ -1777,7 +1778,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::config::MintClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::modules::mint::{BlindNonce, MintOutput};
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
-<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{PegOut, WalletInput, WalletOutput};
 <span class="kw">use </span><span class="kw">crate</span>::outcome::legacy::OutputOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::{Input, Output, Transaction <span class="kw">as </span>LegacyTransaction};

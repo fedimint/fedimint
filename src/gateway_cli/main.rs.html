@@ -248,9 +248,9 @@
 
 <span class="kw">use </span>bitcoin::{Address, Amount, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>fedimint_client_legacy::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_client_legacy::utils::from_hex;
 <span class="kw">use </span>fedimint_core::config::FederationId;
+<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::RpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{

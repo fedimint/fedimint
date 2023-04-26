@@ -254,8 +254,8 @@
     Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Transaction, TxOut,
 };
 <span class="kw">use </span>fedimint_bitcoind::{IBitcoindRpc, <span class="prelude-ty">Result </span><span class="kw">as </span>BitcoinRpcResult};
+<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, Feerate};
-<span class="kw">use </span>fedimint_wallet_client::txoproof::TxOutProof;
 <span class="kw">use </span>rand::rngs::OsRng;
 
 <span class="kw">use </span><span class="kw">super</span>::BitcoinTest;

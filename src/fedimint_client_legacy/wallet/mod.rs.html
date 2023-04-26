@@ -188,6 +188,7 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::{Address, KeyPair};
@@ -197,6 +198,7 @@
 <span class="kw">use </span>fedimint_core::core::Decoder;
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::{ModuleCommon, TransactionItemAmount};
+<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientModule;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -205,7 +207,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::tweakable::Tweakable;
-<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+<span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::{PegInProof, PegInProofError};
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span><span class="kw">crate</span>::MemberError;
