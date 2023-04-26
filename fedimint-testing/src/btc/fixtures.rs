@@ -10,8 +10,8 @@ use bitcoin::{
     Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Transaction, TxOut,
 };
 use fedimint_bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, Feerate};
-use fedimint_wallet_client::txoproof::TxOutProof;
 use rand::rngs::OsRng;
 
 use super::BitcoinTest;

@@ -42,6 +42,7 @@ use fedimint_core::module::{CommonModuleGen, ModuleCommon};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep};
 use fedimint_core::tiered::InvalidAmountTierError;
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{
@@ -92,7 +93,6 @@ use crate::modules::ln::{ContractOutput, LightningGateway, LightningOutput};
 use crate::modules::mint::config::MintClientConfig;
 use crate::modules::mint::{BlindNonce, MintOutput};
 use crate::modules::wallet::config::WalletClientConfig;
-use crate::modules::wallet::txoproof::TxOutProof;
 use crate::modules::wallet::{PegOut, WalletInput, WalletOutput};
 use crate::outcome::legacy::OutputOutcome;
 use crate::transaction::legacy::{Input, Output, Transaction as LegacyTransaction};

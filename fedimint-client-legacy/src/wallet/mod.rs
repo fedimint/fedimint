@@ -7,6 +7,7 @@ use fedimint_core::core::client::ClientModule;
 use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::Amount;
 use fedimint_wallet_client::WalletClientModule;
 use rand::{CryptoRng, RngCore};
@@ -15,7 +16,7 @@ use tracing::debug;
 
 use crate::modules::wallet::config::WalletClientConfig;
 use crate::modules::wallet::tweakable::Tweakable;
-use crate::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+use crate::modules::wallet::txoproof::{PegInProof, PegInProofError};
 use crate::modules::wallet::{WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome};
 use crate::utils::ClientContext;
 use crate::MemberError;

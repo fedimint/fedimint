@@ -17,6 +17,7 @@ async-trait = "0.1.64"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 cln-rpc = "0.1.1"
+erased-serde = "0.3"
 futures = "0.3.24"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
@@ -41,6 +42,7 @@ fedimintd = { path = "../fedimintd" }
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
+serde_json = "1.0.91"
 tokio = { version = "1.26.0", features = ["full"] }
 tokio-rustls = "0.23.4"
 tokio-stream = "0.1.11"
