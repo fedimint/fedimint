@@ -272,7 +272,6 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     // wait for bitcoin RPC to be ready ...
     await_bitcoind_ready(&format!("fedimint-{id}")).await?;
 
-    let bin_dir = env::var("FM_BIN_DIR")?;
     let env_vars = fedimint_env(id)?;
     let data_dir = env_vars
         .get("FM_FEDIMINT_DATA_DIR")
@@ -282,7 +281,7 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
     fs::create_dir_all(&data_dir).await?;
 
     // spawn fedimintd
-    let mut fedimintd = Command::new(format!("{bin_dir}/fedimintd"))
+    let mut fedimintd = Command::new("fedimintd")
         .arg("--data-dir")
         .arg(data_dir)
         .envs(env_vars)
@@ -298,13 +297,9 @@ async fn run_fedimintd(id: usize) -> anyhow::Result<()> {
 }
 
 async fn run_gatewayd(node: GatewayNode) -> anyhow::Result<()> {
-    let bin_dir = env::var("FM_BIN_DIR")?;
-
     // TODO: await_fedimint_block_sync()
 
-    let mut gatewayd = Command::new(format!("{bin_dir}/gatewayd"))
-        .arg(node.to_string())
-        .spawn()?;
+    let mut gatewayd = Command::new("gatewayd").arg(node.to_string()).spawn()?;
     kill_on_exit("gatewayd", &gatewayd).await?;
     info!("gatewayd started");
 
@@ -367,7 +362,6 @@ fn fedimint_env(id: usize) -> anyhow::Result<HashMap<String, String>> {
 
 async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
     // set env vars
-    let bin_dir = env::var("FM_BIN_DIR")?;
     let server_name = format!("Server {id}!");
     let env_vars = fedimint_env(id)?;
     let p2p_url = env_vars
@@ -385,7 +379,7 @@ async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
     fs::create_dir(&out_dir).await?;
 
     info!("creating TLS certs created for started {server_name} in {out_dir}");
-    let mut task = Command::new(format!("{bin_dir}/distributedgen"))
+    let mut task = Command::new("distributedgen")
         .envs(fedimint_env(id)?)
         .arg("create-cert")
         .arg(format!("--p2p-url={p2p_url}"))
