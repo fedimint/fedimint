@@ -1189,6 +1189,21 @@
 <a href="#1189" id="1189">1189</a>
 <a href="#1190" id="1190">1190</a>
 <a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::future::Future;
@@ -1762,6 +1777,21 @@
     .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass-foo&quot;</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// Test load last epoch with admin client
+    </span><span class="kw">let </span>epoch_json = <span class="macro">cmd!</span>(fed, <span class="string">&quot;last-epoch&quot;</span>)
+        .env(<span class="string">&quot;FM_SALT_PATH&quot;</span>, <span class="macro">format!</span>(<span class="string">&quot;{data_dir}/server-0/private.salt&quot;</span>))
+        .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass0&quot;</span>)
+        .env(<span class="string">&quot;FM_OUR_ID&quot;</span>, <span class="string">&quot;0&quot;</span>)
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>epoch_hex = epoch_json[<span class="string">&quot;hex_outcome&quot;</span>].as_str().unwrap();
+    <span class="kw">let </span>_force_epoch = <span class="macro">cmd!</span>(fed, <span class="string">&quot;force-epoch&quot;</span>, epoch_hex)
+        .env(<span class="string">&quot;FM_SALT_PATH&quot;</span>, <span class="macro">format!</span>(<span class="string">&quot;{data_dir}/server-0/private.salt&quot;</span>))
+        .env(<span class="string">&quot;FM_PASSWORD&quot;</span>, <span class="string">&quot;pass0&quot;</span>)
+        .env(<span class="string">&quot;FM_OUR_ID&quot;</span>, <span class="string">&quot;0&quot;</span>)
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>plaintext_one =
         fs::read_to_string(<span class="macro">format!</span>(<span class="string">&quot;{data_dir}/server-0/config-plaintext.json&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
