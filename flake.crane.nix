@@ -1,30 +1,25 @@
 { pkgs, lib, advisory-db, clightning-dev, pkgs-kitman, moreutils-ts }:
 craneLib:
 let
-  # filter source code at path `src` to include only the list of `modules`
-  filterModules = modules: raw-src:
+
+  filterSrcWithRegexes = regexes: raw-src:
     let
       src = builtins.path { path = raw-src; name = "fedimint"; };
       basePath = toString src + "/";
-      relPathAllCargoTomlFiles = builtins.filter
-        (pathStr: lib.strings.hasSuffix "/Cargo.toml" pathStr)
-        (builtins.map (path: lib.removePrefix basePath (toString path)) (lib.filesystem.listFilesRecursive src));
     in
     lib.cleanSourceWith {
       filter = (path: type:
         let
           relPath = lib.removePrefix basePath (toString path);
           includePath =
-            # traverse only into directories that somewhere in there contain `Cargo.toml` file, or were explicitly whitelisted
-            (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
+            (type == "directory") ||
             lib.any
               (re: builtins.match re relPath != null)
-              ([ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*/proto/.*" ] ++ builtins.concatLists (map (name: [ name "${name}/.*" ]) modules));
+              regexes;
         in
         # uncomment to debug:
           # builtins.trace "${relPath}: ${lib.boolToString includePath}"
         includePath
-
       );
       inherit src;
     };
@@ -48,28 +43,6 @@ let
 
   # Like `filterWorkspaceFiles` but with `./scripts/` and `./misc/test/` included
   filterWorkspaceTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" "misc/test/.*" ] src;
-
-  filterSrcWithRegexes = regexes: raw-src:
-    let
-      src = builtins.path { path = raw-src; name = "fedimint"; };
-      basePath = toString src + "/";
-    in
-    lib.cleanSourceWith {
-      filter = (path: type:
-        let
-          relPath = lib.removePrefix basePath (toString path);
-          includePath =
-            (type == "directory") ||
-            lib.any
-              (re: builtins.match re relPath != null)
-              regexes;
-        in
-        # uncomment to debug:
-          # builtins.trace "${relPath}: ${lib.boolToString includePath}"
-        includePath
-      );
-      inherit src;
-    };
 in
 rec {
 
@@ -331,7 +304,7 @@ rec {
   #
   # This unifies their cargo features and avoids building common dependencies multiple
   # times, but will produce a derivation with all listed packages.
-  pkgsBuild = { name, pkgs, dirs, defaultBin ? null }:
+  pkgsBuild = { name, pkgs, defaultBin ? null }:
     let
       # "--package x --package y" args passed to cargo
       pkgsArgs = lib.strings.concatStringsSep " " (lib.mapAttrsToList (name: value: "--package ${name}") pkgs);
@@ -350,7 +323,7 @@ rec {
       version = "0.0.1";
       cargoArtifacts = deps;
 
-      src = filterModules dirs ./.;
+      src = filterWorkspaceFiles ./.;
       cargoExtraArgs = pkgsArgs;
 
       # if needed we will check the whole workspace at once with `workspaceBuild`
@@ -362,9 +335,12 @@ rec {
   #
   # This unifies their cargo features and avoids building common dependencies multiple
   # times, but will produce a derivation with all listed packages.
-  pkgsCrossBuild = { name, pkgs, dirs, target }:
+  pkgsCrossBuild = { name, pkgs, target }:
     if target == null then
-      pkgsBuild { inherit name pkgs dirs; }
+      pkgsBuild
+        {
+          inherit name pkgs;
+        }
     else
       let
         # "--package x --package y" args passed to cargo
@@ -388,7 +364,7 @@ rec {
         version = "0.0.1";
         cargoArtifacts = deps;
 
-        src = filterModules dirs ./.;
+        src = filterWorkspaceFiles ./.;
         cargoExtraArgs = "--target ${target.name} ${pkgsArgs}";
 
         # if needed we will check the whole workspace at once with `workspaceBuild`
@@ -408,27 +384,6 @@ rec {
     };
 
     defaultBin = "fedimintd";
-    dirs = [
-      "crypto/aead"
-      "crypto/derive-secret"
-      "crypto/hkdf"
-      "crypto/tbs"
-      "fedimintd"
-      "fedimint-bin-tests"
-      "fedimint-bitcoind"
-      "fedimint-build"
-      "fedimint-cli"
-      "fedimint-client"
-      "fedimint-client-legacy"
-      "fedimint-core"
-      "fedimint-derive"
-      "fedimint-dbtool"
-      "fedimint-rocksdb"
-      "fedimint-server"
-      "fedimint-logging"
-      "gateway/ln-gateway"
-      "modules"
-    ];
   };
 
   gateway-pkgs = pkgsBuild {
@@ -439,26 +394,6 @@ rec {
       gateway-cli = { };
     };
 
-    dirs = [
-      "crypto/aead"
-      "crypto/derive-secret"
-      "crypto/tbs"
-      "crypto/hkdf"
-      "modules/fedimint-ln"
-      "fedimint-bin-tests"
-      "fedimint-bitcoind"
-      "fedimint-client"
-      "fedimint-client-legacy"
-      "fedimint-core"
-      "fedimint-derive"
-      "fedimint-dbtool"
-      "fedimint-rocksdb"
-      "fedimint-build"
-      "fedimint-logging"
-      "gateway/ln-gateway"
-      "gateway/cli"
-      "modules"
-    ];
   };
 
   client-pkgs = { target ? null }: pkgsCrossBuild {
@@ -471,23 +406,6 @@ rec {
       # broken on wasm32
       fedimint-sqlite = { };
     };
-    dirs = [
-      "crypto/aead"
-      "crypto/derive-secret"
-      "crypto/tbs"
-      "crypto/hkdf"
-      "fedimint-bin-tests"
-      "fedimint-bitcoind"
-      "fedimint-client"
-      "fedimint-client-legacy"
-      "fedimint-core"
-      "fedimint-derive"
-      "fedimint-dbtool"
-      "fedimint-rocksdb"
-      "fedimint-sqlite"
-      "fedimint-logging"
-      "modules"
-    ];
   };
 
   fedimint-dbtool-pkgs = pkgsBuild {
@@ -495,26 +413,6 @@ rec {
     pkgs = {
       fedimint-dbtool = { };
     };
-    dirs = [
-      "client/client-lib"
-      "client/cli"
-      "crypto/aead"
-      "crypto/derive-secret"
-      "crypto/hkdf"
-      "crypto/tbs"
-      "fedimintd"
-      "fedimint-bitcoind"
-      "fedimint-build"
-      "fedimint-client"
-      "fedimint-core"
-      "fedimint-derive"
-      "fedimint-dbtool"
-      "fedimint-rocksdb"
-      "fedimint-server"
-      "fedimint-logging"
-      "gateway/ln-gateway"
-      "modules"
-    ];
   };
 
   fedimint-bin-tests = pkgsBuild {
@@ -522,27 +420,6 @@ rec {
     pkgs = {
       fedimint-bin-tests = { };
     };
-    dirs = [
-      "client/client-lib"
-      "client/cli"
-      "crypto/aead"
-      "crypto/derive-secret"
-      "crypto/hkdf"
-      "crypto/tbs"
-      "fedimintd"
-      "fedimint-bitcoind"
-      "fedimint-build"
-      "fedimint-client"
-      "fedimint-client-legacy"
-      "fedimint-bin-tests"
-      "fedimint-core"
-      "fedimint-derive"
-      "fedimint-rocksdb"
-      "fedimint-server"
-      "fedimint-logging"
-      "gateway/ln-gateway"
-      "modules"
-    ];
   };
 }
 
