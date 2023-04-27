@@ -23,7 +23,7 @@ function open_channel() {
 
 function await_fedimint_block_sync() {
   BLOCKS="$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')"
-  FINALITY_DELAY=$(get_finality_delay)
+  FINALITY_DELAY=10
   AWAIT="$((BLOCKS - FINALITY_DELAY))"
   echo "await_fedimint_block_sync $AWAIT"
   $FM_MINT_CLIENT wait-block-height "$AWAIT"
@@ -58,10 +58,6 @@ function kill_fedimint_processes {
     kill $PIDS 2>/dev/null
   fi
   rm -f $FM_PID_FILE
-}
-
-function get_finality_delay() {
-    cat $FM_DATA_DIR/client.json | jq -e -r ".modules.\"${LEGACY_HARDCODED_INSTANCE_ID_WALLET}\".config.finality_delay"
 }
 
 function sat_to_btc() {
