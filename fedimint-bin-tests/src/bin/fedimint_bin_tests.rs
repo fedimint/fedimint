@@ -8,10 +8,12 @@ use bitcoincore_rpc::bitcoin::Amount as BitcoinRpcAmount;
 use bitcoincore_rpc::RpcApi;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
+use fedimint_bin_tests::federation::{fedimint_env, Fedimintd};
 use fedimint_bin_tests::util::{poll, ProcessManager};
-use fedimint_bin_tests::{cmd, dev_fed, external_daemons, DevFed};
+use fedimint_bin_tests::{cmd, dev_fed, external_daemons, Bitcoind, DevFed};
 use fedimint_core::task::TaskGroup;
 use tokio::fs;
+use tokio::net::TcpStream;
 use tracing::info;
 
 pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
@@ -634,6 +636,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
 enum Cmd {
     ExternalDaemons,
     Tmuxinator,
+    RunUi,
     LatencyTests,
     ReconnectTest,
     CliTests,
@@ -655,6 +658,24 @@ async fn write_ready_file<T>(result: Result<T>) -> Result<T> {
     result
 }
 
+async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
+    let bitcoind = Bitcoind::new(process_mgr).await?;
+    let mut fedimints = Vec::new();
+    for id in 0..2 {
+        fedimints.push(Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
+    }
+    for id in 0..2 {
+        let ui_addr = &fedimint_env(id)?["FM_LISTEN_UI"];
+        poll("waiting for ui startup", || async {
+            Ok(TcpStream::connect(ui_addr).await.is_ok())
+        })
+        .await?;
+        info!("Started UI on http://{ui_addr}");
+    }
+    task_group.make_handle().make_shutdown_rx().await.await?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
@@ -671,6 +692,7 @@ async fn main() -> Result<()> {
             let _daemons = write_ready_file(dev_fed(&task_group, &process_mgr).await).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
+        Cmd::RunUi => run_ui(&process_mgr, &task_group).await?,
         Cmd::LatencyTests => {
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             latency_tests(dev_fed).await?;

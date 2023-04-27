@@ -6,10 +6,9 @@ export FM_FED_NAME=${2:-"Cypherpunk Federation"}
 
 source scripts/build.sh $FM_FED_SIZE
 
-start_bitcoind | show_verbose_output &
-start_federation
+tail -n +0 -F $FM_LOGS_DIR/fedimintd-0.log &
+echo $! >> $FM_PID_FILE
+tail -n +0 -F $FM_LOGS_DIR/fedimintd-1.log &
+echo $! >> $FM_PID_FILE
 
-echo "UI instances running at http://127.0.0.1:18185 and http://127.0.0.1:18175"
-
-# Allow daemons to keep running
-wait
+fedimint-bin-tests run-ui
