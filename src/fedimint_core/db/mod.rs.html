@@ -2438,6 +2438,25 @@
 <a href="#2438" id="2438">2438</a>
 <a href="#2439" id="2439">2439</a>
 <a href="#2440" id="2440">2440</a>
+<a href="#2441" id="2441">2441</a>
+<a href="#2442" id="2442">2442</a>
+<a href="#2443" id="2443">2443</a>
+<a href="#2444" id="2444">2444</a>
+<a href="#2445" id="2445">2445</a>
+<a href="#2446" id="2446">2446</a>
+<a href="#2447" id="2447">2447</a>
+<a href="#2448" id="2448">2448</a>
+<a href="#2449" id="2449">2449</a>
+<a href="#2450" id="2450">2450</a>
+<a href="#2451" id="2451">2451</a>
+<a href="#2452" id="2452">2452</a>
+<a href="#2453" id="2453">2453</a>
+<a href="#2454" id="2454">2454</a>
+<a href="#2455" id="2455">2455</a>
+<a href="#2456" id="2456">2456</a>
+<a href="#2457" id="2457">2457</a>
+<a href="#2458" id="2458">2458</a>
+<a href="#2459" id="2459">2459</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2540,7 +2559,7 @@
 </span><span class="kw">struct </span>DatabaseInner&lt;Db: IDatabase + <span class="question-mark">?</span>Sized&gt; {
     notifications: Notifications,
     module_decoders: ModuleDecoderRegistry,
-    db: Db,
+    db: Box&lt;Db&gt;,
 }
 
 <span class="doccomment">/// Error returned when the autocommit function fails
@@ -2568,7 +2587,26 @@
 }
 
 <span class="kw">impl </span>Database {
-    <span class="kw">pub fn </span>new(db: <span class="kw">impl </span>IDatabase + <span class="lifetime">&#39;static</span>, module_decoders: ModuleDecoderRegistry) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Creates a new Fedimint database from any object implementing
+    /// [`IDatabase`]. For more flexibility see also [`Database::new_from_box`].
+    </span><span class="kw">pub fn </span>new(db: <span class="kw">impl </span>IDatabase + <span class="lifetime">&#39;static</span>, module_decoders: ModuleDecoderRegistry) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>inner = DatabaseInner::&lt;<span class="kw">dyn </span>IDatabase&gt; {
+            db: Box::new(db),
+            notifications: Notifications::new(),
+            module_decoders,
+        };
+
+        <span class="self">Self </span>{
+            inner_db: Arc::new(inner),
+            module_instance_id: <span class="prelude-val">None</span>,
+        }
+    }
+
+    <span class="doccomment">/// Creates a new Fedimint database from a `Box&lt;dyn IDatabase&gt;`, allowing
+    /// the caller to have a dynamic database backend that can choose
+    /// implementations at runtime, while not needing to bind decoders that
+    /// might only be available later.
+    </span><span class="kw">pub fn </span>new_from_box(db: Box&lt;<span class="kw">dyn </span>IDatabase&gt;, module_decoders: ModuleDecoderRegistry) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>inner = DatabaseInner {
             db,
             notifications: Notifications::new(),

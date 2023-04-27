@@ -992,6 +992,29 @@
 <a href="#992" id="992">992</a>
 <a href="#993" id="993">993</a>
 <a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -1316,6 +1339,12 @@
 <span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen&lt;DynGlobalClientContext&gt;;
 
 <span class="kw">impl </span>Client {
+    <span class="doccomment">/// Initialize a client builder that can be configured to create a new
+    /// client.
+    </span><span class="kw">pub fn </span>builder() -&gt; ClientBuilder {
+        ClientBuilder::default()
+    }
+
     <span class="doccomment">/// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
     </span><span class="kw">pub async fn </span>finalize_and_submit_transaction&lt;F, M&gt;(
@@ -1721,6 +1750,7 @@
     module_gens: ClientModuleGenRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
     config: <span class="prelude-ty">Option</span>&lt;ClientConfig&gt;,
+    db: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>IDatabase&gt;&gt;,
 }
 
 <span class="kw">impl </span>ClientBuilder {
@@ -1760,11 +1790,27 @@
     <span class="comment">// TODO: impl config from file
     // TODO: impl config from federation
 
-    </span><span class="kw">pub async fn </span>build&lt;D: IDatabase&gt;(<span class="self">self</span>, db: D, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;Client&gt; {
+    </span><span class="doccomment">/// Uses this database to store the client state
+    </span><span class="kw">pub fn </span>with_database&lt;D: IDatabase + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: D) {
+        <span class="self">self</span>.with_dyn_database(Box::new(db));
+    }
+
+    <span class="doccomment">/// Uses this database to store the client state, allowing for flexibility
+    /// on the caller side by accepting a type-erased trait object.
+    </span><span class="kw">pub fn </span>with_dyn_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: Box&lt;<span class="kw">dyn </span>IDatabase&gt;) {
+        <span class="kw">let </span>was_replaced = <span class="self">self</span>.db.replace(db).is_some();
+        <span class="macro">assert!</span>(
+            !was_replaced,
+            <span class="string">&quot;Only one database can be given to the builder.&quot;
+        </span>);
+    }
+
+    <span class="kw">pub async fn </span>build(<span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;Client&gt; {
         <span class="kw">let </span>config = <span class="self">self</span>.config.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No config was provided&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>primary_module_instance = <span class="self">self
             </span>.primary_module_instance
             .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No primary module instance id was provided&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>db = <span class="self">self</span>.db.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database was provided&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens,
@@ -1779,7 +1825,7 @@
             tx_submission_sm_decoder(),
         );
 
-        <span class="kw">let </span>db = Database::new(db, decoders);
+        <span class="kw">let </span>db = Database::new_from_box(db, decoders);
 
         <span class="kw">let </span>notifier = Notifier::new(db.clone());
 
