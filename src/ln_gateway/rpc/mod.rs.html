@@ -236,6 +236,7 @@
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -249,6 +250,7 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
+<span class="kw">use </span>fedimint_ln_client::contracts::Preimage;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot};
@@ -409,7 +411,7 @@
     FederationInfo,
     GatewayRequest::ConnectFederation
 );
-<span class="macro">impl_gateway_request_trait!</span>(PayInvoicePayload, (), GatewayRequest::PayInvoice);
+<span class="macro">impl_gateway_request_trait!</span>(PayInvoicePayload, Preimage, GatewayRequest::PayInvoice);
 <span class="macro">impl_gateway_request_trait!</span>(BalancePayload, Amount, GatewayRequest::Balance);
 <span class="macro">impl_gateway_request_trait!</span>(
     DepositAddressPayload,

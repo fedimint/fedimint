@@ -350,7 +350,7 @@
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt; {
-        <span class="kw">let </span>federation_id = config.client_config.federation_id.clone();
+        <span class="kw">let </span>federation_id = config.client_config.federation_id;
 
         <span class="kw">let </span>db = <span class="self">self</span>.db_factory.create_database(
             federation_id,

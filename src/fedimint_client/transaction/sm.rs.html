@@ -437,6 +437,9 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -864,8 +867,11 @@
         dbtx.commit_tx().<span class="kw">await</span>;
 
         timeout(Duration::from_secs(<span class="number">5</span>), <span class="kw">async move </span>{
-            dyn_context.await_tx_accepted(operation_id, txid).<span class="kw">await
-        </span>})
+            dyn_context
+                .await_tx_accepted(operation_id, txid)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Transaction was not accepted&quot;</span>)
+        })
         .<span class="kw">await
         </span>.unwrap();
 

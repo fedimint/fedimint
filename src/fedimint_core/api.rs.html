@@ -1609,7 +1609,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         info: <span class="kw-2">&amp;</span>WsClientConnectInfo,
     ) -&gt; FederationResult&lt;ClientConfig&gt; {
-        <span class="kw">let </span>id = info.id.clone();
+        <span class="kw">let </span>id = info.id;
         <span class="kw">let </span>qs = VerifiableResponse::new(
             <span class="self">self</span>.all_members().total(),
             <span class="bool-val">false</span>,

@@ -1071,7 +1071,32 @@
 <a href="#1071" id="1071">1071</a>
 <a href="#1072" id="1072">1072</a>
 <a href="#1073" id="1073">1073</a>
-</pre><pre class="rust"><code><span class="kw">mod </span>db;
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+</pre><pre class="rust"><code><span class="doccomment">/// Database keys used throughout the mint client module
+</span><span class="kw">mod </span>db;
 <span class="doccomment">/// State machines for mint inputs
 </span><span class="kw">mod </span>input;
 <span class="doccomment">/// State machines for out-of-band transmitted e-cash notes
@@ -1175,6 +1200,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;BoxStream&lt;SpendOOBState&gt;&gt;;
+
+    <span class="comment">// Wait for the refund transaction to complete after a lightning invoice
+    // failed to be paid.
+    </span><span class="kw">async fn </span>await_lightning_refund(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        refund_txid: TransactionId,
+    ) -&gt; anyhow::Result&lt;()&gt;;
 }
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
@@ -1251,6 +1284,21 @@
 
         <span class="prelude-val">Ok</span>(operation_id)
     }
+
+    <span class="kw">async fn </span>await_lightning_refund(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        refund_txid: TransactionId,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>(<span class="kw">_</span>, mint_client) = mint_client(<span class="self">self</span>);
+        <span class="kw">let </span>out_point = OutPoint {
+            txid: refund_txid,
+            out_idx: <span class="number">0</span>,
+        };
+        mint_client
+            .await_output_finalized(operation_id, out_point)
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>subscribe_reissue_external_notes_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

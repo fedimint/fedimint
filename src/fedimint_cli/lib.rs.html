@@ -1934,7 +1934,7 @@
                 <span class="kw">let </span>summary = client.summary().<span class="kw">await</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::Info {
-                    federation_id: client.config().as_ref().federation_id.clone(),
+                    federation_id: client.config().as_ref().federation_id,
                     network: client.wallet_client().config.network,
                     meta: client.config().<span class="number">0</span>.meta,
                     total_amount: summary.total_amount(),

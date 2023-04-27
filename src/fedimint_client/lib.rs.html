@@ -1015,6 +1015,23 @@
 <a href="#1015" id="1015">1015</a>
 <a href="#1016" id="1016">1016</a>
 <a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -1126,21 +1143,6 @@
 }
 
 <span class="kw">impl </span>DynGlobalClientContext {
-    <span class="kw">pub async fn </span>await_tx_accepted(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId, txid: TransactionId) {
-        <span class="kw">let </span>update_stream = <span class="self">self</span>.transaction_update_stream(operation_id).<span class="kw">await</span>;
-
-        <span class="kw">let </span>query_txid = txid;
-        update_stream
-            .filter(<span class="kw">move </span>|tx_submission_state| {
-                std::future::ready(<span class="macro">matches!</span>(
-                    tx_submission_state.state,
-                    TxSubmissionStates::Accepted { txid, .. } <span class="kw">if </span>txid == query_txid
-                ))
-            })
-            .next_or_pending()
-            .<span class="kw">await</span>;
-    }
-
     <span class="kw">pub async fn </span>await_tx_rejected(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId, txid: TransactionId) {
         <span class="kw">let </span>update_stream = <span class="self">self</span>.transaction_update_stream(operation_id).<span class="kw">await</span>;
 
@@ -1155,6 +1157,34 @@
             .next_or_pending()
             .<span class="kw">await</span>;
     }
+
+    <span class="kw">pub async fn </span>await_tx_accepted(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        txid: TransactionId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+        <span class="kw">let </span>update_stream = <span class="self">self</span>.transaction_update_stream(operation_id).<span class="kw">await</span>;
+
+        <span class="kw">let </span>query_txid = txid;
+        update_stream
+            .filter_map(|tx_update| {
+                std::future::ready(<span class="kw">match </span>tx_update.state {
+                    TxSubmissionStates::Accepted { txid: event_txid }
+                        <span class="kw">if </span>event_txid == query_txid =&gt;
+                    {
+                        <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(()))
+                    }
+                    TxSubmissionStates::Rejected { txid: event_txid }
+                        <span class="kw">if </span>event_txid == query_txid =&gt;
+                    {
+                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(()))
+                    }
+                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+                })
+            })
+            .next_or_pending()
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Creates a transaction that with an output of the primary module,
     /// claiming the given input and transferring its value into the client&#39;s
@@ -1343,6 +1373,10 @@
     /// client.
     </span><span class="kw">pub fn </span>builder() -&gt; ClientBuilder {
         ClientBuilder::default()
+    }
+
+    <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>) {
+        <span class="self">self</span>.inner.api.as_ref()
     }
 
     <span class="doccomment">/// Add funding and/or change to the transaction builder as needed, finalize

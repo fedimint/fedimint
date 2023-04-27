@@ -234,14 +234,6 @@
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
@@ -328,49 +320,53 @@
         common: <span class="kw-2">&amp;</span>MintInputCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;MintInputStateMachine&gt;&gt; {
-        <span class="kw">let </span>rejected_global_context = global_context.clone();
-        <span class="macro">vec!</span>[
-            <span class="comment">// Success case: containing transaction is accepted
-            </span>StateTransition::new(
-                <span class="self">Self</span>::await_success(<span class="kw-2">*</span>common, global_context.clone()),
-                |_dbtx, (), old_state| Box::pin(<span class="self">Self</span>::transition_success(old_state)),
-            ),
-            <span class="comment">// Transaction rejected: attempting to refund
-            </span>StateTransition::new(
-                <span class="self">Self</span>::await_refund(<span class="kw-2">*</span>common, global_context.clone()),
-                <span class="kw">move </span>|dbtx, (), old_state| {
-                    Box::pin(<span class="self">Self</span>::transition_refund(
-                        dbtx,
-                        old_state,
-                        rejected_global_context.clone(),
-                    ))
-                },
-            ),
-        ]
+        <span class="kw">let </span>global_context = global_context.clone();
+        <span class="macro">vec!</span>[StateTransition::new(
+            <span class="self">Self</span>::await_success(<span class="kw-2">*</span>common, global_context.clone()),
+            <span class="kw">move </span>|dbtx, result, old_state| {
+                Box::pin(<span class="self">Self</span>::transition_success(
+                    result,
+                    old_state,
+                    dbtx,
+                    global_context.clone(),
+                ))
+            },
+        )]
     }
 
-    <span class="kw">async fn </span>await_success(common: MintInputCommon, global_context: DynGlobalClientContext) {
+    <span class="kw">async fn </span>await_success(
+        common: MintInputCommon,
+        global_context: DynGlobalClientContext,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
         global_context
             .await_tx_accepted(common.operation_id, common.txid)
-            .<span class="kw">await</span>;
-    }
+            .<span class="kw">await
+    </span>}
 
-    <span class="kw">async fn </span>transition_success(old_state: MintInputStateMachine) -&gt; MintInputStateMachine {
+    <span class="kw">async fn </span>transition_success(
+        result: <span class="prelude-ty">Result</span>&lt;(), ()&gt;,
+        old_state: MintInputStateMachine,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        global_context: DynGlobalClientContext,
+    ) -&gt; MintInputStateMachine {
         <span class="macro">assert!</span>(<span class="macro">matches!</span>(old_state.state, MintInputStates::Created(<span class="kw">_</span>)));
 
-        MintInputStateMachine {
-            common: old_state.common,
-            state: MintInputStates::Success(MintInputStateSuccess {}),
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Success case: containing transaction is accepted
+                </span>MintInputStateMachine {
+                    common: old_state.common,
+                    state: MintInputStates::Success(MintInputStateSuccess {}),
+                }
+            }
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Transaction rejected: attempting to refund
+                </span><span class="self">Self</span>::refund(dbtx, old_state, global_context).<span class="kw">await
+            </span>}
         }
     }
 
-    <span class="kw">async fn </span>await_refund(common: MintInputCommon, global_context: DynGlobalClientContext) {
-        global_context
-            .await_tx_rejected(common.operation_id, common.txid)
-            .<span class="kw">await</span>;
-    }
-
-    <span class="kw">async fn </span>transition_refund(
+    <span class="kw">async fn </span>refund(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         old_state: MintInputStateMachine,
         global_context: DynGlobalClientContext,
@@ -413,63 +409,51 @@
         common: <span class="kw-2">&amp;</span>MintInputCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;MintInputStateMachine&gt;&gt; {
-        <span class="macro">vec!</span>[
-            <span class="comment">// Refund successful
-            </span>StateTransition::new(
-                <span class="self">Self</span>::await_refund_success(<span class="kw-2">*</span>common, global_context.clone(), <span class="self">self</span>.refund_txid),
-                |_dbtx, (), old_state| Box::pin(<span class="self">Self</span>::transition_refund_success(old_state)),
-            ),
-            <span class="comment">// Refund failed
-            </span>StateTransition::new(
-                <span class="self">Self</span>::await_refund_failed(<span class="kw-2">*</span>common, global_context.clone(), <span class="self">self</span>.refund_txid),
-                |_dbtx, (), old_state| Box::pin(<span class="self">Self</span>::transition_refund_failed(old_state)),
-            ),
-        ]
+        <span class="macro">vec!</span>[StateTransition::new(
+            <span class="self">Self</span>::await_refund_success(<span class="kw-2">*</span>common, global_context.clone(), <span class="self">self</span>.refund_txid),
+            |_dbtx, result, old_state| Box::pin(<span class="self">Self</span>::transition_refund_success(result, old_state)),
+        )]
     }
 
     <span class="kw">async fn </span>await_refund_success(
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
-    ) {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
         global_context
             .await_tx_accepted(common.operation_id, refund_txid)
-            .<span class="kw">await</span>;
-    }
+            .<span class="kw">await
+    </span>}
 
-    <span class="kw">async fn </span>transition_refund_success(old_state: MintInputStateMachine) -&gt; MintInputStateMachine {
+    <span class="kw">async fn </span>transition_refund_success(
+        result: <span class="prelude-ty">Result</span>&lt;(), ()&gt;,
+        old_state: MintInputStateMachine,
+    ) -&gt; MintInputStateMachine {
         <span class="kw">let </span>refund_txid = <span class="kw">match </span>old_state.state {
             MintInputStates::Refund(refund) =&gt; refund.refund_txid,
             <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Invalid state transition&quot;</span>),
         };
 
-        MintInputStateMachine {
-            common: old_state.common,
-            state: MintInputStates::RefundSuccess(MintInputStateRefundSuccess { refund_txid }),
-        }
-    }
-    <span class="kw">async fn </span>await_refund_failed(
-        common: MintInputCommon,
-        global_context: DynGlobalClientContext,
-        refund_txid: TransactionId,
-    ) {
-        global_context
-            .await_tx_rejected(common.operation_id, refund_txid)
-            .<span class="kw">await</span>;
-    }
-
-    <span class="kw">async fn </span>transition_refund_failed(old_state: MintInputStateMachine) -&gt; MintInputStateMachine {
-        <span class="kw">let </span>refund_txid = <span class="kw">match </span>old_state.state {
-            MintInputStates::Refund(refund) =&gt; refund.refund_txid,
-            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Invalid state transition&quot;</span>),
-        };
-
-        <span class="comment">// TODO: include e-cash notes for recovery? Although, they are in the log …
-        </span>MintInputStateMachine {
-            common: old_state.common,
-            state: MintInputStates::Error(MintInputStateError {
-                error: <span class="macro">format!</span>(<span class="string">&quot;Refund transaction {refund_txid} was rejected&quot;</span>),
-            }),
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Refund successful
+                </span>MintInputStateMachine {
+                    common: old_state.common,
+                    state: MintInputStates::RefundSuccess(MintInputStateRefundSuccess {
+                        refund_txid,
+                    }),
+                }
+            }
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                <span class="comment">// Refund failed
+                // TODO: include e-cash notes for recovery? Although, they are in the log …
+                </span>MintInputStateMachine {
+                    common: old_state.common,
+                    state: MintInputStates::Error(MintInputStateError {
+                        error: <span class="macro">format!</span>(<span class="string">&quot;Refund transaction {refund_txid} was rejected&quot;</span>),
+                    }),
+                }
+            }
         }
     }
 }

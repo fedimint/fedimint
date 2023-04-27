@@ -1043,7 +1043,7 @@
     }
 
     <span class="attr">#[instrument(skip_all, fields(%contract_id))]
-    </span><span class="kw">pub async fn </span>pay_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+    </span><span class="kw">pub async fn </span>pay_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;(OutPoint, Preimage)&gt; {
         <span class="self">self</span>.pay_invoice_buy_preimage_finalize_and_claim(
             contract_id,
             <span class="self">self</span>.pay_invoice_buy_preimage(contract_id).<span class="kw">await</span><span class="question-mark">?</span>,
@@ -1124,16 +1124,16 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract_id: ContractId,
         buy_preimage: BuyPreimage,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutPoint, Preimage)&gt; {
         <span class="kw">let </span>rng = rand::rngs::OsRng;
 
         <span class="kw">match </span><span class="self">self</span>.pay_invoice_buy_preimage_finalize(buy_preimage).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(preimage) =&gt; {
                 <span class="kw">let </span>outpoint = <span class="self">self
                     </span>.client
-                    .claim_outgoing_contract(contract_id, preimage, rng)
+                    .claim_outgoing_contract(contract_id, preimage.clone(), rng)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>(outpoint)
+                <span class="prelude-val">Ok</span>((outpoint, preimage))
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">warn!</span>(<span class="string">&quot;Invoice payment failed. Aborting&quot;</span>);
@@ -1289,7 +1289,7 @@
     <span class="kw">pub fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
         <span class="kw">let </span>cfg = <span class="self">self</span>.client.config();
         <span class="prelude-val">Ok</span>(FederationInfo {
-            federation_id: cfg.client_config.federation_id.clone(),
+            federation_id: cfg.client_config.federation_id,
             mint_pubkey: cfg.redeem_key.x_only_public_key().<span class="number">0</span>,
         })
     }

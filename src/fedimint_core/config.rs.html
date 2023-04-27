@@ -1012,7 +1012,7 @@
 ///
 /// Stable id so long as guardians membership does not change
 /// Unique id so long as guardians do not all collude
-</span><span class="attr">#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable)]
+</span><span class="attr">#[derive(Debug, Copy, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>FederationId(<span class="kw">pub </span>threshold_crypto::PublicKey);
 
 <span class="kw">impl </span>Display <span class="kw">for </span>FederationId {
