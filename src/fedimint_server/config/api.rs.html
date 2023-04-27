@@ -947,16 +947,7 @@
 <a href="#947" id="947">947</a>
 <a href="#948" id="948">948</a>
 <a href="#949" id="949">949</a>
-<a href="#950" id="950">950</a>
-<a href="#951" id="951">951</a>
-<a href="#952" id="952">952</a>
-<a href="#953" id="953">953</a>
-<a href="#954" id="954">954</a>
-<a href="#955" id="955">955</a>
-<a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
-<span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Mutex;
@@ -1037,7 +1028,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
 
         <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
-            ConfigApiState::SetPassword =&gt; <span class="kw-2">*</span>state = ConfigApiState::SetConnections(auth),
+            ConfigApiState::SetPassword =&gt; {
+                <span class="kw">let </span>params = ConfigGenConnectionsState::new(<span class="self">self</span>.settings.clone(), auth)<span class="question-mark">?</span>;
+                <span class="kw-2">*</span>state = ConfigApiState::SetConfigGenParams(params);
+            }
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Password already set&quot;</span>.to_string())),
         }
 
@@ -1049,27 +1043,16 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: ConfigGenConnectionsRequest,
     ) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span>connection = {
-            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>connection = <span class="self">self</span>.get_connection_state()<span class="question-mark">?</span>;
+        connection = connection.with_request(request.clone())<span class="question-mark">?</span>;
+        <span class="self">self</span>.set_connections_state(connection.clone());
 
-            <span class="kw">let </span>connection = <span class="kw">match </span>(<span class="kw-2">*</span>state).clone() {
-                ConfigApiState::SetConnections(auth) =&gt; {
-                    ConfigGenConnectionsState::new(request, <span class="self">self</span>.settings.clone(), auth)<span class="question-mark">?
-                </span>}
-                ConfigApiState::SetConfigGenParams(old) =&gt; old.with_request(request)<span class="question-mark">?</span>,
-                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Config already set&quot;</span>.to_string())),
-            };
-            <span class="kw-2">*</span>state = ConfigApiState::SetConfigGenParams(connection.clone());
-
-            connection
-        };
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = connection.request.leader_api_url.clone() {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = request.leader_api_url {
             <span class="comment">// Note PeerIds don&#39;t really exist at this point, but id doesn&#39;t matter because
             // it&#39;s not used in the WS client for anything, perhaps it should be removed
             </span><span class="kw">let </span>client = WsAdminClient::new(url, PeerId::from(<span class="number">0</span>), connection.auth.clone());
             client
-                .add_config_gen_peer(connection.as_peer_info())
+                .add_config_gen_peer(connection.as_peer_info()<span class="question-mark">?</span>)
                 .<span class="kw">await
                 </span>.map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string()))<span class="question-mark">?</span>;
         }
@@ -1083,9 +1066,7 @@
     </span><span class="kw">pub fn </span>add_config_gen_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerServerParams) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>connection = <span class="self">self</span>.get_connection_state()<span class="question-mark">?</span>;
         connection.peers.insert(peer.api_url.clone(), peer);
-
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
-        <span class="kw-2">*</span>state = ConfigApiState::SetConfigGenParams(connection);
+        <span class="self">self</span>.set_connections_state(connection);
 
         <span class="self">self</span>.notify_peer_connection.notify_one();
         <span class="prelude-val">Ok</span>(())
@@ -1093,17 +1074,8 @@
 
     <span class="doccomment">/// Returns the peers that have called `add_config_gen_peer` on the leader
     </span><span class="kw">pub fn </span>get_config_gen_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;Vec&lt;PeerServerParams&gt;&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
-
-        <span class="kw">let </span>peers = <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
-            ConfigApiState::SetConfigGenParams(connection) =&gt; <span class="prelude-val">Ok</span>(connection.get_peer_info()),
-            ConfigApiState::VerifyConfigParams(<span class="kw">_</span>, params) =&gt; {
-                <span class="prelude-val">Ok</span>(params.consensus.peers.values().cloned().collect())
-            }
-            <span class="kw">_ </span>=&gt; <span class="self">Self</span>::bad_request(<span class="string">&quot;Set the config connections first&quot;</span>),
-        }<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(peers)
+        <span class="kw">let </span>connection = <span class="self">self</span>.get_connection_state()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(connection.get_peer_info().into_values().collect())
     }
 
     <span class="doccomment">/// Waits for at least `num_peers` connections to be added
@@ -1124,17 +1096,9 @@
 
     <span class="doccomment">/// Sets the config gen params, should only be called by the leader
     </span><span class="kw">pub async fn </span>set_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>, requested: ConfigGenParamsRequest) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span>connection = <span class="self">self</span>.get_connection_state()<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>peers: BTreeMap&lt;PeerId, PeerServerParams&gt; = connection
-            .get_peer_info()
-            .into_iter()
-            .enumerate()
-            .map(|(i, peer)| (PeerId::from(i <span class="kw">as </span>u16), peer))
-            .collect();
-
-        <span class="kw">let </span>consensus = ConfigGenParamsConsensus { peers, requested };
-        <span class="self">self</span>.set_config_state(connection, consensus)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>connection = <span class="self">self</span>.get_connection_state()<span class="question-mark">?</span>;
+        connection.requested_params = <span class="prelude-val">Some</span>(requested);
+        <span class="self">self</span>.set_connections_state(connection);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -1142,54 +1106,43 @@
     <span class="doccomment">/// Gets the consensus config gen params, if we have a leader get it from
     /// the leader
     </span><span class="kw">pub async fn </span>get_consensus_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenParamsConsensus&gt; {
-        <span class="kw">let </span>connection = {
-            <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
-
-            <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
-                ConfigApiState::VerifyConfigParams(<span class="kw">_</span>, param) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(param.consensus.clone()),
-                ConfigApiState::SetConfigGenParams(connection) =&gt; connection.clone(),
-                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;Not in a state that can return params&quot;</span>),
-            }
-        };
-
-        <span class="kw">let </span>url = connection
-            .request
-            .leader_api_url
+        <span class="kw">let </span>connection = <span class="self">self</span>.get_connection_state().or(<span class="self">self</span>.get_dkg_state())<span class="question-mark">?</span>;
+        <span class="kw">let </span>leader = connection
+            .local
             .clone()
-            .ok_or(ApiError::bad_request(
-                <span class="string">&quot;Need to set the consensus params first&quot;</span>.to_string(),
-            ))<span class="question-mark">?</span>;
+            .and_then(|local| local.leader_api_url);
 
-        <span class="kw">let </span>client = WsAdminClient::new(url, PeerId::from(<span class="number">0</span>), connection.auth.clone());
-        <span class="kw">let </span>consensus = client
-            .get_consensus_config_gen_params()
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Unable to get params from leader&quot;</span>.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = leader {
+            <span class="kw">let </span>client = WsAdminClient::new(url.clone(), PeerId::from(<span class="number">0</span>), connection.auth.clone());
+            <span class="kw">let </span>consensus = client
+                .get_consensus_config_gen_params()
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Unable to get params from leader&quot;</span>.to_string()))<span class="question-mark">?</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(consensus);
+        }
 
-        <span class="self">self</span>.set_config_state(connection, consensus.clone())<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(consensus)
+        <span class="prelude-val">Ok</span>(ConfigGenParamsConsensus {
+            peers: connection.get_peer_info(),
+            requested: connection.get_requested_params()<span class="question-mark">?</span>,
+        })
     }
 
     <span class="doccomment">/// Once configs are generated, starts DKG and await its
     /// completion, calling a second time will return an error
     </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span>dkg_failed = <span class="prelude-val">Err</span>(ApiError::server_error(<span class="string">&quot;DKG failed&quot;</span>.to_string()));
+        <span class="kw">let </span>consensus = <span class="self">self</span>.get_consensus_config_gen_params().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>(params, auth) = {
+        <span class="kw">let </span>params: ConfigGenParams = {
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
 
-            <span class="kw">let </span>(params, auth) = <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
-                ConfigApiState::VerifyConfigParams(auth, params) =&gt; (params.clone(), auth.clone()),
-                ConfigApiState::VerifyConsensusConfig(<span class="kw">_</span>) | ConfigApiState::RunningDkg(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;DKG already run&quot;</span>)
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
+                ConfigApiState::SetConfigGenParams(connection) =&gt; {
+                    <span class="kw">let </span>params = connection.get_config_gen_params(consensus)<span class="question-mark">?</span>;
+                    <span class="kw-2">*</span>state = ConfigApiState::RunningDkg(connection.clone());
+                    params
                 }
-                ConfigApiState::FailedDkg(<span class="kw">_</span>) =&gt; <span class="kw">return </span>dkg_failed,
-                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;Must generate configs first&quot;</span>),
-            };
-
-            <span class="kw-2">*</span>state = ConfigApiState::RunningDkg(auth.clone());
-            (params, auth)
+                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="string">&quot;Cannot run DKG now&quot;</span>),
+            }
         };
 
         <span class="kw">let </span>module_gens = <span class="self">self</span>.settings.module_gens.clone();
@@ -1218,8 +1171,8 @@
                     target: fedimint_logging::LOG_NET_PEER_DKG,
                     <span class="string">&quot;DKG failed with {:?}&quot;</span>, e
                 );
-                <span class="kw-2">*</span>state = ConfigApiState::FailedDkg(auth);
-                dkg_failed
+                <span class="kw-2">*</span>state = ConfigApiState::FailedDkg(params.local.api_auth);
+                <span class="prelude-val">Err</span>(ApiError::server_error(<span class="string">&quot;DKG failed&quot;</span>.to_string()))
             }
         }
     }
@@ -1333,10 +1286,16 @@
 
         <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
             ConfigApiState::SetConfigGenParams(connection) =&gt; <span class="prelude-val">Ok</span>(connection.clone()),
-            ConfigApiState::SetConnections(<span class="kw">_</span>) =&gt; {
-                <span class="self">Self</span>::bad_request(<span class="string">&quot;Set the config connections first&quot;</span>)
-            }
             <span class="kw">_ </span>=&gt; <span class="self">Self</span>::bad_request(<span class="string">&quot;Config params were already generated&quot;</span>),
+        }
+    }
+
+    <span class="kw">fn </span>get_dkg_state(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenConnectionsState&gt; {
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
+            ConfigApiState::RunningDkg(connection) =&gt; <span class="prelude-val">Ok</span>(connection.clone()),
+            <span class="kw">_ </span>=&gt; <span class="self">Self</span>::bad_request(<span class="string">&quot;Dkg was already run&quot;</span>),
         }
     }
 
@@ -1344,36 +1303,9 @@
         <span class="prelude-val">Err</span>(ApiError::bad_request(msg.to_string()))
     }
 
-    <span class="kw">fn </span>set_config_state(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connection: ConfigGenConnectionsState,
-        consensus: ConfigGenParamsConsensus,
-    ) -&gt; ApiResult&lt;()&gt; {
+    <span class="kw">fn </span>set_connections_state(<span class="kw-2">&amp;</span><span class="self">self</span>, connections: ConfigGenConnectionsState) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
-
-        <span class="kw">let </span>(our_id, <span class="kw">_</span>) = consensus
-            .peers
-            .iter()
-            .find(|(<span class="kw">_</span>, param)| connection.tls_cert == param.cert)
-            .ok_or(ApiError::bad_request(
-                <span class="string">&quot;Our TLS cert not found among peers&quot;</span>.to_string(),
-            ))<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>auth = connection.auth.clone();
-        <span class="kw">let </span>local = ConfigGenParamsLocal {
-            our_id: <span class="kw-2">*</span>our_id,
-            our_private_key: connection.tls_private,
-            api_auth: connection.auth,
-            p2p_bind: connection.settings.p2p_bind,
-            api_bind: connection.settings.api_bind,
-            download_token_limit: connection.settings.download_token_limit,
-            max_connections: connection.settings.max_connections,
-        };
-
-        <span class="kw">let </span>params = ConfigGenParams { local, consensus };
-        <span class="kw-2">*</span>state = ConfigApiState::VerifyConfigParams(auth, params);
-
-        <span class="prelude-val">Ok</span>(())
+        <span class="kw-2">*</span>state = ConfigApiState::SetConfigGenParams(connections);
     }
 }
 
@@ -1426,55 +1358,110 @@
     </span>settings: ConfigGenSettings,
     <span class="doccomment">/// Our auth string
     </span>auth: ApiAuth,
+    <span class="doccomment">/// Our local connection
+    </span>local: <span class="prelude-ty">Option</span>&lt;ConfigGenLocalConnection&gt;,
+    <span class="doccomment">/// Connection info received from other guardians, unique by api_url
+    /// (because it&#39;s non-user configurable)
+    </span>peers: BTreeMap&lt;Url, PeerServerParams&gt;,
+    <span class="doccomment">/// The config gen params requested by the leader
+    </span>requested_params: <span class="prelude-ty">Option</span>&lt;ConfigGenParamsRequest&gt;,
+}
+
+<span class="doccomment">/// Our local connection info
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">struct </span>ConfigGenLocalConnection {
     <span class="doccomment">/// Our TLS private key
     </span>tls_private: rustls::PrivateKey,
     <span class="doccomment">/// Our TLS public cert
     </span>tls_cert: rustls::Certificate,
-    <span class="doccomment">/// Info sent by the admin user
-    </span>request: ConfigGenConnectionsRequest,
-    <span class="doccomment">/// Connection info received from other guardians, unique by api_url
-    /// (because it&#39;s non-user configurable)
-    </span>peers: BTreeMap&lt;Url, PeerServerParams&gt;,
+    <span class="doccomment">/// Our guardian name
+    </span>our_name: String,
+    <span class="doccomment">/// Url of &quot;leader&quot; guardian to send our connection info to
+    /// Will be `None` if we are the leader
+    </span>leader_api_url: <span class="prelude-ty">Option</span>&lt;Url&gt;,
 }
 
 <span class="kw">impl </span>ConfigGenConnectionsState {
-    <span class="kw">fn </span>new(
-        request: ConfigGenConnectionsRequest,
-        our_connections: ConfigGenSettings,
-        auth: ApiAuth,
-    ) -&gt; ApiResult&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>(tls_cert, tls_private) = gen_cert_and_key(<span class="kw-2">&amp;</span>request.our_name)
-            .map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to generate TLS keys&quot;</span>.to_string()))<span class="question-mark">?</span>;
+    <span class="kw">fn </span>new(settings: ConfigGenSettings, auth: ApiAuth) -&gt; ApiResult&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            settings: our_connections,
+            settings,
             auth,
-            tls_private,
-            tls_cert,
-            request,
+            local: <span class="prelude-val">None</span>,
             peers: Default::default(),
+            requested_params: <span class="prelude-val">None</span>,
         })
     }
 
-    <span class="kw">fn </span>with_request(<span class="self">self</span>, request: ConfigGenConnectionsRequest) -&gt; ApiResult&lt;<span class="self">Self</span>&gt; {
-        <span class="self">Self</span>::new(request, <span class="self">self</span>.settings, <span class="self">self</span>.auth)
+    <span class="kw">fn </span>with_request(<span class="kw-2">mut </span><span class="self">self</span>, request: ConfigGenConnectionsRequest) -&gt; ApiResult&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>(tls_cert, tls_private) = gen_cert_and_key(<span class="kw-2">&amp;</span>request.our_name)
+            .map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to generate TLS keys&quot;</span>.to_string()))<span class="question-mark">?</span>;
+        <span class="self">self</span>.local = <span class="prelude-val">Some</span>(ConfigGenLocalConnection {
+            tls_private,
+            tls_cert,
+            our_name: request.our_name,
+            leader_api_url: request.leader_api_url,
+        });
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>)
     }
 
-    <span class="kw">fn </span>as_peer_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PeerServerParams {
-        PeerServerParams {
-            cert: <span class="self">self</span>.tls_cert.clone(),
+    <span class="kw">fn </span>local_connection(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenLocalConnection&gt; {
+        <span class="self">self</span>.local.clone().ok_or(ApiError::bad_request(
+            <span class="string">&quot;Our connection info not set yet&quot;</span>.to_string(),
+        ))
+    }
+
+    <span class="kw">fn </span>as_peer_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;PeerServerParams&gt; {
+        <span class="kw">let </span>local = <span class="self">self</span>.local_connection()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(PeerServerParams {
+            cert: local.tls_cert.clone(),
             p2p_url: <span class="self">self</span>.settings.p2p_url.clone(),
             api_url: <span class="self">self</span>.settings.api_url.clone(),
-            name: <span class="self">self</span>.request.our_name.clone(),
-        }
+            name: local.our_name,
+        })
     }
 
-    <span class="kw">fn </span>get_peer_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerServerParams&gt; {
+    <span class="kw">fn </span>get_peer_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, PeerServerParams&gt; {
         <span class="self">self</span>.peers
             .values()
             .cloned()
-            .chain(once(<span class="self">self</span>.as_peer_info()))
+            .chain(<span class="self">self</span>.as_peer_info().ok().into_iter())
             .sorted_by_key(|peer| peer.cert.clone())
+            .enumerate()
+            .map(|(i, peer)| (PeerId::from(i <span class="kw">as </span>u16), peer))
             .collect()
+    }
+
+    <span class="kw">fn </span>get_requested_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenParamsRequest&gt; {
+        <span class="self">self</span>.requested_params.clone().ok_or(ApiError::bad_request(
+            <span class="string">&quot;Config params were not set&quot;</span>.to_string(),
+        ))
+    }
+
+    <span class="kw">fn </span>get_config_gen_params(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        consensus: ConfigGenParamsConsensus,
+    ) -&gt; ApiResult&lt;ConfigGenParams&gt; {
+        <span class="kw">let </span>local_connection = <span class="self">self</span>.local_connection()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>(our_id, <span class="kw">_</span>) = consensus
+            .peers
+            .iter()
+            .find(|(<span class="kw">_</span>, param)| local_connection.tls_cert == param.cert)
+            .ok_or(ApiError::bad_request(
+                <span class="string">&quot;Our TLS cert not found among peers&quot;</span>.to_string(),
+            ))<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>local = ConfigGenParamsLocal {
+            our_id: <span class="kw-2">*</span>our_id,
+            our_private_key: local_connection.tls_private,
+            api_auth: <span class="self">self</span>.auth.clone(),
+            p2p_bind: <span class="self">self</span>.settings.p2p_bind,
+            api_bind: <span class="self">self</span>.settings.api_bind,
+            download_token_limit: <span class="self">self</span>.settings.download_token_limit,
+            max_connections: <span class="self">self</span>.settings.max_connections,
+        };
+
+        <span class="prelude-val">Ok</span>(ConfigGenParams { local, consensus })
     }
 }
 
@@ -1484,14 +1471,11 @@
 </span><span class="kw">pub enum </span>ConfigApiState {
     <span class="doccomment">/// Guardian must first enter a password for auth/decryption
     </span>SetPassword,
-    <span class="doccomment">/// Guardians must send connection info to a &quot;leader&quot;
-    </span>SetConnections(ApiAuth),
-    <span class="doccomment">/// A &quot;leader&quot; guardian (possibly us) must set the config gen parameters
+    <span class="doccomment">/// A &quot;leader&quot; guardian sets the config gen parameters, while followers
+    /// connect
     </span>SetConfigGenParams(ConfigGenConnectionsState),
-    <span class="doccomment">/// Guardian must verify the correct config gen params
-    </span>VerifyConfigParams(ApiAuth, ConfigGenParams),
     <span class="doccomment">/// Running DKG may take a minute
-    </span>RunningDkg(ApiAuth),
+    </span>RunningDkg(ConfigGenConnectionsState),
     <span class="doccomment">/// DKG failed, user should restart config gen from the beginning
     </span>FailedDkg(ApiAuth),
     <span class="doccomment">/// Awaiting guardian verification to write configs
@@ -1516,10 +1500,8 @@
         <span class="kw">let </span>has_auth = <span class="kw">match </span><span class="kw-2">&amp;*</span>state {
             <span class="comment">// The first client to connect gets the set the password
             </span>ConfigApiState::SetPassword =&gt; <span class="bool-val">true</span>,
-            ConfigApiState::SetConnections(api_auth) =&gt; <span class="prelude-val">Some</span>(api_auth) == auth,
             ConfigApiState::SetConfigGenParams(connections) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>connections.auth) == auth,
-            ConfigApiState::VerifyConfigParams(api_auth, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(api_auth) == auth,
-            ConfigApiState::RunningDkg(api_auth) =&gt; <span class="prelude-val">Some</span>(api_auth) == auth,
+            ConfigApiState::RunningDkg(connections) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>connections.auth) == auth,
             ConfigApiState::FailedDkg(api_auth) =&gt; <span class="prelude-val">Some</span>(api_auth) == auth,
             ConfigApiState::VerifyConsensusConfig(cfg) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>cfg.private.api_auth) == auth,
         };
@@ -1826,6 +1808,10 @@
             leader.name = <span class="string">&quot;leader&quot;</span>.to_string();
             leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
 
+            <span class="comment">// Leader sets the config
+            </span><span class="kw">let </span>defaults = leader.client.get_default_config_gen_params().<span class="kw">await</span>.unwrap();
+            leader.client.set_config_gen_params(defaults).<span class="kw">await</span>.unwrap();
+
             <span class="comment">// Setup followers and send connection info
             </span><span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;mut </span>followers {
                 <span class="macro">assert_eq!</span>(
@@ -1844,10 +1830,8 @@
             <span class="kw">let </span>names: Vec&lt;<span class="kw">_</span>&gt; = peers.into_iter().map(|peer| peer.name).sorted().collect();
             <span class="macro">assert_eq!</span>(names, <span class="macro">vec!</span>[<span class="string">&quot;leader&quot;</span>, <span class="string">&quot;peer1_&quot;</span>, <span class="string">&quot;peer2_&quot;</span>]);
 
-            <span class="comment">// Leader sets the configs and followers can fetch them
+            <span class="comment">// Followers can fetch configs
             </span><span class="kw">let </span><span class="kw-2">mut </span>configs = <span class="macro">vec!</span>[];
-            <span class="kw">let </span>defaults = leader.client.get_default_config_gen_params().<span class="kw">await</span>.unwrap();
-            leader.client.set_config_gen_params(defaults).<span class="kw">await</span>.unwrap();
             <span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
                 configs.push(peer.client.get_consensus_config_gen_params().<span class="kw">await</span>.unwrap());
             }
