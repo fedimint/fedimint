@@ -100,7 +100,7 @@ pub struct Database {
 struct DatabaseInner<Db: IDatabase + ?Sized> {
     notifications: Notifications,
     module_decoders: ModuleDecoderRegistry,
-    db: Db,
+    db: Box<Db>,
 }
 
 /// Error returned when the autocommit function fails
@@ -128,7 +128,26 @@ pub enum AutocommitError<E> {
 }
 
 impl Database {
+    /// Creates a new Fedimint database from any object implementing
+    /// [`IDatabase`]. For more flexibility see also [`Database::new_from_box`].
     pub fn new(db: impl IDatabase + 'static, module_decoders: ModuleDecoderRegistry) -> Self {
+        let inner = DatabaseInner::<dyn IDatabase> {
+            db: Box::new(db),
+            notifications: Notifications::new(),
+            module_decoders,
+        };
+
+        Self {
+            inner_db: Arc::new(inner),
+            module_instance_id: None,
+        }
+    }
+
+    /// Creates a new Fedimint database from a `Box<dyn IDatabase>`, allowing
+    /// the caller to have a dynamic database backend that can choose
+    /// implementations at runtime, while not needing to bind decoders that
+    /// might only be available later.
+    pub fn new_from_box(db: Box<dyn IDatabase>, module_decoders: ModuleDecoderRegistry) -> Self {
         let inner = DatabaseInner {
             db,
             notifications: Notifications::new(),
