@@ -4,6 +4,7 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
+use bitcoin_hashes::hex::ToHex;
 use fedimint_client_legacy::ln::PayInvoicePayload;
 use fedimint_core::task::TaskGroup;
 use serde_json::json;
@@ -122,8 +123,8 @@ async fn pay_invoice(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<PayInvoicePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    rpc.send(payload).await?;
-    Ok(())
+    let preimage = rpc.send(payload).await?;
+    Ok(Json(json!(preimage.0.to_hex())))
 }
 
 /// Connect a new federation

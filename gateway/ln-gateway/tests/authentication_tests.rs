@@ -56,7 +56,7 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
                 connect: serde_json::to_string(&WsClientConnectInfo {
                     url: "ws://dummy".parse().unwrap(),
                     download_token: ClientConfigDownloadToken(OsRng::default().gen()),
-                    id: federation_id.clone(),
+                    id: federation_id,
                 })
                 .unwrap(),
             };
@@ -76,9 +76,7 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
             // Test gateway authentication on `get_balance` function
             // * `get_balance` with correct password succeeds
             // * `get_balance` with incorrect password fails
-            let payload = BalancePayload {
-                federation_id: federation_id.clone(),
-            };
+            let payload = BalancePayload { federation_id };
             test_auth(&gw_password, move |pw| {
                 client_ref.get_balance(pw, payload.clone())
             })
@@ -88,9 +86,7 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
             // Test gateway authentication on `get_deposit_address` function
             // * `get_deposit_address` with correct password succeeds
             // * `get_deposit_address` with incorrect password fails
-            let payload = DepositAddressPayload {
-                federation_id: federation_id.clone(),
-            };
+            let payload = DepositAddressPayload { federation_id };
             test_auth(&gw_password, move |pw| {
                 client_ref.get_deposit_address(pw, payload.clone())
             })
@@ -107,7 +103,7 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
                 )
                 .await;
             let payload = DepositPayload {
-                federation_id: federation_id.clone(),
+                federation_id,
                 txout_proof: proof,
                 transaction: tx,
             };

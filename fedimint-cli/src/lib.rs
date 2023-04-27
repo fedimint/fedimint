@@ -792,7 +792,7 @@ impl FedimintCli {
                 let summary = client.summary().await;
 
                 Ok(CliOutput::Info {
-                    federation_id: client.config().as_ref().federation_id.clone(),
+                    federation_id: client.config().as_ref().federation_id,
                     network: client.wallet_client().config.network,
                     meta: client.config().0.meta,
                     total_amount: summary.total_amount(),

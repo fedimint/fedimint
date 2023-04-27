@@ -1118,7 +1118,7 @@ impl Client<UserClientConfig> {
     ) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
 
-        let payload = PayInvoicePayload::new(self.config.0.federation_id.clone(), contract_id);
+        let payload = PayInvoicePayload::new(self.config.0.federation_id, contract_id);
 
         let future = reqwest::Client::new()
             .post(

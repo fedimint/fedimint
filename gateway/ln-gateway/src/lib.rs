@@ -33,6 +33,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::{Amount, TransactionId};
+use fedimint_ln_client::contracts::Preimage;
 use gatewaylnrpc::GetNodeInfoResponse;
 use lnrpc_client::ILnRpcClient;
 use rpc::{FederationInfo, LightningReconnectPayload};
@@ -318,7 +319,7 @@ impl Gateway {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
 
-        if let Ok(actor) = self.select_actor(connect.id.clone()).await {
+        if let Ok(actor) = self.select_actor(connect.id).await {
             info!("Federation {} already connected", connect.id);
             return actor.get_info();
         }
@@ -384,18 +385,18 @@ impl Gateway {
         })
     }
 
-    async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<()> {
+    async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<Preimage> {
         let PayInvoicePayload {
             federation_id,
             contract_id,
         } = payload;
 
         let actor = self.select_actor(federation_id).await?;
-        let outpoint = actor.pay_invoice(contract_id).await?;
+        let (outpoint, preimage) = actor.pay_invoice(contract_id).await?;
         actor
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
-        Ok(())
+        Ok(preimage)
     }
 
     async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {

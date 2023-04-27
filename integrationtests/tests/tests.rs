@@ -555,7 +555,7 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
             .unwrap();
         debug!("Outgoing contract accepted");
 
-        let claim_outpoint = {
+        let (claim_outpoint, _) = {
             let buy_preimage = gateway
                 .actor
                 .pay_invoice_buy_preimage(contract_id)
@@ -634,7 +634,7 @@ async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
             .await
             .unwrap();
 
-        let claim_outpoint = gateway.actor.pay_invoice(contract_id).await.unwrap();
+        let (claim_outpoint, _) = gateway.actor.pay_invoice(contract_id).await.unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway
@@ -1294,7 +1294,7 @@ async fn lightning_gateway_can_reconnect() -> Result<()> {
         let new_lnrpc = create_lightning_adapter(gateway.node, TaskGroup::new()).await;
         gateway.adapter = Arc::new(RwLock::new(new_lnrpc));
 
-        let claim_outpoint = gateway.actor.pay_invoice(contract_id).await.unwrap();
+        let (claim_outpoint, _) = gateway.actor.pay_invoice(contract_id).await.unwrap();
         fed.run_consensus_epochs(2).await; // contract to mint notes, sign notes
 
         gateway

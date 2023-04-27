@@ -109,21 +109,6 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
-    pub async fn await_tx_accepted(&self, operation_id: OperationId, txid: TransactionId) {
-        let update_stream = self.transaction_update_stream(operation_id).await;
-
-        let query_txid = txid;
-        update_stream
-            .filter(move |tx_submission_state| {
-                std::future::ready(matches!(
-                    tx_submission_state.state,
-                    TxSubmissionStates::Accepted { txid, .. } if txid == query_txid
-                ))
-            })
-            .next_or_pending()
-            .await;
-    }
-
     pub async fn await_tx_rejected(&self, operation_id: OperationId, txid: TransactionId) {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
@@ -137,6 +122,34 @@ impl DynGlobalClientContext {
             })
             .next_or_pending()
             .await;
+    }
+
+    pub async fn await_tx_accepted(
+        &self,
+        operation_id: OperationId,
+        txid: TransactionId,
+    ) -> Result<(), ()> {
+        let update_stream = self.transaction_update_stream(operation_id).await;
+
+        let query_txid = txid;
+        update_stream
+            .filter_map(|tx_update| {
+                std::future::ready(match tx_update.state {
+                    TxSubmissionStates::Accepted { txid: event_txid }
+                        if event_txid == query_txid =>
+                    {
+                        Some(Ok(()))
+                    }
+                    TxSubmissionStates::Rejected { txid: event_txid }
+                        if event_txid == query_txid =>
+                    {
+                        Some(Err(()))
+                    }
+                    _ => None,
+                })
+            })
+            .next_or_pending()
+            .await
     }
 
     /// Creates a transaction that with an output of the primary module,
@@ -326,6 +339,10 @@ impl Client {
     /// client.
     pub fn builder() -> ClientBuilder {
         ClientBuilder::default()
+    }
+
+    pub fn api(&self) -> &(dyn IFederationApi + 'static) {
+        self.inner.api.as_ref()
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
