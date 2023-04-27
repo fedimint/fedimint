@@ -1737,7 +1737,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, ServerModule, TransactionId};
-    use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
+    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
     use fedimint_wallet_common::db::{
         BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix, PegOutBitcoinTransaction,
         PegOutBitcoinTransactionPrefix, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,

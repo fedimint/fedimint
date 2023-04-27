@@ -924,7 +924,7 @@ mod fedimint_migration_tests {
         ProposeDecryptionShareKeyPrefix,
     };
     use fedimint_ln_common::LightningCommonGen;
-    use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
+    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     use futures::StreamExt;
     use lightning_invoice::Invoice;
     use rand::distributions::Standard;
