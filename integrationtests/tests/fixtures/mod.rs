@@ -55,7 +55,7 @@ use fedimint_server::{consensus, FedimintApiHandler, FedimintServer};
 use fedimint_testing::btc::mock::FakeBitcoinTest;
 use fedimint_testing::btc::real::RealBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
-use fedimint_testing::ln::mock::FakeLightningTest;
+use fedimint_testing::ln::mock::{FakeLightningTest, LnRpcAdapter};
 use fedimint_testing::ln::real::RealLightningTest;
 use fedimint_testing::ln::{GatewayNode, LightningTest};
 use fedimint_wallet_client::{WalletClientGen, WalletConsensusItem};
@@ -82,13 +82,11 @@ use tracing::{debug, info};
 use url::Url;
 
 use crate::fixtures::user::{IGatewayClient, ILegacyTestClient};
-use crate::fixtures::utils::LnRpcAdapter;
 use crate::ConsensusItem;
 
 mod gen;
 mod legacy;
 pub mod user;
-mod utils;
 
 // 21 denominations, up to ~1048 sats which is big enough for our tests
 const MAX_MSAT_DENOMINATION: u64 = u64::pow(2, 20);
