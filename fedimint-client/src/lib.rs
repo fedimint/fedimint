@@ -322,6 +322,12 @@ pub struct Client {
 pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 
 impl Client {
+    /// Initialize a client builder that can be configured to create a new
+    /// client.
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::default()
+    }
+
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
     pub async fn finalize_and_submit_transaction<F, M>(
@@ -727,6 +733,7 @@ pub struct ClientBuilder {
     module_gens: ClientModuleGenRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     config: Option<ClientConfig>,
+    db: Option<Box<dyn IDatabase>>,
 }
 
 impl ClientBuilder {
@@ -766,11 +773,27 @@ impl ClientBuilder {
     // TODO: impl config from file
     // TODO: impl config from federation
 
-    pub async fn build<D: IDatabase>(self, db: D, tg: &mut TaskGroup) -> anyhow::Result<Client> {
+    /// Uses this database to store the client state
+    pub fn with_database<D: IDatabase + 'static>(&mut self, db: D) {
+        self.with_dyn_database(Box::new(db));
+    }
+
+    /// Uses this database to store the client state, allowing for flexibility
+    /// on the caller side by accepting a type-erased trait object.
+    pub fn with_dyn_database(&mut self, db: Box<dyn IDatabase>) {
+        let was_replaced = self.db.replace(db).is_some();
+        assert!(
+            !was_replaced,
+            "Only one database can be given to the builder."
+        );
+    }
+
+    pub async fn build(self, tg: &mut TaskGroup) -> anyhow::Result<Client> {
         let config = self.config.ok_or(anyhow!("No config was provided"))?;
         let primary_module_instance = self
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
+        let db = self.db.ok_or(anyhow!("No database was provided"))?;
 
         let mut decoders = client_decoders(
             &self.module_gens,
@@ -785,7 +808,7 @@ impl ClientBuilder {
             tx_submission_sm_decoder(),
         );
 
-        let db = Database::new(db, decoders);
+        let db = Database::new_from_box(db, decoders);
 
         let notifier = Notifier::new(db.clone());
 
