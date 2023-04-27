@@ -1062,16 +1062,6 @@
 <a href="#1062" id="1062">1062</a>
 <a href="#1063" id="1063">1063</a>
 <a href="#1064" id="1064">1064</a>
-<a href="#1065" id="1065">1065</a>
-<a href="#1066" id="1066">1066</a>
-<a href="#1067" id="1067">1067</a>
-<a href="#1068" id="1068">1068</a>
-<a href="#1069" id="1069">1069</a>
-<a href="#1070" id="1070">1070</a>
-<a href="#1071" id="1071">1071</a>
-<a href="#1072" id="1072">1072</a>
-<a href="#1073" id="1073">1073</a>
-<a href="#1074" id="1074">1074</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1082,17 +1072,17 @@
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>bitcoin_hashes::sha256::Hash;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>jsonrpsee_core::JsonValue;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::instrument;
 
-<span class="kw">use </span><span class="kw">crate</span>::config::{ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig};
+<span class="kw">use </span><span class="kw">crate</span>::config::{
+    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig,
+    ServerModuleConsensusConfig,
+};
 <span class="kw">use </span><span class="kw">crate</span>::core::{
     Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
     OutputOutcome,
@@ -1343,7 +1333,7 @@
 }
 
 <span class="kw">pub use </span>__api_endpoint <span class="kw">as </span>api_endpoint;
-<span class="kw">use </span>fedimint_core::config::{DkgResult, ModuleConfigResponse};
+<span class="kw">use </span>fedimint_core::config::DkgResult;
 
 <span class="kw">use </span><span class="self">self</span>::registry::ModuleDecoderRegistry;
 
@@ -1462,8 +1452,6 @@
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
 
-    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
-
     <span class="kw">fn </span>to_dyn_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynCommonModuleGen;
 }
 
@@ -1481,10 +1469,6 @@
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
         T::Common::KIND
-    }
-
-    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: Value) -&gt; anyhow::Result&lt;Hash&gt; {
-        T::Common::hash_client_module(config)
     }
 
     <span class="kw">fn </span>to_dyn_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynCommonModuleGen {
@@ -1533,12 +1517,12 @@
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
 
-    <span class="kw">fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value)
-        -&gt; anyhow::Result&lt;ModuleConfigResponse&gt;;
-
-    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
-
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
+
+    <span class="kw">fn </span>get_client_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
+    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1607,7 +1591,7 @@
 /// by running two instances of the module at the same time (each of different
 /// `ModuleKind` version), allow users to slowly migrate to a new one.
 /// This avoids complex and error-prone server-side consensus-migration logic.
-</span><span class="attr">#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable)]
+</span><span class="attr">#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ModuleConsensusVersion(<span class="kw">pub </span>u32);
 
 <span class="doccomment">/// Api version supported by a core server or a client/server module at a given
@@ -1683,8 +1667,6 @@
     <span class="kw">const </span>KIND: ModuleKind;
 
     <span class="kw">fn </span>decoder() -&gt; Decoder;
-
-    <span class="kw">fn </span>hash_client_module(config: serde_json::Value) -&gt; anyhow::Result&lt;sha256::Hash&gt;;
 }
 
 <span class="doccomment">/// Module Generation trait with associated types
@@ -1749,10 +1731,12 @@
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt;;
 
-    <span class="kw">fn </span>to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value)
-        -&gt; anyhow::Result&lt;ModuleConfigResponse&gt;;
-
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
+
+    <span class="kw">fn </span>get_client_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
+    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1804,19 +1788,15 @@
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::distributed_gen(<span class="self">self</span>, peers, params).<span class="kw">await
     </span>}
 
-    <span class="kw">fn </span>to_config_response(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        config: serde_json::Value,
-    ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::to_config_response(<span class="self">self</span>, config)
-    }
-
-    <span class="kw">fn </span>hash_client_module(<span class="kw-2">&amp;</span><span class="self">self</span>, config: serde_json::Value) -&gt; anyhow::Result&lt;Hash&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleGen&gt;::Common::hash_client_module(config)
-    }
-
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::validate_config(<span class="self">self</span>, identity, config)
+    }
+
+    <span class="kw">fn </span>get_client_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
+    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::get_client_config(<span class="self">self</span>, config)
     }
 
     <span class="kw">async fn </span>dump_database(

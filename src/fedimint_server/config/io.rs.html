@@ -332,7 +332,7 @@
     <span class="kw">let </span>client_config = server
         .consensus
         .to_config_response(module_config_gens)
-        .client;
+        .client_config;
     plaintext_json_write(<span class="kw-2">&amp;</span>server.local, path.join(LOCAL_CONFIG))<span class="question-mark">?</span>;
     plaintext_json_write(<span class="kw-2">&amp;</span>server.consensus, path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>;
     plaintext_display_write(<span class="kw-2">&amp;</span>server.get_connect_info(), <span class="kw-2">&amp;</span>path.join(CLIENT_CONNECT_FILE))<span class="question-mark">?</span>;

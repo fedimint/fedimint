@@ -856,6 +856,24 @@
 <a href="#856" id="856">856</a>
 <a href="#857" id="857">857</a>
 <a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -884,7 +902,10 @@
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective, Signature};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::module::{DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen};
+<span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
+<span class="kw">use </span><span class="kw">crate</span>::module::{
+    DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen, ModuleConsensusVersion,
+};
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, MaybeSync};
 <span class="kw">use crate</span>::{maybe_add_send_sync, PeerId};
 
@@ -971,22 +992,19 @@
     <span class="doccomment">/// Threshold pubkey for authenticating epoch history
     </span><span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
     <span class="doccomment">/// Configs from other client modules
-    </span><span class="attr">#[encodable_ignore]
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ClientModuleConfig&gt;,
     <span class="comment">// TODO: make it a String -&gt; serde_json::Value map?
     </span><span class="doccomment">/// Additional config the federation wants to transmit to the clients
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
 }
 
-<span class="doccomment">/// The API response for configuration requests
+<span class="doccomment">/// The API response for client config requests, signed by the Federation
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>ConfigResponse {
+</span><span class="kw">pub struct </span>ClientConfigResponse {
     <span class="doccomment">/// The client config
-    </span><span class="kw">pub </span>client: ClientConfig,
-    <span class="doccomment">/// Hash of the consensus config (for validating against peers)
-    </span><span class="kw">pub </span>consensus_hash: sha256::Hash,
-    <span class="doccomment">/// Auth key signature of the client config hash if it exists
-    </span><span class="kw">pub </span>client_hash_signature: <span class="prelude-ty">Option</span>&lt;Signature&gt;,
+    </span><span class="kw">pub </span>client_config: ClientConfig,
+    <span class="doccomment">/// Auth key signature over the `client_config`
+    </span><span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;Signature&gt;,
 }
 
 <span class="doccomment">/// The federation id is a copy of the authentication threshold public key of
@@ -1031,38 +1049,19 @@
 
 <span class="kw">impl </span>ClientConfig {
     <span class="doccomment">/// Returns the consensus hash for a given client config
-    </span><span class="kw">pub fn </span>consensus_hash(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_config_gens: <span class="kw-2">&amp;</span>CommonModuleGenRegistry,
-    ) -&gt; anyhow::Result&lt;sha256::Hash&gt; {
-        <span class="kw">let </span>modules: BTreeMap&lt;ModuleInstanceId, sha256::Hash&gt; = <span class="self">self
-            </span>.modules
-            .iter()
-            .map(|(module_instance_id, v)| {
-                <span class="kw">let </span>kind = v.kind();
-                <span class="prelude-val">Ok</span>((
-                    <span class="kw-2">*</span>module_instance_id,
-                    module_config_gens
-                        .get(kind)
-                        .map(|gen| gen.hash_client_module(v.value().clone()))
-                        .unwrap_or(<span class="prelude-val">Ok</span>(v.consensus_hash))<span class="question-mark">?</span>,
-                ))
-            })
-            .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
-
+    </span><span class="kw">pub fn </span>consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; sha256::Hash {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="kw">for </span>(k, v) <span class="kw">in </span>modules.iter() {
-            k.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-            v.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        }
-
-        <span class="prelude-val">Ok</span>(sha256::Hash::from_engine(engine))
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)
+            .expect(<span class="string">&quot;Consensus hashing should never fail&quot;</span>);
+        sha256::Hash::from_engine(engine)
     }
 
-    <span class="kw">pub fn </span>get_module&lt;T: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; anyhow::Result&lt;T&gt; {
+    <span class="kw">pub fn </span>get_module&lt;T: Decodable&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(client_cfg) = <span class="self">self</span>.modules.get(<span class="kw-2">&amp;</span>id) {
-            <span class="prelude-val">Ok</span>(serde_json::from_value(client_cfg.value().clone())<span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
+                <span class="kw-2">&amp;mut &amp;</span>client_cfg.config[..],
+                <span class="kw-2">&amp;</span>Default::default(),
+            )<span class="question-mark">?</span>)
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Client config for module id {id} not found&quot;</span>))
         }
@@ -1084,7 +1083,7 @@
     /// mint, wallet, ln module code in the client, this is useful, but
     /// please write any new code that avoids assumptions about available
     /// modules.
-    </span><span class="kw">pub fn </span>get_first_module_by_kind&lt;T: DeserializeOwned&gt;(
+    </span><span class="kw">pub fn </span>get_first_module_by_kind&lt;T: Decodable&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         kind: <span class="kw">impl </span>Into&lt;ModuleKind&gt;,
     ) -&gt; anyhow::Result&lt;(ModuleInstanceId, T)&gt; {
@@ -1092,8 +1091,10 @@
         <span class="kw">let </span><span class="prelude-val">Some</span>((id, module_cfg)) = <span class="self">self</span>.modules.iter().find(|(<span class="kw">_</span>, v)| v.is_kind(<span class="kw-2">&amp;</span>kind)) <span class="kw">else </span>{
             <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Module kind {kind} not found&quot;</span>)
         };
-
-        <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>id, serde_json::from_value(module_cfg.value().clone())<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>((
+            <span class="kw-2">*</span>id,
+            T::consensus_decode(<span class="kw-2">&amp;mut &amp;</span>module_cfg.config[..], <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>,
+        ))
     }
 
     <span class="comment">// TODO: rename this and above
@@ -1395,13 +1396,12 @@
     }
 }
 
-<span class="doccomment">/// Response from the API for this particular module
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>ModuleConfigResponse {
-    <span class="doccomment">/// The client configuration
-    </span><span class="kw">pub </span>client: ClientModuleConfig,
-    <span class="doccomment">/// Hash of the consensus configuration
-    </span><span class="kw">pub </span>consensus_hash: sha256::Hash,
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ServerModuleConsensusConfig {
+    <span class="kw">pub </span>kind: ModuleKind,
+    <span class="kw">pub </span>version: ModuleConsensusVersion,
+    <span class="attr">#[serde(with = <span class="string">&quot;::hex::serde&quot;</span>)]
+    </span><span class="kw">pub </span>config: Vec&lt;u8&gt;,
 }
 
 <span class="doccomment">/// Config for the client-side of a particular Federation module
@@ -1409,22 +1409,24 @@
 /// Since modules are (tbd.) pluggable into Federations,
 /// it needs to be some form of an abstract type-erased-like
 /// value.
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ClientModuleConfig {
-    kind: ModuleKind,
-    consensus_hash: sha256::Hash,
-    config: serde_json::Value,
+    <span class="kw">pub </span>kind: ModuleKind,
+    <span class="kw">pub </span>version: ModuleConsensusVersion,
+    <span class="attr">#[serde(with = <span class="string">&quot;::hex::serde&quot;</span>)]
+    </span><span class="kw">pub </span>config: Vec&lt;u8&gt;,
 }
 
 <span class="kw">impl </span>ClientModuleConfig {
     <span class="kw">pub fn </span>from_typed&lt;T: Encodable + Serialize&gt;(
         kind: ModuleKind,
+        version: ModuleConsensusVersion,
         value: <span class="kw-2">&amp;</span>T,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             kind,
-            consensus_hash: value.consensus_hash(),
-            config: serde_json::to_value(value)<span class="question-mark">?</span>,
+            version,
+            config: value.consensus_encode_to_vec()<span class="question-mark">?</span>,
         })
     }
 
@@ -1436,14 +1438,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.kind
     }
 
-    <span class="kw">pub fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>serde_json::Value {
+    <span class="kw">pub fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
         <span class="kw-2">&amp;</span><span class="self">self</span>.config
     }
 }
 
 <span class="kw">impl </span>ClientModuleConfig {
     <span class="kw">pub fn </span>cast&lt;T: TypedClientModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
-        <span class="prelude-val">Ok</span>(serde_json::from_value(<span class="self">self</span>.config.clone())<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(T::consensus_decode(
+            <span class="kw-2">&amp;mut &amp;</span><span class="self">self</span>.config[..],
+            <span class="kw-2">&amp;</span>Default::default(),
+        )<span class="question-mark">?</span>)
     }
 }
 
@@ -1454,22 +1459,30 @@
 </span><span class="kw">pub struct </span>ServerModuleConfig {
     <span class="kw">pub </span>local: JsonWithKind,
     <span class="kw">pub </span>private: JsonWithKind,
-    <span class="kw">pub </span>consensus: JsonWithKind,
+    <span class="kw">pub </span>consensus: ServerModuleConsensusConfig,
+    <span class="kw">pub </span>consensus_json: JsonWithKind,
 }
 
 <span class="kw">impl </span>ServerModuleConfig {
-    <span class="kw">pub fn </span>from(local: JsonWithKind, private: JsonWithKind, consensus: JsonWithKind) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>from(
+        local: JsonWithKind,
+        private: JsonWithKind,
+        consensus: ServerModuleConsensusConfig,
+        consensus_json: JsonWithKind,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             local,
             private,
             consensus,
+            consensus_json,
         }
     }
 
     <span class="kw">pub fn </span>to_typed&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">let </span>local = serde_json::from_value(<span class="self">self</span>.local.value().clone())<span class="question-mark">?</span>;
         <span class="kw">let </span>private = serde_json::from_value(<span class="self">self</span>.private.value().clone())<span class="question-mark">?</span>;
-        <span class="kw">let </span>consensus = serde_json::from_value(<span class="self">self</span>.consensus.value().clone())<span class="question-mark">?</span>;
+        <span class="kw">let </span>consensus =
+            &lt;T::Consensus&gt;::consensus_decode(<span class="kw-2">&amp;mut &amp;</span><span class="self">self</span>.consensus.config[..], <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(TypedServerModuleConfig::from_parts(
             local, private, consensus,
@@ -1478,12 +1491,25 @@
 }
 
 <span class="doccomment">/// Consensus-critical part of a server side module config
-</span><span class="kw">pub trait </span>TypedServerModuleConsensusConfig: DeserializeOwned + Serialize + Encodable {
+</span><span class="kw">pub trait </span>TypedServerModuleConsensusConfig:
+    DeserializeOwned + Serialize + Encodable + Decodable
+{
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
+
+    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion;
+
+    <span class="kw">fn </span>from_erased(erased: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::consensus_decode(
+            <span class="kw-2">&amp;mut &amp;</span>erased.config[..],
+            <span class="kw-2">&amp;</span>Default::default(),
+        )<span class="question-mark">?</span>)
+    }
+
     <span class="doccomment">/// Derive client side config for this module (type-erased)
     </span><span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig;
 }
 
-<span class="doccomment">/// Module (server side) config
+<span class="doccomment">/// Module (server side) config, typed
 </span><span class="kw">pub trait </span>TypedServerModuleConfig: DeserializeOwned + Serialize {
     <span class="doccomment">/// Local non-consensus, not security-sensitive settings
     </span><span class="kw">type </span>Local: DeserializeOwned + Serialize;
@@ -1512,7 +1538,14 @@
                 kind.clone(),
                 serde_json::to_value(private).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>),
             ),
-            consensus: JsonWithKind::new(
+            consensus: ServerModuleConsensusConfig {
+                kind: consensus.kind(),
+                version: consensus.version(),
+                config: consensus
+                    .consensus_encode_to_vec()
+                    .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>),
+            },
+            consensus_json: JsonWithKind::new(
                 kind,
                 serde_json::to_value(consensus).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>),
             ),
@@ -1525,12 +1558,15 @@
 
 <span class="doccomment">/// Typed client side module config
 </span><span class="kw">pub trait </span>TypedClientModuleConfig:
-    DeserializeOwned + Serialize + Encodable + MaybeSend + MaybeSync
+    DeserializeOwned + Serialize + Decodable + Encodable + MaybeSend + MaybeSync
 {
     <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
 
+    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion;
+
     <span class="kw">fn </span>to_erased(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
-        ClientModuleConfig::from_typed(<span class="self">self</span>.kind(), <span class="self">self</span>).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
+        ClientModuleConfig::from_typed(<span class="self">self</span>.kind(), <span class="self">self</span>.version(), <span class="self">self</span>)
+            .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
     }
 }
 

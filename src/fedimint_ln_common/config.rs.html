@@ -107,18 +107,31 @@
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 
-<span class="kw">use </span><span class="kw">crate</span>::KIND;
+<span class="kw">use crate</span>::{CONSENSUS_VERSION, KIND};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningConfig {
@@ -129,7 +142,7 @@
     </span><span class="kw">pub </span>consensus: LightningConfigConsensus,
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>LightningConfigConsensus {
     <span class="doccomment">/// The threshold public keys for encrypting the LN preimage
     </span><span class="kw">pub </span>threshold_pub_keys: threshold_crypto::PublicKeySet,
@@ -155,9 +168,13 @@
     <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
         KIND
     }
+
+    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
+        CONSENSUS_VERSION
+    }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>LightningClientConfig {
     <span class="kw">pub </span>threshold_pub_key: threshold_crypto::PublicKey,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
@@ -167,12 +184,21 @@
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
         ClientModuleConfig::from_typed(
             KIND,
+            CONSENSUS_VERSION,
             <span class="kw-2">&amp;</span>LightningClientConfig {
                 threshold_pub_key: <span class="self">self</span>.threshold_pub_keys.public_key(),
                 fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
             },
         )
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
+    }
+
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        KIND
+    }
+
+    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
+        CONSENSUS_VERSION
     }
 }
 
@@ -202,7 +228,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>contract_input: fedimint_core::Amount,
     <span class="kw">pub </span>contract_output: fedimint_core::Amount,

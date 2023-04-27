@@ -1140,8 +1140,6 @@
 <a href="#1140" id="1140">1140</a>
 <a href="#1141" id="1141">1141</a>
 <a href="#1142" id="1142">1142</a>
-<a href="#1143" id="1143">1143</a>
-<a href="#1144" id="1144">1144</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1159,9 +1157,7 @@
 <span class="kw">use </span>fedimint_aead::get_password_hash;
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::get_client_root_secret;
-<span class="kw">use </span>fedimint_client::module::gen::{
-    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt, IClientModuleGen,
-};
+<span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 <span class="kw">use </span>fedimint_client::sm::Notifier;
 <span class="kw">use </span>fedimint_client_legacy::mint::backup::Metadata;
 <span class="kw">use </span>fedimint_client_legacy::mint::SpendableNote;
@@ -1805,7 +1801,7 @@
                 <span class="kw">let </span>api = Arc::new(WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect_obj.clone()]))
                     <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
                 <span class="kw">let </span>cfg: ClientConfig = api
-                    .download_client_config(<span class="kw-2">&amp;</span>connect_obj, <span class="self">self</span>.module_gens.to_common())
+                    .download_client_config(<span class="kw-2">&amp;</span>connect_obj)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(
                         CliErrorKind::NetworkError,

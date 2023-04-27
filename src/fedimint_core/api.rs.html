@@ -1088,8 +1088,6 @@
 <a href="#1088" id="1088">1088</a>
 <a href="#1089" id="1089">1089</a>
 <a href="#1090" id="1090">1090</a>
-<a href="#1091" id="1091">1091</a>
-<a href="#1092" id="1092">1092</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1104,7 +1102,7 @@
 <span class="kw">use </span>bech32::Variant::Bech32m;
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
 <span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, CommonModuleGenRegistry, ConfigResponse, FederationId};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1445,7 +1443,6 @@
     </span><span class="kw">async fn </span>download_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         info: <span class="kw-2">&amp;</span>WsClientConnectInfo,
-        module_gens: CommonModuleGenRegistry,
     ) -&gt; FederationResult&lt;ClientConfig&gt;;
 
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
@@ -1611,16 +1608,15 @@
     <span class="kw">async fn </span>download_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         info: <span class="kw-2">&amp;</span>WsClientConnectInfo,
-        module_gens: CommonModuleGenRegistry,
     ) -&gt; FederationResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>id = info.id.clone();
         <span class="kw">let </span>qs = VerifiableResponse::new(
             <span class="self">self</span>.all_members().total(),
             <span class="bool-val">false</span>,
-            <span class="kw">move </span>|config: <span class="kw-2">&amp;</span>ConfigResponse| {
-                <span class="kw">let </span>hash = config.client.consensus_hash(<span class="kw-2">&amp;</span>module_gens).expect(<span class="string">&quot;Hashes&quot;</span>);
+            <span class="kw">move </span>|config: <span class="kw-2">&amp;</span>ClientConfigResponse| {
+                <span class="kw">let </span>hash = config.client_config.consensus_hash();
 
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(sig) = <span class="kw-2">&amp;</span>config.client_hash_signature {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(sig) = <span class="kw-2">&amp;</span>config.signature {
                     id.<span class="number">0</span>.verify(sig, hash)
                 } <span class="kw">else </span>{
                     <span class="bool-val">false
@@ -1630,7 +1626,7 @@
 
         <span class="self">self</span>.request_with_strategy(qs, <span class="string">&quot;config&quot;</span>.to_owned(), ApiRequestErased::new(info.clone()))
             .<span class="kw">await
-            </span>.map(|cfg: ConfigResponse| cfg.client)
+            </span>.map(|cfg: ClientConfigResponse| cfg.client_config)
     }
 
     <span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {

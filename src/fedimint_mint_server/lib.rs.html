@@ -1394,25 +1394,16 @@
 <a href="#1394" id="1394">1394</a>
 <a href="#1395" id="1395">1395</a>
 <a href="#1396" id="1396">1396</a>
-<a href="#1397" id="1397">1397</a>
-<a href="#1398" id="1398">1398</a>
-<a href="#1399" id="1399">1399</a>
-<a href="#1400" id="1400">1400</a>
-<a href="#1401" id="1401">1401</a>
-<a href="#1402" id="1402">1402</a>
-<a href="#1403" id="1403">1403</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::ops::Sub;
 
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
+    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
@@ -1582,7 +1573,7 @@
                                 <span class="kw">let </span>pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
                                 (<span class="kw-2">*</span>amount, pks)
                             })
-                            .collect::&lt;Tiered&lt;PublicKeyShare&gt;&gt;();
+                            .collect::&lt;Tiered&lt;<span class="kw">_</span>&gt;&gt;();
 
                         (<span class="kw-2">*</span>peer, pks)
                     })
@@ -1595,20 +1586,15 @@
         <span class="prelude-val">Ok</span>(server.to_erased())
     }
 
-    <span class="kw">fn </span>to_config_response(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        config: serde_json::Value,
-    ) -&gt; anyhow::Result&lt;ModuleConfigResponse&gt; {
-        <span class="kw">let </span>config = serde_json::from_value::&lt;MintConfigConsensus&gt;(config)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(ModuleConfigResponse {
-            client: config.to_client_config(),
-            consensus_hash: config.consensus_hash(),
-        })
-    }
-
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config.to_typed::&lt;MintConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
+    }
+
+    <span class="kw">fn </span>get_client_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
+    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+        <span class="prelude-val">Ok</span>(MintConfigConsensus::from_erased(config)<span class="question-mark">?</span>.to_client_config())
     }
 
     <span class="kw">async fn </span>dump_database(
@@ -2126,7 +2112,7 @@
             .consensus <span class="comment">// FIXME: make sure we use id instead of idx everywhere
             </span>.peer_tbs_pks
             .iter()
-            .find_map(|(<span class="kw-2">&amp;</span>id, pk)| <span class="kw">if </span>pk == <span class="kw-2">&amp;</span>ref_pub_key { <span class="prelude-val">Some</span>(id) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
+            .find_map(|(<span class="kw-2">&amp;</span>id, pk)| <span class="kw">if </span><span class="kw-2">*</span>pk == ref_pub_key { <span class="prelude-val">Some</span>(id) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
             .expect(<span class="string">&quot;Own key not found among pub keys.&quot;</span>);
 
         <span class="macro">assert_eq!</span>(
@@ -2155,7 +2141,7 @@
         Mint {
             cfg: cfg.clone(),
             sec_key: cfg.private.tbs_sks,
-            pub_key_shares: cfg.consensus.peer_tbs_pks,
+            pub_key_shares: cfg.consensus.peer_tbs_pks.into_iter().collect(),
             pub_key: aggregate_pub_keys,
         }
     }

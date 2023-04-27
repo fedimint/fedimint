@@ -109,20 +109,24 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>bitcoin::secp256k1::{Secp256k1, Verification};
 <span class="kw">use </span>bitcoin::PublicKey;
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>miniscript::{MiniscriptKey, ToPublicKey};
 <span class="kw">use </span>secp256k1::Signing;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
 
-<span class="attr">#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(
+    Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable,
+)]
 </span><span class="kw">pub struct </span>CompressedPublicKey {
     <span class="kw">pub </span>key: secp256k1::PublicKey,
 }

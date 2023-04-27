@@ -131,7 +131,31 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
 
 <span class="kw">use </span>anyhow::bail;
@@ -140,13 +164,13 @@
     TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
 
-<span class="kw">use </span><span class="kw">crate</span>::KIND;
+<span class="kw">use crate</span>::{CONSENSUS_VERSION, KIND};
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintConfig {
@@ -157,7 +181,7 @@
     </span><span class="kw">pub </span>consensus: MintConfigConsensus,
 }
 
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>MintConfigConsensus {
     <span class="doccomment">/// The set of public keys for blind-signing all peers and note
     /// denominations
@@ -174,7 +198,7 @@
     </span><span class="kw">pub </span>tbs_sks: Tiered&lt;tbs::SecretKeyShare&gt;,
 }
 
-<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable)]
+<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>MintClientConfig {
     <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
@@ -186,29 +210,51 @@
     <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
         <span class="kw">crate</span>::KIND
     }
+
+    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
+        <span class="kw">crate</span>::CONSENSUS_VERSION
+    }
+
+    <span class="kw">fn </span>to_erased(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
+        ClientModuleConfig::from_typed(<span class="self">self</span>.kind(), <span class="self">self</span>.version(), <span class="self">self</span>)
+            .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
+    }
 }
 
 <span class="kw">impl </span>TypedServerModuleConsensusConfig <span class="kw">for </span>MintConfigConsensus {
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
-        <span class="kw">let </span>pub_key: HashMap&lt;Amount, AggregatePublicKey&gt; =
-            TieredMultiZip::new(<span class="self">self</span>.peer_tbs_pks.values().map(|keys| keys.iter()).collect())
-                .map(|(amt, keys)| {
-                    <span class="comment">// TODO: avoid this through better aggregation API allowing references or
-                    </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                    (amt, keys.aggregate(<span class="self">self</span>.peer_tbs_pks.threshold()))
-                })
-                .collect();
+        <span class="kw">let </span>pub_keys = TieredMultiZip::new(
+            <span class="self">self</span>.peer_tbs_pks.values().map(|keys| keys.iter()).collect(),
+        )
+        .map(|(amt, keys)| {
+            <span class="comment">// TODO: avoid this through better aggregation API allowing references or
+            </span><span class="kw">let </span>agg_key = keys
+                .into_iter()
+                .copied()
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                .aggregate(<span class="self">self</span>.peer_tbs_pks.threshold());
+            (amt, agg_key)
+        });
 
         ClientModuleConfig::from_typed(
             KIND,
+            CONSENSUS_VERSION,
             <span class="kw-2">&amp;</span>MintClientConfig {
-                tbs_pks: Tiered::from_iter(pub_key.into_iter()),
+                tbs_pks: Tiered::from_iter(pub_keys),
                 fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
                 peer_tbs_pks: <span class="self">self</span>.peer_tbs_pks.clone(),
                 max_notes_per_denomination: <span class="self">self</span>.max_notes_per_denomination,
             },
         )
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
+    }
+
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        <span class="kw">crate</span>::KIND
+    }
+
+    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
+        <span class="kw">crate</span>::CONSENSUS_VERSION
     }
 }
 
@@ -238,7 +284,9 @@
             .get(identity)
             .unwrap()
             .as_map()
-            .clone();
+            .iter()
+            .map(|(k, v)| (<span class="kw-2">*</span>k, <span class="kw-2">*</span>v))
+            .collect();
         <span class="kw">if </span>sks != pks {
             <span class="macro">bail!</span>(<span class="string">&quot;Mint private key doesn&#39;t match pubkey share&quot;</span>);
         }
@@ -250,7 +298,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>note_issuance_abs: fedimint_core::Amount,
     <span class="kw">pub </span>note_spend_abs: fedimint_core::Amount,

@@ -890,6 +890,16 @@
 <a href="#890" id="890">890</a>
 <a href="#891" id="891">891</a>
 <a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
@@ -897,8 +907,6 @@
 <span class="kw">use </span>std::{env, fs};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
-<span class="kw">use </span>bitcoin::hashes::sha256;
-<span class="kw">use </span>bitcoin::hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
@@ -907,8 +915,8 @@
 <span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::config::{
-    ClientConfig, ConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, ModuleConfigResponse,
-    PeerUrl, ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
+    ClientConfig, ClientConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl,
+    ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{
     ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
@@ -936,7 +944,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{DkgRunner, ThresholdKeys};
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TLS_PK};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::{BitcoinHash, NumPeers};
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::NumPeers;
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsConfig};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, NetworkConfig};
@@ -1028,8 +1036,10 @@
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert_map&quot;</span>)]
     </span><span class="kw">pub </span>tls_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt;,
     <span class="doccomment">/// All configuration that needs to be the same for modules
-    </span><span class="attr">#[encodable_ignore]
-    </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
+    </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConsensusConfig&gt;,
+    <span class="attr">#[encodable_ignore]
+    </span><span class="doccomment">/// Human readable representation of [`Self::modules`]
+    </span><span class="kw">pub </span>modules_json: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
     <span class="doccomment">/// Additional config the federation wants to transmit to the clients
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
 }
@@ -1068,57 +1078,47 @@
     <span class="kw">pub fn </span>iter_module_instances(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind)&gt; + <span class="lifetime">&#39;_ </span>{
-        <span class="self">self</span>.modules.iter().map(|(k, v)| (<span class="kw-2">*</span>k, v.kind()))
+        <span class="self">self</span>.modules.iter().map(|(k, v)| (<span class="kw-2">*</span>k, <span class="kw-2">&amp;</span>v.kind))
     }
 
-    <span class="doccomment">/// encodes the fields into a sha256 hash for comparison
-    /// TODO use the derive macro to automatically pick up new fields here
-    </span><span class="kw">pub fn </span>try_to_config_response(
+    <span class="kw">pub fn </span>try_to_config_response(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
-    ) -&gt; anyhow::Result&lt;ConfigResponse&gt; {
-        <span class="kw">let </span>modules: BTreeMap&lt;ModuleInstanceId, ModuleConfigResponse&gt; = <span class="self">self
-            </span>.modules
-            .iter()
-            .map(|(module_instance_id, v)| {
-                <span class="kw">let </span>kind = v.kind();
-                <span class="prelude-val">Ok</span>((
-                    <span class="kw-2">*</span>module_instance_id,
-                    module_config_gens
-                        .get(kind)
-                        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;module config gen not found: {kind}&quot;</span>))<span class="question-mark">?
-                        </span>.to_config_response(v.value().clone())<span class="question-mark">?</span>,
-                ))
-            })
-            .collect::&lt;anyhow::Result&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+        <span class="comment">// TODO: remove
+        </span>module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
+    ) -&gt; anyhow::Result&lt;ClientConfigResponse&gt; {
+        <span class="prelude-val">Ok</span>(ClientConfigResponse {
+            client_config: <span class="self">self</span>.to_client_config(module_config_gens)<span class="question-mark">?</span>,
+            signature: <span class="prelude-val">None</span>,
+        })
+    }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
-        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        <span class="kw">for </span>(k, v) <span class="kw">in </span>modules.iter() {
-            k.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-            v.consensus_hash.consensus_encode(<span class="kw-2">&amp;mut </span>engine)<span class="question-mark">?</span>;
-        }
-        <span class="kw">let </span>consensus_hash = sha256::Hash::from_engine(engine);
-
+    <span class="kw">fn </span>to_client_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_config_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry&lt;DynServerModuleGen&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig, anyhow::Error&gt; {
         <span class="kw">let </span>client = ClientConfig {
             federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
             api_endpoints: <span class="self">self</span>.api_endpoints.clone(),
-            modules: modules.into_iter().map(|(k, v)| (k, v.client)).collect(),
+            modules: <span class="self">self
+                </span>.modules
+                .iter()
+                .map(|(k, v)| {
+                    <span class="kw">let </span>gen = module_config_gens
+                        .get(<span class="kw-2">&amp;</span>v.kind)
+                        .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module gen kind={} not found&quot;</span>, v.kind))<span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>k, gen.get_client_config(v)<span class="question-mark">?</span>))
+                })
+                .collect::&lt;anyhow::Result&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
             meta: <span class="self">self</span>.meta.clone(),
         };
-
-        <span class="prelude-val">Ok</span>(ConfigResponse {
-            client,
-            consensus_hash,
-            client_hash_signature: <span class="prelude-val">None</span>,
-        })
+        <span class="prelude-val">Ok</span>(client)
     }
 
     <span class="kw">pub fn </span>to_config_response(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
-    ) -&gt; ConfigResponse {
+    ) -&gt; ClientConfigResponse {
         <span class="self">self</span>.try_to_config_response(module_config_gens)
             .expect(<span class="string">&quot;configuration mismatch&quot;</span>)
     }
@@ -1171,6 +1171,7 @@
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),
+            modules_json: Default::default(),
             meta: params.consensus.requested.meta,
         };
         <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
@@ -1202,11 +1203,13 @@
                 local,
                 private,
                 consensus,
+                consensus_json,
             } = config;
 
             <span class="self">self</span>.local.modules.insert(name, local);
             <span class="self">self</span>.private.modules.insert(name, private);
             <span class="self">self</span>.consensus.modules.insert(name, consensus);
+            <span class="self">self</span>.consensus.modules_json.insert(name, consensus_json);
         }
     }
 
@@ -1217,8 +1220,14 @@
     ) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">let </span>local = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.local.modules, id)<span class="question-mark">?</span>;
         <span class="kw">let </span>private = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.private.modules, id)<span class="question-mark">?</span>;
-        <span class="kw">let </span>consensus = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules, id)<span class="question-mark">?</span>;
-        <span class="kw">let </span>module = ServerModuleConfig::from(local, private, consensus);
+        <span class="kw">let </span>consensus = <span class="self">self
+            </span>.consensus
+            .modules
+            .get(<span class="kw-2">&amp;</span>id)
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {id} not found&quot;</span>))<span class="question-mark">?
+            </span>.clone();
+        <span class="kw">let </span>consensus_json = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules_json, id)<span class="question-mark">?</span>;
+        <span class="kw">let </span>module = ServerModuleConfig::from(local, private, consensus, consensus_json);
 
         module.to_typed()
     }
@@ -1231,17 +1240,28 @@
             </span>.consensus
             .modules
             .iter()
-            .find(|(<span class="kw">_</span>, v)| v.is_kind(<span class="kw-2">&amp;</span>kind))
+            .find(|(<span class="kw">_</span>, v)| v.kind == kind)
             .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {kind} not found&quot;</span>))<span class="question-mark">?
             </span>.<span class="number">0</span>)
     }
 
-    <span class="doccomment">/// Constructs a module config by name
+    <span class="doccomment">/// Constructs a module config by id
     </span><span class="kw">pub fn </span>get_module_config(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
         <span class="kw">let </span>local = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.local.modules, id)<span class="question-mark">?</span>;
         <span class="kw">let </span>private = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.private.modules, id)<span class="question-mark">?</span>;
-        <span class="kw">let </span>consensus = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules, id)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ServerModuleConfig::from(local, private, consensus))
+        <span class="kw">let </span>consensus = <span class="self">self
+            </span>.consensus
+            .modules
+            .get(<span class="kw-2">&amp;</span>id)
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module {id} not found&quot;</span>))<span class="question-mark">?
+            </span>.clone();
+        <span class="kw">let </span>consensus_json = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules_json, id)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ServerModuleConfig::from(
+            local,
+            private,
+            consensus,
+            consensus_json,
+        ))
     }
 
     <span class="kw">fn </span>get_module_cfg_by_instance_id(
@@ -1282,7 +1302,7 @@
             </span>.consensus
             .modules
             .iter()
-            .map(|(id, config)| <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>id, config.kind())))
+            .map(|(id, config)| <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>id, config.kind.clone())))
             .collect::&lt;anyhow::Result&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
             </span>.iter()
         {
