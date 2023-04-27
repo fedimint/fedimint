@@ -10,10 +10,16 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::Amount;
-use fedimint_testing::btc::BitcoinTest;
 use lazy_static::lazy_static;
 use tokio::time::sleep;
 use url::Url;
+
+use crate::btc::BitcoinTest;
+
+lazy_static! {
+    /// Global lock we use to isolate tests that need exclusive control over shared `bitcoind`
+    static ref REAL_BITCOIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
+}
 
 /// Fixture implementing bitcoin node under test by talking to a `bitcoind` with
 /// no locking considerations.
@@ -122,11 +128,6 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     }
 }
 
-lazy_static! {
-    /// Global lock we use to isolate tests that need exclusive control over shared `bitcoind`
-    static ref REAL_BITCOIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
-}
-
 /// Fixture implementing bitcoin node under test by talking to a `bitcoind` -
 /// unlocked version (lock each call separately)
 ///
@@ -148,6 +149,7 @@ impl RealBitcoinTest {
         }
     }
 }
+
 /// Fixture implementing bitcoin node under test by talking to a `bitcoind` -
 /// locked version - locks the global lock during construction
 pub struct RealBitcoinTestLocked {

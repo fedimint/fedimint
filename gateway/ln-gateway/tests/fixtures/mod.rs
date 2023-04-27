@@ -9,7 +9,7 @@ use fedimint_client_legacy::modules::wallet::WalletClientGen;
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
-use fedimint_testing::btc::fixtures::FakeBitcoinTest;
+use fedimint_testing::btc::mock::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::mock::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;

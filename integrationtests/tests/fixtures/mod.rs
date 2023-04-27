@@ -52,7 +52,8 @@ use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
 use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
 use fedimint_server::{consensus, FedimintApiHandler, FedimintServer};
-use fedimint_testing::btc::fixtures::FakeBitcoinTest;
+use fedimint_testing::btc::mock::FakeBitcoinTest;
+use fedimint_testing::btc::real::RealBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::mock::FakeLightningTest;
 use fedimint_testing::ln::real::RealLightningTest;
@@ -75,7 +76,6 @@ use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use real::RealBitcoinTest;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
 use tracing::{debug, info};
@@ -87,7 +87,6 @@ use crate::ConsensusItem;
 
 mod gen;
 mod legacy;
-mod real;
 pub mod user;
 mod utils;
 

@@ -25,6 +25,7 @@ fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
+lazy_static = "1.4.0"
 ln-gateway = { path = "../gateway/ln-gateway" }
 futures = "0.3"
 lightning = "0.0.113"
