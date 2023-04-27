@@ -7,7 +7,7 @@ edition = "2021"
 
 [[bin]]
 name = "fedimint-bin-tests"
-path = "src/main.rs"
+path = "src/bin/fedimint_bin_tests.rs"
 
 [dependencies]
 anyhow = { version = "1.0.69", features = ["backtrace"] }

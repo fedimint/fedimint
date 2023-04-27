@@ -193,9 +193,14 @@ macro_rules! cmd {
     };
     // last matcher
     (@last $this:expr, $($arg:expr),* $(,)?) => {
-        $this.cmd().await
-            $(.arg($arg))*
-            .kill_on_drop(true)
+        {
+            #[allow(unused)]
+            use $crate::util::ToCmdExt;
+            $this.cmd().await
+                $(.arg($arg))*
+                .kill_on_drop(true)
+
+        }
     };
 }
 
