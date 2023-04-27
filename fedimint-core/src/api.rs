@@ -519,7 +519,7 @@ where
         &self,
         info: &WsClientConnectInfo,
     ) -> FederationResult<ClientConfig> {
-        let id = info.id.clone();
+        let id = info.id;
         let qs = VerifiableResponse::new(
             self.all_members().total(),
             false,

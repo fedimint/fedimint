@@ -41,7 +41,7 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         decoders: ModuleDecoderRegistry,
         _module_gens: ClientModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>, GatewayError> {
-        let federation_id = config.client_config.federation_id.clone();
+        let federation_id = config.client_config.federation_id;
         // Ignore `config`s, hardcode one peer.
         let members = BTreeSet::from([PeerId::from(0)]);
 

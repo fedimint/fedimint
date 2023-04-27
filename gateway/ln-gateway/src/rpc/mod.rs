@@ -11,6 +11,7 @@ use fedimint_client_legacy::ln::PayInvoicePayload;
 use fedimint_core::config::FederationId;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, TransactionId};
+use fedimint_ln_client::contracts::Preimage;
 use futures::Future;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
@@ -171,7 +172,7 @@ impl_gateway_request_trait!(
     FederationInfo,
     GatewayRequest::ConnectFederation
 );
-impl_gateway_request_trait!(PayInvoicePayload, (), GatewayRequest::PayInvoice);
+impl_gateway_request_trait!(PayInvoicePayload, Preimage, GatewayRequest::PayInvoice);
 impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
 impl_gateway_request_trait!(
     DepositAddressPayload,

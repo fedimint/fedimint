@@ -425,7 +425,10 @@ mod tests {
         dbtx.commit_tx().await;
 
         timeout(Duration::from_secs(5), async move {
-            dyn_context.await_tx_accepted(operation_id, txid).await
+            dyn_context
+                .await_tx_accepted(operation_id, txid)
+                .await
+                .expect("Transaction was not accepted")
         })
         .await
         .unwrap();

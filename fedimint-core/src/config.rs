@@ -136,7 +136,7 @@ pub struct ClientConfigResponse {
 ///
 /// Stable id so long as guardians membership does not change
 /// Unique id so long as guardians do not all collude
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable)]
+#[derive(Debug, Copy, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
 pub struct FederationId(pub threshold_crypto::PublicKey);
 
 impl Display for FederationId {

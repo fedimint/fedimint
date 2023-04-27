@@ -1,3 +1,4 @@
+/// Database keys used throughout the mint client module
 mod db;
 /// State machines for mint inputs
 mod input;
@@ -102,6 +103,14 @@ pub trait MintClientExt {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<SpendOOBState>>;
+
+    // Wait for the refund transaction to complete after a lightning invoice
+    // failed to be paid.
+    async fn await_lightning_refund(
+        &self,
+        operation_id: OperationId,
+        refund_txid: TransactionId,
+    ) -> anyhow::Result<()>;
 }
 
 /// The high-level state of a reissue operation started with
@@ -177,6 +186,21 @@ impl MintClientExt for Client {
         .expect("Transactions can only fail if the operation already exists, which we checked previously");
 
         Ok(operation_id)
+    }
+
+    async fn await_lightning_refund(
+        &self,
+        operation_id: OperationId,
+        refund_txid: TransactionId,
+    ) -> anyhow::Result<()> {
+        let (_, mint_client) = mint_client(self);
+        let out_point = OutPoint {
+            txid: refund_txid,
+            out_idx: 0,
+        };
+        mint_client
+            .await_output_finalized(operation_id, out_point)
+            .await
     }
 
     async fn subscribe_reissue_external_notes_updates(

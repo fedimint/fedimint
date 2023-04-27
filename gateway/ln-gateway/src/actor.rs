@@ -395,7 +395,7 @@ impl GatewayActor {
     }
 
     #[instrument(skip_all, fields(%contract_id))]
-    pub async fn pay_invoice(&self, contract_id: ContractId) -> Result<OutPoint> {
+    pub async fn pay_invoice(&self, contract_id: ContractId) -> Result<(OutPoint, Preimage)> {
         self.pay_invoice_buy_preimage_finalize_and_claim(
             contract_id,
             self.pay_invoice_buy_preimage(contract_id).await?,
@@ -476,16 +476,16 @@ impl GatewayActor {
         &self,
         contract_id: ContractId,
         buy_preimage: BuyPreimage,
-    ) -> Result<OutPoint> {
+    ) -> Result<(OutPoint, Preimage)> {
         let rng = rand::rngs::OsRng;
 
         match self.pay_invoice_buy_preimage_finalize(buy_preimage).await {
             Ok(preimage) => {
                 let outpoint = self
                     .client
-                    .claim_outgoing_contract(contract_id, preimage, rng)
+                    .claim_outgoing_contract(contract_id, preimage.clone(), rng)
                     .await?;
-                Ok(outpoint)
+                Ok((outpoint, preimage))
             }
             Err(e) => {
                 warn!("Invoice payment failed. Aborting");
@@ -641,7 +641,7 @@ impl GatewayActor {
     pub fn get_info(&self) -> Result<FederationInfo> {
         let cfg = self.client.config();
         Ok(FederationInfo {
-            federation_id: cfg.client_config.federation_id.clone(),
+            federation_id: cfg.client_config.federation_id,
             mint_pubkey: cfg.redeem_key.x_only_public_key().0,
         })
     }

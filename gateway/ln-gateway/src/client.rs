@@ -125,7 +125,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
     ) -> Result<Client<GatewayClientConfig>> {
-        let federation_id = config.client_config.federation_id.clone();
+        let federation_id = config.client_config.federation_id;
 
         let db = self.db_factory.create_database(
             federation_id,
