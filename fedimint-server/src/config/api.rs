@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::iter::once;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -80,7 +79,10 @@ impl ConfigGenApi {
         let mut state = self.state.lock().expect("lock poisoned");
 
         match &*state {
-            ConfigApiState::SetPassword => *state = ConfigApiState::SetConnections(auth),
+            ConfigApiState::SetPassword => {
+                let params = ConfigGenConnectionsState::new(self.settings.clone(), auth)?;
+                *state = ConfigApiState::SetConfigGenParams(params);
+            }
             _ => return Err(ApiError::bad_request("Password already set".to_string())),
         }
 
@@ -92,27 +94,16 @@ impl ConfigGenApi {
         &self,
         request: ConfigGenConnectionsRequest,
     ) -> ApiResult<()> {
-        let connection = {
-            let mut state = self.state.lock().expect("lock poisoned");
+        let mut connection = self.get_connection_state()?;
+        connection = connection.with_request(request.clone())?;
+        self.set_connections_state(connection.clone());
 
-            let connection = match (*state).clone() {
-                ConfigApiState::SetConnections(auth) => {
-                    ConfigGenConnectionsState::new(request, self.settings.clone(), auth)?
-                }
-                ConfigApiState::SetConfigGenParams(old) => old.with_request(request)?,
-                _ => return Err(ApiError::bad_request("Config already set".to_string())),
-            };
-            *state = ConfigApiState::SetConfigGenParams(connection.clone());
-
-            connection
-        };
-
-        if let Some(url) = connection.request.leader_api_url.clone() {
+        if let Some(url) = request.leader_api_url {
             // Note PeerIds don't really exist at this point, but id doesn't matter because
             // it's not used in the WS client for anything, perhaps it should be removed
             let client = WsAdminClient::new(url, PeerId::from(0), connection.auth.clone());
             client
-                .add_config_gen_peer(connection.as_peer_info())
+                .add_config_gen_peer(connection.as_peer_info()?)
                 .await
                 .map_err(|_| ApiError::not_found("Unable to connect to the leader".to_string()))?;
         }
@@ -126,9 +117,7 @@ impl ConfigGenApi {
     pub fn add_config_gen_peer(&self, peer: PeerServerParams) -> ApiResult<()> {
         let mut connection = self.get_connection_state()?;
         connection.peers.insert(peer.api_url.clone(), peer);
-
-        let mut state = self.state.lock().expect("lock poisoned");
-        *state = ConfigApiState::SetConfigGenParams(connection);
+        self.set_connections_state(connection);
 
         self.notify_peer_connection.notify_one();
         Ok(())
@@ -136,17 +125,8 @@ impl ConfigGenApi {
 
     /// Returns the peers that have called `add_config_gen_peer` on the leader
     pub fn get_config_gen_peers(&self) -> ApiResult<Vec<PeerServerParams>> {
-        let state = self.state.lock().expect("lock poisoned");
-
-        let peers = match &*state {
-            ConfigApiState::SetConfigGenParams(connection) => Ok(connection.get_peer_info()),
-            ConfigApiState::VerifyConfigParams(_, params) => {
-                Ok(params.consensus.peers.values().cloned().collect())
-            }
-            _ => Self::bad_request("Set the config connections first"),
-        }?;
-
-        Ok(peers)
+        let connection = self.get_connection_state()?;
+        Ok(connection.get_peer_info().into_values().collect())
     }
 
     /// Waits for at least `num_peers` connections to be added
@@ -167,17 +147,9 @@ impl ConfigGenApi {
 
     /// Sets the config gen params, should only be called by the leader
     pub async fn set_config_gen_params(&self, requested: ConfigGenParamsRequest) -> ApiResult<()> {
-        let connection = self.get_connection_state()?;
-
-        let peers: BTreeMap<PeerId, PeerServerParams> = connection
-            .get_peer_info()
-            .into_iter()
-            .enumerate()
-            .map(|(i, peer)| (PeerId::from(i as u16), peer))
-            .collect();
-
-        let consensus = ConfigGenParamsConsensus { peers, requested };
-        self.set_config_state(connection, consensus)?;
+        let mut connection = self.get_connection_state()?;
+        connection.requested_params = Some(requested);
+        self.set_connections_state(connection);
 
         Ok(())
     }
@@ -185,54 +157,43 @@ impl ConfigGenApi {
     /// Gets the consensus config gen params, if we have a leader get it from
     /// the leader
     pub async fn get_consensus_config_gen_params(&self) -> ApiResult<ConfigGenParamsConsensus> {
-        let connection = {
-            let state = self.state.lock().expect("lock poisoned");
-
-            match &*state {
-                ConfigApiState::VerifyConfigParams(_, param) => return Ok(param.consensus.clone()),
-                ConfigApiState::SetConfigGenParams(connection) => connection.clone(),
-                _ => return Self::bad_request("Not in a state that can return params"),
-            }
-        };
-
-        let url = connection
-            .request
-            .leader_api_url
+        let connection = self.get_connection_state().or(self.get_dkg_state())?;
+        let leader = connection
+            .local
             .clone()
-            .ok_or(ApiError::bad_request(
-                "Need to set the consensus params first".to_string(),
-            ))?;
+            .and_then(|local| local.leader_api_url);
 
-        let client = WsAdminClient::new(url, PeerId::from(0), connection.auth.clone());
-        let consensus = client
-            .get_consensus_config_gen_params()
-            .await
-            .map_err(|_| ApiError::not_found("Unable to get params from leader".to_string()))?;
+        if let Some(url) = leader {
+            let client = WsAdminClient::new(url.clone(), PeerId::from(0), connection.auth.clone());
+            let consensus = client
+                .get_consensus_config_gen_params()
+                .await
+                .map_err(|_| ApiError::not_found("Unable to get params from leader".to_string()))?;
+            return Ok(consensus);
+        }
 
-        self.set_config_state(connection, consensus.clone())?;
-
-        Ok(consensus)
+        Ok(ConfigGenParamsConsensus {
+            peers: connection.get_peer_info(),
+            requested: connection.get_requested_params()?,
+        })
     }
 
     /// Once configs are generated, starts DKG and await its
     /// completion, calling a second time will return an error
     pub async fn run_dkg(&self) -> ApiResult<()> {
-        let dkg_failed = Err(ApiError::server_error("DKG failed".to_string()));
+        let consensus = self.get_consensus_config_gen_params().await?;
 
-        let (params, auth) = {
+        let params: ConfigGenParams = {
             let mut state = self.state.lock().expect("lock poisoned");
 
-            let (params, auth) = match &*state {
-                ConfigApiState::VerifyConfigParams(auth, params) => (params.clone(), auth.clone()),
-                ConfigApiState::VerifyConsensusConfig(_) | ConfigApiState::RunningDkg(_) => {
-                    return Self::bad_request("DKG already run")
+            match &*state {
+                ConfigApiState::SetConfigGenParams(connection) => {
+                    let params = connection.get_config_gen_params(consensus)?;
+                    *state = ConfigApiState::RunningDkg(connection.clone());
+                    params
                 }
-                ConfigApiState::FailedDkg(_) => return dkg_failed,
-                _ => return Self::bad_request("Must generate configs first"),
-            };
-
-            *state = ConfigApiState::RunningDkg(auth.clone());
-            (params, auth)
+                _ => return Self::bad_request("Cannot run DKG now"),
+            }
         };
 
         let module_gens = self.settings.module_gens.clone();
@@ -261,8 +222,8 @@ impl ConfigGenApi {
                     target: fedimint_logging::LOG_NET_PEER_DKG,
                     "DKG failed with {:?}", e
                 );
-                *state = ConfigApiState::FailedDkg(auth);
-                dkg_failed
+                *state = ConfigApiState::FailedDkg(params.local.api_auth);
+                Err(ApiError::server_error("DKG failed".to_string()))
             }
         }
     }
@@ -376,10 +337,16 @@ impl ConfigGenApi {
 
         match &*state {
             ConfigApiState::SetConfigGenParams(connection) => Ok(connection.clone()),
-            ConfigApiState::SetConnections(_) => {
-                Self::bad_request("Set the config connections first")
-            }
             _ => Self::bad_request("Config params were already generated"),
+        }
+    }
+
+    fn get_dkg_state(&self) -> ApiResult<ConfigGenConnectionsState> {
+        let state = self.state.lock().expect("lock poisoned");
+
+        match &*state {
+            ConfigApiState::RunningDkg(connection) => Ok(connection.clone()),
+            _ => Self::bad_request("Dkg was already run"),
         }
     }
 
@@ -387,36 +354,9 @@ impl ConfigGenApi {
         Err(ApiError::bad_request(msg.to_string()))
     }
 
-    fn set_config_state(
-        &self,
-        connection: ConfigGenConnectionsState,
-        consensus: ConfigGenParamsConsensus,
-    ) -> ApiResult<()> {
+    fn set_connections_state(&self, connections: ConfigGenConnectionsState) {
         let mut state = self.state.lock().expect("lock poisoned");
-
-        let (our_id, _) = consensus
-            .peers
-            .iter()
-            .find(|(_, param)| connection.tls_cert == param.cert)
-            .ok_or(ApiError::bad_request(
-                "Our TLS cert not found among peers".to_string(),
-            ))?;
-
-        let auth = connection.auth.clone();
-        let local = ConfigGenParamsLocal {
-            our_id: *our_id,
-            our_private_key: connection.tls_private,
-            api_auth: connection.auth,
-            p2p_bind: connection.settings.p2p_bind,
-            api_bind: connection.settings.api_bind,
-            download_token_limit: connection.settings.download_token_limit,
-            max_connections: connection.settings.max_connections,
-        };
-
-        let params = ConfigGenParams { local, consensus };
-        *state = ConfigApiState::VerifyConfigParams(auth, params);
-
-        Ok(())
+        *state = ConfigApiState::SetConfigGenParams(connections);
     }
 }
 
@@ -469,55 +409,110 @@ pub struct ConfigGenConnectionsState {
     settings: ConfigGenSettings,
     /// Our auth string
     auth: ApiAuth,
+    /// Our local connection
+    local: Option<ConfigGenLocalConnection>,
+    /// Connection info received from other guardians, unique by api_url
+    /// (because it's non-user configurable)
+    peers: BTreeMap<Url, PeerServerParams>,
+    /// The config gen params requested by the leader
+    requested_params: Option<ConfigGenParamsRequest>,
+}
+
+/// Our local connection info
+#[derive(Debug, Clone)]
+struct ConfigGenLocalConnection {
     /// Our TLS private key
     tls_private: rustls::PrivateKey,
     /// Our TLS public cert
     tls_cert: rustls::Certificate,
-    /// Info sent by the admin user
-    request: ConfigGenConnectionsRequest,
-    /// Connection info received from other guardians, unique by api_url
-    /// (because it's non-user configurable)
-    peers: BTreeMap<Url, PeerServerParams>,
+    /// Our guardian name
+    our_name: String,
+    /// Url of "leader" guardian to send our connection info to
+    /// Will be `None` if we are the leader
+    leader_api_url: Option<Url>,
 }
 
 impl ConfigGenConnectionsState {
-    fn new(
-        request: ConfigGenConnectionsRequest,
-        our_connections: ConfigGenSettings,
-        auth: ApiAuth,
-    ) -> ApiResult<Self> {
-        let (tls_cert, tls_private) = gen_cert_and_key(&request.our_name)
-            .map_err(|_| ApiError::server_error("Unable to generate TLS keys".to_string()))?;
+    fn new(settings: ConfigGenSettings, auth: ApiAuth) -> ApiResult<Self> {
         Ok(Self {
-            settings: our_connections,
+            settings,
             auth,
-            tls_private,
-            tls_cert,
-            request,
+            local: None,
             peers: Default::default(),
+            requested_params: None,
         })
     }
 
-    fn with_request(self, request: ConfigGenConnectionsRequest) -> ApiResult<Self> {
-        Self::new(request, self.settings, self.auth)
+    fn with_request(mut self, request: ConfigGenConnectionsRequest) -> ApiResult<Self> {
+        let (tls_cert, tls_private) = gen_cert_and_key(&request.our_name)
+            .map_err(|_| ApiError::server_error("Unable to generate TLS keys".to_string()))?;
+        self.local = Some(ConfigGenLocalConnection {
+            tls_private,
+            tls_cert,
+            our_name: request.our_name,
+            leader_api_url: request.leader_api_url,
+        });
+        Ok(self)
     }
 
-    fn as_peer_info(&self) -> PeerServerParams {
-        PeerServerParams {
-            cert: self.tls_cert.clone(),
+    fn local_connection(&self) -> ApiResult<ConfigGenLocalConnection> {
+        self.local.clone().ok_or(ApiError::bad_request(
+            "Our connection info not set yet".to_string(),
+        ))
+    }
+
+    fn as_peer_info(&self) -> ApiResult<PeerServerParams> {
+        let local = self.local_connection()?;
+        Ok(PeerServerParams {
+            cert: local.tls_cert.clone(),
             p2p_url: self.settings.p2p_url.clone(),
             api_url: self.settings.api_url.clone(),
-            name: self.request.our_name.clone(),
-        }
+            name: local.our_name,
+        })
     }
 
-    fn get_peer_info(&self) -> Vec<PeerServerParams> {
+    fn get_peer_info(&self) -> BTreeMap<PeerId, PeerServerParams> {
         self.peers
             .values()
             .cloned()
-            .chain(once(self.as_peer_info()))
+            .chain(self.as_peer_info().ok().into_iter())
             .sorted_by_key(|peer| peer.cert.clone())
+            .enumerate()
+            .map(|(i, peer)| (PeerId::from(i as u16), peer))
             .collect()
+    }
+
+    fn get_requested_params(&self) -> ApiResult<ConfigGenParamsRequest> {
+        self.requested_params.clone().ok_or(ApiError::bad_request(
+            "Config params were not set".to_string(),
+        ))
+    }
+
+    fn get_config_gen_params(
+        &self,
+        consensus: ConfigGenParamsConsensus,
+    ) -> ApiResult<ConfigGenParams> {
+        let local_connection = self.local_connection()?;
+
+        let (our_id, _) = consensus
+            .peers
+            .iter()
+            .find(|(_, param)| local_connection.tls_cert == param.cert)
+            .ok_or(ApiError::bad_request(
+                "Our TLS cert not found among peers".to_string(),
+            ))?;
+
+        let local = ConfigGenParamsLocal {
+            our_id: *our_id,
+            our_private_key: local_connection.tls_private,
+            api_auth: self.auth.clone(),
+            p2p_bind: self.settings.p2p_bind,
+            api_bind: self.settings.api_bind,
+            download_token_limit: self.settings.download_token_limit,
+            max_connections: self.settings.max_connections,
+        };
+
+        Ok(ConfigGenParams { local, consensus })
     }
 }
 
@@ -527,14 +522,11 @@ impl ConfigGenConnectionsState {
 pub enum ConfigApiState {
     /// Guardian must first enter a password for auth/decryption
     SetPassword,
-    /// Guardians must send connection info to a "leader"
-    SetConnections(ApiAuth),
-    /// A "leader" guardian (possibly us) must set the config gen parameters
+    /// A "leader" guardian sets the config gen parameters, while followers
+    /// connect
     SetConfigGenParams(ConfigGenConnectionsState),
-    /// Guardian must verify the correct config gen params
-    VerifyConfigParams(ApiAuth, ConfigGenParams),
     /// Running DKG may take a minute
-    RunningDkg(ApiAuth),
+    RunningDkg(ConfigGenConnectionsState),
     /// DKG failed, user should restart config gen from the beginning
     FailedDkg(ApiAuth),
     /// Awaiting guardian verification to write configs
@@ -559,10 +551,8 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         let has_auth = match &*state {
             // The first client to connect gets the set the password
             ConfigApiState::SetPassword => true,
-            ConfigApiState::SetConnections(api_auth) => Some(api_auth) == auth,
             ConfigApiState::SetConfigGenParams(connections) => Some(&connections.auth) == auth,
-            ConfigApiState::VerifyConfigParams(api_auth, _) => Some(api_auth) == auth,
-            ConfigApiState::RunningDkg(api_auth) => Some(api_auth) == auth,
+            ConfigApiState::RunningDkg(connections) => Some(&connections.auth) == auth,
             ConfigApiState::FailedDkg(api_auth) => Some(api_auth) == auth,
             ConfigApiState::VerifyConsensusConfig(cfg) => Some(&cfg.private.api_auth) == auth,
         };
@@ -869,6 +859,10 @@ mod tests {
             leader.name = "leader".to_string();
             leader.set_connections(&None).await.unwrap();
 
+            // Leader sets the config
+            let defaults = leader.client.get_default_config_gen_params().await.unwrap();
+            leader.client.set_config_gen_params(defaults).await.unwrap();
+
             // Setup followers and send connection info
             for follower in &mut followers {
                 assert_eq!(
@@ -887,10 +881,8 @@ mod tests {
             let names: Vec<_> = peers.into_iter().map(|peer| peer.name).sorted().collect();
             assert_eq!(names, vec!["leader", "peer1_", "peer2_"]);
 
-            // Leader sets the configs and followers can fetch them
+            // Followers can fetch configs
             let mut configs = vec![];
-            let defaults = leader.client.get_default_config_gen_params().await.unwrap();
-            leader.client.set_config_gen_params(defaults).await.unwrap();
             for peer in &followers {
                 configs.push(peer.client.get_consensus_config_gen_params().await.unwrap());
             }
