@@ -322,6 +322,12 @@ pub struct Client {
 pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 
 impl Client {
+    /// Initialize a client builder that can be configured to create a new
+    /// client.
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::default()
+    }
+
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
     pub async fn finalize_and_submit_transaction<F, M>(
