@@ -1,12 +1,17 @@
+use std::fmt;
 use std::net::SocketAddr;
+use std::str::FromStr;
 
+use axum::extract::Query;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
 use bitcoin_hashes::hex::ToHex;
 use fedimint_client_legacy::ln::PayInvoicePayload;
+use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
+use serde::{de, Deserialize, Deserializer};
 use serde_json::json;
 use tokio::sync::oneshot;
 use tower_http::auth::RequireAuthorizationLayer;
@@ -30,6 +35,7 @@ pub async fn run_webserver(
 
     // Authenticated, public routes used for gateway administration
     let admin_routes = Router::new()
+        // TODO: (@oleonardolima) Should the /info be really a POST ?
         .route("/info", post(info))
         .route("/balance", post(balance))
         .route("/address", post(address))
@@ -63,13 +69,36 @@ pub async fn run_webserver(
     Ok(tx)
 }
 
-/// Display gateway ecash note balance
+#[derive(Deserialize)]
+struct InfoQueryParams {
+    #[serde(default, deserialize_with = "empty_string_as_none")]
+    federation_id: Option<FederationId>,
+}
+
+/// Serde deserialization decorator to map empty Strings to None,
+fn empty_string_as_none<'de, D, T>(de: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let opt = Option::<String>::deserialize(de)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => FromStr::from_str(s).map_err(de::Error::custom).map(Some),
+    }
+}
+
+/// Display gateway high-level information
 #[debug_handler]
 #[instrument(skip_all, err)]
 async fn info(
     Extension(rpc): Extension<GatewayRpcSender>,
-    Json(payload): Json<InfoPayload>,
+    Query(params): Query<InfoQueryParams>,
 ) -> Result<impl IntoResponse, GatewayError> {
+    let payload = InfoPayload {
+        federation_id: params.federation_id,
+    };
     let info = rpc.send(payload).await?;
     Ok(Json(json!(info)))
 }

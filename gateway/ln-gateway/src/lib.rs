@@ -389,12 +389,23 @@ impl Gateway {
         Ok(federation_info)
     }
 
-    async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
+    async fn handle_get_info(&self, payload: InfoPayload) -> Result<GatewayInfo> {
         let actors = self.actors.read().await;
-        let mut federations: Vec<FederationInfo> = Vec::new();
+        let mut all_federations: Vec<FederationInfo> = Vec::new();
         for actor in actors.values() {
-            federations.push(actor.get_info()?);
+            all_federations.push(actor.get_info()?);
         }
+
+        let federations = payload
+            .federation_id
+            .map(|id| {
+                all_federations
+                    .iter()
+                    .filter(|info| info.federation_id.eq(&id))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or(all_federations);
 
         let ln_info = self.lnrpc.read().await.info().await?;
 

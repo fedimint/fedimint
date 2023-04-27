@@ -65,7 +65,9 @@ pub struct ConnectFedPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct InfoPayload;
+pub struct InfoPayload {
+    pub federation_id: Option<FederationId>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupPayload {
