@@ -13,7 +13,7 @@ GATEWAY_TYPE=${3:-"CLN"}
 
 if [ "$GATEWAY_TYPE" == "CLN" ]; then GATEWAY_CLI=$FM_GWCLI_CLN; else GATEWAY_CLI=$FM_GWCLI_LND; fi
 
-FINALITY_DELAY=$(get_finality_delay)
+FINALITY_DELAY=10
 echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"
 
 FED_ID="$(get_federation_id)"
