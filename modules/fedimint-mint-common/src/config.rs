@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::iter::FromIterator;
 
 use anyhow::bail;
@@ -7,13 +7,13 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
 
-use crate::KIND;
+use crate::{CONSENSUS_VERSION, KIND};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
@@ -24,7 +24,7 @@ pub struct MintConfig {
     pub consensus: MintConfigConsensus,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct MintConfigConsensus {
     /// The set of public keys for blind-signing all peers and note
     /// denominations
@@ -41,7 +41,7 @@ pub struct MintConfigPrivate {
     pub tbs_sks: Tiered<tbs::SecretKeyShare>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct MintClientConfig {
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
@@ -53,29 +53,51 @@ impl TypedClientModuleConfig for MintClientConfig {
     fn kind(&self) -> ModuleKind {
         crate::KIND
     }
+
+    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+        crate::CONSENSUS_VERSION
+    }
+
+    fn to_erased(&self) -> ClientModuleConfig {
+        ClientModuleConfig::from_typed(self.kind(), self.version(), self)
+            .expect("serialization can't fail")
+    }
 }
 
 impl TypedServerModuleConsensusConfig for MintConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
-        let pub_key: HashMap<Amount, AggregatePublicKey> =
-            TieredMultiZip::new(self.peer_tbs_pks.values().map(|keys| keys.iter()).collect())
-                .map(|(amt, keys)| {
-                    // TODO: avoid this through better aggregation API allowing references or
-                    let keys = keys.into_iter().copied().collect::<Vec<_>>();
-                    (amt, keys.aggregate(self.peer_tbs_pks.threshold()))
-                })
-                .collect();
+        let pub_keys = TieredMultiZip::new(
+            self.peer_tbs_pks.values().map(|keys| keys.iter()).collect(),
+        )
+        .map(|(amt, keys)| {
+            // TODO: avoid this through better aggregation API allowing references or
+            let agg_key = keys
+                .into_iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .aggregate(self.peer_tbs_pks.threshold());
+            (amt, agg_key)
+        });
 
         ClientModuleConfig::from_typed(
             KIND,
+            CONSENSUS_VERSION,
             &MintClientConfig {
-                tbs_pks: Tiered::from_iter(pub_key.into_iter()),
+                tbs_pks: Tiered::from_iter(pub_keys),
                 fee_consensus: self.fee_consensus.clone(),
                 peer_tbs_pks: self.peer_tbs_pks.clone(),
                 max_notes_per_denomination: self.max_notes_per_denomination,
             },
         )
         .expect("Serialization can't fail")
+    }
+
+    fn kind(&self) -> ModuleKind {
+        crate::KIND
+    }
+
+    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+        crate::CONSENSUS_VERSION
     }
 }
 
@@ -105,7 +127,9 @@ impl TypedServerModuleConfig for MintConfig {
             .get(identity)
             .unwrap()
             .as_map()
-            .clone();
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect();
         if sks != pks {
             bail!("Mint private key doesn't match pubkey share");
         }
@@ -117,7 +141,7 @@ impl TypedServerModuleConfig for MintConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
     pub note_issuance_abs: fedimint_core::Amount,
     pub note_spend_abs: fedimint_core::Amount,

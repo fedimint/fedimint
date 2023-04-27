@@ -4,12 +4,10 @@ use std::iter::FromIterator;
 use std::ops::Sub;
 
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
+    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
-use fedimint_core::encoding::Encodable;
-use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
@@ -179,7 +177,7 @@ impl ServerModuleGen for MintGen {
                                 let pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
                                 (*amount, pks)
                             })
-                            .collect::<Tiered<PublicKeyShare>>();
+                            .collect::<Tiered<_>>();
 
                         (*peer, pks)
                     })
@@ -192,20 +190,15 @@ impl ServerModuleGen for MintGen {
         Ok(server.to_erased())
     }
 
-    fn to_config_response(
-        &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<ModuleConfigResponse> {
-        let config = serde_json::from_value::<MintConfigConsensus>(config)?;
-
-        Ok(ModuleConfigResponse {
-            client: config.to_client_config(),
-            consensus_hash: config.consensus_hash(),
-        })
-    }
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<MintConfig>()?.validate_config(identity)
+    }
+
+    fn get_client_config(
+        &self,
+        config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        Ok(MintConfigConsensus::from_erased(config)?.to_client_config())
     }
 
     async fn dump_database(
@@ -723,7 +716,7 @@ impl Mint {
             .consensus // FIXME: make sure we use id instead of idx everywhere
             .peer_tbs_pks
             .iter()
-            .find_map(|(&id, pk)| if pk == &ref_pub_key { Some(id) } else { None })
+            .find_map(|(&id, pk)| if *pk == ref_pub_key { Some(id) } else { None })
             .expect("Own key not found among pub keys.");
 
         assert_eq!(
@@ -752,7 +745,7 @@ impl Mint {
         Mint {
             cfg: cfg.clone(),
             sec_key: cfg.private.tbs_sks,
-            pub_key_shares: cfg.consensus.peer_tbs_pks,
+            pub_key_shares: cfg.consensus.peer_tbs_pks.into_iter().collect(),
             pub_key: aggregate_pub_keys,
         }
     }

@@ -16,17 +16,18 @@ use std::time::SystemTime;
 
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 use url::Url;
 
-use crate::config::LightningClientConfig;
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
+
 const KIND: ModuleKind = ModuleKind::from_static_str("ln");
+const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct LightningInput {
@@ -189,11 +190,6 @@ impl CommonModuleGen for LightningCommonGen {
     const KIND: ModuleKind = KIND;
     fn decoder() -> Decoder {
         LightningModuleTypes::decoder()
-    }
-    fn hash_client_module(
-        config: serde_json::Value,
-    ) -> anyhow::Result<bitcoin_hashes::sha256::Hash> {
-        Ok(serde_json::from_value::<LightningClientConfig>(config)?.consensus_hash())
     }
 }
 

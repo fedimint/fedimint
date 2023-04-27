@@ -15,9 +15,7 @@ use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::get_client_root_secret;
-use fedimint_client::module::gen::{
-    ClientModuleGen, ClientModuleGenRegistry, ClientModuleGenRegistryExt, IClientModuleGen,
-};
+use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 use fedimint_client::sm::Notifier;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
@@ -661,7 +659,7 @@ impl FedimintCli {
                 let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]))
                     as Arc<dyn IFederationApi + Send + Sync + 'static>;
                 let cfg: ClientConfig = api
-                    .download_client_config(&connect_obj, self.module_gens.to_common())
+                    .download_client_config(&connect_obj)
                     .await
                     .map_err_cli_msg(
                         CliErrorKind::NetworkError,

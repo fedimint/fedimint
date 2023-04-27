@@ -4,8 +4,8 @@ use std::ops::Sub;
 
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
+    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
@@ -130,22 +130,17 @@ impl ServerModuleGen for LightningGen {
         Ok(server.to_erased())
     }
 
-    fn to_config_response(
-        &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<ModuleConfigResponse> {
-        let config = serde_json::from_value::<LightningConfigConsensus>(config)?;
-
-        Ok(ModuleConfigResponse {
-            client: config.to_client_config(),
-            consensus_hash: config.consensus_hash(),
-        })
-    }
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config
             .to_typed::<LightningConfig>()?
             .validate_config(identity)
+    }
+
+    fn get_client_config(
+        &self,
+        config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        Ok(LightningConfigConsensus::from_erased(config)?.to_client_config())
     }
 
     async fn dump_database(

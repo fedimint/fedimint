@@ -4,12 +4,12 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 
-use crate::KIND;
+use crate::{CONSENSUS_VERSION, KIND};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
@@ -20,7 +20,7 @@ pub struct LightningConfig {
     pub consensus: LightningConfigConsensus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningConfigConsensus {
     /// The threshold public keys for encrypting the LN preimage
     pub threshold_pub_keys: threshold_crypto::PublicKeySet,
@@ -46,9 +46,13 @@ impl TypedClientModuleConfig for LightningClientConfig {
     fn kind(&self) -> ModuleKind {
         KIND
     }
+
+    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+        CONSENSUS_VERSION
+    }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
@@ -58,12 +62,21 @@ impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
         ClientModuleConfig::from_typed(
             KIND,
+            CONSENSUS_VERSION,
             &LightningClientConfig {
                 threshold_pub_key: self.threshold_pub_keys.public_key(),
                 fee_consensus: self.fee_consensus.clone(),
             },
         )
         .expect("Serialization can't fail")
+    }
+
+    fn kind(&self) -> ModuleKind {
+        KIND
+    }
+
+    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+        CONSENSUS_VERSION
     }
 }
 
@@ -93,7 +106,7 @@ impl TypedServerModuleConfig for LightningConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
     pub contract_input: fedimint_core::Amount,
     pub contract_output: fedimint_core::Amount,

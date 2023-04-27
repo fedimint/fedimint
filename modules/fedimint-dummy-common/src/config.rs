@@ -3,11 +3,12 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 
-use crate::KIND;
+use crate::{CONSENSUS_VERSION, KIND};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DummyConfig {
@@ -19,7 +20,7 @@ pub struct DummyConfig {
     pub consensus: DummyConfigConsensus,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
 pub struct DummyConfigConsensus {
     pub something: u64,
 }
@@ -29,7 +30,7 @@ pub struct DummyConfigPrivate {
     pub something_private: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct DummyClientConfig {
     pub something: u64,
 }
@@ -38,17 +39,30 @@ impl TypedClientModuleConfig for DummyClientConfig {
     fn kind(&self) -> fedimint_core::core::ModuleKind {
         KIND
     }
+
+    fn version(&self) -> ModuleConsensusVersion {
+        CONSENSUS_VERSION
+    }
 }
 
 impl TypedServerModuleConsensusConfig for DummyConfigConsensus {
     fn to_client_config(&self) -> ClientModuleConfig {
         ClientModuleConfig::from_typed(
             KIND,
+            CONSENSUS_VERSION,
             &(DummyClientConfig {
                 something: self.something,
             }),
         )
         .expect("Serialization can't fail")
+    }
+
+    fn kind(&self) -> ModuleKind {
+        KIND
+    }
+
+    fn version(&self) -> ModuleConsensusVersion {
+        CONSENSUS_VERSION
     }
 }
 

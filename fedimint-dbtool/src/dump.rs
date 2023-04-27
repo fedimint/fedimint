@@ -119,7 +119,7 @@ impl<'a> DatabaseDump<'a> {
         let cfg = &self.cfg;
         if let Some(cfg) = cfg {
             for (module_id, module_cfg) in &cfg.consensus.modules {
-                let kind = module_cfg.kind();
+                let kind = &module_cfg.kind;
 
                 let Some(init) = self.module_inits.get(kind) else {
                     panic!("Detected configuration for unsupported module kind: {kind}")

@@ -3,7 +3,8 @@ use std::ffi::OsString;
 
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::config::{
-    ConfigGenModuleParams, DkgResult, ModuleConfigResponse, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
+    ServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::module::{
@@ -15,7 +16,6 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::{apply, async_trait_maybe_send, PeerId};
 use fedimint_wallet_client::WalletCommonGen;
 use fedimint_wallet_server::{Wallet, WalletGen};
-use serde_json::Value;
 
 #[derive(Debug, Clone)]
 /// Used to create a wallet module with a mock bitcoind
@@ -78,12 +78,15 @@ impl ServerModuleGen for FakeWalletGen {
         self.inner.distributed_gen(peer, params).await
     }
 
-    fn to_config_response(&self, config: Value) -> anyhow::Result<ModuleConfigResponse> {
-        self.inner.to_config_response(config)
-    }
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         self.inner.validate_config(identity, config)
+    }
+
+    fn get_client_config(
+        &self,
+        config: &ServerModuleConsensusConfig,
+    ) -> anyhow::Result<ClientModuleConfig> {
+        self.inner.get_client_config(config)
     }
 
     async fn dump_database(

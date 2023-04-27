@@ -57,7 +57,9 @@ pub const LEGACY_HARDCODED_INSTANCE_ID_WALLET: ModuleInstanceId = 2;
 /// This is a short string that identifies type of a module.
 /// Authors of 3rd party modules are free to come up with a string,
 /// long enough to avoid conflicts with similar modules.
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Serialize, Deserialize, Encodable, Decodable,
+)]
 pub struct ModuleKind(Cow<'static, str>);
 
 impl ModuleKind {

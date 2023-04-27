@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::api::WsClientConnectInfo;
-use fedimint_core::config::ConfigResponse;
+use fedimint_core::config::ClientConfigResponse;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeEpochHistory, SerdeSignature, SignedEpochOutcome};
@@ -66,7 +66,7 @@ pub struct ConsensusApi {
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Cached client config response
-    pub client_cfg: ConfigResponse,
+    pub client_cfg: ClientConfigResponse,
     /// For sending API events to consensus such as transactions
     pub api_sender: Sender<ApiEvent>,
 
@@ -223,7 +223,7 @@ impl ConsensusApi {
         &self,
         info: WsClientConnectInfo,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ApiResult<ConfigResponse> {
+    ) -> ApiResult<ClientConfigResponse> {
         let token = self.cfg.local.download_token.clone();
 
         if info.download_token != token {
@@ -272,11 +272,11 @@ impl ConsensusApi {
     pub async fn get_config_with_sig(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ConfigResponse {
+    ) -> ClientConfigResponse {
         let mut client = self.client_cfg.clone();
         let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
         if let Some(SerdeSignature(sig)) = maybe_sig {
-            client.client_hash_signature = Some(sig);
+            client.signature = Some(sig);
         }
         client
     }
@@ -400,14 +400,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             "config",
-            async |fedimint: &ConsensusApi, context, info: WsClientConnectInfo| -> ConfigResponse {
+            async |fedimint: &ConsensusApi, context, info: WsClientConnectInfo| -> ClientConfigResponse {
                 fedimint.download_config_with_token(info, &mut context.dbtx()).await
             }
         },
         api_endpoint! {
             "config_hash",
             async |fedimint: &ConsensusApi, context, _v: ()| -> sha256::Hash {
-                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await.consensus_hash)
+                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await.client_config.consensus_hash())
             }
         },
         api_endpoint! {
