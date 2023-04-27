@@ -115,7 +115,7 @@ impl ApiRequestErased {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiAuth(pub String);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiError {
     pub code: i32,
     pub message: String,

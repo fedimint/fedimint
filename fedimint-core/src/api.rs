@@ -1,11 +1,11 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{Cursor, Read};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{cmp, result};
 
 use anyhow::{anyhow, ensure};
@@ -839,6 +839,49 @@ fn url_to_string_with_default_port(url: &Url) -> String {
 }
 
 impl<C: JsonRpcClient> WsFederationApi<C> {}
+
+/// The status of a server, including how it views its peers
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ConsensusStatus {
+    /// The last contribution that this server has made to the consensus, it's
+    /// equivalent to [`PeerConsensusStatus::last_contribution`] and
+    /// [`ConsensusContribution::value`]
+    pub last_contribution: u64,
+    pub status_by_peer: HashMap<PeerId, PeerConsensusStatus>,
+    pub peers_online: u64,
+    pub peers_offline: u64,
+    /// This should always be 0 if everything is okay, so a monitoring tool
+    /// should generate an alert if this is not the case.
+    pub peers_flagged: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerConsensusStatus {
+    pub last_contribution: Option<u64>,
+    pub last_contribution_timestamp_seconds: Option<u64>,
+    pub connection_status: PeerConnectionStatus,
+    /// Indicates that this peer needs attention from the operator. For instance
+    /// it may be suffering too many disconnections or it hasn't contributed for
+    /// the consensus in a long time
+    pub flagged: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PeerConnectionStatus {
+    #[default]
+    Disconnected,
+    Connected,
+}
+
+/// Tracks the consensus contribution for a peer
+#[derive(Debug, Clone, Copy)]
+pub struct ConsensusContribution {
+    /// Using HBBFT this is the epoch count. In general it should be an
+    /// increasing number
+    pub value: u64,
+    /// When the contribution was received
+    pub time: SystemTime,
+}
 
 #[cfg(test)]
 mod tests {

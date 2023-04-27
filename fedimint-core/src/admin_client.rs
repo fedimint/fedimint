@@ -204,9 +204,10 @@ impl WsAdminClient {
 }
 
 /// The state of the server returned via APIs
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ServerStatus {
     /// Server needs a password to read configs
+    #[default]
     AwaitingPassword,
     /// Configs were not found, need to run config gen
     GeneratingConfig,
