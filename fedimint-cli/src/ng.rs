@@ -41,7 +41,8 @@ pub async fn handle_ng_command<D: IDatabase>(
     client_builder.with_module(WalletClientGen);
     client_builder.with_primary_module(1);
     client_builder.with_config(cfg);
-    let client = client_builder.build(db, &mut tg).await?;
+    client_builder.with_database(db);
+    let client = client_builder.build(&mut tg).await?;
 
     match command {
         ClientNg::Info => {
