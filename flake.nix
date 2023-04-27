@@ -52,21 +52,31 @@
           # the binary we need from `moreutils`
           moreutils-ts = pkgs.writeShellScriptBin "ts" "exec ${pkgs.moreutils}/bin/ts \"$@\"";
 
-          toolchain = import ./flake.toolchain.nix
-            {
+          toolchain = import ./flake.toolchain.nix {
+            inherit pkgs lib system stdenv fenix android-nixpkgs;
+          };
 
-              inherit pkgs lib system stdenv fenix crane android-nixpkgs;
+          craneLib' = crane.lib.${system};
+          craneLibNative' = craneLib'.overrideToolchain toolchain.fenixToolchain;
+
+          craneLibCross' = builtins.mapAttrs
+            (name: target: crane.lib.${system}.overrideToolchain toolchain.fenixToolchainCross.${name})
+            toolchain.crossTargets
+          ;
+          craneExtendCommon = import ./nix/craneCommon.nix
+            {
+              inherit pkgs pkgs-kitman clightning-dev advisory-db lib moreutils-ts;
+
+              src = ./.;
             };
 
-
-          craneBuild = import ./flake.crane.nix
+          craneExtendBuild = import ./nix/craneBuild.nix
             {
               inherit pkgs pkgs-kitman clightning-dev advisory-db lib moreutils-ts;
             };
 
-          craneBuildNative = craneBuild toolchain.craneLibNative;
-          craneBuildNativeDocExport = craneBuild toolchain.craneLibNativeDocExport;
-          craneBuildCross = target: craneBuild toolchain.craneLibCross.${target};
+          craneLibNative = craneExtendBuild (craneExtendCommon craneLibNative');
+          craneLibCross = target: craneExtendBuild (craneExtendCommon craneLibCross'.${target});
 
           # Replace placeholder git hash in a binary
           #
@@ -121,44 +131,44 @@
             };
 
           # outputs that do something over the whole workspace
-          workspaceOutputs = {
-            workspaceDeps = craneBuildNative.workspaceDeps;
-            workspaceBuild = craneBuildNative.workspaceBuild;
-            workspaceClippy = craneBuildNative.workspaceClippy;
-            workspaceTest = craneBuildNative.workspaceTest;
-            workspaceTestDoc = craneBuildNative.workspaceTestDoc;
-            workspaceDoc = craneBuildNative.workspaceDoc;
-            workspaceDocExport = craneBuildNativeDocExport.workspaceDocExport;
-            workspaceCargoUdeps = craneBuildNativeDocExport.workspaceCargoUdeps;
-            workspaceCov = craneBuildNative.workspaceCov;
-            workspaceAudit = craneBuildNative.workspaceAudit;
+          workspaceOutputs = craneLib: {
+            workspaceDeps = craneLib.workspaceDeps;
+            workspaceBuild = craneLib.workspaceBuild;
+            workspaceClippy = craneLib.workspaceClippy;
+            workspaceTest = craneLib.workspaceTest;
+            workspaceTestDoc = craneLib.workspaceTestDoc;
+            workspaceDoc = craneLib.workspaceDoc;
+            workspaceDocExport = (craneLib.overrideToolchain toolchain.fenixToolchainDocNightly).workspaceDocExport;
+            workspaceCargoUdeps = (craneLib.overrideToolchain toolchain.fenixToolchainDocNightly).workspaceCargoUdeps;
+            workspaceCov = craneLib.workspaceCov;
+            workspaceAudit = craneLib.workspaceAudit;
           };
 
           # outputs that build a particular Rust package
           rustPackageOutputs = {
-            default = craneBuildNative.fedimint-pkgs;
+            default = craneLibNative.fedimint-pkgs;
 
-            fedimint-pkgs = craneBuildNative.fedimint-pkgs;
-            gateway-pkgs = craneBuildNative.gateway-pkgs;
-            client-pkgs = craneBuildNative.client-pkgs { };
-            fedimint-dbtool-pkgs = craneBuildNative.fedimint-dbtool-pkgs;
-            fedimint-bin-tests = craneBuildNative.fedimint-bin-tests;
+            fedimint-pkgs = craneLibNative.fedimint-pkgs;
+            gateway-pkgs = craneLibNative.gateway-pkgs;
+            client-pkgs = craneLibNative.client-pkgs { };
+            fedimint-dbtool-pkgs = craneLibNative.fedimint-dbtool-pkgs;
+            fedimint-bin-tests = craneLibNative.fedimint-bin-tests;
           };
 
           # rust packages outputs with git hash replaced
           rustPackageOutputsFinal = builtins.mapAttrs (name: package: replaceGitHash { inherit name package; }) rustPackageOutputs;
 
-          cli-test = {
-            all = craneBuildNative.cliTestsAll;
-            reconnect = craneBuildNative.cliTestReconnect;
-            latency = craneBuildNative.cliTestLatency;
-            cli = craneBuildNative.cliTestCli;
-            rust-tests = craneBuildNative.cliRustTests;
-            always-fail = craneBuildNative.cliTestAlwaysFail;
+          cli-test = craneLib: {
+            all = craneLib.cliTestsAll;
+            reconnect = craneLib.cliTestReconnect;
+            latency = craneLib.cliTestLatency;
+            cli = craneLib.cliTestCli;
+            rust-tests = craneLib.cliRustTests;
+            always-fail = craneLib.cliTestAlwaysFail;
           };
 
           # packages we expose from our flake (note: we also expose `legacyPackages` for hierarchical outputs)
-          packages = workspaceOutputs //
+          packages = (workspaceOutputs craneLibNative) //
             # replace git hash in the final binaries
             rustPackageOutputsFinal
             // {
@@ -194,10 +204,11 @@
           # purposes (like `nix build`).
           legacyPackages =
             let
-
-              overrideCargoProfileRecursively = deriv: profile: deriv.overrideAttrs (oldAttrs: {
-                CARGO_PROFILE = profile;
-                cargoArtifacts = if oldAttrs ? "cargoArtifacts" && oldAttrs.cargoArtifacts != null then overrideCargoProfileRecursively oldAttrs.cargoArtifacts profile else null;
+              craneLibDebug = craneLibNative.overrideScope' (self: prev: {
+                commonProfile = "dev";
+              });
+              craneLibCi = craneLibNative.overrideScope' (self: prev: {
+                commonProfile = "ci";
               });
             in
             {
@@ -206,29 +217,15 @@
               # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
               # recursing into `cargoArtifacts` to do the same. This way a debug build depends on debug build of all dependencies.
               # See https://github.com/ipetkov/crane/discussions/140#discussioncomment-3857137 for more info.
-              debug =
-                (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") workspaceOutputs) //
-                (builtins.mapAttrs
-                  (name: deriv: replaceGitHash {
-                    inherit name; package = overrideCargoProfileRecursively deriv "dev";
-                  })
-                  rustPackageOutputs) // {
-                  cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") cli-test);
-                };
+              debug = (workspaceOutputs craneLibDebug) // { cli-test = cli-test craneLibDebug; };
 
-              ci =
-                (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "ci") workspaceOutputs) //
-                (builtins.mapAttrs
-                  (name: deriv: replaceGitHash {
-                    inherit name; package = overrideCargoProfileRecursively deriv "ci";
-                  })
-                  rustPackageOutputs) // {
-                  cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "ci") cli-test);
-                };
+              ci = (workspaceOutputs craneLibCi) // {
+                cli-test = cli-test craneLibCi;
+              };
 
               cross = builtins.mapAttrs
                 (name: target: {
-                  client-pkgs = (craneBuildCross name).client-pkgs { inherit target; };
+                  client-pkgs = (craneLibCross name).client-pkgs { inherit target; };
                 })
                 toolchain.crossTargets;
 
@@ -270,33 +267,32 @@
 
                   fedimint-cli = pkgs.dockerTools.buildLayeredImage {
                     name = "fedimint-cli";
-                    contents = [ craneBuildNative.fedimint-pkgs pkgs.bash pkgs.coreutils ];
+                    contents = [ craneLibNative.fedimint-pkgs pkgs.bash pkgs.coreutils ];
                     config = {
                       Cmd = [
-                        "${craneBuildNative.fedimint-pkgs}/bin/fedimint-cli"
+                        "${craneLibNative.fedimint-pkgs}/bin/fedimint-cli"
                       ];
                     };
                   };
 
                   gatewayd = pkgs.dockerTools.buildLayeredImage {
                     name = "gatewayd";
-                    contents = [ craneBuildNative.gateway-pkgs pkgs.bash pkgs.coreutils ];
+                    contents = [ craneLibNative.gateway-pkgs pkgs.bash pkgs.coreutils ];
                     config = {
                       Cmd = [
-                        "${craneBuildNative.gateway-pkgs}/bin/gatewayd"
+                        "${craneLibNative.gateway-pkgs}/bin/gatewayd"
                       ];
                     };
                   };
                 };
             };
 
-
           devShells =
 
             let
               shellCommon = craneLib:
                 let
-                  build = craneBuild craneBuild;
+                  build = craneLibNative;
                   commonArgs = build.commonArgs;
                   commonEnvs = build.commonEnvs;
                 in
@@ -456,13 +452,12 @@
 
           lib = {
             inherit replaceGitHash devShells;
-            commonArgsBase = craneBuildNative.commonArgsBase;
+            commonArgsBase = craneLibNative.commonArgsBase;
           };
 
-
           checks = {
-            workspaceBuild = craneBuildNative.workspaceBuild;
-            workspaceClippy = craneBuildNative.workspaceClippy;
+            workspaceBuild = craneLibNative.workspaceBuild;
+            workspaceClippy = craneLibNative.workspaceClippy;
           };
 
         });

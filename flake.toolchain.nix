@@ -1,4 +1,4 @@
-{ pkgs, lib, system, stdenv, crane, fenix, android-nixpkgs }:
+{ pkgs, lib, system, stdenv, fenix, android-nixpkgs }:
 let
   isArch64Darwin = stdenv.isAarch64 || stdenv.isDarwin;
 
@@ -139,6 +139,11 @@ let
     "llvm-tools-preview"
   ]);
 
+  fenixToolchainDocNightly = fenixChannelNightly.withComponents [
+    "cargo"
+    "rustc"
+  ];
+
   fenixToolchainRustfmt = (fenixChannelNightly.withComponents [
     "rustfmt"
   ]);
@@ -169,18 +174,5 @@ let
     ])
     crossTargets
   ;
-
-  craneLibNative = crane.lib.${system}.overrideToolchain fenixToolchain;
-
-  # nightly toolchain for cargo docs with unstable features
-  craneLibNativeDocExport = crane.lib.${system}.overrideToolchain (fenixChannelNightly.withComponents [
-    "cargo"
-    "rustc"
-  ]);
-
-  craneLibCross = builtins.mapAttrs
-    (name: target: crane.lib.${system}.overrideToolchain fenixToolchainCross.${name})
-    crossTargets
-  ;
 in
-{ inherit crossTargets androidCrossEnvVars wasm32CrossEnvVars fenixToolchain fenixToolchainNightly fenixChannel fenixToolchainRustfmt fenixToolchainCargoFmt fenixToolchainCrossAll fenixToolchainCrossWasm fenixToolchainCross craneLibNative craneLibNativeDocExport craneLibCross; }
+{ inherit crossTargets androidCrossEnvVars wasm32CrossEnvVars fenixToolchain fenixToolchainNightly fenixChannel fenixToolchainRustfmt fenixToolchainCargoFmt fenixToolchainDocNightly fenixToolchainCrossAll fenixToolchainCrossWasm fenixToolchainCross; }
