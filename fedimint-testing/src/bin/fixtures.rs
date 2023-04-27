@@ -9,31 +9,16 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use bitcoincore_rpc::{Client as BitcoinClient, RpcApi};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_logging::TracingSetup;
+use fedimint_testing::ln::GatewayNode;
 use tokio::fs::{self, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tracing::{error, info};
 use url::Url;
-
-#[allow(dead_code)]
-#[derive(ValueEnum, Clone, Debug)]
-pub enum GatewayNode {
-    Cln,
-    Lnd,
-}
-
-impl ToString for GatewayNode {
-    fn to_string(&self) -> String {
-        match self {
-            GatewayNode::Cln => "cln".to_string(),
-            GatewayNode::Lnd => "lnd".to_string(),
-        }
-    }
-}
 
 #[derive(Subcommand)]
 enum Cmd {

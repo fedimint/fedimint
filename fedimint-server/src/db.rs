@@ -166,7 +166,7 @@ mod fedimint_migration_tests {
     use fedimint_core::{PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
-    use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
+    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
     use futures::StreamExt;
     use rand::distributions::{Distribution, Standard};
     use rand::rngs::OsRng;

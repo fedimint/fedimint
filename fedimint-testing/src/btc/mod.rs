@@ -1,5 +1,5 @@
-pub mod bitcoind;
-pub mod fixtures;
+pub mod mock;
+pub mod real;
 
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};

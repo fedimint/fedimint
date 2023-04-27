@@ -1185,7 +1185,7 @@ mod fedimint_migration_tests {
     use fedimint_mint_common::{
         MintCommonGen, MintOutputBlindSignatures, MintOutputSignatureShare, Nonce,
     };
-    use fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
+    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
