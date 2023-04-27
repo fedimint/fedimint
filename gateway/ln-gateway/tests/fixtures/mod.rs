@@ -11,7 +11,7 @@ use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
-use fedimint_testing::ln::fixtures::FakeLightningTest;
+use fedimint_testing::ln::mock::FakeLightningTest;
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};

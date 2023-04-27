@@ -18,6 +18,7 @@ async-trait = "*"
 bitcoin = "0.29.2"
 bitcoincore-rpc = "0.16.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
+cln-rpc = "0.1.1"
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-client  = { path = "../fedimint-client" }
@@ -35,4 +36,5 @@ tracing ="0.1.37"
 rand = "0.8"
 tokio = { version = "1.26.0", features = ["full"] }
 tokio-stream = "0.1.11"
+tonic_lnd = { git = "https://github.com/fedimint/tonic_lnd", branch="lnd-client-features", features = ["lightningrpc", "routerrpc"] }
 url = "2.3.1"

@@ -50,4 +50,3 @@ tracing ="0.1.37"
 url = "2.3.1"
 hbbft = { git = "https://github.com/fedimint/hbbft" }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
-tonic_lnd = { git = "https://github.com/fedimint/tonic_lnd", branch="lnd-client-features", features = ["lightningrpc", "routerrpc"] }

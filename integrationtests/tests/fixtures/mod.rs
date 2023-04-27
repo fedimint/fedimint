@@ -11,7 +11,6 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, KeyPair};
-use cln_rpc::ClnRpc;
 use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
@@ -55,8 +54,9 @@ use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
 use fedimint_server::{consensus, FedimintApiHandler, FedimintServer};
 use fedimint_testing::btc::fixtures::FakeBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
-use fedimint_testing::ln::fixtures::FakeLightningTest;
-use fedimint_testing::ln::LightningTest;
+use fedimint_testing::ln::mock::FakeLightningTest;
+use fedimint_testing::ln::real::RealLightningTest;
+use fedimint_testing::ln::{GatewayNode, LightningTest};
 use fedimint_wallet_client::{WalletClientGen, WalletConsensusItem};
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
@@ -75,10 +75,9 @@ use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
 use ln_gateway::Gateway;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use real::{RealBitcoinTest, RealLightningTest};
+use real::RealBitcoinTest;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
-use tonic_lnd::connect;
 use tracing::{debug, info};
 use url::Url;
 
@@ -109,13 +108,6 @@ pub fn sha256(data: &[u8]) -> sha256::Hash {
 
 pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
     bitcoin::secp256k1::Secp256k1::new()
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug)]
-pub enum GatewayNode {
-    Cln,
-    Lnd,
 }
 
 #[non_exhaustive]
@@ -290,25 +282,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                     }
                 };
             let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
-
-            // lightning - we create one LND RPC client, and one CLN RPC client. one will be
-            // used as the gateway's lightning node, and the other is an external node
-            // outside the federation that can be used to test lightnining
-            // payments through the gateway
-            let socket_cln = PathBuf::from(dir.clone()).join("cln/regtest/lightning-rpc");
-            let rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).await.unwrap()));
-            let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR").unwrap();
-            let lnd_macaroon = env::var("FM_LND_MACAROON").unwrap();
-            let lnd_tls_cert = env::var("FM_LND_TLS_CERT").unwrap();
-            let lnd_client = connect(
-                lnd_rpc_addr.clone(),
-                lnd_tls_cert.clone(),
-                lnd_macaroon.clone(),
-            )
-            .await
-            .unwrap();
-            let rpc_lnd = Arc::new(Mutex::new(lnd_client.clone()));
-            let lightning = RealLightningTest::new(rpc_cln, rpc_lnd, gateway_node.clone()).await;
+            let lightning = RealLightningTest::new(&dir, &gateway_node).await;
 
             // federation
             let connect_gen = |cfg: &ServerConfig| {

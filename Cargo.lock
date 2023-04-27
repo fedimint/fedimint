@@ -1650,6 +1650,7 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "clap",
+ "cln-rpc",
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-client-legacy",
@@ -1666,6 +1667,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tonic_lnd",
  "tracing",
  "url",
 ]
@@ -1711,7 +1713,6 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.23.4",
  "tokio-stream",
- "tonic_lnd",
  "tracing",
  "url",
 ]

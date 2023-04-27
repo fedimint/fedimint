@@ -1,8 +1,10 @@
 use async_trait::async_trait;
+use clap::ValueEnum;
 use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 
-pub mod fixtures;
+pub mod mock;
+pub mod real;
 
 #[async_trait]
 pub trait LightningTest {
@@ -18,4 +20,19 @@ pub trait LightningTest {
 
     /// Is this a LN instance shared with other tests
     fn is_shared(&self) -> bool;
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum GatewayNode {
+    Cln,
+    Lnd,
+}
+
+impl ToString for GatewayNode {
+    fn to_string(&self) -> String {
+        match self {
+            GatewayNode::Cln => "cln".to_string(),
+            GatewayNode::Lnd => "lnd".to_string(),
+        }
+    }
 }
