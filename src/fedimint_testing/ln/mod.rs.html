@@ -19,11 +19,30 @@
 <a href="#19" id="19">19</a>
 <a href="#20" id="20">20</a>
 <a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>clap::ValueEnum;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>lightning_invoice::Invoice;
 
-<span class="kw">pub mod </span>fixtures;
+<span class="kw">pub mod </span>mock;
+<span class="kw">pub mod </span>real;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>LightningTest {
@@ -39,6 +58,21 @@
 
     <span class="doccomment">/// Is this a LN instance shared with other tests
     </span><span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
+}
+
+<span class="attr">#[derive(ValueEnum, Clone, Debug)]
+</span><span class="kw">pub enum </span>GatewayNode {
+    Cln,
+    Lnd,
+}
+
+<span class="kw">impl </span>ToString <span class="kw">for </span>GatewayNode {
+    <span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="kw">match </span><span class="self">self </span>{
+            GatewayNode::Cln =&gt; <span class="string">&quot;cln&quot;</span>.to_string(),
+            GatewayNode::Lnd =&gt; <span class="string">&quot;lnd&quot;</span>.to_string(),
+        }
+    }
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

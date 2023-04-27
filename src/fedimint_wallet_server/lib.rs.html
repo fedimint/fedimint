@@ -3775,7 +3775,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     <span class="kw">use </span>fedimint_core::{BitcoinHash, Feerate, OutPoint, ServerModule, TransactionId};
-    <span class="kw">use </span>fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
+    <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
     <span class="kw">use </span>fedimint_wallet_common::db::{
         BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix, PegOutBitcoinTransaction,
         PegOutBitcoinTransactionPrefix, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,

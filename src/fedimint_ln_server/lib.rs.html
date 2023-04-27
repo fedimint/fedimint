@@ -2086,7 +2086,7 @@
         ProposeDecryptionShareKeyPrefix,
     };
     <span class="kw">use </span>fedimint_ln_common::LightningCommonGen;
-    <span class="kw">use </span>fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
+    <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>lightning_invoice::Invoice;
     <span class="kw">use </span>rand::distributions::Standard;

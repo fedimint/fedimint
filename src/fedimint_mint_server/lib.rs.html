@@ -2581,7 +2581,7 @@
     <span class="kw">use </span>fedimint_mint_common::{
         MintCommonGen, MintOutputBlindSignatures, MintOutputSignatureShare, Nonce,
     };
-    <span class="kw">use </span>fedimint_testing::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
+    <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>strum::IntoEnumIterator;
