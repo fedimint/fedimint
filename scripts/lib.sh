@@ -1,7 +1,5 @@
 # shellcheck shell=bash
 
-export LEGACY_HARDCODED_INSTANCE_ID_WALLET="2"
-
 function mine_blocks() {
     PEG_IN_ADDR="$($FM_BTC_CLIENT getnewaddress)"
     $FM_BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR
@@ -13,26 +11,6 @@ function await_fedimint_block_sync() {
   AWAIT="$((BLOCKS - FINALITY_DELAY))"
   echo "await_fedimint_block_sync $AWAIT"
   $FM_MINT_CLIENT wait-block-height "$AWAIT"
-}
-
-# Check that lightning block-processing is caught up
-# CLI integration tests should call this before attempting to pay invoices
-function await_lightning_node_block_processing() {
-  await_bitcoind_ready
-  # CLN
-  until [ "$($FM_BTC_CLIENT getblockchaininfo | jq -e -r '.blocks')" == "$($FM_LIGHTNING_CLI getinfo | jq -e -r '.blockheight')" ]
-  do
-    sleep $FM_POLL_INTERVAL
-  done
-  echo "done waiting for cln"
-
-  # LND
-  until [ "true" == "$($FM_LNCLI getinfo | jq -r '.synced_to_chain')" ]
-  do
-    echo "sleeping"
-    sleep $FM_POLL_INTERVAL
-  done
-  echo "done waiting for lnd"
 }
 
 # Function for killing processes stored in FM_PID_FILE in reverse-order they were created in
@@ -94,10 +72,6 @@ function show_verbose_output()
     fi
 }
 
-function await_bitcoind_ready() {
-  fixtures await-bitcoind-ready
-}
-
 function use_cln_gw() {
     PUBKEY=$($FM_LIGHTNING_CLI getinfo | jq -e -r '.id')
     $FM_MINT_CLIENT switch-gateway $PUBKEY
@@ -108,21 +82,4 @@ function use_lnd_gw() {
     PUBKEY=$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')
     $FM_MINT_CLIENT switch-gateway $PUBKEY
     echo "Using LND gateway"
-}
-
-### Start Daemons ###
-
-function start_bitcoind() {
-  fixtures bitcoind
-  echo $! >> $FM_PID_FILE
-}
-
-function start_federation() {
-  START_SERVER=${1:-0}
-  END_SERVER=${2:-$FM_FED_SIZE}
-  fixtures federation $START_SERVER $END_SERVER &
-  # BUG: Give daemons some time to write to `FM_PID_FILE`
-  # before moving on and letting other scripts rely on it.
-  # See https://github.com/fedimint/fedimint/issues/2236
-  sleep 2
 }

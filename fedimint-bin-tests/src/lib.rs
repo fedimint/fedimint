@@ -28,7 +28,7 @@ use tracing::{info, warn};
 
 pub mod util;
 use util::*;
-mod federation;
+pub mod federation;
 
 pub struct DevFed {
     pub bitcoind: Bitcoind,

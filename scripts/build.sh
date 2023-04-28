@@ -84,12 +84,6 @@ export FM_GWCLI_LND="gateway-cli --rpcpassword=theresnosecondbest -a http://127.
 export FM_TEST_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
 export FM_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
 
-# Alias clients
-alias lightning-cli="\$FM_LIGHTNING_CLI"
-alias lncli="\$FM_LNCLI"
-alias bitcoin-cli="\$FM_BTC_CLIENT"
-alias mint_client="\$FM_MINT_CLIENT"
-alias gateway-cln="\$FM_GWCLI_CLN"
-alias gateway-lnd="\$FM_GWCLI_LND"
+source ./scripts/aliases.sh
 
 trap kill_fedimint_processes EXIT

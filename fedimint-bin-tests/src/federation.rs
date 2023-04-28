@@ -19,7 +19,7 @@ use super::*; // TODO: remove this
 /// 18173. Each port needed is incremented by 1 within this range.
 ///
 /// * `peer_id` - ID of the server. Used to calculate port numbers.
-fn fedimint_env(peer_id: usize) -> anyhow::Result<HashMap<String, String>> {
+pub fn fedimint_env(peer_id: usize) -> anyhow::Result<HashMap<String, String>> {
     let base_port = 8173 + 10000;
     let p2p_port = base_port + (peer_id * 10);
     let api_port = base_port + (peer_id * 10) + 1;
