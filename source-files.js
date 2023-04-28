@@ -29,7 +29,6 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_wallet_common":["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
 "fedimint_wallet_server":["",[],["lib.rs"]],\
 "fedimintd":["",[],["distributed_gen.rs","fedimintd.rs","lib.rs","ui.rs"]],\
-"fixtures":["",[],["fixtures.rs"]],\
 "gateway_cli":["",[],["main.rs"]],\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
 "gatewayd":["",[],["gatewayd.rs"]],\

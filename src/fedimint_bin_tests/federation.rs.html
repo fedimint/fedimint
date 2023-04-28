@@ -424,7 +424,7 @@
 /// 18173. Each port needed is incremented by 1 within this range.
 ///
 /// * `peer_id` - ID of the server. Used to calculate port numbers.
-</span><span class="kw">fn </span>fedimint_env(peer_id: usize) -&gt; anyhow::Result&lt;HashMap&lt;String, String&gt;&gt; {
+</span><span class="kw">pub fn </span>fedimint_env(peer_id: usize) -&gt; anyhow::Result&lt;HashMap&lt;String, String&gt;&gt; {
     <span class="kw">let </span>base_port = <span class="number">8173 </span>+ <span class="number">10000</span>;
     <span class="kw">let </span>p2p_port = base_port + (peer_id * <span class="number">10</span>);
     <span class="kw">let </span>api_port = base_port + (peer_id * <span class="number">10</span>) + <span class="number">1</span>;
