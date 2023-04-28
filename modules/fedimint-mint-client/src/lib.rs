@@ -439,6 +439,7 @@ impl MintClientContext {
 
 impl Context for MintClientContext {}
 
+#[apply(async_trait_maybe_send)]
 impl ClientModule for MintClientModule {
     type Common = MintModuleTypes;
     type ModuleStateMachineContext = MintClientContext;

@@ -329,7 +329,7 @@ fn states_add_instance(
 }
 
 pub struct Client {
-    inner: Arc<ClientInner>,
+    pub inner: Arc<ClientInner>,
 }
 
 pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
@@ -483,15 +483,22 @@ impl Client {
 
     /// Returns a reference to a typed module client instance. Returns an error
     /// if the instance isn't registered or the module kind doesn't match.
+    pub fn get_erased_module_client(
+        &self,
+        instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
+        self.inner
+            .try_get_module(instance_id)
+            .ok_or(anyhow!("Unknown module instance {}", instance_id))
+    }
+
+    /// Returns a reference to a typed module client instance. Returns an error
+    /// if the instance isn't registered or the module kind doesn't match.
     pub fn get_module_client<M: ClientModule>(
         &self,
         instance_id: ModuleInstanceId,
     ) -> anyhow::Result<&M> {
-        let module = self
-            .inner
-            .try_get_module(instance_id)
-            .ok_or(anyhow!("Unknown module instance {}", instance_id))?;
-        module
+        self.get_erased_module_client(instance_id)?
             .as_any()
             .downcast_ref::<M>()
             .ok_or_else(|| anyhow::anyhow!("Module is not of type {}", std::any::type_name::<M>()))
@@ -525,7 +532,7 @@ impl Client {
     }
 }
 
-struct ClientInner {
+pub struct ClientInner {
     db: Database,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
@@ -757,6 +764,11 @@ impl ClientBuilder {
     /// Make module generator available when reading the config
     pub fn with_module<M: ClientModuleGen>(&mut self, module_gen: M) {
         self.module_gens.attach(module_gen);
+    }
+
+    /// Replace module generator registry entirely
+    pub fn with_module_gens(&mut self, module_gens: ClientModuleGenRegistry) {
+        self.module_gens = module_gens;
     }
 
     /// Uses this config to initialize modules

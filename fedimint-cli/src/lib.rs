@@ -14,9 +14,9 @@ use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
 use fedimint_client::derivable_secret::ChildId;
-use fedimint_client::get_client_root_secret;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 use fedimint_client::sm::Notifier;
+use fedimint_client::{get_client_root_secret, ClientBuilder};
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -405,6 +405,23 @@ impl Opts {
         )
         .await)
     }
+
+    async fn build_client_ng(
+        &self,
+        module_gens: &ClientModuleGenRegistry,
+    ) -> CliResult<fedimint_client::Client> {
+        let mut tg = TaskGroup::new();
+        let cfg = self.load_config()?.0;
+        let db = self.load_rocks_db()?;
+
+        let mut client_builder = ClientBuilder::default();
+        client_builder.with_module_gens(module_gens.clone());
+        client_builder.with_primary_module(1);
+        client_builder.with_config(cfg.clone());
+        client_builder.with_database(db);
+
+        client_builder.build(&mut tg).await.map_err_cli_general()
+    }
 }
 
 #[derive(Subcommand, Clone)]
@@ -571,7 +588,7 @@ enum Command {
     Ng(ng::ClientNg),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ModuleSelector {
     Id(ModuleInstanceId),
     Kind(ModuleKind),
@@ -1094,8 +1111,9 @@ impl FedimintCli {
             }
             Command::Ng(command) => {
                 let cfg = cli.load_config()?;
+                let client_ng = cli.build_client_ng(&self.module_gens).await?;
                 Ok(CliOutput::Raw(
-                    ng::handle_ng_command(command, cfg.0, cli.load_rocks_db().unwrap())
+                    ng::handle_ng_command(command, cfg.0, client_ng)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))
