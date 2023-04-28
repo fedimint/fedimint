@@ -14,10 +14,10 @@ mkfifo $FM_READY_FILE
 # Convert RUST_LOG to lowercase
 # if RUST_LOG is none, don't show output of test setup
 if [ "${RUST_LOG,,}" = "none" ]; then
-  $FM_BIN_DIR/devimint external-daemons >/dev/null &
+  devimint external-daemons >/dev/null &
   echo $! >> $FM_PID_FILE
 else
-  $FM_BIN_DIR/devimint external-daemons &
+  devimint external-daemons &
   echo $! >> $FM_PID_FILE
 fi
 
