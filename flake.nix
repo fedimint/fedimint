@@ -33,6 +33,7 @@
             overlays = [
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
+                wasm-bindgen-cli = pkgs-unstable.wasm-bindgen-cli;
 
                 # mold wrapper from https://discourse.nixos.org/t/using-mold-as-linker-prevents-libraries-from-being-found/18530/5
                 mold =
