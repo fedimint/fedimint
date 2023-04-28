@@ -9,7 +9,7 @@ use bitcoincore_rpc::RpcApi;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_bin_tests::util::{poll, ProcessManager};
-use fedimint_bin_tests::{cmd, dev_fed, DevFed};
+use fedimint_bin_tests::{cmd, dev_fed, external_daemons, DevFed};
 use fedimint_core::task::TaskGroup;
 use tokio::fs;
 use tracing::info;
@@ -630,23 +630,9 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     Ok(())
 }
 
-pub async fn tmuxinator(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
-    let ready_file = env::var("FM_READY_FILE")?;
-    match dev_fed(task_group, process_mgr).await {
-        Ok(_dev_fed) => {
-            fs::write(ready_file, "READY").await?;
-            task_group.make_handle().make_shutdown_rx().await.await?;
-            Ok(())
-        }
-        Err(e) => {
-            fs::write(ready_file, "ERROR").await?;
-            Err(e)
-        }
-    }
-}
-
 #[derive(Subcommand)]
 enum Cmd {
+    ExternalDaemons,
     Tmuxinator,
     LatencyTests,
     ReconnectTest,
@@ -660,6 +646,15 @@ struct Args {
     command: Cmd,
 }
 
+async fn write_ready_file<T>(result: Result<T>) -> Result<T> {
+    let ready_file = env::var("FM_READY_FILE")?;
+    match result {
+        Ok(_) => fs::write(ready_file, "READY").await?,
+        Err(_) => fs::write(ready_file, "ERROR").await?,
+    }
+    result
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
@@ -668,7 +663,14 @@ async fn main() -> Result<()> {
     task_group.install_kill_handler();
     let args = Args::parse();
     match args.command {
-        Cmd::Tmuxinator => tmuxinator(&process_mgr, &task_group).await?,
+        Cmd::ExternalDaemons => {
+            let _daemons = write_ready_file(external_daemons(&process_mgr).await).await?;
+            task_group.make_handle().make_shutdown_rx().await.await?;
+        }
+        Cmd::Tmuxinator => {
+            let _daemons = write_ready_file(dev_fed(&task_group, &process_mgr).await).await?;
+            task_group.make_handle().make_shutdown_rx().await.await?;
+        }
         Cmd::LatencyTests => {
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             latency_tests(dev_fed).await?;
