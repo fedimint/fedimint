@@ -26,6 +26,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
@@ -62,9 +63,10 @@ pub trait MintClientExt {
     /// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
     /// [`MintClientExt::subscribe_reissue_external_notes_updates`].
-    async fn reissue_external_notes(
+    async fn reissue_external_notes<M: Serialize + Send>(
         &self,
         notes: TieredMulti<SpendableNote>,
+        extra_meta: M,
     ) -> anyhow::Result<OperationId>;
 
     /// Subscribe to updates on the progress of a reissue operation started with
@@ -85,10 +87,11 @@ pub trait MintClientExt {
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
     /// come online and reissue the notes themselves.
-    async fn spend_notes(
+    async fn spend_notes<M: Serialize + Send>(
         &self,
         min_amount: Amount,
         try_cancel_after: Duration,
+        extra_meta: M,
     ) -> anyhow::Result<(OperationId, TieredMulti<SpendableNote>)>;
 
     /// Try to cancel a spend operation started with
@@ -155,9 +158,10 @@ pub enum SpendOOBState {
 
 #[apply(async_trait_maybe_send!)]
 impl MintClientExt for Client {
-    async fn reissue_external_notes(
+    async fn reissue_external_notes<M: Serialize + Send>(
         &self,
         notes: TieredMulti<SpendableNote>,
+        extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         let (mint_client_instance, mint_client) = mint_client(self);
 
@@ -166,14 +170,21 @@ impl MintClientExt for Client {
             bail!("We already reissued these notes");
         }
 
+        let amount = notes.total_amount();
         let mint_input = mint_client
             .create_input_from_notes(operation_id, notes)
             .await?;
 
         let tx = TransactionBuilder::new().with_input(mint_input.into_dyn(mint_client_instance));
 
-        let operation_meta_gen = |txid| MintMeta::Reissuance {
-            out_point: OutPoint { txid, out_idx: 0 },
+        let extra_meta = serde_json::to_value(extra_meta)
+            .expect("MintClientExt::reissue_external_notes extra_meta is serializable");
+        let operation_meta_gen = move |txid| MintMeta {
+            variant: MintMetaVariants::Reissuance {
+                out_point: OutPoint { txid, out_idx: 0 },
+            },
+            amount,
+            extra_meta: extra_meta.clone(),
         };
 
         self.finalize_and_submit_transaction(
@@ -204,8 +215,8 @@ impl MintClientExt for Client {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<ReissueExternalNotesState>> {
-        let out_point = match mint_operation(self, operation_id).await? {
-            MintMeta::Reissuance { out_point } => out_point,
+        let out_point = match mint_operation(self, operation_id).await?.variant {
+            MintMetaVariants::Reissuance { out_point } => out_point,
             _ => bail!("Operation is not a reissuance"),
         };
 
@@ -240,16 +251,20 @@ impl MintClientExt for Client {
         }))
     }
 
-    async fn spend_notes(
+    async fn spend_notes<M: Serialize + Send>(
         &self,
         min_amount: Amount,
         try_cancel_after: Duration,
+        extra_meta: M,
     ) -> anyhow::Result<(OperationId, TieredMulti<SpendableNote>)> {
         let (mint_client_instance, mint_client) = mint_client(self);
+        let extra_meta = serde_json::to_value(extra_meta)
+            .expect("MintClientExt::spend_notes extra_meta is serializable");
 
         self.db()
             .autocommit(
-                |dbtx| {
+                move |dbtx| {
+                    let extra_meta = extra_meta.clone();
                     Box::pin(async move {
                         let (operation_id, states, notes) = mint_client
                             .spend_notes_oob(
@@ -269,7 +284,13 @@ impl MintClientExt for Client {
                             dbtx,
                             operation_id,
                             MintCommonGen::KIND.as_str(),
-                            MintMeta::SpendOOB,
+                            MintMeta {
+                                variant: MintMetaVariants::SpendOOB {
+                                    requested_amount: min_amount,
+                                },
+                                amount: notes.total_amount(),
+                                extra_meta,
+                            },
                         )
                         .await;
 
@@ -299,8 +320,8 @@ impl MintClientExt for Client {
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<SpendOOBState>> {
         if !matches!(
-            mint_operation(self, operation_id).await?,
-            MintMeta::SpendOOB
+            mint_operation(self, operation_id).await?.variant,
+            MintMetaVariants::SpendOOB { .. }
         ) {
             bail!("Operation is not a out-of-band spend");
         };
@@ -363,9 +384,16 @@ async fn mint_operation(client: &Client, operation_id: OperationId) -> anyhow::R
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum MintMeta {
+pub struct MintMeta {
+    variant: MintMetaVariants,
+    amount: Amount,
+    extra_meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum MintMetaVariants {
     Reissuance { out_point: OutPoint },
-    SpendOOB,
+    SpendOOB { requested_amount: Amount },
 }
 
 #[derive(Debug, Clone)]

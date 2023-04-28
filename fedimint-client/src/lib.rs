@@ -1062,3 +1062,41 @@ impl Decodable for OperationLogEntry {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde::{Deserialize, Serialize};
+
+    use crate::OperationLogEntry;
+
+    #[test]
+    fn test_operation_log_entry_serde() {
+        let op_log = OperationLogEntry {
+            operation_type: "test".to_string(),
+            meta: serde_json::to_value(()).unwrap(),
+        };
+
+        op_log.meta::<()>();
+    }
+
+    #[test]
+    fn test_operation_log_entry_serde_extra_meta() {
+        #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+        struct Meta {
+            foo: String,
+            extra_meta: serde_json::Value,
+        }
+
+        let meta = Meta {
+            foo: "bar".to_string(),
+            extra_meta: serde_json::to_value(()).unwrap(),
+        };
+
+        let op_log = OperationLogEntry {
+            operation_type: "test".to_string(),
+            meta: serde_json::to_value(meta.clone()).unwrap(),
+        };
+
+        assert_eq!(op_log.meta::<Meta>(), meta);
+    }
+}
