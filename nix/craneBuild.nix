@@ -273,10 +273,10 @@ craneLib.overrideScope' (self: prev: {
     };
   };
 
-  fedimint-bin-tests = self.pkgsBuild {
-    name = "fedimint-bin-tests";
+  devimint = self.pkgsBuild {
+    name = "devimint";
     pkgs = {
-      fedimint-bin-tests = { };
+      devimint = { };
     };
   };
 })

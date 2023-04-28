@@ -5,4 +5,4 @@ set -euo pipefail
 export RUST_LOG="${RUST_LOG:-info}"
 source ./scripts/build.sh
 
-$FM_BIN_DIR/fedimint-bin-tests latency-tests
+devimint latency-tests

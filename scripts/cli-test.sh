@@ -5,4 +5,4 @@ set -euo pipefail
 export RUST_LOG="${RUST_LOG:-info}"
 source ./scripts/build.sh
 
-fedimint-bin-tests cli-tests
+devimint cli-tests

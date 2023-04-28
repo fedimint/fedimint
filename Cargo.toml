@@ -7,7 +7,6 @@ members = [
     "gateway/ln-gateway",
     "gateway/cli",
     "fedimintd",
-    "fedimint-bin-tests",
     "fedimint-bitcoind",
     "fedimint-core",
     "fedimint-client",
@@ -32,6 +31,7 @@ members = [
     "modules/fedimint-wallet-common",
     "modules/fedimint-wallet-client",
     "modules/fedimint-wallet-server",
+    "devimint",
     "integrationtests",
     "fedimint-build",
     "recoverytool"

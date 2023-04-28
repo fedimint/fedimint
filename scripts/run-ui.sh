@@ -11,4 +11,4 @@ echo $! >> $FM_PID_FILE
 tail -n +0 -F $FM_LOGS_DIR/fedimintd-1.log &
 echo $! >> $FM_PID_FILE
 
-fedimint-bin-tests run-ui
+devimint run-ui
