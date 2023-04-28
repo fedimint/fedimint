@@ -883,6 +883,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "devimint"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitcoincore-rpc",
+ "clap",
+ "cln-rpc",
+ "fedimint-bitcoind",
+ "fedimint-client",
+ "fedimint-client-legacy",
+ "fedimint-core",
+ "fedimint-ln-client",
+ "fedimint-logging",
+ "fedimint-wallet-client",
+ "nix",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tonic_lnd",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1065,30 +1089,6 @@ dependencies = [
  "hex",
  "rand",
  "ring",
-]
-
-[[package]]
-name = "fedimint-bin-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitcoincore-rpc",
- "clap",
- "cln-rpc",
- "fedimint-bitcoind",
- "fedimint-client",
- "fedimint-client-legacy",
- "fedimint-core",
- "fedimint-ln-client",
- "fedimint-logging",
- "fedimint-wallet-client",
- "nix",
- "serde",
- "serde_json",
- "tokio",
- "tonic_lnd",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
