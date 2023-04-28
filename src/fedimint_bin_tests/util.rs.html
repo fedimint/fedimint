@@ -260,6 +260,11 @@
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
@@ -455,9 +460,14 @@
     };
     <span class="comment">// last matcher
     </span>(@last <span class="macro-nonterminal">$this</span>:expr, $(<span class="macro-nonterminal">$arg</span>:expr),* $(,)<span class="question-mark">?</span>) =&gt; {
-        <span class="macro-nonterminal">$this</span>.cmd().<span class="kw">await
-            </span>$(.arg(<span class="macro-nonterminal">$arg</span>))*
-            .kill_on_drop(<span class="bool-val">true</span>)
+        {
+            <span class="attr">#[allow(unused)]
+            </span><span class="kw">use </span><span class="macro-nonterminal">$crate::util::ToCmdExt</span>;
+            <span class="macro-nonterminal">$this</span>.cmd().<span class="kw">await
+                </span>$(.arg(<span class="macro-nonterminal">$arg</span>))*
+                .kill_on_drop(<span class="bool-val">true</span>)
+
+        }
     };
 }
 

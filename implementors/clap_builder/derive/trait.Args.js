@@ -1,6 +1,5 @@
 (function() {var implementors = {
 "dbtool":[["impl Args for <a class=\"struct\" href=\"dbtool/struct.Options.html\" title=\"struct dbtool::Options\">Options</a>"]],
-"fedimint_bin_tests":[["impl Args for <a class=\"struct\" href=\"fedimint_bin_tests/struct.Args.html\" title=\"struct fedimint_bin_tests::Args\">Args</a>"]],
 "fedimint_cli":[["impl Args for <a class=\"struct\" href=\"fedimint_cli/struct.Opts.html\" title=\"struct fedimint_cli::Opts\">Opts</a>"]],
 "fedimintd":[["impl Args for <a class=\"struct\" href=\"fedimintd/distributed_gen/struct.Cli.html\" title=\"struct fedimintd::distributed_gen::Cli\">Cli</a>"],["impl Args for <a class=\"struct\" href=\"fedimintd/fedimintd/struct.ServerOpts.html\" title=\"struct fedimintd::fedimintd::ServerOpts\">ServerOpts</a>"]],
 "fixtures":[["impl Args for <a class=\"struct\" href=\"fixtures/struct.Args.html\" title=\"struct fixtures::Args\">Args</a>"]],
