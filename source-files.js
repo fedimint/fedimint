@@ -1,8 +1,8 @@
 var sourcesIndex = JSON.parse('{\
 "dbtool":["",[],["dump.rs","main.rs"]],\
+"devimint":["",[],["federation.rs","lib.rs","util.rs"]],\
 "distributedgen":["",[],["distributedgen.rs"]],\
 "fedimint_aead":["",[],["lib.rs"]],\
-"fedimint_bin_tests":["",[],["federation.rs","lib.rs","util.rs"]],\
 "fedimint_bitcoind":["",[],["bitcoincore_rpc.rs","lib.rs"]],\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
