@@ -2,8 +2,29 @@
 
 source .tmpenv
 
-source ./scripts/lib.sh
 source ./scripts/aliases.sh
+
+function show_verbose_output()
+{
+    if [[ $FM_VERBOSE_OUTPUT -ne 1 ]]
+    then
+        cat > /dev/null 2>&1
+    else
+        cat
+    fi
+}
+
+function use_cln_gw() {
+    PUBKEY=$($FM_LIGHTNING_CLI getinfo | jq -e -r '.id')
+    $FM_MINT_CLIENT switch-gateway $PUBKEY
+    echo "Using CLN gateway"
+}
+
+function use_lnd_gw() {
+    PUBKEY=$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')
+    $FM_MINT_CLIENT switch-gateway $PUBKEY
+    echo "Using LND gateway"
+}
 
 echo Waiting for fedimint start
 

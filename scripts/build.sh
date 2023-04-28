@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-source ./scripts/lib.sh
 echo "Run with 'source ./scripts/build.sh [fed_size] [dir]"
 
 # allow for overriding arguments
@@ -85,5 +84,16 @@ export FM_TEST_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
 export FM_BITCOIND_RPC="http://bitcoin:bitcoin@127.0.0.1:18443"
 
 source ./scripts/aliases.sh
+
+# Function for killing processes stored in FM_PID_FILE in reverse-order they were created in
+function kill_fedimint_processes {
+  echo "Killing fedimint processes"
+  PIDS=$(cat $FM_PID_FILE | sed '1!G;h;$!d') # sed reverses order
+  if [ -n "$PIDS" ]
+  then
+    kill $PIDS 2>/dev/null
+  fi
+  rm -f $FM_PID_FILE
+}
 
 trap kill_fedimint_processes EXIT
