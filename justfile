@@ -82,11 +82,11 @@ format:
   nixpkgs-fmt $(echo **.nix)
 
 # start mprocs with a dev federation setup
-fed-shell:
-  ./scripts/fed-shell.sh
+mprocs:
+  ./scripts/mprocs.sh
 
-# exit fed-shell session
-exit-fed-shell:
+# exit mprocs session
+exit-mprocs:
   mprocs --ctl '{c: quit}' --server 127.0.0.1:4050
 
 # start tmuxinator with dev federation setup

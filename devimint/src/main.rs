@@ -635,7 +635,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
 #[derive(Subcommand)]
 enum Cmd {
     ExternalDaemons,
-    Tmuxinator,
+    DevFed,
     RunUi,
     LatencyTests,
     ReconnectTest,
@@ -688,7 +688,7 @@ async fn main() -> Result<()> {
             let _daemons = write_ready_file(external_daemons(&process_mgr).await).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
-        Cmd::Tmuxinator => {
+        Cmd::DevFed => {
             let _daemons = write_ready_file(dev_fed(&task_group, &process_mgr).await).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
