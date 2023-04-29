@@ -11,4 +11,11 @@ name = "fedimint_dummy_client"
 path = "src/lib.rs"
 
 [dependencies]
+async-trait = "0.1"
+anyhow = "1.0.66"
 fedimint-dummy-common ={ path = "../fedimint-dummy-common" }
+fedimint-client = { path = "../../fedimint-client" }
+fedimint-core ={ path = "../../fedimint-core" }
+rand = "0.8.5"
+secp256k1 = "0.24.2"
+
