@@ -1,7 +1,7 @@
 import React from 'react';
 import { Flex, Image, Spacer } from '@chakra-ui/react';
 import { ColorModeSwitcher } from './ColorModeSwitcher';
-import Logo from '../assets/Fedimint-Full.png';
+import Logo from './assets/Fedimint-Full.png';
 
 export const Header = React.memo(() => {
   return (

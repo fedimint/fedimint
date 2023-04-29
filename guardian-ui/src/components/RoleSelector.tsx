@@ -12,8 +12,8 @@ import {
 } from '@chakra-ui/react';
 import { GuardianRole } from '../types';
 
-import Leader from '../assets/Leader.png';
-import Follower from '../assets/Follower.png';
+import Leader from './assets/Leader.png';
+import Follower from './assets/Follower.png';
 import { CustomButton } from './index';
 
 interface RoleSelectorProps {
