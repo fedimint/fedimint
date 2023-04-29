@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -31,15 +30,6 @@ pub trait ClientModule: Debug {
         &self,
         output: &<Self::Module as ModuleCommon>::Output,
     ) -> TransactionItemAmount;
-
-    async fn handle_cli_command(
-        &self,
-        _args: &[ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        Err(anyhow::format_err!(
-            "This module does not implement cli commands"
-        ))
-    }
 }
 
 pub trait IClientModule: Debug {

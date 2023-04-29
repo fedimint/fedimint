@@ -8,15 +8,13 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{ffi, fs, result};
+use std::{fs, result};
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
-use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
-use fedimint_client::sm::Notifier;
-use fedimint_client::{get_client_root_secret, ClientBuilder};
+use fedimint_client::ClientBuilder;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -574,16 +572,6 @@ enum Command {
     /// Force processing an epoch
     ForceEpoch { hex_outcome: String },
 
-    /// Call module-specific commands
-    Module {
-        #[clap(long)]
-        id: ModuleSelector,
-
-        /// Command with arguments to call the module with
-        #[clap(long)]
-        arg: Vec<ffi::OsString>,
-    },
-
     #[clap(subcommand)]
     Ng(ng::ClientNg),
 }
@@ -1068,46 +1056,6 @@ impl FedimintCli {
                     .force_process_epoch(SerdeEpochHistory::from(&outcome))
                     .await?;
                 Ok(CliOutput::ForceEpoch)
-            }
-            Command::Module { id, arg } => {
-                let cfg = cli.load_config()?;
-                let decoders = cli.load_decoders(&cfg, &self.module_gens);
-                let db = cli.load_db(&decoders)?;
-                let root_secret = get_client_root_secret(&db).await;
-
-                let (id, module_cfg) = match id {
-                    ModuleSelector::Id(id) => (
-                        id,
-                        cfg.as_ref()
-                            .get_module_cfg(id)
-                            .map_err_cli_msg(CliErrorKind::IOError, "Can't load module")?,
-                    ),
-                    ModuleSelector::Kind(kind) => {
-                        cfg.as_ref()
-                            .get_first_module_by_kind_cfg(kind)
-                            .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid kind")?
-                    }
-                };
-                let module_gen =
-                    self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
-
-                let module = module_gen
-                    .init(
-                        module_cfg,
-                        db.clone(),
-                        id,
-                        root_secret.child_key(ChildId(id as u64)),
-                        Notifier::new(db),
-                    )
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;
-
-                Ok(CliOutput::Raw(
-                    module
-                        .handle_cli_command(&arg)
-                        .await
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
-                ))
             }
             Command::Ng(command) => {
                 let cfg = cli.load_config()?;
