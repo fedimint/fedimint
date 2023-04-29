@@ -8,6 +8,7 @@ mod oob;
 mod output;
 
 use std::cmp::Ordering;
+use std::ffi;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,7 +27,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
@@ -44,7 +45,7 @@ use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tbs::AggregatePublicKey;
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::db::{NextECashNoteIndexKey, NoteKey, NoteKeyPrefix};
 use crate::input::{
@@ -464,6 +465,7 @@ impl MintClientContext {
 
 impl Context for MintClientContext {}
 
+#[apply(async_trait_maybe_send!)]
 impl ClientModule for MintClientModule {
     type Common = MintModuleTypes;
     type ModuleStateMachineContext = MintClientContext;
@@ -492,6 +494,55 @@ impl ClientModule for MintClientModule {
         TransactionItemAmount {
             amount: output.0.total_amount(),
             fee: self.cfg.fee_consensus.note_issuance_abs * (output.0.count_items() as u64),
+        }
+    }
+
+    async fn handle_cli_command(
+        &self,
+        client: &Client,
+        args: &[ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        if args.is_empty() {
+            return Err(anyhow::format_err!(
+                "Expected to be called with at leas 1 arguments: <command> …"
+            ));
+        }
+
+        let command = args[0].to_string_lossy();
+
+        // FIXME: make instance-aware
+        match command.as_ref() {
+            "reissue" => {
+                if args.len() != 2 {
+                    return Err(anyhow::format_err!(
+                        "`reissue` command expects 1 argument: <notes>"
+                    ));
+                }
+
+                let notes = parse_ecash(args[1].to_string_lossy().as_ref())
+                    .map_err(|e| anyhow::format_err!("invalid notes format: {e}"))?;
+
+                let amount = notes.total_amount();
+
+                let operation_id = client.reissue_external_notes(notes, ()).await?;
+                let mut updates = client
+                    .subscribe_reissue_external_notes_updates(operation_id)
+                    .await
+                    .unwrap();
+
+                while let Some(update) = updates.next().await {
+                    if let ReissueExternalNotesState::Failed(e) = update {
+                        return Err(anyhow::Error::msg(format!("Reissue failed: {e}")));
+                    }
+
+                    info!("Update: {:?}", update);
+                }
+
+                Ok(serde_json::to_value(amount).unwrap())
+            }
+            command => Err(anyhow::format_err!(
+                "Unknown command: {command}, supported commands: reissue"
+            )),
         }
     }
 }
@@ -1119,4 +1170,12 @@ mod tests {
             .flat_map(|(amount, number)| vec![(amount, "dummy note".into()); number])
             .collect()
     }
+}
+
+pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
+    let bytes = base64::decode(s)?;
+    Ok(Decodable::consensus_decode(
+        &mut std::io::Cursor::new(bytes),
+        &ModuleDecoderRegistry::default(),
+    )?)
 }
