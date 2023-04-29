@@ -18,7 +18,8 @@ use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
+    TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -495,6 +496,15 @@ impl Client {
             .as_any()
             .downcast_ref::<M>()
             .ok_or_else(|| anyhow::anyhow!("Module is not of type {}", std::any::type_name::<M>()))
+    }
+
+    pub fn get_module_client_dyn(
+        &self,
+        instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
+        self.inner
+            .try_get_module(instance_id)
+            .ok_or(anyhow!("Unknown module instance {}", instance_id))
     }
 
     pub fn db(&self) -> &Database {

@@ -14,9 +14,9 @@ use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
 use fedimint_client::derivable_secret::ChildId;
-use fedimint_client::get_client_root_secret;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 use fedimint_client::sm::Notifier;
+use fedimint_client::{get_client_root_secret, ClientBuilder};
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -1054,11 +1054,22 @@ impl FedimintCli {
             }
             Command::Module { id, arg } => {
                 let cfg = cli.load_config()?;
-                let decoders = cli.load_decoders(&cfg, &self.module_gens);
-                let db = cli.load_db(&decoders)?;
-                let root_secret = get_client_root_secret(&db).await;
 
-                let (id, module_cfg) = match id {
+                let mut tg = TaskGroup::new();
+
+                let mut client_builder = ClientBuilder::default();
+                client_builder.with_module(MintClientGen);
+                client_builder.with_module(LightningClientGen);
+                client_builder.with_module(WalletClientGen);
+                client_builder.with_primary_module(1);
+                client_builder.with_config(cfg.0.clone());
+                client_builder.with_database(cli.load_rocks_db().unwrap());
+                let client = client_builder
+                    .build(&mut tg)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+
+                let (id, _) = match id {
                     ModuleSelector::Id(id) => (
                         id,
                         cfg.as_ref()
@@ -1071,23 +1082,14 @@ impl FedimintCli {
                             .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid kind")?
                     }
                 };
-                let module_gen =
-                    self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
 
-                let module = module_gen
-                    .init(
-                        module_cfg,
-                        db.clone(),
-                        id,
-                        root_secret.child_key(ChildId(id as u64)),
-                        Notifier::new(db),
-                    )
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;
+                let module = client
+                    .get_module_client_dyn(id)
+                    .expect("Module exists according to cfg");
 
                 Ok(CliOutput::Raw(
                     module
-                        .handle_cli_command(&arg)
+                        .handle_cli_command(&client, &arg)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))
