@@ -5,7 +5,7 @@ use fedimint_core::config::ModuleGenParams;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::plugin_types_trait_impl_common;
+use fedimint_core::{Amount, plugin_types_trait_impl_common};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -38,9 +38,9 @@ pub struct DummyConfigGenParams {
 impl ModuleGenParams for DummyConfigGenParams {}
 
 #[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable,
 )]
-pub struct DummyInput;
+pub struct DummyInput(pub Amount);
 
 impl fmt::Display for DummyInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -49,9 +49,9 @@ impl fmt::Display for DummyInput {
 }
 
 #[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
+    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable,
 )]
-pub struct DummyOutput;
+pub struct DummyOutput(pub Amount);
 
 impl fmt::Display for DummyOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

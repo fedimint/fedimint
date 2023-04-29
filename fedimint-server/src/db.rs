@@ -174,7 +174,7 @@ mod fedimint_migration_tests {
     use secp256k1_zkp::Message;
     use strum::IntoEnumIterator;
     use threshold_crypto::SignatureShare;
-
+    use fedimint_core::Amount;
     use super::{
         AcceptedTransactionKey, ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey,
         EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
@@ -202,8 +202,8 @@ mod fedimint_migration_tests {
         let key_pair = KeyPair::from_secret_key(&secp, &sk);
         let schnorr = secp.sign_schnorr(&Message::from_slice(&BYTE_32).unwrap(), &key_pair);
         let transaction = Transaction {
-            inputs: vec![DynInput::from_typed(0, DummyInput)],
-            outputs: vec![DynOutput::from_typed(0, DummyOutput)],
+            inputs: vec![DynInput::from_typed(0, DummyInput(Amount::ZERO))],
+            outputs: vec![DynOutput::from_typed(0, DummyOutput(Amount::ZERO))],
             signature: Some(schnorr),
         };
 
