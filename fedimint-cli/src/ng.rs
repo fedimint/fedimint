@@ -4,17 +4,14 @@ use std::time::Duration;
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
-use fedimint_client::ClientBuilder;
+use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT};
-use fedimint_core::db::IDatabase;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, TieredMulti, TieredSummary};
-use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
-use fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
-use fedimint_wallet_client::WalletClientGen;
+use fedimint_ln_client::{LightningClientExt, LnPayState};
+use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -45,23 +42,11 @@ pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Er
     secp256k1::PublicKey::from_str(s)
 }
 
-pub async fn handle_ng_command<D: IDatabase>(
+pub async fn handle_ng_command(
     command: ClientNg,
-    cfg: ClientConfig,
-    db: D,
+    config: ClientConfig,
+    client: Client,
 ) -> anyhow::Result<serde_json::Value> {
-    let mut tg = TaskGroup::new();
-
-    let fed_id = cfg.federation_id;
-    let mut client_builder = ClientBuilder::default();
-    client_builder.with_module(MintClientGen);
-    client_builder.with_module(LightningClientGen);
-    client_builder.with_module(WalletClientGen);
-    client_builder.with_primary_module(1);
-    client_builder.with_config(cfg);
-    client_builder.with_database(db);
-    let client = client_builder.build(&mut tg).await?;
-
     match command {
         ClientNg::Info => {
             let mint_client = client
@@ -111,7 +96,7 @@ pub async fn handle_ng_command<D: IDatabase>(
             dbtx.commit_tx().await;
 
             let operation_id = client
-                .pay_bolt11_invoice(fed_id, bolt11, active_gateway)
+                .pay_bolt11_invoice(config.federation_id, bolt11, active_gateway)
                 .await?;
 
             let mut updates = client.subscribe_ln_pay_updates(operation_id).await?;

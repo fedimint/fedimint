@@ -13,10 +13,8 @@ use std::{ffi, fs, result};
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
-use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
-use fedimint_client::sm::Notifier;
-use fedimint_client::{get_client_root_secret, ClientBuilder};
+use fedimint_client::ClientBuilder;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -404,6 +402,23 @@ impl Opts {
             Default::default(),
         )
         .await)
+    }
+
+    async fn build_client_ng(
+        &self,
+        module_gens: &ClientModuleGenRegistry,
+    ) -> CliResult<fedimint_client::Client> {
+        let mut tg = TaskGroup::new();
+        let cfg = self.load_config()?.0;
+        let db = self.load_rocks_db()?;
+
+        let mut client_builder = ClientBuilder::default();
+        client_builder.with_module_gens(module_gens.clone());
+        client_builder.with_primary_module(1);
+        client_builder.with_config(cfg.clone());
+        client_builder.with_database(db);
+
+        client_builder.build(&mut tg).await.map_err_cli_general()
     }
 }
 
@@ -1054,18 +1069,8 @@ impl FedimintCli {
             }
             Command::Module { id, arg } => {
                 let cfg = cli.load_config()?;
-
-                let mut tg = TaskGroup::new();
-
-                let mut client_builder = ClientBuilder::default();
-                client_builder.with_module(MintClientGen);
-                client_builder.with_module(LightningClientGen);
-                client_builder.with_module(WalletClientGen);
-                client_builder.with_primary_module(1);
-                client_builder.with_config(cfg.0.clone());
-                client_builder.with_database(cli.load_rocks_db().unwrap());
-                let client = client_builder
-                    .build(&mut tg)
+                let client = cli
+                    .build_client_ng(&self.module_gens)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
 
@@ -1095,9 +1100,13 @@ impl FedimintCli {
                 ))
             }
             Command::Ng(command) => {
-                let cfg = cli.load_config()?;
+                let config = cli.load_config()?.0;
+                let client = cli
+                    .build_client_ng(&self.module_gens)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 Ok(CliOutput::Raw(
-                    ng::handle_ng_command(command, cfg.0, cli.load_rocks_db().unwrap())
+                    ng::handle_ng_command(command, config, client)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))

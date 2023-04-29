@@ -18,8 +18,7 @@ use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -767,6 +766,11 @@ impl ClientBuilder {
     /// Make module generator available when reading the config
     pub fn with_module<M: ClientModuleGen>(&mut self, module_gen: M) {
         self.module_gens.attach(module_gen);
+    }
+
+    /// Replace module generator registry entirely
+    pub fn with_module_gens(&mut self, module_gens: ClientModuleGenRegistry) {
+        self.module_gens = module_gens;
     }
 
     /// Uses this config to initialize modules
