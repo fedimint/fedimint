@@ -10,6 +10,7 @@ import {
 const initialState: SetupState = {
   role: null,
   progress: SetupProgress.Start,
+  myName: '',
   federationName: '',
   finalityDelay: 10,
   network: Network.Testnet,
@@ -27,6 +28,8 @@ const reducer = (state: SetupState, action: SetupAction): SetupState => {
       return { ...state, role: action.payload };
     case SETUP_ACTION_TYPE.SET_PROGRESS:
       return { ...state, progress: action.payload };
+    case SETUP_ACTION_TYPE.SET_MY_NAME:
+      return { ...state, myName: action.payload };
     case SETUP_ACTION_TYPE.SET_FEDERATION_NAME:
       return { ...state, federationName: action.payload };
     case SETUP_ACTION_TYPE.SET_FINALITY_DELAY:

@@ -11,6 +11,10 @@ const colors = {
   },
 };
 
+const blueGradient =
+  'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)';
+const inputShadow = '0px 1px 2px rgba(16, 24, 40, 0.05)';
+
 export const theme = extendTheme(
   {
     colors,
@@ -30,7 +34,7 @@ export const theme = extendTheme(
         },
       },
       Button: {
-        baseStyles: {
+        baseStyle: {
           _disabled: {
             pointerEvents: 'none',
           },
@@ -42,14 +46,14 @@ export const theme = extendTheme(
         },
         variants: {
           solid: {
-            bg: 'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)',
+            bg: blueGradient,
             color: '#FFF',
             _hover: {
-              bg: 'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)',
+              bg: blueGradient,
               filter: 'brightness(1.1)',
             },
             _active: {
-              bg: 'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)',
+              bg: blueGradient,
               filter: 'brightness(1.05)',
             },
             _disabled: {
@@ -62,6 +66,36 @@ export const theme = extendTheme(
             _hover: {
               bg: '#EFF8FF',
             },
+          },
+        },
+      },
+      FormLabel: {
+        baseStyle: {
+          color: '#344054',
+          fontSize: '14px',
+          lineHeight: '20px',
+        },
+      },
+      FormHelperText: {
+        baseStyle: {
+          color: colors.text.secondary,
+        },
+      },
+      Input: {
+        variants: {
+          outline: {
+            field: {
+              border: '1px solid #D0D5DD',
+              boxShadow: inputShadow,
+            },
+          },
+        },
+      },
+      Select: {
+        baseStyle: {
+          field: {
+            border: '1px solid #D0D5DD',
+            boxShadow: inputShadow,
           },
         },
       },

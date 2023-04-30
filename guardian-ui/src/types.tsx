@@ -30,6 +30,7 @@ export interface PeerStatus {
 export interface SetupState {
   role: GuardianRole | null;
   progress: SetupProgress;
+  myName: string;
   federationName: string;
   finalityDelay: number;
   network: Network | null;
@@ -44,6 +45,7 @@ export interface SetupState {
 export enum SETUP_ACTION_TYPE {
   SET_ROLE = 'SET_ROLE',
   SET_PROGRESS = 'SET_PROGRESS',
+  SET_MY_NAME = 'SET_MY_NAME',
   SET_FEDERATION_NAME = 'SET_FEDERATION_NAME',
   SET_FINALITY_DELAY = 'SET_FINALITY_DELAY',
   SET_NETWORK = 'SET_NETWORK',
@@ -63,6 +65,10 @@ export type SetupAction =
   | {
       type: SETUP_ACTION_TYPE.SET_PROGRESS;
       payload: SetupProgress;
+    }
+  | {
+      type: SETUP_ACTION_TYPE.SET_MY_NAME;
+      payload: string;
     }
   | {
       type: SETUP_ACTION_TYPE.SET_FEDERATION_NAME;

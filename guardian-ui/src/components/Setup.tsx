@@ -13,6 +13,7 @@ import { Header } from './Header';
 import { useGuardianContext } from '../hooks';
 import { GuardianRole, SetupProgress, SETUP_ACTION_TYPE } from '../types';
 import { RoleSelector } from './RoleSelector';
+import { SetConfiguration } from './SetConfiguration';
 
 const PROGRESS_ORDER: SetupProgress[] = [
   SetupProgress.Start,
@@ -35,15 +36,12 @@ export const Setup: React.FC = () => {
   const nextProgress: SetupProgress | undefined =
     PROGRESS_ORDER[progressIdx + 1];
 
-  console.log({ progressIdx, nextProgress, prevProgress });
-
   const handleBack = useCallback(() => {
     if (!prevProgress) return;
     dispatch({ type: SETUP_ACTION_TYPE.SET_PROGRESS, payload: prevProgress });
   }, [dispatch, prevProgress]);
 
   const handleNext = useCallback(() => {
-    console.log({ nextProgress });
     if (!nextProgress) return;
     dispatch({ type: SETUP_ACTION_TYPE.SET_PROGRESS, payload: nextProgress });
   }, [dispatch, nextProgress]);
@@ -68,7 +66,7 @@ export const Setup: React.FC = () => {
       subtitle = isHost
         ? 'Your Federation Followers will confirm this information on their end.'
         : 'Your Federation Leader will be setting up main Federation details. You’ll confirm them soon.';
-
+      content = <SetConfiguration next={handleNext} />;
       break;
     case SetupProgress.ConnectGuardians:
       title = isHost ? 'Invite your Guardians' : 'Join your Federation Leader';
