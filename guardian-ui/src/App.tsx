@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ChakraProvider, Center, Box, Text, theme } from '@chakra-ui/react';
+import { ChakraProvider, Center, Box, Text } from '@chakra-ui/react';
 import { Header, RoleSelector } from './components';
 import { GuardianRole } from './types';
+import theme from './components/theme';
 
 export const App = React.memo(() => {
 	const [role, setGuardianRole] = useState<GuardianRole | undefined>(undefined);

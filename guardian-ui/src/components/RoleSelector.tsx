@@ -34,7 +34,7 @@ export const RoleSelector = React.memo(
 					image={Leader}
 					text={'Leader'}
 					description={
-						'Choose one of your Guardians as a leader. The Leader will input information about the federation.'
+						'Choose one of your Guardians as a leader. The Leader will input \n information about the federation.'
 					}
 					selectOption={() => selectGuardianRole(GuardianRole.Host)}
 				/>
@@ -42,7 +42,7 @@ export const RoleSelector = React.memo(
 					image={Follower}
 					text={'Follower'}
 					description={
-						'Guardian Followers (all other Guardians) will confirm information that the Leader inputs.'
+						'Guardian Followers (all other Guardians) will confirm information that \n the Leader inputs.'
 					}
 					selectOption={() => selectGuardianRole(GuardianRole.Follower)}
 				/>
@@ -72,18 +72,28 @@ export const RoleOption = React.memo(
 				p={10}
 				width='full'
 				height={{
-					base: '106px',
+					base: '100%',
 					md: '50%',
-					xl: '25%',
 				}}
+				size={{ base: 'sm', md: 'md', lg: 'lg' }}
+				// fontSize={{ base: 'md', md: '16px', lg: 'xl' }}
+				px={{ base: 4, md: 6, lg: 8 }}
 			>
 				<Flex gap={4} pr={5} alignItems='left' flexDirection='row'>
-					<Image src={image} boxSize='40px' />
+					<Image
+						src={image}
+						boxSize={{ base: '27px', md: '50px' }}
+						objectFit='contain'
+					/>
 					<HStack alignItems='left' textAlign='start' flexDirection='column'>
-						<Text fontSize='16px' mb={3} pl={2}>
+						<Text
+							fontSize={{ base: '12px', md: '16px', lg: '20px' }}
+							mb={3}
+							pl={2}
+						>
 							{text}
 						</Text>
-						<Text mb={8} fontSize='16px'>
+						<Text mb={8} fontSize={{ base: '10px', md: '12px', lg: '16px' }}>
 							{description}
 						</Text>
 					</HStack>
