@@ -6,6 +6,7 @@ import {
   SetupProgress,
   Network,
 } from './types';
+import { ApiInterface, NoopGuardianApi } from './GuardianApi';
 
 const initialState: SetupState = {
   role: null,
@@ -54,24 +55,28 @@ const reducer = (state: SetupState, action: SetupAction): SetupState => {
 };
 
 export const GuardianContext = createContext<{
+	api: ApiInterface;
   state: SetupState;
   dispatch: Dispatch<SetupAction>;
 }>({
+	api: new NoopGuardianApi(),
   state: initialState,
   dispatch: () => null,
 });
 
 export interface GuardianProviderProps {
+	api: ApiInterface;
   children: ReactNode;
 }
 
 export const GuardianProvider: React.FC<GuardianProviderProps> = ({
+	api,
   children,
-}) => {
+}: GuardianProviderProps) => {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   return (
-    <GuardianContext.Provider value={{ state, dispatch }}>
+    <GuardianContext.Provider value={{ state, dispatch, api }}>
       {children}
     </GuardianContext.Provider>
   );
