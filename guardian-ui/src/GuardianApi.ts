@@ -8,7 +8,7 @@ export interface ApiInterface {
     ourName: string,
     leaderUrl?: string
   ) => Promise<void>;
-  getDefaultConfigGenParams: () => Promise<unknown>;
+  getDefaultConfigGenParams: () => Promise<ConfigGenParams>;
   status: () => Promise<string>;
   getConsensusConfigGenParams: () => Promise<ConfigGenParams>;
   setConfigGenParams: (params: ConfigGenParams) => Promise<void>;
@@ -127,7 +127,7 @@ export class GuardianApi implements ApiInterface {
     return this.rpc('status', null, true /* authenticated */);
   };
 
-  getConsensusConfigGenParams = async (): Promise<string> => {
+  getConsensusConfigGenParams = async (): Promise<ConfigGenParams> => {
     return this.rpc(
       'get_consensus_config_gen_params',
       null,
@@ -195,14 +195,14 @@ export class NoopGuardianApi implements ApiInterface {
   ): Promise<void> => {
     return;
   };
-  getDefaultConfigGenParams = async (): Promise<unknown> => {
-    return;
+  getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
+    throw 'not implemented';
   };
   status = async (): Promise<string> => {
     return 'noop';
   };
-  getConsensusConfigGenParams = async (): Promise<unknown> => {
-    return;
+  getConsensusConfigGenParams = async (): Promise<ConfigGenParams> => {
+    throw 'not implemented';
   };
   setConfigGenParams = async (_params: ConfigGenParams): Promise<void> => {
     return;

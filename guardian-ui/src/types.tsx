@@ -27,7 +27,11 @@ export interface PeerStatus {
   connected: boolean;
 }
 
-export type ConfigGenParams = unknown;
+export type ConfigGenParams = {
+  meta: { federationName: string };
+  mint: { mintAmounts: number[] };
+  wallet: { finalityDelay: 11; network: Network };
+};
 
 export interface SetupState {
   role: GuardianRole | null;
