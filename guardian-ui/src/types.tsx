@@ -27,6 +27,8 @@ export interface PeerStatus {
   connected: boolean;
 }
 
+export type ConfigGenParams = unknown;
+
 export interface SetupState {
   role: GuardianRole | null;
   progress: SetupProgress;

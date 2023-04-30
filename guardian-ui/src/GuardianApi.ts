@@ -1,13 +1,19 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
+import { ConfigGenParams } from './types';
 
 export interface ApiInterface {
   setPassword: (password: string) => Promise<void>;
-  setConnections: (ourName: string, leaderUrl?: string) => Promise<void>;
-  getDefaults: () => Promise<unknown>;
-  getStatus: () => Promise<string>;
-  getConsensusParams: () => Promise<unknown>;
+  setPasswordLocal: (password: string) => void;
+  setConfigGenConnections: (
+    ourName: string,
+    leaderUrl?: string
+  ) => Promise<void>;
+  getDefaultConfigGenParams: () => Promise<unknown>;
+  status: () => Promise<string>;
+  getConsensusConfigGenParams: () => Promise<ConfigGenParams>;
+  setConfigGenParams: (params: ConfigGenParams) => Promise<void>;
   getVerifyConfigHash: () => Promise<string>;
-  awaitPeers: (numPeers: number) => Promise<void>;
+  awaitConfigGenPeers: (numPeers: number) => Promise<void>;
   runDkg: () => Promise<void>;
   verifyConfigs: (configHashes: string[]) => Promise<void>;
   startConsensus: () => Promise<void>;
@@ -81,17 +87,19 @@ export class GuardianApi implements ApiInterface {
   };
 
   setPassword = async (password: string): Promise<void> => {
-    await this.rpc<string, void>(
-      'set_password',
-      password,
-      false /* not-authenticated */
-    );
     this.password = password;
+
+    await this.rpc('set_password', null, true /* authenticated */);
 
     return;
   };
 
-  setConnections = async (
+  setPasswordLocal = (password: string): void => {
+    this.password = password;
+    return;
+  };
+
+  setConfigGenConnections = async (
     ourName: string,
     leaderUrl?: string
   ): Promise<void> => {
@@ -107,7 +115,7 @@ export class GuardianApi implements ApiInterface {
     );
   };
 
-  getDefaults = async (): Promise<unknown> => {
+  getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
     return this.rpc(
       'get_default_config_gen_params',
       null,
@@ -115,23 +123,28 @@ export class GuardianApi implements ApiInterface {
     );
   };
 
-  getStatus = async (): Promise<string> => {
+  status = async (): Promise<string> => {
     return this.rpc('status', null, true /* authenticated */);
   };
 
-  getConsensusParams = async (): Promise<string> => {
+  getConsensusConfigGenParams = async (): Promise<string> => {
     return this.rpc(
       'get_consensus_config_gen_params',
       null,
-      true /* authenticated */
+      false /* not-authenticated */
     );
+  };
+
+  // FIXME
+  setConfigGenParams = async (params: ConfigGenParams): Promise<void> => {
+    return this.rpc('set_config_gen_params', params, true /* authenticated */);
   };
 
   getVerifyConfigHash = async (): Promise<string> => {
     return this.rpc('get_verify_config_hash', null, true /* authenticated */);
   };
 
-  awaitPeers = async (numPeers: number): Promise<void> => {
+  awaitConfigGenPeers = async (numPeers: number): Promise<void> => {
     // not authenticated
     return this.rpc(
       'await_config_gen_peers',
@@ -153,7 +166,7 @@ export class GuardianApi implements ApiInterface {
       throw new Error('password not set');
     }
 
-    return this.rpc('start_consensus', this.password, true /* authenticated */);
+    return this.rpc('start_consensus', null, true /* authenticated */);
   };
 
   shutdown = async (): Promise<boolean> => {
@@ -173,25 +186,31 @@ export class NoopGuardianApi implements ApiInterface {
   setPassword = async (_password: string): Promise<void> => {
     return;
   };
-  setConnections = async (
+  setPasswordLocal = (_password: string): void => {
+    return;
+  };
+  setConfigGenConnections = async (
     _ourName: string,
     _leaderUrl?: string
   ): Promise<void> => {
     return;
   };
-  getDefaults = async (): Promise<unknown> => {
+  getDefaultConfigGenParams = async (): Promise<unknown> => {
     return;
   };
-  getStatus = async (): Promise<string> => {
+  status = async (): Promise<string> => {
     return 'noop';
   };
-  getConsensusParams = async (): Promise<unknown> => {
+  getConsensusConfigGenParams = async (): Promise<unknown> => {
+    return;
+  };
+  setConfigGenParams = async (_params: ConfigGenParams): Promise<void> => {
     return;
   };
   getVerifyConfigHash = async (): Promise<string> => {
     return 'noop';
   };
-  awaitPeers = async (_numPeers: number): Promise<void> => {
+  awaitConfigGenPeers = async (_numPeers: number): Promise<void> => {
     return;
   };
   runDkg = async (): Promise<void> => {
