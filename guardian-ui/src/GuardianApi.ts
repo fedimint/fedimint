@@ -1,181 +1,187 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
 
 export interface ApiInterface {
-	setPassword: (password: string) => Promise<void>;
-	setConnections: (ourName: string, leaderUrl?: string) => Promise<void>;
-	getDefaults: () => Promise<unknown>;
-	getStatus: () => Promise<string>;
-	getConsensusParams: () => Promise<unknown>;
-	getVerifyConfigHash: () => Promise<string>;
-	awaitPeers: (numPeers: number) => Promise<void>;
-	runDkg: () => Promise<void>;
-	verifyConfigs: (configHashes: string[]) => Promise<void>;
-	startConsensus: () => Promise<void>;
-	shutdown: () => Promise<boolean>;
+  setPassword: (password: string) => Promise<void>;
+  setConnections: (ourName: string, leaderUrl?: string) => Promise<void>;
+  getDefaults: () => Promise<unknown>;
+  getStatus: () => Promise<string>;
+  getConsensusParams: () => Promise<unknown>;
+  getVerifyConfigHash: () => Promise<string>;
+  awaitPeers: (numPeers: number) => Promise<void>;
+  runDkg: () => Promise<void>;
+  verifyConfigs: (configHashes: string[]) => Promise<void>;
+  startConsensus: () => Promise<void>;
+  shutdown: () => Promise<boolean>;
 }
 
 export class GuardianApi implements ApiInterface {
-	password: string | null;
-	websocket: JsonRpcWebsocket | null;
+  private password: string | null;
+  private websocket: JsonRpcWebsocket | null;
 
-	constructor() {
-		this.password = null;
-		this.websocket = null;
+  constructor() {
+    this.password = null;
+    this.websocket = null;
 
-		this.connect();
-	}
+    this.connect();
+  }
 
-	private connect = async (): Promise<JsonRpcWebsocket> => {
-		if (this.websocket !== null) {
-			return this.websocket;
-		}
+  private connect = async (): Promise<JsonRpcWebsocket> => {
+    if (this.websocket !== null) {
+      return this.websocket;
+    }
 
-		const websocketUrl = process.env.REACT_APP_FM_CONFIG_API;
+    const websocketUrl = process.env.REACT_APP_FM_CONFIG_API;
 
-		if (!websocketUrl) {
-			throw new Error('REACT_APP_FM_CONFIG_API not set');
-		}
+    if (!websocketUrl) {
+      throw new Error('REACT_APP_FM_CONFIG_API not set');
+    }
 
-		const requestTimeoutMs = 20000;
-		const websocket = new JsonRpcWebsocket(
-			websocketUrl,
-			requestTimeoutMs,
-			(error: JsonRpcError) => {
-				console.error('failed to create websocket', error);
-				this.shutdown();
-			}
-		);
-		await websocket.open();
+    const requestTimeoutMs = 20000;
+    const websocket = new JsonRpcWebsocket(
+      websocketUrl,
+      requestTimeoutMs,
+      (error: JsonRpcError) => {
+        console.error('failed to create websocket', error);
+        this.shutdown();
+      }
+    );
+    await websocket.open();
 
-		this.websocket = websocket;
-		return Promise.resolve(this.websocket);
-	};
+    this.websocket = websocket;
+    return this.websocket;
+  };
 
-	private rpc = async <T>(method: string, params: unknown): Promise<T> => {
-		try {
-			const websocket = await this.connect();
+  private rpc = async <P, T>(method: string, params: P): Promise<T> => {
+    try {
+      const websocket = await this.connect();
 
-			const response = await websocket.call(method, [
-				{
-					auth: this.password,
-					params,
-				},
-			]);
+      const response = await websocket.call(method, [
+        {
+          auth: this.password,
+          params,
+        },
+      ]);
 
-			return response.result as T;
-		} catch (error) {
-			console.error('websocket rpc error', error);
-			throw error;
-		}
-	};
+      if (response.error) {
+        throw response.error;
+      }
 
-	shutdown = async (): Promise<boolean> => {
-		if (this.websocket) {
-			const evt: CloseEvent = await this.websocket.close();
-			this.websocket = null;
-			return Promise.resolve(evt.type === 'close' && evt.wasClean);
-		}
+      const result = response.result as T;
+      console.log(`${method} rpc result:`, result);
 
-		return Promise.resolve(true);
-	};
+      return result;
+    } catch (error) {
+      console.error(`error calling "${method}" on websocket rpc : `, error);
+      throw error;
+    }
+  };
 
-	setPassword = async (password: string): Promise<void> => {
-		await this.rpc('set_password', password);
-		this.password = password;
-	};
+  setPassword = async (password: string): Promise<void> => {
+    await this.rpc<string, void>('set_password', password);
+    this.password = password;
 
-	getDefaults = async (): Promise<unknown> => {
-		const defaults = await this.rpc('get_default_config_gen_params', null);
-		console.log('get_default_config_gen_params result', defaults);
-		return defaults;
-	};
+    return;
+  };
 
-	getStatus = async (): Promise<string> => {
-		const result = await this.rpc('status', null);
-		console.log('status result', result);
-		return result as string;
-	};
+  setConnections = async (
+    ourName: string,
+    leaderUrl?: string
+  ): Promise<void> => {
+    const connections = {
+      our_name: ourName,
+      leader_api_url: leaderUrl,
+    };
 
-	setConnections = async (
-		ourName: string,
-		leaderUrl?: string
-	): Promise<void> => {
-		const connections = {
-			our_name: ourName, // FIXME: make the call twice, second time with our_name
-			leader_api_url: leaderUrl,
-		};
-		const defaults = await this.rpc('set_config_gen_connections', connections);
-		console.log('set_config_gen_connections result', defaults);
-	};
+    return this.rpc('set_config_gen_connections', connections);
+  };
 
-	awaitPeers = async (numPeers: number): Promise<void> => {
-		const result = await this.rpc('await_config_gen_peers', numPeers); // not authenticated
-		console.log('await_config_gen_peers result', result);
-	};
+  getDefaults = async (): Promise<unknown> => {
+    return this.rpc('get_default_config_gen_params', null);
+  };
 
-	getVerifyConfigHash = async (): Promise<string> => {
-		const hash = await this.rpc('get_verify_config_hash', null);
-		console.log('get_verify_config_hash result', hash);
-		return hash as string;
-	};
+  getStatus = async (): Promise<string> => {
+    return this.rpc('status', null);
+  };
 
-	verifyConfigs = async (configHashes: string[]): Promise<void> => {
-		const result = await this.rpc('verify_configs', configHashes);
-		console.log('verify_config result', result);
-	};
+  getConsensusParams = async (): Promise<string> => {
+    return this.rpc('get_consensus_config_gen_params', null);
+  };
 
-	getConsensusParams = async (): Promise<string> => {
-		const result = await this.rpc('get_consensus_config_gen_params', null);
-		console.log('get_consensus_config_gen_params result', result);
-		return result as string;
-	};
+  getVerifyConfigHash = async (): Promise<string> => {
+    return this.rpc('get_verify_config_hash', null);
+  };
 
-	runDkg = async (): Promise<void> => {
-		const result = await this.rpc('run_dkg', null);
-		console.log('run_dkg result', result);
-	};
+  awaitPeers = async (numPeers: number): Promise<void> => {
+    // not authenticated
+    return this.rpc('await_config_gen_peers', numPeers);
+  };
 
-	startConsensus = async (): Promise<void> => {
-		const result = await this.rpc('start_consensus', this.password);
-		console.log('start_consensus result', result);
-	};
+  runDkg = async (): Promise<void> => {
+    return this.rpc('run_dkg', null);
+  };
+
+  verifyConfigs = async (configHashes: string[]): Promise<void> => {
+    return this.rpc('verify_configs', configHashes);
+  };
+
+  startConsensus = async (): Promise<void> => {
+    if (this.password === null) {
+      throw new Error('password not set');
+    }
+
+    return this.rpc('start_consensus', this.password);
+  };
+
+  shutdown = async (): Promise<boolean> => {
+    if (this.websocket) {
+      const evt: CloseEvent = await this.websocket.close();
+      this.websocket = null;
+      return evt.type === 'close' && evt.wasClean;
+    }
+
+    return true;
+  };
 }
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
 
 export class NoopGuardianApi implements ApiInterface {
-	setPassword = async (_password: string): Promise<void> => {
-		return;
-	};
-	setConnections = async (
-		_ourName: string,
-		_leaderUrl?: string
-	): Promise<void> => {
-		return;
-	};
-	getDefaults = async (): Promise<unknown> => {
-		return;
-	};
-	getStatus = async (): Promise<string> => {
-		return 'noop';
-	};
-	getConsensusParams = async (): Promise<unknown> => {
-		return;
-	};
-	getVerifyConfigHash = async (): Promise<string> => {
-		return 'noop';
-	};
-	awaitPeers = async (_numPeers: number): Promise<void> => {
-		return;
-	};
-	runDkg = async (): Promise<void> => {
-		return;
-	};
-	verifyConfigs = async (_configHashes: string[]): Promise<void> => {
-		return;
-	};
-	startConsensus = async (): Promise<void> => {
-		return;
-	};
-	shutdown = async (): Promise<boolean> => {
-		return true;
-	};
+  setPassword = async (_password: string): Promise<void> => {
+    return;
+  };
+  setConnections = async (
+    _ourName: string,
+    _leaderUrl?: string
+  ): Promise<void> => {
+    return;
+  };
+  getDefaults = async (): Promise<unknown> => {
+    return;
+  };
+  getStatus = async (): Promise<string> => {
+    return 'noop';
+  };
+  getConsensusParams = async (): Promise<unknown> => {
+    return;
+  };
+  getVerifyConfigHash = async (): Promise<string> => {
+    return 'noop';
+  };
+  awaitPeers = async (_numPeers: number): Promise<void> => {
+    return;
+  };
+  runDkg = async (): Promise<void> => {
+    return;
+  };
+  verifyConfigs = async (_configHashes: string[]): Promise<void> => {
+    return;
+  };
+  startConsensus = async (): Promise<void> => {
+    return;
+  };
+  shutdown = async (): Promise<boolean> => {
+    return true;
+  };
 }
+
+/* eslint-enable @typescript-eslint/no-unused-vars */
