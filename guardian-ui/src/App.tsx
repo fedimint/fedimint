@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChakraProvider, Center, Box, Text } from '@chakra-ui/react';
-import { Header, RoleSelector } from './components';
+import { Header } from './components/Header';
+import { RoleSelector } from './components/RoleSelector';
 import { GuardianRole } from './types';
 import { theme, Fonts } from './theme';
 
@@ -24,7 +25,7 @@ export const App = React.memo(() => {
       <ChakraProvider theme={theme}>
         <Center>
           <Box
-            maxW='1000px'
+            maxW='960px'
             width='100%'
             minH='100%'
             mt={10}
@@ -34,7 +35,7 @@ export const App = React.memo(() => {
             p={5}
           >
             <Header />
-            <Box mt={12}>{GetExperience()}</Box>
+            <Box mt={10}>{GetExperience()}</Box>
           </Box>
         </Center>
       </ChakraProvider>

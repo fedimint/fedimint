@@ -1,15 +1,62 @@
 import { Global } from '@emotion/react';
-import { extendTheme } from '@chakra-ui/theme-utils';
+import { extendTheme, withDefaultColorScheme } from '@chakra-ui/react';
 
 const SPACE_GROTESK = 'Space Grotesk';
 const INTER = 'Inter';
 
-export const theme = extendTheme({
-  fonts: {
-    heading: `'${SPACE_GROTESK}', monospace`,
-    body: `'${INTER}', sans-serif`,
+const colors = {
+  text: {
+    primary: '#101828',
+    secondary: '#475467',
   },
-});
+};
+
+export const theme = extendTheme(
+  {
+    colors,
+    fonts: {
+      heading: `'${SPACE_GROTESK}', monospace`,
+      body: `'${INTER}', sans-serif`,
+    },
+    components: {
+      Text: {
+        baseStyle: {
+          color: colors.text.primary,
+        },
+        variants: {
+          secondary: {
+            color: colors.text.secondary,
+          },
+        },
+      },
+      Button: {
+        sizes: {
+          md: {
+            height: '36px',
+          },
+        },
+        variants: {
+          solid: {
+            bg: 'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)',
+            color: '#FFF',
+            _hover: {
+              bg: 'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)',
+              filter: 'brightness(1.1)',
+            },
+          },
+          ghost: {
+            bg: 'transparent',
+            border: '1px solid #EAECF0',
+            _hover: {
+              bg: '#EFF8FF',
+            },
+          },
+        },
+      },
+    },
+  },
+  withDefaultColorScheme({ colorScheme: 'blue' })
+);
 
 export const Fonts = () => (
   <Global

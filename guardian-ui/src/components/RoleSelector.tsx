@@ -1,20 +1,11 @@
-import React from 'react';
-import {
-  Button,
-  Flex,
-  Image,
-  Radio,
-  RadioGroup,
-  VStack,
-  HStack,
-  Text,
-  Heading,
-} from '@chakra-ui/react';
+import React, { useMemo, useState } from 'react';
+import { Button, VStack, Text, Heading, Icon } from '@chakra-ui/react';
 import { GuardianRole } from '../types';
 
-import Leader from './assets/Leader.png';
-import Follower from './assets/Follower.png';
-import { CustomButton } from './index';
+import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
+import { ReactComponent as StarsIcon } from '../assets/svgs/stars.svg';
+import { ReactComponent as IntersectSquareIcon } from '../assets/svgs/intersect-square.svg';
+import { RadioButtonGroup, RadioButtonOption } from './ui/RadioButtonGroup';
 
 interface RoleSelectorProps {
   selectGuardianRole: (role: GuardianRole) => void;
@@ -22,77 +13,54 @@ interface RoleSelectorProps {
 
 export const RoleSelector = React.memo(
   ({ selectGuardianRole }: RoleSelectorProps) => {
+    const [role, setRole] = useState<GuardianRole>();
+    const options: RadioButtonOption<GuardianRole>[] = useMemo(
+      () => [
+        {
+          value: GuardianRole.Host,
+          label: 'Leader',
+          description:
+            'Choose one of your Guardians as a Leader. The Leader will input information about the Federation.',
+          icon: StarsIcon,
+        },
+        {
+          value: GuardianRole.Follower,
+          label: 'Follower',
+          description:
+            'Guardian Followers (all other Guardians) will confirm information that the Leader inputs.',
+          icon: IntersectSquareIcon,
+        },
+      ],
+      []
+    );
     return (
-      <>
-        <VStack alignItems='left'>
-          <Heading fontSize='3xl'>Welcome to Fedimint!</Heading>
-          <Text fontSize='xl'>
-            Are you setting up your Fedimint as a Leader or Follower?
+      <VStack gap={8} align='left' justify='left'>
+        <VStack align='left' gap={2}>
+          <Heading fontSize={32} fontWeight='500'>
+            Welcome to Fedimint!
+          </Heading>
+          <Text fontSize={16} fontWeight='500'>
+            Are you creating a Federation, or joining one?
           </Text>
         </VStack>
 
-        <RoleOption
-          image={Leader}
-          text={'Leader'}
-          description={
-            'Choose one of your Guardians as a leader. The Leader will input information about the federation.'
-          }
-          selectOption={() => selectGuardianRole(GuardianRole.Host)}
+        <RadioButtonGroup
+          options={options}
+          value={role}
+          onChange={(value) => setRole(value)}
         />
-        <RoleOption
-          image={Follower}
-          text={'Follower'}
-          description={
-            'Guardian Followers (all other Guardians) will confirm information that the Leader inputs.'
-          }
-          selectOption={() => selectGuardianRole(GuardianRole.Follower)}
-        />
-        <CustomButton />
-      </>
-    );
-  }
-);
 
-interface RoleOptionProps {
-  image: string;
-  text: string;
-  description: string;
-  selectOption: () => void;
-}
-
-export const RoleOption = React.memo(
-  ({ image, text, description, selectOption }: RoleOptionProps) => {
-    return (
-      <Button
-        onClick={selectOption}
-        _hover={{
-          bg: '#EFF8FF',
-          color: '#175CD3',
-        }}
-        mt={5}
-        p={10}
-        width='full'
-        height={{
-          base: '106px',
-          md: '50%',
-          xl: '25%',
-        }}
-      >
-        <Flex gap={4} pr={5} alignItems='left' flexDirection='row'>
-          <Image src={image} boxSize='40px' />
-          <HStack alignItems='left' textAlign='start' flexDirection='column'>
-            <Text fontSize='16px' mb={3} pl={2}>
-              {text}
-            </Text>
-            <Text mb={8} fontSize='16px'>
-              {description}
-            </Text>
-          </HStack>
-        </Flex>
-        <RadioGroup>
-          <Radio colorScheme='#EFF8FF' pl={16} pb={10} />
-        </RadioGroup>
-      </Button>
+        <div>
+          <Button
+            width='auto'
+            leftIcon={<Icon as={ArrowRightIcon} />}
+            disabled={!role}
+            onClick={() => role && selectGuardianRole(role)}
+          >
+            Next
+          </Button>
+        </div>
+      </VStack>
     );
   }
 );
