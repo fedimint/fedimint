@@ -30,6 +30,11 @@ export const theme = extendTheme(
         },
       },
       Button: {
+        baseStyles: {
+          _disabled: {
+            pointerEvents: 'none',
+          },
+        },
         sizes: {
           md: {
             height: '36px',
@@ -42,6 +47,13 @@ export const theme = extendTheme(
             _hover: {
               bg: 'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)',
               filter: 'brightness(1.1)',
+            },
+            _active: {
+              bg: 'linear-gradient(72.82deg, #4AD6FF -62.43%, #23419F 63.9%)',
+              filter: 'brightness(1.05)',
+            },
+            _disabled: {
+              pointerEvents: 'none',
             },
           },
           ghost: {

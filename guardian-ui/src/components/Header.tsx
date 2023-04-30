@@ -5,7 +5,7 @@ import Logo from '../assets/images/Fedimint-Full.png';
 
 export const Header = React.memo(() => {
   return (
-    <Flex>
+    <Flex width='100%'>
       <Flex alignItems='center' gap='2'>
         <Image
           src={Logo}

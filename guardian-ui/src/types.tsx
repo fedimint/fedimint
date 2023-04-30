@@ -1,14 +1,14 @@
 export enum GuardianRole {
-  Host,
-  Follower,
+  Host = 'Host',
+  Follower = 'Follower',
 }
 
 export enum SetupProgress {
-  Start,
-  SetConfiguration,
-  ConnectGuardians,
-  VerifyGuardians,
-  SetupComplete,
+  Start = 'Start',
+  SetConfiguration = 'SetConfiguration',
+  ConnectGuardians = 'ConnectGuardians',
+  VerifyGuardians = 'VerifyGuardians',
+  SetupComplete = 'SetupComplete',
 }
 
 export enum Network {
