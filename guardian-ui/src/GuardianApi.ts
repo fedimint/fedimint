@@ -51,13 +51,17 @@ export class GuardianApi implements ApiInterface {
     return this.websocket;
   };
 
-  private rpc = async <P, T>(method: string, params: P): Promise<T> => {
+  private rpc = async <P, T>(
+    method: string,
+    params: P,
+    authenticated: boolean
+  ): Promise<T> => {
     try {
       const websocket = await this.connect();
 
       const response = await websocket.call(method, [
         {
-          auth: this.password,
+          auth: authenticated ? this.password : null,
           params,
         },
       ]);
@@ -77,7 +81,11 @@ export class GuardianApi implements ApiInterface {
   };
 
   setPassword = async (password: string): Promise<void> => {
-    await this.rpc<string, void>('set_password', password);
+    await this.rpc<string, void>(
+      'set_password',
+      password,
+      false /* not-authenticated */
+    );
     this.password = password;
 
     return;
@@ -92,36 +100,52 @@ export class GuardianApi implements ApiInterface {
       leader_api_url: leaderUrl,
     };
 
-    return this.rpc('set_config_gen_connections', connections);
+    return this.rpc(
+      'set_config_gen_connections',
+      connections,
+      true /* authenticated */
+    );
   };
 
   getDefaults = async (): Promise<unknown> => {
-    return this.rpc('get_default_config_gen_params', null);
+    return this.rpc(
+      'get_default_config_gen_params',
+      null,
+      true /* authenticated */
+    );
   };
 
   getStatus = async (): Promise<string> => {
-    return this.rpc('status', null);
+    return this.rpc('status', null, true /* authenticated */);
   };
 
   getConsensusParams = async (): Promise<string> => {
-    return this.rpc('get_consensus_config_gen_params', null);
+    return this.rpc(
+      'get_consensus_config_gen_params',
+      null,
+      true /* authenticated */
+    );
   };
 
   getVerifyConfigHash = async (): Promise<string> => {
-    return this.rpc('get_verify_config_hash', null);
+    return this.rpc('get_verify_config_hash', null, true /* authenticated */);
   };
 
   awaitPeers = async (numPeers: number): Promise<void> => {
     // not authenticated
-    return this.rpc('await_config_gen_peers', numPeers);
+    return this.rpc(
+      'await_config_gen_peers',
+      numPeers,
+      false /* not-authenticated */
+    );
   };
 
   runDkg = async (): Promise<void> => {
-    return this.rpc('run_dkg', null);
+    return this.rpc('run_dkg', null, true /* authenticated */);
   };
 
   verifyConfigs = async (configHashes: string[]): Promise<void> => {
-    return this.rpc('verify_configs', configHashes);
+    return this.rpc('verify_configs', configHashes, true /* authenticated */);
   };
 
   startConsensus = async (): Promise<void> => {
@@ -129,7 +153,7 @@ export class GuardianApi implements ApiInterface {
       throw new Error('password not set');
     }
 
-    return this.rpc('start_consensus', this.password);
+    return this.rpc('start_consensus', this.password, true /* authenticated */);
   };
 
   shutdown = async (): Promise<boolean> => {
