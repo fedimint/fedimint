@@ -284,6 +284,16 @@
                       ];
                     };
                   };
+
+                  gateway-cli = pkgs.dockerTools.buildLayeredImage {
+                    name = "gateway-cli";
+                    contents = [ craneLibNative.gateway-pkgs pkgs.bash pkgs.coreutils ];
+                    config = {
+                      Cmd = [
+                        "${craneLibNative.gateway-pkgs}/bin/gateway-cli"
+                      ];
+                    };
+                  };
                 };
             };
 
