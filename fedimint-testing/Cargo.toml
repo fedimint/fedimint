@@ -22,7 +22,7 @@ cln-rpc = "0.1.1"
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-client  = { path = "../fedimint-client" }
-fedimint-bitcoind = { path = "../fedimint-bitcoind" }
+fedimint-bitcoind = { path = "../fedimint-bitcoind", features = ["bitcoincore-rpc"] }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 lazy_static = "1.4.0"
