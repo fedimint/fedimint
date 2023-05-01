@@ -2412,11 +2412,12 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
         let db = db.new_isolated(module_instance_id);
 
+        let key_task = waiter(&db, TestKey(1)).await;
+
         let mut tx = db.begin_transaction().await;
         tx.insert_new_entry(&key, &val).await;
         tx.commit_tx().await;
 
-        let key_task = waiter(&db, TestKey(1)).await;
         assert_eq!(
             future_returns_shortly(async { key_task.await.unwrap() }).await,
             Some(TestVal(2)),
@@ -2431,13 +2432,14 @@ mod tests {
         let val = TestVal(2);
         let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
 
+        let key_task = waiter(&db.new_isolated(module_instance_id), TestKey(1)).await;
+
         let mut tx = db.begin_transaction().await;
         let mut tx_mod = tx.with_module_prefix(module_instance_id);
         tx_mod.insert_new_entry(&key, &val).await;
         drop(tx_mod);
         tx.commit_tx().await;
 
-        let key_task = waiter(&db.new_isolated(module_instance_id), TestKey(1)).await;
         assert_eq!(
             future_returns_shortly(async { key_task.await.unwrap() }).await,
             Some(TestVal(2)),
