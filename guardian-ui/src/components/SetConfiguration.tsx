@@ -10,7 +10,7 @@ import {
   Heading,
   Button,
 } from '@chakra-ui/react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGuardianContext } from '../hooks';
 import { GuardianRole, Network } from '../types';
 import { ReactComponent as FedimintLogo } from '../assets/svgs/fedimint.svg';
@@ -23,15 +23,29 @@ interface Props {
 
 export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const {
-    state: { role },
+    state: { role, finalityDelay },
+    api,
   } = useGuardianContext();
   const isHost = role === GuardianRole.Host;
   const [guardianName, setGuardianName] = useState('');
   const [password, setPassword] = useState('');
   const [federationName, setFederationName] = useState('');
   const [numGuardians, setNumGuardians] = useState('');
-  const [blockConfirmations, setBlockConfirmations] = useState('');
+  const [blockConfirmations, setBlockConfirmations] = useState(finalityDelay);
   const [network, setNetwork] = useState('');
+
+  useEffect(() => {
+    api
+      .getDefaultConfigGenParams()
+      .then((params) => {
+        setFederationName(params.meta.federationName);
+        setBlockConfirmations(params.modules.wallet.finalityDelay);
+        setNetwork(params.modules.wallet.network);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  }, []);
 
   const isValidNumber = (value: string) => {
     const int = parseInt(value, 10);
@@ -45,7 +59,6 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
         password &&
         federationName &&
         isValidNumber(numGuardians) &&
-        isValidNumber(blockConfirmations) &&
         network
     );
   } else {
@@ -108,7 +121,11 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
                 type='number'
                 min={1}
                 value={blockConfirmations}
-                onChange={(ev) => setBlockConfirmations(ev.currentTarget.value)}
+                onChange={(ev) => {
+                  const value = ev.currentTarget.value;
+                  isValidNumber(value) &&
+                    setBlockConfirmations(value as unknown as number);
+                }}
               />
               <FormHelperText>
                 How many block confirmations needed before confirming?
