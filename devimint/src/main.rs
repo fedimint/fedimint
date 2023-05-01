@@ -697,11 +697,18 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     Ok(())
 }
 
+#[derive(Subcommand, PartialEq, Eq)]
+enum RunUiKind {
+    Old,
+    New,
+}
+
 #[derive(Subcommand)]
 enum Cmd {
     ExternalDaemons,
     DevFed,
-    RunUi,
+    #[clap(subcommand)]
+    RunUi(RunUiKind),
     LatencyTests,
     ReconnectTest,
     CliTests,
@@ -724,19 +731,33 @@ async fn write_ready_file<T>(result: Result<T>) -> Result<T> {
     result
 }
 
-async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
+async fn run_ui(
+    process_mgr: &ProcessManager,
+    task_group: &TaskGroup,
+    kind: &RunUiKind,
+) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let mut fedimints = Vec::new();
-    for id in 0..2 {
-        fedimints.push(Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
+    for peer_id in 0..2 {
+        let mut env_vars = fedimint_env(peer_id)?;
+        // For new UI, don't set password or run the old UI
+        if kind == &RunUiKind::New {
+            env_vars.remove("FM_LISTEN_UI");
+            env_vars.remove("FM_PASSWORD");
+        }
+        fedimints.push(Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, env_vars).await?);
     }
     for id in 0..2 {
-        let ui_addr = &fedimint_env(id)?["FM_LISTEN_UI"];
-        poll("waiting for ui startup", || async {
-            Ok(TcpStream::connect(ui_addr).await.is_ok())
+        // For old UI, wait for UI server. For running new UI, wait for config API.
+        let server_addr = match kind {
+            RunUiKind::Old => fedimint_env(id)?["FM_LISTEN_UI"].clone(),
+            RunUiKind::New => fedimint_env(id)?["FM_BIND_P2P"].clone(),
+        };
+        poll("waiting for ui/api startup", || async {
+            Ok(TcpStream::connect(&server_addr).await.is_ok())
         })
         .await?;
-        info!(LOG_DEVIMINT, "Started UI on http://{ui_addr}");
+        info!(LOG_DEVIMINT, "Started ui/api on http://{server_addr}");
     }
     task_group.make_handle().make_shutdown_rx().await.await?;
     Ok(())
@@ -758,7 +779,7 @@ async fn main() -> Result<()> {
             let _daemons = write_ready_file(dev_fed(&task_group, &process_mgr).await).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
-        Cmd::RunUi => run_ui(&process_mgr, &task_group).await?,
+        Cmd::RunUi(kind) => run_ui(&process_mgr, &task_group, &kind).await?,
         Cmd::LatencyTests => {
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             latency_tests(dev_fed).await?;
