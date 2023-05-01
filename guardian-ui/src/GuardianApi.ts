@@ -1,5 +1,5 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
-import { ConfigGenParams } from './types';
+import { API_ConfigGenParams, ConfigGenParams } from './types';
 
 export interface ApiInterface {
   setPassword: (password: string) => Promise<void>;
@@ -116,11 +116,26 @@ export class GuardianApi implements ApiInterface {
   };
 
   getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
-    return this.rpc(
+    const params: API_ConfigGenParams = await this.rpc(
       'get_default_config_gen_params',
       null,
       true /* authenticated */
     );
+
+    return {
+      meta: {
+        federationName: params.meta.federation_name,
+      },
+      modules: {
+        mint: {
+          mintAmounts: params.modules.mint.mint_amounts,
+        },
+        wallet: {
+          finalityDelay: params.modules.wallet.finality_delay,
+          network: params.modules.wallet.network,
+        },
+      },
+    };
   };
 
   status = async (): Promise<string> => {

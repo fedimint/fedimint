@@ -27,10 +27,20 @@ export interface PeerStatus {
   connected: boolean;
 }
 
+export type API_ConfigGenParams = {
+  meta: { federation_name: string };
+  modules: {
+    wallet: { finality_delay: number; network: Network };
+    mint: { mint_amounts: number[] };
+  };
+};
+
 export type ConfigGenParams = {
   meta: { federationName: string };
-  mint: { mintAmounts: number[] };
-  wallet: { finalityDelay: 11; network: Network };
+  modules: {
+    wallet: { finalityDelay: number; network: Network };
+    mint: { mintAmounts: number[] };
+  };
 };
 
 export interface SetupState {
