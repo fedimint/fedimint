@@ -20,6 +20,7 @@ pub const LOG_TASK: &str = "task";
 pub const LOG_TEST: &str = "test";
 pub const LOG_TIMING: &str = "timing";
 pub const LOG_WALLET: &str = "wallet";
+pub const LOG_BITCOIND: &str = "bitcoind";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]
