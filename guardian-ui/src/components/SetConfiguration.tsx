@@ -23,7 +23,7 @@ interface Props {
 
 export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const {
-    state: { role, finalityDelay },
+    state: { role, finalityDelay, network: selectedNetwork },
     api,
   } = useGuardianContext();
   const isHost = role === GuardianRole.Host;
@@ -32,7 +32,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const [federationName, setFederationName] = useState('');
   const [numGuardians, setNumGuardians] = useState('');
   const [blockConfirmations, setBlockConfirmations] = useState(finalityDelay);
-  const [network, setNetwork] = useState('');
+  const [network, setNetwork] = useState(selectedNetwork);
 
   useEffect(() => {
     api
@@ -135,8 +135,11 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
               <FormLabel>Bitcoin network</FormLabel>
               <Select
                 placeholder='Select a network'
-                value={network}
-                onChange={(ev) => setNetwork(ev.currentTarget.value)}
+                value={network !== null ? network : ''}
+                onChange={(ev) => {
+                  const value = ev.currentTarget.value;
+                  setNetwork(value as unknown as Network);
+                }}
               >
                 {Object.entries(Network).map(([label, value]) => (
                   <option key={value} value={value}>
