@@ -1,11 +1,5 @@
 # Guardian UI
 
-## Prerequisites NPM and Yarn
-
-[NPM](https://www.npmjs.com/) - (use [nvm](https://github.com/nvm-sh/nvm))
-
-[Yarn](https://yarnpkg.com/getting-started/installhttps://classic.yarnpkg.com/lang/en/docs/install/) - `npm install --global yarn`
-
 ## Run the UI
 
 From root repo directory:
