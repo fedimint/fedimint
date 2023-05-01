@@ -2,6 +2,8 @@ import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
 import { API_ConfigGenParams, ConfigGenParams } from './types';
 
 export interface ApiInterface {
+  checkAuth: () => Promise<boolean>;
+  testPassword: (password: string) => Promise<boolean>;
   setPassword: (password: string) => Promise<void>;
   getPassword: () => string | null;
   setConfigGenConnections: (
@@ -89,10 +91,48 @@ export class GuardianApi implements ApiInterface {
     }
   };
 
+  checkAuth = async (): Promise<boolean> => {
+    // Use get_default_config_gen_params as a way to check if we need auth.
+    try {
+      await this.rpc(
+        'get_default_config_gen_params',
+        null,
+        false /* not-authenticated */
+      );
+      return false;
+    } catch (err) {
+      // TODO: make sure error is auth error, not unrelated
+      return true;
+    }
+  };
+
+  testPassword = async (password: string): Promise<boolean> => {
+    // Replace with password to check.
+    sessionStorage.setItem(SESSION_STORAGE_KEY, password);
+
+    // Attempt a request with the temporary password.
+    try {
+      await this.rpc(
+        'get_default_config_gen_params',
+        null,
+        true /* authenticated */
+      );
+      return true;
+    } catch (err) {
+      // TODO: make sure error is auth error, not unrelated
+      this.clearPassword();
+      return false;
+    }
+  };
+
   setPassword = async (password: string): Promise<void> => {
     sessionStorage.setItem(SESSION_STORAGE_KEY, password);
 
     return this.rpc('set_password', null, true /* authenticated */);
+  };
+
+  private clearPassword = () => {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
   };
 
   setConfigGenConnections = async (
@@ -203,6 +243,8 @@ export class GuardianApi implements ApiInterface {
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 export class NoopGuardianApi implements ApiInterface {
+  checkAuth = () => Promise.resolve(false);
+  testPassword = () => Promise.resolve(false);
   setPassword = async (_password: string): Promise<void> => {
     return;
   };
