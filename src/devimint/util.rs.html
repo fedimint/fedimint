@@ -265,6 +265,11 @@
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
@@ -400,7 +405,10 @@
 
     <span class="doccomment">/// Run the command and get its output as json.
     </span><span class="kw">pub async fn </span>out_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>output = <span class="self">self</span>.run_inner().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>output = <span class="self">self
+            </span>.run_inner()
+            .<span class="kw">await
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;command: {}&quot;</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
         <span class="kw">let </span>output = String::from_utf8(output.stdout)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(output.trim().to_owned())
     }
@@ -410,9 +418,8 @@
         <span class="kw">let </span>output = <span class="self">self</span>.cmd.output().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!output.status.success() {
             <span class="macro">bail!</span>(
-                <span class="string">&quot;{}\ncommand: {}\nstdout:\n{}\nstderr:\n{}&quot;</span>,
+                <span class="string">&quot;{}\nstdout:\n{}\nstderr:\n{}&quot;</span>,
                 output.status,
-                <span class="self">self</span>.command_debug(),
                 String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stdout),
                 String::from_utf8_lossy(<span class="kw-2">&amp;</span>output.stderr),
             );
@@ -422,7 +429,10 @@
 
     <span class="doccomment">/// Run the command ignoring its output.
     </span><span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let _ </span>= <span class="self">self</span>.run_inner().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let _ </span>= <span class="self">self
+            </span>.run_inner()
+            .<span class="kw">await
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;command: {}&quot;</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 }
