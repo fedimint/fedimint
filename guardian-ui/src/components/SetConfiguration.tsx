@@ -23,16 +23,31 @@ interface Props {
 
 export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const {
-    state: { role, myName, finalityDelay, network: selectedNetwork },
+    state: {
+      role,
+      configGenParams,
+      myName: stateMyName,
+      password: statePassword,
+      numPeers: stateNumPeers,
+    },
     api,
+    submitConfiguration,
   } = useGuardianContext();
   const isHost = role === GuardianRole.Host;
-  const [guardianName, setGuardianName] = useState(myName);
-  const [password, setPassword] = useState('');
-  const [federationName, setFederationName] = useState('');
-  const [numGuardians, setNumGuardians] = useState('');
-  const [blockConfirmations, setBlockConfirmations] = useState(finalityDelay);
-  const [network, setNetwork] = useState(selectedNetwork);
+  const [myName, setMyName] = useState(stateMyName);
+  const [password, setPassword] = useState(statePassword);
+  const [federationName, setFederationName] = useState(
+    configGenParams?.meta.federationName || ''
+  );
+  const [numPeers, setNumPeers] = useState(
+    stateNumPeers ? stateNumPeers.toString() : ''
+  );
+  const [blockConfirmations, setBlockConfirmations] = useState(
+    configGenParams?.modules?.wallet?.finalityDelay?.toString() || ''
+  );
+  const [network, setNetwork] = useState(
+    configGenParams?.modules?.wallet?.network || ''
+  );
   const [mintAmounts, setMintAmounts] = useState<number[]>([]);
 
   useEffect(() => {
@@ -40,7 +55,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
       .getDefaultConfigGenParams()
       .then((params) => {
         setFederationName(params.meta.federationName);
-        setBlockConfirmations(params.modules.wallet.finalityDelay);
+        setBlockConfirmations(params.modules.wallet.finalityDelay.toString());
         setNetwork(params.modules.wallet.network);
         setMintAmounts(params.modules.mint.mintAmounts);
       })
@@ -49,6 +64,11 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
       });
   }, []);
 
+  // Update password when updated from state
+  useEffect(() => {
+    setPassword(statePassword);
+  }, [statePassword]);
+
   const isValidNumber = (value: string) => {
     const int = parseInt(value, 10);
     return int && !Number.isNaN(int);
@@ -56,34 +76,34 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
 
   const isValid: boolean = isHost
     ? Boolean(
-        guardianName &&
+        myName &&
           password &&
           federationName &&
-          isValidNumber(numGuardians) &&
+          isValidNumber(numPeers) &&
+          isValidNumber(blockConfirmations) &&
           network
       )
-    : Boolean(guardianName && password);
+    : Boolean(myName && password);
 
   const handleNext = async () => {
     try {
-      await api.setPassword(password);
-
-      if (isValid) {
-        await api.setConfigGenConnections(myName);
-        await api.setConfigGenParams({
+      submitConfiguration({
+        password,
+        myName,
+        numPeers: parseInt(numPeers, 10),
+        config: {
           meta: { federationName },
           modules: {
             mint: {
               mintAmounts,
             },
             wallet: {
-              finalityDelay: blockConfirmations,
+              finalityDelay: parseInt(blockConfirmations, 10),
               network: network as Network,
             },
           },
-        });
-      }
-
+        },
+      });
       next();
     } catch (err) {
       // FIXME: Handle error and show error UI
@@ -97,8 +117,8 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
         <FormControl>
           <FormLabel>Guardian name</FormLabel>
           <Input
-            value={guardianName}
-            onChange={(ev) => setGuardianName(ev.currentTarget.value)}
+            value={myName}
+            onChange={(ev) => setMyName(ev.currentTarget.value)}
           />
           <FormHelperText>
             This name will be shown to other Guardians
@@ -110,6 +130,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
             type='password'
             value={password}
             onChange={(ev) => setPassword(ev.currentTarget.value)}
+            isDisabled={!!statePassword}
           />
           <FormHelperText>
             You'll need this every time you visit this page.
@@ -132,8 +153,8 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
               <Input
                 type='number'
                 min={1}
-                value={numGuardians}
-                onChange={(ev) => setNumGuardians(ev.currentTarget.value)}
+                value={numPeers}
+                onChange={(ev) => setNumPeers(ev.currentTarget.value)}
               />
               <FormHelperText>This cannot be changed later.</FormHelperText>
             </FormControl>
@@ -149,8 +170,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
                 value={blockConfirmations}
                 onChange={(ev) => {
                   const value = ev.currentTarget.value;
-                  isValidNumber(value) &&
-                    setBlockConfirmations(value as unknown as number);
+                  isValidNumber(value) && setBlockConfirmations(value);
                 }}
               />
               <FormHelperText>

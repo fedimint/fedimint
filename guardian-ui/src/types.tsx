@@ -47,10 +47,8 @@ export interface SetupState {
   role: GuardianRole | null;
   progress: SetupProgress;
   myName: string;
-  federationName: string;
-  finalityDelay: number;
-  network: Network | null;
   password: string;
+  configGenParams: ConfigGenParams | null;
   numPeers: number;
   peers: Peer[];
   myVerificationCode: string;
@@ -62,10 +60,8 @@ export enum SETUP_ACTION_TYPE {
   SET_ROLE = 'SET_ROLE',
   SET_PROGRESS = 'SET_PROGRESS',
   SET_MY_NAME = 'SET_MY_NAME',
-  SET_FEDERATION_NAME = 'SET_FEDERATION_NAME',
-  SET_FINALITY_DELAY = 'SET_FINALITY_DELAY',
-  SET_NETWORK = 'SET_NETWORK',
   SET_PASSWORD = 'SET_PASSWORD',
+  SET_CONFIG_GEN_PARAMS = 'SET_CONFIG_GEN_PARAMS',
   SET_NUM_PEERS = 'SET_NUM_PEERS',
   SET_PEERS = 'SET_PEERS',
   SET_MY_VERIFICATION_CODE = 'SET_MY_VERIFICATION_CODE',
@@ -87,16 +83,8 @@ export type SetupAction =
       payload: string;
     }
   | {
-      type: SETUP_ACTION_TYPE.SET_FEDERATION_NAME;
-      payload: string;
-    }
-  | {
-      type: SETUP_ACTION_TYPE.SET_FINALITY_DELAY;
-      payload: number;
-    }
-  | {
-      type: SETUP_ACTION_TYPE.SET_NETWORK;
-      payload: Network;
+      type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS;
+      payload: ConfigGenParams | null;
     }
   | {
       type: SETUP_ACTION_TYPE.SET_PASSWORD;

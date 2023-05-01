@@ -34,7 +34,6 @@ export function RadioButtonGroup<T extends string | number>({
     boxShadow: `0 0 0 2px ${theme.colors.blue[600]} inset`,
     bg: theme.colors.blue[50],
   };
-  console.log(theme);
 
   return (
     <VStack gap={1} align='left'>

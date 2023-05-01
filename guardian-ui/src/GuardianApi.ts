@@ -3,6 +3,7 @@ import { API_ConfigGenParams, ConfigGenParams } from './types';
 
 export interface ApiInterface {
   setPassword: (password: string) => Promise<void>;
+  getPassword: () => string | null;
   setConfigGenConnections: (
     ourName: string,
     leaderUrl?: string
@@ -18,6 +19,8 @@ export interface ApiInterface {
   startConsensus: () => Promise<void>;
   shutdown: () => Promise<boolean>;
 }
+
+const SESSION_STORAGE_KEY = 'guardian-ui-key';
 
 export class GuardianApi implements ApiInterface {
   private websocket: JsonRpcWebsocket | null;
@@ -53,8 +56,8 @@ export class GuardianApi implements ApiInterface {
     return this.websocket;
   };
 
-  private getPassword = (): string | null => {
-    return sessionStorage.getItem('fm-setup-ui-password');
+  public getPassword = (): string | null => {
+    return sessionStorage.getItem(SESSION_STORAGE_KEY);
   };
 
   private rpc = async <P, T>(
@@ -87,7 +90,7 @@ export class GuardianApi implements ApiInterface {
   };
 
   setPassword = async (password: string): Promise<void> => {
-    sessionStorage.setItem('fm-setup-ui-password', password);
+    sessionStorage.setItem(SESSION_STORAGE_KEY, password);
 
     return this.rpc('set_password', null, true /* authenticated */);
   };
@@ -109,11 +112,20 @@ export class GuardianApi implements ApiInterface {
   };
 
   getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
-    const params: API_ConfigGenParams = await this.rpc(
-      'get_default_config_gen_params',
-      null,
-      false /* not-authenticated */
-    );
+    let params: API_ConfigGenParams;
+    try {
+      params = await this.rpc(
+        'get_default_config_gen_params',
+        null,
+        false /* not-authenticated */
+      );
+    } catch (err) {
+      params = await this.rpc(
+        'get_default_config_gen_params',
+        null,
+        true /* authenticated */
+      );
+    }
 
     return {
       meta: {
@@ -194,6 +206,7 @@ export class NoopGuardianApi implements ApiInterface {
   setPassword = async (_password: string): Promise<void> => {
     return;
   };
+  getPassword = () => null;
   setConfigGenConnections = async (
     _ourName: string,
     _leaderUrl?: string
