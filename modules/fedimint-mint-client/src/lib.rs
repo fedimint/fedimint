@@ -106,7 +106,7 @@ pub trait MintClientExt {
 
     // Wait for the refund transaction to complete after a lightning invoice
     // failed to be paid.
-    async fn await_lightning_refund(
+    async fn await_claim_notes(
         &self,
         operation_id: OperationId,
         refund_txid: TransactionId,
@@ -188,16 +188,13 @@ impl MintClientExt for Client {
         Ok(operation_id)
     }
 
-    async fn await_lightning_refund(
+    async fn await_claim_notes(
         &self,
         operation_id: OperationId,
-        refund_txid: TransactionId,
+        txid: TransactionId,
     ) -> anyhow::Result<()> {
         let (_, mint_client) = mint_client(self);
-        let out_point = OutPoint {
-            txid: refund_txid,
-            out_idx: 0,
-        };
+        let out_point = OutPoint { txid, out_idx: 0 };
         mint_client
             .await_output_finalized(operation_id, out_point)
             .await

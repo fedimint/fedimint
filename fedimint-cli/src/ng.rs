@@ -4,15 +4,15 @@ use std::time::Duration;
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
-use fedimint_client::ClientBuilder;
+use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT};
 use fedimint_core::db::IDatabase;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{Amount, TieredMulti, TieredSummary};
-use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
+use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState, LnReceiveState};
 use fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
 use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
@@ -29,6 +29,14 @@ pub enum ClientNg {
     },
     Spend {
         amount: Amount,
+    },
+    LnInvoice {
+        #[clap(long, value_parser = parse_fedimint_amount)]
+        amount: Amount,
+        #[clap(long, default_value = "")]
+        description: String,
+        #[clap(long)]
+        expiry_time: Option<u64>,
     },
     LnPay {
         bolt11: lightning_invoice::Invoice,
@@ -64,19 +72,7 @@ pub async fn handle_ng_command<D: IDatabase>(
 
     match command {
         ClientNg::Info => {
-            let mint_client = client
-                .get_module_client::<MintClientModule>(LEGACY_HARDCODED_INSTANCE_ID_MINT)
-                .unwrap();
-            let summary = mint_client
-                .get_wallet_summary(
-                    &mut client.db().begin_transaction().await.with_module_prefix(1),
-                )
-                .await;
-            Ok(serde_json::to_value(InfoResponse {
-                total_msat: summary.total_amount(),
-                denominations_msat: summary,
-            })
-            .unwrap())
+            return get_note_summary(&client).await;
         }
         ClientNg::Reissue { notes } => {
             let amount = notes.total_amount();
@@ -103,6 +99,38 @@ pub async fn handle_ng_command<D: IDatabase>(
 
             Ok(serde_json::to_value(notes).unwrap())
         }
+        ClientNg::LnInvoice {
+            amount,
+            description,
+            expiry_time,
+        } => {
+            let mut dbtx = client.db().begin_transaction().await;
+            let active_gateway = client
+                .fetch_active_gateway(&mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN))
+                .await?;
+            dbtx.commit_tx().await;
+
+            let operation_id = client
+                .create_bolt11_invoice_and_receive(amount, description, expiry_time, active_gateway)
+                .await?;
+            let mut updates = client.subscribe_to_ln_receive_updates(operation_id).await?;
+            while let Some(update) = updates.next().await {
+                match update {
+                    LnReceiveState::Claimed { txid } => {
+                        client.await_claim_notes(operation_id, txid).await?;
+                        return get_note_summary(&client).await;
+                    }
+                    LnReceiveState::Canceled { reason } => {
+                        return Err(reason.into());
+                    }
+                    _ => {}
+                }
+
+                info!("Update: {:?}", update);
+            }
+
+            return Err(anyhow::anyhow!("Unknown Lightning receive state"));
+        }
         ClientNg::LnPay { bolt11 } => {
             let mut dbtx = client.db().begin_transaction().await;
             let active_gateway = client
@@ -126,9 +154,7 @@ pub async fn handle_ng_command<D: IDatabase>(
                         .unwrap());
                     }
                     LnPayState::Refunded { refund_txid } => {
-                        client
-                            .await_lightning_refund(operation_id, refund_txid)
-                            .await?;
+                        client.await_claim_notes(operation_id, refund_txid).await?;
                     }
                     _ => {}
                 }
@@ -180,10 +206,34 @@ pub async fn handle_ng_command<D: IDatabase>(
     }
 }
 
+async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> {
+    let mint_client = client
+        .get_module_client::<MintClientModule>(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+        .unwrap();
+    let summary = mint_client
+        .get_wallet_summary(&mut client.db().begin_transaction().await.with_module_prefix(1))
+        .await;
+    Ok(serde_json::to_value(InfoResponse {
+        total_msat: summary.total_amount(),
+        denominations_msat: summary,
+    })
+    .unwrap())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InfoResponse {
     total_msat: Amount,
     denominations_msat: TieredSummary,
+}
+
+pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmountError> {
+    if let Some(i) = s.find(char::is_alphabetic) {
+        let (amt, denom) = s.split_at(i);
+        fedimint_core::Amount::from_str_in(amt, denom.parse()?)
+    } else {
+        //default to millisatoshi
+        fedimint_core::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
+    }
 }
 
 pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {

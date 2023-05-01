@@ -1,17 +1,43 @@
 pub mod api;
 
+use bitcoin::Network;
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
+use fedimint_core::module::{
+    CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
+};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_wallet_common::config::WalletClientConfig;
 pub use fedimint_wallet_common::*;
+
+pub trait WalletClientExt {
+    fn get_network(&self) -> Network;
+}
+
+impl WalletClientExt for Client {
+    fn get_network(&self) -> Network {
+        let (_, wallet_client) = wallet_client(self);
+        wallet_client.get_network()
+    }
+}
+
+fn wallet_client(client: &Client) -> (ModuleInstanceId, &WalletClientModule) {
+    let wallet_client_instance = client
+        .get_first_instance(&WalletCommonGen::KIND)
+        .expect("No ln module attached to client");
+
+    let wallet_client = client
+        .get_module_client::<WalletClientModule>(wallet_client_instance)
+        .expect("Instance ID exists, we just fetched it");
+
+    (wallet_client_instance, wallet_client)
+}
 
 #[derive(Debug, Clone)]
 pub struct WalletClientGen;
@@ -27,17 +53,19 @@ impl ClientModuleGen for WalletClientGen {
 
     async fn init(
         &self,
-        _cfg: Self::Config,
+        cfg: Self::Config,
         _db: Database,
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
-        Ok(WalletClientModule {})
+        Ok(WalletClientModule { cfg })
     }
 }
 
 #[derive(Debug)]
-pub struct WalletClientModule {}
+pub struct WalletClientModule {
+    cfg: WalletClientConfig,
+}
 
 impl ClientModule for WalletClientModule {
     type Common = WalletModuleTypes;
@@ -58,6 +86,12 @@ impl ClientModule for WalletClientModule {
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> TransactionItemAmount {
         unimplemented!()
+    }
+}
+
+impl WalletClientModule {
+    fn get_network(&self) -> Network {
+        self.cfg.network
     }
 }
 
