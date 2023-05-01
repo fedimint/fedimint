@@ -133,7 +133,10 @@ impl Command {
 
     /// Run the command and get its output as json.
     pub async fn out_string(&mut self) -> Result<String> {
-        let output = self.run_inner().await?;
+        let output = self
+            .run_inner()
+            .await
+            .with_context(|| format!("command: {}", self.command_debug()))?;
         let output = String::from_utf8(output.stdout)?;
         Ok(output.trim().to_owned())
     }
@@ -143,9 +146,8 @@ impl Command {
         let output = self.cmd.output().await?;
         if !output.status.success() {
             bail!(
-                "{}\ncommand: {}\nstdout:\n{}\nstderr:\n{}",
+                "{}\nstdout:\n{}\nstderr:\n{}",
                 output.status,
-                self.command_debug(),
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr),
             );
@@ -155,7 +157,10 @@ impl Command {
 
     /// Run the command ignoring its output.
     pub async fn run(&mut self) -> Result<()> {
-        let _ = self.run_inner().await?;
+        let _ = self
+            .run_inner()
+            .await
+            .with_context(|| format!("command: {}", self.command_debug()))?;
         Ok(())
     }
 }
