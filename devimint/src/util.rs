@@ -30,7 +30,7 @@ impl ProcessHandle {
             Err(_) => return Err(anyhow!("Cannot kill process because of clones")),
         };
         let mut child = std::mem::take(&mut process_handle_inner.child).unwrap();
-        info!("killing {}", process_handle_inner.name);
+        info!(LOG_TEST, "killing {}", process_handle_inner.name);
         kill(&child);
         child.wait().await?;
         Ok(())
@@ -46,7 +46,7 @@ pub struct ProcessHandleInner {
 impl Drop for ProcessHandleInner {
     fn drop(&mut self) {
         let Some(child) = &mut self.child else { return; };
-        info!("killing {}", self.name);
+        info!(LOG_TEST, "killing {}", self.name);
         kill(child);
     }
 }
@@ -142,7 +142,7 @@ impl Command {
     }
 
     pub async fn run_inner(&mut self) -> Result<std::process::Output> {
-        info!("> {}", self.command_debug());
+        info!(LOG_TEST, "> {}", self.command_debug());
         let output = self.cmd.output().await?;
         if !output.status.success() {
             bail!(
@@ -234,6 +234,7 @@ where
         if now.duration_since(last_time)? > Duration::from_secs(20) {
             let total_duration = now.duration_since(start)?;
             warn!(
+                LOG_TEST,
                 "waiting {name} for over {} seconds",
                 total_duration.as_secs()
             );

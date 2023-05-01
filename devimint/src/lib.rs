@@ -19,6 +19,7 @@ use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningClientGen;
+use fedimint_logging::LOG_TEST;
 use fedimint_wallet_client::WalletClientGen;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
@@ -71,7 +72,7 @@ impl Bitcoind {
             if e.to_string().contains("Database already exists") {
                 break;
             }
-            warn!("Failed to create wallet ... retrying {}", e);
+            warn!(LOG_TEST, "Failed to create wallet ... retrying {}", e);
             sleep(Duration::from_secs(1)).await
         }
 
@@ -263,7 +264,7 @@ impl Lnd {
 
 pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> Result<()> {
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-    info!("block sync done");
+    info!(LOG_TEST, "block sync done");
     let cln_addr = cln
         .request(cln_rpc::model::NewaddrRequest { addresstype: None })
         .await?
@@ -437,29 +438,33 @@ pub async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Re
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )?;
-            info!("lightning started");
+            info!(LOG_TEST, "lightning started");
             let (gw_cln, gw_lnd, _) = tokio::try_join!(
                 Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())),
                 open_channel(&bitcoind, &cln, &lnd),
             )?;
-            info!("gateways started");
+            info!(LOG_TEST, "gateways started");
             Ok((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         async {
             run_dkg(task_group, 4).await?;
-            info!("dkg done");
+            info!(LOG_TEST, "dkg done");
             Federation::new(process_mgr, bitcoind.clone(), 0..4).await
         },
     )?;
-    info!("federation and gateways started");
+    info!(LOG_TEST, "federation and gateways started");
     tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed))?;
     fed.await_gateways_registered().await?;
-    info!("gateways registered");
+    info!(LOG_TEST, "gateways registered");
     fed.use_gateway(&gw_cln).await?;
-    info!("starting dev federation took {:?}", start_time.elapsed()?);
+    info!(
+        LOG_TEST,
+        "starting dev federation took {:?}",
+        start_time.elapsed()?
+    );
     Ok(DevFed {
         bitcoind,
         cln,
@@ -491,7 +496,11 @@ pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDa
         Esplora::new(process_mgr, bitcoind.clone()),
     )?;
     open_channel(&bitcoind, &cln, &lnd).await?;
-    info!("starting base deamons took {:?}", start_time.elapsed()?);
+    info!(
+        LOG_TEST,
+        "starting base deamons took {:?}",
+        start_time.elapsed()?
+    );
     Ok(ExternalDaemons {
         bitcoind,
         cln,
@@ -517,7 +526,7 @@ impl Electrs {
             "--db-dir={electrs_dir}",
         );
         let process = process_mgr.spawn_daemon("electrs", cmd).await?;
-        info!("electrs started");
+        info!(LOG_TEST, "electrs started");
 
         Ok(Self {
             _bitcoind: bitcoind,
@@ -549,7 +558,7 @@ impl Esplora {
             "--monitoring-addr=127.0.0.1:50003",
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
-        info!("esplora started");
+        info!(LOG_TEST, "esplora started");
 
         Ok(Self {
             _bitcoind: bitcoind,
