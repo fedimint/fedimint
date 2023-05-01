@@ -258,8 +258,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .get_received_by_address(&pegout_addr, Some(0))?;
     anyhow::ensure!(
         received != amount,
-        "Peg-out address received {}, expected 0.00000500",
-        received
+        "Peg-out address received {}, expected {}",
+        received,
+        amount
     );
 
     // lightning tests
