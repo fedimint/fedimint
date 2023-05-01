@@ -23,16 +23,17 @@ interface Props {
 
 export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const {
-    state: { role, finalityDelay, network: selectedNetwork },
+    state: { role, myName, finalityDelay, network: selectedNetwork },
     api,
   } = useGuardianContext();
   const isHost = role === GuardianRole.Host;
-  const [guardianName, setGuardianName] = useState('');
+  const [guardianName, setGuardianName] = useState(myName);
   const [password, setPassword] = useState('');
   const [federationName, setFederationName] = useState('');
   const [numGuardians, setNumGuardians] = useState('');
   const [blockConfirmations, setBlockConfirmations] = useState(finalityDelay);
   const [network, setNetwork] = useState(selectedNetwork);
+  const [mintAmounts, setMintAmounts] = useState<number[]>([]);
 
   useEffect(() => {
     api
@@ -41,6 +42,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
         setFederationName(params.meta.federationName);
         setBlockConfirmations(params.modules.wallet.finalityDelay);
         setNetwork(params.modules.wallet.network);
+        setMintAmounts(params.modules.mint.mintAmounts);
       })
       .catch((err) => {
         console.error(err);
@@ -52,18 +54,42 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
     return int && !Number.isNaN(int);
   };
 
-  let isValid: boolean;
-  if (isHost) {
-    isValid = Boolean(
-      guardianName &&
-        password &&
-        federationName &&
-        isValidNumber(numGuardians) &&
-        network
-    );
-  } else {
-    isValid = Boolean(guardianName && password);
-  }
+  const isValid: boolean = isHost
+    ? Boolean(
+        guardianName &&
+          password &&
+          federationName &&
+          isValidNumber(numGuardians) &&
+          network
+      )
+    : Boolean(guardianName && password);
+
+  const handleNext = async () => {
+    try {
+      await api.setPassword(password);
+
+      if (isValid) {
+        await api.setConfigGenConnections(myName);
+        await api.setConfigGenParams({
+          meta: { federationName },
+          modules: {
+            mint: {
+              mintAmounts,
+            },
+            wallet: {
+              finalityDelay: blockConfirmations,
+              network: network as Network,
+            },
+          },
+        });
+      }
+
+      next();
+    } catch (err) {
+      // FIXME: Handle error and show error UI
+      console.error(err);
+    }
+  };
 
   return (
     <VStack gap={8} justify='start' align='start'>
@@ -154,7 +180,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
       <div>
         <Button
           isDisabled={!isValid}
-          onClick={isValid ? next : undefined}
+          onClick={isValid ? handleNext : undefined}
           leftIcon={<Icon as={ArrowRightIcon} />}
           mt={4}
         >

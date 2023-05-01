@@ -3,7 +3,6 @@ import { API_ConfigGenParams, ConfigGenParams } from './types';
 
 export interface ApiInterface {
   setPassword: (password: string) => Promise<void>;
-  setPasswordLocal: (password: string) => void;
   setConfigGenConnections: (
     ourName: string,
     leaderUrl?: string
@@ -21,13 +20,10 @@ export interface ApiInterface {
 }
 
 export class GuardianApi implements ApiInterface {
-  private password: string | null;
   private websocket: JsonRpcWebsocket | null;
 
   constructor() {
-    this.password = null;
     this.websocket = null;
-
     this.connect();
   }
 
@@ -57,6 +53,10 @@ export class GuardianApi implements ApiInterface {
     return this.websocket;
   };
 
+  private getPassword = (): string | null => {
+    return sessionStorage.getItem('fm-setup-ui-password');
+  };
+
   private rpc = async <P, T>(
     method: string,
     params: P,
@@ -67,7 +67,7 @@ export class GuardianApi implements ApiInterface {
 
       const response = await websocket.call(method, [
         {
-          auth: authenticated ? this.password : null,
+          auth: authenticated ? this.getPassword() : null,
           params,
         },
       ]);
@@ -87,16 +87,9 @@ export class GuardianApi implements ApiInterface {
   };
 
   setPassword = async (password: string): Promise<void> => {
-    this.password = password;
+    sessionStorage.setItem('fm-setup-ui-password', password);
 
-    await this.rpc('set_password', null, true /* authenticated */);
-
-    return;
-  };
-
-  setPasswordLocal = (password: string): void => {
-    this.password = password;
-    return;
+    return this.rpc('set_password', null, true /* authenticated */);
   };
 
   setConfigGenConnections = async (
@@ -119,7 +112,7 @@ export class GuardianApi implements ApiInterface {
     const params: API_ConfigGenParams = await this.rpc(
       'get_default_config_gen_params',
       null,
-      true /* authenticated */
+      false /* not-authenticated */
     );
 
     return {
@@ -177,7 +170,7 @@ export class GuardianApi implements ApiInterface {
   };
 
   startConsensus = async (): Promise<void> => {
-    if (this.password === null) {
+    if (this.getPassword() === null) {
       throw new Error('password not set');
     }
 
@@ -199,9 +192,6 @@ export class GuardianApi implements ApiInterface {
 
 export class NoopGuardianApi implements ApiInterface {
   setPassword = async (_password: string): Promise<void> => {
-    return;
-  };
-  setPasswordLocal = (_password: string): void => {
     return;
   };
   setConfigGenConnections = async (
