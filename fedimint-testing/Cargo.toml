@@ -22,6 +22,7 @@ cln-rpc = "0.1.1"
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-client  = { path = "../fedimint-client" }
+fedimint-server  = { path = "../fedimint-server" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind", features = ["bitcoincore-rpc"] }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
@@ -35,6 +36,7 @@ secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_has
 serde = { version = "1.0.149", features = [ "derive" ] }
 tracing ="0.1.37"
 rand = "0.8"
+tokio-rustls = "0.23.4"
 tokio = { version = "1.26.0", features = ["full"] }
 tokio-stream = "0.1.11"
 tonic_lnd = { git = "https://github.com/fedimint/tonic_lnd", branch="lnd-client-features", features = ["lightningrpc", "routerrpc"] }
