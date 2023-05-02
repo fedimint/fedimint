@@ -104,7 +104,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
   children,
 }: GuardianProviderProps) => {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { password } = state;
+  const { password, configGenParams } = state;
 
   useEffect(() => {
     // Fetch password from API on mount
@@ -131,9 +131,16 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
         progress: state.progress,
         myName: state.myName,
         numPeers: state.numPeers,
+        configGenParams: state.configGenParams,
       })
     );
-  }, [state.role, state.progress, state.myName, state.numPeers]);
+  }, [
+    state.role,
+    state.progress,
+    state.myName,
+    state.numPeers,
+    state.configGenParams,
+  ]);
 
   // Single call save all of the configuration on the middle step and call various API methods.
   const submitConfiguration = useCallback(
@@ -141,7 +148,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
       password: newPassword,
       myName,
       numPeers,
-      config,
+      config: newConfigGenParams,
     }: {
       password: string;
       myName: string;
@@ -149,7 +156,10 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
       config: ConfigGenParams;
     }) => {
       if (!password) {
-        await api.setPassword(newPassword);
+        if (!configGenParams) {
+          await api.setPassword(newPassword);
+        }
+
         dispatch({
           type: SETUP_ACTION_TYPE.SET_PASSWORD,
           payload: newPassword,
@@ -164,13 +174,13 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
         payload: myName,
       });
 
-      await api.setConfigGenParams(config);
+      await api.setConfigGenParams(newConfigGenParams);
       dispatch({
         type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
-        payload: config,
+        payload: newConfigGenParams,
       });
     },
-    [password, api, dispatch]
+    [password, api, dispatch, configGenParams]
   );
 
   return (

@@ -51,18 +51,20 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const [mintAmounts, setMintAmounts] = useState<number[]>([]);
 
   useEffect(() => {
-    api
-      .getDefaultConfigGenParams()
-      .then((params) => {
-        setFederationName(params.meta.federationName);
-        setBlockConfirmations(params.modules.wallet.finalityDelay.toString());
-        setNetwork(params.modules.wallet.network);
-        setMintAmounts(params.modules.mint.mintAmounts);
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  }, []);
+    if (configGenParams === null) {
+      api
+        .getDefaultConfigGenParams()
+        .then((params) => {
+          setFederationName(params.meta.federationName);
+          setBlockConfirmations(params.modules.wallet.finalityDelay.toString());
+          setNetwork(params.modules.wallet.network);
+          setMintAmounts(params.modules.mint.mintAmounts);
+        })
+        .catch((err) => {
+          console.error(err);
+        });
+    }
+  }, [configGenParams]);
 
   // Update password when updated from state
   useEffect(() => {
