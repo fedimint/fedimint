@@ -631,10 +631,31 @@
 <a href="#631" id="631">631</a>
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::os::unix::ffi::OsStrExt;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
@@ -647,7 +668,7 @@
 };
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
-<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
 <span class="kw">use </span>futures::stream::Peekable;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
@@ -882,10 +903,28 @@
     }
 
     <span class="doccomment">/// Loop `run_conensus_epoch` until shut down
-    </span><span class="kw">pub async fn </span>run_consensus(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: TaskHandle) {
-        <span class="comment">// FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a
-        // problem for change, but maybe later for other use cases
-        </span><span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
+    </span><span class="kw">pub async fn </span>run_consensus(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>our_hash = <span class="self">self
+            </span>.cfg
+            .consensus
+            .to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.module_inits)
+            .client_config
+            .consensus_hash();
+
+        <span class="comment">// Confirm our hash matches with peers
+        </span><span class="kw">loop </span>{
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Waiting for peers config {our_hash}&quot;</span>);
+            <span class="kw">match </span><span class="self">self</span>.api.consensus_config_hash().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == our_hash =&gt; <span class="kw">break</span>,
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;ERROR {:?}&quot;</span>, e)
+                }
+            }
+            sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="self">self</span>.start_consensus().<span class="kw">await</span>;
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
@@ -918,6 +957,7 @@
         }
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Consensus task shut down&quot;</span>);
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Starts consensus by skipping to the last saved epoch history  and
