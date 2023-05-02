@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ChakraProvider } from '@chakra-ui/react';
+import { theme, Fonts } from './theme';
 import { Admin } from './Admin';
 import { BlockstreamExplorer, MockMintgate } from './api';
 import './index.css';
@@ -22,7 +23,8 @@ const root = ReactDOM.createRoot(
 
 root.render(
 	<React.StrictMode>
-		<ChakraProvider>
+		<Fonts />
+		<ChakraProvider theme={theme}>
 			<ApiProvider props={{ mintgate, explorer }}>
 				<Admin />
 			</ApiProvider>
