@@ -754,6 +754,10 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
+    pub fn with_module_gens(&mut self, module_gens: ClientModuleGenRegistry) {
+        self.module_gens = module_gens;
+    }
+
     /// Make module generator available when reading the config
     pub fn with_module<M: ClientModuleGen>(&mut self, module_gen: M) {
         self.module_gens.attach(module_gen);
