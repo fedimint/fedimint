@@ -56,7 +56,7 @@ impl FederationFixture {
         params: impl ModuleGenParams,
     ) -> Self {
         self.params
-            .attach_config_gen_params(server.module_kind(), params);
+            .attach_config_gen_params(id, server.module_kind(), params);
         self.ids.push(id);
         self.clients.push(DynClientModuleGen::from(client));
         self.servers.push(DynServerModuleGen::from(server));
@@ -75,17 +75,12 @@ impl FederationFixture {
         let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
         let params = local_config_gen_params(&peers, base_port, self.params.clone())
             .expect("Generates local config");
+        let server_gen = ServerModuleGenRegistry::from(self.servers.clone());
+        let configs = ServerConfig::trusted_dealer_gen(&params, server_gen.clone());
 
-        // TODO: refactor constructors to make this easier
-        let mut instances = BTreeMap::new();
-        for i in 0..self.servers.len() {
-            let kind = self.servers[i].as_ref().module_kind();
-            instances.insert(self.ids[i], (kind, self.servers[i].clone()));
-        }
-        let configs = ServerConfig::trusted_dealer_gen(&params, instances);
         FederationTest {
             configs,
-            server_gen: ServerModuleGenRegistry::from(self.servers.clone()),
+            server_gen,
             client_gen: ClientModuleGenRegistry::from(self.clients.clone()),
             primary_client: self.primary_client,
             task,

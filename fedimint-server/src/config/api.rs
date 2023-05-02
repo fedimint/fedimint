@@ -12,12 +12,11 @@ use fedimint_core::admin_client::{
     PeerServerParams, ServerStatus, WsAdminClient,
 };
 use fedimint_core::config::ServerModuleGenRegistry;
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
-    DynServerModuleGen,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
@@ -196,12 +195,10 @@ impl ConfigGenApi {
             }
         };
 
-        let module_gens = self.settings.module_gens.clone();
-
         let mut task_group = self.task_group.make_subgroup().await;
         let config = ServerConfig::distributed_gen(
             &params,
-            module_gens,
+            self.settings.registry.clone(),
             DelayCalculator::PROD_DEFAULT,
             &mut task_group,
         )
@@ -394,8 +391,6 @@ pub struct ConfigGenSettings {
     pub api_url: Url,
     /// The default params for the modules
     pub default_params: ConfigGenParamsRequest,
-    /// Modules that will generate configs
-    pub module_gens: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
     /// How many API connections we will accept
     pub max_connections: u32,
     /// Registry for config gen
@@ -745,7 +740,6 @@ mod tests {
                 p2p_url,
                 api_url: api_url.clone(),
                 default_params: Default::default(),
-                module_gens: Default::default(),
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
                 registry: Default::default(),
             };

@@ -347,10 +347,8 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 DynServerModuleGen::from(LightningGen),
             ]);
 
-            let server_config = ServerConfig::trusted_dealer_gen(
-                &params,
-                server_module_inits.clone().legacy_init_modules(),
-            );
+            let server_config =
+                ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
                 .to_config_response(&server_module_inits)
@@ -543,7 +541,7 @@ async fn distributed_config(
 
             let cfg = ServerConfig::distributed_gen(
                 &our_params,
-                registry.legacy_init_modules(),
+                registry,
                 DelayCalculator::TEST_DEFAULT,
                 &mut task_group,
             );
@@ -1301,7 +1299,6 @@ impl FederationTest {
                     p2p_url: cfg.local.p2p_endpoints[&cfg.local.identity].url.clone(),
                     api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
                     default_params: Default::default(),
-                    module_gens: module_inits.legacy_init_modules(),
                     max_connections: 100,
                     registry: module_inits.clone(),
                 },

@@ -415,7 +415,7 @@ impl ServerConfig {
 
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ConfigGenParams>,
-        registry: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+        registry: ServerModuleGenRegistry,
     ) -> BTreeMap<PeerId, Self> {
         let mut rng = OsRng;
         let peer0 = &params[&PeerId::from(0)];
@@ -427,23 +427,15 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
-        let null_config_gen = ConfigGenModuleParams::null();
-
-        // We assume user wants one module instance for every module kind
-        let module_configs: BTreeMap<_, _> = registry
-            .into_iter()
-            .map(|(module_id, (kind, gen))| {
+        let modules = peer0.consensus.requested.modules.iter_modules();
+        let module_configs: BTreeMap<_, _> = modules
+            .map(|(module_id, kind, module_params)| {
                 (
                     module_id,
-                    gen.trusted_dealer_gen(
-                        &peer0.peer_ids(),
-                        peer0
-                            .consensus
-                            .requested
-                            .modules
-                            .get(&kind)
-                            .unwrap_or(&null_config_gen),
-                    ),
+                    registry
+                        .get(kind)
+                        .expect("Module not registered")
+                        .trusted_dealer_gen(&peer0.peer_ids(), module_params),
                 )
             })
             .collect();
@@ -479,7 +471,7 @@ impl ServerConfig {
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
         params: &ConfigGenParams,
-        registry: BTreeMap<u16, (ModuleKind, DynServerModuleGen)>,
+        registry: ServerModuleGenRegistry,
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {
@@ -521,27 +513,16 @@ impl ServerConfig {
         let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
-
-        // NOTE: Currently we do not implement user-assisted module-kind to
-        // module-instance-id assignment We assume that user wants one instance
-        // of each module that was compiled in. This is how things were
-        // initially, where we consider "module as a code" as "module as an instance at
-        // runtime"
-        let null_config_gen = ConfigGenModuleParams::null();
-        for (module_instance_id, (kind, gen)) in registry {
+        let modules = params.consensus.requested.modules.iter_modules();
+        for (module_instance_id, kind, module_params) in modules {
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(
-                    &dkg,
-                    params
-                        .consensus
-                        .requested
-                        .modules
-                        .get(&kind)
-                        .unwrap_or(&null_config_gen),
-                )
-                .await?,
+                registry
+                    .get(kind)
+                    .expect("Module not registered")
+                    .distributed_gen(&dkg, module_params)
+                    .await?,
             );
         }
 

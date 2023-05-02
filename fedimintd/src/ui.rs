@@ -180,7 +180,7 @@ async fn post_guardians(
             ) {
                 Ok(params) => ServerConfig::distributed_gen(
                     &params,
-                    module_gens.clone().legacy_init_modules(),
+                    module_gens.clone(),
                     DelayCalculator::PROD_DEFAULT,
                     &mut dkg_task_group,
                 )
