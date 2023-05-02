@@ -16,7 +16,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::{ApiAuth, DynServerModuleGen, IServerModuleGen};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::PeerId;
-use fedimint_server::config::api::{ConfigGenParamsLocal, ConfigGenSettings};
+use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::ConsensusServer;
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
@@ -145,28 +145,7 @@ impl FederationTest {
             .await
             .expect("Failed to init server");
 
-            // TODO: Refactor to `run_consensus_api` outside `FedimintServer`
-            let api = FedimintServer {
-                data_dir: Default::default(),
-                settings: ConfigGenSettings {
-                    download_token_limit: None,
-                    p2p_bind: config.local.fed_bind,
-                    api_bind: config.local.api_bind,
-                    p2p_url: config.local.p2p_endpoints[&config.local.identity]
-                        .url
-                        .clone(),
-                    api_url: config.consensus.api_endpoints[&config.local.identity]
-                        .url
-                        .clone(),
-                    default_params: Default::default(),
-                    module_gens: Default::default(),
-                    max_connections: config.local.max_connections,
-                    registry: Default::default(),
-                },
-                db,
-            };
-
-            let api_handle = api.run_consensus_api(&server.consensus.api).await;
+            let api_handle = FedimintServer::spawn_consensus_api(&server).await;
             handles.push(api_handle);
             servers.push(server);
         }

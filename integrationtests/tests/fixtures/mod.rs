@@ -1166,23 +1166,7 @@ impl FederationTest {
         let mut handles = vec![];
         for server in &self.servers {
             let s = server.lock().await;
-            let cfg = s.fedimint.cfg.clone();
-            let api = FedimintServer {
-                data_dir: Default::default(),
-                settings: ConfigGenSettings {
-                    download_token_limit: cfg.local.download_token_limit,
-                    p2p_bind: cfg.local.fed_bind,
-                    api_bind: cfg.local.api_bind,
-                    p2p_url: cfg.local.p2p_endpoints[&cfg.local.identity].url.clone(),
-                    api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
-                    default_params: Default::default(),
-                    module_gens: s.fedimint.consensus.module_inits.legacy_init_modules(),
-                    max_connections: s.fedimint.consensus.cfg.local.max_connections,
-                    registry: s.fedimint.consensus.module_inits.clone(),
-                },
-                db: s.fedimint.consensus.db.clone(),
-            };
-            handles.push(api.run_consensus_api(&s.fedimint.consensus.api).await);
+            handles.push(FedimintServer::spawn_consensus_api(&s.fedimint).await);
         }
         handles
     }
