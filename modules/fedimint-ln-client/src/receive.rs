@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -5,18 +6,17 @@ use bitcoin::util::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::core::Decoder;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContract;
-use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
-use fedimint_ln_common::{LightningInput, LightningOutputOutcome};
+use fedimint_ln_common::contracts::{DecryptedPreimage, IdentifiableContract};
+use fedimint_ln_common::LightningInput;
 use lightning_invoice::Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::api::LnFederationApi;
 use crate::{LightningClientContext, LightningClientStateMachines};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -28,8 +28,8 @@ use crate::{LightningClientContext, LightningClientStateMachines};
 ///
 ///     SubmittedOffer -- await transaction rejection --> Canceled
 ///     SubmittedOffer -- await invoice confirmation --> ConfirmedInvoice
-///     ConfirmedInvoice -- await claim transaction acceptance  --> Funded
-///     ConfirmedInvoice -- await claim transaction timeout --> Canceled
+///     ConfirmedInvoice -- await contract creation + decryption  --> Funded
+///     ConfirmedInvoice -- await offer timeout --> Canceled
 ///     Funded -- await claim tx acceptance --> Success
 ///     Funded -- await claim tx rejection --> Canceled
 /// ```
@@ -43,13 +43,8 @@ pub enum LightningReceiveStates {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub struct LightningReceiveCommon {
-    pub operation_id: OperationId,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct LightningReceiveStateMachine {
-    pub common: LightningReceiveCommon,
+    pub operation_id: OperationId,
     pub state: LightningReceiveStates,
 }
 
@@ -59,12 +54,12 @@ impl State for LightningReceiveStateMachine {
 
     fn transitions(
         &self,
-        context: &Self::ModuleContext,
+        _context: &Self::ModuleContext,
         global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             LightningReceiveStates::SubmittedOffer(submitted_offer) => {
-                submitted_offer.transitions(&self.common, global_context, context)
+                submitted_offer.transitions(self.operation_id, global_context)
             }
             LightningReceiveStates::Canceled(_) => {
                 vec![]
@@ -73,7 +68,7 @@ impl State for LightningReceiveStateMachine {
                 confirmed_invoice.transitions(global_context)
             }
             LightningReceiveStates::Funded(funded) => {
-                funded.transitions(self.common.clone(), global_context)
+                funded.transitions(self.operation_id, global_context)
             }
             LightningReceiveStates::Success(_) => {
                 vec![]
@@ -82,7 +77,7 @@ impl State for LightningReceiveStateMachine {
     }
 
     fn operation_id(&self) -> fedimint_client::sm::OperationId {
-        self.common.operation_id
+        self.operation_id
     }
 }
 
@@ -101,104 +96,67 @@ pub enum LightningReceiveError {
     Timeout,
     #[error("Claim transaction was rejected")]
     ClaimRejected,
+    #[error("The decrypted preimage was invalid")]
+    InvalidPreimage,
 }
 
 impl LightningReceiveSubmittedOffer {
     fn transitions(
         &self,
-        common: &LightningReceiveCommon,
+        operation_id: OperationId,
         global_context: &DynGlobalClientContext,
-        context: &LightningClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
         let global_context = global_context.clone();
-        let rejected_context = global_context.clone();
         let txid = self.offer_txid;
         let invoice = self.invoice.clone();
         let payment_keypair = self.payment_keypair;
-        let rejected_common = common.clone();
-        vec![
-            StateTransition::new(
-                Self::await_invoice_confirmation(
-                    global_context,
-                    context.ln_decoder.clone(),
-                    txid,
-                    invoice,
+        vec![StateTransition::new(
+            Self::await_invoice_confirmation(global_context, operation_id, txid),
+            move |_dbtx, result, old_state| {
+                Box::pin(Self::transition_confirmed_invoice(
+                    result,
+                    old_state,
+                    invoice.clone(),
                     payment_keypair,
-                ),
-                move |_dbtx, result, old_state| {
-                    Box::pin(Self::transition_confirmed_invoice(result, old_state))
-                },
-            ),
-            StateTransition::new(
-                Self::await_invoice_rejection(rejected_context, rejected_common, txid),
-                |_dbtx, (), old_state| Box::pin(Self::transition_invoice_rejected(old_state)),
-            ),
-        ]
+                ))
+            },
+        )]
     }
 
     async fn await_invoice_confirmation(
         global_context: DynGlobalClientContext,
-        module_decoder: Decoder,
+        operation_id: OperationId,
         txid: TransactionId,
-        invoice: Invoice,
-        payment_keypair: KeyPair,
-    ) -> Result<ConfirmedInvoice, LightningReceiveError> {
-        let outpoint = OutPoint { txid, out_idx: 0 };
-        let timeout = Duration::from_secs(15);
-        global_context
-            .api()
-            .await_output_outcome::<LightningOutputOutcome>(outpoint, timeout, &module_decoder)
-            .await
-            .map_err(|_| LightningReceiveError::Rejected)?;
-        let confirmed_invoice = ConfirmedInvoice {
-            invoice,
-            keypair: payment_keypair,
-        };
-
-        Ok(confirmed_invoice)
-    }
-
-    async fn await_invoice_rejection(
-        global_context: DynGlobalClientContext,
-        common: LightningReceiveCommon,
-        txid: TransactionId,
-    ) {
-        global_context
-            .await_tx_rejected(common.operation_id, txid)
-            .await;
+    ) -> Result<(), ()> {
+        global_context.await_tx_accepted(operation_id, txid).await
     }
 
     async fn transition_confirmed_invoice(
-        result: Result<ConfirmedInvoice, LightningReceiveError>,
+        result: Result<(), ()>,
         old_state: LightningReceiveStateMachine,
+        invoice: Invoice,
+        keypair: KeyPair,
     ) -> LightningReceiveStateMachine {
         match result {
-            Ok(confirmed_invoice) => LightningReceiveStateMachine {
-                common: old_state.common,
+            Ok(_) => LightningReceiveStateMachine {
+                operation_id: old_state.operation_id,
                 state: LightningReceiveStates::ConfirmedInvoice(LightningReceiveConfirmedInvoice {
-                    confirmed_invoice,
+                    invoice,
+                    keypair,
                 }),
             },
-            Err(e) => LightningReceiveStateMachine {
-                common: old_state.common,
-                state: LightningReceiveStates::Canceled(e),
+            Err(_) => LightningReceiveStateMachine {
+                operation_id: old_state.operation_id,
+                state: LightningReceiveStates::Canceled(LightningReceiveError::Rejected),
             },
-        }
-    }
-
-    async fn transition_invoice_rejected(
-        old_state: LightningReceiveStateMachine,
-    ) -> LightningReceiveStateMachine {
-        LightningReceiveStateMachine {
-            common: old_state.common,
-            state: LightningReceiveStates::Canceled(LightningReceiveError::Rejected),
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct LightningReceiveConfirmedInvoice {
-    confirmed_invoice: ConfirmedInvoice,
+    invoice: Invoice,
+    keypair: KeyPair,
 }
 
 impl LightningReceiveConfirmedInvoice {
@@ -206,9 +164,9 @@ impl LightningReceiveConfirmedInvoice {
         &self,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
-        let invoice = self.confirmed_invoice.invoice.clone();
+        let invoice = self.invoice.clone();
         let timeout = invoice.expiry_time();
-        let keypair = self.confirmed_invoice.keypair;
+        let keypair = self.keypair;
         let global_context = global_context.clone();
         vec![
             StateTransition::new(
@@ -233,16 +191,25 @@ impl LightningReceiveConfirmedInvoice {
     async fn await_incoming_contract_account(
         invoice: Invoice,
         global_context: DynGlobalClientContext,
-    ) -> IncomingContractAccount {
+    ) -> Result<IncomingContractAccount, LightningReceiveError> {
         // TODO: Get rid of polling
         loop {
             let contract_id = (*invoice.payment_hash()).into();
-            let contract =
-                LightningClientContext::get_incoming_contract(contract_id, global_context.clone())
-                    .await;
+            let contract = global_context
+                .api()
+                .get_incoming_contract(contract_id)
+                .await;
 
             if let Ok(contract) = contract {
-                return contract;
+                match contract.contract.decrypted_preimage {
+                    DecryptedPreimage::Pending => {}
+                    DecryptedPreimage::Some(_) => {
+                        return Ok(contract);
+                    }
+                    DecryptedPreimage::Invalid => {
+                        return Err(LightningReceiveError::InvalidPreimage);
+                    }
+                }
             }
 
             sleep(Duration::from_secs(1)).await;
@@ -252,14 +219,23 @@ impl LightningReceiveConfirmedInvoice {
     async fn transition_funded(
         old_state: LightningReceiveStateMachine,
         keypair: KeyPair,
-        contract: IncomingContractAccount,
+        result: Result<IncomingContractAccount, LightningReceiveError>,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
     ) -> LightningReceiveStateMachine {
-        let outpoint = Self::claim_incoming_contract(dbtx, contract, keypair, global_context).await;
-        LightningReceiveStateMachine {
-            common: old_state.common,
-            state: LightningReceiveStates::Funded(LightningReceiveFunded { outpoint }),
+        match result {
+            Ok(contract) => {
+                let outpoint =
+                    Self::claim_incoming_contract(dbtx, contract, keypair, global_context).await;
+                LightningReceiveStateMachine {
+                    operation_id: old_state.operation_id,
+                    state: LightningReceiveStates::Funded(LightningReceiveFunded { outpoint }),
+                }
+            }
+            Err(e) => LightningReceiveStateMachine {
+                operation_id: old_state.operation_id,
+                state: LightningReceiveStates::Canceled(e),
+            },
         }
     }
 
@@ -283,14 +259,18 @@ impl LightningReceiveConfirmedInvoice {
     }
 
     async fn await_payment_timeout(timeout: Duration) {
-        sleep(timeout).await
+        // Add 10% of the invoice expiry_time as a buffer before we stop awaiting the
+        // payment
+        let timeout_buffer = timeout.as_secs_f64() * 0.1;
+        let payment_timeout = timeout.add(Duration::from_secs_f64(timeout_buffer));
+        sleep(payment_timeout).await
     }
 
     async fn transition_timeout(
         old_state: LightningReceiveStateMachine,
     ) -> LightningReceiveStateMachine {
         LightningReceiveStateMachine {
-            common: old_state.common,
+            operation_id: old_state.operation_id,
             state: LightningReceiveStates::Canceled(LightningReceiveError::Timeout),
         }
     }
@@ -304,12 +284,12 @@ pub struct LightningReceiveFunded {
 impl LightningReceiveFunded {
     fn transitions(
         &self,
-        common: LightningReceiveCommon,
+        operation_id: OperationId,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
         let txid = self.outpoint.txid;
         vec![StateTransition::new(
-            Self::await_claim_success(common, global_context.clone(), txid),
+            Self::await_claim_success(operation_id, global_context.clone(), txid),
             move |_dbtx, result, old_state| {
                 Box::pin(Self::transition_claim_success(result, old_state, txid))
             },
@@ -317,13 +297,11 @@ impl LightningReceiveFunded {
     }
 
     async fn await_claim_success(
-        common: LightningReceiveCommon,
+        operation_id: OperationId,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
     ) -> Result<(), ()> {
-        global_context
-            .await_tx_accepted(common.operation_id, txid)
-            .await
+        global_context.await_tx_accepted(operation_id, txid).await
     }
 
     async fn transition_claim_success(
@@ -335,14 +313,14 @@ impl LightningReceiveFunded {
             Ok(_) => {
                 // Claim successful
                 LightningReceiveStateMachine {
-                    common: old_state.common,
+                    operation_id: old_state.operation_id,
                     state: LightningReceiveStates::Success(txid),
                 }
             }
             Err(_) => {
                 // Claim rejection
                 LightningReceiveStateMachine {
-                    common: old_state.common,
+                    operation_id: old_state.operation_id,
                     state: LightningReceiveStates::Canceled(LightningReceiveError::ClaimRejected),
                 }
             }
@@ -363,23 +341,5 @@ impl IncomingContractAccount {
             amount: self.amount,
             witness: None,
         }
-    }
-}
-
-// TODO: should this have some kind of "state" enum - e.g. pending, paid,
-// expired
-/// Invoice whose "offer" has been accepted by federation
-#[derive(Debug, Encodable, Clone, Eq, PartialEq, Decodable, Serialize, Deserialize)]
-pub struct ConfirmedInvoice {
-    /// The invoice itself
-    pub invoice: Invoice,
-    /// Keypair that will be able to sweep contract once it has received payment
-    pub keypair: KeyPair,
-}
-
-impl ConfirmedInvoice {
-    pub fn contract_id(&self) -> ContractId {
-        // FIXME: Should we be using the payment hash?
-        (*self.invoice.payment_hash()).into()
     }
 }

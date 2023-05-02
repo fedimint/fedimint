@@ -11,19 +11,19 @@ use anyhow::bail;
 use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
-use bitcoin_hashes::sha256::{self, Hash as Sha256Hash};
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use bitcoin_hashes::Hash;
 use db::LightningGatewayKey;
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{ClientModule, IClientModule};
+use fedimint_client::module::ClientModule;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::IFederationApi;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -34,9 +34,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Transaction
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContract;
-use fedimint_ln_common::contracts::{
-    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
-};
+use fedimint_ln_common::contracts::{Contract, EncryptedPreimage, IdentifiableContract, Preimage};
 pub use fedimint_ln_common::*;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::WalletClientExt;
@@ -47,16 +45,14 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use pay::{LightningPayStateMachine, OutgoingContractAccount, OutgoingContractData};
 use rand::{CryptoRng, RngCore};
-use receive::{IncomingContractAccount, LightningReceiveError, LightningReceiveStateMachine};
+use receive::{LightningReceiveError, LightningReceiveStateMachine};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error};
 
 use crate::pay::{LightningPayCommon, LightningPayCreatedOutgoingLnContract, LightningPayStates};
-use crate::receive::{
-    LightningReceiveCommon, LightningReceiveStates, LightningReceiveSubmittedOffer,
-};
+use crate::receive::{LightningReceiveStates, LightningReceiveSubmittedOffer};
 
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
@@ -237,9 +233,13 @@ impl LightningClientExt for Client {
         gateway: LightningGateway,
     ) -> anyhow::Result<OperationId> {
         let (ln_client_id, ln_client) = ln_client(self);
+
+        // TODO: This gets the `bitcoin::Network` from the wallet module. Ideally
+        // modules should not be dependent on each other. This should be moved
+        // to the global config.
         let network = self.get_network();
-        let (invoice, payment_hash, preimage, keypair) = ln_client
-            .generate_unconfirmed_invoice(
+        let (operation_id, invoice, output) = ln_client
+            .create_lightning_receive_output(
                 amount,
                 description,
                 rand::rngs::OsRng,
@@ -248,16 +248,6 @@ impl LightningClientExt for Client {
                 network,
             )
             .await?;
-        let operation_id = invoice.payment_hash().into_inner();
-        let output = ln_client.create_offer_output(
-            operation_id,
-            amount,
-            invoice.clone(),
-            keypair,
-            payment_hash,
-            preimage,
-            expiry_time,
-        )?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(ln_client_id));
         let operation_meta_gen = |txid| OutPoint { txid, out_idx: 0 };
         let txid = self
@@ -457,41 +447,9 @@ impl ClientModuleGen for LightningClientGen {
     }
 }
 #[derive(Debug, Clone)]
-pub struct LightningClientContext {
-    ln_decoder: Decoder,
-}
+pub struct LightningClientContext {}
 
 impl Context for LightningClientContext {}
-
-impl LightningClientContext {
-    pub async fn get_outgoing_contract(
-        id: ContractId,
-        global_context: DynGlobalClientContext,
-    ) -> anyhow::Result<OutgoingContractAccount> {
-        let account = global_context.api().fetch_contract(id).await?;
-        match account.contract {
-            FundedContract::Outgoing(c) => Ok(OutgoingContractAccount {
-                amount: account.amount,
-                contract: c,
-            }),
-            _ => Err(anyhow::anyhow!("WrongAccountType")),
-        }
-    }
-
-    pub async fn get_incoming_contract(
-        id: ContractId,
-        global_context: DynGlobalClientContext,
-    ) -> anyhow::Result<IncomingContractAccount> {
-        let account = global_context.api().fetch_contract(id).await?;
-        match account.contract {
-            FundedContract::Incoming(c) => Ok(IncomingContractAccount {
-                amount: account.amount,
-                contract: c.contract,
-            }),
-            _ => Err(anyhow::anyhow!("WrongAccountType")),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct LightningClientModule {
@@ -506,9 +464,7 @@ impl ClientModule for LightningClientModule {
     type States = LightningClientStateMachines;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
-        LightningClientContext {
-            ln_decoder: self.decoder(),
-        }
+        LightningClientContext {}
     }
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
@@ -710,7 +666,7 @@ impl LightningClientModule {
         }
     }
 
-    pub async fn generate_unconfirmed_invoice<'a>(
+    pub async fn create_lightning_receive_output<'a>(
         &'a self,
         amount: Amount,
         description: String,
@@ -718,7 +674,11 @@ impl LightningClientModule {
         expiry_time: Option<u64>,
         gateway: LightningGateway,
         network: Network,
-    ) -> anyhow::Result<(Invoice, sha256::Hash, Preimage, KeyPair)> {
+    ) -> anyhow::Result<(
+        OperationId,
+        Invoice,
+        ClientOutput<LightningOutput, LightningClientStateMachines>,
+    )> {
         let payment_keypair = KeyPair::new(&self.secp, &mut rng);
         let raw_payment_secret: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
@@ -781,33 +741,17 @@ impl LightningClientModule {
         let invoice = invoice_builder
             .build_signed(|hash| self.secp.sign_ecdsa_recoverable(hash, &node_secret_key))?;
 
-        Ok((
-            invoice,
-            payment_hash,
-            Preimage(raw_payment_secret),
-            payment_keypair,
-        ))
-    }
+        let operation_id = invoice.payment_hash().into_inner();
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn create_offer_output(
-        &self,
-        operation_id: OperationId,
-        amount: Amount,
-        invoice: Invoice,
-        keypair: KeyPair,
-        payment_hash: Sha256Hash,
-        preimage: Preimage,
-        expiry_time: Option<u64>,
-    ) -> anyhow::Result<ClientOutput<LightningOutput, LightningClientStateMachines>> {
+        let sm_invoice = invoice.clone();
         let sm_gen = Arc::new(move |txid: TransactionId, _input_idx: u64| {
             vec![LightningClientStateMachines::Receive(
                 LightningReceiveStateMachine {
-                    common: LightningReceiveCommon { operation_id },
+                    operation_id,
                     state: LightningReceiveStates::SubmittedOffer(LightningReceiveSubmittedOffer {
                         offer_txid: txid,
-                        invoice: invoice.clone(),
-                        payment_keypair: keypair,
+                        invoice: sm_invoice.clone(),
+                        payment_keypair,
                     }),
                 },
             )]
@@ -816,14 +760,21 @@ impl LightningClientModule {
         let ln_output = LightningOutput::Offer(IncomingContractOffer {
             amount,
             hash: payment_hash,
-            encrypted_preimage: EncryptedPreimage::new(preimage, &self.cfg.threshold_pub_key),
+            encrypted_preimage: EncryptedPreimage::new(
+                Preimage(raw_payment_secret),
+                &self.cfg.threshold_pub_key,
+            ),
             expiry_time,
         });
 
-        Ok(ClientOutput {
-            output: ln_output,
-            state_machines: sm_gen,
-        })
+        Ok((
+            operation_id,
+            invoice,
+            ClientOutput {
+                output: ln_output,
+                state_machines: sm_gen,
+            },
+        ))
     }
 }
 
