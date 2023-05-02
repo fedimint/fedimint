@@ -216,11 +216,6 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 
@@ -279,7 +274,7 @@
         params: <span class="kw">impl </span>ModuleGenParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.params
-            .attach_config_gen_params(server.module_kind(), params);
+            .attach_config_gen_params(id, server.module_kind(), params);
         <span class="self">self</span>.ids.push(id);
         <span class="self">self</span>.clients.push(DynClientModuleGen::from(client));
         <span class="self">self</span>.servers.push(DynServerModuleGen::from(server));
@@ -298,17 +293,12 @@
         <span class="kw">let </span>peers = (<span class="number">0</span>..<span class="self">self</span>.num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>params = local_config_gen_params(<span class="kw-2">&amp;</span>peers, base_port, <span class="self">self</span>.params.clone())
             .expect(<span class="string">&quot;Generates local config&quot;</span>);
+        <span class="kw">let </span>server_gen = ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone());
+        <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, server_gen.clone());
 
-        <span class="comment">// TODO: refactor constructors to make this easier
-        </span><span class="kw">let </span><span class="kw-2">mut </span>instances = BTreeMap::new();
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="self">self</span>.servers.len() {
-            <span class="kw">let </span>kind = <span class="self">self</span>.servers[i].as_ref().module_kind();
-            instances.insert(<span class="self">self</span>.ids[i], (kind, <span class="self">self</span>.servers[i].clone()));
-        }
-        <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, instances);
         FederationTest {
             configs,
-            server_gen: ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone()),
+            server_gen,
             client_gen: ClientModuleGenRegistry::from(<span class="self">self</span>.clients.clone()),
             primary_client: <span class="self">self</span>.primary_client,
             task,

@@ -266,28 +266,12 @@
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>clap::Parser;
-<span class="kw">use </span>fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
-};
-<span class="kw">use </span>fedimint_core::core::ModuleKind;
+<span class="kw">use </span>fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
@@ -388,7 +372,7 @@
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             module_gens: ServerModuleGenRegistry::new(),
-            module_gens_params: ServerModuleGenParamsRegistry::new(),
+            module_gens_params: ServerModuleGenParamsRegistry::default(),
             opts,
         })
     }
@@ -398,15 +382,6 @@
         </span>T: ServerModuleGen + <span class="lifetime">&#39;static </span>+ Send + Sync,
     {
         <span class="self">self</span>.module_gens.attach(gen);
-        <span class="self">self
-    </span>}
-
-    <span class="kw">pub fn </span>with_extra_module_gens_params&lt;P&gt;(<span class="kw-2">mut </span><span class="self">self</span>, kind: ModuleKind, params: P) -&gt; <span class="self">Self
-    </span><span class="kw">where
-        </span>P: ModuleGenParams,
-    {
-        <span class="self">self</span>.module_gens_params
-            .attach_config_gen_params(kind, params);
         <span class="self">self
     </span>}
 
@@ -552,7 +527,6 @@
             p2p_url: cfg.local.p2p_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
             api_url: cfg.consensus.api_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
             default_params: Default::default(),
-            module_gens: module_gens.legacy_init_modules(),
             max_connections: fedimint_server::config::max_connections(),
             registry: module_gens,
         },

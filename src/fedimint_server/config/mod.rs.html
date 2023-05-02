@@ -881,25 +881,6 @@
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
 <a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
-<a href="#893" id="893">893</a>
-<a href="#894" id="894">894</a>
-<a href="#895" id="895">895</a>
-<a href="#896" id="896">896</a>
-<a href="#897" id="897">897</a>
-<a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
-<a href="#900" id="900">900</a>
-<a href="#901" id="901">901</a>
-<a href="#902" id="902">902</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
@@ -1317,7 +1298,7 @@
 
     <span class="kw">pub fn </span>trusted_dealer_gen(
         params: <span class="kw-2">&amp;</span>HashMap&lt;PeerId, ConfigGenParams&gt;,
-        registry: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
+        registry: ServerModuleGenRegistry,
     ) -&gt; BTreeMap&lt;PeerId, <span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
@@ -1329,23 +1310,15 @@
         <span class="kw">let </span>authinfo = NetworkInfo::generate_map(peer0.peer_ids(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
-        <span class="kw">let </span>null_config_gen = ConfigGenModuleParams::null();
-
-        <span class="comment">// We assume user wants one module instance for every module kind
-        </span><span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = registry
-            .into_iter()
-            .map(|(module_id, (kind, gen))| {
+        <span class="kw">let </span>modules = peer0.consensus.requested.modules.iter_modules();
+        <span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = modules
+            .map(|(module_id, kind, module_params)| {
                 (
                     module_id,
-                    gen.trusted_dealer_gen(
-                        <span class="kw-2">&amp;</span>peer0.peer_ids(),
-                        peer0
-                            .consensus
-                            .requested
-                            .modules
-                            .get(<span class="kw-2">&amp;</span>kind)
-                            .unwrap_or(<span class="kw-2">&amp;</span>null_config_gen),
-                    ),
+                    registry
+                        .get(kind)
+                        .expect(<span class="string">&quot;Module not registered&quot;</span>)
+                        .trusted_dealer_gen(<span class="kw-2">&amp;</span>peer0.peer_ids(), module_params),
                 )
             })
             .collect();
@@ -1381,7 +1354,7 @@
     <span class="doccomment">/// Runs the distributed key gen algorithm
     </span><span class="kw">pub async fn </span>distributed_gen(
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
-        registry: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
+        registry: ServerModuleGenRegistry,
         delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
@@ -1423,27 +1396,16 @@
         <span class="kw">let </span>epoch_keys = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = Default::default();
-
-        <span class="comment">// NOTE: Currently we do not implement user-assisted module-kind to
-        // module-instance-id assignment We assume that user wants one instance
-        // of each module that was compiled in. This is how things were
-        // initially, where we consider &quot;module as a code&quot; as &quot;module as an instance at
-        // runtime&quot;
-        </span><span class="kw">let </span>null_config_gen = ConfigGenModuleParams::null();
-        <span class="kw">for </span>(module_instance_id, (kind, gen)) <span class="kw">in </span>registry {
+        <span class="kw">let </span>modules = params.consensus.requested.modules.iter_modules();
+        <span class="kw">for </span>(module_instance_id, kind, module_params) <span class="kw">in </span>modules {
             <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
             module_cfgs.insert(
                 module_instance_id,
-                gen.distributed_gen(
-                    <span class="kw-2">&amp;</span>dkg,
-                    params
-                        .consensus
-                        .requested
-                        .modules
-                        .get(<span class="kw-2">&amp;</span>kind)
-                        .unwrap_or(<span class="kw-2">&amp;</span>null_config_gen),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>,
+                registry
+                    .get(kind)
+                    .expect(<span class="string">&quot;Module not registered&quot;</span>)
+                    .distributed_gen(<span class="kw-2">&amp;</span>dkg, module_params)
+                    .<span class="kw">await</span><span class="question-mark">?</span>,
             );
         }
 

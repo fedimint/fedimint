@@ -941,12 +941,6 @@
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
-<a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a>
-<a href="#949" id="949">949</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -961,12 +955,11 @@
     PeerServerParams, ServerStatus, WsAdminClient,
 };
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
-<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
-    DynServerModuleGen,
 };
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::write_new;
@@ -1145,12 +1138,10 @@
             }
         };
 
-        <span class="kw">let </span>module_gens = <span class="self">self</span>.settings.module_gens.clone();
-
         <span class="kw">let </span><span class="kw-2">mut </span>task_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
         <span class="kw">let </span>config = ServerConfig::distributed_gen(
             <span class="kw-2">&amp;</span>params,
-            module_gens,
+            <span class="self">self</span>.settings.registry.clone(),
             DelayCalculator::PROD_DEFAULT,
             <span class="kw-2">&amp;mut </span>task_group,
         )
@@ -1343,8 +1334,6 @@
     </span><span class="kw">pub </span>api_url: Url,
     <span class="doccomment">/// The default params for the modules
     </span><span class="kw">pub </span>default_params: ConfigGenParamsRequest,
-    <span class="doccomment">/// Modules that will generate configs
-    </span><span class="kw">pub </span>module_gens: BTreeMap&lt;u16, (ModuleKind, DynServerModuleGen)&gt;,
     <span class="doccomment">/// How many API connections we will accept
     </span><span class="kw">pub </span>max_connections: u32,
     <span class="doccomment">/// Registry for config gen
@@ -1694,7 +1683,6 @@
                 p2p_url,
                 api_url: api_url.clone(),
                 default_params: Default::default(),
-                module_gens: Default::default(),
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
                 registry: Default::default(),
             };
