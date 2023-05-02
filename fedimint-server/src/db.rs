@@ -163,7 +163,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleGen;
     use fedimint_core::transaction::Transaction;
-    use fedimint_core::{PeerId, ServerModule, TransactionId};
+    use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
     use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
@@ -202,8 +202,20 @@ mod fedimint_migration_tests {
         let key_pair = KeyPair::from_secret_key(&secp, &sk);
         let schnorr = secp.sign_schnorr(&Message::from_slice(&BYTE_32).unwrap(), &key_pair);
         let transaction = Transaction {
-            inputs: vec![DynInput::from_typed(0, DummyInput)],
-            outputs: vec![DynOutput::from_typed(0, DummyOutput)],
+            inputs: vec![DynInput::from_typed(
+                0,
+                DummyInput {
+                    amount: Amount::ZERO,
+                    account: key_pair.x_only_public_key().0,
+                },
+            )],
+            outputs: vec![DynOutput::from_typed(
+                0,
+                DummyOutput {
+                    amount: Amount::ZERO,
+                    account: key_pair.x_only_public_key().0,
+                },
+            )],
             signature: Some(schnorr),
         };
 

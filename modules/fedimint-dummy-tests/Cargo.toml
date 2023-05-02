@@ -1,0 +1,23 @@
+[package]
+name = "fedimint-dummy-tests"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-dummy is a dummy example fedimint module."
+license = "MIT"
+
+[[test]]
+name = "fedimint_dummy_tests"
+path = "tests/tests.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-testing = { path = "../../fedimint-testing" }
+fedimint-client = { path = "../../fedimint-client" }
+fedimint-core ={ path = "../../fedimint-core" }
+fedimint-server = { path = "../../fedimint-server" }
+fedimint-logging = { path = "../../fedimint-logging" }
+tokio = { version = "1.26.0", features = ["sync"] }

@@ -22,6 +22,7 @@ members = [
     "modules/fedimint-dummy-common",
     "modules/fedimint-dummy-client",
     "modules/fedimint-dummy-server",
+    "modules/fedimint-dummy-tests",
     "modules/fedimint-mint-common",
     "modules/fedimint-mint-client",
     "modules/fedimint-mint-server",
