@@ -16,6 +16,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::encoding::Encodable;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
@@ -256,17 +257,6 @@ pub struct ConfigGenModuleParams(serde_json::Value);
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
-impl ServerModuleGenRegistry {
-    // TODO: Remove this with modularization
-    pub fn legacy_init_modules(&self) -> BTreeMap<u16, (ModuleKind, DynServerModuleGen)> {
-        let mut modules = BTreeMap::new();
-        for (id, (kind, gen)) in self.legacy_init_order_iter().into_iter().enumerate() {
-            modules.insert(u16::try_from(id).expect("cannot fail"), (kind, gen));
-        }
-        modules
-    }
-}
-
 impl ConfigGenModuleParams {
     /// Null value, used as a config gen parameters for module gens that don't
     /// need any parameters
@@ -287,26 +277,23 @@ impl ConfigGenModuleParams {
 pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
 
 /// Configs for each module's DKG
-///
-/// Note: in the future, we should make this one a
-/// `ModuleRegistry<ConfigGenParams>`, as each module **instance** will need a
-/// distinct config for dkg.
-pub type ServerModuleGenParamsRegistry = ModuleGenRegistry<ConfigGenModuleParams>;
+pub type ServerModuleGenParamsRegistry = ModuleRegistry<ConfigGenModuleParams>;
 
 impl Eq for ServerModuleGenParamsRegistry {}
 
 impl PartialEq for ServerModuleGenParamsRegistry {
     fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
+        self.iter_modules().eq(other.iter_modules())
     }
 }
 
 impl Serialize for ServerModuleGenParamsRegistry {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut serializer = serializer.serialize_map(Some(self.0.len()))?;
-        for (key, value) in self.0.iter() {
-            serializer.serialize_key(key)?;
-            serializer.serialize_value(&value.0)?;
+        let modules: Vec<_> = self.iter_modules().collect();
+        let mut serializer = serializer.serialize_map(Some(modules.len()))?;
+        for (id, kind, params) in modules.into_iter() {
+            serializer.serialize_key(&id)?;
+            serializer.serialize_value(&(kind.clone(), params.0.clone()))?;
         }
         serializer.end()
     }
@@ -317,13 +304,14 @@ impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
     where
         D: Deserializer<'de>,
     {
-        let json: BTreeMap<ModuleKind, serde_json::Value> = Deserialize::deserialize(deserializer)?;
+        let json: BTreeMap<ModuleInstanceId, (ModuleKind, serde_json::Value)> =
+            Deserialize::deserialize(deserializer)?;
         let mut params = BTreeMap::new();
 
-        for (key, value) in json {
-            params.insert(key, ConfigGenModuleParams(value));
+        for (id, (kind, value)) in json {
+            params.insert(id, (kind, ConfigGenModuleParams(value)));
         }
-        Ok(ModuleGenRegistry(params))
+        Ok(ModuleRegistry::from(params))
     }
 }
 
@@ -391,40 +379,18 @@ impl<M> ModuleGenRegistry<M> {
     }
 }
 
-impl ModuleGenRegistry<ConfigGenModuleParams> {
-    pub fn attach_config_gen_params<T>(&mut self, kind: ModuleKind, gen: T) -> &mut Self
-    where
-        T: ModuleGenParams,
-    {
-        if self
-            .0
-            .insert(
-                kind.clone(),
-                ConfigGenModuleParams::from_typed(gen)
-                    .expect("Invalid config gen params for {kind}"),
-            )
-            .is_some()
-        {
-            panic!("Can't insert module of same kind twice: {kind}");
-        }
-        self
-    }
-
-    pub fn with_config_gen_params<T>(mut self, kind: ModuleKind, gen: T) -> Self
-    where
-        T: ModuleGenParams,
-    {
-        if self
-            .0
-            .insert(
-                kind.clone(),
-                ConfigGenModuleParams::from_typed(gen)
-                    .expect("Invalid config gen params for {kind}"),
-            )
-            .is_some()
-        {
-            panic!("Can't insert module of same kind twice: {kind}");
-        }
+impl ModuleRegistry<ConfigGenModuleParams> {
+    pub fn attach_config_gen_params<T: ModuleGenParams>(
+        &mut self,
+        id: ModuleInstanceId,
+        kind: ModuleKind,
+        gen: T,
+    ) -> &mut Self {
+        self.register_module(
+            id,
+            kind,
+            ConfigGenModuleParams::from_typed(gen).expect("Invalid config gen params for {kind}"),
+        );
         self
     }
 }

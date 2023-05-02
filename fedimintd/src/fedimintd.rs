@@ -3,10 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
-use fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
-};
-use fedimint_core::core::ModuleKind;
+use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -107,7 +104,7 @@ impl Fedimintd {
 
         Ok(Self {
             module_gens: ServerModuleGenRegistry::new(),
-            module_gens_params: ServerModuleGenParamsRegistry::new(),
+            module_gens_params: ServerModuleGenParamsRegistry::default(),
             opts,
         })
     }
@@ -117,15 +114,6 @@ impl Fedimintd {
         T: ServerModuleGen + 'static + Send + Sync,
     {
         self.module_gens.attach(gen);
-        self
-    }
-
-    pub fn with_extra_module_gens_params<P>(mut self, kind: ModuleKind, params: P) -> Self
-    where
-        P: ModuleGenParams,
-    {
-        self.module_gens_params
-            .attach_config_gen_params(kind, params);
         self
     }
 
@@ -271,7 +259,6 @@ async fn run(
             p2p_url: cfg.local.p2p_endpoints[&cfg.local.identity].url.clone(),
             api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
             default_params: Default::default(),
-            module_gens: module_gens.legacy_init_modules(),
             max_connections: fedimint_server::config::max_connections(),
             registry: module_gens,
         },
