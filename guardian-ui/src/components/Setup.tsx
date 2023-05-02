@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Center,
   Box,
   Button,
   Text,
@@ -131,44 +130,30 @@ export const Setup: React.FC = () => {
   }
 
   return (
-    <>
-      <Center>
-        <Box
-          maxW='960px'
-          width='100%'
-          mt={10}
-          mb={10}
-          mr={[2, 4, 6, 10]}
-          ml={[2, 4, 6, 10]}
-          p={5}
-        >
-          <VStack gap={8} align='start'>
-            <Header />
-            <VStack align='start' gap={2}>
-              {prevProgress && (
-                <Button
-                  variant='link'
-                  onClick={handleBack}
-                  leftIcon={<Icon as={ArrowLeftIcon} />}
-                >
-                  Back
-                </Button>
-              )}
-              {title && (
-                <Heading fontSize={32} lineHeight='3xl' fontWeight='500'>
-                  {title}
-                </Heading>
-              )}
-              {subtitle && (
-                <Text size='md' lineHeight='shorter' fontWeight='500'>
-                  {subtitle}
-                </Text>
-              )}
-            </VStack>
-            <Box mt={10}>{content}</Box>
-          </VStack>
-        </Box>
-      </Center>
-    </>
+    <VStack gap={8} align='start'>
+      <Header />
+      <VStack align='start' gap={2}>
+        {prevProgress && (
+          <Button
+            variant='link'
+            onClick={handleBack}
+            leftIcon={<Icon as={ArrowLeftIcon} />}
+          >
+            Back
+          </Button>
+        )}
+        {title && (
+          <Heading fontSize={32} lineHeight='3xl' fontWeight='500'>
+            {title}
+          </Heading>
+        )}
+        {subtitle && (
+          <Text size='md' lineHeight='shorter' fontWeight='500'>
+            {subtitle}
+          </Text>
+        )}
+      </VStack>
+      <Box mt={10}>{content}</Box>
+    </VStack>
   );
 };

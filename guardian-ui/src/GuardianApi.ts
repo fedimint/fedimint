@@ -24,37 +24,44 @@ export interface ApiInterface {
 const SESSION_STORAGE_KEY = 'guardian-ui-key';
 
 export class GuardianApi implements ApiInterface {
-  private websocket: JsonRpcWebsocket | null;
+  private websocket: JsonRpcWebsocket | null = null;
+  private connectPromise: Promise<JsonRpcWebsocket> | null = null;
 
-  constructor() {
-    this.websocket = null;
-    this.connect();
-  }
-
-  private connect = async (): Promise<JsonRpcWebsocket> => {
+  public connect = async (): Promise<JsonRpcWebsocket> => {
     if (this.websocket !== null) {
       return this.websocket;
     }
-
-    const websocketUrl = process.env.REACT_APP_FM_CONFIG_API;
-
-    if (!websocketUrl) {
-      throw new Error('REACT_APP_FM_CONFIG_API not set');
+    if (this.connectPromise) {
+      return await this.connectPromise;
     }
 
-    const requestTimeoutMs = 20000;
-    const websocket = new JsonRpcWebsocket(
-      websocketUrl,
-      requestTimeoutMs,
-      (error: JsonRpcError) => {
-        console.error('failed to create websocket', error);
-        this.shutdown();
-      }
-    );
-    await websocket.open();
+    this.connectPromise = new Promise((resolve, reject) => {
+      const websocketUrl = process.env.REACT_APP_FM_CONFIG_API;
 
-    this.websocket = websocket;
-    return this.websocket;
+      if (!websocketUrl) {
+        throw new Error('REACT_APP_FM_CONFIG_API not set');
+      }
+
+      const requestTimeoutMs = 20000;
+      const websocket = new JsonRpcWebsocket(
+        websocketUrl,
+        requestTimeoutMs,
+        (error: JsonRpcError) => {
+          console.error('failed to create websocket', error);
+          reject(error);
+          this.shutdown();
+        }
+      );
+      websocket
+        .open()
+        .then(() => {
+          this.websocket = websocket;
+          resolve(this.websocket);
+        })
+        .catch((error) => reject(error));
+    });
+
+    return this.connectPromise;
   };
 
   public getPassword = (): string | null => {
