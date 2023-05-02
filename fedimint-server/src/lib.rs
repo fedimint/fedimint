@@ -2,19 +2,19 @@
 extern crate fedimint_core;
 
 use std::fs;
+use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{anyhow as format_err, bail, Context};
+use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
 use config::ServerConfig;
-use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::TaskGroup;
 pub use fedimint_core::*;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
@@ -25,13 +25,13 @@ use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use rand::rngs::OsRng;
 use tokio::runtime::Runtime;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::PLAINTEXT_PASSWORD;
 use crate::consensus::server::ConsensusServer;
 use crate::consensus::HbbftConsensusOutcome;
-use crate::net::api::{ConsensusApi, RpcHandlerCtx};
+use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 use crate::net::peers::ReconnectPeerConnections;
 
@@ -95,9 +95,9 @@ impl FedimintServer {
         .unwrap();
 
         info!(target: LOG_CONSENSUS, "Starting consensus API");
-        let handler = self.run_consensus_api(&server.consensus.api).await;
+        let handler = Self::spawn_consensus_api(&server).await;
 
-        self.run_consensus(server, &mut task_group).await?;
+        server.run_consensus(task_group.make_handle()).await?;
         handler.stop().await;
 
         info!(target: LOG_CONSENSUS, "Shutting down tasks");
@@ -137,7 +137,7 @@ impl FedimintServer {
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
-        let handler = self.spawn_api(rpc_module, 10).await;
+        let handler = Self::spawn_api(&self.settings.api_bind, rpc_module, 10).await;
 
         let cfg = config_generated_rx.recv().await.expect("should not close");
         handler.stop().await;
@@ -146,51 +146,21 @@ impl FedimintServer {
 
     /// Runs the `ConsensusApi` which serves endpoints while consensus is
     /// running
-    pub async fn run_consensus_api(&self, api: &ConsensusApi) -> FedimintApiHandler {
+    pub async fn spawn_consensus_api(server: &ConsensusServer) -> FedimintApiHandler {
+        let api = &server.consensus.api;
+        let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
         for (id, _, module) in api.modules.iter_modules() {
             Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
         }
 
-        self.spawn_api(rpc_module, api.cfg.local.max_connections)
-            .await
-    }
-
-    /// Runs the `FedimintServer` which runs P2P consensus
-    async fn run_consensus(
-        &mut self,
-        server: ConsensusServer,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<()> {
-        // TODO: Upgrade / config validation should be part of the config gen API
-        let our_hash = server
-            .cfg
-            .consensus
-            .to_config_response(&self.settings.registry)
-            .client_config
-            .consensus_hash();
-
-        loop {
-            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
-            match server.api.consensus_config_hash().await {
-                Ok(consensus_hash) if consensus_hash == our_hash => break,
-                Ok(_) => bail!("Our consensus config doesn't match peers!"),
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "ERROR {:?}", e)
-                }
-            }
-            sleep(Duration::from_millis(1000)).await;
-        }
-
-        server.run_consensus(task_group.make_handle()).await;
-
-        Ok(())
+        Self::spawn_api(&cfg.api_bind, rpc_module, cfg.max_connections).await
     }
 
     /// Spawns an API server
     async fn spawn_api<T>(
-        &self,
+        api_bind: &SocketAddr,
         module: RpcModule<RpcHandlerCtx<T>>,
         max_connections: u32,
     ) -> FedimintApiHandler {
@@ -199,9 +169,9 @@ impl FedimintServer {
             .max_connections(max_connections)
             .ping_interval(Duration::from_secs(10))
             .custom_tokio_runtime(runtime.handle().clone())
-            .build(&self.settings.api_bind.to_string())
+            .build(&api_bind.to_string())
             .await
-            .context(format!("Bind address: {}", self.settings.api_bind))
+            .context(format!("Bind address: {api_bind}"))
             .expect("Could not start API server")
             .start(module)
             .expect("Could not start API server");

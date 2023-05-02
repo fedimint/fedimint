@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::os::unix::ffi::OsStrExt;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::bail;
 use fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
@@ -14,7 +15,7 @@ use fedimint_core::epoch::{
 };
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
-use fedimint_core::task::{TaskGroup, TaskHandle};
+use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::{NumPeers, PeerId};
 use futures::stream::Peekable;
 use futures::{FutureExt, StreamExt};
@@ -249,9 +250,27 @@ impl ConsensusServer {
     }
 
     /// Loop `run_conensus_epoch` until shut down
-    pub async fn run_consensus(mut self, task_handle: TaskHandle) {
-        // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a
-        // problem for change, but maybe later for other use cases
+    pub async fn run_consensus(mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
+        let our_hash = self
+            .cfg
+            .consensus
+            .to_config_response(&self.consensus.module_inits)
+            .client_config
+            .consensus_hash();
+
+        // Confirm our hash matches with peers
+        loop {
+            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
+            match self.api.consensus_config_hash().await {
+                Ok(consensus_hash) if consensus_hash == our_hash => break,
+                Ok(_) => bail!("Our consensus config doesn't match peers!"),
+                Err(e) => {
+                    warn!(target: LOG_CONSENSUS, "ERROR {:?}", e)
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+
         let mut rng = OsRng;
         self.start_consensus().await;
 
@@ -285,6 +304,7 @@ impl ConsensusServer {
         }
 
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
+        Ok(())
     }
 
     /// Starts consensus by skipping to the last saved epoch history  and
