@@ -5,9 +5,11 @@ use fedimint_core::query::{CurrentConsensus, UnionResponses};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
-use fedimint_ln_common::contracts::ContractId;
+use fedimint_ln_common::contracts::{ContractId, FundedContract};
 use fedimint_ln_common::{ContractAccount, LightningGateway};
 
+use crate::pay::OutgoingContractAccount;
+use crate::receive::IncomingContractAccount;
 use crate::Sha256Hash;
 
 #[apply(async_trait_maybe_send!)]
@@ -20,6 +22,16 @@ pub trait LnFederationApi {
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>>;
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()>;
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
+
+    async fn get_incoming_contract(
+        &self,
+        id: ContractId,
+    ) -> anyhow::Result<IncomingContractAccount>;
+
+    async fn get_outgoing_contract(
+        &self,
+        id: ContractId,
+    ) -> anyhow::Result<OutgoingContractAccount>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -71,5 +83,33 @@ where
             )
             .await?
             .is_some())
+    }
+
+    async fn get_incoming_contract(
+        &self,
+        id: ContractId,
+    ) -> anyhow::Result<IncomingContractAccount> {
+        let account = self.fetch_contract(id).await?;
+        match account.contract {
+            FundedContract::Incoming(c) => Ok(IncomingContractAccount {
+                amount: account.amount,
+                contract: c.contract,
+            }),
+            _ => Err(anyhow::anyhow!("WrongAccountType")),
+        }
+    }
+
+    async fn get_outgoing_contract(
+        &self,
+        id: ContractId,
+    ) -> anyhow::Result<OutgoingContractAccount> {
+        let account = self.fetch_contract(id).await?;
+        match account.contract {
+            FundedContract::Outgoing(c) => Ok(OutgoingContractAccount {
+                amount: account.amount,
+                contract: c,
+            }),
+            _ => Err(anyhow::anyhow!("WrongAccountType")),
+        }
     }
 }

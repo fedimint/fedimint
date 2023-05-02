@@ -50,6 +50,7 @@ where
             .collect()
     }
 }
+
 #[macro_export]
 macro_rules! sm_enum_variant_translation {
     ($sm:expr, $enum_variant:path) => {

@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
+use crate::api::LnFederationApi;
 use crate::{LightningClientContext, LightningClientStateMachines};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -256,9 +257,10 @@ impl LightningPayFunded {
     ) -> LightningPayStateMachine {
         // TODO: Retry contacting gateway
 
-        let contract =
-            LightningClientContext::get_outgoing_contract(contract_id, global_context.clone())
-                .await;
+        let contract = global_context
+            .api()
+            .get_outgoing_contract(contract_id)
+            .await;
         let timelock = match contract {
             Ok(contract) => contract.contract.timelock,
             Err(_) => {
@@ -292,11 +294,10 @@ impl LightningPayFunded {
                 state: LightningPayStates::Success(preimage),
             },
             Err(GatewayPayError::GatewayInternalError) => {
-                let contract = LightningClientContext::get_outgoing_contract(
-                    contract_id,
-                    global_context.clone(),
-                )
-                .await;
+                let contract = global_context
+                    .api()
+                    .get_outgoing_contract(contract_id)
+                    .await;
                 let timelock = match contract {
                     Ok(contract) => contract.contract.timelock,
                     Err(_) => {
@@ -402,9 +403,10 @@ impl LightningPayRefundable {
     ) {
         // TODO: Remove polling
         loop {
-            let contract =
-                LightningClientContext::get_outgoing_contract(contract_id, global_context.clone())
-                    .await;
+            let contract = global_context
+                .api()
+                .get_outgoing_contract(contract_id)
+                .await;
             if let Ok(contract) = contract {
                 if contract.contract.cancelled {
                     return;
