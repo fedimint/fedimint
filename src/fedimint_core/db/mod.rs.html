@@ -2457,6 +2457,18 @@
 <a href="#2457" id="2457">2457</a>
 <a href="#2458" id="2458">2458</a>
 <a href="#2459" id="2459">2459</a>
+<a href="#2460" id="2460">2460</a>
+<a href="#2461" id="2461">2461</a>
+<a href="#2462" id="2462">2462</a>
+<a href="#2463" id="2463">2463</a>
+<a href="#2464" id="2464">2464</a>
+<a href="#2465" id="2465">2465</a>
+<a href="#2466" id="2466">2466</a>
+<a href="#2467" id="2467">2467</a>
+<a href="#2468" id="2468">2468</a>
+<a href="#2469" id="2469">2469</a>
+<a href="#2470" id="2470">2470</a>
+<a href="#2471" id="2471">2471</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3223,12 +3235,25 @@
         .<span class="kw">await
     </span>}
 
+    <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key))]
+    </span><span class="kw">fn </span>add_notification_key&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K)
+    <span class="kw">where
+        </span>K: DatabaseKey + DatabaseRecord,
+    {
+        <span class="kw">if </span>&lt;K <span class="kw">as </span>DatabaseKey&gt;::NOTIFY_ON_MODIFY {
+            <span class="self">self</span>.isolated_tx
+                .add_notification_key(<span class="kw-2">&amp;</span>key.to_bytes())
+                .expect(<span class="string">&quot;Notifications not setup properly&quot;</span>)
+        }
+    }
+
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key, <span class="question-mark">?</span>value), ret)]
     </span><span class="kw">pub async fn </span>insert_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Option</span>&lt;K::Value&gt;
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
+        <span class="self">self</span>.add_notification_key(key);
         <span class="self">self</span>.isolated_tx
             .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), <span class="kw-2">&amp;</span>value.to_bytes())
             .<span class="kw">await
@@ -3245,6 +3270,7 @@
         </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
+        <span class="self">self</span>.add_notification_key(key);
         <span class="kw">let </span>key_bytes = key.to_bytes();
         <span class="kw">let </span>value_bytes = value.to_bytes();
         <span class="kw">let </span>prev_val = <span class="self">self
@@ -3268,6 +3294,7 @@
         </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
+        <span class="self">self</span>.add_notification_key(key);
         <span class="kw">let </span>key_bytes = key.to_bytes();
         <span class="kw">match </span><span class="self">self
             </span>.isolated_tx
@@ -3618,10 +3645,7 @@
         </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
-        <span class="kw">if </span>&lt;K <span class="kw">as </span>DatabaseKey&gt;::NOTIFY_ON_MODIFY {
-            <span class="self">self</span>.add_notification_key(key);
-        }
-
+        <span class="self">self</span>.add_notification_key(key);
         <span class="self">self</span>.tx
             .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), <span class="kw-2">&amp;</span>value.to_bytes())
             .<span class="kw">await
@@ -3638,9 +3662,7 @@
         </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
-        <span class="kw">if </span>&lt;K <span class="kw">as </span>DatabaseKey&gt;::NOTIFY_ON_MODIFY {
-            <span class="self">self</span>.add_notification_key(key);
-        }
+        <span class="self">self</span>.add_notification_key(key);
         <span class="kw">let </span>prev_val = <span class="self">self
             </span>.tx
             .raw_insert_bytes(<span class="kw-2">&amp;</span>key.to_bytes(), <span class="kw-2">&amp;</span>value.to_bytes())
@@ -3661,9 +3683,11 @@
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseRecord,
     {
-        <span class="self">self</span>.tx
-            .add_notification_key(<span class="kw-2">&amp;</span>key.to_bytes())
-            .expect(<span class="string">&quot;Notifications not setup properly&quot;</span>)
+        <span class="kw">if </span>&lt;K <span class="kw">as </span>DatabaseKey&gt;::NOTIFY_ON_MODIFY {
+            <span class="self">self</span>.tx
+                .add_notification_key(<span class="kw-2">&amp;</span>key.to_bytes())
+                .expect(<span class="string">&quot;Notifications not setup properly&quot;</span>)
+        }
     }
 
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key, ret), ret)]
@@ -3672,9 +3696,7 @@
         </span>K: DatabaseKey + DatabaseRecord,
     {
         <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
-        <span class="kw">if </span>&lt;K <span class="kw">as </span>DatabaseKey&gt;::NOTIFY_ON_MODIFY {
-            <span class="self">self</span>.add_notification_key(key);
-        }
+        <span class="self">self</span>.add_notification_key(key);
         <span class="kw">let </span>key_bytes = key.to_bytes();
         <span class="kw">match </span><span class="self">self
             </span>.tx
@@ -4871,11 +4893,12 @@
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
         <span class="kw">let </span>db = db.new_isolated(module_instance_id);
 
+        <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db, TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
+
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
         tx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>val).<span class="kw">await</span>;
         tx.commit_tx().<span class="kw">await</span>;
 
-        <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db, TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(
             future_returns_shortly(<span class="kw">async </span>{ key_task.<span class="kw">await</span>.unwrap() }).<span class="kw">await</span>,
             <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)),
@@ -4890,13 +4913,14 @@
         <span class="kw">let </span>val = TestVal(<span class="number">2</span>);
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
 
+        <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db.new_isolated(module_instance_id), TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
+
         <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>tx_mod = tx.with_module_prefix(module_instance_id);
         tx_mod.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>val).<span class="kw">await</span>;
         drop(tx_mod);
         tx.commit_tx().<span class="kw">await</span>;
 
-        <span class="kw">let </span>key_task = waiter(<span class="kw-2">&amp;</span>db.new_isolated(module_instance_id), TestKey(<span class="number">1</span>)).<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(
             future_returns_shortly(<span class="kw">async </span>{ key_task.<span class="kw">await</span>.unwrap() }).<span class="kw">await</span>,
             <span class="prelude-val">Some</span>(TestVal(<span class="number">2</span>)),
