@@ -1032,6 +1032,10 @@
 <a href="#1032" id="1032">1032</a>
 <a href="#1033" id="1033">1033</a>
 <a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -1788,6 +1792,10 @@
 }
 
 <span class="kw">impl </span>ClientBuilder {
+    <span class="kw">pub fn </span>with_module_gens(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_gens: ClientModuleGenRegistry) {
+        <span class="self">self</span>.module_gens = module_gens;
+    }
+
     <span class="doccomment">/// Make module generator available when reading the config
     </span><span class="kw">pub fn </span>with_module&lt;M: ClientModuleGen&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_gen: M) {
         <span class="self">self</span>.module_gens.attach(module_gen);
