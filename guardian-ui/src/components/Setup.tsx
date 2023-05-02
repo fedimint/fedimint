@@ -12,7 +12,12 @@ import {
 import { ReactComponent as ArrowLeftIcon } from '../assets/svgs/arrow-left.svg';
 import { Header } from './Header';
 import { useGuardianContext } from '../hooks';
-import { GuardianRole, SetupProgress, SETUP_ACTION_TYPE } from '../types';
+import {
+  GuardianRole,
+  SetupProgress,
+  SETUP_ACTION_TYPE,
+  ServerStatus,
+} from '../types';
 import { RoleSelector } from './RoleSelector';
 import { SetConfiguration } from './SetConfiguration';
 import { Login } from './Login';
@@ -31,7 +36,7 @@ export const Setup: React.FC = () => {
     state: { progress, role, password },
     dispatch,
   } = useGuardianContext();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
 
   const isHost = role === GuardianRole.Host;
@@ -42,11 +47,25 @@ export const Setup: React.FC = () => {
     PROGRESS_ORDER[progressIdx + 1];
 
   useEffect(() => {
-    setIsCheckingAuth(true);
-    api.checkAuth().then((res) => {
-      setNeedsAuth(res);
-      setIsCheckingAuth(false);
-    });
+    setIsCheckingStatus(true);
+
+    try {
+      api.status().then((status) => {
+        if (status === ServerStatus.AwaitingPassword) {
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_INITIAL_STATE,
+            payload: null,
+          });
+        } else {
+          setNeedsAuth(true);
+        }
+      });
+    } catch (err) {
+      // TODO: Show error UI
+      console.error(err);
+    }
+
+    setIsCheckingStatus(false);
   }, [api]);
 
   const handleBack = useCallback(() => {
@@ -68,7 +87,7 @@ export const Setup: React.FC = () => {
       <Button onClick={handleNext}>Next</Button>
     </>
   );
-  if (isCheckingAuth) {
+  if (isCheckingStatus) {
     content = <Spinner />;
   } else if (needsAuth && !password) {
     title = 'Welcome back!';

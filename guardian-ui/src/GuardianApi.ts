@@ -1,8 +1,7 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
-import { API_ConfigGenParams, ConfigGenParams } from './types';
+import { API_ConfigGenParams, ConfigGenParams, ServerStatus } from './types';
 
 export interface ApiInterface {
-  checkAuth: () => Promise<boolean>;
   testPassword: (password: string) => Promise<boolean>;
   setPassword: (password: string) => Promise<void>;
   getPassword: () => string | null;
@@ -11,7 +10,7 @@ export interface ApiInterface {
     leaderUrl?: string
   ) => Promise<void>;
   getDefaultConfigGenParams: () => Promise<ConfigGenParams>;
-  status: () => Promise<string>;
+  status: () => Promise<ServerStatus>;
   getConsensusConfigGenParams: () => Promise<ConfigGenParams>;
   setConfigGenParams: (params: ConfigGenParams) => Promise<void>;
   getVerifyConfigHash: () => Promise<string>;
@@ -91,32 +90,13 @@ export class GuardianApi implements ApiInterface {
     }
   };
 
-  checkAuth = async (): Promise<boolean> => {
-    // Use get_default_config_gen_params as a way to check if we need auth.
-    try {
-      await this.rpc(
-        'get_default_config_gen_params',
-        null,
-        false /* not-authenticated */
-      );
-      return false;
-    } catch (err) {
-      // TODO: make sure error is auth error, not unrelated
-      return true;
-    }
-  };
-
   testPassword = async (password: string): Promise<boolean> => {
     // Replace with password to check.
     sessionStorage.setItem(SESSION_STORAGE_KEY, password);
 
-    // Attempt a request with the temporary password.
+    // Attempt a "status" rpc call with the temporary password.
     try {
-      await this.rpc(
-        'get_default_config_gen_params',
-        null,
-        true /* authenticated */
-      );
+      await this.status();
       return true;
     } catch (err) {
       // TODO: make sure error is auth error, not unrelated
@@ -183,7 +163,7 @@ export class GuardianApi implements ApiInterface {
     };
   };
 
-  status = async (): Promise<string> => {
+  status = async (): Promise<ServerStatus> => {
     return this.rpc('status', null, true /* authenticated */);
   };
 
@@ -243,7 +223,6 @@ export class GuardianApi implements ApiInterface {
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 export class NoopGuardianApi implements ApiInterface {
-  checkAuth = () => Promise.resolve(false);
   testPassword = () => Promise.resolve(false);
   setPassword = async (_password: string): Promise<void> => {
     return;
@@ -258,8 +237,8 @@ export class NoopGuardianApi implements ApiInterface {
   getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
     throw 'not implemented';
   };
-  status = async (): Promise<string> => {
-    return 'noop';
+  status = async (): Promise<ServerStatus> => {
+    throw 'not implemented';
   };
   getConsensusConfigGenParams = async (): Promise<ConfigGenParams> => {
     throw 'not implemented';
@@ -268,7 +247,7 @@ export class NoopGuardianApi implements ApiInterface {
     return;
   };
   getVerifyConfigHash = async (): Promise<string> => {
-    return 'noop';
+    throw 'not implemented';
   };
   awaitConfigGenPeers = async (_numPeers: number): Promise<void> => {
     return;

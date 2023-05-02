@@ -11,6 +11,13 @@ export enum SetupProgress {
   SetupComplete = 'SetupComplete',
 }
 
+export enum ServerStatus {
+  AwaitingPassword = 'AwaitingPassword',
+  GeneratingConfig = 'GeneratingConfig',
+  Upgrading = 'Upgrading',
+  ConsensusRunning = 'ConsensusRunning',
+}
+
 export enum Network {
   Testnet = 'testnet',
   Mainnet = 'mainnet',
@@ -57,6 +64,7 @@ export interface SetupState {
 }
 
 export enum SETUP_ACTION_TYPE {
+  SET_INITIAL_STATE = 'SET_INITIAL_STATE',
   SET_ROLE = 'SET_ROLE',
   SET_PROGRESS = 'SET_PROGRESS',
   SET_MY_NAME = 'SET_MY_NAME',
@@ -70,6 +78,10 @@ export enum SETUP_ACTION_TYPE {
 }
 
 export type SetupAction =
+  | {
+      type: SETUP_ACTION_TYPE.SET_INITIAL_STATE;
+      payload: null;
+    }
   | {
       type: SETUP_ACTION_TYPE.SET_ROLE;
       payload: GuardianRole;

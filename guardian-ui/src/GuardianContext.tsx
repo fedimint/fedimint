@@ -50,6 +50,8 @@ const initialState = makeInitialState();
 
 const reducer = (state: SetupState, action: SetupAction): SetupState => {
   switch (action.type) {
+    case SETUP_ACTION_TYPE.SET_INITIAL_STATE:
+      return initialState;
     case SETUP_ACTION_TYPE.SET_ROLE:
       return { ...state, role: action.payload };
     case SETUP_ACTION_TYPE.SET_PROGRESS:
