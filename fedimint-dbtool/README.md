@@ -6,6 +6,9 @@ database.**
 For database layout see [`database.md`](../docs/database.md), but verify the information in the code before taking
 potentially destructive action.
 
+If your federation is running, a database lock should cause a panic when running these commands so be sure to stop
+the federation first.
+
 ## Usage
 ```
 $ dbtool --help
@@ -21,7 +24,7 @@ Commands:
   help    Print this message or the help of the given subcommand(s)
 
 Arguments:
-  <DATABASE>  
+  <DATABASE>  - file path of the database
 
 Options:
   -h, --help  Print help
