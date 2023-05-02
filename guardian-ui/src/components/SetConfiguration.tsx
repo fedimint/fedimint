@@ -16,6 +16,7 @@ import { GuardianRole, Network } from '../types';
 import { ReactComponent as FedimintLogo } from '../assets/svgs/fedimint.svg';
 import { ReactComponent as BitcoinLogo } from '../assets/svgs/bitcoin.svg';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
+import { FormGroup } from './FormGroup';
 
 interface Props {
   next(): void;
@@ -212,12 +213,6 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
     </VStack>
   );
 };
-
-const FormGroup: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <VStack gap={4} align='start' width='100%' maxWidth={320}>
-    {children}
-  </VStack>
-);
 
 const FormGroupHeading: React.FC<{
   icon: React.FunctionComponent<React.SVGAttributes<SVGElement>>;
