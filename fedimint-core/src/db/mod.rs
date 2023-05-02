@@ -764,12 +764,25 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         .await
     }
 
+    #[instrument(level = "debug", skip_all, fields(?key))]
+    fn add_notification_key<K>(&mut self, key: &K)
+    where
+        K: DatabaseKey + DatabaseRecord,
+    {
+        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
+            self.isolated_tx
+                .add_notification_key(&key.to_bytes())
+                .expect("Notifications not setup properly")
+        }
+    }
+
     #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
     pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        self.add_notification_key(key);
         self.isolated_tx
             .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
             .await
@@ -786,6 +799,7 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        self.add_notification_key(key);
         let key_bytes = key.to_bytes();
         let value_bytes = value.to_bytes();
         let prev_val = self
@@ -809,6 +823,7 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
+        self.add_notification_key(key);
         let key_bytes = key.to_bytes();
         match self
             .isolated_tx
@@ -1159,10 +1174,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
-        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
-            self.add_notification_key(key);
-        }
-
+        self.add_notification_key(key);
         self.tx
             .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
             .await
@@ -1179,9 +1191,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
-        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
-            self.add_notification_key(key);
-        }
+        self.add_notification_key(key);
         let prev_val = self
             .tx
             .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
@@ -1202,9 +1212,11 @@ impl<'parent> DatabaseTransaction<'parent> {
     where
         K: DatabaseKey + DatabaseRecord,
     {
-        self.tx
-            .add_notification_key(&key.to_bytes())
-            .expect("Notifications not setup properly")
+        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
+            self.tx
+                .add_notification_key(&key.to_bytes())
+                .expect("Notifications not setup properly")
+        }
     }
 
     #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
@@ -1213,9 +1225,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         K: DatabaseKey + DatabaseRecord,
     {
         self.commit_tracker.has_writes = true;
-        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
-            self.add_notification_key(key);
-        }
+        self.add_notification_key(key);
         let key_bytes = key.to_bytes();
         match self
             .tx
@@ -2412,11 +2422,12 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
         let db = db.new_isolated(module_instance_id);
 
+        let key_task = waiter(&db, TestKey(1)).await;
+
         let mut tx = db.begin_transaction().await;
         tx.insert_new_entry(&key, &val).await;
         tx.commit_tx().await;
 
-        let key_task = waiter(&db, TestKey(1)).await;
         assert_eq!(
             future_returns_shortly(async { key_task.await.unwrap() }).await,
             Some(TestVal(2)),
@@ -2431,13 +2442,14 @@ mod tests {
         let val = TestVal(2);
         let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
 
+        let key_task = waiter(&db.new_isolated(module_instance_id), TestKey(1)).await;
+
         let mut tx = db.begin_transaction().await;
         let mut tx_mod = tx.with_module_prefix(module_instance_id);
         tx_mod.insert_new_entry(&key, &val).await;
         drop(tx_mod);
         tx.commit_tx().await;
 
-        let key_task = waiter(&db.new_isolated(module_instance_id), TestKey(1)).await;
         assert_eq!(
             future_returns_shortly(async { key_task.await.unwrap() }).await,
             Some(TestVal(2)),
