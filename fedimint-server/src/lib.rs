@@ -7,15 +7,14 @@ use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{anyhow as format_err, bail, Context};
+use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
 use config::ServerConfig;
-use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::TaskGroup;
 pub use fedimint_core::*;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
@@ -26,7 +25,7 @@ use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use rand::rngs::OsRng;
 use tokio::runtime::Runtime;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::PLAINTEXT_PASSWORD;
@@ -98,7 +97,7 @@ impl FedimintServer {
         info!(target: LOG_CONSENSUS, "Starting consensus API");
         let handler = Self::spawn_consensus_api(&server).await;
 
-        self.run_consensus(server, &mut task_group).await?;
+        server.run_consensus(task_group.make_handle()).await?;
         handler.stop().await;
 
         info!(target: LOG_CONSENSUS, "Shutting down tasks");
@@ -157,37 +156,6 @@ impl FedimintServer {
         }
 
         Self::spawn_api(&cfg.api_bind, rpc_module, cfg.max_connections).await
-    }
-
-    /// Runs the `FedimintServer` which runs P2P consensus
-    async fn run_consensus(
-        &mut self,
-        server: ConsensusServer,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<()> {
-        // TODO: Upgrade / config validation should be part of the config gen API
-        let our_hash = server
-            .cfg
-            .consensus
-            .to_config_response(&self.settings.registry)
-            .client_config
-            .consensus_hash();
-
-        loop {
-            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
-            match server.api.consensus_config_hash().await {
-                Ok(consensus_hash) if consensus_hash == our_hash => break,
-                Ok(_) => bail!("Our consensus config doesn't match peers!"),
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "ERROR {:?}", e)
-                }
-            }
-            sleep(Duration::from_millis(1000)).await;
-        }
-
-        server.run_consensus(task_group.make_handle()).await;
-
-        Ok(())
     }
 
     /// Spawns an API server
