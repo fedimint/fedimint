@@ -1092,9 +1092,6 @@
 <a href="#1092" id="1092">1092</a>
 <a href="#1093" id="1093">1093</a>
 <a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a>
-<a href="#1097" id="1097">1097</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Database keys used throughout the mint client module
 </span><span class="kw">mod </span>db;
 <span class="doccomment">/// State machines for mint inputs
@@ -1203,7 +1200,7 @@
 
     <span class="comment">// Wait for the refund transaction to complete after a lightning invoice
     // failed to be paid.
-    </span><span class="kw">async fn </span>await_lightning_refund(
+    </span><span class="kw">async fn </span>await_claim_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         refund_txid: TransactionId,
@@ -1285,16 +1282,13 @@
         <span class="prelude-val">Ok</span>(operation_id)
     }
 
-    <span class="kw">async fn </span>await_lightning_refund(
+    <span class="kw">async fn </span>await_claim_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        refund_txid: TransactionId,
+        txid: TransactionId,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>(<span class="kw">_</span>, mint_client) = mint_client(<span class="self">self</span>);
-        <span class="kw">let </span>out_point = OutPoint {
-            txid: refund_txid,
-            out_idx: <span class="number">0</span>,
-        };
+        <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
         mint_client
             .await_output_finalized(operation_id, out_point)
             .<span class="kw">await

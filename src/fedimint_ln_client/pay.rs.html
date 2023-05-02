@@ -539,6 +539,8 @@
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -557,6 +559,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
+<span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
 <span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines};
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
@@ -797,9 +800,10 @@
     ) -&gt; LightningPayStateMachine {
         <span class="comment">// TODO: Retry contacting gateway
 
-        </span><span class="kw">let </span>contract =
-            LightningClientContext::get_outgoing_contract(contract_id, global_context.clone())
-                .<span class="kw">await</span>;
+        </span><span class="kw">let </span>contract = global_context
+            .api()
+            .get_outgoing_contract(contract_id)
+            .<span class="kw">await</span>;
         <span class="kw">let </span>timelock = <span class="kw">match </span>contract {
             <span class="prelude-val">Ok</span>(contract) =&gt; contract.contract.timelock,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
@@ -833,11 +837,10 @@
                 state: LightningPayStates::Success(preimage),
             },
             <span class="prelude-val">Err</span>(GatewayPayError::GatewayInternalError) =&gt; {
-                <span class="kw">let </span>contract = LightningClientContext::get_outgoing_contract(
-                    contract_id,
-                    global_context.clone(),
-                )
-                .<span class="kw">await</span>;
+                <span class="kw">let </span>contract = global_context
+                    .api()
+                    .get_outgoing_contract(contract_id)
+                    .<span class="kw">await</span>;
                 <span class="kw">let </span>timelock = <span class="kw">match </span>contract {
                     <span class="prelude-val">Ok</span>(contract) =&gt; contract.contract.timelock,
                     <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
@@ -943,9 +946,10 @@
     ) {
         <span class="comment">// TODO: Remove polling
         </span><span class="kw">loop </span>{
-            <span class="kw">let </span>contract =
-                LightningClientContext::get_outgoing_contract(contract_id, global_context.clone())
-                    .<span class="kw">await</span>;
+            <span class="kw">let </span>contract = global_context
+                .api()
+                .get_outgoing_contract(contract_id)
+                .<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(contract) = contract {
                 <span class="kw">if </span>contract.contract.cancelled {
                     <span class="kw">return</span>;

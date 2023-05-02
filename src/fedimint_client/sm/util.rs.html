@@ -62,6 +62,7 @@
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -114,6 +115,7 @@
             .collect()
     }
 }
+
 <span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>sm_enum_variant_translation {
     (<span class="macro-nonterminal">$sm</span>:expr, <span class="macro-nonterminal">$enum_variant</span>:path) =&gt; {

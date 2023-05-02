@@ -199,21 +199,53 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
-<span class="kw">use </span>fedimint_client::ClientBuilder;
+<span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
-<span class="kw">use </span>fedimint_core::core::{LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 <span class="kw">use </span>fedimint_core::db::IDatabase;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::{Amount, TieredMulti, TieredSummary};
-<span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
+<span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState, LnReceiveState};
 <span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>futures::StreamExt;
@@ -230,6 +262,14 @@
     },
     Spend {
         amount: Amount,
+    },
+    LnInvoice {
+        <span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
+        </span>amount: Amount,
+        <span class="attr">#[clap(long, default_value = <span class="string">&quot;&quot;</span>)]
+        </span>description: String,
+        <span class="attr">#[clap(long)]
+        </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
     LnPay {
         bolt11: lightning_invoice::Invoice,
@@ -265,19 +305,7 @@
 
     <span class="kw">match </span>command {
         ClientNg::Info =&gt; {
-            <span class="kw">let </span>mint_client = client
-                .get_module_client::&lt;MintClientModule&gt;(LEGACY_HARDCODED_INSTANCE_ID_MINT)
-                .unwrap();
-            <span class="kw">let </span>summary = mint_client
-                .get_wallet_summary(
-                    <span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>),
-                )
-                .<span class="kw">await</span>;
-            <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {
-                total_msat: summary.total_amount(),
-                denominations_msat: summary,
-            })
-            .unwrap())
+            <span class="kw">return </span>get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>;
         }
         ClientNg::Reissue { notes } =&gt; {
             <span class="kw">let </span>amount = notes.total_amount();
@@ -304,12 +332,36 @@
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(notes).unwrap())
         }
-        ClientNg::LnPay { bolt11 } =&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-            <span class="kw">let </span>active_gateway = client
-                .fetch_active_gateway(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN))
+        ClientNg::LnInvoice {
+            amount,
+            description,
+            expiry_time,
+        } =&gt; {
+            <span class="kw">let </span>active_gateway = client.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>(operation_id, <span class="kw">_</span>) = client
+                .create_bolt11_invoice_and_receive(amount, description, expiry_time, active_gateway)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            dbtx.commit_tx().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_to_ln_receive_updates(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
+                <span class="kw">match </span>update {
+                    LnReceiveState::Claimed { txid } =&gt; {
+                        client.await_claim_notes(operation_id, txid).<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">return </span>get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>;
+                    }
+                    LnReceiveState::Canceled { reason } =&gt; {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(reason.into());
+                    }
+                    <span class="kw">_ </span>=&gt; {}
+                }
+
+                <span class="macro">info!</span>(<span class="string">&quot;Update: {:?}&quot;</span>, update);
+            }
+
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown Lightning receive state&quot;</span>));
+        }
+        ClientNg::LnPay { bolt11 } =&gt; {
+            <span class="kw">let </span>active_gateway = client.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>operation_id = client
                 .pay_bolt11_invoice(fed_id, bolt11, active_gateway)
@@ -327,9 +379,7 @@
                         .unwrap());
                     }
                     LnPayState::Refunded { refund_txid } =&gt; {
-                        client
-                            .await_lightning_refund(operation_id, refund_txid)
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                        client.await_claim_notes(operation_id, refund_txid).<span class="kw">await</span><span class="question-mark">?</span>;
                     }
                     <span class="kw">_ </span>=&gt; {}
                 }
@@ -346,11 +396,7 @@
             }
 
             <span class="kw">let </span><span class="kw-2">mut </span>gateways_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways);
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-            <span class="kw">let </span>active_gateway = client
-                .fetch_active_gateway(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN))
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-            dbtx.commit_tx().<span class="kw">await</span>;
+            <span class="kw">let </span>active_gateway = client.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             gateways_json
                 .as_array_mut()
@@ -366,25 +412,43 @@
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateways_json).unwrap())
         }
         ClientNg::SwitchGateway { pubkey } =&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-            <span class="kw">let </span>gateway = client
-                .switch_active_gateway(
-                    <span class="prelude-val">Some</span>(pubkey),
-                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span>gateway = client.switch_active_gateway(<span class="prelude-val">Some</span>(pubkey), dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
             gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
-            dbtx.commit_tx().<span class="kw">await</span>;
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateway_json).unwrap())
         }
     }
+}
+
+<span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>Client) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
+    <span class="kw">let </span>mint_client = client
+        .get_module_client::&lt;MintClientModule&gt;(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+        .unwrap();
+    <span class="kw">let </span>summary = mint_client
+        .get_wallet_summary(<span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>))
+        .<span class="kw">await</span>;
+    <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {
+        total_msat: summary.total_amount(),
+        denominations_msat: summary,
+    })
+    .unwrap())
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">struct </span>InfoResponse {
     total_msat: Amount,
     denominations_msat: TieredSummary,
+}
+
+<span class="kw">pub fn </span>parse_fedimint_amount(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_core::Amount, ParseAmountError&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = s.find(char::is_alphabetic) {
+        <span class="kw">let </span>(amt, denom) = s.split_at(i);
+        fedimint_core::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
+    } <span class="kw">else </span>{
+        <span class="comment">//default to millisatoshi
+        </span>fedimint_core::Amount::from_str_in(s, bitcoin::Denomination::MilliSatoshi)
+    }
 }
 
 <span class="kw">pub fn </span>parse_ecash(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {

@@ -14,7 +14,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_dummy_client":["",[],["lib.rs"]],\
 "fedimint_dummy_common":["",[],["config.rs","db.rs","lib.rs"]],\
 "fedimint_dummy_server":["",[],["lib.rs"]],\
-"fedimint_ln_client":["",[],["api.rs","db.rs","lib.rs","pay.rs"]],\
+"fedimint_ln_client":["",[],["api.rs","db.rs","lib.rs","pay.rs","receive.rs"]],\
 "fedimint_ln_common":["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]],\
 "fedimint_ln_server":["",[],["lib.rs"]],\
 "fedimint_logging":["",[],["lib.rs"]],\
