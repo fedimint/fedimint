@@ -6,7 +6,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::config::ClientConfig;
-use fedimint_core::core::{LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::db::IDatabase;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -104,13 +104,9 @@ pub async fn handle_ng_command<D: IDatabase>(
             description,
             expiry_time,
         } => {
-            let mut dbtx = client.db().begin_transaction().await;
-            let active_gateway = client
-                .fetch_active_gateway(&mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN))
-                .await?;
-            dbtx.commit_tx().await;
+            let active_gateway = client.fetch_active_gateway().await?;
 
-            let operation_id = client
+            let (operation_id, _) = client
                 .create_bolt11_invoice_and_receive(amount, description, expiry_time, active_gateway)
                 .await?;
             let mut updates = client.subscribe_to_ln_receive_updates(operation_id).await?;
@@ -132,11 +128,7 @@ pub async fn handle_ng_command<D: IDatabase>(
             return Err(anyhow::anyhow!("Unknown Lightning receive state"));
         }
         ClientNg::LnPay { bolt11 } => {
-            let mut dbtx = client.db().begin_transaction().await;
-            let active_gateway = client
-                .fetch_active_gateway(&mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN))
-                .await?;
-            dbtx.commit_tx().await;
+            let active_gateway = client.fetch_active_gateway().await?;
 
             let operation_id = client
                 .pay_bolt11_invoice(fed_id, bolt11, active_gateway)
@@ -171,11 +163,7 @@ pub async fn handle_ng_command<D: IDatabase>(
             }
 
             let mut gateways_json = json!(&gateways);
-            let mut dbtx = client.db().begin_transaction().await;
-            let active_gateway = client
-                .fetch_active_gateway(&mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN))
-                .await?;
-            dbtx.commit_tx().await;
+            let active_gateway = client.fetch_active_gateway().await?;
 
             gateways_json
                 .as_array_mut()
@@ -191,16 +179,10 @@ pub async fn handle_ng_command<D: IDatabase>(
             Ok(serde_json::to_value(gateways_json).unwrap())
         }
         ClientNg::SwitchGateway { pubkey } => {
-            let mut dbtx = client.db().begin_transaction().await;
-            let gateway = client
-                .switch_active_gateway(
-                    Some(pubkey),
-                    &mut dbtx.with_module_prefix(LEGACY_HARDCODED_INSTANCE_ID_LN),
-                )
-                .await?;
+            let dbtx = client.db().begin_transaction().await;
+            let gateway = client.switch_active_gateway(Some(pubkey), dbtx).await?;
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);
-            dbtx.commit_tx().await;
             Ok(serde_json::to_value(gateway_json).unwrap())
         }
     }

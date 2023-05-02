@@ -24,7 +24,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::IFederationApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
@@ -60,14 +60,11 @@ const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 
 #[apply(async_trait_maybe_send!)]
 pub trait LightningClientExt {
-    async fn fetch_active_gateway(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> anyhow::Result<LightningGateway>;
+    async fn fetch_active_gateway(&self) -> anyhow::Result<LightningGateway>;
     async fn switch_active_gateway(
         &self,
         node_pub_key: Option<secp256k1::PublicKey>,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: DatabaseTransaction<'_>,
     ) -> anyhow::Result<LightningGateway>;
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
 
@@ -89,7 +86,7 @@ pub trait LightningClientExt {
         description: String,
         expiry_time: Option<u64>,
         gateway: LightningGateway,
-    ) -> anyhow::Result<OperationId>;
+    ) -> anyhow::Result<(OperationId, Invoice)>;
 
     async fn subscribe_to_ln_receive_updates(
         &self,
@@ -123,18 +120,20 @@ pub enum LnReceiveState {
 
 #[apply(async_trait_maybe_send!)]
 impl LightningClientExt for Client {
-    async fn fetch_active_gateway(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> anyhow::Result<LightningGateway> {
-        // FIXME: forgetting about old gws might not always be ideal. We assume that the
-        // gateway stays the same except for route hints for now.
-        if let Some(gateway) = dbtx
-            .get_value(&LightningGatewayKey)
-            .await
-            .filter(|gw| gw.valid_until > fedimint_core::time::now())
+    async fn fetch_active_gateway(&self) -> anyhow::Result<LightningGateway> {
+        let (ln_client_id, _) = ln_client(self);
+        let mut dbtx = self.db().begin_transaction().await;
         {
-            return Ok(gateway);
+            let mut isolated_dbtx = dbtx.with_module_prefix(ln_client_id);
+            // FIXME: forgetting about old gws might not always be ideal. We assume that the
+            // gateway stays the same except for route hints for now.
+            if let Some(gateway) = isolated_dbtx
+                .get_value(&LightningGatewayKey)
+                .await
+                .filter(|gw| gw.valid_until > fedimint_core::time::now())
+            {
+                return Ok(gateway);
+            }
         }
 
         self.switch_active_gateway(None, dbtx).await
@@ -148,7 +147,7 @@ impl LightningClientExt for Client {
     async fn switch_active_gateway(
         &self,
         node_pub_key: Option<secp256k1::PublicKey>,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        mut dbtx: DatabaseTransaction<'_>,
     ) -> anyhow::Result<LightningGateway> {
         let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
@@ -170,7 +169,11 @@ impl LightningClientExt for Client {
                 gateways[0].clone()
             }
         };
-        dbtx.insert_entry(&LightningGatewayKey, &gateway).await;
+        let (ln_client_id, _) = ln_client(self);
+        dbtx.with_module_prefix(ln_client_id)
+            .insert_entry(&LightningGatewayKey, &gateway)
+            .await;
+        dbtx.commit_tx().await;
         Ok(gateway)
     }
 
@@ -231,7 +234,7 @@ impl LightningClientExt for Client {
         description: String,
         expiry_time: Option<u64>,
         gateway: LightningGateway,
-    ) -> anyhow::Result<OperationId> {
+    ) -> anyhow::Result<(OperationId, Invoice)> {
         let (ln_client_id, ln_client) = ln_client(self);
 
         // TODO: This gets the `bitcoin::Network` from the wallet module. Ideally
@@ -266,13 +269,13 @@ impl LightningClientExt for Client {
             LightningCommonGen::KIND.as_str(),
             LightningMeta::Receive {
                 out_point: OutPoint { txid, out_idx: 0 },
-                invoice,
+                invoice: invoice.clone(),
             },
         )
         .await;
         dbtx.commit_tx().await;
 
-        Ok(operation_id)
+        Ok((operation_id, invoice))
     }
 
     async fn subscribe_to_ln_receive_updates(
