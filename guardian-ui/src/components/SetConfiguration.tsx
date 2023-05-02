@@ -5,9 +5,7 @@ import {
   FormHelperText,
   Input,
   Select,
-  Flex,
   Icon,
-  Heading,
   Button,
 } from '@chakra-ui/react';
 import React, { useEffect, useState } from 'react';
@@ -17,6 +15,7 @@ import { ReactComponent as FedimintLogo } from '../assets/svgs/fedimint.svg';
 import { ReactComponent as BitcoinLogo } from '../assets/svgs/bitcoin.svg';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
 import { FormGroup } from './FormGroup';
+import { FormGroupHeading } from './FormGroupHeading';
 
 interface Props {
   next(): void;
@@ -213,15 +212,3 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
     </VStack>
   );
 };
-
-const FormGroupHeading: React.FC<{
-  icon: React.FunctionComponent<React.SVGAttributes<SVGElement>>;
-  title: React.ReactNode;
-}> = ({ icon, title }) => (
-  <Flex align='center' justify='start' mb={-3}>
-    <Icon width='20px' height='20px' mr={2} as={icon} />
-    <Heading fontSize='md' lineHeight='20px' fontWeight='700'>
-      {title}
-    </Heading>
-  </Flex>
-);
