@@ -73,7 +73,10 @@ impl ProcessManager {
         cmd.cmd.kill_on_drop(false); // we handle killing ourself
         cmd.cmd.stdout(log.try_clone()?);
         cmd.cmd.stderr(log);
-        let child = cmd.cmd.spawn()?;
+        let child = cmd
+            .cmd
+            .spawn()
+            .with_context(|| format!("Could not spawn: {name}"))?;
         Ok(ProcessHandle(Arc::new(ProcessHandleInner {
             name: name.to_owned(),
             child: Some(child),
