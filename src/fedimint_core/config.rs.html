@@ -834,12 +834,6 @@
 <a href="#834" id="834">834</a>
 <a href="#835" id="835">835</a>
 <a href="#836" id="836">836</a>
-<a href="#837" id="837">837</a>
-<a href="#838" id="838">838</a>
-<a href="#839" id="839">839</a>
-<a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a>
-<a href="#842" id="842">842</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1436,9 +1430,6 @@
             <span class="kw-2">&amp;</span>Default::default(),
         )<span class="question-mark">?</span>)
     }
-
-    <span class="doccomment">/// Derive client side config for this module (type-erased)
-    </span><span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig;
 }
 
 <span class="doccomment">/// Module (server side) config, typed
@@ -1483,9 +1474,6 @@
             ),
         }
     }
-
-    <span class="doccomment">/// Validate the config
-    </span><span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt;;
 }
 
 <span class="doccomment">/// Typed client side module config

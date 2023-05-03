@@ -1062,6 +1062,7 @@
 <a href="#1062" id="1062">1062</a>
 <a href="#1063" id="1063">1063</a>
 <a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1733,7 +1734,8 @@
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt;;
 
-    <span class="kw">fn </span>get_client_config(
+    <span class="doccomment">/// Converts the consensus config into the client config
+    </span><span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;

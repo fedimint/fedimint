@@ -1165,10 +1165,29 @@
 <a href="#1165" id="1165">1165</a>
 <a href="#1166" id="1166">1166</a>
 <a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
+<a href="#1173" id="1173">1173</a>
+<a href="#1174" id="1174">1174</a>
+<a href="#1175" id="1175">1175</a>
+<a href="#1176" id="1176">1176</a>
+<a href="#1177" id="1177">1177</a>
+<a href="#1178" id="1178">1178</a>
+<a href="#1179" id="1179">1179</a>
+<a href="#1180" id="1180">1180</a>
+<a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::ops::Sub;
 
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
@@ -1193,7 +1212,8 @@
 };
 <span class="kw">pub use </span>fedimint_ln_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_ln_common::config::{
-    FeeConsensus, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
+    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
+    LightningConfigPrivate,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_ln_common::contracts::{
@@ -1303,16 +1323,32 @@
     }
 
     <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
-        config
-            .to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?
-            </span>.validate_config(identity)
+        <span class="kw">let </span>config = config.to_typed::&lt;LightningConfig&gt;()<span class="question-mark">?</span>;
+        <span class="kw">if </span>config.private.threshold_sec_key.public_key_share()
+            != config
+                .consensus
+                .threshold_pub_keys
+                .public_key_share(identity.to_usize())
+        {
+            <span class="macro">bail!</span>(<span class="string">&quot;Lightning private key doesn&#39;t match pubkey share&quot;</span>);
+        }
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="prelude-val">Ok</span>(LightningConfigConsensus::from_erased(config)<span class="question-mark">?</span>.to_client_config())
+        <span class="kw">let </span>config = LightningConfigConsensus::from_erased(config)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ClientModuleConfig::from_typed(
+            config.kind(),
+            config.version(),
+            <span class="kw-2">&amp;</span>LightningClientConfig {
+                threshold_pub_key: config.threshold_pub_keys.public_key(),
+                fee_consensus: config.fee_consensus,
+            },
+        )
+        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>))
     }
 
     <span class="kw">async fn </span>dump_database(
