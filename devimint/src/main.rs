@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use std::env;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
@@ -592,6 +592,52 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    drop(cln);
+    drop(lnd);
+
+    let gateways = vec![gw_cln, gw_lnd];
+
+    for mut gw in gateways {
+        // Verify that the gateway can query the lightning node for the pubkey and alias
+        let mut cmd = gw.cmd().await.arg("info");
+        assert!(cmd.run().await.is_ok());
+
+        // Verify that after stopping the lightning node, info no longer returns since
+        // the lightning node is unreachable.
+        gw.stop_lightning_node().await?;
+        let info_fut = cmd.run();
+
+        // CLN will timeout when trying to retrieve the info, LND will return an
+        // explicit error
+        let expected_timeout_or_failure = tokio::time::timeout(Duration::from_secs(3), info_fut)
+            .await
+            .map_err(|_| anyhow::anyhow!("TimeoutError"))
+            .and_then(|result| result);
+        assert!(expected_timeout_or_failure.is_err());
+
+        // Verify that after the lightning node has restarted, the gateway automatically
+        // reconnects and can query the lightning node info again.
+        gw.start_lightning_node(process_mgr).await?;
+        assert!(cmd.run().await.is_ok());
+    }
+
+    info!(LOG_TEST, "lightning_reconnect_test: success");
+    Ok(())
+}
+
 async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     #[allow(unused_variables)]
     let DevFed {
@@ -642,6 +688,7 @@ enum Cmd {
     LatencyTests,
     ReconnectTest,
     CliTests,
+    LightningReconnectTest,
 }
 
 #[derive(Parser)]
@@ -706,6 +753,10 @@ async fn main() -> Result<()> {
         Cmd::CliTests => {
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             cli_tests(dev_fed).await?;
+        }
+        Cmd::LightningReconnectTest => {
+            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
         }
     }
     Ok(())

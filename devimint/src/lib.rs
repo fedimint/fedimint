@@ -25,6 +25,7 @@ use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::sleep;
 use tonic_lnd::lnrpc::GetInfoRequest;
+use tonic_lnd::LndClient;
 use tracing::{info, warn};
 
 pub mod util;
@@ -131,14 +132,29 @@ impl Bitcoind {
 #[derive(Clone)]
 pub struct Lightningd {
     rpc: Arc<Mutex<ClnRpc>>,
-    _process: ProcessHandle,
+    process: Option<ProcessHandle>,
     bitcoind: Bitcoind,
 }
 
 impl Lightningd {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
         let cln_dir = env::var("FM_CLN_DIR")?;
+        let process = Lightningd::start(process_mgr, cln_dir.clone()).await?;
 
+        let socket_cln = PathBuf::from(cln_dir).join("regtest/lightning-rpc");
+        poll("lightningd", || async {
+            Ok(fs::try_exists(&socket_cln).await?)
+        })
+        .await?;
+        let rpc = ClnRpc::new(socket_cln).await?;
+        Ok(Self {
+            bitcoind,
+            rpc: Arc::new(Mutex::new(rpc)),
+            process: Some(process),
+        })
+    }
+
+    pub async fn start(process_mgr: &ProcessManager, cln_dir: String) -> Result<ProcessHandle> {
         let extension_path = cmd!("which", "gateway-cln-extension")
             .out_string()
             .await
@@ -151,19 +167,14 @@ impl Lightningd {
             "--plugin={extension_path}"
         );
 
-        let process = process_mgr.spawn_daemon("lightningd", cmd).await?;
+        process_mgr.spawn_daemon("lightningd", cmd).await
+    }
 
-        let socket_cln = PathBuf::from(cln_dir).join("regtest/lightning-rpc");
-        poll("lightningd", || async {
-            Ok(fs::try_exists(&socket_cln).await?)
-        })
-        .await?;
-        let rpc = ClnRpc::new(socket_cln).await?;
-        Ok(Self {
-            bitcoind,
-            rpc: Arc::new(Mutex::new(rpc)),
-            _process: process,
-        })
+    pub async fn restart(&mut self, process_mgr: &ProcessManager) -> Result<()> {
+        let cln_dir = env::var("FM_CLN_DIR")?;
+        let process = Lightningd::start(process_mgr, cln_dir).await?;
+        self.process = Some(process);
+        Ok(())
     }
 
     pub async fn request<R: cln_rpc::model::IntoRequest>(&self, request: R) -> Result<R::Response>
@@ -194,17 +205,37 @@ impl Lightningd {
             .id
             .to_string())
     }
+
+    pub async fn kill(&mut self) -> Result<()> {
+        if let Some(process) = self.process.take() {
+            return process.kill().await;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
 pub struct Lnd {
     client: Arc<Mutex<tonic_lnd::LndClient>>,
-    _process: ProcessHandle,
+    process: Option<ProcessHandle>,
     _bitcoind: Bitcoind,
 }
 
 impl Lnd {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        let (process, client) = Lnd::start(process_mgr).await?;
+        let this = Self {
+            _bitcoind: bitcoind,
+            client: Arc::new(Mutex::new(client)),
+            process: Some(process),
+        };
+        // wait for lnd rpc to be active
+        poll("lnd", || async { Ok(this.pub_key().await.is_ok()) }).await?;
+        Ok(this)
+    }
+
+    pub async fn start(process_mgr: &ProcessManager) -> Result<(ProcessHandle, LndClient)> {
         let lnd_dir = env::var("FM_LND_DIR")?;
         let cmd = cmd!("lnd", "--lnddir={lnd_dir}");
 
@@ -216,20 +247,33 @@ impl Lnd {
             Ok(fs::try_exists(&lnd_tls_cert).await? && fs::try_exists(&lnd_macaroon).await?)
         })
         .await?;
+
+        poll("lnd_connect", || async {
+            Ok(tonic_lnd::connect(
+                lnd_rpc_addr.clone(),
+                lnd_tls_cert.clone(),
+                lnd_macaroon.clone(),
+            )
+            .await
+            .is_ok())
+        })
+        .await?;
+
         let client = tonic_lnd::connect(
             lnd_rpc_addr.clone(),
             lnd_tls_cert.clone(),
             lnd_macaroon.clone(),
         )
         .await?;
-        let this = Self {
-            _bitcoind: bitcoind,
-            client: Arc::new(Mutex::new(client)),
-            _process: process,
-        };
-        // wait for lnd rpc to be active
-        poll("lnd", || async { Ok(this.pub_key().await.is_ok()) }).await?;
-        Ok(this)
+        Ok((process, client))
+    }
+
+    pub async fn restart(&mut self, process_mgr: &ProcessManager) -> Result<()> {
+        let (process, client) = Lnd::start(process_mgr).await?;
+        self.process = Some(process);
+        self.client = Arc::new(Mutex::new(client));
+        poll("lnd", || async { Ok(self.pub_key().await.is_ok()) }).await?;
+        Ok(())
     }
 
     pub async fn client_lock(&self) -> Result<MappedMutexGuard<'_, tonic_lnd::LightningClient>> {
@@ -258,6 +302,14 @@ impl Lnd {
                 .synced_to_chain)
         })
         .await?;
+        Ok(())
+    }
+
+    pub async fn kill(&mut self) -> Result<()> {
+        if let Some(process) = self.process.take() {
+            return process.kill().await;
+        }
+
         Ok(())
     }
 }
@@ -387,6 +439,20 @@ impl Gatewayd {
             ln,
             _process: process,
         })
+    }
+
+    pub async fn stop_lightning_node(&mut self) -> Result<()> {
+        match &mut self.ln {
+            ClnOrLnd::Lnd(lnd) => lnd.kill().await,
+            ClnOrLnd::Cln(cln) => cln.kill().await,
+        }
+    }
+
+    pub async fn start_lightning_node(&mut self, process_mgr: &ProcessManager) -> Result<()> {
+        match &mut self.ln {
+            ClnOrLnd::Lnd(lnd) => lnd.restart(process_mgr).await,
+            ClnOrLnd::Cln(cln) => cln.restart(process_mgr).await,
+        }
     }
 
     pub async fn cmd(&self) -> Command {
