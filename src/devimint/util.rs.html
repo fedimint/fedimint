@@ -271,6 +271,9 @@
 <a href="#271" id="271">271</a>
 <a href="#272" id="272">272</a>
 <a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
@@ -346,7 +349,10 @@
         cmd.cmd.kill_on_drop(<span class="bool-val">false</span>); <span class="comment">// we handle killing ourself
         </span>cmd.cmd.stdout(log.try_clone()<span class="question-mark">?</span>);
         cmd.cmd.stderr(log);
-        <span class="kw">let </span>child = cmd.cmd.spawn()<span class="question-mark">?</span>;
+        <span class="kw">let </span>child = cmd
+            .cmd
+            .spawn()
+            .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Could not spawn: {name}&quot;</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ProcessHandle(Arc::new(ProcessHandleInner {
             name: name.to_owned(),
             child: <span class="prelude-val">Some</span>(child),
