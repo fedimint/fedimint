@@ -1,14 +1,12 @@
 import {
   Button,
   CircularProgress,
-  Flex,
   FormControl,
   FormLabel,
   Heading,
   Icon,
   Input,
   VStack,
-  useClipboard,
 } from '@chakra-ui/react';
 import React, { useEffect, useState } from 'react';
 import { FormGroup } from './FormGroup';
@@ -16,6 +14,7 @@ import { FormGroupHeading } from './FormGroupHeading';
 import { useGuardianContext } from '../hooks';
 import { GuardianRole } from '../types';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
+import { CopyInput } from './ui/CopyInput';
 
 interface Props {
   next(): void;
@@ -39,12 +38,6 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
   }, [isAwaitingDKG]);
 
   const [verificationCode] = useState('verifyCodePlaceholder');
-  const {
-    onCopy,
-    value: clipValue,
-    setValue,
-    hasCopied,
-  } = useClipboard(verificationCode);
 
   const [numberOfOtherGuardians] = useState(3);
   const [otherGuardiansVerificationCodes, setOtherGuardiansVerificationCodes] =
@@ -89,17 +82,7 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
       <FormGroup>
         <FormControl>
           <FormLabel>Share your verification code.</FormLabel>
-          <Flex>
-            <Input
-              value={clipValue}
-              readOnly={true}
-              onChange={(e) => {
-                setValue(e.target.value);
-              }}
-              mr={2}
-            />
-            <Button onClick={onCopy}>{hasCopied ? 'Copied!' : 'Copy'}</Button>
-          </Flex>
+          <CopyInput value={verificationCode} />
         </FormControl>
       </FormGroup>
       <FormGroup>
