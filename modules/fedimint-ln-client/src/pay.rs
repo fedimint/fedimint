@@ -5,6 +5,7 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, State
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, TransactionId};
@@ -422,6 +423,7 @@ impl LightningPayRefundable {
         loop {
             let consensus_block_height = global_context
                 .api()
+                .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
                 .fetch_consensus_block_height()
                 .await
                 .map_err(|_| anyhow::anyhow!("ApiError"));
