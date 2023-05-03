@@ -1,14 +1,12 @@
 import {
   Button,
-  CircularProgress,
   FormControl,
   FormLabel,
-  Heading,
   Icon,
   Input,
   VStack,
 } from '@chakra-ui/react';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { FormGroup } from './FormGroup';
 import { FormGroupHeading } from './FormGroupHeading';
 import { useGuardianContext } from '../hooks';
@@ -25,17 +23,6 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
     state: { role },
   } = useGuardianContext();
   const isHost = role === GuardianRole.Host;
-  const [isAwaitingDKG, setIsAwaitingDKG] = useState(true);
-
-  // Temp timer to simulate loading
-  useEffect(() => {
-    if (isAwaitingDKG) {
-      const timer = setTimeout(() => {
-        setIsAwaitingDKG(false);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAwaitingDKG]);
 
   const [verificationCode] = useState('verifyCodePlaceholder');
 
@@ -69,14 +56,6 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
     }
   );
 
-  if (isAwaitingDKG) {
-    return (
-      <VStack gap={8} justify='center' align='center'>
-        <CircularProgress isIndeterminate color='#23419F' size='200px' />
-        <Heading>Generating codes...</Heading>
-      </VStack>
-    );
-  }
   return (
     <VStack gap={8} justify='start' align='start'>
       <FormGroup>

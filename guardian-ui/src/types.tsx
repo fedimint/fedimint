@@ -7,6 +7,7 @@ export enum SetupProgress {
   Start = 'Start',
   SetConfiguration = 'SetConfiguration',
   ConnectGuardians = 'ConnectGuardians',
+  RunDKG = 'RunDKG',
   VerifyGuardians = 'VerifyGuardians',
   SetupComplete = 'SetupComplete',
 }

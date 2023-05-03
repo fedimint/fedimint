@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useEffect,
   useReducer,
+  useState,
 } from 'react';
 import {
   SetupState,
@@ -12,6 +13,7 @@ import {
   SETUP_ACTION_TYPE,
   SetupProgress,
   ConfigGenParams,
+  ConsensusState,
   GuardianRole,
 } from './types';
 import { ApiInterface, NoopGuardianApi } from './GuardianApi';
@@ -88,11 +90,17 @@ export const GuardianContext = createContext<{
     numPeers: number;
     config: ConfigGenParams;
   }): Promise<void>;
+  connectToHost(url: string): Promise<ConsensusState>;
+  fetchConsensusState(): Promise<ConsensusState>;
+  togglePeerPolling(toggle: boolean): void;
 }>({
   api: new NoopGuardianApi(),
   state: initialState,
   dispatch: () => null,
-  submitConfiguration: () => Promise.resolve(),
+  submitConfiguration: () => Promise.reject(),
+  connectToHost: () => Promise.reject(),
+  fetchConsensusState: () => Promise.reject(),
+  togglePeerPolling: () => null,
 });
 
 export interface GuardianProviderProps {
@@ -105,7 +113,8 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
   children,
 }: GuardianProviderProps) => {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { role, password, configGenParams } = state;
+  const { role, password, configGenParams, myName } = state;
+  const [isPollingPeers, setIsPollingPeers] = useState(false);
 
   useEffect(() => {
     // Fetch password from API on mount
@@ -142,6 +151,31 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     state.numPeers,
     state.configGenParams,
   ]);
+
+  // Poll for peer state every 2 seconds when isPollingPeers.
+  useEffect(() => {
+    if (!isPollingPeers) return;
+    let timeout: ReturnType<typeof setTimeout>;
+    const pollPeers = () => {
+      api
+        .getConsensusConfigGenParams()
+        .then((res) =>
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_PEERS,
+            payload: Object.values(res.peers),
+          })
+        )
+        .catch((err) => {
+          console.warn('Failed to poll for peers', err);
+        })
+        .finally(() => {
+          timeout = setTimeout(pollPeers, 2000);
+        });
+      api.status();
+    };
+    pollPeers();
+    return () => clearTimeout(timeout);
+  }, [isPollingPeers]);
 
   // Single call save all of the configuration on the middle step and call various API methods.
   const submitConfiguration = useCallback(
@@ -187,9 +221,42 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     [password, api, dispatch, configGenParams, role]
   );
 
+  const fetchConsensusState = useCallback(async () => {
+    const consensusState = await api.getConsensusConfigGenParams();
+    dispatch({
+      type: SETUP_ACTION_TYPE.SET_PEERS,
+      payload: Object.values(consensusState.peers),
+    });
+    dispatch({
+      type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
+      payload: consensusState.requested,
+    });
+    return consensusState;
+  }, []);
+
+  const connectToHost = useCallback(
+    async (url: string) => {
+      await api.setConfigGenConnections(myName, url);
+      return await fetchConsensusState();
+    },
+    [myName, api, dispatch]
+  );
+
+  const togglePeerPolling = useCallback((poll: boolean) => {
+    setIsPollingPeers(poll);
+  }, []);
+
   return (
     <GuardianContext.Provider
-      value={{ state, dispatch, api, submitConfiguration }}
+      value={{
+        state,
+        dispatch,
+        api,
+        submitConfiguration,
+        connectToHost,
+        fetchConsensusState,
+        togglePeerPolling,
+      }}
     >
       {children}
     </GuardianContext.Provider>

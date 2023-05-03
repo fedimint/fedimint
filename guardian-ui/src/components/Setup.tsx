@@ -20,12 +20,15 @@ import {
 import { RoleSelector } from './RoleSelector';
 import { SetConfiguration } from './SetConfiguration';
 import { Login } from './Login';
+import { ConnectGuardians } from './ConnectGuardians';
+import { RunDKG } from './RunDKG';
 import { VerifyGuardians } from './VerifyGuardians';
 
 const PROGRESS_ORDER: SetupProgress[] = [
   SetupProgress.Start,
   SetupProgress.SetConfiguration,
   SetupProgress.ConnectGuardians,
+  SetupProgress.RunDKG,
   SetupProgress.VerifyGuardians,
   SetupProgress.SetupComplete,
 ];
@@ -80,6 +83,7 @@ export const Setup: React.FC = () => {
 
   let title: React.ReactNode;
   let subtitle: React.ReactNode;
+  let canGoBack = true;
   let content: React.ReactNode = (
     <>
       {/* TODO: Remove these defaults */}
@@ -114,16 +118,25 @@ export const Setup: React.FC = () => {
         subtitle = isHost
           ? 'Share the link with the other Guardians to get everyone on the same page. Once all the Guardians join, you’ll automatically move on to the next step.'
           : 'Get your invite link from your Federation Leader, and paste it below.';
+        content = <ConnectGuardians next={handleNext} />;
+        break;
+      case SetupProgress.RunDKG:
+        title = 'Boom! Sharing info between Guardians';
+        subtitle =
+          'All Guardians have validated federation setup details. Running some numbers...';
+        content = <RunDKG next={handleNext} />;
         break;
       case SetupProgress.VerifyGuardians:
         title = 'Verify your Guardians';
         subtitle =
           'Ask each Guardian for their verification code, and paste them below to check validity. We’re almost done!';
         content = <VerifyGuardians next={handleNext} />;
+        canGoBack = false;
         break;
       case SetupProgress.SetupComplete:
         title = 'Your Federation is now set up!';
         subtitle = 'Get connected and start inviting members.';
+        canGoBack = false;
         break;
       default:
         title = 'Unknown step';
@@ -135,7 +148,7 @@ export const Setup: React.FC = () => {
     <VStack gap={8} align='start'>
       <Header />
       <VStack align='start' gap={2}>
-        {prevProgress && (
+        {prevProgress && canGoBack && (
           <Button
             variant='link'
             onClick={handleBack}
@@ -155,7 +168,9 @@ export const Setup: React.FC = () => {
           </Text>
         )}
       </VStack>
-      <Box mt={10}>{content}</Box>
+      <Box mt={10} width='100%'>
+        {content}
+      </Box>
     </VStack>
   );
 };
