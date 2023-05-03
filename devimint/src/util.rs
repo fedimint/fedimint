@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail};
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::*;
 
@@ -145,7 +145,7 @@ impl Command {
     }
 
     pub async fn run_inner(&mut self) -> Result<std::process::Output> {
-        info!(LOG_DEVIMINT, "> {}", self.command_debug());
+        debug!(LOG_DEVIMINT, "> {}", self.command_debug());
         let output = self.cmd.output().await?;
         if !output.status.success() {
             bail!(
