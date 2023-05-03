@@ -20,6 +20,7 @@ import {
 import { RoleSelector } from './RoleSelector';
 import { SetConfiguration } from './SetConfiguration';
 import { Login } from './Login';
+import { VerifyGuardians } from './VerifyGuardians';
 
 const PROGRESS_ORDER: SetupProgress[] = [
   SetupProgress.Start,
@@ -118,6 +119,7 @@ export const Setup: React.FC = () => {
         title = 'Verify your Guardians';
         subtitle =
           'Ask each Guardian for their verification code, and paste them below to check validity. We’re almost done!';
+        content = <VerifyGuardians next={handleNext} />;
         break;
       case SetupProgress.SetupComplete:
         title = 'Your Federation is now set up!';
