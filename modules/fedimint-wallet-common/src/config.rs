@@ -3,8 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::{bail, format_err};
 use bitcoin::Network;
 use fedimint_core::config::{
-    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -91,20 +90,6 @@ impl Default for FeeConsensus {
 }
 
 impl TypedServerModuleConsensusConfig for WalletConfigConsensus {
-    fn to_client_config(&self) -> ClientModuleConfig {
-        ClientModuleConfig::from_typed(
-            crate::KIND,
-            crate::CONSENSUS_VERSION,
-            &WalletClientConfig {
-                peg_in_descriptor: self.peg_in_descriptor.clone(),
-                network: self.network,
-                fee_consensus: self.fee_consensus.clone(),
-                finality_delay: self.finality_delay,
-            },
-        )
-        .expect("Serialization can't fail")
-    }
-
     fn kind(&self) -> ModuleKind {
         crate::KIND
     }

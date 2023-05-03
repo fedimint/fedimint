@@ -1,7 +1,6 @@
 use anyhow::bail;
 use fedimint_core::config::{
-    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -44,18 +43,6 @@ pub struct DummyConfigPrivate {
 }
 
 impl TypedServerModuleConsensusConfig for DummyConfigConsensus {
-    /// Derives the client config from the consensus config
-    fn to_client_config(&self) -> ClientModuleConfig {
-        ClientModuleConfig::from_typed(
-            KIND,
-            CONSENSUS_VERSION,
-            &(DummyClientConfig {
-                tx_fee: self.tx_fee,
-            }),
-        )
-        .expect("Serialization can't fail")
-    }
-
     // TODO: Boilerplate-code
     fn kind(&self) -> ModuleKind {
         KIND

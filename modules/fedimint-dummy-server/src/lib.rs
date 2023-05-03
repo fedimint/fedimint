@@ -20,7 +20,9 @@ use fedimint_core::module::{
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
-use fedimint_dummy_common::config::{DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+use fedimint_dummy_common::config::{
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
+};
 use fedimint_dummy_common::{
     DummyCommonGen, DummyConfigGenParams, DummyConsensusItem, DummyError, DummyInput,
     DummyModuleTypes, DummyOutput, DummyOutputOutcome, DummyPrintMoneyRequest, CONSENSUS_VERSION,
@@ -131,12 +133,20 @@ impl ServerModuleGen for DummyGen {
         .to_erased())
     }
 
-    // TODO: Boilerplate-code
+    /// Converts the consensus config into the client config
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig> {
-        Ok(DummyConfigConsensus::from_erased(config)?.to_client_config())
+        let config = DummyConfigConsensus::from_erased(config)?;
+        Ok(ClientModuleConfig::from_typed(
+            config.kind(),
+            config.version(),
+            &(DummyClientConfig {
+                tx_fee: config.tx_fee,
+            }),
+        )
+        .expect("Serialization can't fail"))
     }
 
     // TODO: Boilerplate-code

@@ -53,7 +53,7 @@ use fedimint_core::{
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::WalletConfig;
+use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig};
 use fedimint_wallet_common::db::{
     BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
     PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
@@ -185,7 +185,18 @@ impl ServerModuleGen for WalletGen {
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig> {
-        Ok(WalletConfigConsensus::from_erased(config)?.to_client_config())
+        let config = WalletConfigConsensus::from_erased(config)?;
+        Ok(ClientModuleConfig::from_typed(
+            config.kind(),
+            config.version(),
+            &WalletClientConfig {
+                peg_in_descriptor: config.peg_in_descriptor.clone(),
+                network: config.network,
+                fee_consensus: config.fee_consensus.clone(),
+                finality_delay: config.finality_delay,
+            },
+        )
+        .expect("Serialization can't fail"))
     }
 
     async fn dump_database(

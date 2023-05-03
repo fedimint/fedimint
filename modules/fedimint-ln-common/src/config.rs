@@ -1,7 +1,6 @@
 use anyhow::bail;
 use fedimint_core::config::{
-    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
+    TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -59,18 +58,6 @@ pub struct LightningClientConfig {
 }
 
 impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
-    fn to_client_config(&self) -> ClientModuleConfig {
-        ClientModuleConfig::from_typed(
-            KIND,
-            CONSENSUS_VERSION,
-            &LightningClientConfig {
-                threshold_pub_key: self.threshold_pub_keys.public_key(),
-                fee_consensus: self.fee_consensus.clone(),
-            },
-        )
-        .expect("Serialization can't fail")
-    }
-
     fn kind(&self) -> ModuleKind {
         KIND
     }
