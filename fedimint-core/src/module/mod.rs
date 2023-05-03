@@ -669,6 +669,7 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
 
+    /// Converts the consensus config into the client config
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,

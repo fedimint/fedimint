@@ -1,19 +1,16 @@
 use std::collections::BTreeMap;
-use std::iter::FromIterator;
 
-use anyhow::bail;
 use fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
-use itertools::Itertools;
+use fedimint_core::{PeerId, Tiered};
 use serde::{Deserialize, Serialize};
-use tbs::{Aggregatable, AggregatePublicKey, PublicKeyShare};
+use tbs::{AggregatePublicKey, PublicKeyShare};
 
-use crate::{CONSENSUS_VERSION, KIND};
+use crate::KIND;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
@@ -65,33 +62,6 @@ impl TypedClientModuleConfig for MintClientConfig {
 }
 
 impl TypedServerModuleConsensusConfig for MintConfigConsensus {
-    fn to_client_config(&self) -> ClientModuleConfig {
-        let pub_keys = TieredMultiZip::new(
-            self.peer_tbs_pks.values().map(|keys| keys.iter()).collect(),
-        )
-        .map(|(amt, keys)| {
-            // TODO: avoid this through better aggregation API allowing references or
-            let agg_key = keys
-                .into_iter()
-                .copied()
-                .collect::<Vec<_>>()
-                .aggregate(self.peer_tbs_pks.threshold());
-            (amt, agg_key)
-        });
-
-        ClientModuleConfig::from_typed(
-            KIND,
-            CONSENSUS_VERSION,
-            &MintClientConfig {
-                tbs_pks: Tiered::from_iter(pub_keys),
-                fee_consensus: self.fee_consensus.clone(),
-                peer_tbs_pks: self.peer_tbs_pks.clone(),
-                max_notes_per_denomination: self.max_notes_per_denomination,
-            },
-        )
-        .expect("Serialization can't fail")
-    }
-
     fn kind(&self) -> ModuleKind {
         crate::KIND
     }
@@ -112,32 +82,6 @@ impl TypedServerModuleConfig for MintConfig {
 
     fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
         (KIND, (), self.private, self.consensus)
-    }
-
-    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
-        let sks: BTreeMap<Amount, PublicKeyShare> = self
-            .private
-            .tbs_sks
-            .iter()
-            .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
-            .collect();
-        let pks: BTreeMap<Amount, PublicKeyShare> = self
-            .consensus
-            .peer_tbs_pks
-            .get(identity)
-            .unwrap()
-            .as_map()
-            .iter()
-            .map(|(k, v)| (*k, *v))
-            .collect();
-        if sks != pks {
-            bail!("Mint private key doesn't match pubkey share");
-        }
-        if !sks.keys().contains(&Amount::from_msats(1)) {
-            bail!("No msat 1 denomination");
-        }
-
-        Ok(())
     }
 }
 

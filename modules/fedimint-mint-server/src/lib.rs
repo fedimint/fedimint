@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::ops::Sub;
 
+use anyhow::bail;
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -24,7 +25,7 @@ use fedimint_core::{
 };
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
-    FeeConsensus, MintConfig, MintConfigConsensus, MintConfigPrivate,
+    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
 };
 use fedimint_mint_common::db::{
     DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
@@ -191,14 +192,65 @@ impl ServerModuleGen for MintGen {
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        config.to_typed::<MintConfig>()?.validate_config(identity)
+        let config = config.to_typed::<MintConfig>()?;
+        let sks: BTreeMap<Amount, PublicKeyShare> = config
+            .private
+            .tbs_sks
+            .iter()
+            .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+            .collect();
+        let pks: BTreeMap<Amount, PublicKeyShare> = config
+            .consensus
+            .peer_tbs_pks
+            .get(identity)
+            .unwrap()
+            .as_map()
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect();
+        if sks != pks {
+            bail!("Mint private key doesn't match pubkey share");
+        }
+        if !sks.keys().contains(&Amount::from_msats(1)) {
+            bail!("No msat 1 denomination");
+        }
+
+        Ok(())
     }
 
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig> {
-        Ok(MintConfigConsensus::from_erased(config)?.to_client_config())
+        let config = MintConfigConsensus::from_erased(config)?;
+        let pub_keys = TieredMultiZip::new(
+            config
+                .peer_tbs_pks
+                .values()
+                .map(|keys| keys.iter())
+                .collect(),
+        )
+        .map(|(amt, keys)| {
+            // TODO: avoid this through better aggregation API allowing references or
+            let agg_key = keys
+                .into_iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .aggregate(config.peer_tbs_pks.threshold());
+            (amt, agg_key)
+        });
+
+        Ok(ClientModuleConfig::from_typed(
+            config.kind(),
+            config.version(),
+            &MintClientConfig {
+                tbs_pks: Tiered::from_iter(pub_keys),
+                fee_consensus: config.fee_consensus.clone(),
+                peer_tbs_pks: config.peer_tbs_pks.clone(),
+                max_notes_per_denomination: config.max_notes_per_denomination,
+            },
+        )
+        .expect("Serialization can't fail"))
     }
 
     async fn dump_database(
@@ -936,10 +988,7 @@ impl Mint {
 
 #[cfg(test)]
 mod test {
-    use fedimint_core::config::{
-        ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig,
-        TypedServerModuleConsensusConfig,
-    };
+    use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
     use fedimint_core::module::ServerModuleGen;
     use fedimint_core::{Amount, PeerId, TieredMulti};
     use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
@@ -962,11 +1011,9 @@ mod test {
             })
             .unwrap(),
         );
-        let client_cfg = mint_cfg[&PeerId::from(0)]
-            .to_typed::<MintConfig>()
-            .unwrap()
-            .consensus
-            .to_client_config();
+        let client_cfg = MintGen
+            .get_client_config(&mint_cfg[&PeerId::from(0)].consensus)
+            .unwrap();
 
         (mint_cfg.into_values().collect(), client_cfg)
     }

@@ -594,9 +594,6 @@ pub trait TypedServerModuleConsensusConfig:
             &Default::default(),
         )?)
     }
-
-    /// Derive client side config for this module (type-erased)
-    fn to_client_config(&self) -> ClientModuleConfig;
 }
 
 /// Module (server side) config, typed
@@ -641,9 +638,6 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
             ),
         }
     }
-
-    /// Validate the config
-    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()>;
 }
 
 /// Typed client side module config

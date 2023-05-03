@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::string::ToString;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
@@ -20,7 +21,9 @@ use fedimint_core::module::{
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
-use fedimint_dummy_common::config::{DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
+use fedimint_dummy_common::config::{
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
+};
 use fedimint_dummy_common::{
     DummyCommonGen, DummyConfigGenParams, DummyConsensusItem, DummyError, DummyInput,
     DummyModuleTypes, DummyOutput, DummyOutputOutcome, DummyPrintMoneyRequest, CONSENSUS_VERSION,
@@ -131,17 +134,33 @@ impl ServerModuleGen for DummyGen {
         .to_erased())
     }
 
-    // TODO: Boilerplate-code
+    /// Converts the consensus config into the client config
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig> {
-        Ok(DummyConfigConsensus::from_erased(config)?.to_client_config())
+        let config = DummyConfigConsensus::from_erased(config)?;
+        Ok(ClientModuleConfig::from_typed(
+            config.kind(),
+            config.version(),
+            &(DummyClientConfig {
+                tx_fee: config.tx_fee,
+            }),
+        )
+        .expect("Serialization can't fail"))
     }
 
-    // TODO: Boilerplate-code
+    /// Validates the private/public key of configs
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        config.to_typed::<DummyConfig>()?.validate_config(identity)
+        let config = config.to_typed::<DummyConfig>()?;
+        let our_id = identity.to_usize();
+        let our_share = config.consensus.public_key_set.public_key_share(our_id);
+
+        // Check our private key matches our public key share
+        if config.private.private_key_share.public_key_share() != our_share {
+            bail!("Private key doesn't match public key share");
+        }
+        Ok(())
     }
 
     /// Dumps all database items for debugging
