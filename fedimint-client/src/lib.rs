@@ -341,6 +341,13 @@ impl Client {
         ClientBuilder::default()
     }
 
+    pub async fn start_executor(&self, tg: &mut TaskGroup) {
+        self.inner
+            .executor
+            .start_executor(tg, self.inner.context_gen())
+            .await
+    }
+
     pub fn api(&self) -> &(dyn IFederationApi + 'static) {
         self.inner.api.as_ref()
     }
@@ -814,7 +821,15 @@ impl ClientBuilder {
         );
     }
 
+    /// Build a [`Client`] and start its executor
     pub async fn build(self, tg: &mut TaskGroup) -> anyhow::Result<Client> {
+        let client = self.build_stopped().await?;
+        client.start_executor(tg).await;
+        Ok(client)
+    }
+
+    /// Build a [`Client`] but do not start the executor
+    pub async fn build_stopped(self) -> anyhow::Result<Client> {
         let config = self.config.ok_or(anyhow!("No config was provided"))?;
         let primary_module_instance = self
             .primary_module_instance
@@ -912,11 +927,6 @@ impl ClientBuilder {
             api,
             secp_ctx: Secp256k1::new(),
         });
-
-        client_inner
-            .executor
-            .start_executor(tg, client_inner.context_gen())
-            .await;
 
         Ok(Client {
             inner: client_inner,
