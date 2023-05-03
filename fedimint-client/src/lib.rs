@@ -345,6 +345,10 @@ impl Client {
         self.inner.api.as_ref()
     }
 
+    pub fn get_meta(&self, key: &str) -> Option<String> {
+        self.inner.federation_meta.get(key).cloned()
+    }
+
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
     pub async fn finalize_and_submit_transaction<F, M>(
@@ -527,6 +531,7 @@ impl Client {
 
 struct ClientInner {
     db: Database,
+    federation_meta: BTreeMap<String, String>,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
     primary_module_kind: ModuleKind,
@@ -898,6 +903,7 @@ impl ClientBuilder {
 
         let client_inner = Arc::new(ClientInner {
             db,
+            federation_meta: config.meta,
             primary_module,
             primary_module_instance,
             primary_module_kind,
