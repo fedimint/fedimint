@@ -842,6 +842,9 @@
 <a href="#842" id="842">842</a>
 <a href="#843" id="843">843</a>
 <a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
@@ -867,7 +870,7 @@
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::IFederationApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
@@ -1370,7 +1373,10 @@
         fed_id: FederationId,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) -&gt; anyhow::Result&lt;ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;&gt; {
-        <span class="kw">let </span>consensus_height = api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>consensus_height = api
+            .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .fetch_consensus_block_height()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
 
         <span class="kw">let </span>contract_amount = {
