@@ -19,10 +19,6 @@ pub mod config;
 /// Unique name for this module
 const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
 
-/// Needed to avoid API path collisions
-// TODO: Remove
-pub const LEGACY_HARDCODED_INSTANCE_ID_DUMMY: ModuleInstanceId = 4;
-
 /// Modules are non-compatible with older versions
 pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 

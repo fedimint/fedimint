@@ -13,6 +13,7 @@ use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -135,6 +136,8 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     /// have some idea as well, but passing this set across every
     /// API call to the federation would be inconvenient.
     fn all_members(&self) -> &BTreeSet<PeerId>;
+
+    fn with_module(&self, id: ModuleInstanceId) -> DynFederationApi;
 
     /// Make request to a specific federation member by `peer_id`
     async fn request_raw(
@@ -548,10 +551,11 @@ where
 /// Mint API client that will try to run queries against all `members` expecting
 /// equal results from at least `min_eq_results` of them. Members that return
 /// differing results are returned as a member faults list.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WsFederationApi<C = WsClient> {
     peers: BTreeSet<PeerId>,
-    members: Vec<FederationMember<C>>,
+    members: Arc<Vec<FederationMember<C>>>,
+    module_id: Option<ModuleInstanceId>,
 }
 
 #[derive(Debug)]
@@ -658,9 +662,20 @@ impl<'de> Deserialize<'de> for WsClientConnectInfo {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync> IFederationApi for WsFederationApi<C> {
+impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync + 'static> IFederationApi
+    for WsFederationApi<C>
+{
     fn all_members(&self) -> &BTreeSet<PeerId> {
         &self.peers
+    }
+
+    fn with_module(&self, id: ModuleInstanceId) -> DynFederationApi {
+        WsFederationApi {
+            peers: self.peers.clone(),
+            members: self.members.clone(),
+            module_id: Some(id),
+        }
+        .into()
     }
 
     async fn request_raw(
@@ -675,7 +690,11 @@ impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync> IFederationApi for WsFede
             .find(|m| m.peer_id == peer_id)
             .ok_or_else(|| JsonRpcError::Custom(format!("Invalid peer_id: {peer_id}")))?;
 
-        member.request(method, params).await
+        let method = match self.module_id {
+            None => method.to_string(),
+            Some(id) => format!("module_{id}_{method}"),
+        };
+        member.request(&method, params).await
     }
 }
 
@@ -743,22 +762,25 @@ impl<C> WsFederationApi<C> {
     pub fn new_with_client(members: Vec<(PeerId, Url)>) -> Self {
         WsFederationApi {
             peers: members.iter().map(|m| m.0).collect(),
-            members: members
-                .into_iter()
-                .map(|(peer_id, url)| {
-                    assert!(
-                        url.port_or_known_default().is_some(),
-                        "API client requires a port"
-                    );
-                    assert!(url.host().is_some(), "API client requires a target host");
+            members: Arc::new(
+                members
+                    .into_iter()
+                    .map(|(peer_id, url)| {
+                        assert!(
+                            url.port_or_known_default().is_some(),
+                            "API client requires a port"
+                        );
+                        assert!(url.host().is_some(), "API client requires a target host");
 
-                    FederationMember {
-                        peer_id,
-                        url,
-                        client: RwLock::new(None),
-                    }
-                })
-                .collect(),
+                        FederationMember {
+                            peer_id,
+                            url,
+                            client: RwLock::new(None),
+                        }
+                    })
+                    .collect(),
+            ),
+            module_id: None,
         }
     }
 }

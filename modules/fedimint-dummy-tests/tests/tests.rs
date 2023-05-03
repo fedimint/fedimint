@@ -1,20 +1,19 @@
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
-use fedimint_dummy_common::{DummyConfigGenParams, LEGACY_HARDCODED_INSTANCE_ID_DUMMY};
+use fedimint_dummy_common::DummyConfigGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_logging::TracingSetup;
 use fedimint_testing::federation::FederationFixture;
 use fedimint_testing::fixtures::test;
 
 fn fixture() -> FederationFixture {
-    let mod_id = LEGACY_HARDCODED_INSTANCE_ID_DUMMY;
     TracingSetup::default().init().unwrap();
     let params = DummyConfigGenParams {
         tx_fee: Amount::ZERO,
     };
     FederationFixture::new_with_peers(2)
-        .with_module(mod_id, DummyClientGen, DummyGen, params)
-        .with_primary_module(mod_id)
+        .with_module(0, DummyClientGen, DummyGen, params)
+        .with_primary_module(0)
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -1,6 +1,5 @@
 use bitcoin::Address;
 use fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -25,7 +24,7 @@ where
     async fn fetch_consensus_block_height(&self) -> FederationResult<u64> {
         self.request_with_strategy(
             EventuallyConsistent::new(self.all_members().one_honest()),
-            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height"),
+            "block_height".to_string(),
             ApiRequestErased::default(),
         )
         .await
@@ -37,7 +36,7 @@ where
         amount: bitcoin::Amount,
     ) -> FederationResult<Option<PegOutFees>> {
         self.request_eventually_consistent(
-            format!("module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_peg_out_fees"),
+            "peg_out_fees".to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
         )
         .await
