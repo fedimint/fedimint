@@ -4,7 +4,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_core::api::{IFederationApi, JsonRpcResult};
+use fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::ApiRequest;
 use fedimint_core::PeerId;
 use futures::Future;
@@ -101,6 +102,10 @@ where
 {
     fn all_members(&self) -> &BTreeSet<PeerId> {
         &self.members
+    }
+
+    fn with_module(&self, _id: ModuleInstanceId) -> DynFederationApi {
+        unimplemented!()
     }
 
     async fn request_raw(

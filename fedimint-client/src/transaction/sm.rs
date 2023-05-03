@@ -216,8 +216,8 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use async_trait::async_trait;
-    use fedimint_core::api::{IFederationApi, JsonRpcResult};
-    use fedimint_core::core::{IntoDynInstance, ModuleKind};
+    use fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
+    use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -260,6 +260,10 @@ mod tests {
     impl IFederationApi for FakeApiClient {
         fn all_members(&self) -> &BTreeSet<PeerId> {
             &self.fake_peers
+        }
+
+        fn with_module(&self, _id: ModuleInstanceId) -> DynFederationApi {
+            unimplemented!()
         }
 
         async fn request_raw(

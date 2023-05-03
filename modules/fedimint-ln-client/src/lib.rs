@@ -178,7 +178,12 @@ impl LightningClientExt for Client {
     }
 
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>> {
-        Ok(self.api().fetch_gateways().await?)
+        let (ln_client_id, _) = ln_client(self);
+        Ok(self
+            .api()
+            .with_module(ln_client_id)
+            .fetch_gateways()
+            .await?)
     }
 
     async fn pay_bolt11_invoice(

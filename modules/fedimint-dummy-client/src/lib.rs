@@ -59,8 +59,8 @@ impl DummyClientExt for Client {
         let (id, dummy) = dummy_client(self);
         let account = dummy.key.x_only_public_key().0;
         let request = DummyPrintMoneyRequest { amount, account };
-        self.api().print_money(request).await?;
-        let funds = self.api().wait_for_money(account).await?;
+        self.api().with_module(id).print_money(request).await?;
+        let funds = self.api().with_module(id).wait_for_money(account).await?;
 
         // TODO: Not very nice to get to the module db
         let mod_db = self.db().new_isolated(id);
