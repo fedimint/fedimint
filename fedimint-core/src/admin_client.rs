@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use bitcoin_hashes::sha256;
@@ -73,16 +73,6 @@ impl WsAdminClient {
             .await
     }
 
-    /// During config gen, waits to receive server connections from a number of
-    /// `peers`
-    pub async fn await_config_gen_peers(
-        &self,
-        peers: usize,
-    ) -> FederationResult<Vec<PeerServerParams>> {
-        self.request("await_config_gen_peers", ApiRequestErased::new(peers))
-            .await
-    }
-
     /// Sends a signal to consensus that we are ready to shutdown the federation
     /// and upgrade
     pub async fn signal_upgrade(&self) -> FederationResult<()> {
@@ -142,25 +132,15 @@ impl WsAdminClient {
     /// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
-    pub async fn run_dkg(&self) -> FederationResult<ConfigGenParamsConsensus> {
+    pub async fn run_dkg(&self) -> FederationResult<()> {
         self.request_auth("run_dkg", ApiRequestErased::default())
             .await
     }
 
     /// After DKG, returns the hash of the consensus config tweaked with our id.
     /// We need to share this with all other peers to complete verification.
-    pub async fn get_verify_config_hash(&self) -> FederationResult<sha256::Hash> {
+    pub async fn get_verify_config_hash(&self) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
         self.request_auth("get_verify_config_hash", ApiRequestErased::default())
-            .await
-    }
-
-    /// After we exchange verification hashes with other peers, we call this to
-    /// confirm we all have the same consensus configs.
-    pub async fn verify_configs(
-        &self,
-        user_hashes: BTreeSet<sha256::Hash>,
-    ) -> FederationResult<()> {
-        self.request_auth("verify_configs", ApiRequestErased::new(user_hashes))
             .await
     }
 
@@ -209,8 +189,14 @@ pub enum ServerStatus {
     /// Server needs a password to read configs
     #[default]
     AwaitingPassword,
-    /// Configs were not found, need to run config gen
-    GeneratingConfig,
+    /// Waiting for peers to share the config gen params
+    SharingConfigGenParams,
+    /// Ready to run config gen once all peers are ready
+    ReadyForConfigGen,
+    /// We failed running config gen
+    ConfigGenFailed,
+    /// Config is generated, peers should verify the config
+    VerifyingConfigs,
     /// Restarted from a planned upgrade (requires action to start)
     Upgrading,
     /// Consensus is running
@@ -239,6 +225,8 @@ pub struct PeerServerParams {
     pub api_url: Url,
     /// Name of the peer, used in TLS auth
     pub name: String,
+    /// Status of the peer if known
+    pub status: Option<ServerStatus>,
 }
 
 /// The config gen params that need to be in consensus, sent by the config gen

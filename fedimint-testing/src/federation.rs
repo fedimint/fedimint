@@ -180,6 +180,7 @@ fn local_config_gen_params(
                 p2p_url: p2p_url.parse().expect("Should parse"),
                 api_url: api_url.parse().expect("Should parse"),
                 name: format!("peer-{}", peer.to_usize()),
+                status: None,
             };
             (*peer, params)
         })

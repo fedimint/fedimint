@@ -82,6 +82,7 @@ pub fn parse_peer_params(url: String) -> anyhow::Result<PeerServerParams> {
         p2p_url,
         api_url,
         name: split[2].to_string(),
+        status: None,
     })
 }
 
