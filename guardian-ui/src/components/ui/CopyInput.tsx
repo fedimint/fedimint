@@ -34,8 +34,9 @@ export const CopyInput: React.FC<CopyInputProps> = ({ value, size = 'md' }) => {
           borderTopLeftRadius={0}
           borderBottomLeftRadius={0}
           size={size}
-          height={size == 'lg' ? '46px' : '38px'}
+          height={size == 'lg' ? '46px' : '42px'}
           width='100%'
+          colorScheme='gray'
         >
           {hasCopied ? 'Copied' : 'Copy'}
         </Button>
