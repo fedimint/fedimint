@@ -37,13 +37,13 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const [myName, setMyName] = useState(stateMyName);
   const [password, setPassword] = useState(statePassword);
   const [federationName, setFederationName] = useState(
-    configGenParams?.meta.federationName || ''
+    configGenParams?.meta.federation_name || ''
   );
   const [numPeers, setNumPeers] = useState(
     stateNumPeers ? stateNumPeers.toString() : ''
   );
   const [blockConfirmations, setBlockConfirmations] = useState(
-    configGenParams?.modules?.wallet?.finalityDelay?.toString() || ''
+    configGenParams?.modules?.wallet?.finality_delay?.toString() || ''
   );
   const [network, setNetwork] = useState(
     configGenParams?.modules?.wallet?.network || ''
@@ -55,10 +55,12 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
       api
         .getDefaultConfigGenParams()
         .then((params) => {
-          setFederationName(params.meta.federationName);
-          setBlockConfirmations(params.modules.wallet.finalityDelay.toString());
+          setFederationName(params.meta.federation_name);
+          setBlockConfirmations(
+            params.modules.wallet.finality_delay.toString()
+          );
           setNetwork(params.modules.wallet.network);
-          setMintAmounts(params.modules.mint.mintAmounts);
+          setMintAmounts(params.modules.mint.mint_amounts);
         })
         .catch((err) => {
           console.error(err);
@@ -89,18 +91,18 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
 
   const handleNext = async () => {
     try {
-      submitConfiguration({
+      await submitConfiguration({
         password,
         myName,
         numPeers: parseInt(numPeers, 10),
         config: {
-          meta: { federationName },
+          meta: { federation_name: federationName },
           modules: {
             mint: {
-              mintAmounts,
+              mint_amounts: mintAmounts,
             },
             wallet: {
-              finalityDelay: parseInt(blockConfirmations, 10),
+              finality_delay: parseInt(blockConfirmations, 10),
               network: network as Network,
             },
           },

@@ -12,6 +12,7 @@ import {
   SETUP_ACTION_TYPE,
   SetupProgress,
   ConfigGenParams,
+  GuardianRole,
 } from './types';
 import { ApiInterface, NoopGuardianApi } from './GuardianApi';
 
@@ -104,7 +105,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
   children,
 }: GuardianProviderProps) => {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { password, configGenParams } = state;
+  const { role, password, configGenParams } = state;
 
   useEffect(() => {
     // Fetch password from API on mount
@@ -168,19 +169,22 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
 
       dispatch({ type: SETUP_ACTION_TYPE.SET_NUM_PEERS, payload: numPeers });
 
-      await api.setConfigGenConnections(myName);
       dispatch({
         type: SETUP_ACTION_TYPE.SET_MY_NAME,
         payload: myName,
       });
 
-      await api.setConfigGenParams(newConfigGenParams);
-      dispatch({
-        type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
-        payload: newConfigGenParams,
-      });
+      // Only host submits this, followers will connect to host in subsequent step.
+      if (role === GuardianRole.Host) {
+        await api.setConfigGenConnections(myName);
+        await api.setConfigGenParams(newConfigGenParams);
+        dispatch({
+          type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
+          payload: newConfigGenParams,
+        });
+      }
     },
-    [password, api, dispatch, configGenParams]
+    [password, api, dispatch, configGenParams, role]
   );
 
   return (
