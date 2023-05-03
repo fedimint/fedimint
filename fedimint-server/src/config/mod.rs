@@ -785,9 +785,9 @@ where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    ReconnectPeerConnections::new(network, delay_calculator, connector, task_group)
-        .await
-        .into_dyn()
+    let (connections, _) =
+        ReconnectPeerConnections::new(network, delay_calculator, connector, task_group).await;
+    connections.into_dyn()
 }
 
 pub fn gen_cert_and_key(

@@ -5,7 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
-use fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
+use fedimint_core::api::{
+    ConsensusContribution, DynFederationApi, GlobalFederationApi, WsFederationApi,
+};
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::{apply_migrations, Database};
@@ -15,7 +17,7 @@ use fedimint_core::epoch::{
 };
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
-use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
+use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::{NumPeers, PeerId};
 use futures::stream::Peekable;
 use futures::{FutureExt, StreamExt};
@@ -38,7 +40,7 @@ use crate::consensus::{
 use crate::db::{get_global_database_migrations, LastEpochKey, GLOBAL_DATABASE_VERSION};
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
-use crate::net::api::ConsensusApi;
+use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, PeerConnector, PeerSlice, ReconnectPeerConnections};
 use crate::{LOG_CONSENSUS, LOG_CORE};
@@ -70,6 +72,8 @@ enum EpochTriggerEvent {
     RunEpochRequest,
 }
 
+pub(crate) type LatestContributionByPeer = HashMap<PeerId, ConsensusContribution>;
+
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
     /// `TaskGroup` that is running the server
@@ -90,6 +94,9 @@ pub struct ConsensusServer {
     pub other_peers: BTreeSet<PeerId>,
     /// If `Some` then we restarted and look for the epoch to rejoin at
     pub rejoin_at_epoch: HashMap<u64, HashSet<PeerId>>,
+    /// Under the HBBFT consensus algorithm, this will track the latest epoch
+    /// message received by each peer and when it was received
+    pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     /// How many empty epochs peers requested we run
     pub run_empty_epochs: u64,
     /// Tracks the last epoch outcome from consensus
@@ -180,14 +187,14 @@ impl ConsensusServer {
         cfg.validate_config(&cfg.local.identity, &module_inits)?;
 
         // Build P2P connections for HBBFT consensus
-        let connections = ReconnectPeerConnections::new(
+        let (connections, peer_status_channels) = ReconnectPeerConnections::new(
             cfg.network_config(),
             delay_calculator,
             connector,
             task_group,
         )
-        .await
-        .into_dyn();
+        .await;
+        let connections = connections.into_dyn();
 
         let net_info = NetworkInfo::new(
             cfg.local.identity,
@@ -214,6 +221,7 @@ impl ConsensusServer {
         let client_cfg = cfg.consensus.to_config_response(&module_inits);
         let modules = ModuleRegistry::from(modules);
 
+        let latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>> = Default::default();
         let consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             db: db.clone(),
@@ -221,6 +229,11 @@ impl ConsensusServer {
             client_cfg,
             api_sender,
             supported_api_versions: ServerConfig::supported_api_versions_summary(&modules),
+            latest_contribution_by_peer: Arc::clone(&latest_contribution_by_peer),
+            peer_status_channels,
+            // keep the status for a short time to protect the system against a denial-of-service
+            // attack
+            consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
         };
 
         // Build consensus processor
@@ -243,6 +256,7 @@ impl ConsensusServer {
             api: api.into(),
             other_peers,
             rejoin_at_epoch: Default::default(),
+            latest_contribution_by_peer,
             run_empty_epochs: 0,
             last_processed_epoch: None,
             decoders: modules.decoder_registry(),
@@ -323,7 +337,8 @@ impl ConsensusServer {
             "Starting consensus at epoch {}", epoch
         );
         self.hbbft.skip_to_epoch(epoch);
-        self.rejoin_at_epoch = HashMap::new();
+        self.rejoin_at_epoch.clear();
+        self.latest_contribution_by_peer.write().await.clear();
         self.request_rejoin(1).await;
     }
 
@@ -590,6 +605,22 @@ impl ConsensusServer {
     async fn rejoin_at_epoch(&mut self, epoch: u64, peer: PeerId) {
         let peers = self.rejoin_at_epoch.entry(epoch).or_default();
         peers.insert(peer);
+        let contribution = ConsensusContribution {
+            // this is equivalent to epoch count, so + 1 here as usual
+            value: epoch + 1,
+            time: fedimint_core::time::now(),
+        };
+        self.latest_contribution_by_peer
+            .write()
+            .await
+            .entry(peer)
+            .and_modify(|c| {
+                // only update if epoch count is higher
+                if contribution.value > c.value {
+                    *c = contribution;
+                }
+            })
+            .or_insert(contribution);
         let threshold = self.cfg.local.p2p_endpoints.threshold();
 
         if peers.len() >= threshold && self.hbbft.epoch() < epoch {
