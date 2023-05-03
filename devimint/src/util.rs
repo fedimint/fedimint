@@ -51,12 +51,13 @@ impl Drop for ProcessHandleInner {
     }
 }
 
-#[derive(Default)]
-pub struct ProcessManager {}
+pub struct ProcessManager {
+    pub globals: vars::Global,
+}
 
 impl ProcessManager {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(globals: vars::Global) -> Self {
+        Self { globals }
     }
 
     /// Logs to $FM_LOGS_DIR/{name}.{out,err}

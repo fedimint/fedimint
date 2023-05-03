@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fmt::{Display, Formatter};
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,7 +30,9 @@ use tonic_lnd::LndClient;
 use tracing::{info, warn};
 
 pub mod util;
+pub mod vars;
 use util::*;
+use vars::utf8;
 pub mod federation;
 
 pub struct DevFed {
@@ -52,12 +54,12 @@ pub struct Bitcoind {
 
 impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager) -> Result<Self> {
-        let btc_dir = env::var("FM_BTC_DIR")?;
+        let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
         let process = processmgr
             .spawn_daemon("bitcoind", cmd!("bitcoind", "-datadir={btc_dir}"))
             .await?;
 
-        let url = env::var("FM_TEST_BITCOIND_RPC")?.parse()?;
+        let url = processmgr.globals.FM_TEST_BITCOIND_RPC.parse()?;
         let (host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(&url)?;
         let client = Arc::new(bitcoincore_rpc::Client::new(&host, auth)?);
 
@@ -139,10 +141,10 @@ pub struct Lightningd {
 
 impl Lightningd {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        let cln_dir = env::var("FM_CLN_DIR")?;
-        let process = Lightningd::start(process_mgr, cln_dir.clone()).await?;
+        let cln_dir = &process_mgr.globals.FM_CLN_DIR;
+        let process = Lightningd::start(process_mgr, cln_dir).await?;
 
-        let socket_cln = PathBuf::from(cln_dir).join("regtest/lightning-rpc");
+        let socket_cln = cln_dir.join("regtest/lightning-rpc");
         poll("lightningd", || async {
             Ok(ClnRpc::new(socket_cln.clone()).await.is_ok())
         })
@@ -155,7 +157,7 @@ impl Lightningd {
         })
     }
 
-    pub async fn start(process_mgr: &ProcessManager, cln_dir: String) -> Result<ProcessHandle> {
+    pub async fn start(process_mgr: &ProcessManager, cln_dir: &Path) -> Result<ProcessHandle> {
         let extension_path = cmd!("which", "gateway-cln-extension")
             .out_string()
             .await
@@ -164,7 +166,7 @@ impl Lightningd {
             "lightningd",
             "--dev-fast-gossip",
             "--dev-bitcoind-poll=1",
-            "--lightning-dir={cln_dir}",
+            format!("--lightning-dir={}", utf8(cln_dir)),
             "--plugin={extension_path}"
         );
 
@@ -226,15 +228,17 @@ impl Lnd {
     }
 
     pub async fn start(process_mgr: &ProcessManager) -> Result<(ProcessHandle, LndClient)> {
-        let lnd_dir = env::var("FM_LND_DIR")?;
-        let cmd = cmd!("lnd", "--lnddir={lnd_dir}");
+        let cmd = cmd!(
+            "lnd",
+            format!("--lnddir={}", utf8(&process_mgr.globals.FM_LND_DIR))
+        );
 
         let process = process_mgr.spawn_daemon("lnd", cmd).await?;
-        let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR")?;
-        let lnd_macaroon = env::var("FM_LND_MACAROON")?;
-        let lnd_tls_cert = env::var("FM_LND_TLS_CERT")?;
+        let lnd_rpc_addr = &process_mgr.globals.FM_LND_RPC_ADDR;
+        let lnd_macaroon = &process_mgr.globals.FM_LND_MACAROON;
+        let lnd_tls_cert = &process_mgr.globals.FM_LND_TLS_CERT;
         poll("lnd", || async {
-            Ok(fs::try_exists(&lnd_tls_cert).await? && fs::try_exists(&lnd_macaroon).await?)
+            Ok(fs::try_exists(lnd_tls_cert).await? && fs::try_exists(lnd_macaroon).await?)
         })
         .await?;
 
@@ -390,12 +394,12 @@ pub struct Gatewayd {
 impl Gatewayd {
     pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
         let ln_name = ln.name();
-        let test_dir = env::var("FM_TEST_DIR")?;
+        let test_dir = &process_mgr.globals.FM_TEST_DIR;
         let gateway_env: HashMap<String, String> = match ln {
             LightningNode::Cln(_) => HashMap::from_iter([
                 (
                     "FM_GATEWAY_DATA_DIR".to_owned(),
-                    format!("{test_dir}/gw-cln"),
+                    format!("{}/gw-cln", utf8(test_dir)),
                 ),
                 (
                     "FM_GATEWAY_LISTEN_ADDR".to_owned(),
@@ -409,7 +413,7 @@ impl Gatewayd {
             LightningNode::Lnd(_) => HashMap::from_iter([
                 (
                     "FM_GATEWAY_DATA_DIR".to_owned(),
-                    format!("{test_dir}/gw-lnd"),
+                    format!("{}/gw-lnd", utf8(test_dir)),
                 ),
                 (
                     "FM_GATEWAY_LISTEN_ADDR".to_owned(),

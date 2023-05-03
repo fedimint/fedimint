@@ -11,17 +11,9 @@ fi
 export FM_VERBOSE_OUTPUT=0
 
 source scripts/build.sh
-echo "Running in temporary directory $FM_TEST_DIR"
 
-# a pipe that rust writes to, and user-shell can wait for it
-export FM_READY_FILE=$FM_TMP_DIR/ready
-mkfifo $FM_READY_FILE
-
-devimint dev-fed &>$FM_LOGS_DIR/devimint.log &
+devimint dev-fed 2>/dev/null &
 echo $! >> $FM_PID_FILE
-
-env | sed -En 's/^(FM_[^=]*).*/\1/gp' | while read var; do printf 'export %s=%q\n' "$var" "${!var}"; done > .tmpenv
+eval "$(devimint env)"
 
 mprocs -c misc/mprocs.yaml
-
-rm .tmpenv

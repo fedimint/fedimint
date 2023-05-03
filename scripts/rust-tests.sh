@@ -8,9 +8,6 @@ source scripts/build.sh
 
 >&2 echo "### Setting up tests"
 
-export FM_READY_FILE=$FM_TMP_DIR/ready
-mkfifo $FM_READY_FILE
-
 # Convert RUST_LOG to lowercase
 # if RUST_LOG is none, don't show output of test setup
 if [ "${RUST_LOG,,}" = "none" ]; then
@@ -21,14 +18,14 @@ else
   echo $! >> $FM_PID_FILE
 fi
 
-# waits for rust to write to this pipe
-STATUS=$(cat $FM_READY_FILE)
+STATUS=$(devimint wait)
 if [ "$STATUS" = "ERROR" ]
 then
     echo "base daemons didn't start correctly"
     exit 1
 fi
 
+eval "$(devimint env)"
 >&2 echo "### Setting up tests - complete"
 
 export FM_TEST_USE_REAL_DAEMONS=1

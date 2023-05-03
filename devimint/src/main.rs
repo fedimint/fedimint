@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::env;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -10,7 +11,9 @@ use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{fedimint_env, Fedimintd};
 use devimint::util::{poll, ProcessManager};
-use devimint::{cmd, dev_fed, external_daemons, Bitcoind, DevFed, LightningNode, Lightningd, Lnd};
+use devimint::{
+    cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
+};
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
@@ -728,6 +731,20 @@ enum Cmd {
     ReconnectTest,
     CliTests,
     LightningReconnectTest,
+    #[clap(flatten)]
+    Rpc(RpcCmd),
+}
+
+#[derive(Subcommand)]
+enum RpcCmd {
+    Wait,
+    Env,
+}
+
+#[derive(Parser)]
+struct CommonArgs {
+    #[clap(short = 'd', long, env = "FM_TEST_DIR")]
+    test_dir: PathBuf,
 }
 
 #[derive(Parser)]
@@ -735,10 +752,12 @@ enum Cmd {
 struct Args {
     #[clap(subcommand)]
     command: Cmd,
+    #[clap(flatten)]
+    common: CommonArgs,
 }
 
-async fn write_ready_file<T>(result: Result<T>) -> Result<T> {
-    let ready_file = env::var("FM_READY_FILE")?;
+async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result<T> {
+    let ready_file = &global.FM_READY_FILE;
     match result {
         Ok(_) => fs::write(ready_file, "READY").await?,
         Err(_) => fs::write(ready_file, "ERROR").await?,
@@ -778,39 +797,102 @@ async fn run_ui(
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    fedimint_logging::TracingSetup::default().init()?;
-    let process_mgr = ProcessManager::new();
+use std::fmt::Write;
+
+async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
+    let globals = vars::Global::new(&arg.test_dir, 4).await?;
+    let log_file = fs::File::create(globals.FM_LOGS_DIR.join("devimint.log"))
+        .await?
+        .into_std()
+        .await;
+
+    fedimint_logging::TracingSetup::default()
+        .with_file(Some(log_file))
+        .init()?;
+
+    let mut env_string = String::new();
+    for (var, value) in globals.vars() {
+        writeln!(env_string, r#"export {var}="{value}""#)?; // hope that value doesn't contain a "
+        std::env::set_var(var, value);
+    }
+    fs::write(globals.FM_TEST_DIR.join("env"), env_string).await?;
+    let process_mgr = ProcessManager::new(globals);
     let task_group = TaskGroup::new();
     task_group.install_kill_handler();
+    Ok((process_mgr, task_group))
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
         Cmd::ExternalDaemons => {
-            let _daemons = write_ready_file(external_daemons(&process_mgr).await).await?;
+            let (process_mgr, task_group) = setup(args.common).await?;
+            let _daemons =
+                write_ready_file(&process_mgr.globals, external_daemons(&process_mgr).await)
+                    .await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::DevFed => {
-            let _daemons = write_ready_file(dev_fed(&task_group, &process_mgr).await).await?;
+            let (process_mgr, task_group) = setup(args.common).await?;
+            let _daemons = write_ready_file(
+                &process_mgr.globals,
+                dev_fed(&task_group, &process_mgr).await,
+            )
+            .await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
-        Cmd::RunUi(kind) => run_ui(&process_mgr, &task_group, &kind).await?,
+        Cmd::RunUi(kind) => {
+            let (process_mgr, task_group) = setup(args.common).await?;
+            run_ui(&process_mgr, &task_group, &kind).await?
+        }
         Cmd::LatencyTests => {
+            let (process_mgr, task_group) = setup(args.common).await?;
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             latency_tests(dev_fed).await?;
         }
         Cmd::ReconnectTest => {
+            let (process_mgr, task_group) = setup(args.common).await?;
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
         }
         Cmd::CliTests => {
+            let (process_mgr, task_group) = setup(args.common).await?;
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             cli_tests(dev_fed).await?;
         }
         Cmd::LightningReconnectTest => {
+            let (process_mgr, task_group) = setup(args.common).await?;
             let dev_fed = dev_fed(&task_group, &process_mgr).await?;
             lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
         }
+        Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,
     }
     Ok(())
+}
+
+async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
+    fedimint_logging::TracingSetup::default().init()?;
+    match rpc {
+        RpcCmd::Env => {
+            let env_file = common.test_dir.join("env");
+            poll("env file", || async {
+                Ok(fs::try_exists(&env_file).await?)
+            })
+            .await?;
+            let env = fs::read_to_string(&env_file).await?;
+            print!("{env}");
+            Ok(())
+        }
+        RpcCmd::Wait => {
+            let ready_file = common.test_dir.join("ready");
+            poll("ready file", || async {
+                Ok(fs::try_exists(&ready_file).await?)
+            })
+            .await?;
+            let env = fs::read_to_string(&ready_file).await?;
+            print!("{env}");
+            Ok(())
+        }
+    }
 }

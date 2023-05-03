@@ -2,7 +2,7 @@ name: fedimint-dev
 root: .
 socket_name: fedimint-dev
 pre_window:
-  - source .tmpenv
+  - eval "$(devimint env)"
   - source scripts/aliases.sh
 tmux_detached: false
 windows:
@@ -35,8 +35,8 @@ windows:
       panes:
         - bitcoind:
           - tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
-  - fedimint_dkg:
+  - devimint:
       panes:
         - log:
-          - tail -n +0 -F $FM_LOGS_DIR/fedimint-dev.log
+          - tail -n +0 -F $FM_LOGS_DIR/devimint.log
 
