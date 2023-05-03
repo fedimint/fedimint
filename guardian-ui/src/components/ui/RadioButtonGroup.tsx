@@ -4,11 +4,11 @@ import {
   Button,
   Icon,
   Text,
-  Radio,
   Flex,
   useTheme,
 } from '@chakra-ui/react';
 import React from 'react';
+import { ReactComponent as CheckIcon } from '../../assets/svgs/check.svg';
 
 export interface RadioButtonOption<T extends string | number> {
   icon: React.FunctionComponent<React.SVGAttributes<SVGElement>>;
@@ -29,10 +29,24 @@ export function RadioButtonGroup<T extends string | number>({
   onChange,
 }: RadioButtonGroupProps<T>): React.ReactElement {
   const theme = useTheme();
+  const defaultStyles = {
+    background: theme.colors.white,
+    borderColor: theme.colors.gray[200],
+    _hover: {
+      borderColor: theme.colors.blue[300],
+    },
+    _focus: {
+      boxShadow: theme.shadows.outline,
+    },
+    _active: {
+      borderColor: theme.colors.blue[400],
+      boxShadow: 'none',
+    },
+  };
   const activeStyles = {
-    borderColor: theme.colors.blue[600],
-    boxShadow: `0 0 0 1px ${theme.colors.blue[600]} inset`,
     bg: theme.colors.blue[50],
+    borderColor: theme.colors.blue[600],
+    boxShadow: `0 0 0 1px ${theme.colors.blue[600]}`,
   };
 
   return (
@@ -44,10 +58,6 @@ export function RadioButtonGroup<T extends string | number>({
             key={option.value}
             onClick={() => onChange(option.value)}
             variant='outline'
-            _hover={{
-              bg: '#EFF8FF',
-              color: '#175CD3',
-            }}
             pl={4}
             pr={4}
             width='full'
@@ -56,7 +66,9 @@ export function RadioButtonGroup<T extends string | number>({
             borderRadius={12}
             textAlign='left'
             margin={0}
-            {...(isActive ? activeStyles : {})}
+            isActive={isActive}
+            sx={isActive ? activeStyles : defaultStyles}
+            role='group'
           >
             <HStack maxWidth='100%' gap={3} align='start'>
               <Flex
@@ -67,26 +79,62 @@ export function RadioButtonGroup<T extends string | number>({
                 bg={theme.colors.blue[100]}
                 boxShadow={`0 0 0 6px ${theme.colors.blue[50]}`}
                 borderRadius='100%'
+                mixBlendMode='multiply'
               >
                 <Icon as={option.icon} />
               </Flex>
               <VStack align='start' flex={1} minWidth={0} wrap='wrap'>
                 <Text
-                  fontWeight='500'
+                  fontWeight='medium'
                   color={isActive ? theme.colors.blue[800] : undefined}
                 >
                   {option.label}
                 </Text>
                 <Text
                   variant='secondary'
-                  fontWeight='400'
+                  fontWeight='normal'
                   whiteSpace='break-spaces'
-                  color={isActive ? theme.colors.blue[600] : undefined}
+                  color={isActive ? theme.colors.blue[700] : undefined}
                 >
                   {option.description}
                 </Text>
               </VStack>
-              <Radio isChecked={value === option.value} />
+              <Flex
+                align='center'
+                justify='center'
+                boxSize='20px'
+                borderRadius='100%'
+                transitionProperty={theme.transition.property.common}
+                transitionDuration={theme.transition.duration.normal}
+                sx={
+                  isActive
+                    ? {
+                        bg: theme.colors.blue[700],
+                        border: `1px solid ${theme.colors.blue[700]}`,
+                        color: theme.colors.white,
+                      }
+                    : {
+                        bg: theme.colors.white,
+                        border: `1px solid ${theme.colors.gray[300]}`,
+                        _groupHover: {
+                          bg: theme.colors.blue[100],
+                          borderColor: theme.colors.blue[600],
+                        },
+                        _groupFocus: {
+                          bg: theme.colors.white,
+                          borderColor: theme.colors.blue[300],
+                          boxShadow: theme.shadows.outline,
+                        },
+                        _groupActive: {
+                          bg: theme.colors.blue[200],
+                          borderColor: theme.colors.blue[600],
+                          boxShadow: 'none',
+                        },
+                      }
+                }
+              >
+                {isActive && <Icon boxSize='14px' as={CheckIcon} />}
+              </Flex>
             </HStack>
           </Button>
         );

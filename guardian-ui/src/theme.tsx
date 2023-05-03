@@ -55,7 +55,7 @@ const colors = {
   },
   border: {
     input: palette.gray[300],
-    button: palette.gray[200],
+    button: palette.gray[300],
     table: palette.gray[200],
     hover: palette.gray[400],
     active: palette.blue[800],
