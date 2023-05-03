@@ -129,10 +129,6 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -153,10 +149,6 @@
 
 <span class="doccomment">/// Unique name for this module
 </span><span class="kw">const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;dummy&quot;</span>);
-
-<span class="doccomment">/// Needed to avoid API path collisions
-</span><span class="comment">// TODO: Remove
-</span><span class="kw">pub const </span>LEGACY_HARDCODED_INSTANCE_ID_DUMMY: ModuleInstanceId = <span class="number">4</span>;
 
 <span class="doccomment">/// Modules are non-compatible with older versions
 </span><span class="kw">pub const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(<span class="number">0</span>);

@@ -167,6 +167,12 @@
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>fake;
 
 <span class="kw">use </span>bitcoin::Address;
@@ -207,45 +213,47 @@
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_account&quot;</span>),
-            ApiRequestErased::new(contract),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+            .request_current_consensus(<span class="string">&quot;wait_account&quot;</span>.to_string(), ApiRequestErased::new(contract))
+            .<span class="kw">await
     </span>}
     <span class="kw">async fn </span>fetch_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Sha256Hash,
     ) -&gt; FederationResult&lt;IncomingContractOffer&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_offer&quot;</span>),
-            ApiRequestErased::new(payment_hash),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+            .request_current_consensus(
+                <span class="string">&quot;wait_offer&quot;</span>.to_string(),
+                ApiRequestErased::new(payment_hash),
+            )
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            UnionResponses::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_list_gateways&quot;</span>),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+            .request_with_strategy(
+                UnionResponses::new(<span class="self">self</span>.all_members().threshold()),
+                <span class="string">&quot;list_gateways&quot;</span>.to_string(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_register_gateway&quot;</span>),
-            ApiRequestErased::new(gateway),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+            .request_with_strategy(
+                CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
+                <span class="string">&quot;register_gateway&quot;</span>.to_string(),
+                ApiRequestErased::new(gateway),
+            )
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request_current_consensus::&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt;&gt;(
-                <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_offer&quot;</span>),
+            </span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+            .request_current_consensus::&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt;&gt;(
+                <span class="string">&quot;offer&quot;</span>.to_string(),
                 ApiRequestErased::new(payment_hash),
             )
             .<span class="kw">await</span><span class="question-mark">?
@@ -274,23 +282,25 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>fedimint_mint_client::SignedBackupRequest,
     ) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_MINT}_backup&quot;</span>),
-            ApiRequestErased::new(request),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+            .request_with_strategy(
+                CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
+                <span class="string">&quot;backup&quot;</span>.to_string(),
+                ApiRequestErased::new(request),
+            )
+            .<span class="kw">await
     </span>}
     <span class="kw">async fn </span>download_ecash_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
     ) -&gt; FederationResult&lt;Vec&lt;ECashUserBackupSnapshot&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request_with_strategy(
+            </span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_MINT)
+            .request_with_strategy(
                 UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt;&gt;::new(
                     <span class="self">self</span>.all_members().threshold(),
                 ),
-                <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_MINT}_recover&quot;</span>),
+                <span class="string">&quot;recover&quot;</span>.to_string(),
                 ApiRequestErased::new(id),
             )
             .<span class="kw">await</span><span class="question-mark">?
@@ -316,12 +326,13 @@
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height&quot;</span>),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .request_with_strategy(
+                EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
+                <span class="string">&quot;block_height&quot;</span>.to_string(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_peg_out_fees(
@@ -329,11 +340,12 @@
         address: <span class="kw-2">&amp;</span>Address,
         amount: bitcoin::Amount,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
-        <span class="self">self</span>.request_eventually_consistent(
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_peg_out_fees&quot;</span>),
-            ApiRequestErased::new((address, amount.to_sat())),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .request_eventually_consistent(
+                <span class="string">&quot;peg_out_fees&quot;</span>.to_string(),
+                ApiRequestErased::new((address, amount.to_sat())),
+            )
+            .<span class="kw">await
     </span>}
 }
 </code></pre></div>

@@ -1131,6 +1131,28 @@
 <a href="#1131" id="1131">1131</a>
 <a href="#1132" id="1132">1132</a>
 <a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1146,6 +1168,7 @@
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1268,6 +1291,8 @@
     /// have some idea as well, but passing this set across every
     /// API call to the federation would be inconvenient.
     </span><span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;;
+
+    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynFederationApi;
 
     <span class="doccomment">/// Make request to a specific federation member by `peer_id`
     </span><span class="kw">async fn </span>request_raw(
@@ -1681,10 +1706,11 @@
 <span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting
 /// equal results from at least `min_eq_results` of them. Members that return
 /// differing results are returned as a member faults list.
-</span><span class="attr">#[derive(Debug)]
+</span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
     peers: BTreeSet&lt;PeerId&gt;,
-    members: Vec&lt;FederationMember&lt;C&gt;&gt;,
+    members: Arc&lt;Vec&lt;FederationMember&lt;C&gt;&gt;&gt;,
+    module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1791,9 +1817,20 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + MaybeSend + MaybeSync&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
+</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>&gt; IFederationApi
+    <span class="kw">for </span>WsFederationApi&lt;C&gt;
+{
     <span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.peers
+    }
+
+    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynFederationApi {
+        WsFederationApi {
+            peers: <span class="self">self</span>.peers.clone(),
+            members: <span class="self">self</span>.members.clone(),
+            module_id: <span class="prelude-val">Some</span>(id),
+        }
+        .into()
     }
 
     <span class="kw">async fn </span>request_raw(
@@ -1808,7 +1845,11 @@
             .find(|m| m.peer_id == peer_id)
             .ok_or_else(|| JsonRpcError::Custom(<span class="macro">format!</span>(<span class="string">&quot;Invalid peer_id: {peer_id}&quot;</span>)))<span class="question-mark">?</span>;
 
-        member.request(method, params).<span class="kw">await
+        <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
+            <span class="prelude-val">None </span>=&gt; method.to_string(),
+            <span class="prelude-val">Some</span>(id) =&gt; <span class="macro">format!</span>(<span class="string">&quot;module_{id}_{method}&quot;</span>),
+        };
+        member.request(<span class="kw-2">&amp;</span>method, params).<span class="kw">await
     </span>}
 }
 
@@ -1876,22 +1917,25 @@
     </span><span class="kw">pub fn </span>new_with_client(members: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
         WsFederationApi {
             peers: members.iter().map(|m| m.<span class="number">0</span>).collect(),
-            members: members
-                .into_iter()
-                .map(|(peer_id, url)| {
-                    <span class="macro">assert!</span>(
-                        url.port_or_known_default().is_some(),
-                        <span class="string">&quot;API client requires a port&quot;
-                    </span>);
-                    <span class="macro">assert!</span>(url.host().is_some(), <span class="string">&quot;API client requires a target host&quot;</span>);
+            members: Arc::new(
+                members
+                    .into_iter()
+                    .map(|(peer_id, url)| {
+                        <span class="macro">assert!</span>(
+                            url.port_or_known_default().is_some(),
+                            <span class="string">&quot;API client requires a port&quot;
+                        </span>);
+                        <span class="macro">assert!</span>(url.host().is_some(), <span class="string">&quot;API client requires a target host&quot;</span>);
 
-                    FederationMember {
-                        peer_id,
-                        url,
-                        client: RwLock::new(<span class="prelude-val">None</span>),
-                    }
-                })
-                .collect(),
+                        FederationMember {
+                            peer_id,
+                            url,
+                            client: RwLock::new(<span class="prelude-val">None</span>),
+                        }
+                    })
+                    .collect(),
+            ),
+            module_id: <span class="prelude-val">None</span>,
         }
     }
 }

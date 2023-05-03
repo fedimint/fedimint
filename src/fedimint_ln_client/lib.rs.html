@@ -837,6 +837,11 @@
 <a href="#837" id="837">837</a>
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
@@ -1017,7 +1022,12 @@
     }
 
     <span class="kw">async fn </span>fetch_registered_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;LightningGateway&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.api().fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="kw">let </span>(ln_client_id, <span class="kw">_</span>) = ln_client(<span class="self">self</span>);
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.api()
+            .with_module(ln_client_id)
+            .fetch_gateways()
+            .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">async fn </span>pay_bolt11_invoice(

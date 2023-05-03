@@ -27,17 +27,11 @@
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
 <a href="#29" id="29">29</a>
-<a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount};
-<span class="kw">use </span>fedimint_dummy_common::{DummyPrintMoneyRequest, LEGACY_HARDCODED_INSTANCE_ID_DUMMY};
+<span class="kw">use </span>fedimint_dummy_common::DummyPrintMoneyRequest;
 <span class="kw">use </span>secp256k1::XOnlyPublicKey;
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -53,19 +47,13 @@
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, request: DummyPrintMoneyRequest) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_DUMMY}_print_money&quot;</span>),
-            ApiRequestErased::new(request),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;print_money&quot;</span>.to_string(), ApiRequestErased::new(request))
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>wait_for_money(<span class="kw-2">&amp;</span><span class="self">self</span>, account: XOnlyPublicKey) -&gt; FederationResult&lt;Amount&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_DUMMY}_wait_for_money&quot;</span>),
-            ApiRequestErased::new(account),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_for_money&quot;</span>.to_string(), ApiRequestErased::new(account))
+            .<span class="kw">await
     </span>}
 }
 </code></pre></div>

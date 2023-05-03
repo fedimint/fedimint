@@ -354,8 +354,8 @@
         <span class="kw">let </span>(id, dummy) = dummy_client(<span class="self">self</span>);
         <span class="kw">let </span>account = dummy.key.x_only_public_key().<span class="number">0</span>;
         <span class="kw">let </span>request = DummyPrintMoneyRequest { amount, account };
-        <span class="self">self</span>.api().print_money(request).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>funds = <span class="self">self</span>.api().wait_for_money(account).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.api().with_module(id).print_money(request).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>funds = <span class="self">self</span>.api().with_module(id).wait_for_money(account).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// TODO: Not very nice to get to the module db
         </span><span class="kw">let </span>mod_db = <span class="self">self</span>.db().new_isolated(id);

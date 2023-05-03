@@ -109,12 +109,7 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
-<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::{CurrentConsensus, UnionResponses};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -155,18 +150,15 @@
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_account&quot;</span>),
-            ApiRequestErased::new(contract),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_account&quot;</span>.to_string(), ApiRequestErased::new(contract))
+            .<span class="kw">await
     </span>}
     <span class="kw">async fn </span>fetch_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Sha256Hash,
     ) -&gt; FederationResult&lt;IncomingContractOffer&gt; {
         <span class="self">self</span>.request_current_consensus(
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_wait_offer&quot;</span>),
+            <span class="string">&quot;wait_offer&quot;</span>.to_string(),
             ApiRequestErased::new(payment_hash),
         )
         .<span class="kw">await
@@ -175,7 +167,7 @@
     <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt; {
         <span class="self">self</span>.request_with_strategy(
             UnionResponses::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_list_gateways&quot;</span>),
+            <span class="string">&quot;list_gateways&quot;</span>.to_string(),
             ApiRequestErased::default(),
         )
         .<span class="kw">await
@@ -184,7 +176,7 @@
     <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_with_strategy(
             CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
-            <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_register_gateway&quot;</span>),
+            <span class="string">&quot;register_gateway&quot;</span>.to_string(),
             ApiRequestErased::new(gateway),
         )
         .<span class="kw">await
@@ -193,7 +185,7 @@
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.request_current_consensus::&lt;<span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt;&gt;(
-                <span class="macro">format!</span>(<span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_LN}_offer&quot;</span>),
+                <span class="string">&quot;offer&quot;</span>.to_string(),
                 ApiRequestErased::new(payment_hash),
             )
             .<span class="kw">await</span><span class="question-mark">?
