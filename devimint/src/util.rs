@@ -166,6 +166,26 @@ impl Command {
             .with_context(|| format!("command: {}", self.command_debug()))?;
         Ok(())
     }
+
+    /// Run the command logging the output and error
+    pub async fn run_with_logging(&mut self, name: String) -> Result<()> {
+        let logs_dir = env::var("FM_LOGS_DIR")?;
+        let path = format!("{logs_dir}/{name}.log");
+        let log = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+            .await?
+            .into_std()
+            .await;
+        self.cmd.stdout(log.try_clone()?);
+        self.cmd.stderr(log);
+        let status = self.cmd.spawn()?.wait().await?;
+        if !status.success() {
+            bail!("{}", status);
+        }
+        Ok(())
+    }
 }
 
 /// easy syntax to create a Command

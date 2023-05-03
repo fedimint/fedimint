@@ -4,23 +4,12 @@ use std::ops::Range;
 use anyhow::{anyhow, Context};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::task::TaskGroup;
 use fedimint_wallet_client::config::WalletClientConfig;
+use futures::future;
 use tokio::fs;
-use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use super::*; // TODO: remove this
 
-type EnvVars = HashMap<String, String>;
-
-/// Create a map of environment variables which fedimintd and DKG can use,
-/// but which can't be defined by `build.sh` because multiple of these daemons
-/// run concurrently with different values.
-///
-/// We allow ranges of 10 ports for each fedimintd / dkg instance starting from
-/// 18173. Each port needed is incremented by 1 within this range.
-///
-/// * `peer_id` - ID of the server. Used to calculate port numbers.
 pub fn fedimint_env(peer_id: usize) -> anyhow::Result<HashMap<String, String>> {
     let base_port = 8173 + 10000;
     let p2p_port = base_port + (peer_id * 10);
@@ -59,10 +48,15 @@ impl Federation {
     ) -> Result<Self> {
         let mut members = BTreeMap::new();
         for peer_id in peer_ids {
-            let env_vars = fedimint_env(peer_id)?;
             members.insert(
                 peer_id,
-                Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, env_vars).await?,
+                Fedimintd::new(
+                    process_mgr,
+                    bitcoind.clone(),
+                    peer_id,
+                    vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?,
+                )
+                .await?,
             );
         }
 
@@ -92,10 +86,15 @@ impl Federation {
         if self.members.contains_key(&peer_id) {
             return Err(anyhow!("fedimintd-{} already running", peer_id));
         }
-        let env_vars = fedimint_env(peer_id)?;
         self.members.insert(
             peer_id,
-            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer_id, env_vars).await?,
+            Fedimintd::new(
+                process_mgr,
+                self.bitcoind.clone(),
+                peer_id,
+                vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?,
+            )
+            .await?,
         );
         Ok(())
     }
@@ -243,23 +242,16 @@ impl Fedimintd {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         peer_id: usize,
-        env_vars: EnvVars,
+        env: vars::Fedimintd,
     ) -> Result<Self> {
-        let cfg_dir = env::var("FM_DATA_DIR")?;
-        let data_dir = env_vars
-            .get("FM_FEDIMINT_DATA_DIR")
-            .context("FM_FEDIMINT_DATA_DIR not found")?;
-        fs::create_dir_all(data_dir).await?;
-
-        // spawn fedimintd
-        let cmd = cmd!("fedimintd", "--data-dir={cfg_dir}/server-{peer_id}").envs(env_vars);
-
         info!("fedimintd-{peer_id} started");
         let process = process_mgr
-            .spawn_daemon(&format!("fedimintd-{peer_id}"), cmd)
+            .spawn_daemon(
+                &format!("fedimintd-{peer_id}"),
+                cmd!("fedimintd").envs(env.vars()),
+            )
             .await?;
 
-        // TODO: wait for federation to start
         Ok(Self {
             _bitcoind: bitcoind,
             process,
@@ -272,148 +264,111 @@ impl Fedimintd {
     }
 }
 
-pub async fn run_dkg(root_task_group: &TaskGroup, servers: usize) -> anyhow::Result<()> {
-    async fn create_tls(id: usize, sender: Sender<String>) -> anyhow::Result<()> {
-        // set env vars
+pub async fn run_dkg(process_mgr: &ProcessManager, servers: usize) -> anyhow::Result<()> {
+    async fn create_tls(id: usize, env: &vars::Fedimintd) -> anyhow::Result<String> {
         let server_name = format!("Server {id}!");
-        let env_vars = fedimint_env(id)?;
-        let p2p_url = env_vars.get("FM_P2P_URL").context("FM_P2P_URL not found")?;
-        let api_url = env_vars.get("FM_API_URL").context("FM_API_URL not found")?;
-        let out_dir = env_vars
-            .get("FM_FEDIMINT_DATA_DIR")
-            .context("FM_FEDIMINT_DATA_DIR not found")?;
-        let cert_path = format!("{out_dir}/tls-cert");
 
-        // create out-dir
-        fs::create_dir(&out_dir).await?;
-
-        info!("creating TLS certs created for started {server_name} in {out_dir}");
         cmd!(
             "distributedgen",
             "create-cert",
-            "--p2p-url={p2p_url}",
-            "--api-url={api_url}",
-            "--out-dir={out_dir}",
+            "--p2p-url",
+            &env.FM_P2P_URL,
+            "--api-url",
+            &env.FM_API_URL,
+            "--out-dir",
+            utf8(&env.FM_DATA_DIR),
             "--name={server_name}",
         )
-        .envs(fedimint_env(id)?)
-        .run()
+        .envs(env.vars())
+        .run_with_logging(format!("fedimintd-{id}"))
         .await?;
 
         info!("TLS certs created for started {server_name}");
 
-        // TODO: read TLS cert from disk and return if over channel
-        let cert = fs::read_to_string(cert_path)
+        let cert = fs::read_to_string(env.FM_DATA_DIR.join("tls-cert"))
             .await
             .context("could not read TLS cert from disk")?;
 
-        sender
-            .send(cert)
-            .await
-            .context("failed to send cert over channel")?;
-
-        Ok(())
+        Ok(cert)
     }
 
-    async fn run_distributedgen(id: usize, certs: Vec<String>) -> anyhow::Result<()> {
+    async fn run_distributedgen(
+        id: usize,
+        env: &vars::Fedimintd,
+        certs: Vec<String>,
+    ) -> anyhow::Result<()> {
         let certs = certs.join(",");
-        let cfg_dir = env::var("FM_DATA_DIR")?;
         let server_name = format!("Server-{id}");
 
-        let env_vars = fedimint_env(id)?;
-        let bind_p2p = env_vars
-            .get("FM_BIND_P2P")
-            .expect("fedimint_env sets this key");
-        let bind_api = env_vars
-            .get("FM_BIND_API")
-            .expect("fedimint_env sets this key");
-        let out_dir = env_vars
-            .get("FM_FEDIMINT_DATA_DIR")
-            .expect("fedimint_env sets this key");
-
-        info!("creating TLS certs created for started {server_name} in {out_dir}");
         cmd!(
             "distributedgen",
             "run",
-            "--bind-p2p={bind_p2p}",
-            "--bind-api={bind_api}",
-            "--out-dir={out_dir}",
+            "--bind-p2p",
+            &env.FM_BIND_P2P,
+            "--bind-api",
+            &env.FM_BIND_API,
+            "--out-dir",
+            utf8(&env.FM_DATA_DIR),
             "--certs={certs}",
         )
-        .envs(fedimint_env(id)?)
-        .run()
+        .envs(env.vars())
+        .run_with_logging(format!("fedimintd-{id}"))
         .await
-        .unwrap_or_else(|e| panic!("DKG failed for {server_name} {e:?}"));
+        .with_context(|| format!("dkg run for {server_name}"))?;
 
         info!("DKG created for started {server_name}");
-
-        // copy configs to config directory
-        fs::rename(
-            format!("{out_dir}/client-connect"),
-            format!("{cfg_dir}/client-connect"),
-        )
-        .await?;
-        fs::rename(
-            format!("{out_dir}/client.json"),
-            format!("{cfg_dir}/client.json"),
-        )
-        .await?;
-        info!("copied client configs");
 
         Ok(())
     }
 
-    let mut task_group = root_task_group.make_subgroup().await;
-
-    // generate TLS certs
-    let (sender, mut receiver): (Sender<String>, Receiver<String>) = mpsc::channel(1000);
-    for id in 0..servers {
-        let sender = sender.clone();
-        task_group
-            .spawn(
-                format!("create TLS certs for server {id}"),
-                move |_| async move {
-                    info!("generating certs for server {}", id);
-                    create_tls(id, sender).await.expect("create_tls failed");
-                    info!("generating certs for server {}", id);
-                },
-            )
-            .await;
-    }
-    task_group.join_all(None).await?;
     info!("Generated TLS certs");
+    let fedimintd_envs = future::try_join_all(
+        (0..servers).map(|id| vars::Fedimintd::init(&process_mgr.globals, id, vars::UiKind::Old)),
+    )
+    .await?;
+    let certs = future::try_join_all(
+        fedimintd_envs
+            .iter()
+            .enumerate()
+            .map(|(id, env)| create_tls(id, env)),
+    )
+    .await?;
 
-    // collect TLS certs
-    let mut certs = vec![];
-    while certs.len() < servers {
-        let cert = receiver
-            .recv()
-            .await
-            .expect("couldn't receive cert over channel");
-        certs.push(cert)
-    }
-    let certs_string = certs.join(",");
-    info!("Collected TLS certs: {certs_string}");
+    info!(
+        "Collected TLS certs: {certs_string}",
+        certs_string = certs.join(",")
+    );
 
-    // generate keys
-    let mut task_group = root_task_group.make_subgroup().await;
-    for id in 0..servers {
-        let certs = certs.clone();
-        task_group
-            .spawn(
-                format!("create TLS certs for server {id}"),
-                move |_| async move {
-                    info!("generating keys for server {}", id);
-                    run_distributedgen(id, certs)
-                        .await
-                        .expect("run_distributedgen failed");
-                    info!("generating keys for server {}", id);
-                },
-            )
-            .await;
-    }
+    info!("running distributedgen");
 
-    task_group.join_all(None).await?;
+    future::try_join_all(
+        fedimintd_envs
+            .iter()
+            .enumerate()
+            .map(|(id, env)| run_distributedgen(id, env, certs.clone())),
+    )
+    .await?;
+
+    let out_dir = &fedimintd_envs
+        .first()
+        .context("must run dkg with at least one peer")?
+        .FM_DATA_DIR;
+    let cfg_dir = &process_mgr.globals.FM_DATA_DIR;
+    let out_dir = utf8(out_dir);
+    let cfg_dir = utf8(cfg_dir);
+    // copy configs to config directory
+    fs::rename(
+        format!("{out_dir}/client-connect"),
+        format!("{cfg_dir}/client-connect"),
+    )
+    .await?;
+    fs::rename(
+        format!("{out_dir}/client.json"),
+        format!("{cfg_dir}/client.json"),
+    )
+    .await?;
+    info!("copied client configs");
+
     info!("DKG complete");
 
     Ok(())
