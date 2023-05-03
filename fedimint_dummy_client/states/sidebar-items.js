@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["DummyStateMachine","Tracks a transaction"]],"fn":[["add_funds",""],["await_tx_accepted",""]]};

@@ -238,8 +238,206 @@
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
+<span class="kw">use </span>std::string::ToString;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::{
@@ -247,40 +445,60 @@
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::epoch::SerdeSignatureShare;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
-    InputMeta, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::{OutPoint, PeerId, ServerModule};
+<span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>fedimint_dummy_common::config::{DummyConfig, DummyConfigConsensus, DummyConfigPrivate};
-<span class="kw">use </span>fedimint_dummy_common::db::migrate_dummy_db_version_0;
 <span class="kw">use </span>fedimint_dummy_common::{
-    DummyCommonGen, DummyConsensusItem, DummyInput, DummyModuleTypes, DummyOutput,
-    DummyOutputOutcome,
+    DummyCommonGen, DummyConfigGenParams, DummyConsensusItem, DummyError, DummyInput,
+    DummyModuleTypes, DummyOutput, DummyOutputOutcome, DummyPrintMoneyRequest, CONSENSUS_VERSION,
 };
-<span class="kw">use </span>futures::FutureExt;
+<span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
+<span class="kw">use </span>futures::{FutureExt, StreamExt};
+<span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>secp256k1::XOnlyPublicKey;
+<span class="kw">use </span>strum::IntoEnumIterator;
+<span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
+<span class="kw">use </span>threshold_crypto::{PublicKeySet, SecretKeySet, SignatureShare};
+<span class="kw">use </span>tokio::sync::Notify;
 
-<span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>DummyServerGen;
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    migrate_to_v1, DbKeyPrefix, DummyFundsKeyV1, DummyFundsKeyV1Prefix, DummyOutcomeKeyV1,
+    DummyOutcomeKeyV1Prefix, DummyPrintKeyV1, DummyPrintKeyV1Prefix,
+};
 
-<span class="kw">impl </span>ExtendsCommonModuleGen <span class="kw">for </span>DummyServerGen {
+<span class="kw">mod </span>db;
+
+<span class="doccomment">/// Generates the module
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>DummyGen;
+
+<span class="comment">// TODO: Boilerplate-code
+</span><span class="kw">impl </span>ExtendsCommonModuleGen <span class="kw">for </span>DummyGen {
     <span class="kw">type </span>Common = DummyCommonGen;
 }
 
-<span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ServerModuleGen <span class="kw">for </span>DummyServerGen {
+<span class="doccomment">/// Implementation of server module non-consensus functions
+</span><span class="attr">#[async_trait]
+</span><span class="kw">impl </span>ServerModuleGen <span class="kw">for </span>DummyGen {
     <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 
-    <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
-        <span class="kw-2">&amp;</span>[ModuleConsensusVersion(<span class="number">0</span>)]
+    <span class="doccomment">/// Returns the version of this module
+    </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
+        <span class="kw-2">&amp;</span>[CONSENSUS_VERSION]
     }
 
-    <span class="kw">async fn </span>init(
+    <span class="doccomment">/// Initialize the module
+    </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         _db: Database,
@@ -290,72 +508,127 @@
         <span class="prelude-val">Ok</span>(Dummy::new(cfg.to_typed()<span class="question-mark">?</span>).into())
     }
 
-    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
+    <span class="doccomment">/// DB migrations to move from old to newer versions
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MigrationMap {
         <span class="kw">let </span><span class="kw-2">mut </span>migrations = MigrationMap::new();
-
-        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| {
-            migrate_dummy_db_version_0(dbtx).boxed()
-        });
-
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| migrate_to_v1(dbtx).boxed());
         migrations
     }
 
-    <span class="kw">fn </span>trusted_dealer_gen(
+    <span class="doccomment">/// Generates configs for all peers in a trusted manner for testing
+    </span><span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
-        <span class="kw">let </span>mint_cfg: BTreeMap&lt;<span class="kw">_</span>, DummyConfig&gt; = peers
+        <span class="comment">// Coerce config gen params into type
+        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyConfigGenParams&gt;().unwrap();
+        <span class="comment">// Create trusted set of threshold keys
+        </span><span class="kw">let </span>sks = SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
+        <span class="kw">let </span>pks: PublicKeySet = sks.public_keys();
+        <span class="comment">// Generate a config for each peer
+        </span>peers
             .iter()
             .map(|<span class="kw-2">&amp;</span>peer| {
+                <span class="kw">let </span>private_key_share = SerdeSecret(sks.secret_key_share(peer.to_usize()));
                 <span class="kw">let </span>config = DummyConfig {
-                    private: DummyConfigPrivate {
-                        something_private: <span class="number">3</span>,
+                    private: DummyConfigPrivate { private_key_share },
+                    consensus: DummyConfigConsensus {
+                        public_key_set: pks.clone(),
+                        tx_fee: params.tx_fee,
                     },
-                    consensus: DummyConfigConsensus { something: <span class="number">1 </span>},
                 };
-                (peer, config)
+                (peer, config.to_erased())
             })
-            .collect();
-
-        mint_cfg
-            .into_iter()
-            .map(|(k, v)| (k, v.to_erased()))
             .collect()
     }
 
-    <span class="kw">async fn </span>distributed_gen(
+    <span class="doccomment">/// Generates configs for all peers in an untrusted manner
+    </span><span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _peers: <span class="kw-2">&amp;</span>PeerHandle,
-        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
+        peers: <span class="kw-2">&amp;</span>PeerHandle,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
-        <span class="kw">let </span>server = DummyConfig {
-            private: DummyConfigPrivate {
-                something_private: <span class="number">3</span>,
-            },
-            consensus: DummyConfigConsensus { something: <span class="number">2 </span>},
-        };
+        <span class="comment">// Coerce config gen params into type
+        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyConfigGenParams&gt;().unwrap();
+        <span class="comment">// Runs distributed key generation
+        // Could create multiple keys, here we use &#39;()&#39; to create one
+        </span><span class="kw">let </span>g1 = peers.run_dkg_g1(()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>keys = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
 
-        <span class="prelude-val">Ok</span>(server.to_erased())
+        <span class="prelude-val">Ok</span>(DummyConfig {
+            private: DummyConfigPrivate {
+                private_key_share: keys.secret_key_share,
+            },
+            consensus: DummyConfigConsensus {
+                public_key_set: keys.public_key_set,
+                tx_fee: params.tx_fee,
+            },
+        }
+        .to_erased())
     }
 
-    <span class="kw">fn </span>get_client_config(
+    <span class="comment">// TODO: Boilerplate-code
+    </span><span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
         <span class="prelude-val">Ok</span>(DummyConfigConsensus::from_erased(config)<span class="question-mark">?</span>.to_client_config())
     }
 
-    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="comment">// TODO: Boilerplate-code
+    </span><span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId, config: ServerModuleConfig) -&gt; anyhow::Result&lt;()&gt; {
         config.to_typed::&lt;DummyConfig&gt;()<span class="question-mark">?</span>.validate_config(identity)
     }
 
-    <span class="kw">async fn </span>dump_database(
+    <span class="doccomment">/// Dumps all database items for debugging
+    </span><span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        _prefix_names: Vec&lt;String&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
-        Box::new(BTreeMap::new().into_iter())
+        <span class="comment">// TODO: Boilerplate-code
+        </span><span class="kw">let </span><span class="kw-2">mut </span>items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; = BTreeMap::new();
+        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+        });
+
+        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
+            <span class="kw">match </span>table {
+                DbKeyPrefix::Funds =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        DummyFundsKeyV1Prefix,
+                        DummyFundsKeyV1,
+                        Amount,
+                        items,
+                        <span class="string">&quot;Dummy Funds&quot;
+                    </span>);
+                }
+                DbKeyPrefix::Outcome =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        DummyOutcomeKeyV1Prefix,
+                        DummyOutcomeKeyV1,
+                        DummyOutputOutcome,
+                        items,
+                        <span class="string">&quot;Dummy Outputs&quot;
+                    </span>);
+                }
+                DbKeyPrefix::Print =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        DummyPrintKeyV1Prefix,
+                        DummyPrintKeyV1,
+                        (),
+                        items,
+                        <span class="string">&quot;Dummy Print&quot;
+                    </span>);
+                }
+            }
+        }
+
+        Box::new(items.into_iter())
     }
 }
 
@@ -363,35 +636,77 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Dummy {
     <span class="kw">pub </span>cfg: DummyConfig,
+    <span class="doccomment">/// Notifies us to propose an epoch
+    </span><span class="kw">pub </span>print_notify: Notify,
 }
 
-<span class="attr">#[async_trait]
+<span class="doccomment">/// Implementation of consensus for the server module
+</span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Dummy {
-    <span class="kw">type </span>Common = DummyModuleTypes;
-    <span class="kw">type </span>Gen = DummyServerGen;
+    <span class="doccomment">/// Define the consensus types
+    </span><span class="kw">type </span>Common = DummyModuleTypes;
+    <span class="kw">type </span>Gen = DummyGen;
     <span class="kw">type </span>VerificationCache = DummyVerificationCache;
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
         SupportedModuleApiVersions::from_raw(<span class="number">0</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
     }
 
-    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        std::future::pending().<span class="kw">await
-    </span>}
+    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        <span class="comment">// Wait until we have a proposal
+        </span><span class="kw">if </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
+            <span class="self">self</span>.print_notify.notified().<span class="kw">await</span>;
+        }
+    }
 
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConsensusProposal&lt;DummyConsensusItem&gt; {
-        ConsensusProposal::empty()
+        <span class="comment">// Sign and send the print requests to consensus
+        </span><span class="kw">let </span>items = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DummyPrintKeyV1Prefix).<span class="kw">await</span>.map(
+            |(DummyPrintKeyV1(request), <span class="kw">_</span>)| {
+                <span class="kw">let </span>encoded_request = request.consensus_encode_to_vec().unwrap();
+                <span class="kw">let </span>sig = <span class="self">self</span>.cfg.private.private_key_share.sign(encoded_request);
+                DummyConsensusItem::Print(request, SerdeSignatureShare(sig))
+            },
+        );
+        ConsensusProposal::new_auto_trigger(items.collect().<span class="kw">await</span>)
     }
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        _consensus_items: Vec&lt;(PeerId, DummyConsensusItem)&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        consensus_items: Vec&lt;(PeerId, DummyConsensusItem)&gt;,
         _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
+        <span class="comment">// TODO: We could make combining peer sigs easier since it&#39;s often used
+
+        // Collect all signatures by request
+        </span><span class="kw">let </span><span class="kw-2">mut </span>requests = HashMap::&lt;DummyPrintMoneyRequest, Vec&lt;(usize, <span class="kw-2">&amp;</span>SignatureShare)&gt;&gt;::new();
+        <span class="kw">for </span>(peer, DummyConsensusItem::Print(request, share)) <span class="kw">in </span><span class="kw-2">&amp;</span>consensus_items {
+            <span class="kw">let </span>entry = requests.entry(request.clone()).or_default();
+            entry.push((peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>));
+        }
+
+        <span class="kw">let </span>pks = <span class="self">self</span>.cfg.consensus.public_key_set.clone();
+        <span class="kw">for </span>(request, shares) <span class="kw">in </span>requests {
+            <span class="comment">// If a threshold of us signed, we can combine signatures
+            </span><span class="kw">let </span>encoded_request = request.consensus_encode_to_vec().unwrap();
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(sig) = pks.combine_signatures(shares) {
+                <span class="kw">if </span>pks.public_key().verify(<span class="kw-2">&amp;</span>sig, encoded_request) {
+                    <span class="comment">// If request is properly signed remove the consensus item
+                    </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>DummyPrintKeyV1(request.clone())).<span class="kw">await</span>;
+                    <span class="comment">// Add money to the user&#39;s account
+                    </span><span class="kw">let </span>amount = get_funds(<span class="kw-2">&amp;</span>request.account, dbtx).<span class="kw">await </span>+ request.amount;
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyFundsKeyV1(request.account), <span class="kw-2">&amp;</span>amount)
+                        .<span class="kw">await</span>;
+                    <span class="comment">// Print fake assets for the fed&#39;s balance sheet audit
+                    </span>dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyFundsKeyV1(fed_account()), <span class="kw-2">&amp;</span>amount)
+                        .<span class="kw">await</span>;
+                }
+            }
+        }
         <span class="macro">vec!</span>[]
     }
 
@@ -405,38 +720,75 @@
     <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        _input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyInput,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="macro">unimplemented!</span>()
+        <span class="comment">// verify user has enough funds
+        </span><span class="kw">if </span>input.amount &gt; get_funds(<span class="kw-2">&amp;</span>input.account, dbtx).<span class="kw">await </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(DummyError::NotEnoughFunds).into_module_error_other();
+        }
+
+        <span class="prelude-val">Ok</span>(InputMeta {
+            amount: TransactionItemAmount {
+                amount: input.amount,
+                fee: <span class="self">self</span>.cfg.consensus.tx_fee,
+            },
+            <span class="comment">// IMPORTANT: include the pubkey to validate the user signed this tx
+            </span>puk_keys: <span class="macro">vec!</span>[input.account],
+        })
     }
 
     <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        _input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DummyInput,
-        _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+        interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DummyInput,
+        cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="macro">unimplemented!</span>()
+        <span class="comment">// TODO: Boiler-plate code
+        </span><span class="kw">let </span>meta = <span class="self">self
+            </span>.validate_input(interconnect, dbtx, cache, input)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// subtract funds from the user&#39;s account
+        </span><span class="kw">let </span>updated = get_funds(<span class="kw-2">&amp;</span>input.account, dbtx).<span class="kw">await </span>- input.amount;
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyFundsKeyV1(input.account), <span class="kw-2">&amp;</span>updated)
+            .<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>(meta)
     }
 
     <span class="kw">async fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        _output: <span class="kw-2">&amp;</span>DummyOutput,
+        output: <span class="kw-2">&amp;</span>DummyOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="macro">unimplemented!</span>()
+        <span class="prelude-val">Ok</span>(TransactionItemAmount {
+            amount: output.amount,
+            fee: <span class="self">self</span>.cfg.consensus.tx_fee,
+        })
     }
 
     <span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        _output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyOutput,
-        _out_point: OutPoint,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyOutput,
+        out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="macro">unimplemented!</span>()
+        <span class="comment">// TODO: Boiler-plate code
+        </span><span class="kw">let </span>meta = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>updated = get_funds(<span class="kw-2">&amp;</span>output.account, dbtx).<span class="kw">await </span>+ output.amount;
+        <span class="comment">// insert the output key for users to fetch the tx outcome
+        </span><span class="kw">let </span>outcome = DummyOutputOutcome(updated, output.account);
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyOutcomeKeyV1(out_point), <span class="kw-2">&amp;</span>outcome)
+            .<span class="kw">await</span>;
+        <span class="comment">// add funds to the user&#39;s account
+        </span>dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyFundsKeyV1(output.account), <span class="kw-2">&amp;</span>updated)
+            .<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>(meta)
     }
 
     <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
@@ -449,25 +801,64 @@
 
     <span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        _out_point: OutPoint,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;DummyOutputOutcome&gt; {
-        <span class="prelude-val">None
+        <span class="comment">// check whether or not the output has been processed
+        </span>dbtx.get_value(<span class="kw-2">&amp;</span>DummyOutcomeKeyV1(out_point)).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, _audit: <span class="kw-2">&amp;mut </span>Audit) {}
+    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit
+            .add_items(dbtx, <span class="kw-2">&amp;</span>DummyFundsKeyV1Prefix, |k, v| <span class="kw">match </span>k {
+                <span class="comment">// special account for creating assets (positive)
+                </span>DummyFundsKeyV1(key) <span class="kw">if </span>key == fed_account() =&gt; v.msats <span class="kw">as </span>i64,
+                <span class="comment">// a user&#39;s funds are a federation&#39;s liability (negative)
+                </span>DummyFundsKeyV1(<span class="kw">_</span>) =&gt; -(v.msats <span class="kw">as </span>i64),
+            })
+            .<span class="kw">await</span>;
+    }
 
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
-        <span class="macro">vec!</span>[<span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;dummy&quot;</span>,
-            <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Dummy, _dbtx, _request: ()| -&gt; () {
-                <span class="prelude-val">Ok</span>(())
-            }
-        }]
+        <span class="macro">vec!</span>[
+            <span class="macro">api_endpoint! </span>{
+                <span class="comment">// API allows users ask the fed to print money
+                </span><span class="string">&quot;print_money&quot;</span>,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Dummy, context, request: DummyPrintMoneyRequest| -&gt; () {
+                    <span class="comment">// TODO: A way to send messages to consensus without the DB
+                    </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.dbtx();
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyPrintKeyV1(request), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
+                    module.print_notify.notify_one();
+                    <span class="prelude-val">Ok</span>(())
+                }
+            },
+            <span class="macro">api_endpoint! </span>{
+                <span class="comment">// API allows users to wait for an account to exist
+                </span><span class="string">&quot;wait_for_money&quot;</span>,
+                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Dummy, context, account: XOnlyPublicKey| -&gt; Amount {
+                    <span class="comment">// TODO: Wait for a change or non-existence of a key
+                    </span><span class="kw">let </span>future = context.wait_key_exists(DummyFundsKeyV1(account));
+                    <span class="kw">let </span>funds = future.<span class="kw">await</span>;
+                    <span class="prelude-val">Ok</span>(funds)
+                }
+            },
+        ]
     }
 }
 
-<span class="attr">#[derive(Debug, Clone)]
+<span class="kw">fn </span>fed_account() -&gt; XOnlyPublicKey {
+    <span class="kw">let </span>account_bytes = <span class="string">&quot;Money printer go brrr...........&quot;</span>.as_bytes();
+    XOnlyPublicKey::from_slice(account_bytes).expect(<span class="string">&quot;32 bytes&quot;</span>)
+}
+
+<span class="doccomment">/// Helper to get the funds for an account
+</span><span class="kw">async fn </span>get_funds&lt;<span class="lifetime">&#39;a</span>&gt;(key: <span class="kw-2">&amp;</span>XOnlyPublicKey, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; Amount {
+    <span class="kw">let </span>funds = dbtx.get_value(<span class="kw-2">&amp;</span>DummyFundsKeyV1(<span class="kw-2">*</span>key)).<span class="kw">await</span>;
+    funds.unwrap_or(Amount::ZERO)
+}
+
+<span class="doccomment">/// An in-memory cache we could use for faster validation
+</span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>DummyVerificationCache;
 
 <span class="kw">impl </span>fedimint_core::server::VerificationCache <span class="kw">for </span>DummyVerificationCache {}
@@ -475,7 +866,10 @@
 <span class="kw">impl </span>Dummy {
     <span class="doccomment">/// Create new module instance
     </span><span class="kw">pub fn </span>new(cfg: DummyConfig) -&gt; Dummy {
-        Dummy { cfg }
+        Dummy {
+            cfg,
+            print_notify: Notify::new(),
+        }
     }
 }
 </code></pre></div>

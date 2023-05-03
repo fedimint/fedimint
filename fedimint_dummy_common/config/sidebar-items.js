@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["DummyClientConfig",""],["DummyConfig",""],["DummyConfigConsensus",""],["DummyConfigPrivate",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["DummyClientConfig","Contains all the configuration for the client"],["DummyConfig","Contains all the configuration for the server"],["DummyConfigConsensus","Will be the same for every federation member"],["DummyConfigPrivate","Will be encrypted and not shared such as private key material"]]};

@@ -94,30 +94,149 @@
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
 <a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::ModuleGenParams;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::epoch::SerdeSignatureShare;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
-<span class="kw">use </span>fedimint_core::plugin_types_trait_impl_common;
+<span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Amount};
+<span class="kw">use </span>secp256k1::XOnlyPublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
-<span class="kw">pub mod </span>config;
-<span class="kw">pub mod </span>db;
+<span class="comment">// Common contains types shared by both the client and server
 
-<span class="kw">const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;dummy&quot;</span>);
-<span class="kw">pub const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(<span class="number">0</span>);
+// The client and server configuration
+</span><span class="kw">pub mod </span>config;
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>DummyConsensusItem;
+<span class="doccomment">/// Unique name for this module
+</span><span class="kw">const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;dummy&quot;</span>);
 
-<span class="attr">#[derive(Debug)]
+<span class="doccomment">/// Needed to avoid API path collisions
+</span><span class="comment">// TODO: Remove
+</span><span class="kw">pub const </span>LEGACY_HARDCODED_INSTANCE_ID_DUMMY: ModuleInstanceId = <span class="number">4</span>;
+
+<span class="doccomment">/// Modules are non-compatible with older versions
+</span><span class="kw">pub const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(<span class="number">0</span>);
+
+<span class="doccomment">/// Non-transaction items that will be submitted to consensus
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>DummyConsensusItem {
+    <span class="doccomment">/// User&#39;s print money request signed by a peer
+    </span>Print(DummyPrintMoneyRequest, SerdeSignatureShare),
+}
+
+<span class="doccomment">/// Parameters necessary to generate this module&#39;s configuration
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>DummyConfigGenParams {
+    <span class="kw">pub </span>tx_fee: Amount,
+}
+
+<span class="doccomment">/// Input for a fedimint transaction
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>DummyInput {
+    <span class="kw">pub </span>amount: Amount,
+    <span class="doccomment">/// Associate the input with a user&#39;s pubkey
+    </span><span class="kw">pub </span>account: XOnlyPublicKey,
+}
+
+<span class="doccomment">/// Output for a fedimint transaction
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>DummyOutput {
+    <span class="kw">pub </span>amount: Amount,
+    <span class="doccomment">/// Associate the output with a user&#39;s pubkey
+    </span><span class="kw">pub </span>account: XOnlyPublicKey,
+}
+
+<span class="doccomment">/// Information needed by a client to update output funds
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>DummyOutputOutcome(<span class="kw">pub </span>Amount, <span class="kw">pub </span>XOnlyPublicKey);
+
+<span class="doccomment">/// Request type sent from client to server
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>DummyPrintMoneyRequest {
+    <span class="kw">pub </span>amount: Amount,
+    <span class="kw">pub </span>account: XOnlyPublicKey,
+}
+
+<span class="doccomment">/// Errors that might be returned by the server
+</span><span class="comment">// TODO: Move to server lib?
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
+</span><span class="kw">pub enum </span>DummyError {
+    <span class="attr">#[error(<span class="string">&quot;Not enough funds&quot;</span>)]
+    </span>NotEnoughFunds,
+}
+
+<span class="doccomment">/// Contains the types defined above
+</span><span class="kw">pub struct </span>DummyModuleTypes;
+
+<span class="comment">// Wire together the types for this module
+</span><span class="macro">plugin_types_trait_impl_common!</span>(
+    DummyInput,
+    DummyOutput,
+    DummyOutputOutcome,
+    DummyConsensusItem
+);
+
+<span class="comment">// TODO: Boilerplate-code
+</span><span class="kw">impl </span>ModuleCommon <span class="kw">for </span>DummyModuleTypes {
+    <span class="kw">type </span>Input = DummyInput;
+    <span class="kw">type </span>Output = DummyOutput;
+    <span class="kw">type </span>OutputOutcome = DummyOutputOutcome;
+    <span class="kw">type </span>ConsensusItem = DummyConsensusItem;
+}
+
+<span class="comment">// TODO: Boilerplate-code
+</span><span class="kw">impl </span>ModuleGenParams <span class="kw">for </span>DummyConfigGenParams {}
+
+<span class="comment">// TODO: Boilerplate-code
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>DummyCommonGen;
 
-<span class="attr">#[async_trait]
+<span class="comment">// TODO: Boilerplate-code
+</span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>CommonModuleGen <span class="kw">for </span>DummyCommonGen {
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
@@ -126,36 +245,17 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>DummyConfigGenParams {
-    <span class="kw">pub </span>important_param: u64,
-}
-
-<span class="kw">impl </span>ModuleGenParams <span class="kw">for </span>DummyConfigGenParams {}
-
-<span class="attr">#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-)]
-</span><span class="kw">pub struct </span>DummyInput;
-
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>DummyInput {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;DummyInput&quot;</span>)
+        <span class="macro">write!</span>(f, <span class="string">&quot;DummyInput {}&quot;</span>, <span class="self">self</span>.amount)
     }
 }
-
-<span class="attr">#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-)]
-</span><span class="kw">pub struct </span>DummyOutput;
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>DummyOutput {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;DummyOutput&quot;</span>)
+        <span class="macro">write!</span>(f, <span class="string">&quot;DummyOutput {}&quot;</span>, <span class="self">self</span>.amount)
     }
 }
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>DummyOutputOutcome;
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>DummyOutputOutcome {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
@@ -165,30 +265,8 @@
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>DummyConsensusItem {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;DummyOutputConfirmation&quot;</span>)
+        <span class="macro">write!</span>(f, <span class="string">&quot;DummyConsensusItem&quot;</span>)
     }
-}
-
-<span class="kw">pub struct </span>DummyModuleTypes;
-
-<span class="kw">impl </span>ModuleCommon <span class="kw">for </span>DummyModuleTypes {
-    <span class="kw">type </span>Input = DummyInput;
-    <span class="kw">type </span>Output = DummyOutput;
-    <span class="kw">type </span>OutputOutcome = DummyOutputOutcome;
-    <span class="kw">type </span>ConsensusItem = DummyConsensusItem;
-}
-
-<span class="macro">plugin_types_trait_impl_common!</span>(
-    DummyInput,
-    DummyOutput,
-    DummyOutputOutcome,
-    DummyConsensusItem
-);
-
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
-</span><span class="kw">pub enum </span>DummyError {
-    <span class="attr">#[error(<span class="string">&quot;Something went wrong&quot;</span>)]
-    </span>SomethingDummyWentWrong,
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_dummy_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

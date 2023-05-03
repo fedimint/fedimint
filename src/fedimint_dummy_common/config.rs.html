@@ -83,70 +83,93 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::config::{
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::ModuleConsensusVersion;
-<span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_core::{Amount, PeerId};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
+<span class="kw">use </span>threshold_crypto::{PublicKeySet, SecretKeyShare};
 
 <span class="kw">use crate</span>::{CONSENSUS_VERSION, KIND};
 
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="doccomment">/// Contains all the configuration for the server
+</span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DummyConfig {
-    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key
-    /// material
-    </span><span class="kw">pub </span>private: DummyConfigPrivate,
-    <span class="doccomment">/// Contains all configuration that needs to be the same for every
-    /// federation member
-    </span><span class="kw">pub </span>consensus: DummyConfigConsensus,
+    <span class="kw">pub </span>private: DummyConfigPrivate,
+    <span class="kw">pub </span>consensus: DummyConfigConsensus,
 }
 
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>DummyConfigConsensus {
-    <span class="kw">pub </span>something: u64,
-}
-
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>DummyConfigPrivate {
-    <span class="kw">pub </span>something_private: u64,
-}
-
-<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+<span class="doccomment">/// Contains all the configuration for the client
+</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>DummyClientConfig {
-    <span class="kw">pub </span>something: u64,
+    <span class="doccomment">/// Accessible to clients
+    </span><span class="kw">pub </span>tx_fee: Amount,
 }
 
-<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>DummyClientConfig {
-    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::core::ModuleKind {
-        KIND
-    }
+<span class="doccomment">/// Will be the same for every federation member
+</span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>DummyConfigConsensus {
+    <span class="doccomment">/// Example federation threshold signing key
+    </span><span class="kw">pub </span>public_key_set: PublicKeySet,
+    <span class="doccomment">/// Will be the same for all peers
+    </span><span class="kw">pub </span>tx_fee: Amount,
+}
 
-    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion {
-        CONSENSUS_VERSION
-    }
+<span class="doccomment">/// Will be encrypted and not shared such as private key material
+</span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>DummyConfigPrivate {
+    <span class="doccomment">/// Example private key share for a single member
+    </span><span class="kw">pub </span>private_key_share: SerdeSecret&lt;SecretKeyShare&gt;,
 }
 
 <span class="kw">impl </span>TypedServerModuleConsensusConfig <span class="kw">for </span>DummyConfigConsensus {
-    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
+    <span class="doccomment">/// Derives the client config from the consensus config
+    </span><span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
         ClientModuleConfig::from_typed(
             KIND,
             CONSENSUS_VERSION,
             <span class="kw-2">&amp;</span>(DummyClientConfig {
-                something: <span class="self">self</span>.something,
+                tx_fee: <span class="self">self</span>.tx_fee,
             }),
         )
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>)
     }
 
-    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+    <span class="comment">// TODO: Boilerplate-code
+    </span><span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
         KIND
     }
 
-    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion {
+    <span class="comment">// TODO: Boilerplate-code
+    </span><span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion {
         CONSENSUS_VERSION
     }
 }
@@ -156,16 +179,37 @@
     <span class="kw">type </span>Private = DummyConfigPrivate;
     <span class="kw">type </span>Consensus = DummyConfigConsensus;
 
-    <span class="kw">fn </span>from_parts(_local: <span class="self">Self</span>::Local, private: <span class="self">Self</span>::Private, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self </span>{
+    <span class="comment">// TODO: Boilerplate-code (remove local)
+    </span><span class="kw">fn </span>from_parts(<span class="kw">_</span>: <span class="self">Self</span>::Local, private: <span class="self">Self</span>::Private, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ private, consensus }
     }
 
-    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
+    <span class="comment">// TODO: Boilerplate-code (remove local)
+    </span><span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
         (KIND, (), <span class="self">self</span>.private, <span class="self">self</span>.consensus)
     }
 
-    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, _identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="doccomment">/// Checks whether the config should be used
+    </span><span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>our_id = identity.to_usize();
+        <span class="kw">let </span>our_share = <span class="self">self</span>.consensus.public_key_set.public_key_share(our_id);
+
+        <span class="comment">// Check our private key matches our public key share
+        </span><span class="kw">if </span><span class="self">self</span>.private.private_key_share.public_key_share() != our_share {
+            <span class="macro">bail!</span>(<span class="string">&quot;Private key doesn&#39;t match public key share&quot;</span>);
+        }
         <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="comment">// TODO: Boilerplate-code
+</span><span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>DummyClientConfig {
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::core::ModuleKind {
+        KIND
+    }
+
+    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion {
+        CONSENSUS_VERSION
     }
 }
 </code></pre></div>

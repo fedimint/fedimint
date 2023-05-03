@@ -1,3 +1,4 @@
 (function() {var implementors = {
+"fedimint_dummy_client":[["impl PrimaryClientModule for <a class=\"struct\" href=\"fedimint_dummy_client/struct.DummyClientModule.html\" title=\"struct fedimint_dummy_client::DummyClientModule\">DummyClientModule</a>"]],
 "fedimint_mint_client":[["impl PrimaryClientModule for <a class=\"struct\" href=\"fedimint_mint_client/struct.MintClientModule.html\" title=\"struct fedimint_mint_client::MintClientModule\">MintClientModule</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

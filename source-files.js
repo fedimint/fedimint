@@ -11,9 +11,9 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_core":["",[["core",[],["client.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","registry.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]],["util",[],["broadcaststream.rs","mod.rs"]]],["admin_client.rs","api.rs","bitcoin_rpc.rs","cancellable.rs","config.rs","core.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","outcome.rs","query.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","timing.rs","transaction.rs","txoproof.rs"]],\
 "fedimint_derive":["",[],["lib.rs"]],\
 "fedimint_derive_secret":["",[],["lib.rs"]],\
-"fedimint_dummy_client":["",[],["lib.rs"]],\
-"fedimint_dummy_common":["",[],["config.rs","db.rs","lib.rs"]],\
-"fedimint_dummy_server":["",[],["lib.rs"]],\
+"fedimint_dummy_client":["",[],["api.rs","db.rs","lib.rs","states.rs"]],\
+"fedimint_dummy_common":["",[],["config.rs","lib.rs"]],\
+"fedimint_dummy_server":["",[],["db.rs","lib.rs"]],\
 "fedimint_ln_client":["",[],["api.rs","db.rs","lib.rs","pay.rs","receive.rs"]],\
 "fedimint_ln_common":["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]],\
 "fedimint_ln_server":["",[],["lib.rs"]],\

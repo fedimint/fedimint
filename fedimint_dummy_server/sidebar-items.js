@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["Dummy","Dummy module"],["DummyServerGen",""],["DummyVerificationCache",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["fed_account",""],["get_funds","Helper to get the funds for an account"]],"mod":[["db",""]],"struct":[["Dummy","Dummy module"],["DummyGen","Generates the module"],["DummyVerificationCache","An in-memory cache we could use for faster validation"]]};

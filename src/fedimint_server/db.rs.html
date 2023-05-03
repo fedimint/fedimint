@@ -397,6 +397,18 @@
 <a href="#397" id="397">397</a>
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -562,7 +574,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::CommonModuleGen;
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
-    <span class="kw">use </span>fedimint_core::{PeerId, ServerModule, TransactionId};
+    <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
     <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
@@ -601,8 +613,20 @@
         <span class="kw">let </span>key_pair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span>secp, <span class="kw-2">&amp;</span>sk);
         <span class="kw">let </span>schnorr = secp.sign_schnorr(<span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap(), <span class="kw-2">&amp;</span>key_pair);
         <span class="kw">let </span>transaction = Transaction {
-            inputs: <span class="macro">vec!</span>[DynInput::from_typed(<span class="number">0</span>, DummyInput)],
-            outputs: <span class="macro">vec!</span>[DynOutput::from_typed(<span class="number">0</span>, DummyOutput)],
+            inputs: <span class="macro">vec!</span>[DynInput::from_typed(
+                <span class="number">0</span>,
+                DummyInput {
+                    amount: Amount::ZERO,
+                    account: key_pair.x_only_public_key().<span class="number">0</span>,
+                },
+            )],
+            outputs: <span class="macro">vec!</span>[DynOutput::from_typed(
+                <span class="number">0</span>,
+                DummyOutput {
+                    amount: Amount::ZERO,
+                    account: key_pair.x_only_public_key().<span class="number">0</span>,
+                },
+            )],
             signature: <span class="prelude-val">Some</span>(schnorr),
         };
 
