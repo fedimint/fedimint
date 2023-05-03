@@ -651,6 +651,37 @@
 <a href="#651" id="651">651</a>
 <a href="#652" id="652">652</a>
 <a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::os::unix::ffi::OsStrExt;
@@ -658,7 +689,9 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi, WsFederationApi};
+<span class="kw">use </span>fedimint_core::api::{
+    ConsensusContribution, DynFederationApi, GlobalFederationApi, WsFederationApi,
+};
 <span class="kw">use </span>fedimint_core::cancellable::Cancellable;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
 <span class="kw">use </span>fedimint_core::db::{apply_migrations, Database};
@@ -668,7 +701,7 @@
 };
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
 <span class="kw">use </span>futures::stream::Peekable;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
@@ -691,7 +724,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_global_database_migrations, LastEpochKey, GLOBAL_DATABASE_VERSION};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::peers::IPeerConnections;
-<span class="kw">use </span><span class="kw">crate</span>::net::api::ConsensusApi;
+<span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, PeerConnector, PeerSlice, ReconnectPeerConnections};
 <span class="kw">use crate</span>::{LOG_CONSENSUS, LOG_CORE};
@@ -723,6 +756,8 @@
     </span>RunEpochRequest,
 }
 
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>LatestContributionByPeer = HashMap&lt;PeerId, ConsensusContribution&gt;;
+
 <span class="doccomment">/// Runs the main server consensus loop
 </span><span class="kw">pub struct </span>ConsensusServer {
     <span class="doccomment">/// `TaskGroup` that is running the server
@@ -743,6 +778,9 @@
     </span><span class="kw">pub </span>other_peers: BTreeSet&lt;PeerId&gt;,
     <span class="doccomment">/// If `Some` then we restarted and look for the epoch to rejoin at
     </span><span class="kw">pub </span>rejoin_at_epoch: HashMap&lt;u64, HashSet&lt;PeerId&gt;&gt;,
+    <span class="doccomment">/// Under the HBBFT consensus algorithm, this will track the latest epoch
+    /// message received by each peer and when it was received
+    </span><span class="kw">pub </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
     <span class="doccomment">/// How many empty epochs peers requested we run
     </span><span class="kw">pub </span>run_empty_epochs: u64,
     <span class="doccomment">/// Tracks the last epoch outcome from consensus
@@ -833,14 +871,14 @@
         </span>cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>;
 
         <span class="comment">// Build P2P connections for HBBFT consensus
-        </span><span class="kw">let </span>connections = ReconnectPeerConnections::new(
+        </span><span class="kw">let </span>(connections, peer_status_channels) = ReconnectPeerConnections::new(
             cfg.network_config(),
             delay_calculator,
             connector,
             task_group,
         )
-        .<span class="kw">await
-        </span>.into_dyn();
+        .<span class="kw">await</span>;
+        <span class="kw">let </span>connections = connections.into_dyn();
 
         <span class="kw">let </span>net_info = NetworkInfo::new(
             cfg.local.identity,
@@ -867,6 +905,7 @@
         <span class="kw">let </span>client_cfg = cfg.consensus.to_config_response(<span class="kw-2">&amp;</span>module_inits);
         <span class="kw">let </span>modules = ModuleRegistry::from(modules);
 
+        <span class="kw">let </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt; = Default::default();
         <span class="kw">let </span>consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             db: db.clone(),
@@ -874,6 +913,11 @@
             client_cfg,
             api_sender,
             supported_api_versions: ServerConfig::supported_api_versions_summary(<span class="kw-2">&amp;</span>modules),
+            latest_contribution_by_peer: Arc::clone(<span class="kw-2">&amp;</span>latest_contribution_by_peer),
+            peer_status_channels,
+            <span class="comment">// keep the status for a short time to protect the system against a denial-of-service
+            // attack
+            </span>consensus_status_cache: ExpiringCache::new(Duration::from_millis(<span class="number">500</span>)),
         };
 
         <span class="comment">// Build consensus processor
@@ -896,6 +940,7 @@
             api: api.into(),
             other_peers,
             rejoin_at_epoch: Default::default(),
+            latest_contribution_by_peer,
             run_empty_epochs: <span class="number">0</span>,
             last_processed_epoch: <span class="prelude-val">None</span>,
             decoders: modules.decoder_registry(),
@@ -976,7 +1021,8 @@
             <span class="string">&quot;Starting consensus at epoch {}&quot;</span>, epoch
         );
         <span class="self">self</span>.hbbft.skip_to_epoch(epoch);
-        <span class="self">self</span>.rejoin_at_epoch = HashMap::new();
+        <span class="self">self</span>.rejoin_at_epoch.clear();
+        <span class="self">self</span>.latest_contribution_by_peer.write().<span class="kw">await</span>.clear();
         <span class="self">self</span>.request_rejoin(<span class="number">1</span>).<span class="kw">await</span>;
     }
 
@@ -1243,6 +1289,22 @@
     </span><span class="kw">async fn </span>rejoin_at_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>, epoch: u64, peer: PeerId) {
         <span class="kw">let </span>peers = <span class="self">self</span>.rejoin_at_epoch.entry(epoch).or_default();
         peers.insert(peer);
+        <span class="kw">let </span>contribution = ConsensusContribution {
+            <span class="comment">// this is equivalent to epoch count, so + 1 here as usual
+            </span>value: epoch + <span class="number">1</span>,
+            time: fedimint_core::time::now(),
+        };
+        <span class="self">self</span>.latest_contribution_by_peer
+            .write()
+            .<span class="kw">await
+            </span>.entry(peer)
+            .and_modify(|c| {
+                <span class="comment">// only update if epoch count is higher
+                </span><span class="kw">if </span>contribution.value &gt; c.value {
+                    <span class="kw-2">*</span>c = contribution;
+                }
+            })
+            .or_insert(contribution);
         <span class="kw">let </span>threshold = <span class="self">self</span>.cfg.local.p2p_endpoints.threshold();
 
         <span class="kw">if </span>peers.len() &gt;= threshold &amp;&amp; <span class="self">self</span>.hbbft.epoch() &lt; epoch {

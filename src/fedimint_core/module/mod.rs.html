@@ -1180,7 +1180,7 @@
 </span><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ApiAuth(<span class="kw">pub </span>String);
 
-<span class="attr">#[derive(Debug)]
+<span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ApiError {
     <span class="kw">pub </span>code: i32,
     <span class="kw">pub </span>message: String,

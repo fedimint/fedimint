@@ -790,6 +790,88 @@
 <a href="#790" id="790">790</a>
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -805,6 +887,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_core::api::PeerConnectionStatus;
 <span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
@@ -817,6 +900,7 @@
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::mpsc::{Receiver, Sender};
+<span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
@@ -868,6 +952,45 @@
 <span class="kw">struct </span>PeerConnectionStateMachine&lt;M&gt; {
     common: CommonPeerConnectionState&lt;M&gt;,
     state: PeerConnectionState&lt;M&gt;,
+}
+
+<span class="kw">struct </span>PeerStatusQuery {
+    response_sender: oneshot::Sender&lt;PeerConnectionStatus&gt;,
+}
+
+<span class="kw">type </span>PeerStatusChannelSender = Sender&lt;PeerStatusQuery&gt;;
+<span class="kw">type </span>PeerStatusChannelReceiver = Receiver&lt;PeerStatusQuery&gt;;
+
+<span class="doccomment">/// Keeps the references to a `PeerStatusChannelSender` for each `PeerId`, which
+/// can be used to ask the corresponding `PeerConnectionStateMachine` for the
+/// current `PeerConnectionStatus`
+</span><span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>PeerStatusChannels(HashMap&lt;PeerId, PeerStatusChannelSender&gt;);
+
+<span class="kw">impl </span>PeerStatusChannels {
+    <span class="kw">pub async fn </span>get_all_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashMap&lt;PeerId, anyhow::Result&lt;PeerConnectionStatus&gt;&gt; {
+        <span class="kw">let </span>results = <span class="self">self</span>.<span class="number">0</span>.iter().map(|(peer_id, sender)| <span class="kw">async </span>{
+            <span class="kw">let </span>(response_sender, response_receiver) = oneshot::channel();
+            <span class="kw">let </span>query = PeerStatusQuery { response_sender };
+            <span class="kw">let </span>sender_response = sender
+                .send(query)
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;channel closed while querying peer status&quot;</span>));
+            <span class="kw">match </span>sender_response {
+                <span class="prelude-val">Ok</span>(()) =&gt; {
+                    <span class="kw">let </span>status = response_receiver
+                        .<span class="kw">await
+                        </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;channel closed while receiving peer status&quot;</span>));
+                    (<span class="kw-2">*</span>peer_id, status)
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; (<span class="kw-2">*</span>peer_id, <span class="prelude-val">Err</span>(e)),
+            }
+        });
+        futures::future::join_all(results)
+            .<span class="kw">await
+            </span>.into_iter()
+            .collect()
+    }
 }
 
 <span class="doccomment">/// Calculates delays for reconnecting to peers
@@ -928,6 +1051,7 @@
     connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
     incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
     last_received: <span class="prelude-ty">Option</span>&lt;MessageId&gt;,
+    status_query_receiver: PeerStatusChannelReceiver,
 }
 
 <span class="kw">struct </span>DisconnectedPeerConnectionState {
@@ -953,45 +1077,55 @@
     /// See [`ReconnectPeerConnections`] for requirements on the
     /// `Connector`.
     </span><span class="attr">#[instrument(skip_all)]
-    </span><span class="kw">pub async fn </span>new(
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
         cfg: NetworkConfig,
         delay_calculator: DelayCalculator,
         connect: PeerConnector&lt;T&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="self">Self </span>{
+    ) -&gt; (<span class="self">Self</span>, PeerStatusChannels) {
         <span class="kw">let </span>shared_connector: SharedAnyConnector&lt;PeerMessage&lt;T&gt;&gt; = connect.into();
 
-        <span class="kw">let </span>(connection_senders, connections) = cfg
+        <span class="kw">let </span>(connection_senders, (status_query_senders, connections)): (
+            <span class="kw">_</span>,
+            (HashMap&lt;PeerId, PeerStatusChannelSender&gt;, <span class="kw">_</span>),
+        ) = cfg
             .peers
             .iter()
             .filter(|(<span class="kw-2">&amp;</span>peer, <span class="kw">_</span>)| peer != cfg.identity)
             .map(|(<span class="kw-2">&amp;</span>peer, peer_address)| {
                 <span class="kw">let </span>(connection_sender, connection_receiver) =
                     tokio::sync::mpsc::channel::&lt;AnyFramedTransport&lt;PeerMessage&lt;T&gt;&gt;&gt;(<span class="number">4</span>);
-                (
+                <span class="kw">let </span>(status_query_sender, status_query_receiver) =
+                    tokio::sync::mpsc::channel::&lt;PeerStatusQuery&gt;(<span class="number">1</span>); <span class="comment">// better block the sender than flood the receiver
+                </span>(
                     (peer, connection_sender),
                     (
-                        peer,
-                        PeerConnection::new(
+                        (peer, status_query_sender),
+                        (
                             peer,
-                            peer_address.clone(),
-                            delay_calculator,
-                            shared_connector.clone(),
-                            connection_receiver,
-                            task_group,
+                            PeerConnection::new(
+                                peer,
+                                peer_address.clone(),
+                                delay_calculator,
+                                shared_connector.clone(),
+                                connection_receiver,
+                                status_query_receiver,
+                                task_group,
+                            ),
                         ),
                     ),
                 )
             })
             .unzip();
-
         task_group
             .spawn(<span class="string">&quot;listen task&quot;</span>, <span class="kw">move </span>|handle| {
                 <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
             })
             .<span class="kw">await</span>;
-
-        ReconnectPeerConnections { connections }
+        (
+            ReconnectPeerConnections { connections },
+            PeerStatusChannels(status_query_senders),
+        )
     }
 
     <span class="kw">async fn </span>run_listen_task(
@@ -1175,6 +1309,13 @@
                     },
                 }
             },
+            <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
+                <span class="kw">if </span>status_query.response_sender.send(PeerConnectionStatus::Connected).is_err() {
+                    <span class="kw">let </span>peer_id = <span class="self">self</span>.peer;
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">&quot;Could not send peer status response: receiver dropped&quot;</span>);
+                }
+                PeerConnectionState::Connected(connected)
+            },
             <span class="prelude-val">Some</span>(msg_res) = connected.connection.next() =&gt; {
                 <span class="self">self</span>.receive_message(connected, msg_res).<span class="kw">await
             </span>},
@@ -1332,7 +1473,7 @@
                     <span class="prelude-val">Some</span>(msg) =&gt; {
                         <span class="self">self</span>.send_message(disconnected, msg).<span class="kw">await</span>}
                     <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER,<span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
+                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Exiting peer connection IO task - parent disconnected&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     }
                 }
@@ -1347,6 +1488,13 @@
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     },
                 }
+            },
+            <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
+                <span class="kw">if </span>status_query.response_sender.send(PeerConnectionStatus::Disconnected).is_err() {
+                    <span class="kw">let </span>peer_id = <span class="self">self</span>.peer;
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">&quot;Could not send peer status response: receiver dropped&quot;</span>);
+                }
+                PeerConnectionState::Disconnected(disconnected)
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at) =&gt; {
                 <span class="self">self</span>.reconnect(disconnected).<span class="kw">await
@@ -1415,6 +1563,7 @@
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
+        status_query_receiver: PeerStatusChannelReceiver,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; PeerConnection&lt;M&gt; {
         <span class="kw">let </span>(outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
@@ -1431,6 +1580,7 @@
                     delay_calculator,
                     connect,
                     incoming_connections,
+                    status_query_receiver,
                     <span class="kw-2">&amp;</span>handle,
                 )
                 .<span class="kw">await
@@ -1461,6 +1611,7 @@
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
+        status_query_receiver: PeerStatusChannelReceiver,
         task_handle: <span class="kw-2">&amp;</span>TaskHandle,
     ) {
         <span class="kw">let </span>common = CommonPeerConnectionState {
@@ -1472,6 +1623,7 @@
             delay_calculator,
             connect,
             incoming_connections,
+            status_query_receiver,
             last_received: <span class="prelude-val">None</span>,
         };
         <span class="kw">let </span>initial_state = common.disconnect(<span class="number">0</span>);
@@ -1546,20 +1698,32 @@
                 .<span class="kw">await
             </span>};
 
-            <span class="kw">let </span><span class="kw-2">mut </span>peers_a = build_peers(<span class="string">&quot;127.0.0.1:1000&quot;</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>peers_b = build_peers(<span class="string">&quot;127.0.0.1:2000&quot;</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span>(<span class="kw-2">mut </span>peers_a, peer_status_client_a) =
+                build_peers(<span class="string">&quot;127.0.0.1:1000&quot;</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span>(<span class="kw-2">mut </span>peers_b, peer_status_client_b) =
+                build_peers(<span class="string">&quot;127.0.0.1:2000&quot;</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
 
             peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>.unwrap();
             <span class="kw">let </span>recv = timeout(peers_b.receive()).<span class="kw">await</span>.unwrap().unwrap();
             <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">42</span>);
+            <span class="kw">let </span>status = peer_status_client_a.get_all_status().<span class="kw">await</span>;
+            <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
+            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
 
             peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>.unwrap();
+            <span class="kw">let </span>status = peer_status_client_b.get_all_status().<span class="kw">await</span>;
+            <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
+            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
 
-            <span class="kw">let </span><span class="kw-2">mut </span>peers_c = build_peers(<span class="string">&quot;127.0.0.1:3000&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
+            <span class="kw">let </span>(<span class="kw-2">mut </span>peers_c, peer_status_client_c) =
+                build_peers(<span class="string">&quot;127.0.0.1:3000&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
             <span class="kw">let </span>recv = timeout(peers_c.receive()).<span class="kw">await</span>.unwrap().unwrap();
             <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">21</span>);
+            <span class="kw">let </span>status = peer_status_client_c.get_all_status().<span class="kw">await</span>;
+            <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
+            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
         }
 
         task_group.shutdown().<span class="kw">await</span>;

@@ -288,6 +288,7 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -494,9 +495,10 @@
 }
 
 <span class="doccomment">/// The state of the server returned via APIs
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+</span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>ServerStatus {
     <span class="doccomment">/// Server needs a password to read configs
+    </span><span class="attr">#[default]
     </span>AwaitingPassword,
     <span class="doccomment">/// Configs were not found, need to run config gen
     </span>GeneratingConfig,

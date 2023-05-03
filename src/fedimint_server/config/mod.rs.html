@@ -1668,9 +1668,9 @@
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">let </span>connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    ReconnectPeerConnections::new(network, delay_calculator, connector, task_group)
-        .<span class="kw">await
-        </span>.into_dyn()
+    <span class="kw">let </span>(connections, <span class="kw">_</span>) =
+        ReconnectPeerConnections::new(network, delay_calculator, connector, task_group).<span class="kw">await</span>;
+    connections.into_dyn()
 }
 
 <span class="kw">pub fn </span>gen_cert_and_key(

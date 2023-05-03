@@ -1088,14 +1088,57 @@
 <a href="#1088" id="1088">1088</a>
 <a href="#1089" id="1089">1089</a>
 <a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
-<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
 <span class="kw">use </span>std::io::{Cursor, Read};
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::time::{Duration, SystemTime};
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::{anyhow, ensure};
@@ -1929,6 +1972,49 @@
 }
 
 <span class="kw">impl</span>&lt;C: JsonRpcClient&gt; WsFederationApi&lt;C&gt; {}
+
+<span class="doccomment">/// The status of a server, including how it views its peers
+</span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ConsensusStatus {
+    <span class="doccomment">/// The last contribution that this server has made to the consensus, it&#39;s
+    /// equivalent to [`PeerConsensusStatus::last_contribution`] and
+    /// [`ConsensusContribution::value`]
+    </span><span class="kw">pub </span>last_contribution: u64,
+    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, PeerConsensusStatus&gt;,
+    <span class="kw">pub </span>peers_online: u64,
+    <span class="kw">pub </span>peers_offline: u64,
+    <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
+    /// should generate an alert if this is not the case.
+    </span><span class="kw">pub </span>peers_flagged: u64,
+}
+
+<span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PeerConsensusStatus {
+    <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="kw">pub </span>last_contribution_timestamp_seconds: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="kw">pub </span>connection_status: PeerConnectionStatus,
+    <span class="doccomment">/// Indicates that this peer needs attention from the operator. For instance
+    /// it may be suffering too many disconnections or it hasn&#39;t contributed for
+    /// the consensus in a long time
+    </span><span class="kw">pub </span>flagged: bool,
+}
+
+<span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>PeerConnectionStatus {
+    <span class="attr">#[default]
+    </span>Disconnected,
+    Connected,
+}
+
+<span class="doccomment">/// Tracks the consensus contribution for a peer
+</span><span class="attr">#[derive(Debug, Clone, Copy)]
+</span><span class="kw">pub struct </span>ConsensusContribution {
+    <span class="doccomment">/// Using HBBFT this is the epoch count. In general it should be an
+    /// increasing number
+    </span><span class="kw">pub </span>value: u64,
+    <span class="doccomment">/// When the contribution was received
+    </span><span class="kw">pub </span>time: SystemTime,
+}
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
