@@ -27,11 +27,9 @@ export enum Network {
 
 export interface Peer {
   name: string;
-  status: PeerStatus;
-}
-
-export interface PeerStatus {
-  connected: boolean;
+  cert: string;
+  api_url: string;
+  p2p_url: string;
 }
 
 export type API_ConfigGenParams = {
@@ -49,6 +47,11 @@ export type ConfigGenParams = {
     mint: { mintAmounts: number[] };
   };
 };
+
+export interface ConsensusState {
+  requested: ConfigGenParams;
+  peers: Peer[];
+}
 
 export interface SetupState {
   role: GuardianRole | null;

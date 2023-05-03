@@ -1,5 +1,10 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
-import { API_ConfigGenParams, ConfigGenParams, ServerStatus } from './types';
+import {
+  API_ConfigGenParams,
+  ConfigGenParams,
+  ConsensusState,
+  ServerStatus,
+} from './types';
 
 export interface ApiInterface {
   testPassword: (password: string) => Promise<boolean>;
@@ -11,7 +16,7 @@ export interface ApiInterface {
   ) => Promise<void>;
   getDefaultConfigGenParams: () => Promise<ConfigGenParams>;
   status: () => Promise<ServerStatus>;
-  getConsensusConfigGenParams: () => Promise<ConfigGenParams>;
+  getConsensusConfigGenParams: () => Promise<ConsensusState>;
   setConfigGenParams: (params: ConfigGenParams) => Promise<void>;
   getVerifyConfigHash: () => Promise<string>;
   awaitConfigGenPeers: (numPeers: number) => Promise<void>;
@@ -91,9 +96,11 @@ export class GuardianApi implements ApiInterface {
       console.log(`${method} rpc result:`, result);
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`error calling "${method}" on websocket rpc : `, error);
-      throw error;
+      throw 'error' in (error as { error: JsonRpcError })
+        ? (error as { error: JsonRpcError }).error
+        : error;
     }
   };
 
@@ -174,7 +181,7 @@ export class GuardianApi implements ApiInterface {
     return this.rpc('status', null, true /* authenticated */);
   };
 
-  getConsensusConfigGenParams = async (): Promise<ConfigGenParams> => {
+  getConsensusConfigGenParams = async (): Promise<ConsensusState> => {
     return this.rpc(
       'get_consensus_config_gen_params',
       null,
@@ -247,7 +254,7 @@ export class NoopGuardianApi implements ApiInterface {
   status = async (): Promise<ServerStatus> => {
     throw 'not implemented';
   };
-  getConsensusConfigGenParams = async (): Promise<ConfigGenParams> => {
+  getConsensusConfigGenParams = async (): Promise<ConsensusState> => {
     throw 'not implemented';
   };
   setConfigGenParams = async (_params: ConfigGenParams): Promise<void> => {
