@@ -30,8 +30,8 @@ export function RadioButtonGroup<T extends string | number>({
 }: RadioButtonGroupProps<T>): React.ReactElement {
   const theme = useTheme();
   const activeStyles = {
-    borderColor: 'transparent',
-    boxShadow: `0 0 0 2px ${theme.colors.blue[600]} inset`,
+    borderColor: theme.colors.blue[600],
+    boxShadow: `0 0 0 1px ${theme.colors.blue[600]} inset`,
     bg: theme.colors.blue[50],
   };
 
@@ -43,7 +43,7 @@ export function RadioButtonGroup<T extends string | number>({
           <Button
             key={option.value}
             onClick={() => onChange(option.value)}
-            variant='ghost'
+            variant='outline'
             _hover={{
               bg: '#EFF8FF',
               color: '#175CD3',
