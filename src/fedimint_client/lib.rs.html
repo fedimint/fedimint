@@ -1042,6 +1042,16 @@
 <a href="#1042" id="1042">1042</a>
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -1384,6 +1394,13 @@
     </span><span class="kw">pub fn </span>builder() -&gt; ClientBuilder {
         ClientBuilder::default()
     }
+
+    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) {
+        <span class="self">self</span>.inner
+            .executor
+            .start_executor(tg, <span class="self">self</span>.inner.context_gen())
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>) {
         <span class="self">self</span>.inner.api.as_ref()
@@ -1858,7 +1875,15 @@
         </span>);
     }
 
-    <span class="kw">pub async fn </span>build(<span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;Client&gt; {
+    <span class="doccomment">/// Build a [`Client`] and start its executor
+    </span><span class="kw">pub async fn </span>build(<span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;Client&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped().<span class="kw">await</span><span class="question-mark">?</span>;
+        client.start_executor(tg).<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(client)
+    }
+
+    <span class="doccomment">/// Build a [`Client`] but do not start the executor
+    </span><span class="kw">pub async fn </span>build_stopped(<span class="self">self</span>) -&gt; anyhow::Result&lt;Client&gt; {
         <span class="kw">let </span>config = <span class="self">self</span>.config.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No config was provided&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>primary_module_instance = <span class="self">self
             </span>.primary_module_instance
@@ -1956,11 +1981,6 @@
             api,
             secp_ctx: Secp256k1::new(),
         });
-
-        client_inner
-            .executor
-            .start_executor(tg, client_inner.context_gen())
-            .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(Client {
             inner: client_inner,
