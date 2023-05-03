@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -28,6 +29,7 @@ pub struct TracingSetup {
     tokio_console_bind: Option<SocketAddr>,
     with_jaeger: bool,
     with_chrome: bool,
+    with_file: Option<File>,
 }
 
 impl TracingSetup {
@@ -52,12 +54,25 @@ impl TracingSetup {
         self
     }
 
+    pub fn with_file(&mut self, file: Option<File>) -> &mut Self {
+        self.with_file = file;
+        self
+    }
+
     /// Initialize the logging, must be called for tracing to begin
-    pub fn init(&self) -> anyhow::Result<()> {
+    pub fn init(&mut self) -> anyhow::Result<()> {
+        use tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
         let filter_layer =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+        let fmt_writer = if let Some(file) = self.with_file.take() {
+            BoxMakeWriter::new(Tee::new(io::stderr, file))
+        } else {
+            BoxMakeWriter::new(io::stderr)
+        };
+
         let fmt_layer = tracing_subscriber::fmt::layer()
-            .with_writer(io::stderr)
+            .with_writer(fmt_writer)
             .with_filter(filter_layer);
 
         let console_opt = || -> Option<Box<dyn Layer<_> + Send + Sync + 'static>> {
