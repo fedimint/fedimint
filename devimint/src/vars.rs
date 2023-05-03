@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 pub trait ToEnvVar {
-    fn to_env_value(&self) -> String;
+    fn to_env_value(&self) -> Option<String>;
 }
 
 macro_rules! declare_vars {
@@ -20,7 +20,7 @@ macro_rules! declare_vars {
         }
 
         impl $name {
-            pub async fn new_vars($($args)*) -> ::anyhow::Result<Self> {
+            pub async fn init($($args)*) -> ::anyhow::Result<Self> {
                 $(let $env_name: $env_ty = $env_value.into();)*
                 Ok(Self {
                     $($env_name),*
@@ -28,30 +28,41 @@ macro_rules! declare_vars {
             }
 
             pub fn vars<'a>(&'a self) -> impl Iterator<Item = (&'static str, String)> {
-                vec![$((stringify!($env_name), $crate::vars::ToEnvVar::to_env_value(&self.$env_name))),*].into_iter()
+                let mut env = ::std::vec::Vec::new();
+                $(
+                    if let Some(value) = $crate::vars::ToEnvVar::to_env_value(&self.$env_name) {
+                        env.push((stringify!($env_name), value));
+                    }
+                )*
+                env.into_iter()
             }
         }
     };
 }
 
 impl ToEnvVar for PathBuf {
-    fn to_env_value(&self) -> String {
-        self.as_os_str().to_str().expect("must be utf8").to_owned()
+    fn to_env_value(&self) -> Option<String> {
+        Some(self.as_os_str().to_str().expect("must be utf8").to_owned())
     }
 }
 
 impl ToEnvVar for String {
-    fn to_env_value(&self) -> String {
-        self.to_owned()
+    fn to_env_value(&self) -> Option<String> {
+        Some(self.to_owned())
     }
 }
 
 impl ToEnvVar for usize {
-    fn to_env_value(&self) -> String {
-        self.to_string()
+    fn to_env_value(&self) -> Option<String> {
+        Some(self.to_string())
     }
 }
 
+impl<T: ToEnvVar> ToEnvVar for Option<T> {
+    fn to_env_value(&self) -> Option<String> {
+        self.as_ref().and_then(ToEnvVar::to_env_value)
+    }
+}
 async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
     if !dir.exists() {
         tokio::fs::create_dir(&dir).await?;
@@ -113,7 +124,7 @@ declare_vars! {
 
 impl Global {
     pub async fn new(test_dir: &Path, fed_size: usize) -> anyhow::Result<Self> {
-        let this = Self::new_vars(test_dir, fed_size).await?;
+        let this = Self::init(test_dir, fed_size).await?;
         fs::copy(
             "misc/test/bitcoin.conf",
             this.FM_BTC_DIR.join("bitcoin.conf"),
@@ -127,5 +138,38 @@ impl Global {
         )
         .await?;
         Ok(this)
+    }
+}
+
+const BASE_PORT: usize = 8173 + 10000;
+
+#[derive(PartialEq, Eq)]
+pub enum UiKind {
+    Old,
+    New,
+}
+
+// We allow ranges of 10 ports for each fedimintd / dkg instance starting from
+// 18173. Each port needed is incremented by 1 within this range.
+//
+// * `id` - ID of the server. Used to calculate port numbers.
+declare_vars! {
+    Fedimintd = (globals: &Global, id: usize, ui_kind: UiKind) => {
+        FM_BIND_P2P: String = format!("127.0.0.1:{p2p}", p2p = BASE_PORT + id * 10);
+        FM_P2P_URL: String = format!("fedimint://{FM_BIND_P2P}");
+        FM_BIND_API: String = format!("127.0.0.1:{api}", api = BASE_PORT + id * 10 + 1);
+        FM_API_URL: String = format!("ws://{FM_BIND_API}");
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{id}"))).await?;
+        // For new UI, don't set password or run the old UI
+        FM_LISTEN_UI: Option<String> = if ui_kind == UiKind::Old {
+            Some(format!("127.0.0.1:{ui}", ui = BASE_PORT + id * 10 + 2))
+        } else {
+            None
+        };
+        FM_PASSWORD: Option<String> = if ui_kind == UiKind::Old {
+            Some(format!("pass{id}"))
+        } else {
+            None
+        };
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 use anyhow::{anyhow, Context};
@@ -9,29 +9,6 @@ use futures::future;
 use tokio::fs;
 
 use super::*; // TODO: remove this
-
-pub fn fedimint_env(peer_id: usize) -> anyhow::Result<HashMap<String, String>> {
-    let base_port = 8173 + 10000;
-    let p2p_port = base_port + (peer_id * 10);
-    let api_port = base_port + (peer_id * 10) + 1;
-    let ui_port = base_port + (peer_id * 10) + 2;
-    let cfg_dir = env::var("FM_DATA_DIR")?;
-    Ok(HashMap::from_iter([
-        ("FM_BIND_P2P".into(), format!("127.0.0.1:{p2p_port}")),
-        (
-            "FM_P2P_URL".into(),
-            format!("fedimint://127.0.0.1:{p2p_port}"),
-        ),
-        ("FM_BIND_API".into(), format!("127.0.0.1:{api_port}")),
-        ("FM_API_URL".into(), format!("ws://127.0.0.1:{api_port}")),
-        ("FM_LISTEN_UI".into(), format!("127.0.0.1:{ui_port}")),
-        (
-            "FM_FEDIMINT_DATA_DIR".into(),
-            format!("{cfg_dir}/server-{peer_id}"),
-        ),
-        ("FM_PASSWORD".into(), format!("pass{peer_id}")),
-    ]))
-}
 
 pub struct Federation {
     // client is only for internal use, use cli commands instead
@@ -54,7 +31,8 @@ impl Federation {
                     process_mgr,
                     bitcoind.clone(),
                     peer_id,
-                    vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?,
+                    &vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old)
+                        .await?,
                 )
                 .await?,
             );
@@ -92,7 +70,7 @@ impl Federation {
                 process_mgr,
                 self.bitcoind.clone(),
                 peer_id,
-                vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?,
+                &vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?,
             )
             .await?,
         );
@@ -242,7 +220,7 @@ impl Fedimintd {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         peer_id: usize,
-        env: vars::Fedimintd,
+        env: &vars::Fedimintd,
     ) -> Result<Self> {
         info!("fedimintd-{peer_id} started");
         let process = process_mgr

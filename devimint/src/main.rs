@@ -9,7 +9,7 @@ use bitcoincore_rpc::bitcoin::Amount as BitcoinRpcAmount;
 use bitcoincore_rpc::RpcApi;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
-use devimint::federation::{fedimint_env, Fedimintd};
+use devimint::federation::Fedimintd;
 use devimint::util::{poll, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
@@ -771,28 +771,40 @@ async fn run_ui(
     kind: &RunUiKind,
 ) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let mut fedimints = Vec::new();
-    for peer_id in 0..2 {
-        let mut env_vars = fedimint_env(peer_id)?;
-        // For new UI, don't set password or run the old UI
-        if kind == &RunUiKind::New {
-            env_vars.remove("FM_LISTEN_UI");
-            env_vars.remove("FM_PASSWORD");
+    // don't drop fedimintds
+    let _fedimintds = futures::future::try_join_all((0..2).map(|peer_id| {
+        let bitcoind = bitcoind.clone();
+        async move {
+            let env_vars = match kind {
+                RunUiKind::Old => {
+                    vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?
+                }
+                RunUiKind::New => {
+                    vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::New).await?
+                }
+            };
+
+            let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, &env_vars).await?;
+
+            // For old UI, wait for UI server. For running new UI, wait for config API.
+            let server_addr = match kind {
+                RunUiKind::Old => env_vars
+                    .FM_LISTEN_UI
+                    .as_ref()
+                    .expect("FM_LISTEN_UI must be set for old ui"),
+                RunUiKind::New => &env_vars.FM_BIND_P2P,
+            };
+
+            poll("waiting for ui/api startup", || async {
+                Ok(TcpStream::connect(server_addr).await.is_ok())
+            })
+            .await?;
+            info!(LOG_DEVIMINT, "Started ui/api on http://{server_addr}");
+            anyhow::Ok(fm)
         }
-        fedimints.push(Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, env_vars).await?);
-    }
-    for id in 0..2 {
-        // For old UI, wait for UI server. For running new UI, wait for config API.
-        let server_addr = match kind {
-            RunUiKind::Old => fedimint_env(id)?["FM_LISTEN_UI"].clone(),
-            RunUiKind::New => fedimint_env(id)?["FM_BIND_P2P"].clone(),
-        };
-        poll("waiting for ui/api startup", || async {
-            Ok(TcpStream::connect(&server_addr).await.is_ok())
-        })
-        .await?;
-        info!(LOG_DEVIMINT, "Started ui/api on http://{server_addr}");
-    }
+    }))
+    .await?;
+
     task_group.make_handle().make_shutdown_rx().await.await?;
     Ok(())
 }
@@ -835,11 +847,8 @@ async fn main() -> Result<()> {
         }
         Cmd::DevFed => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let _daemons = write_ready_file(
-                &process_mgr.globals,
-                dev_fed(&task_group, &process_mgr).await,
-            )
-            .await?;
+            let _daemons =
+                write_ready_file(&process_mgr.globals, dev_fed(&process_mgr).await).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::RunUi(kind) => {
@@ -847,23 +856,23 @@ async fn main() -> Result<()> {
             run_ui(&process_mgr, &task_group, &kind).await?
         }
         Cmd::LatencyTests => {
-            let (process_mgr, task_group) = setup(args.common).await?;
-            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
             latency_tests(dev_fed).await?;
         }
         Cmd::ReconnectTest => {
-            let (process_mgr, task_group) = setup(args.common).await?;
-            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
         }
         Cmd::CliTests => {
-            let (process_mgr, task_group) = setup(args.common).await?;
-            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
             cli_tests(dev_fed).await?;
         }
         Cmd::LightningReconnectTest => {
-            let (process_mgr, task_group) = setup(args.common).await?;
-            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
             lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
         }
         Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,

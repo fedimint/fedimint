@@ -18,7 +18,6 @@ use fedimint_client_legacy::{module_decode_stubs, UserClient, UserClientConfig};
 use fedimint_core::config::load_from_file;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_wallet_client::WalletClientGen;
@@ -503,7 +502,7 @@ impl Gatewayd {
     }
 }
 
-pub async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Result<DevFed> {
+pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = tokio::try_join!(
@@ -524,7 +523,7 @@ pub async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Re
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         async {
-            run_dkg(task_group, 4).await?;
+            run_dkg(process_mgr, 4).await?;
             info!(LOG_DEVIMINT, "dkg done");
             Federation::new(process_mgr, bitcoind.clone(), 0..4).await
         },
