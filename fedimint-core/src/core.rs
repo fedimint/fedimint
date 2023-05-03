@@ -26,6 +26,8 @@ use crate::{
 pub mod client;
 pub mod server;
 
+pub mod backup;
+
 /// Module instance ID
 ///
 /// This value uniquely identifies a single instance of a module in a

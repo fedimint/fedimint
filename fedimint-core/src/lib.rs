@@ -25,6 +25,7 @@ use crate::module::registry::ModuleDecoderRegistry;
 #[cfg(not(target_family = "wasm"))]
 pub mod admin_client;
 pub mod api;
+pub mod backup;
 pub mod bitcoin_rpc;
 pub mod cancellable;
 pub mod config;
@@ -135,7 +136,20 @@ pub fn sats(amount: u64) -> Amount {
 /// `OutPoint` represents a globally unique output in a transaction
 ///
 /// Hence, a transaction ID and the output index is required.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deserialize,
+    Serialize,
+    Encodable,
+    Decodable,
+)]
 pub struct OutPoint {
     /// The referenced transaction ID
     pub txid: TransactionId,

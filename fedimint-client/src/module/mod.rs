@@ -3,6 +3,7 @@ use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use fedimint_core::api::DynFederationApi;
 use fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
@@ -12,7 +13,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
 
-use crate::sm::{Context, DynContext, DynState, OperationId, State};
+use crate::sm::{Context, DynContext, DynState, Executor, OperationId, State};
 use crate::transaction::{ClientInput, ClientOutput};
 use crate::{Client, DynGlobalClientContext};
 
@@ -64,6 +65,41 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> TransactionItemAmount;
+
+    fn supports_backup(&self) -> bool {
+        false
+    }
+
+    async fn backup(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _executor: Executor<DynGlobalClientContext>,
+        _api: DynFederationApi,
+        _module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>> {
+        anyhow::bail!("Backup not supported");
+    }
+
+    async fn restore(
+        &self,
+        // _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor<DynGlobalClientContext>,
+        _api: DynFederationApi,
+        _snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("Backup not supported");
+    }
+
+    async fn wipe(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("Wiping not supported");
+    }
 }
 
 /// Type-erased version of [`ClientModule`]
@@ -84,6 +120,33 @@ pub trait IClientModule: Debug {
     fn input_amount(&self, input: &DynInput) -> TransactionItemAmount;
 
     fn output_amount(&self, output: &DynOutput) -> TransactionItemAmount;
+
+    fn supports_backup(&self) -> bool;
+
+    async fn backup(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynFederationApi,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>>;
+
+    async fn restore(
+        &self,
+        // dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynFederationApi,
+        snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()>;
+
+    async fn wipe(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -129,6 +192,41 @@ where
                 .downcast_ref()
                 .expect("Dispatched to correct module"),
         )
+    }
+
+    fn supports_backup(&self) -> bool {
+        <T as ClientModule>::supports_backup(self)
+    }
+
+    async fn backup(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynFederationApi,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>> {
+        <T as ClientModule>::backup(self, dbtx, executor, api, module_instance_id).await
+    }
+
+    async fn restore(
+        &self,
+        // dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynFederationApi,
+        snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        <T as ClientModule>::restore(self, dbtx, module_instance_id, executor, api, snapshot).await
+    }
+
+    async fn wipe(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()> {
+        <T as ClientModule>::wipe(self, dbtx, module_instance_id, executor).await
     }
 }
 

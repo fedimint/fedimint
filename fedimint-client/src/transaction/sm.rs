@@ -231,6 +231,7 @@ mod tests {
 
     use async_trait::async_trait;
     use fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
+    use fedimint_core::config::ClientConfig;
     use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
@@ -255,16 +256,16 @@ mod tests {
         InstancelessDynClientOutput,
     };
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct FakeApiClient {
-        txns: Mutex<Vec<TransactionId>>,
+        txns: Arc<Mutex<Vec<TransactionId>>>,
         fake_peers: BTreeSet<PeerId>,
     }
 
     impl Default for FakeApiClient {
         fn default() -> Self {
             FakeApiClient {
-                txns: Mutex::new(vec![]),
+                txns: Arc::new(Mutex::new(vec![])),
                 fake_peers: vec![PeerId::from(0)].into_iter().collect(),
             }
         }
@@ -370,6 +371,14 @@ mod tests {
             &self.api
         }
 
+        fn client_config(&self) -> &ClientConfig {
+            unimplemented!()
+        }
+
+        fn decoders(&self) -> &ModuleDecoderRegistry {
+            unimplemented!()
+        }
+
         fn module_api(&self) -> DynFederationApi {
             unimplemented!()
         }
@@ -433,7 +442,7 @@ mod tests {
             .await;
 
         let context = Arc::new(FakeGlobalContext {
-            api: Default::default(),
+            api: FakeApiClient::default(),
             executor: executor.clone(),
         });
         let dyn_context = DynGlobalClientContext::from(context.clone());
