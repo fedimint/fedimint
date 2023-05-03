@@ -62,6 +62,45 @@ const colors = {
   },
 };
 
+const buttonSizes = {
+  xs: {
+    height: '36px',
+    px: 4,
+  },
+  sm: {
+    height: '40px',
+    px: 5,
+  },
+  md: {
+    height: '44px',
+    px: 6,
+  },
+  lg: {
+    height: '48px',
+    px: 7,
+  },
+  xl: {
+    height: '60px',
+    px: 8,
+  },
+};
+
+const inputSizes = Object.keys(buttonSizes).reduce((prev, key) => {
+  const size = key as keyof typeof buttonSizes;
+  const css = {
+    height: buttonSizes[size].height,
+    px: Math.floor(buttonSizes[size].px * 0.75),
+  };
+  prev = {
+    ...prev,
+    [size]: {
+      field: css,
+      addon: css,
+    },
+  };
+  return prev;
+}, {});
+
 export const theme = extendTheme(
   {
     colors,
@@ -137,16 +176,15 @@ export const theme = extendTheme(
         },
       },
       Button: {
+        defaultProps: {
+          size: 'md',
+        },
         baseStyle: {
           _disabled: {
             pointerEvents: 'none',
           },
         },
-        sizes: {
-          md: {
-            height: '36px',
-          },
-        },
+        sizes: buttonSizes,
         variants: {
           solid: {
             bg: colors.blue[600],
@@ -185,6 +223,10 @@ export const theme = extendTheme(
         },
       },
       Input: {
+        defaultProps: {
+          size: 'md',
+        },
+        sizes: inputSizes,
         variants: {
           outline: {
             field: {
@@ -198,6 +240,9 @@ export const theme = extendTheme(
         },
       },
       Select: {
+        defaultProps: {
+          size: 'md',
+        },
         variants: {
           outline: {
             field: {
