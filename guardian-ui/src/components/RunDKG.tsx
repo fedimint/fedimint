@@ -17,18 +17,26 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
   const theme = useTheme();
   const [error, setError] = useState<string>();
 
+  // Keep trying to run DKG until it's finished, or we get an unexpected error.
   useEffect(() => {
-    api
-      .runDkg()
-      .then(() => next())
-      .catch((err) => {
-        const message = err.message || err.toString();
-        if (message === 'Dkg was already run') {
-          next();
-        } else {
-          setError(message);
-        }
-      });
+    let timeout: ReturnType<typeof setTimeout>;
+    const runDkg = () => {
+      api
+        .runDkg()
+        .then(() => next())
+        .catch((err) => {
+          const message = err.message || err.toString();
+          if (message === 'Dkg was already run') {
+            next();
+          } else if (message === 'Cannot run DKG now') {
+            timeout = setTimeout(() => runDkg, 3000);
+          } else {
+            setError(message);
+          }
+        });
+    };
+    runDkg();
+    return () => clearTimeout(timeout);
   }, [next]);
 
   return (
