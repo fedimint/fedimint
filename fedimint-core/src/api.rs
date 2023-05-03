@@ -11,6 +11,7 @@ use std::{cmp, result};
 use anyhow::{anyhow, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
+use bitcoin::secp256k1;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 use fedimint_core::core::ModuleInstanceId;
@@ -38,13 +39,15 @@ use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
+use crate::backup::ClientBackupSnapshot;
+use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::ApiRequestErased;
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
-    VerifiableResponse,
+    UnionResponsesSingle, VerifiableResponse,
 };
 use crate::transaction::{SerdeTransaction, Transaction};
 
@@ -308,6 +311,7 @@ pub trait FederationApiExt: IFederationApi {
 impl<T: ?Sized> FederationApiExt for T where T: IFederationApi {}
 
 dyn_newtype_define! {
+    #[derive(Clone)]
     pub DynFederationApi(Arc<IFederationApi>)
 }
 
@@ -360,7 +364,15 @@ pub trait GlobalFederationApi {
 
     /// Fetches the server consensus hash if enough peers agree on it
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
+
+    async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()>;
+
+    async fn download_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> FederationResult<Vec<ClientBackupSnapshot>>;
 }
+
 fn map_tx_outcome_outpoint<R>(
     tx_outcome: TransactionStatus,
     out_point: OutPoint,
@@ -544,6 +556,33 @@ where
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
         self.request_current_consensus("config_hash".to_owned(), ApiRequestErased::default())
             .await
+    }
+
+    async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
+        self.request_with_strategy(
+            CurrentConsensus::new(self.all_members().threshold()),
+            "backup".to_owned(),
+            ApiRequestErased::new(request),
+        )
+        .await
+    }
+
+    async fn download_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> FederationResult<Vec<ClientBackupSnapshot>> {
+        Ok(self
+            .request_with_strategy(
+                UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(
+                    self.all_members().threshold(),
+                ),
+                "recover".to_owned(),
+                ApiRequestErased::new(id),
+            )
+            .await?
+            .into_iter()
+            .flatten()
+            .collect())
     }
 }
 

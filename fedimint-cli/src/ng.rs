@@ -1,9 +1,10 @@
-use std::ffi;
 use std::str::FromStr;
 use std::time::Duration;
 
+use anyhow::bail;
 use bitcoin::secp256k1;
 use clap::Subcommand;
+use fedimint_client::backup::Metadata;
 use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
@@ -18,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
 
-use crate::LnInvoiceResponse;
+use crate::{metadata_from_clap_cli, LnInvoiceResponse};
 
 #[derive(Debug, Clone)]
 pub enum ModuleSelector {
@@ -68,15 +69,23 @@ pub enum ClientNg {
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
-    /// Call module-specific commands
-    Mod {
-        #[clap(long)]
-        id: ModuleSelector,
-
-        /// Command with arguments to call the module with
-        #[clap(long)]
-        arg: Vec<ffi::OsString>,
+    /// Upload the (encrypted) snapshot of mint notes to federation
+    Backup {
+        #[clap(long = "metadata")]
+        /// Backup metadata, encoded as `key=value` (use `--metadata=key=value`,
+        /// possibly multiple times)
+        // TODO: Can we make it `*Map<String, String>` and avoid custom parsing?
+        metadata: Vec<String>,
     },
+    /// Wipe the state of the client (mostly for testing purposes)
+    #[clap(hide = true)]
+    Wipe {
+        #[clap(long)]
+        force: bool,
+    },
+    /// Restore the previously created backup of mint notes (with `backup`
+    /// command)
+    Restore,
 }
 
 pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
@@ -215,17 +224,22 @@ pub async fn handle_ng_command(
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
         }
-        ClientNg::Mod { id, arg } => {
-            let (id, _) = match id {
-                ModuleSelector::Id(id) => (id, config.get_module_cfg(id)?),
-                ModuleSelector::Kind(kind) => config.get_first_module_by_kind_cfg(kind)?,
-            };
 
-            let module = client
-                .get_module_client_dyn(id)
-                .expect("Module exists according to cfg");
+        ClientNg::Backup { metadata } => {
+            let metadata = metadata_from_clap_cli(metadata)?;
 
-            Ok(module.handle_cli_command(&client, &arg).await?)
+            client
+                .backup_to_federation(Metadata::from_json_serialized(metadata))
+                .await?;
+            Ok(serde_json::to_value(()).unwrap())
+        }
+        ClientNg::Restore => Ok(client.restore_from_backup().await?.to_json_value()?),
+        ClientNg::Wipe { force } => {
+            if !force {
+                bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
+            }
+            client.wipe_state().await?;
+            Ok(serde_json::to_value(()).unwrap())
         }
     }
 }

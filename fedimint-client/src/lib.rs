@@ -119,17 +119,18 @@ use crate::transaction::{
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
+/// Client backup
+pub mod backup;
 /// Database keys used by the client
 pub mod db;
 /// Module client interface definitions
 pub mod module;
+/// Secret handling & derivation
+pub mod secret;
 /// Client state machine interfaces and executor implementation
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
-
-/// Secret handling & derivation
-pub mod secret;
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
@@ -147,12 +148,16 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// calls can be made
     fn module_api(&self) -> DynFederationApi;
 
+    fn client_config(&self) -> &ClientConfig;
+
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IFederationApi`] typically does not provide the necessary
     /// functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
     // TODO: Could be removed in favor of client() except for testing
     fn api(&self) -> &(dyn IFederationApi + 'static);
+
+    fn decoders(&self) -> &ModuleDecoderRegistry;
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::claim_input`].
@@ -359,6 +364,14 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.client.api.as_ref()
     }
 
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        self.client.decoders()
+    }
+
+    fn client_config(&self) -> &ClientConfig {
+        self.client.config()
+    }
+
     async fn claim_input_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
@@ -466,6 +479,10 @@ impl Client {
 
     pub fn get_meta(&self, key: &str) -> Option<String> {
         self.inner.federation_meta.get(key).cloned()
+    }
+
+    fn root_secret(&self) -> DerivableSecret {
+        self.inner.root_secret.clone()
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
@@ -679,6 +696,8 @@ pub struct ClientModuleInstance {
 }
 
 struct ClientInner {
+    config: ClientConfig,
+    decoders: ModuleDecoderRegistry,
     db: Database,
     federation_id: FederationId,
     federation_meta: BTreeMap<String, String>,
@@ -688,6 +707,7 @@ struct ClientInner {
     modules: ClientModuleRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynFederationApi,
+    root_secret: DerivableSecret,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 }
 
@@ -702,6 +722,14 @@ impl ClientInner {
             }
             .into()
         })
+    }
+
+    fn config(&self) -> &ClientConfig {
+        &self.config
+    }
+
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.decoders
     }
 
     /// Returns a reference to the module, panics if not found
@@ -994,7 +1022,7 @@ impl ClientBuilder {
             tx_submission_sm_decoder(),
         );
 
-        let db = Database::new_from_box(db, decoders);
+        let db = Database::new_from_box(db, decoders.clone());
 
         let notifier = Notifier::new(db.clone());
 
@@ -1005,7 +1033,7 @@ impl ClientBuilder {
         let (modules, (primary_module_kind, primary_module)) = {
             let mut modules = ClientModuleRegistry::default();
             let mut primary_module = None;
-            for (module_instance, module_config) in config.modules {
+            for (module_instance, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
                 if module_instance == primary_module_instance {
                     let module = self
@@ -1062,6 +1090,8 @@ impl ClientBuilder {
         };
 
         let client_inner = Arc::new(ClientInner {
+            config: config.clone(),
+            decoders,
             db,
             federation_id: config.federation_id,
             federation_meta: config.meta,
@@ -1072,6 +1102,7 @@ impl ClientBuilder {
             executor,
             api,
             secp_ctx: Secp256k1::new(),
+            root_secret,
         });
 
         Ok(Client {

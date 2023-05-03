@@ -16,6 +16,7 @@ pub use executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 pub use notifier::{ModuleNotifier, Notifier};
+use rand::RngCore;
 use serde::{Deserialize, Deserializer, Serialize};
 pub use state::{Context, DynContext, DynState, IState, OperationState, State, StateTransition};
 
@@ -49,6 +50,16 @@ impl GlobalContext for () {}
 /// 256bit value collisions are impossible for all intents and purposes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
 pub struct OperationId(pub [u8; 32]);
+
+impl OperationId {
+    /// Generate random [`OperationId`]
+    pub fn new_random() -> Self {
+        let mut rng = rand::thread_rng();
+        let mut bytes = [0u8; 32];
+        rng.fill_bytes(&mut bytes);
+        Self(bytes)
+    }
+}
 
 impl Display for OperationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

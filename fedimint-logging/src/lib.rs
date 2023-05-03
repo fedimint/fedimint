@@ -22,6 +22,9 @@ pub const LOG_TASK: &str = "task";
 pub const LOG_TEST: &str = "test";
 pub const LOG_TIMING: &str = "timing";
 pub const LOG_WALLET: &str = "wallet";
+pub const LOG_CLIENT: &str = "client";
+pub const LOG_CLIENT_BACKUP: &str = "client::backup";
+pub const LOG_CLIENT_RECOVERY: &str = "client::recovery";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]

@@ -10,7 +10,9 @@ use fedimint_core::api::{
     ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
     WsClientConnectInfo,
 };
+use fedimint_core::backup::ClientBackupKey;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse};
+use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -25,12 +27,14 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use jsonrpsee::RpcModule;
+use secp256k1_zkp::SECP256K1;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
+use crate::backup::ClientBackupSnapshot;
 use crate::config::api::{get_verification_hashes, ApiResult};
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
@@ -314,6 +318,44 @@ impl ConsensusApi {
             MAX_DURATION_FOR_RECENT_CONTRIBUTION,
         ))
     }
+
+    async fn handle_backup_request(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        request: SignedBackupRequest,
+    ) -> Result<(), ApiError> {
+        let request = request
+            .verify_valid(SECP256K1)
+            .map_err(|_| ApiError::bad_request("invalid request".into()))?;
+
+        debug!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Received client backup request");
+        if let Some(prev) = dbtx.get_value(&ClientBackupKey(request.id)).await {
+            if request.timestamp <= prev.timestamp {
+                debug!(id = %request.id, len = request.payload.len(), "Received client backup request with old timestamp - ignoring");
+                return Err(ApiError::bad_request("timestamp too small".into()));
+            }
+        }
+
+        info!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Storing new client backup");
+        dbtx.insert_entry(
+            &ClientBackupKey(request.id),
+            &ClientBackupSnapshot {
+                timestamp: request.timestamp,
+                data: request.payload.to_vec(),
+            },
+        )
+        .await;
+
+        Ok(())
+    }
+
+    async fn handle_recover_request(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        id: secp256k1_zkp::XOnlyPublicKey,
+    ) -> Option<ClientBackupSnapshot> {
+        dbtx.get_value(&ClientBackupKey(id)).await
+    }
 }
 
 fn calculate_consensus_status(
@@ -556,6 +598,22 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 } else {
                     Err(ApiError::unauthorized())
                 }
+            }
+        },
+        api_endpoint! {
+            "backup",
+            async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
+                fedimint
+                    .handle_backup_request(&mut context.dbtx(), request).await?;
+                Ok(())
+
+            }
+        },
+        api_endpoint! {
+            "recover",
+            async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
+                Ok(fedimint
+                    .handle_recover_request(&mut context.dbtx(), id).await)
             }
         },
     ]

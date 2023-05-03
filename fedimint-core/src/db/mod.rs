@@ -1447,6 +1447,7 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     DatabaseVersion = 0x50,
+    ClientBackup = 0x51,
 }
 
 #[derive(Debug, Error)]
