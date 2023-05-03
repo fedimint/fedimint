@@ -277,19 +277,7 @@
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
@@ -364,16 +352,6 @@
             .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// During config gen, waits to receive server connections from a number of
-    /// `peers`
-    </span><span class="kw">pub async fn </span>await_config_gen_peers(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        peers: usize,
-    ) -&gt; FederationResult&lt;Vec&lt;PeerServerParams&gt;&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;await_config_gen_peers&quot;</span>, ApiRequestErased::new(peers))
-            .<span class="kw">await
-    </span>}
-
     <span class="doccomment">/// Sends a signal to consensus that we are ready to shutdown the federation
     /// and upgrade
     </span><span class="kw">pub async fn </span>signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
@@ -433,25 +411,15 @@
     <span class="doccomment">/// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
-    </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ConfigGenParamsConsensus&gt; {
+    </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_auth(<span class="string">&quot;run_dkg&quot;</span>, ApiRequestErased::default())
             .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// After DKG, returns the hash of the consensus config tweaked with our id.
     /// We need to share this with all other peers to complete verification.
-    </span><span class="kw">pub async fn </span>get_verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {
+    </span><span class="kw">pub async fn </span>get_verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
         <span class="self">self</span>.request_auth(<span class="string">&quot;get_verify_config_hash&quot;</span>, ApiRequestErased::default())
-            .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// After we exchange verification hashes with other peers, we call this to
-    /// confirm we all have the same consensus configs.
-    </span><span class="kw">pub async fn </span>verify_configs(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        user_hashes: BTreeSet&lt;sha256::Hash&gt;,
-    ) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;verify_configs&quot;</span>, ApiRequestErased::new(user_hashes))
             .<span class="kw">await
     </span>}
 
@@ -500,8 +468,14 @@
     <span class="doccomment">/// Server needs a password to read configs
     </span><span class="attr">#[default]
     </span>AwaitingPassword,
-    <span class="doccomment">/// Configs were not found, need to run config gen
-    </span>GeneratingConfig,
+    <span class="doccomment">/// Waiting for peers to share the config gen params
+    </span>SharingConfigGenParams,
+    <span class="doccomment">/// Ready to run config gen once all peers are ready
+    </span>ReadyForConfigGen,
+    <span class="doccomment">/// We failed running config gen
+    </span>ConfigGenFailed,
+    <span class="doccomment">/// Config is generated, peers should verify the config
+    </span>VerifyingConfigs,
     <span class="doccomment">/// Restarted from a planned upgrade (requires action to start)
     </span>Upgrading,
     <span class="doccomment">/// Consensus is running
@@ -530,6 +504,8 @@
     </span><span class="kw">pub </span>api_url: Url,
     <span class="doccomment">/// Name of the peer, used in TLS auth
     </span><span class="kw">pub </span>name: String,
+    <span class="doccomment">/// Status of the peer if known
+    </span><span class="kw">pub </span>status: <span class="prelude-ty">Option</span>&lt;ServerStatus&gt;,
 }
 
 <span class="doccomment">/// The config gen params that need to be in consensus, sent by the config gen

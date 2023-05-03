@@ -216,6 +216,7 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 
@@ -398,6 +399,7 @@
                 p2p_url: p2p_url.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
                 api_url: api_url.parse().expect(<span class="string">&quot;Should parse&quot;</span>),
                 name: <span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize()),
+                status: <span class="prelude-val">None</span>,
             };
             (<span class="kw-2">*</span>peer, params)
         })
