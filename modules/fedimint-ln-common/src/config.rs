@@ -1,10 +1,8 @@
-use anyhow::bail;
 use fedimint_core::config::{
     TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 
@@ -78,18 +76,6 @@ impl TypedServerModuleConfig for LightningConfig {
 
     fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
         (KIND, (), self.private, self.consensus)
-    }
-
-    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
-        if self.private.threshold_sec_key.public_key_share()
-            != self
-                .consensus
-                .threshold_pub_keys
-                .public_key_share(identity.to_usize())
-        {
-            bail!("Lightning private key doesn't match pubkey share");
-        }
-        Ok(())
     }
 }
 

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::string::ToString;
 
+use anyhow::bail;
 use async_trait::async_trait;
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
@@ -149,9 +150,17 @@ impl ServerModuleGen for DummyGen {
         .expect("Serialization can't fail"))
     }
 
-    // TODO: Boilerplate-code
+    /// Validates the private/public key of configs
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        config.to_typed::<DummyConfig>()?.validate_config(identity)
+        let config = config.to_typed::<DummyConfig>()?;
+        let our_id = identity.to_usize();
+        let our_share = config.consensus.public_key_set.public_key_share(our_id);
+
+        // Check our private key matches our public key share
+        if config.private.private_key_share.public_key_share() != our_share {
+            bail!("Private key doesn't match public key share");
+        }
+        Ok(())
     }
 
     /// Dumps all database items for debugging

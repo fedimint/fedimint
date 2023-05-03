@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use anyhow::{bail, format_err};
 use bitcoin::Network;
 use fedimint_core::config::{
     TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -114,22 +113,6 @@ impl TypedServerModuleConfig for WalletConfig {
 
     fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
         (crate::KIND, self.local, self.private, self.consensus)
-    }
-
-    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()> {
-        let pubkey = secp256k1::PublicKey::from_secret_key_global(&self.private.peg_in_key);
-
-        if self
-            .consensus
-            .peer_peg_in_keys
-            .get(identity)
-            .ok_or_else(|| format_err!("Secret key doesn't match any public key"))?
-            != &CompressedPublicKey::new(pubkey)
-        {
-            bail!(" Bitcoin wallet private key doesn't match multisig pubkey");
-        }
-
-        Ok(())
     }
 }
 

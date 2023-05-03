@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::OsString;
 use std::ops::Sub;
 
+use anyhow::bail;
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
@@ -137,9 +138,16 @@ impl ServerModuleGen for LightningGen {
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        config
-            .to_typed::<LightningConfig>()?
-            .validate_config(identity)
+        let config = config.to_typed::<LightningConfig>()?;
+        if config.private.threshold_sec_key.public_key_share()
+            != config
+                .consensus
+                .threshold_pub_keys
+                .public_key_share(identity.to_usize())
+        {
+            bail!("Lightning private key doesn't match pubkey share");
+        }
+        Ok(())
     }
 
     fn get_client_config(

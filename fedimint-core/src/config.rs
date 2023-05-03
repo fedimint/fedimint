@@ -638,9 +638,6 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
             ),
         }
     }
-
-    /// Validate the config
-    fn validate_config(&self, identity: &PeerId) -> anyhow::Result<()>;
 }
 
 /// Typed client side module config

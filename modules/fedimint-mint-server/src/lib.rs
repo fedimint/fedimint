@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::ops::Sub;
 
+use anyhow::bail;
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -191,7 +192,30 @@ impl ServerModuleGen for MintGen {
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        config.to_typed::<MintConfig>()?.validate_config(identity)
+        let config = config.to_typed::<MintConfig>()?;
+        let sks: BTreeMap<Amount, PublicKeyShare> = config
+            .private
+            .tbs_sks
+            .iter()
+            .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+            .collect();
+        let pks: BTreeMap<Amount, PublicKeyShare> = config
+            .consensus
+            .peer_tbs_pks
+            .get(identity)
+            .unwrap()
+            .as_map()
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect();
+        if sks != pks {
+            bail!("Mint private key doesn't match pubkey share");
+        }
+        if !sks.keys().contains(&Amount::from_msats(1)) {
+            bail!("No msat 1 denomination");
+        }
+
+        Ok(())
     }
 
     fn get_client_config(

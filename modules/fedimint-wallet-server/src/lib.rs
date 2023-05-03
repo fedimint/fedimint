@@ -5,6 +5,7 @@ use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
+use anyhow::{bail, format_err};
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -178,7 +179,20 @@ impl ServerModuleGen for WalletGen {
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        config.to_typed::<WalletConfig>()?.validate_config(identity)
+        let config = config.to_typed::<WalletConfig>()?;
+        let pubkey = secp256k1::PublicKey::from_secret_key_global(&config.private.peg_in_key);
+
+        if config
+            .consensus
+            .peer_peg_in_keys
+            .get(identity)
+            .ok_or_else(|| format_err!("Secret key doesn't match any public key"))?
+            != &CompressedPublicKey::new(pubkey)
+        {
+            bail!(" Bitcoin wallet private key doesn't match multisig pubkey");
+        }
+
+        Ok(())
     }
 
     fn get_client_config(
