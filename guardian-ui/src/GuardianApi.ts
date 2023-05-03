@@ -1,10 +1,5 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
-import {
-  API_ConfigGenParams,
-  ConfigGenParams,
-  ConsensusState,
-  ServerStatus,
-} from './types';
+import { ConfigGenParams, ConsensusState, ServerStatus } from './types';
 
 export interface ApiInterface {
   testPassword: (password: string) => Promise<boolean>;
@@ -146,7 +141,7 @@ export class GuardianApi implements ApiInterface {
   };
 
   getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
-    let params: API_ConfigGenParams;
+    let params: ConfigGenParams;
     try {
       params = await this.rpc(
         'get_default_config_gen_params',
@@ -160,21 +155,7 @@ export class GuardianApi implements ApiInterface {
         true /* authenticated */
       );
     }
-
-    return {
-      meta: {
-        federationName: params.meta.federation_name,
-      },
-      modules: {
-        mint: {
-          mintAmounts: params.modules.mint.mint_amounts,
-        },
-        wallet: {
-          finalityDelay: params.modules.wallet.finality_delay,
-          network: params.modules.wallet.network,
-        },
-      },
-    };
+    return params;
   };
 
   status = async (): Promise<ServerStatus> => {

@@ -32,7 +32,7 @@ export interface Peer {
   p2p_url: string;
 }
 
-export type API_ConfigGenParams = {
+export type ConfigGenParams = {
   meta: { federation_name: string };
   modules: {
     wallet: { finality_delay: number; network: Network };
@@ -40,17 +40,9 @@ export type API_ConfigGenParams = {
   };
 };
 
-export type ConfigGenParams = {
-  meta: { federationName: string };
-  modules: {
-    wallet: { finalityDelay: number; network: Network };
-    mint: { mintAmounts: number[] };
-  };
-};
-
 export interface ConsensusState {
   requested: ConfigGenParams;
-  peers: Peer[];
+  peers: Record<string, Peer>;
 }
 
 export interface SetupState {
