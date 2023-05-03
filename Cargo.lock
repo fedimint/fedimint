@@ -1324,7 +1324,14 @@ dependencies = [
 name = "fedimint-dummy-client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-client",
+ "fedimint-core",
  "fedimint-dummy-common",
+ "rand",
+ "secp256k1",
+ "tracing",
 ]
 
 [[package]]
@@ -1338,10 +1345,12 @@ dependencies = [
  "fedimint-core",
  "futures",
  "rand",
+ "secp256k1",
  "serde",
  "strum",
  "strum_macros",
  "thiserror",
+ "threshold_crypto",
  "tracing",
 ]
 
@@ -1358,11 +1367,30 @@ dependencies = [
  "fedimint-server",
  "futures",
  "rand",
+ "secp256k1",
  "serde",
  "strum",
  "strum_macros",
  "thiserror",
+ "threshold_crypto",
+ "tokio",
  "tracing",
+]
+
+[[package]]
+name = "fedimint-dummy-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-server",
+ "fedimint-testing",
+ "tokio",
 ]
 
 [[package]]
