@@ -14,7 +14,6 @@ import {
   SetupProgress,
   ConfigGenParams,
   ConsensusState,
-  GuardianRole,
   ServerStatus,
 } from './types';
 import { ApiInterface, NoopGuardianApi } from './GuardianApi';
@@ -83,11 +82,16 @@ const reducer = (state: SetupState, action: SetupAction): SetupState => {
   }
 };
 
-export const GuardianContext = createContext<{
+interface GuardianContextValue {
   api: ApiInterface;
   state: SetupState;
   dispatch: Dispatch<SetupAction>;
-  submitConfiguration(config: {
+  submitFollowerConfiguration(config: {
+    myName: string;
+    password: string;
+    hostServerUrl: string;
+  }): Promise<void>;
+  submitHostConfiguration(config: {
     password: string;
     myName: string;
     numPeers: number;
@@ -96,11 +100,14 @@ export const GuardianContext = createContext<{
   connectToHost(url: string): Promise<ConsensusState>;
   fetchConsensusState(): Promise<ConsensusState>;
   togglePeerPolling(toggle: boolean): void;
-}>({
+}
+
+export const GuardianContext = createContext<GuardianContextValue>({
   api: new NoopGuardianApi(),
   state: initialState,
   dispatch: () => null,
-  submitConfiguration: () => Promise.reject(),
+  submitFollowerConfiguration: () => Promise.reject(),
+  submitHostConfiguration: () => Promise.reject(),
   connectToHost: () => Promise.reject(),
   fetchConsensusState: () => Promise.reject(),
   togglePeerPolling: () => null,
@@ -116,7 +123,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
   children,
 }: GuardianProviderProps) => {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { role, password, configGenParams, myName } = state;
+  const { password, configGenParams, myName } = state;
   const [isPollingPeers, setIsPollingPeers] = useState(false);
 
   // On mount, fetch what status the server has us at. Compare with state, and
@@ -188,75 +195,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     state.configGenParams,
   ]);
 
-  // Poll for peer state every 2 seconds when isPollingPeers.
-  useEffect(() => {
-    if (!isPollingPeers) return;
-    let timeout: ReturnType<typeof setTimeout>;
-    const pollPeers = () => {
-      api
-        .getConsensusConfigGenParams()
-        .then((res) =>
-          dispatch({
-            type: SETUP_ACTION_TYPE.SET_PEERS,
-            payload: Object.values(res.peers),
-          })
-        )
-        .catch((err) => {
-          console.warn('Failed to poll for peers', err);
-        })
-        .finally(() => {
-          timeout = setTimeout(pollPeers, 2000);
-        });
-      api.status();
-    };
-    pollPeers();
-    return () => clearTimeout(timeout);
-  }, [isPollingPeers]);
-
-  // Single call save all of the configuration on the middle step and call various API methods.
-  const submitConfiguration = useCallback(
-    async ({
-      password: newPassword,
-      myName,
-      numPeers,
-      config: newConfigGenParams,
-    }: {
-      password: string;
-      myName: string;
-      numPeers: number;
-      config: ConfigGenParams;
-    }) => {
-      if (!password) {
-        if (!configGenParams) {
-          await api.setPassword(newPassword);
-        }
-
-        dispatch({
-          type: SETUP_ACTION_TYPE.SET_PASSWORD,
-          payload: newPassword,
-        });
-      }
-
-      dispatch({ type: SETUP_ACTION_TYPE.SET_NUM_PEERS, payload: numPeers });
-
-      dispatch({
-        type: SETUP_ACTION_TYPE.SET_MY_NAME,
-        payload: myName,
-      });
-
-      // Only host submits this, followers will connect to host in subsequent step.
-      if (role === GuardianRole.Host) {
-        await api.setConfigGenConnections(myName);
-        await api.setConfigGenParams(newConfigGenParams);
-        dispatch({
-          type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
-          payload: newConfigGenParams,
-        });
-      }
-    },
-    [password, api, dispatch, configGenParams, role]
-  );
-
+  // Fetch consensus state, dispatch updates with it.
   const fetchConsensusState = useCallback(async () => {
     const consensusState = await api.getConsensusConfigGenParams();
     dispatch({
@@ -269,6 +208,83 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     });
     return consensusState;
   }, []);
+
+  // Poll for peer state every 2 seconds when isPollingPeers.
+  useEffect(() => {
+    if (!isPollingPeers) return;
+    let timeout: ReturnType<typeof setTimeout>;
+    const pollPeers = () => {
+      fetchConsensusState()
+        .catch((err) => {
+          console.warn('Failed to poll for peers', err);
+        })
+        .finally(() => {
+          timeout = setTimeout(pollPeers, 2000);
+        });
+    };
+    pollPeers();
+    return () => clearTimeout(timeout);
+  }, [isPollingPeers]);
+
+  // Single call to save all of the configuration for followers.
+  const submitFollowerConfiguration: GuardianContextValue['submitFollowerConfiguration'] =
+    useCallback(
+      async ({ myName, password: newPassword, hostServerUrl }) => {
+        if (!password) {
+          await api.setPassword(newPassword);
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_PASSWORD,
+            payload: newPassword,
+          });
+        }
+
+        dispatch({
+          type: SETUP_ACTION_TYPE.SET_MY_NAME,
+          payload: myName,
+        });
+
+        await api.setConfigGenConnections(myName, hostServerUrl);
+        await fetchConsensusState();
+      },
+      [password, api, dispatch, fetchConsensusState]
+    );
+
+  // Single call to save all of the configuration for hosts.
+  const submitHostConfiguration: GuardianContextValue['submitHostConfiguration'] =
+    useCallback(
+      async ({
+        password: newPassword,
+        myName,
+        numPeers,
+        config: newConfigGenParams,
+      }) => {
+        if (!password) {
+          if (!configGenParams) {
+            await api.setPassword(newPassword);
+          }
+
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_PASSWORD,
+            payload: newPassword,
+          });
+        }
+
+        dispatch({ type: SETUP_ACTION_TYPE.SET_NUM_PEERS, payload: numPeers });
+        dispatch({
+          type: SETUP_ACTION_TYPE.SET_MY_NAME,
+          payload: myName,
+        });
+
+        // Only host submits this, followers will connect to host in subsequent step.
+        await api.setConfigGenConnections(myName);
+        await api.setConfigGenParams(newConfigGenParams);
+        dispatch({
+          type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
+          payload: newConfigGenParams,
+        });
+      },
+      [password, api, dispatch, configGenParams]
+    );
 
   const connectToHost = useCallback(
     async (url: string) => {
@@ -288,7 +304,8 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
         state,
         dispatch,
         api,
-        submitConfiguration,
+        submitFollowerConfiguration,
+        submitHostConfiguration,
         connectToHost,
         fetchConsensusState,
         togglePeerPolling,

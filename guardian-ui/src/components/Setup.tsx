@@ -117,10 +117,10 @@ export const Setup: React.FC = () => {
       case SetupProgress.ConnectGuardians:
         title = isHost
           ? 'Invite your Guardians'
-          : 'Join your Federation Leader';
+          : 'Confirm your Federation Information';
         subtitle = isHost
           ? 'Share the link with the other Guardians to get everyone on the same page. Once all the Guardians join, you’ll automatically move on to the next step.'
-          : 'Get your invite link from your Federation Leader, and paste it below.';
+          : 'Make sure that the information here looks right, and that the Federation Guardians are correct. Click the Approve button when you’re sure it looks good.';
         content = <ConnectGuardians next={handleNext} />;
         break;
       case SetupProgress.RunDKG:

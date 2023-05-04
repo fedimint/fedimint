@@ -7,6 +7,8 @@ import {
   Select,
   Icon,
   Button,
+  Text,
+  useTheme,
 } from '@chakra-ui/react';
 import React, { useEffect, useState } from 'react';
 import { useGuardianContext } from '../hooks';
@@ -16,7 +18,7 @@ import { ReactComponent as BitcoinLogo } from '../assets/svgs/bitcoin.svg';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
 import { FormGroup } from './ui/FormGroup';
 import { FormGroupHeading } from './ui/FormGroupHeading';
-import { getModuleParamsFromConfig } from '../utils/api';
+import { formatApiErrorMessage, getModuleParamsFromConfig } from '../utils/api';
 
 interface Props {
   next(): void;
@@ -32,11 +34,14 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
       numPeers: stateNumPeers,
     },
     api,
-    submitConfiguration,
+    submitFollowerConfiguration,
+    submitHostConfiguration,
   } = useGuardianContext();
+  const theme = useTheme();
   const isHost = role === GuardianRole.Host;
   const [myName, setMyName] = useState(stateMyName);
   const [password, setPassword] = useState(statePassword);
+  const [hostServerUrl, setHostServerUrl] = useState('');
   const [numPeers, setNumPeers] = useState(
     stateNumPeers ? stateNumPeers.toString() : ''
   );
@@ -44,6 +49,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const [blockConfirmations, setBlockConfirmations] = useState('');
   const [network, setNetwork] = useState('');
   const [mintAmounts, setMintAmounts] = useState<number[]>([]);
+  const [error, setError] = useState<string>();
 
   useEffect(() => {
     const initStateFromParams = (params: ConfigGenParams) => {
@@ -93,34 +99,42 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
           isValidNumber(blockConfirmations) &&
           network
       )
-    : Boolean(myName && password);
+    : Boolean(myName && password && hostServerUrl);
 
   const handleNext = async () => {
+    setError(undefined);
     try {
-      await submitConfiguration({
-        password,
-        myName,
-        numPeers: parseInt(numPeers, 10),
-        config: {
-          meta: { federation_name: federationName },
-          modules: {
-            // TODO: figure out way to not hard-code modules here
-            0: ['mint', { mint_amounts: mintAmounts }],
-            1: [
-              'wallet',
-              {
-                finality_delay: parseInt(blockConfirmations, 10),
-                network: network as Network,
-              },
-            ],
-            2: ['ln', null],
+      if (isHost) {
+        await submitHostConfiguration({
+          myName,
+          password,
+          numPeers: parseInt(numPeers, 10),
+          config: {
+            meta: { federation_name: federationName },
+            modules: {
+              // TODO: figure out way to not hard-code modules here
+              0: ['mint', { mint_amounts: mintAmounts }],
+              1: [
+                'wallet',
+                {
+                  finality_delay: parseInt(blockConfirmations, 10),
+                  network: network as Network,
+                },
+              ],
+              2: ['ln', null],
+            },
           },
-        },
-      });
+        });
+      } else {
+        await submitFollowerConfiguration({
+          myName,
+          password,
+          hostServerUrl,
+        });
+      }
       next();
     } catch (err) {
-      // FIXME: Handle error and show error UI
-      console.error(err);
+      setError(formatApiErrorMessage(err));
     }
   };
 
@@ -149,6 +163,20 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
             You'll need this every time you visit this page.
           </FormHelperText>
         </FormControl>
+        {!isHost && (
+          <FormControl>
+            <FormLabel>Join Federation link</FormLabel>
+            <Input
+              value={hostServerUrl}
+              onChange={(ev) => setHostServerUrl(ev.currentTarget.value)}
+              placeholder='ws://...'
+            />
+            <FormHelperText>
+              Ask the person who created the Federation for a link, and paste it
+              here.
+            </FormHelperText>
+          </FormControl>
+        )}
       </FormGroup>
       {isHost && (
         <>
@@ -209,6 +237,11 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
             </FormControl>
           </FormGroup>
         </>
+      )}
+      {error && (
+        <Text color={theme.colors.red[500]} mt={4}>
+          {error}
+        </Text>
       )}
       <div>
         <Button
