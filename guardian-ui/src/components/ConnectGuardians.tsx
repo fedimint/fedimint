@@ -14,7 +14,7 @@ import {
   HStack,
 } from '@chakra-ui/react';
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { useGuardianContext } from '../hooks';
+import { useConsensusPolling, useGuardianContext } from '../hooks';
 import { GuardianRole, ServerStatus } from '../types';
 import { CopyInput } from './ui/CopyInput';
 import { Table, TableRow } from './ui/Table';
@@ -29,9 +29,11 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
   const {
     state: { role, peers, numPeers, configGenParams },
     api,
-    togglePeerPolling,
   } = useGuardianContext();
   const theme = useTheme();
+
+  // Poll for peers and configGenParams while on this page.
+  useConsensusPolling();
 
   const isAllConnected = numPeers && numPeers == peers.length;
   const isAllAccepted =
@@ -39,12 +41,6 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
     peers.filter((peer) => peer.status === ServerStatus.ReadyForConfigGen)
       .length >=
       numPeers - 1;
-
-  // Toggle peer polling while on this page.
-  useEffect(() => {
-    togglePeerPolling(true);
-    return () => togglePeerPolling(false);
-  }, [togglePeerPolling]);
 
   // For hosts, once all peers have connected, run DKG immediately.
   useEffect(() => {

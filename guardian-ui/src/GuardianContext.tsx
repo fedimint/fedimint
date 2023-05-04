@@ -99,7 +99,7 @@ interface GuardianContextValue {
   }): Promise<void>;
   connectToHost(url: string): Promise<ConsensusState>;
   fetchConsensusState(): Promise<ConsensusState>;
-  togglePeerPolling(toggle: boolean): void;
+  toggleConsensusPolling(toggle: boolean): void;
 }
 
 export const GuardianContext = createContext<GuardianContextValue>({
@@ -110,7 +110,7 @@ export const GuardianContext = createContext<GuardianContextValue>({
   submitHostConfiguration: () => Promise.reject(),
   connectToHost: () => Promise.reject(),
   fetchConsensusState: () => Promise.reject(),
-  togglePeerPolling: () => null,
+  toggleConsensusPolling: () => null,
 });
 
 export interface GuardianProviderProps {
@@ -124,7 +124,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
 }: GuardianProviderProps) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { password, configGenParams, myName } = state;
-  const [isPollingPeers, setIsPollingPeers] = useState(false);
+  const [isPollingConsensus, setIsPollingConsensus] = useState(false);
 
   // On mount, fetch what status the server has us at. Compare with state, and
   // redirect to the correct step if necessary.
@@ -211,7 +211,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
 
   // Poll for peer state every 2 seconds when isPollingPeers.
   useEffect(() => {
-    if (!isPollingPeers) return;
+    if (!isPollingConsensus) return;
     let timeout: ReturnType<typeof setTimeout>;
     const pollPeers = () => {
       fetchConsensusState()
@@ -224,7 +224,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     };
     pollPeers();
     return () => clearTimeout(timeout);
-  }, [isPollingPeers]);
+  }, [isPollingConsensus]);
 
   // Single call to save all of the configuration for followers.
   const submitFollowerConfiguration: GuardianContextValue['submitFollowerConfiguration'] =
@@ -294,8 +294,8 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     [myName, api, dispatch]
   );
 
-  const togglePeerPolling = useCallback((poll: boolean) => {
-    setIsPollingPeers(poll);
+  const toggleConsensusPolling = useCallback((poll: boolean) => {
+    setIsPollingConsensus(poll);
   }, []);
 
   return (
@@ -308,7 +308,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
         submitHostConfiguration,
         connectToHost,
         fetchConsensusState,
-        togglePeerPolling,
+        toggleConsensusPolling,
       }}
     >
       {children}

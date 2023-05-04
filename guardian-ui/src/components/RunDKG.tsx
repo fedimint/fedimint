@@ -7,7 +7,7 @@ import {
   useTheme,
 } from '@chakra-ui/react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useGuardianContext } from '../hooks';
+import { useConsensusPolling, useGuardianContext } from '../hooks';
 import { ServerStatus } from '../types';
 import { formatApiErrorMessage } from '../utils/api';
 
@@ -19,17 +19,13 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
   const {
     api,
     state: { peers },
-    togglePeerPolling,
   } = useGuardianContext();
   const theme = useTheme();
   const [isWaitingForOthers, setIsWaitingForOthers] = useState(false);
   const [error, setError] = useState<string>();
 
-  // Poll peers while we're on this page
-  useEffect(() => {
-    togglePeerPolling(true);
-    return () => togglePeerPolling(false);
-  }, [togglePeerPolling]);
+  // Poll for peers and configGenParams while on this page.
+  useConsensusPolling();
 
   // Keep trying to run DKG until it's finished, or we get an unexpected error.
   // "Cancel" the effect on re-run to prevent calling `runDkg` multiple times.
