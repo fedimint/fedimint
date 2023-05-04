@@ -613,6 +613,7 @@ pub struct SupportedApiVersionsSummary {
 }
 
 pub trait CommonModuleGen: Debug + Sized {
+    const CONSENSUS_VERSION: ModuleConsensusVersion;
     const KIND: ModuleKind;
 
     fn decoder() -> Decoder;

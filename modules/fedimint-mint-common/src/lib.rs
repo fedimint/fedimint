@@ -90,6 +90,7 @@ pub struct BlindNonce(pub tbs::BlindedMessage);
 pub struct MintCommonGen;
 
 impl CommonModuleGen for MintCommonGen {
+    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     fn decoder() -> Decoder {
@@ -151,13 +152,6 @@ impl std::fmt::Display for MintConsensusItem {
 
 pub struct MintModuleTypes;
 
-impl ModuleCommon for MintModuleTypes {
-    type Input = MintInput;
-    type Output = MintOutput;
-    type OutputOutcome = MintOutputOutcome;
-    type ConsensusItem = MintConsensusItem;
-}
-
 impl Note {
     /// Verify the note's validity under a mit key `pk`
     pub fn verify(&self, pk: tbs::AggregatePublicKey) -> bool {
@@ -199,7 +193,13 @@ impl Extend<(Amount, BlindNonce)> for MintOutput {
     }
 }
 
-plugin_types_trait_impl_common!(MintInput, MintOutput, MintOutputOutcome, MintConsensusItem);
+plugin_types_trait_impl_common!(
+    MintModuleTypes,
+    MintInput,
+    MintOutput,
+    MintOutputOutcome,
+    MintConsensusItem
+);
 
 /// Represents an array of mint indexes that delivered faulty shares
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

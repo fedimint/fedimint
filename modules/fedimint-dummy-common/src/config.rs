@@ -1,15 +1,17 @@
-use fedimint_core::config::{
-    TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
-};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::ModuleConsensusVersion;
-use fedimint_core::Amount;
+use fedimint_core::{plugin_types_trait_impl_config, Amount};
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::{PublicKey, PublicKeySet, SecretKeyShare};
 
-use crate::{CONSENSUS_VERSION, KIND};
+use crate::DummyCommonGen;
+
+/// Parameters necessary to generate this module's configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DummyConfigGenParams {
+    pub tx_fee: Amount,
+}
 
 /// Contains all the configuration for the server
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -42,41 +44,12 @@ pub struct DummyConfigPrivate {
     pub private_key_share: SerdeSecret<SecretKeyShare>,
 }
 
-impl TypedServerModuleConsensusConfig for DummyConfigConsensus {
-    // TODO: Boilerplate-code
-    fn kind(&self) -> ModuleKind {
-        KIND
-    }
-
-    // TODO: Boilerplate-code
-    fn version(&self) -> ModuleConsensusVersion {
-        CONSENSUS_VERSION
-    }
-}
-
-impl TypedServerModuleConfig for DummyConfig {
-    type Local = ();
-    type Private = DummyConfigPrivate;
-    type Consensus = DummyConfigConsensus;
-
-    // TODO: Boilerplate-code (remove local)
-    fn from_parts(_: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self {
-        Self { private, consensus }
-    }
-
-    // TODO: Boilerplate-code (remove local)
-    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
-        (KIND, (), self.private, self.consensus)
-    }
-}
-
-// TODO: Boilerplate-code
-impl TypedClientModuleConfig for DummyClientConfig {
-    fn kind(&self) -> fedimint_core::core::ModuleKind {
-        KIND
-    }
-
-    fn version(&self) -> ModuleConsensusVersion {
-        CONSENSUS_VERSION
-    }
-}
+// Wire together the configs for this module
+plugin_types_trait_impl_config!(
+    DummyCommonGen,
+    DummyConfigGenParams,
+    DummyConfig,
+    DummyConfigPrivate,
+    DummyConfigConsensus,
+    DummyClientConfig
+);

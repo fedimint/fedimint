@@ -6,9 +6,12 @@ use fedimint_core::core::{
 };
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::{Amount, Tiered};
-use fedimint_ln_server::{LightningGen, LightningGenParams};
-use fedimint_mint_server::{MintGen, MintGenParams};
-use fedimint_wallet_server::{WalletGen, WalletGenParams};
+use fedimint_ln_server::common::config::LightningGenParams;
+use fedimint_ln_server::LightningGen;
+use fedimint_mint_server::common::config::MintGenParams;
+use fedimint_mint_server::MintGen;
+use fedimint_wallet_server::common::config::WalletGenParams;
+use fedimint_wallet_server::WalletGen;
 
 mod ui;
 

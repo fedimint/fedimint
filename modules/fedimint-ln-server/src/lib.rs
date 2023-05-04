@@ -5,7 +5,7 @@ use std::ops::Sub;
 use anyhow::bail;
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -59,11 +59,6 @@ pub struct LightningGen;
 impl ExtendsCommonModuleGen for LightningGen {
     type Common = LightningCommonGen;
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParams;
-
-impl ModuleGenParams for LightningGenParams {}
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for LightningGen {

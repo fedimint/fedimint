@@ -1,6 +1,6 @@
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
-use fedimint_dummy_common::DummyConfigGenParams;
+use fedimint_dummy_common::config::DummyConfigGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_testing::federation::FederationFixture;
 use fedimint_testing::fixtures::test;

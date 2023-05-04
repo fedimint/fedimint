@@ -30,7 +30,7 @@ use fedimint_core::bitcoin_rpc::{
     FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
 };
 use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{
@@ -54,7 +54,7 @@ use fedimint_core::{
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig};
+use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::db::{
     BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
     PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
@@ -73,14 +73,6 @@ use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info, instrument, trace, warn};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletGenParams {
-    pub network: bitcoin::network::constants::Network,
-    pub finality_delay: u32,
-}
-
-impl ModuleGenParams for WalletGenParams {}
 
 #[derive(Debug, Clone)]
 pub struct WalletGen;

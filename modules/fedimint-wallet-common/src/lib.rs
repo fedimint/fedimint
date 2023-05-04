@@ -183,6 +183,7 @@ impl std::fmt::Display for WalletOutputOutcome {
 pub struct WalletCommonGen;
 
 impl CommonModuleGen for WalletCommonGen {
+    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
     fn decoder() -> Decoder {
         WalletModuleTypes::decoder()
@@ -240,13 +241,6 @@ impl std::fmt::Display for WalletOutput {
 
 pub struct WalletModuleTypes;
 
-impl ModuleCommon for WalletModuleTypes {
-    type Input = WalletInput;
-    type Output = WalletOutput;
-    type OutputOutcome = WalletOutputOutcome;
-    type ConsensusItem = WalletConsensusItem;
-}
-
 pub fn proprietary_tweak_key() -> ProprietaryKey {
     ProprietaryKey {
         prefix: b"fedimint".to_vec(),
@@ -273,6 +267,7 @@ impl PartialEq for PegOutSignatureItem {
 impl Eq for PegOutSignatureItem {}
 
 plugin_types_trait_impl_common!(
+    WalletModuleTypes,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,

@@ -21,11 +21,11 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 use fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigGenParams, DummyConfigPrivate,
 };
 use fedimint_dummy_common::{
-    fed_public_key, DummyCommonGen, DummyConfigGenParams, DummyConsensusItem, DummyError,
-    DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
+    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::{FutureExt, StreamExt};

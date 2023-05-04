@@ -170,11 +170,70 @@ macro_rules! module_plugin_trait_define{
     };
 }
 
+/// Implements the necessary traits for all configuration related types of a
+/// `FederationServer` module.
+#[macro_export]
+macro_rules! plugin_types_trait_impl_config {
+    ($common_gen:ty, $gen_params:ty, $cfg:ty, $cfg_private:ty, $cfg_consensus:ty, $cfg_client:ty) => {
+        impl fedimint_core::config::ModuleGenParams for $gen_params {}
+
+        impl fedimint_core::config::TypedServerModuleConsensusConfig for $cfg_consensus {
+            fn kind(&self) -> fedimint_core::core::ModuleKind {
+                <$common_gen as fedimint_core::module::CommonModuleGen>::KIND
+            }
+
+            fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+                <$common_gen as fedimint_core::module::CommonModuleGen>::CONSENSUS_VERSION
+            }
+        }
+
+        impl fedimint_core::config::TypedServerModuleConfig for $cfg {
+            type Local = ();
+            type Private = $cfg_private;
+            type Consensus = $cfg_consensus;
+
+            fn from_parts(
+                _: Self::Local,
+                private: Self::Private,
+                consensus: Self::Consensus,
+            ) -> Self {
+                Self { private, consensus }
+            }
+
+            fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
+                (
+                    <$common_gen as fedimint_core::module::CommonModuleGen>::KIND,
+                    (),
+                    self.private,
+                    self.consensus,
+                )
+            }
+        }
+
+        impl fedimint_core::config::TypedClientModuleConfig for $cfg_client {
+            fn kind(&self) -> fedimint_core::core::ModuleKind {
+                <$common_gen as fedimint_core::module::CommonModuleGen>::KIND
+            }
+
+            fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
+                <$common_gen as fedimint_core::module::CommonModuleGen>::CONSENSUS_VERSION
+            }
+        }
+    };
+}
+
 /// Implements the necessary traits for all associated types of a
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl_common {
-    ($input:ty, $output:ty, $outcome:ty, $ci:ty) => {
+    ($types:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty) => {
+        impl fedimint_core::module::ModuleCommon for $types {
+            type Input = $input;
+            type Output = $output;
+            type OutputOutcome = $outcome;
+            type ConsensusItem = $ci;
+        }
+
         impl fedimint_core::core::Input for $input {}
 
         impl fedimint_core::core::IntoDynInstance for $input {

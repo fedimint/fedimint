@@ -5,7 +5,7 @@ use std::ops::Sub;
 
 use anyhow::bail;
 use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ModuleGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
@@ -26,6 +26,7 @@ use fedimint_core::{
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
+    MintGenParams,
 };
 use fedimint_mint_common::db::{
     DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
@@ -46,7 +47,6 @@ use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::ParallelBridge;
 use secp256k1_zkp::SECP256K1;
-use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::{
     combine_valid_shares, dealer_keygen, sign_blinded_msg, verify_blind_share, Aggregatable,
@@ -54,13 +54,6 @@ use tbs::{
 };
 use threshold_crypto::group::Curve;
 use tracing::{debug, error, info, warn};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MintGenParams {
-    pub mint_amounts: Vec<Amount>,
-}
-
-impl ModuleGenParams for MintGenParams {}
 
 #[derive(Debug, Clone)]
 pub struct MintGen;
