@@ -12,7 +12,7 @@ use devimint::federation::{fedimint_env, Fedimintd};
 use devimint::util::{poll, ProcessManager};
 use devimint::{cmd, dev_fed, external_daemons, Bitcoind, DevFed};
 use fedimint_core::task::TaskGroup;
-use fedimint_logging::LOG_TEST;
+use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
 use tokio::net::TcpStream;
 use tracing::info;
@@ -616,7 +616,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     fed.start_server(process_mgr, 0).await?;
     fed.generate_epochs(10).await?;
     fed.await_all_peers().await?;
-    info!(LOG_TEST, "Server 0 successfully rejoined!");
+    info!(LOG_DEVIMINT, "Server 0 successfully rejoined!");
     bitcoind.mine_blocks(100).await?;
 
     // now test what happens if consensus needs to be restarted
@@ -630,7 +630,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     fed.start_server(process_mgr, 2).await?;
     fed.start_server(process_mgr, 3).await?;
     fed.await_all_peers().await?;
-    info!(LOG_TEST, "fm success: reconnect-test");
+    info!(LOG_DEVIMINT, "fm success: reconnect-test");
     Ok(())
 }
 
@@ -672,7 +672,7 @@ async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<
             Ok(TcpStream::connect(ui_addr).await.is_ok())
         })
         .await?;
-        info!(LOG_TEST, "Started UI on http://{ui_addr}");
+        info!(LOG_DEVIMINT, "Started UI on http://{ui_addr}");
     }
     task_group.make_handle().make_shutdown_rx().await.await?;
     Ok(())
