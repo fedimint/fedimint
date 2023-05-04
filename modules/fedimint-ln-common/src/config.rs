@@ -1,12 +1,13 @@
-use fedimint_core::config::{
-    TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
-};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::plugin_types_trait_impl_config;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 
-use crate::{CONSENSUS_VERSION, KIND};
+use crate::LightningCommonGen;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningGenParams;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
@@ -39,45 +40,21 @@ pub struct LightningConfigPrivate {
     pub threshold_sec_key: SerdeSecret<threshold_crypto::SecretKeyShare>,
 }
 
-impl TypedClientModuleConfig for LightningClientConfig {
-    fn kind(&self) -> ModuleKind {
-        KIND
-    }
-
-    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-        CONSENSUS_VERSION
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
 }
 
-impl TypedServerModuleConsensusConfig for LightningConfigConsensus {
-    fn kind(&self) -> ModuleKind {
-        KIND
-    }
-
-    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-        CONSENSUS_VERSION
-    }
-}
-
-impl TypedServerModuleConfig for LightningConfig {
-    type Local = ();
-    type Private = LightningConfigPrivate;
-    type Consensus = LightningConfigConsensus;
-
-    fn from_parts(_local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self {
-        Self { private, consensus }
-    }
-
-    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
-        (KIND, (), self.private, self.consensus)
-    }
-}
+// Wire together the configs for this module
+plugin_types_trait_impl_config!(
+    LightningCommonGen,
+    LightningGenParams,
+    LightningConfig,
+    LightningConfigPrivate,
+    LightningConfigConsensus,
+    LightningClientConfig
+);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {

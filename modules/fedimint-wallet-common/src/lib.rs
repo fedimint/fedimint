@@ -183,6 +183,7 @@ impl std::fmt::Display for WalletOutputOutcome {
 pub struct WalletCommonGen;
 
 impl CommonModuleGen for WalletCommonGen {
+    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
     fn decoder() -> Decoder {
         WalletModuleTypes::decoder()

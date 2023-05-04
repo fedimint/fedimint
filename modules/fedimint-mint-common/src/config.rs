@@ -1,16 +1,17 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::config::{
-    ClientModuleConfig, TypedClientModuleConfig, TypedServerModuleConfig,
-    TypedServerModuleConsensusConfig,
-};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{PeerId, Tiered};
+use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId, Tiered};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, PublicKeyShare};
 
-use crate::KIND;
+use crate::MintCommonGen;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MintGenParams {
+    pub mint_amounts: Vec<Amount>,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
@@ -46,44 +47,15 @@ pub struct MintClientConfig {
     pub max_notes_per_denomination: u16,
 }
 
-impl TypedClientModuleConfig for MintClientConfig {
-    fn kind(&self) -> ModuleKind {
-        crate::KIND
-    }
-
-    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-        crate::CONSENSUS_VERSION
-    }
-
-    fn to_erased(&self) -> ClientModuleConfig {
-        ClientModuleConfig::from_typed(self.kind(), self.version(), self)
-            .expect("serialization can't fail")
-    }
-}
-
-impl TypedServerModuleConsensusConfig for MintConfigConsensus {
-    fn kind(&self) -> ModuleKind {
-        crate::KIND
-    }
-
-    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-        crate::CONSENSUS_VERSION
-    }
-}
-
-impl TypedServerModuleConfig for MintConfig {
-    type Local = ();
-    type Private = MintConfigPrivate;
-    type Consensus = MintConfigConsensus;
-
-    fn from_parts(_local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self {
-        Self { private, consensus }
-    }
-
-    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
-        (KIND, (), self.private, self.consensus)
-    }
-}
+// Wire together the configs for this module
+plugin_types_trait_impl_config!(
+    MintCommonGen,
+    MintGenParams,
+    MintConfig,
+    MintConfigPrivate,
+    MintConfigConsensus,
+    MintClientConfig
+);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {

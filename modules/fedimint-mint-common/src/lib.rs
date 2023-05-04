@@ -90,6 +90,7 @@ pub struct BlindNonce(pub tbs::BlindedMessage);
 pub struct MintCommonGen;
 
 impl CommonModuleGen for MintCommonGen {
+    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     fn decoder() -> Decoder {

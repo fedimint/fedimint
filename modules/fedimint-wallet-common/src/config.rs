@@ -1,32 +1,30 @@
 use std::collections::BTreeMap;
 
 use bitcoin::Network;
-use fedimint_core::config::{
-    TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
-};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{Feerate, PeerId};
+use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
 use crate::keys::CompressedPublicKey;
-use crate::PegInDescriptor;
+use crate::{PegInDescriptor, WalletCommonGen};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletGenParams {
+    pub network: bitcoin::network::constants::Network,
+    pub finality_delay: u32,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {
-    /// Contains all configuration that is locally configurable and not secret
-    pub local: WalletConfigLocal,
     /// Contains all configuration that will be encrypted such as private key
     /// material
     pub private: WalletConfigPrivate,
     /// Contains all configuration that needs to be the same for every server
     pub consensus: WalletConfigConsensus,
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WalletConfigLocal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigPrivate {
@@ -63,16 +61,6 @@ pub struct WalletClientConfig {
     pub fee_consensus: FeeConsensus,
 }
 
-impl TypedClientModuleConfig for WalletClientConfig {
-    fn kind(&self) -> ModuleKind {
-        crate::KIND
-    }
-
-    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-        crate::CONSENSUS_VERSION
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
     pub peg_in_abs: fedimint_core::Amount,
@@ -85,34 +73,6 @@ impl Default for FeeConsensus {
             peg_in_abs: fedimint_core::Amount::ZERO,
             peg_out_abs: fedimint_core::Amount::ZERO,
         }
-    }
-}
-
-impl TypedServerModuleConsensusConfig for WalletConfigConsensus {
-    fn kind(&self) -> ModuleKind {
-        crate::KIND
-    }
-
-    fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-        crate::CONSENSUS_VERSION
-    }
-}
-
-impl TypedServerModuleConfig for WalletConfig {
-    type Local = WalletConfigLocal;
-    type Private = WalletConfigPrivate;
-    type Consensus = WalletConfigConsensus;
-
-    fn from_parts(local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self {
-        Self {
-            local,
-            private,
-            consensus,
-        }
-    }
-
-    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
-        (crate::KIND, self.local, self.private, self.consensus)
     }
 }
 
@@ -129,7 +89,6 @@ impl WalletConfig {
         );
 
         Self {
-            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -157,3 +116,12 @@ impl WalletClientConfig {
         }
     }
 }
+
+plugin_types_trait_impl_config!(
+    WalletCommonGen,
+    WalletGenParams,
+    WalletConfig,
+    WalletConfigPrivate,
+    WalletConfigConsensus,
+    WalletClientConfig
+);

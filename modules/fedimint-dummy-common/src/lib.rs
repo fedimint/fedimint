@@ -1,7 +1,5 @@
 use std::fmt;
 
-use async_trait::async_trait;
-use fedimint_core::config::ModuleGenParams;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SerdeSignatureShare;
@@ -27,12 +25,6 @@ pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 pub enum DummyConsensusItem {
     /// User's message sign request signed by a single peer
     Sign(String, SerdeSignatureShare),
-}
-
-/// Parameters necessary to generate this module's configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DummyConfigGenParams {
-    pub tx_fee: Amount,
 }
 
 /// Input for a fedimint transaction
@@ -75,16 +67,11 @@ plugin_types_trait_impl_common!(
     DummyConsensusItem
 );
 
-// TODO: Boilerplate-code
-impl ModuleGenParams for DummyConfigGenParams {}
-
-// TODO: Boilerplate-code
 #[derive(Debug)]
 pub struct DummyCommonGen;
 
-// TODO: Boilerplate-code
-#[async_trait]
 impl CommonModuleGen for DummyCommonGen {
+    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     fn decoder() -> Decoder {

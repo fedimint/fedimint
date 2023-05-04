@@ -187,6 +187,7 @@ impl std::fmt::Display for LightningConsensusItem {
 pub struct LightningCommonGen;
 
 impl CommonModuleGen for LightningCommonGen {
+    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
     fn decoder() -> Decoder {
         LightningModuleTypes::decoder()
