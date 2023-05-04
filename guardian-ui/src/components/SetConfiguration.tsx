@@ -37,12 +37,10 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const isHost = role === GuardianRole.Host;
   const [myName, setMyName] = useState(stateMyName);
   const [password, setPassword] = useState(statePassword);
-  const [federationName, setFederationName] = useState(
-    configGenParams?.meta.federation_name || ''
-  );
   const [numPeers, setNumPeers] = useState(
     stateNumPeers ? stateNumPeers.toString() : ''
   );
+  const [federationName, setFederationName] = useState('');
   const [blockConfirmations, setBlockConfirmations] = useState('');
   const [network, setNetwork] = useState('');
   const [mintAmounts, setMintAmounts] = useState<number[]>([]);
@@ -60,7 +58,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
         getModuleParamsFromConfig(params, 'wallet')?.network.toString() || ''
       );
       setMintAmounts(
-        getModuleParamsFromConfig(configGenParams, 'mint')?.mint_amounts || []
+        getModuleParamsFromConfig(params, 'mint')?.mint_amounts || []
       );
     };
 
@@ -106,6 +104,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
         config: {
           meta: { federation_name: federationName },
           modules: {
+            // TODO: figure out way to not hard-code modules here
             0: ['mint', { mint_amounts: mintAmounts }],
             1: [
               'wallet',
@@ -114,6 +113,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
                 network: network as Network,
               },
             ],
+            2: ['ln', null],
           },
         },
       });
