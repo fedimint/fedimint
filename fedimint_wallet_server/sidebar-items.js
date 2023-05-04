@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["broadcast_pending_tx",""],["run_broadcast_pending_tx",""]],"struct":[["StatelessWallet",""],["Wallet",""],["WalletGen",""],["WalletGenParams",""],["WalletVerificationCache",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["broadcast_pending_tx",""],["run_broadcast_pending_tx",""]],"struct":[["StatelessWallet",""],["Wallet",""],["WalletGen",""],["WalletVerificationCache",""]]};

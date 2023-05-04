@@ -1076,6 +1076,7 @@
 <a href="#1076" id="1076">1076</a>
 <a href="#1077" id="1077">1077</a>
 <a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1691,6 +1692,7 @@
 }
 
 <span class="kw">pub trait </span>CommonModuleGen: Debug + Sized {
+    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion;
     <span class="kw">const </span>KIND: ModuleKind;
 
     <span class="kw">fn </span>decoder() -&gt; Decoder;

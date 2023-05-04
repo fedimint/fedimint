@@ -340,6 +340,7 @@
 </span><span class="kw">pub struct </span>MintCommonGen;
 
 <span class="kw">impl </span>CommonModuleGen <span class="kw">for </span>MintCommonGen {
+    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
     <span class="kw">fn </span>decoder() -&gt; Decoder {
@@ -401,13 +402,6 @@
 
 <span class="kw">pub struct </span>MintModuleTypes;
 
-<span class="kw">impl </span>ModuleCommon <span class="kw">for </span>MintModuleTypes {
-    <span class="kw">type </span>Input = MintInput;
-    <span class="kw">type </span>Output = MintOutput;
-    <span class="kw">type </span>OutputOutcome = MintOutputOutcome;
-    <span class="kw">type </span>ConsensusItem = MintConsensusItem;
-}
-
 <span class="kw">impl </span>Note {
     <span class="doccomment">/// Verify the note&#39;s validity under a mit key `pk`
     </span><span class="kw">pub fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: tbs::AggregatePublicKey) -&gt; bool {
@@ -449,7 +443,13 @@
     }
 }
 
-<span class="macro">plugin_types_trait_impl_common!</span>(MintInput, MintOutput, MintOutputOutcome, MintConsensusItem);
+<span class="macro">plugin_types_trait_impl_common!</span>(
+    MintModuleTypes,
+    MintInput,
+    MintOutput,
+    MintOutputOutcome,
+    MintConsensusItem
+);
 
 <span class="doccomment">/// Represents an array of mint indexes that delivered faulty shares
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash)]

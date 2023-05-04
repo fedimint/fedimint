@@ -332,11 +332,6 @@
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
@@ -522,6 +517,7 @@
 </span><span class="kw">pub struct </span>WalletCommonGen;
 
 <span class="kw">impl </span>CommonModuleGen <span class="kw">for </span>WalletCommonGen {
+    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
     <span class="kw">fn </span>decoder() -&gt; Decoder {
         WalletModuleTypes::decoder()
@@ -579,13 +575,6 @@
 
 <span class="kw">pub struct </span>WalletModuleTypes;
 
-<span class="kw">impl </span>ModuleCommon <span class="kw">for </span>WalletModuleTypes {
-    <span class="kw">type </span>Input = WalletInput;
-    <span class="kw">type </span>Output = WalletOutput;
-    <span class="kw">type </span>OutputOutcome = WalletOutputOutcome;
-    <span class="kw">type </span>ConsensusItem = WalletConsensusItem;
-}
-
 <span class="kw">pub fn </span>proprietary_tweak_key() -&gt; ProprietaryKey {
     ProprietaryKey {
         prefix: <span class="string">b&quot;fedimint&quot;</span>.to_vec(),
@@ -612,6 +601,7 @@
 <span class="kw">impl </span>Eq <span class="kw">for </span>PegOutSignatureItem {}
 
 <span class="macro">plugin_types_trait_impl_common!</span>(
+    WalletModuleTypes,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,

@@ -51,6 +51,9 @@
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
 <a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::core::{
@@ -59,9 +62,12 @@
 };
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::{Amount, Tiered};
-<span class="kw">use </span>fedimint_ln_server::{LightningGen, LightningGenParams};
-<span class="kw">use </span>fedimint_mint_server::{MintGen, MintGenParams};
-<span class="kw">use </span>fedimint_wallet_server::{WalletGen, WalletGenParams};
+<span class="kw">use </span>fedimint_ln_server::common::config::LightningGenParams;
+<span class="kw">use </span>fedimint_ln_server::LightningGen;
+<span class="kw">use </span>fedimint_mint_server::common::config::MintGenParams;
+<span class="kw">use </span>fedimint_mint_server::MintGen;
+<span class="kw">use </span>fedimint_wallet_server::common::config::WalletGenParams;
+<span class="kw">use </span>fedimint_wallet_server::WalletGen;
 
 <span class="kw">mod </span>ui;
 

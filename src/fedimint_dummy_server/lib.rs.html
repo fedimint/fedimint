@@ -470,11 +470,11 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigGenParams, DummyConfigPrivate,
 };
 <span class="kw">use </span>fedimint_dummy_common::{
-    fed_public_key, DummyCommonGen, DummyConfigGenParams, DummyConsensusItem, DummyError,
-    DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
+    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};

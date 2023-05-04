@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["LightningClientConfig",""],["LightningConfig",""],["LightningConfigConsensus",""],["LightningConfigPrivate",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["LightningClientConfig",""],["LightningConfig",""],["LightningConfigConsensus",""],["LightningConfigPrivate",""],["LightningGenParams",""]]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["MintClientConfig",""],["MintConfig",""],["MintConfigConsensus",""],["MintConfigPrivate",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["MintClientConfig",""],["MintConfig",""],["MintConfigConsensus",""],["MintConfigPrivate",""],["MintGenParams",""]]};

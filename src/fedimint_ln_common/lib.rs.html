@@ -284,11 +284,6 @@
 <a href="#284" id="284">284</a>
 <a href="#285" id="285">285</a>
 <a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -478,6 +473,7 @@
 </span><span class="kw">pub struct </span>LightningCommonGen;
 
 <span class="kw">impl </span>CommonModuleGen <span class="kw">for </span>LightningCommonGen {
+    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
     <span class="kw">fn </span>decoder() -&gt; Decoder {
         LightningModuleTypes::decoder()
@@ -486,14 +482,8 @@
 
 <span class="kw">pub struct </span>LightningModuleTypes;
 
-<span class="kw">impl </span>ModuleCommon <span class="kw">for </span>LightningModuleTypes {
-    <span class="kw">type </span>Input = LightningInput;
-    <span class="kw">type </span>Output = LightningOutput;
-    <span class="kw">type </span>OutputOutcome = LightningOutputOutcome;
-    <span class="kw">type </span>ConsensusItem = LightningConsensusItem;
-}
-
 <span class="macro">plugin_types_trait_impl_common!</span>(
+    LightningModuleTypes,
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,

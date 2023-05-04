@@ -125,67 +125,33 @@
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_core::config::{
-    TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
-};
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::{Feerate, PeerId};
+<span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
-<span class="kw">use </span><span class="kw">crate</span>::PegInDescriptor;
+<span class="kw">use crate</span>::{PegInDescriptor, WalletCommonGen};
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletGenParams {
+    <span class="kw">pub </span>network: bitcoin::network::constants::Network,
+    <span class="kw">pub </span>finality_delay: u32,
+}
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfig {
-    <span class="doccomment">/// Contains all configuration that is locally configurable and not secret
-    </span><span class="kw">pub </span>local: WalletConfigLocal,
     <span class="doccomment">/// Contains all configuration that will be encrypted such as private key
     /// material
     </span><span class="kw">pub </span>private: WalletConfigPrivate,
     <span class="doccomment">/// Contains all configuration that needs to be the same for every server
     </span><span class="kw">pub </span>consensus: WalletConfigConsensus,
 }
-
-<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>WalletConfigLocal;
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfigPrivate {
@@ -222,16 +188,6 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="kw">impl </span>TypedClientModuleConfig <span class="kw">for </span>WalletClientConfig {
-    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
-        <span class="kw">crate</span>::KIND
-    }
-
-    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
-        <span class="kw">crate</span>::CONSENSUS_VERSION
-    }
-}
-
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>peg_in_abs: fedimint_core::Amount,
@@ -244,34 +200,6 @@
             peg_in_abs: fedimint_core::Amount::ZERO,
             peg_out_abs: fedimint_core::Amount::ZERO,
         }
-    }
-}
-
-<span class="kw">impl </span>TypedServerModuleConsensusConfig <span class="kw">for </span>WalletConfigConsensus {
-    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
-        <span class="kw">crate</span>::KIND
-    }
-
-    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
-        <span class="kw">crate</span>::CONSENSUS_VERSION
-    }
-}
-
-<span class="kw">impl </span>TypedServerModuleConfig <span class="kw">for </span>WalletConfig {
-    <span class="kw">type </span>Local = WalletConfigLocal;
-    <span class="kw">type </span>Private = WalletConfigPrivate;
-    <span class="kw">type </span>Consensus = WalletConfigConsensus;
-
-    <span class="kw">fn </span>from_parts(local: <span class="self">Self</span>::Local, private: <span class="self">Self</span>::Private, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            local,
-            private,
-            consensus,
-        }
-    }
-
-    <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
-        (<span class="kw">crate</span>::KIND, <span class="self">self</span>.local, <span class="self">self</span>.private, <span class="self">self</span>.consensus)
     }
 }
 
@@ -288,7 +216,6 @@
         );
 
         <span class="self">Self </span>{
-            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -316,5 +243,14 @@
         }
     }
 }
+
+<span class="macro">plugin_types_trait_impl_config!</span>(
+    WalletCommonGen,
+    WalletGenParams,
+    WalletConfig,
+    WalletConfigPrivate,
+    WalletConfigConsensus,
+    WalletClientConfig
+);
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
