@@ -10,6 +10,7 @@ use tracing_subscriber::{EnvFilter, Layer};
 pub const LOG_CONSENSUS: &str = "consensus";
 pub const LOG_CORE: &str = "core";
 pub const LOG_DB: &str = "db";
+pub const LOG_DEVIMINT: &str = "devimint";
 pub const LOG_ECASH_RECOVERY: &str = "ecash-recovery";
 pub const LOG_NET_API: &str = "net::api";
 pub const LOG_NET_PEER_DKG: &str = "net::peer::dkg";
