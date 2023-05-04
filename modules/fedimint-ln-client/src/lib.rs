@@ -23,7 +23,7 @@ use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::IFederationApi;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -526,7 +526,10 @@ impl LightningClientModule {
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
     ) -> anyhow::Result<ClientOutput<LightningOutput, LightningClientStateMachines>> {
-        let consensus_height = api.fetch_consensus_block_height().await?;
+        let consensus_height = api
+            .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .fetch_consensus_block_height()
+            .await?;
         let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
 
         let contract_amount = {
