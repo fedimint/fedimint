@@ -9,8 +9,7 @@ use fedimint_core::config::{
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
-use fedimint_core::encoding::Encodable;
-use fedimint_core::epoch::SerdeSignatureShare;
+use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
@@ -25,13 +24,12 @@ use fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
 };
 use fedimint_dummy_common::{
-    DummyCommonGen, DummyConfigGenParams, DummyConsensusItem, DummyError, DummyInput,
-    DummyModuleTypes, DummyOutput, DummyOutputOutcome, DummyPrintMoneyRequest, CONSENSUS_VERSION,
+    fed_public_key, DummyCommonGen, DummyConfigGenParams, DummyConsensusItem, DummyError,
+    DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
-use secp256k1::XOnlyPublicKey;
 use strum::IntoEnumIterator;
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::{PublicKeySet, SecretKeySet, SignatureShare};
@@ -39,7 +37,7 @@ use tokio::sync::Notify;
 
 use crate::db::{
     migrate_to_v1, DbKeyPrefix, DummyFundsKeyV1, DummyFundsKeyV1Prefix, DummyOutcomeKeyV1,
-    DummyOutcomeKeyV1Prefix, DummyPrintKeyV1, DummyPrintKeyV1Prefix,
+    DummyOutcomeKeyV1Prefix, DummySignKeyV1, DummySignV1Prefix,
 };
 
 mod db;
@@ -145,6 +143,7 @@ impl ServerModuleGen for DummyGen {
             config.version(),
             &(DummyClientConfig {
                 tx_fee: config.tx_fee,
+                fed_public_key: config.public_key_set.public_key(),
             }),
         )
         .expect("Serialization can't fail"))
@@ -197,14 +196,14 @@ impl ServerModuleGen for DummyGen {
                         "Dummy Outputs"
                     );
                 }
-                DbKeyPrefix::Print => {
+                DbKeyPrefix::Sign => {
                     push_db_pair_items!(
                         dbtx,
-                        DummyPrintKeyV1Prefix,
-                        DummyPrintKeyV1,
-                        (),
+                        DummySignV1Prefix,
+                        DummySignKeyV1,
+                        Option<SerdeSignature>,
                         items,
-                        "Dummy Print"
+                        "Dummy Sign"
                     );
                 }
             }
@@ -219,7 +218,7 @@ impl ServerModuleGen for DummyGen {
 pub struct Dummy {
     pub cfg: DummyConfig,
     /// Notifies us to propose an epoch
-    pub print_notify: Notify,
+    pub sign_notify: Notify,
 }
 
 /// Implementation of consensus for the server module
@@ -237,7 +236,7 @@ impl ServerModule for Dummy {
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         // Wait until we have a proposal
         if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            self.print_notify.notified().await;
+            self.sign_notify.notified().await;
         }
     }
 
@@ -246,13 +245,13 @@ impl ServerModule for Dummy {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<DummyConsensusItem> {
         // Sign and send the print requests to consensus
-        let items = dbtx.find_by_prefix(&DummyPrintKeyV1Prefix).await.map(
-            |(DummyPrintKeyV1(request), _)| {
-                let encoded_request = request.consensus_encode_to_vec().unwrap();
-                let sig = self.cfg.private.private_key_share.sign(encoded_request);
-                DummyConsensusItem::Print(request, SerdeSignatureShare(sig))
-            },
-        );
+        let items =
+            dbtx.find_by_prefix(&DummySignV1Prefix)
+                .await
+                .map(|(DummySignKeyV1(message), _)| {
+                    let sig = self.cfg.private.private_key_share.sign(&message);
+                    DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
+                });
         ConsensusProposal::new_auto_trigger(items.collect().await)
     }
 
@@ -262,30 +261,25 @@ impl ServerModule for Dummy {
         consensus_items: Vec<(PeerId, DummyConsensusItem)>,
         _consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
-        // TODO: We could make combining peer sigs easier since it's often used
-
-        // Collect all signatures by request
-        let mut requests = HashMap::<DummyPrintMoneyRequest, Vec<(usize, &SignatureShare)>>::new();
-        for (peer, DummyConsensusItem::Print(request, share)) in &consensus_items {
-            let entry = requests.entry(request.clone()).or_default();
+        // Collect all signatures consensus items by message
+        let mut sigs = HashMap::<String, Vec<(usize, &SignatureShare)>>::new();
+        for (peer, DummyConsensusItem::Sign(request, share)) in &consensus_items {
+            let entry = sigs.entry(request.clone()).or_default();
             entry.push((peer.to_usize(), &share.0));
         }
 
         let pks = self.cfg.consensus.public_key_set.clone();
-        for (request, shares) in requests {
+        for (message, shares) in sigs {
+            let key = DummySignKeyV1(message.to_string());
+
             // If a threshold of us signed, we can combine signatures
-            let encoded_request = request.consensus_encode_to_vec().unwrap();
-            if let Ok(sig) = pks.combine_signatures(shares) {
-                if pks.public_key().verify(&sig, encoded_request) {
-                    // If request is properly signed remove the consensus item
-                    dbtx.remove_entry(&DummyPrintKeyV1(request.clone())).await;
-                    // Add money to the user's account
-                    let amount = get_funds(&request.account, dbtx).await + request.amount;
-                    dbtx.insert_entry(&DummyFundsKeyV1(request.account), &amount)
-                        .await;
-                    // Print fake assets for the fed's balance sheet audit
-                    dbtx.insert_entry(&DummyFundsKeyV1(fed_account()), &amount)
-                        .await;
+            // TODO: We could make combining + verifying peer sigs easier
+            match pks.combine_signatures(shares) {
+                Ok(sig) if pks.public_key().verify(&sig, &message) => {
+                    dbtx.insert_entry(&key, &Some(SerdeSignature(sig))).await;
+                }
+                _ => {
+                    dbtx.insert_entry(&key, &None).await;
                 }
             }
         }
@@ -306,19 +300,22 @@ impl ServerModule for Dummy {
         _verification_cache: &Self::VerificationCache,
         input: &'a DummyInput,
     ) -> Result<InputMeta, ModuleError> {
-        // verify user has enough funds
-        if input.amount > get_funds(&input.account, dbtx).await {
-            return Err(DummyError::NotEnoughFunds).into_module_error_other();
+        let current_funds = dbtx.get_value(&DummyFundsKeyV1(input.account)).await;
+        let enough_funds = input.amount <= current_funds.unwrap_or(Amount::ZERO);
+
+        // verify user has enough funds or is using the fed account
+        if enough_funds || fed_public_key() == input.account {
+            return Ok(InputMeta {
+                amount: TransactionItemAmount {
+                    amount: input.amount,
+                    fee: self.cfg.consensus.tx_fee,
+                },
+                // IMPORTANT: include the pubkey to validate the user signed this tx
+                puk_keys: vec![input.account],
+            });
         }
 
-        Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: input.amount,
-                fee: self.cfg.consensus.tx_fee,
-            },
-            // IMPORTANT: include the pubkey to validate the user signed this tx
-            puk_keys: vec![input.account],
-        })
+        Err(DummyError::NotEnoughFunds).into_module_error_other()
     }
 
     async fn apply_input<'a, 'b, 'c>(
@@ -333,9 +330,14 @@ impl ServerModule for Dummy {
             .validate_input(interconnect, dbtx, cache, input)
             .await?;
 
-        // subtract funds from the user's account
-        let updated = get_funds(&input.account, dbtx).await - input.amount;
-        dbtx.insert_entry(&DummyFundsKeyV1(input.account), &updated)
+        let current_funds = dbtx.get_value(&DummyFundsKeyV1(input.account)).await;
+        // Subtract funds from normal user, or print funds for the fed
+        let updated_funds = if fed_public_key() == input.account {
+            current_funds.unwrap_or(Amount::ZERO) + input.amount
+        } else {
+            current_funds.unwrap_or(Amount::ZERO) - input.amount
+        };
+        dbtx.insert_entry(&DummyFundsKeyV1(input.account), &updated_funds)
             .await;
 
         Ok(meta)
@@ -361,13 +363,15 @@ impl ServerModule for Dummy {
         // TODO: Boiler-plate code
         let meta = self.validate_output(dbtx, output).await?;
 
-        let updated = get_funds(&output.account, dbtx).await + output.amount;
-        // insert the output key for users to fetch the tx outcome
-        let outcome = DummyOutputOutcome(updated, output.account);
-        dbtx.insert_entry(&DummyOutcomeKeyV1(out_point), &outcome)
+        // Add output funds to the user's account
+        let current_funds = dbtx.get_value(&DummyFundsKeyV1(output.account)).await;
+        let updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;
+        dbtx.insert_entry(&DummyFundsKeyV1(output.account), &updated_funds)
             .await;
-        // add funds to the user's account
-        dbtx.insert_entry(&DummyFundsKeyV1(output.account), &updated)
+
+        // Update the output outcome the user can query
+        let outcome = DummyOutputOutcome(updated_funds, output.account);
+        dbtx.insert_entry(&DummyOutcomeKeyV1(out_point), &outcome)
             .await;
 
         Ok(meta)
@@ -393,8 +397,9 @@ impl ServerModule for Dummy {
     async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
         audit
             .add_items(dbtx, &DummyFundsKeyV1Prefix, |k, v| match k {
-                // special account for creating assets (positive)
-                DummyFundsKeyV1(key) if key == fed_account() => v.msats as i64,
+                // the fed's test account is considered an asset (positive)
+                // should be the bitcoin we own in a real module
+                DummyFundsKeyV1(key) if key == fed_public_key() => v.msats as i64,
                 // a user's funds are a federation's liability (negative)
                 DummyFundsKeyV1(_) => -(v.msats as i64),
             })
@@ -404,39 +409,27 @@ impl ServerModule for Dummy {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                // API allows users ask the fed to print money
-                "print_money",
-                async |module: &Dummy, context, request: DummyPrintMoneyRequest| -> () {
-                    // TODO: A way to send messages to consensus without the DB
+                // API allows users ask the fed to threshold-sign a message
+                "sign_message",
+                async |module: &Dummy, context, message: String| -> () {
+                    // TODO: Should not write to DB in module APIs
                     let mut dbtx = context.dbtx();
-                    dbtx.insert_entry(&DummyPrintKeyV1(request), &()).await;
-                    module.print_notify.notify_one();
+                    dbtx.insert_entry(&DummySignKeyV1(message), &None).await;
+                    module.sign_notify.notify_one();
                     Ok(())
                 }
             },
             api_endpoint! {
-                // API allows users to wait for an account to exist
-                "wait_for_money",
-                async |_module: &Dummy, context, account: XOnlyPublicKey| -> Amount {
-                    // TODO: Wait for a change or non-existence of a key
-                    let future = context.wait_key_exists(DummyFundsKeyV1(account));
-                    let funds = future.await;
-                    Ok(funds)
+                // API waits for the signature to exist
+                "wait_signed",
+                async |_module: &Dummy, context, message: String| -> SerdeSignature {
+                    let future = context.wait_value_matches(DummySignKeyV1(message), |sig| sig.is_some());
+                    let sig = future.await;
+                    Ok(sig.expect("checked is some"))
                 }
             },
         ]
     }
-}
-
-fn fed_account() -> XOnlyPublicKey {
-    let account_bytes = "Money printer go brrr...........".as_bytes();
-    XOnlyPublicKey::from_slice(account_bytes).expect("32 bytes")
-}
-
-/// Helper to get the funds for an account
-async fn get_funds<'a>(key: &XOnlyPublicKey, dbtx: &mut ModuleDatabaseTransaction<'a>) -> Amount {
-    let funds = dbtx.get_value(&DummyFundsKeyV1(*key)).await;
-    funds.unwrap_or(Amount::ZERO)
 }
 
 /// An in-memory cache we could use for faster validation
@@ -450,7 +443,7 @@ impl Dummy {
     pub fn new(cfg: DummyConfig) -> Dummy {
         Dummy {
             cfg,
-            print_notify: Notify::new(),
+            sign_notify: Notify::new(),
         }
     }
 }

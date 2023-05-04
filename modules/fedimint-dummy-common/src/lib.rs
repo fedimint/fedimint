@@ -7,7 +7,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SerdeSignatureShare;
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
-use secp256k1::XOnlyPublicKey;
+use secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -25,8 +25,8 @@ pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 /// Non-transaction items that will be submitted to consensus
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum DummyConsensusItem {
-    /// User's print money request signed by a peer
-    Print(DummyPrintMoneyRequest, SerdeSignatureShare),
+    /// User's message sign request signed by a single peer
+    Sign(String, SerdeSignatureShare),
 }
 
 /// Parameters necessary to generate this module's configuration
@@ -54,13 +54,6 @@ pub struct DummyOutput {
 /// Information needed by a client to update output funds
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct DummyOutputOutcome(pub Amount, pub XOnlyPublicKey);
-
-/// Request type sent from client to server
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct DummyPrintMoneyRequest {
-    pub amount: Amount,
-    pub account: XOnlyPublicKey,
-}
 
 /// Errors that might be returned by the server
 // TODO: Move to server lib?
@@ -128,4 +121,15 @@ impl fmt::Display for DummyConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DummyConsensusItem")
     }
+}
+
+/// A special key that creates assets for a test/example
+const FED_SECRET_PHRASE: &str = "Money printer go brrr...........";
+
+pub fn fed_public_key() -> XOnlyPublicKey {
+    fed_key_pair().x_only_public_key().0
+}
+
+pub fn fed_key_pair() -> KeyPair {
+    KeyPair::from_seckey_slice(&Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect("32 bytes")
 }

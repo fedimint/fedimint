@@ -20,11 +20,12 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
-    DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
-    DummyPrintMoneyRequest,
+    fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
+    DummyOutputOutcome,
 };
 use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
+use threshold_crypto::{PublicKey, Signature};
 
 use crate::api::DummyFederationApi;
 use crate::db::DummyClientFundsKeyV0;
@@ -46,28 +47,45 @@ pub trait DummyClientExt {
     /// Wait to receive money at an outpoint
     async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()>;
 
+    /// Request the federation signs a message for us
+    async fn fed_signature(&self, message: &str) -> anyhow::Result<Signature>;
+
     /// The amount of funds we have
     async fn total_funds(&self) -> Amount;
 
     /// Return our account
     fn account(&self) -> XOnlyPublicKey;
+
+    /// Return the fed's public key
+    fn fed_public_key(&self) -> PublicKey;
 }
 
 #[apply(async_trait_maybe_send!)]
 impl DummyClientExt for Client {
     async fn print_money(&self, amount: Amount) -> anyhow::Result<()> {
-        let (id, dummy) = dummy_client(self);
-        let account = dummy.key.x_only_public_key().0;
-        let request = DummyPrintMoneyRequest { amount, account };
-        self.api().with_module(id).print_money(request).await?;
-        let funds = self.api().with_module(id).wait_for_money(account).await?;
+        let (id, _) = dummy_client(self);
+        let op_id = rand::random();
 
-        // TODO: Not very nice to get to the module db
-        let mod_db = self.db().new_isolated(id);
-        let mut dbtx = mod_db.begin_transaction().await;
-        dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
-        dbtx.commit_tx().await;
-        Ok(())
+        // TODO: Building a tx could be easier
+        // Create input using the fed's account
+        let input = ClientInput {
+            input: DummyInput {
+                amount,
+                account: fed_public_key(),
+            },
+            keys: vec![fed_key_pair()],
+            state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
+        };
+
+        // Build and send tx to the fed
+        // Will output to our primary client module
+        let tx = TransactionBuilder::new().with_input(input.into_dyn(id));
+        let outpoint = |txid| OutPoint { txid, out_idx: 0 };
+        let txid = self
+            .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
+            .await?;
+
+        self.receive_money(outpoint(txid)).await
     }
 
     async fn send_money(
@@ -131,6 +149,14 @@ impl DummyClientExt for Client {
         Ok(())
     }
 
+    async fn fed_signature(&self, message: &str) -> anyhow::Result<Signature> {
+        let (id, _) = dummy_client(self);
+        let api = self.api().with_module(id);
+        api.sign_message(message.to_string()).await?;
+        let sig = api.wait_signed(message.to_string()).await?;
+        Ok(sig.0)
+    }
+
     async fn total_funds(&self) -> Amount {
         // TODO: Not very nice to get to the module db
         let (id, _) = dummy_client(self);
@@ -142,6 +168,11 @@ impl DummyClientExt for Client {
     fn account(&self) -> XOnlyPublicKey {
         let (_, client) = dummy_client(self);
         client.key.x_only_public_key().0
+    }
+
+    fn fed_public_key(&self) -> PublicKey {
+        let (_, dummy) = dummy_client(self);
+        dummy.cfg.fed_public_key
     }
 }
 

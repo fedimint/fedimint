@@ -1,12 +1,13 @@
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
 use futures::StreamExt;
 use secp256k1::XOnlyPublicKey;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::{DummyOutputOutcome, DummyPrintMoneyRequest};
+use crate::DummyOutputOutcome;
 
 /// Namespaces DB keys for this module
 #[repr(u8)]
@@ -14,7 +15,7 @@ use crate::{DummyOutputOutcome, DummyPrintMoneyRequest};
 pub enum DbKeyPrefix {
     Funds = 0x01,
     Outcome = 0x02,
-    Print = 0x03,
+    Sign = 0x03,
 }
 
 // TODO: Boilerplate-code
@@ -87,21 +88,21 @@ impl_db_record!(
     key = DummyFundsKeyV1,
     value = Amount,
     db_prefix = DbKeyPrefix::Funds,
-    // Allows us to listen for notifications on this key
-    notify_on_modify = true
 );
 impl_db_lookup!(key = DummyFundsKeyV1, query_prefix = DummyFundsKeyV1Prefix);
 
-/// Lookup print money requests by key or prefix
+/// Lookup signature requests by key or prefix
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummyPrintKeyV1(pub DummyPrintMoneyRequest);
+pub struct DummySignKeyV1(pub String);
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct DummyPrintKeyV1Prefix;
+pub struct DummySignV1Prefix;
 
 impl_db_record!(
-    key = DummyPrintKeyV1,
-    value = (),
-    db_prefix = DbKeyPrefix::Print,
+    key = DummySignKeyV1,
+    value = Option<SerdeSignature>,
+    db_prefix = DbKeyPrefix::Sign,
+    // Allows us to listen for notifications on this key
+    notify_on_modify = true
 );
-impl_db_lookup!(key = DummyPrintKeyV1, query_prefix = DummyPrintKeyV1Prefix);
+impl_db_lookup!(key = DummySignKeyV1, query_prefix = DummySignV1Prefix);
