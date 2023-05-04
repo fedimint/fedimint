@@ -878,10 +878,15 @@
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::sync::{Mutex, MutexGuard};
+<span class="kw">use </span>std::sync::Mutex;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
@@ -948,18 +953,19 @@
 
     <span class="comment">// Sets the auth and decryption key derived from the password
     </span><span class="kw">pub fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::AwaitingPassword)<span class="question-mark">?</span>;
+        <span class="self">self</span>.require_status(ServerStatus::AwaitingPassword)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
         state.auth = <span class="prelude-val">Some</span>(auth);
         state.status = ServerStatus::SharingConfigGenParams;
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">fn </span>require_status(<span class="kw-2">&amp;</span><span class="self">self</span>, status: ServerStatus) -&gt; ApiResult&lt;MutexGuard&lt;ConfigGenState&gt;&gt; {
+    <span class="kw">fn </span>require_status(<span class="kw-2">&amp;</span><span class="self">self</span>, status: ServerStatus) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
         <span class="kw">if </span>state.status != status {
             <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Expected to be in {status:?} state&quot;</span>));
         }
-        <span class="prelude-val">Ok</span>(state)
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Sets our connection info, possibly sending it to a leader
@@ -968,7 +974,8 @@
         request: ConfigGenConnectionsRequest,
     ) -&gt; ApiResult&lt;()&gt; {
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
+            <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
             state.set_request(request)<span class="question-mark">?</span>;
         }
         <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1014,7 +1021,8 @@
 
     <span class="doccomment">/// Sets the config gen params, should only be called by the leader
     </span><span class="kw">pub async fn </span>set_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>, requested: ConfigGenParamsRequest) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
+        <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
         state.requested_params = <span class="prelude-val">Some</span>(requested);
         <span class="prelude-val">Ok</span>(())
     }
@@ -1045,9 +1053,10 @@
     /// completion, calling a second time will return an error
     </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;()&gt; {
         <span class="comment">// Update our state to running DKG
-        </span><span class="kw">let </span>consensus = <span class="self">self</span>.get_consensus_config_gen_params().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
+        <span class="kw">let </span>consensus = <span class="self">self</span>.get_consensus_config_gen_params().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(params, registry) = {
-            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
             state.status = ServerStatus::ReadyForConfigGen;
             (
                 state.get_config_gen_params(consensus)<span class="question-mark">?</span>,
@@ -1093,7 +1102,8 @@
     <span class="doccomment">/// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
     </span><span class="kw">pub fn </span>get_verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.require_status(ServerStatus::VerifyingConfigs)<span class="question-mark">?</span>;
+        <span class="self">self</span>.require_status(ServerStatus::VerifyingConfigs)<span class="question-mark">?</span>;
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
         state.get_verification()
     }
 
