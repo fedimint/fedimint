@@ -158,12 +158,12 @@ export const Setup: React.FC = () => {
           </Button>
         )}
         {title && (
-          <Heading fontSize={32} lineHeight='3xl' fontWeight='500'>
+          <Heading size='md' fontWeight='medium'>
             {title}
           </Heading>
         )}
         {subtitle && (
-          <Text size='md' lineHeight='shorter' fontWeight='500'>
+          <Text size='md' fontWeight='medium'>
             {subtitle}
           </Text>
         )}

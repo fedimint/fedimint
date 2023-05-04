@@ -43,13 +43,15 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
     <VStack gap={8} justify='center' align='center'>
       {error ? (
         <>
-          <Heading color={theme.colors.red[500]}>Something went wrong.</Heading>
+          <Heading size='sm' color={theme.colors.red[500]}>
+            Something went wrong.
+          </Heading>
           <Text>{error}</Text>
         </>
       ) : (
         <>
           <CircularProgress isIndeterminate color='#23419F' size='200px' />
-          <Heading>Generating codes...</Heading>
+          <Heading size='sm'>Generating codes...</Heading>
         </>
       )}
     </VStack>

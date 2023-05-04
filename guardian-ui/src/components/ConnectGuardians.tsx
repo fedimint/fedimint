@@ -96,7 +96,7 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
         <FormLabel>Invite Followers</FormLabel>
         <CopyInput
           value={process.env.REACT_APP_FM_CONFIG_API || ''}
-          size='md'
+          size='lg'
         />
         <FormHelperText>
           Share this link with the other Guardians
