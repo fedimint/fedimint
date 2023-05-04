@@ -15,6 +15,7 @@ import {
   ConfigGenParams,
   ConsensusState,
   GuardianRole,
+  ServerStatus,
 } from './types';
 import { ApiInterface, NoopGuardianApi } from './GuardianApi';
 
@@ -118,6 +119,39 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
   const { role, password, configGenParams, myName } = state;
   const [isPollingPeers, setIsPollingPeers] = useState(false);
 
+  // On mount, fetch what status the server has us at. Compare with state, and
+  // redirect to the correct step if necessary.
+  useEffect(() => {
+    api
+      .status()
+      .then((status) => {
+        // If we're still waiting for a password, restart the whole thing.
+        if (status === ServerStatus.AwaitingPassword) {
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_INITIAL_STATE,
+            payload: null,
+          });
+        }
+        // If we're ready for DKG, move them to approve the config to start.
+        if (status === ServerStatus.ReadyForConfigGen) {
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_PROGRESS,
+            payload: SetupProgress.ConnectGuardians,
+          });
+        }
+        // If we're supposed to be verifying, jump to peer validation screen
+        if (status === ServerStatus.VerifyingConfigs) {
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_PROGRESS,
+            payload: SetupProgress.VerifyGuardians,
+          });
+        }
+      })
+      .catch(() => {
+        /* no-op */
+      });
+  }, [api]);
+
   useEffect(() => {
     // Fetch password from API on mount
     const apiPassword = api.getPassword();
@@ -132,7 +166,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     return () => {
       api.shutdown();
     };
-  }, []);
+  }, [api]);
 
   // Update local storage on state changes.
   useEffect(() => {
