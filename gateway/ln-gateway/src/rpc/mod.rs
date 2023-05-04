@@ -122,6 +122,19 @@ pub struct FederationInfo {
     pub federation_id: FederationId,
     /// Information we registered with the fed
     pub registration: LightningGateway,
+    /// The current federation balance
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance: Option<Amount>,
+}
+
+impl FederationInfo {
+    pub fn new(federation_id: FederationId, registration: LightningGateway) -> Self {
+        FederationInfo {
+            federation_id,
+            registration,
+            balance: None,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

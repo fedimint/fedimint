@@ -336,7 +336,7 @@ impl Gateway {
 
         if let Ok(actor) = self.select_actor(connect.id).await {
             info!("Federation {} already connected", connect.id);
-            return actor.get_info();
+            return actor.get_summary_info();
         }
 
         let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.read().await.info().await?;
@@ -384,28 +384,27 @@ impl Gateway {
             );
         }
 
-        let federation_info = actor.get_info()?;
+        let federation_info = actor.get_summary_info()?;
 
         Ok(federation_info)
     }
 
     async fn handle_get_info(&self, payload: InfoPayload) -> Result<GatewayInfo> {
-        let actors = self.actors.read().await;
-        let mut all_federations: Vec<FederationInfo> = Vec::new();
-        for actor in actors.values() {
-            all_federations.push(actor.get_info()?);
-        }
-
-        let federations = payload
-            .federation_id
-            .map(|id| {
-                all_federations
-                    .iter()
-                    .filter(|info| info.federation_id.eq(&id))
-                    .cloned()
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or(all_federations);
+        let mut federations: Vec<FederationInfo> = Vec::new();
+        match payload.federation_id {
+            Some(federation_id) => federations.push(
+                self.select_actor(federation_id)
+                    .await?
+                    .get_detailed_info()
+                    .await?,
+            ),
+            None => {
+                let actors = self.actors.read().await;
+                for actor in actors.values() {
+                    federations.push(actor.get_summary_info()?);
+                }
+            }
+        };
 
         let ln_info = self.lnrpc.read().await.info().await?;
 
