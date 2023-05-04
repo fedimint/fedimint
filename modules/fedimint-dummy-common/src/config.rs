@@ -7,7 +7,7 @@ use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::{PublicKeySet, SecretKeyShare};
+use threshold_crypto::{PublicKey, PublicKeySet, SecretKeyShare};
 
 use crate::{CONSENSUS_VERSION, KIND};
 
@@ -23,6 +23,7 @@ pub struct DummyConfig {
 pub struct DummyClientConfig {
     /// Accessible to clients
     pub tx_fee: Amount,
+    pub fed_public_key: PublicKey,
 }
 
 /// Will be the same for every federation member

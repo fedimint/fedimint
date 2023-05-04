@@ -196,6 +196,19 @@ impl<'a> ApiEndpointContext<'a> {
         async move { db.wait_key_exists(&key).await }
     }
 
+    /// Waits for key to have a value that matches.
+    pub fn wait_value_matches<K>(
+        &self,
+        key: K,
+        matcher: impl Fn(&K::Value) -> bool + Copy,
+    ) -> impl Future<Output = K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        let db = self.db.clone();
+        async move { db.wait_key_check(&key, |v| v.filter(matcher)).await.0 }
+    }
+
     /// Attempts to commit the dbtx or returns an ApiError
     pub async fn commit_tx_result(self) -> Result<(), ApiError> {
         self.dbtx.commit_tx_result().await.map_err(|_err| ApiError {
