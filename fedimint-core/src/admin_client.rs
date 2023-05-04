@@ -9,7 +9,8 @@ use tokio_rustls::rustls;
 use url::Url;
 
 use crate::api::{
-    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, WsFederationApi,
+    ConsensusStatus, DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi,
+    WsFederationApi,
 };
 use crate::config::ServerModuleGenParamsRegistry;
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -177,6 +178,12 @@ impl WsAdminClient {
     /// Returns the status of the server
     pub async fn status(&self) -> FederationResult<ServerStatus> {
         self.request_auth("status", ApiRequestErased::default())
+            .await
+    }
+
+    /// Returns the consensus status of the server
+    pub async fn consensus_status(&self) -> FederationResult<ConsensusStatus> {
+        self.request_auth("consensus_status", ApiRequestErased::default())
             .await
     }
 

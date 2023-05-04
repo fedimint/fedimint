@@ -863,7 +863,7 @@ fn url_to_string_with_default_port(url: &Url) -> String {
 impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 /// The status of a server, including how it views its peers
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConsensusStatus {
     /// The last contribution that this server has made to the consensus, it's
     /// equivalent to [`PeerConsensusStatus::last_contribution`] and

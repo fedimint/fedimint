@@ -5,6 +5,8 @@ use bitcoin::secp256k1;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::{Client, ClientBuilder};
+use fedimint_core::admin_client::{ServerStatus, WsAdminClient};
+use fedimint_core::api::ConsensusStatus;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::db::IDatabase;
@@ -47,6 +49,7 @@ pub enum ClientNg {
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
+    Status,
 }
 
 pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
@@ -57,6 +60,7 @@ pub async fn handle_ng_command<D: IDatabase>(
     command: ClientNg,
     cfg: ClientConfig,
     db: D,
+    admin_client: WsAdminClient,
 ) -> anyhow::Result<serde_json::Value> {
     let mut tg = TaskGroup::new();
 
@@ -185,7 +189,25 @@ pub async fn handle_ng_command<D: IDatabase>(
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
         }
+        ClientNg::Status => {
+            let status = admin_client.status().await?;
+            let consensus_status = if status == ServerStatus::ConsensusRunning {
+                Some(admin_client.consensus_status().await?)
+            } else {
+                None
+            };
+            Ok(serde_json::to_value(StatusResponse {
+                status,
+                consensus_status,
+            })?)
+        }
     }
+}
+
+#[derive(Serialize)]
+struct StatusResponse {
+    status: ServerStatus,
+    consensus_status: Option<ConsensusStatus>,
 }
 
 async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> {

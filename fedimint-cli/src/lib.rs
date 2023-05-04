@@ -1095,9 +1095,14 @@ impl FedimintCli {
             Command::Ng(command) => {
                 let cfg = cli.load_config()?;
                 Ok(CliOutput::Raw(
-                    ng::handle_ng_command(command, cfg.0, cli.load_rocks_db().unwrap())
-                        .await
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                    ng::handle_ng_command(
+                        command,
+                        cfg.0,
+                        cli.load_rocks_db().unwrap(),
+                        cli.admin_client().await?,
+                    )
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))
             }
         }
