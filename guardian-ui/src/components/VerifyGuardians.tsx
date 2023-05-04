@@ -7,8 +7,8 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import React, { useState } from 'react';
-import { FormGroup } from './FormGroup';
-import { FormGroupHeading } from './FormGroupHeading';
+import { FormGroup } from './ui/FormGroup';
+import { FormGroupHeading } from './ui/FormGroupHeading';
 import { useGuardianContext } from '../hooks';
 import { GuardianRole } from '../types';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
