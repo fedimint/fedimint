@@ -3,7 +3,6 @@ root: .
 socket_name: fedimint-dev
 pre_window:
   - source .tmpenv
-  - source scripts/lib.sh
   - source scripts/aliases.sh
 tmux_detached: false
 windows:
