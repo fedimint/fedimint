@@ -1,7 +1,7 @@
 //! Client library for fedimintd
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::sync::Arc;
@@ -481,6 +481,10 @@ impl Client {
         }
 
         operation_entries
+    }
+
+    pub async fn get_active_operations(&self) -> HashSet<OperationId> {
+        self.inner.executor.get_active_operations().await
     }
 
     pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
