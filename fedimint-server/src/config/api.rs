@@ -9,8 +9,9 @@ use bitcoin_hashes::{sha256, Hash};
 use fedimint_aead::random_salt;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    PeerServerParams, ServerStatus, WsAdminClient,
+    PeerServerParams, WsAdminClient,
 };
+use fedimint_core::api::{ServerStatus, StatusResponse};
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
@@ -254,7 +255,7 @@ impl ConfigGenApi {
     }
 
     /// Returns the server status
-    pub async fn status(&self) -> ServerStatus {
+    pub async fn server_status(&self) -> ServerStatus {
         let has_upgrade_flag = { self.has_upgrade_flag().await };
 
         let state = self.state.lock().expect("lock poisoned");
@@ -573,12 +574,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         },
         api_endpoint! {
             "status",
-            async |config: &ConfigGenApi, context, _v: ()| -> ServerStatus {
-                if context.has_auth() {
-                    Ok(config.status().await)
-                } else {
-                    Err(ApiError::unauthorized())
-                }
+            async |config: &ConfigGenApi, _context, _v: ()| -> StatusResponse {
+                let server = config.server_status().await;
+                Ok(StatusResponse {
+                    server,
+                    consensus: None
+                })
             }
         },
     ]
@@ -601,8 +602,8 @@ mod tests {
     use std::time::Duration;
     use std::{env, fs};
 
-    use fedimint_core::admin_client::{ServerStatus, WsAdminClient};
-    use fedimint_core::api::FederationResult;
+    use fedimint_core::admin_client::WsAdminClient;
+    use fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -701,7 +702,7 @@ mod tests {
         }
 
         /// Helper for getting server status
-        async fn server_status(&self) -> ServerStatus {
+        async fn status(&self) -> StatusResponse {
             loop {
                 match self.client.status().await {
                     Ok(status) => return status,
@@ -772,7 +773,7 @@ mod tests {
         }
 
         let test = async {
-            assert_eq!(leader.server_status().await, ServerStatus::AwaitingPassword);
+            assert_eq!(leader.status().await.server, ServerStatus::AwaitingPassword);
 
             // Cannot set the password twice
             leader.client.set_password().await.unwrap();
@@ -790,7 +791,7 @@ mod tests {
             // Setup followers and send connection info
             for follower in &mut followers {
                 assert_eq!(
-                    follower.server_status().await,
+                    follower.status().await.server,
                     ServerStatus::AwaitingPassword
                 );
                 follower.client.set_password().await.unwrap();
@@ -840,7 +841,7 @@ mod tests {
             // start consensus
             for peer in followers.iter() {
                 peer.client.start_consensus().await.ok();
-                assert_eq!(peer.server_status().await, ServerStatus::ConsensusRunning);
+                assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
             }
 
             // shutdown
@@ -865,9 +866,9 @@ mod tests {
         let test2 = async {
             // Confirm we are stuck in upgrading after an upgrade
             for peer in followers.iter() {
-                assert_eq!(peer.server_status().await, ServerStatus::Upgrading);
+                assert_eq!(peer.status().await.server, ServerStatus::Upgrading);
                 peer.client.start_consensus().await.ok();
-                assert_eq!(peer.server_status().await, ServerStatus::ConsensusRunning);
+                assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
             }
 
             // shutdown again

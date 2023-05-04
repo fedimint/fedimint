@@ -6,9 +6,9 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::api::{
-    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, WsClientConnectInfo,
+    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
+    WsClientConnectInfo,
 };
 use fedimint_core::config::ClientConfigResponse;
 use fedimint_core::core::ModuleInstanceId;
@@ -532,21 +532,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "consensus_status",
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> ConsensusStatus {
-                fedimint.consensus_status_cache.get(|| async {
-                    fedimint.get_consensus_status().await
-                }).await
-            }
-        },
-        api_endpoint! {
             "status",
-            async |_fedimint: &ConsensusApi, context, _v: ()| -> ServerStatus {
-                if context.has_auth() {
-                    Ok(ServerStatus::ConsensusRunning)
-                } else {
-                    Err(ApiError::unauthorized())
-                }
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
+                let consensus_status = fedimint
+                    .consensus_status_cache
+                    .get(|| fedimint.get_consensus_status())
+                    .await?;
+                Ok(StatusResponse {
+                    server: ServerStatus::ConsensusRunning,
+                    consensus: Some(consensus_status)
+                })
             }
         },
     ]

@@ -9,7 +9,8 @@ use tokio_rustls::rustls;
 use url::Url;
 
 use crate::api::{
-    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, WsFederationApi,
+    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
+    StatusResponse, WsFederationApi,
 };
 use crate::config::ServerModuleGenParamsRegistry;
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -155,7 +156,7 @@ impl WsAdminClient {
     }
 
     /// Returns the status of the server
-    pub async fn status(&self) -> FederationResult<ServerStatus> {
+    pub async fn status(&self) -> FederationResult<StatusResponse> {
         self.request_auth("status", ApiRequestErased::default())
             .await
     }
@@ -181,26 +182,6 @@ impl WsAdminClient {
             .request_current_consensus(method.to_owned(), params)
             .await
     }
-}
-
-/// The state of the server returned via APIs
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
-pub enum ServerStatus {
-    /// Server needs a password to read configs
-    #[default]
-    AwaitingPassword,
-    /// Waiting for peers to share the config gen params
-    SharingConfigGenParams,
-    /// Ready to run config gen once all peers are ready
-    ReadyForConfigGen,
-    /// We failed running config gen
-    ConfigGenFailed,
-    /// Config is generated, peers should verify the config
-    VerifyingConfigs,
-    /// Restarted from a planned upgrade (requires action to start)
-    Upgrading,
-    /// Consensus is running
-    ConsensusRunning,
 }
 
 /// Sent by admin user to the API
