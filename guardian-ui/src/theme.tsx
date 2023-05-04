@@ -62,6 +62,29 @@ const colors = {
   },
 };
 
+const textSizes = {
+  xs: {
+    fontSize: '12px',
+    lineHeight: '18px',
+  },
+  sm: {
+    fontSize: '14px',
+    lineHeight: '20px',
+  },
+  md: {
+    fontSize: '16px',
+    lineHeight: '24px',
+  },
+  lg: {
+    fontSize: '18px',
+    lineHeight: '28px',
+  },
+  xl: {
+    fontSize: '20px',
+    lineHeight: '30px',
+  },
+};
+
 const buttonSizes = {
   xs: {
     height: '36px',
@@ -109,28 +132,7 @@ export const theme = extendTheme(
       heading: `'${SPACE_GROTESK}', monospace`,
       body: `'${INTER}', sans-serif`,
     },
-    textStyles: {
-      xs: {
-        fontSize: '12px',
-        lineHeight: '18px',
-      },
-      sm: {
-        fontSize: '14px',
-        lineHeight: '20px',
-      },
-      md: {
-        fontSize: '16px',
-        lineHeight: '24px',
-      },
-      lg: {
-        fontSize: '18px',
-        lineHeight: '28px',
-      },
-      xl: {
-        fontSize: '20px',
-        lineHeight: '30px',
-      },
-    },
+    textStyles: textSizes,
     components: {
       Text: {
         baseStyle: {
@@ -141,6 +143,7 @@ export const theme = extendTheme(
             color: colors.text.secondary,
           },
         },
+        sizes: textSizes,
       },
       Heading: {
         sizes: {
@@ -256,11 +259,21 @@ export const theme = extendTheme(
         },
       },
       Table: {
-        basStyle: {
-          colorScheme: 'gray',
-        },
         defaultProps: {
           colorScheme: 'gray',
+        },
+        baseStyle: {
+          th: {
+            color: colors.text.secondary,
+            fontFamily: 'body',
+            fontWeight: 'medium',
+            textTransform: 'initial',
+            letterSpacing: 'normal',
+          },
+          td: {
+            textStyle: 'sm',
+            fontWeight: 'medium',
+          },
         },
         variants: {
           simple: {

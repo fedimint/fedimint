@@ -1,5 +1,4 @@
 import {
-  Heading,
   Text,
   TableContainer,
   Table as ChakraTable,
@@ -46,9 +45,23 @@ export function Table<T extends string>({
       width='100%'
     >
       {hasHeading && (
-        <Box p={6} borderBottom={border}>
-          {title && <Heading>{title}</Heading>}
-          {description && <Text>{description}</Text>}
+        <Box
+          display='flex'
+          flexDirection='column'
+          gap={1}
+          p={6}
+          borderBottom={border}
+        >
+          {title && (
+            <Text size='lg' fontWeight='600'>
+              {title}
+            </Text>
+          )}
+          {description && (
+            <Text variant='secondary' size='sm'>
+              {description}
+            </Text>
+          )}
         </Box>
       )}
       <TableContainer>
