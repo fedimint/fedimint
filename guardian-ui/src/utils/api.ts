@@ -19,7 +19,6 @@ export function getModuleParamsFromConfig<T extends AnyFedimintModule[0]>(
  * Given an unknown error object, return a user-facing message.
  */
 export function formatApiErrorMessage(err: unknown) {
-  console.log({ err });
   if (!err) return 'Unknown error';
   if ('error' in (err as { error: JsonRpcError })) {
     return (err as { error: JsonRpcError }).error.message;

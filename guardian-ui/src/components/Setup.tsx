@@ -39,7 +39,7 @@ export const Setup: React.FC = () => {
     state: { progress, role, password },
     dispatch,
   } = useGuardianContext();
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   const [needsAuth, setNeedsAuth] = useState(false);
 
   const isHost = role === GuardianRole.Host;
@@ -50,10 +50,9 @@ export const Setup: React.FC = () => {
     PROGRESS_ORDER[progressIdx + 1];
 
   useEffect(() => {
-    setIsCheckingStatus(true);
-
-    try {
-      api.status().then((status) => {
+    api
+      .status()
+      .then((status) => {
         if (status === ServerStatus.AwaitingPassword) {
           dispatch({
             type: SETUP_ACTION_TYPE.SET_INITIAL_STATE,
@@ -62,13 +61,17 @@ export const Setup: React.FC = () => {
         } else {
           setNeedsAuth(true);
         }
+      })
+      .catch((err) => {
+        if (err && err.code === 401) {
+          setNeedsAuth(true);
+        } else {
+          console.error('Failed to get status', err);
+        }
+      })
+      .finally(() => {
+        setIsCheckingStatus(false);
       });
-    } catch (err) {
-      // TODO: Show error UI
-      console.error(err);
-    }
-
-    setIsCheckingStatus(false);
   }, [api]);
 
   const handleBack = useCallback(() => {

@@ -18,7 +18,7 @@ import {
 } from '@chakra-ui/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGuardianContext } from '../hooks';
-import { ConfigGenParams, GuardianRole } from '../types';
+import { ConfigGenParams, GuardianRole, ServerStatus } from '../types';
 import { CopyInput } from './ui/CopyInput';
 import { Table, TableRow } from './ui/Table';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
@@ -44,6 +44,11 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
   const [connectError, setConnectError] = useState<string>();
 
   const isAllConnected = numPeers && numPeers == peers.length;
+  const isAllAccepted =
+    isAllConnected &&
+    peers.filter((peer) => peer.status === ServerStatus.ReadyForConfigGen)
+      .length >=
+      numPeers - 1;
 
   // For hosts, immediately start polling for peer state. For followers,
   // check if we already are connected + have consensus params. If so,
@@ -65,9 +70,9 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
 
   // For hosts, once all peers have connected, run DKG immediately.
   useEffect(() => {
-    if (role !== GuardianRole.Host || !isAllConnected) return;
+    if (role !== GuardianRole.Host || !isAllAccepted) return;
     next();
-  }, [role, isAllConnected, next]);
+  }, [role, isAllAccepted, next]);
 
   const handleApprove = useCallback(() => {
     next();

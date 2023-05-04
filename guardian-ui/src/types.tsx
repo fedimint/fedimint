@@ -14,7 +14,10 @@ export enum SetupProgress {
 
 export enum ServerStatus {
   AwaitingPassword = 'AwaitingPassword',
-  GeneratingConfig = 'GeneratingConfig',
+  SharingConfigGenParams = 'SharingConfigGenParams',
+  ReadyForConfigGen = 'ReadyForConfigGen',
+  ConfigGenFailed = 'ConfigGenFailed',
+  VerifyingConfigs = 'VerifyingConfigs',
   Upgrading = 'Upgrading',
   ConsensusRunning = 'ConsensusRunning',
 }
@@ -31,6 +34,7 @@ export interface Peer {
   cert: string;
   api_url: string;
   p2p_url: string;
+  status: ServerStatus;
 }
 
 export type LnFedimintModule = ['ln', null];
