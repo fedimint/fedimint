@@ -36,7 +36,7 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     let canceled = false;
-    const runDkg = async () => {
+    const pollDkg = async () => {
       try {
         const status = await api.status();
         if (canceled) return;
@@ -65,9 +65,9 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
       } catch (err) {
         setError(formatApiErrorMessage(err));
       }
-      timeout = setTimeout(() => runDkg, 3000);
+      timeout = setTimeout(pollDkg, 3000);
     };
-    runDkg();
+    pollDkg();
 
     return () => {
       clearTimeout(timeout);
