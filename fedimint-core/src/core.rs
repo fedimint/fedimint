@@ -174,7 +174,14 @@ macro_rules! module_plugin_trait_define{
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl_common {
-    ($input:ty, $output:ty, $outcome:ty, $ci:ty) => {
+    ($types:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty) => {
+        impl fedimint_core::module::ModuleCommon for $types {
+            type Input = $input;
+            type Output = $output;
+            type OutputOutcome = $outcome;
+            type ConsensusItem = $ci;
+        }
+
         impl fedimint_core::core::Input for $input {}
 
         impl fedimint_core::core::IntoDynInstance for $input {

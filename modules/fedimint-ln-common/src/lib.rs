@@ -195,14 +195,8 @@ impl CommonModuleGen for LightningCommonGen {
 
 pub struct LightningModuleTypes;
 
-impl ModuleCommon for LightningModuleTypes {
-    type Input = LightningInput;
-    type Output = LightningOutput;
-    type OutputOutcome = LightningOutputOutcome;
-    type ConsensusItem = LightningConsensusItem;
-}
-
 plugin_types_trait_impl_common!(
+    LightningModuleTypes,
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,

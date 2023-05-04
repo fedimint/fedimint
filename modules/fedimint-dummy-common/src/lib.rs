@@ -68,19 +68,12 @@ pub struct DummyModuleTypes;
 
 // Wire together the types for this module
 plugin_types_trait_impl_common!(
+    DummyModuleTypes,
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
     DummyConsensusItem
 );
-
-// TODO: Boilerplate-code
-impl ModuleCommon for DummyModuleTypes {
-    type Input = DummyInput;
-    type Output = DummyOutput;
-    type OutputOutcome = DummyOutputOutcome;
-    type ConsensusItem = DummyConsensusItem;
-}
 
 // TODO: Boilerplate-code
 impl ModuleGenParams for DummyConfigGenParams {}
