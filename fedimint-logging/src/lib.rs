@@ -8,17 +8,17 @@ use tracing_subscriber::{EnvFilter, Layer};
 
 /// Constants for categorizing the logging type
 pub const LOG_CONSENSUS: &str = "consensus";
-pub const LOG_NET: &str = "net";
-pub const LOG_NET_PEER: &str = "net::peer";
-pub const LOG_NET_PEER_DKG: &str = "net::peer::dkg";
-pub const LOG_DB: &str = "db";
-pub const LOG_TIMING: &str = "timing";
 pub const LOG_CORE: &str = "core";
-pub const LOG_NET_API: &str = "net::api";
-pub const LOG_TASK: &str = "task";
-pub const LOG_WALLET: &str = "wallet";
-pub const LOG_TEST: &str = "test";
+pub const LOG_DB: &str = "db";
 pub const LOG_ECASH_RECOVERY: &str = "ecash-recovery";
+pub const LOG_NET_API: &str = "net::api";
+pub const LOG_NET_PEER_DKG: &str = "net::peer::dkg";
+pub const LOG_NET_PEER: &str = "net::peer";
+pub const LOG_NET: &str = "net";
+pub const LOG_TASK: &str = "task";
+pub const LOG_TEST: &str = "test";
+pub const LOG_TIMING: &str = "timing";
+pub const LOG_WALLET: &str = "wallet";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]
