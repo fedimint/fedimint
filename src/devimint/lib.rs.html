@@ -587,7 +587,7 @@
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
-<span class="kw">use </span>fedimint_logging::LOG_TEST;
+<span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
@@ -640,7 +640,7 @@
             <span class="kw">if </span>e.to_string().contains(<span class="string">&quot;Database already exists&quot;</span>) {
                 <span class="kw">break</span>;
             }
-            <span class="macro">warn!</span>(LOG_TEST, <span class="string">&quot;Failed to create wallet ... retrying {}&quot;</span>, e);
+            <span class="macro">warn!</span>(LOG_DEVIMINT, <span class="string">&quot;Failed to create wallet ... retrying {}&quot;</span>, e);
             sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
         </span>}
 
@@ -832,7 +832,7 @@
 
 <span class="kw">pub async fn </span>open_channel(bitcoind: <span class="kw-2">&amp;</span>Bitcoind, cln: <span class="kw-2">&amp;</span>Lightningd, lnd: <span class="kw-2">&amp;</span>Lnd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;block sync done&quot;</span>);
+    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;block sync done&quot;</span>);
     <span class="kw">let </span>cln_addr = cln
         .request(cln_rpc::model::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
         .<span class="kw">await</span><span class="question-mark">?
@@ -1006,30 +1006,30 @@
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;lightning started&quot;</span>);
+            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;lightning started&quot;</span>);
             <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
                 Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())),
                 open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
             )<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;gateways started&quot;</span>);
+            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateways started&quot;</span>);
             <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         <span class="kw">async </span>{
             run_dkg(task_group, <span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;dkg done&quot;</span>);
+            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;dkg done&quot;</span>);
             Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..<span class="number">4</span>).<span class="kw">await
         </span>},
     )<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;federation and gateways started&quot;</span>);
+    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;federation and gateways started&quot;</span>);
     <span class="macro">tokio::try_join!</span>(gw_cln.connect_fed(<span class="kw-2">&amp;</span>fed), gw_lnd.connect_fed(<span class="kw-2">&amp;</span>fed))<span class="question-mark">?</span>;
     fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;gateways registered&quot;</span>);
+    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateways registered&quot;</span>);
     fed.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(
-        LOG_TEST,
+        LOG_DEVIMINT,
         <span class="string">&quot;starting dev federation took {:?}&quot;</span>,
         start_time.elapsed()<span class="question-mark">?
     </span>);
@@ -1065,7 +1065,7 @@
     )<span class="question-mark">?</span>;
     open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(
-        LOG_TEST,
+        LOG_DEVIMINT,
         <span class="string">&quot;starting base deamons took {:?}&quot;</span>,
         start_time.elapsed()<span class="question-mark">?
     </span>);
@@ -1094,7 +1094,7 @@
             <span class="string">&quot;--db-dir={electrs_dir}&quot;</span>,
         );
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;electrs&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;electrs started&quot;</span>);
+        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;electrs started&quot;</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
@@ -1126,7 +1126,7 @@
             <span class="string">&quot;--monitoring-addr=127.0.0.1:50003&quot;</span>,
         );
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;esplora&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(LOG_TEST, <span class="string">&quot;esplora started&quot;</span>);
+        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;esplora started&quot;</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
