@@ -23,6 +23,7 @@ import { CopyInput } from './ui/CopyInput';
 import { Table, TableRow } from './ui/Table';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
 import { CheckCircleIcon } from '@chakra-ui/icons';
+import { getModuleParamsFromConfig } from '../utils/api';
 
 interface Props {
   next(): void;
@@ -114,11 +115,12 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
         },
         {
           label: 'Network',
-          value: consensusConfig.modules.wallet.network,
+          value: getModuleParamsFromConfig(consensusConfig, 'wallet')?.network,
         },
         {
           label: 'Block confirmations',
-          value: `${consensusConfig.modules.wallet.finality_delay} blocks`,
+          value: getModuleParamsFromConfig(consensusConfig, 'wallet')
+            ?.finality_delay,
         },
       ];
       innerContent = (

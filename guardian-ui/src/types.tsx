@@ -33,12 +33,22 @@ export interface Peer {
   p2p_url: string;
 }
 
+export type LnFedimintModule = ['ln', null];
+export type MintFedimintModule = ['mint', { mint_amounts: number[] }];
+export type WalletFedimintModule = [
+  'wallet',
+  { finality_delay: number; network: Network }
+];
+export type OtherFedimintModule = [string, object | null];
+export type AnyFedimintModule =
+  | LnFedimintModule
+  | MintFedimintModule
+  | WalletFedimintModule
+  | OtherFedimintModule;
+
 export type ConfigGenParams = {
   meta: { federation_name: string };
-  modules: {
-    wallet: { finality_delay: number; network: Network };
-    mint: { mint_amounts: number[] };
-  };
+  modules: Record<number, AnyFedimintModule>;
 };
 
 export interface ConsensusState {

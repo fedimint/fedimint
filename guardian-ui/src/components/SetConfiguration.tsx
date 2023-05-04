@@ -10,12 +10,13 @@ import {
 } from '@chakra-ui/react';
 import React, { useEffect, useState } from 'react';
 import { useGuardianContext } from '../hooks';
-import { GuardianRole, Network } from '../types';
+import { ConfigGenParams, GuardianRole, Network } from '../types';
 import { ReactComponent as FedimintLogo } from '../assets/svgs/fedimint.svg';
 import { ReactComponent as BitcoinLogo } from '../assets/svgs/bitcoin.svg';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
 import { FormGroup } from './ui/FormGroup';
 import { FormGroupHeading } from './ui/FormGroupHeading';
+import { getModuleParamsFromConfig } from '../utils/api';
 
 interface Props {
   next(): void;
@@ -42,29 +43,36 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
   const [numPeers, setNumPeers] = useState(
     stateNumPeers ? stateNumPeers.toString() : ''
   );
-  const [blockConfirmations, setBlockConfirmations] = useState(
-    configGenParams?.modules?.wallet?.finality_delay?.toString() || ''
-  );
-  const [network, setNetwork] = useState(
-    configGenParams?.modules?.wallet?.network || ''
-  );
+  const [blockConfirmations, setBlockConfirmations] = useState('');
+  const [network, setNetwork] = useState('');
   const [mintAmounts, setMintAmounts] = useState<number[]>([]);
 
   useEffect(() => {
+    const initStateFromParams = (params: ConfigGenParams) => {
+      setFederationName(params.meta.federation_name);
+      setBlockConfirmations(
+        getModuleParamsFromConfig(
+          params,
+          'wallet'
+        )?.finality_delay.toString() || ''
+      );
+      setNetwork(
+        getModuleParamsFromConfig(params, 'wallet')?.network.toString() || ''
+      );
+      setMintAmounts(
+        getModuleParamsFromConfig(configGenParams, 'mint')?.mint_amounts || []
+      );
+    };
+
     if (configGenParams === null) {
       api
         .getDefaultConfigGenParams()
-        .then((params) => {
-          setFederationName(params.meta.federation_name);
-          setBlockConfirmations(
-            params.modules.wallet.finality_delay.toString()
-          );
-          setNetwork(params.modules.wallet.network);
-          setMintAmounts(params.modules.mint.mint_amounts);
-        })
+        .then(initStateFromParams)
         .catch((err) => {
           console.error(err);
         });
+    } else {
+      initStateFromParams(configGenParams);
     }
   }, [configGenParams]);
 
@@ -98,13 +106,14 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
         config: {
           meta: { federation_name: federationName },
           modules: {
-            mint: {
-              mint_amounts: mintAmounts,
-            },
-            wallet: {
-              finality_delay: parseInt(blockConfirmations, 10),
-              network: network as Network,
-            },
+            0: ['mint', { mint_amounts: mintAmounts }],
+            1: [
+              'wallet',
+              {
+                finality_delay: parseInt(blockConfirmations, 10),
+                network: network as Network,
+              },
+            ],
           },
         },
       });
