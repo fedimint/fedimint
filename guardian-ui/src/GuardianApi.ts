@@ -58,7 +58,14 @@ export class GuardianApi implements ApiInterface {
           this.websocket = websocket;
           resolve(this.websocket);
         })
-        .catch((error) => reject(error));
+        .catch((error) => {
+          console.error('failed to open websocket', error);
+          reject(
+            new Error(
+              'Failed to connect to API, confirm your server is online and try again.'
+            )
+          );
+        });
     });
 
     return this.connectPromise;

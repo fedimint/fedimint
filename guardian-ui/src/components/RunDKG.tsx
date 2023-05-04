@@ -7,6 +7,7 @@ import {
 } from '@chakra-ui/react';
 import React, { useEffect, useState } from 'react';
 import { useGuardianContext } from '../hooks';
+import { formatApiErrorMessage } from '../utils/api';
 
 interface Props {
   next(): void;
@@ -25,7 +26,7 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
         .runDkg()
         .then(() => next())
         .catch((err) => {
-          const message = err.message || err.toString();
+          const message = formatApiErrorMessage(err);
           if (message === 'Dkg was already run') {
             next();
           } else if (message === 'Cannot run DKG now') {

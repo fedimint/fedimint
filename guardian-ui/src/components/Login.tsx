@@ -9,6 +9,7 @@ import {
 } from '@chakra-ui/react';
 import { useGuardianContext } from '../hooks';
 import { SETUP_ACTION_TYPE } from '../types';
+import { formatApiErrorMessage } from '../utils/api';
 
 export const Login: React.FC = () => {
   const { api, dispatch } = useGuardianContext();
@@ -25,10 +26,9 @@ export const Login: React.FC = () => {
         } else {
           setError('Invalid password');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error({ err });
-        // TODO: show error message
-        setError(err.message || err.toString());
+        setError(formatApiErrorMessage(err));
       }
     },
     [api, password]

@@ -12,6 +12,7 @@ import { theme, Fonts } from './theme';
 import { GuardianApi } from './GuardianApi';
 import { GuardianProvider } from './GuardianContext';
 import { Setup } from './components/Setup';
+import { formatApiErrorMessage } from './utils/api';
 
 export const App = React.memo(() => {
   const api = useMemo(() => new GuardianApi(), []);
@@ -25,7 +26,7 @@ export const App = React.memo(() => {
         setIsConnected(true);
       })
       .catch((err) => {
-        setError(err.message || err.toString());
+        setError(formatApiErrorMessage(err));
       });
   }, [api]);
 
