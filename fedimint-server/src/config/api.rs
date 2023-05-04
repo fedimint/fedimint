@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::HashEngine;
@@ -68,19 +68,18 @@ impl ConfigGenApi {
 
     // Sets the auth and decryption key derived from the password
     pub fn set_password(&self, auth: ApiAuth) -> ApiResult<()> {
-        self.require_status(ServerStatus::AwaitingPassword)?;
-        let mut state = self.state.lock().expect("lock poisoned");
+        let mut state = self.require_status(ServerStatus::AwaitingPassword)?;
         state.auth = Some(auth);
         state.status = ServerStatus::SharingConfigGenParams;
         Ok(())
     }
 
-    fn require_status(&self, status: ServerStatus) -> ApiResult<()> {
+    fn require_status(&self, status: ServerStatus) -> ApiResult<MutexGuard<ConfigGenState>> {
         let state = self.state.lock().expect("lock poisoned");
         if state.status != status {
             return Self::bad_request(&format!("Expected to be in {status:?} state"));
         }
-        Ok(())
+        Ok(state)
     }
 
     /// Sets our connection info, possibly sending it to a leader
@@ -89,8 +88,7 @@ impl ConfigGenApi {
         request: ConfigGenConnectionsRequest,
     ) -> ApiResult<()> {
         {
-            self.require_status(ServerStatus::SharingConfigGenParams)?;
-            let mut state = self.state.lock().expect("lock poisoned");
+            let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
             state.set_request(request)?;
         }
         self.update_leader().await?;
@@ -136,8 +134,7 @@ impl ConfigGenApi {
 
     /// Sets the config gen params, should only be called by the leader
     pub async fn set_config_gen_params(&self, requested: ConfigGenParamsRequest) -> ApiResult<()> {
-        self.require_status(ServerStatus::SharingConfigGenParams)?;
-        let mut state = self.state.lock().expect("lock poisoned");
+        let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
         state.requested_params = Some(requested);
         Ok(())
     }
@@ -168,10 +165,9 @@ impl ConfigGenApi {
     /// completion, calling a second time will return an error
     pub async fn run_dkg(&self) -> ApiResult<()> {
         // Update our state to running DKG
-        self.require_status(ServerStatus::SharingConfigGenParams)?;
         let consensus = self.get_consensus_config_gen_params().await?;
         let (params, registry) = {
-            let mut state = self.state.lock().expect("lock poisoned");
+            let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
             state.status = ServerStatus::ReadyForConfigGen;
             (
                 state.get_config_gen_params(consensus)?,
@@ -217,8 +213,7 @@ impl ConfigGenApi {
     /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
     pub fn get_verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
-        self.require_status(ServerStatus::VerifyingConfigs)?;
-        let state = self.state.lock().expect("lock poisoned");
+        let state = self.require_status(ServerStatus::VerifyingConfigs)?;
         state.get_verification()
     }
 
