@@ -129,6 +129,10 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -138,7 +142,7 @@
 <span class="kw">use </span>fedimint_core::epoch::SerdeSignatureShare;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Amount};
-<span class="kw">use </span>secp256k1::XOnlyPublicKey;
+<span class="kw">use </span>secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
@@ -156,8 +160,8 @@
 <span class="doccomment">/// Non-transaction items that will be submitted to consensus
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>DummyConsensusItem {
-    <span class="doccomment">/// User&#39;s print money request signed by a peer
-    </span>Print(DummyPrintMoneyRequest, SerdeSignatureShare),
+    <span class="doccomment">/// User&#39;s message sign request signed by a single peer
+    </span>Sign(String, SerdeSignatureShare),
 }
 
 <span class="doccomment">/// Parameters necessary to generate this module&#39;s configuration
@@ -185,13 +189,6 @@
 <span class="doccomment">/// Information needed by a client to update output funds
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>DummyOutputOutcome(<span class="kw">pub </span>Amount, <span class="kw">pub </span>XOnlyPublicKey);
-
-<span class="doccomment">/// Request type sent from client to server
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>DummyPrintMoneyRequest {
-    <span class="kw">pub </span>amount: Amount,
-    <span class="kw">pub </span>account: XOnlyPublicKey,
-}
 
 <span class="doccomment">/// Errors that might be returned by the server
 </span><span class="comment">// TODO: Move to server lib?
@@ -259,6 +256,17 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         <span class="macro">write!</span>(f, <span class="string">&quot;DummyConsensusItem&quot;</span>)
     }
+}
+
+<span class="doccomment">/// A special key that creates assets for a test/example
+</span><span class="kw">const </span>FED_SECRET_PHRASE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;Money printer go brrr...........&quot;</span>;
+
+<span class="kw">pub fn </span>fed_public_key() -&gt; XOnlyPublicKey {
+    fed_key_pair().x_only_public_key().<span class="number">0
+</span>}
+
+<span class="kw">pub fn </span>fed_key_pair() -&gt; KeyPair {
+    KeyPair::from_seckey_slice(<span class="kw-2">&amp;</span>Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect(<span class="string">&quot;32 bytes&quot;</span>)
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_dummy_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

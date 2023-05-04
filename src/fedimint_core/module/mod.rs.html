@@ -1063,6 +1063,19 @@
 <a href="#1063" id="1063">1063</a>
 <a href="#1064" id="1064">1064</a>
 <a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
@@ -1259,6 +1272,19 @@
         <span class="comment">// self contains dbtx which is !Send
         // try removing this and see the error.
         </span><span class="kw">async move </span>{ db.wait_key_exists(<span class="kw-2">&amp;</span>key).<span class="kw">await </span>}
+    }
+
+    <span class="doccomment">/// Waits for key to have a value that matches.
+    </span><span class="kw">pub fn </span>wait_value_matches&lt;K&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        key: K,
+        matcher: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>K::Value) -&gt; bool + Copy,
+    ) -&gt; <span class="kw">impl </span>Future&lt;Output = K::Value&gt;
+    <span class="kw">where
+        </span>K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        <span class="kw">let </span>db = <span class="self">self</span>.db.clone();
+        <span class="kw">async move </span>{ db.wait_key_check(<span class="kw-2">&amp;</span>key, |v| v.filter(matcher)).<span class="kw">await</span>.<span class="number">0 </span>}
     }
 
     <span class="doccomment">/// Attempts to commit the dbtx or returns an ApiError

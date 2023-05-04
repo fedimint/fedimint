@@ -79,6 +79,7 @@
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::config::{
     TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
@@ -88,7 +89,7 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
-<span class="kw">use </span>threshold_crypto::{PublicKeySet, SecretKeyShare};
+<span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, SecretKeyShare};
 
 <span class="kw">use crate</span>::{CONSENSUS_VERSION, KIND};
 
@@ -104,6 +105,7 @@
 </span><span class="kw">pub struct </span>DummyClientConfig {
     <span class="doccomment">/// Accessible to clients
     </span><span class="kw">pub </span>tx_fee: Amount,
+    <span class="kw">pub </span>fed_public_key: PublicKey,
 }
 
 <span class="doccomment">/// Will be the same for every federation member

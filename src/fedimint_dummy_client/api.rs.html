@@ -26,19 +26,17 @@
 <a href="#26" id="26">26</a>
 <a href="#27" id="27">27</a>
 <a href="#28" id="28">28</a>
-<a href="#29" id="29">29</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
+<span class="kw">use </span>fedimint_core::epoch::SerdeSignature;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount};
-<span class="kw">use </span>fedimint_dummy_common::DummyPrintMoneyRequest;
-<span class="kw">use </span>secp256k1::XOnlyPublicKey;
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>DummyFederationApi {
-    <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, request: DummyPrintMoneyRequest) -&gt; FederationResult&lt;()&gt;;
+    <span class="kw">async fn </span>sign_message(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;()&gt;;
 
-    <span class="kw">async fn </span>wait_for_money(<span class="kw-2">&amp;</span><span class="self">self</span>, account: XOnlyPublicKey) -&gt; FederationResult&lt;Amount&gt;;
+    <span class="kw">async fn </span>wait_signed(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;SerdeSignature&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -46,13 +44,13 @@
 <span class="kw">where
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, request: DummyPrintMoneyRequest) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;print_money&quot;</span>.to_string(), ApiRequestErased::new(request))
+    <span class="kw">async fn </span>sign_message(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;sign_message&quot;</span>.to_string(), ApiRequestErased::new(message))
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>wait_for_money(<span class="kw-2">&amp;</span><span class="self">self</span>, account: XOnlyPublicKey) -&gt; FederationResult&lt;Amount&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_for_money&quot;</span>.to_string(), ApiRequestErased::new(account))
+    <span class="kw">async fn </span>wait_signed(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;SerdeSignature&gt; {
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_signed&quot;</span>.to_string(), ApiRequestErased::new(message))
             .<span class="kw">await
     </span>}
 }

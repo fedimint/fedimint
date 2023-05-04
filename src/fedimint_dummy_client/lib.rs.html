@@ -293,6 +293,37 @@
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -315,11 +346,12 @@
 <span class="kw">pub use </span>fedimint_dummy_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_dummy_common::config::DummyClientConfig;
 <span class="kw">use </span>fedimint_dummy_common::{
-    DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
-    DummyPrintMoneyRequest,
+    fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
+    DummyOutputOutcome,
 };
 <span class="kw">use </span>secp256k1::{Secp256k1, XOnlyPublicKey};
 <span class="kw">use </span>states::DummyStateMachine;
+<span class="kw">use </span>threshold_crypto::{PublicKey, Signature};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::DummyFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::db::DummyClientFundsKeyV0;
@@ -341,29 +373,46 @@
     <span class="doccomment">/// Wait to receive money at an outpoint
     </span><span class="kw">async fn </span>receive_money(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; anyhow::Result&lt;()&gt;;
 
+    <span class="doccomment">/// Request the federation signs a message for us
+    </span><span class="kw">async fn </span>fed_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;Signature&gt;;
+
     <span class="doccomment">/// The amount of funds we have
     </span><span class="kw">async fn </span>total_funds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount;
 
     <span class="doccomment">/// Return our account
     </span><span class="kw">fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; XOnlyPublicKey;
+
+    <span class="doccomment">/// Return the fed&#39;s public key
+    </span><span class="kw">fn </span>fed_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>DummyClientExt <span class="kw">for </span>Client {
     <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>(id, dummy) = dummy_client(<span class="self">self</span>);
-        <span class="kw">let </span>account = dummy.key.x_only_public_key().<span class="number">0</span>;
-        <span class="kw">let </span>request = DummyPrintMoneyRequest { amount, account };
-        <span class="self">self</span>.api().with_module(id).print_money(request).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>funds = <span class="self">self</span>.api().with_module(id).wait_for_money(account).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(id, <span class="kw">_</span>) = dummy_client(<span class="self">self</span>);
+        <span class="kw">let </span>op_id = rand::random();
 
-        <span class="comment">// TODO: Not very nice to get to the module db
-        </span><span class="kw">let </span>mod_db = <span class="self">self</span>.db().new_isolated(id);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = mod_db.begin_transaction().<span class="kw">await</span>;
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>funds).<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
+        <span class="comment">// TODO: Building a tx could be easier
+        // Create input using the fed&#39;s account
+        </span><span class="kw">let </span>input = ClientInput {
+            input: DummyInput {
+                amount,
+                account: fed_public_key(),
+            },
+            keys: <span class="macro">vec!</span>[fed_key_pair()],
+            state_machines: Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
+        };
+
+        <span class="comment">// Build and send tx to the fed
+        // Will output to our primary client module
+        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_input(input.into_dyn(id));
+        <span class="kw">let </span>outpoint = |txid| OutPoint { txid, out_idx: <span class="number">0 </span>};
+        <span class="kw">let </span>txid = <span class="self">self
+            </span>.finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="self">self</span>.receive_money(outpoint(txid)).<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>send_money(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -426,6 +475,14 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="kw">async fn </span>fed_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;Signature&gt; {
+        <span class="kw">let </span>(id, <span class="kw">_</span>) = dummy_client(<span class="self">self</span>);
+        <span class="kw">let </span>api = <span class="self">self</span>.api().with_module(id);
+        api.sign_message(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>sig = api.wait_signed(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(sig.<span class="number">0</span>)
+    }
+
     <span class="kw">async fn </span>total_funds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="comment">// TODO: Not very nice to get to the module db
         </span><span class="kw">let </span>(id, <span class="kw">_</span>) = dummy_client(<span class="self">self</span>);
@@ -438,6 +495,11 @@
         <span class="kw">let </span>(<span class="kw">_</span>, client) = dummy_client(<span class="self">self</span>);
         client.key.x_only_public_key().<span class="number">0
     </span>}
+
+    <span class="kw">fn </span>fed_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
+        <span class="kw">let </span>(<span class="kw">_</span>, dummy) = dummy_client(<span class="self">self</span>);
+        dummy.cfg.fed_public_key
+    }
 }
 
 <span class="comment">// TODO: Boiler-plate
