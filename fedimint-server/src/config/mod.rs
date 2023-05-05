@@ -16,9 +16,7 @@ use fedimint_core::config::{
     ClientConfig, ClientConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl,
     ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
-use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
-};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, PeerHandle,
@@ -28,6 +26,7 @@ use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConne
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
+use futures::future::join_all;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
 use itertools::Itertools;
@@ -484,7 +483,6 @@ impl ServerConfig {
         )
         .await;
         let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
-        let mut rng = OsRng;
 
         let peers = &params.peer_ids();
         let our_id = &params.local.our_id;
@@ -505,25 +503,28 @@ impl ServerConfig {
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
-        let keys = dkg
-            .run_g1(MODULE_INSTANCE_ID_GLOBAL, &connections, &mut rng)
-            .await?;
+        let keys = dkg.run_g1(MODULE_INSTANCE_ID_GLOBAL, &connections).await?;
         let auth_keys = keys[&KeyType::Auth].threshold_crypto();
         let hbbft_keys = keys[&KeyType::Hbbft].threshold_crypto();
         let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
         let modules = params.consensus.requested.modules.iter_modules();
-        for (module_instance_id, kind, module_params) in modules {
+        let modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
-            module_cfgs.insert(
-                module_instance_id,
-                registry
+            let registry = registry.clone();
+
+            async move {
+                let result = registry
                     .get(kind)
                     .expect("Module not registered")
                     .distributed_gen(&dkg, module_params)
-                    .await?,
-            );
+                    .await;
+                (module_instance_id, result)
+            }
+        });
+        for (module_instance_id, config) in join_all(modules_runner).await {
+            module_cfgs.insert(module_instance_id, config?);
         }
 
         info!(
@@ -533,8 +534,13 @@ impl ServerConfig {
         // Note: Since our outgoing buffers are asynchronous, we don't actually know
         // if other peers received our message, just because we received theirs.
         // That's why we need to do a one last best effort sync.
+        let dkg_done = "DKG DONE".to_string();
         connections
-            .send(peers, MODULE_INSTANCE_ID_DKG_DONE, DkgPeerMsg::Done)
+            .send(
+                peers,
+                (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
+                DkgPeerMsg::Done,
+            )
             .await?;
 
         info!(
@@ -545,7 +551,7 @@ impl ServerConfig {
             let mut done_peers = BTreeSet::from([*our_id]);
 
             while done_peers.len() < peers.len() {
-                match connections.receive(MODULE_INSTANCE_ID_DKG_DONE).await {
+                match connections.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).await {
                     Ok((peer_id, DkgPeerMsg::Done)) => {
                         info!(
                             target: LOG_NET_PEER_DKG,
