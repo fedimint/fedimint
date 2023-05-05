@@ -11,6 +11,8 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use super::*; // TODO: remove this
 
+type EnvVars = HashMap<String, String>;
+
 /// Create a map of environment variables which fedimintd and DKG can use,
 /// but which can't be defined by `build.sh` because multiple of these daemons
 /// run concurrently with different values.
@@ -53,11 +55,15 @@ impl Federation {
     pub async fn new(
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
-        ids: Range<usize>,
+        peer_ids: Range<usize>,
     ) -> Result<Self> {
         let mut members = BTreeMap::new();
-        for id in ids {
-            members.insert(id, Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
+        for peer_id in peer_ids {
+            let env_vars = fedimint_env(peer_id)?;
+            members.insert(
+                peer_id,
+                Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, env_vars).await?,
+            );
         }
 
         let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
@@ -86,9 +92,10 @@ impl Federation {
         if self.members.contains_key(&peer_id) {
             return Err(anyhow!("fedimintd-{} already running", peer_id));
         }
+        let env_vars = fedimint_env(peer_id)?;
         self.members.insert(
             peer_id,
-            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer_id).await?,
+            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer_id, env_vars).await?,
         );
         Ok(())
     }
@@ -236,9 +243,9 @@ impl Fedimintd {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         peer_id: usize,
+        env_vars: EnvVars,
     ) -> Result<Self> {
         let cfg_dir = env::var("FM_DATA_DIR")?;
-        let env_vars = fedimint_env(peer_id)?;
         let data_dir = env_vars
             .get("FM_FEDIMINT_DATA_DIR")
             .context("FM_FEDIMINT_DATA_DIR not found")?;
