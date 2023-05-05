@@ -37,6 +37,7 @@ export const CopyInput: React.FC<CopyInputProps> = ({ value, size = 'md' }) => {
           height={size == 'lg' ? '46px' : '42px'}
           width='100%'
           colorScheme='gray'
+          bg={theme.colors.white}
         >
           {hasCopied ? 'Copied' : 'Copy'}
         </Button>
