@@ -7,23 +7,27 @@ import {
 } from './types';
 
 export interface ApiInterface {
-  testPassword: (password: string) => Promise<boolean>;
-  setPassword: (password: string) => Promise<void>;
+  // WebSocket methods
+  connect(): Promise<JsonRpcWebsocket>;
+  shutdown: () => Promise<boolean>;
   getPassword: () => string | null;
+  testPassword: (password: string) => Promise<boolean>;
+
+  // Shared RPC methods
+  status: () => Promise<ServerStatus>;
+
+  // Setup RPC methods (only exist during setup)
+  setPassword: (password: string) => Promise<void>;
   setConfigGenConnections: (
     ourName: string,
     leaderUrl?: string
   ) => Promise<void>;
   getDefaultConfigGenParams: () => Promise<ConfigGenParams>;
-  status: () => Promise<ServerStatus>;
   getConsensusConfigGenParams: () => Promise<ConsensusState>;
   setConfigGenParams: (params: ConfigGenParams) => Promise<void>;
   getVerifyConfigHash: () => Promise<PeerHashMap>;
-  awaitConfigGenPeers: (numPeers: number) => Promise<void>;
   runDkg: () => Promise<void>;
-  verifyConfigs: (configHashes: string[]) => Promise<void>;
   startConsensus: () => Promise<void>;
-  shutdown: () => Promise<boolean>;
 }
 
 const SESSION_STORAGE_KEY = 'guardian-ui-key';
@@ -31,6 +35,8 @@ const SESSION_STORAGE_KEY = 'guardian-ui-key';
 export class GuardianApi implements ApiInterface {
   private websocket: JsonRpcWebsocket | null = null;
   private connectPromise: Promise<JsonRpcWebsocket> | null = null;
+
+  /*** WebSocket methods ***/
 
   public connect = async (): Promise<JsonRpcWebsocket> => {
     if (this.websocket !== null) {
@@ -76,39 +82,18 @@ export class GuardianApi implements ApiInterface {
     return this.connectPromise;
   };
 
-  public getPassword = (): string | null => {
-    return sessionStorage.getItem(SESSION_STORAGE_KEY);
+  shutdown = async (): Promise<boolean> => {
+    if (this.websocket) {
+      const evt: CloseEvent = await this.websocket.close();
+      this.websocket = null;
+      return evt.type === 'close' && evt.wasClean;
+    }
+
+    return true;
   };
 
-  private rpc = async <P, T>(
-    method: string,
-    params: P,
-    authenticated: boolean
-  ): Promise<T> => {
-    try {
-      const websocket = await this.connect();
-
-      const response = await websocket.call(method, [
-        {
-          auth: authenticated ? this.getPassword() : null,
-          params,
-        },
-      ]);
-
-      if (response.error) {
-        throw response.error;
-      }
-
-      const result = response.result as T;
-      console.log(`${method} rpc result:`, result);
-
-      return result;
-    } catch (error: unknown) {
-      console.error(`error calling "${method}" on websocket rpc : `, error);
-      throw 'error' in (error as { error: JsonRpcError })
-        ? (error as { error: JsonRpcError }).error
-        : error;
-    }
+  getPassword = (): string | null => {
+    return sessionStorage.getItem(SESSION_STORAGE_KEY);
   };
 
   testPassword = async (password: string): Promise<boolean> => {
@@ -125,6 +110,14 @@ export class GuardianApi implements ApiInterface {
       return false;
     }
   };
+
+  /*** Shared RPC methods */
+
+  status = async (): Promise<ServerStatus> => {
+    return this.rpc('status', null, true /* authenticated */);
+  };
+
+  /*** Setup RPC methods ***/
 
   setPassword = async (password: string): Promise<void> => {
     sessionStorage.setItem(SESSION_STORAGE_KEY, password);
@@ -170,10 +163,6 @@ export class GuardianApi implements ApiInterface {
     return params;
   };
 
-  status = async (): Promise<ServerStatus> => {
-    return this.rpc('status', null, true /* authenticated */);
-  };
-
   getConsensusConfigGenParams = async (): Promise<ConsensusState> => {
     return this.rpc(
       'get_consensus_config_gen_params',
@@ -182,7 +171,6 @@ export class GuardianApi implements ApiInterface {
     );
   };
 
-  // FIXME
   setConfigGenParams = async (params: ConfigGenParams): Promise<void> => {
     return this.rpc('set_config_gen_params', params, true /* authenticated */);
   };
@@ -191,21 +179,8 @@ export class GuardianApi implements ApiInterface {
     return this.rpc('get_verify_config_hash', null, true /* authenticated */);
   };
 
-  awaitConfigGenPeers = async (numPeers: number): Promise<void> => {
-    // not authenticated
-    return this.rpc(
-      'await_config_gen_peers',
-      numPeers,
-      false /* not-authenticated */
-    );
-  };
-
   runDkg = async (): Promise<void> => {
     return this.rpc('run_dkg', null, true /* authenticated */);
-  };
-
-  verifyConfigs = async (configHashes: string[]): Promise<void> => {
-    return this.rpc('verify_configs', configHashes, true /* authenticated */);
   };
 
   startConsensus = async (): Promise<void> => {
@@ -216,61 +191,36 @@ export class GuardianApi implements ApiInterface {
     return this.rpc('start_consensus', null, true /* authenticated */);
   };
 
-  shutdown = async (): Promise<boolean> => {
-    if (this.websocket) {
-      const evt: CloseEvent = await this.websocket.close();
-      this.websocket = null;
-      return evt.type === 'close' && evt.wasClean;
+  /*** Internal private methods ***/
+
+  private rpc = async <P, T>(
+    method: string,
+    params: P,
+    authenticated: boolean
+  ): Promise<T> => {
+    try {
+      const websocket = await this.connect();
+
+      const response = await websocket.call(method, [
+        {
+          auth: authenticated ? this.getPassword() : null,
+          params,
+        },
+      ]);
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      const result = response.result as T;
+      console.log(`${method} rpc result:`, result);
+
+      return result;
+    } catch (error: unknown) {
+      console.error(`error calling "${method}" on websocket rpc : `, error);
+      throw 'error' in (error as { error: JsonRpcError })
+        ? (error as { error: JsonRpcError }).error
+        : error;
     }
-
-    return true;
   };
 }
-
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
-export class NoopGuardianApi implements ApiInterface {
-  testPassword = () => Promise.resolve(false);
-  setPassword = async (_password: string): Promise<void> => {
-    return;
-  };
-  getPassword = () => null;
-  setConfigGenConnections = async (
-    _ourName: string,
-    _leaderUrl?: string
-  ): Promise<void> => {
-    return;
-  };
-  getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
-    throw 'not implemented';
-  };
-  status = async (): Promise<ServerStatus> => {
-    throw 'not implemented';
-  };
-  getConsensusConfigGenParams = async (): Promise<ConsensusState> => {
-    throw 'not implemented';
-  };
-  setConfigGenParams = async (_params: ConfigGenParams): Promise<void> => {
-    return;
-  };
-  getVerifyConfigHash = async (): Promise<PeerHashMap> => {
-    throw 'not implemented';
-  };
-  awaitConfigGenPeers = async (_numPeers: number): Promise<void> => {
-    return;
-  };
-  runDkg = async (): Promise<void> => {
-    return;
-  };
-  verifyConfigs = async (_configHashes: string[]): Promise<void> => {
-    return;
-  };
-  startConsensus = async (): Promise<void> => {
-    return;
-  };
-  shutdown = async (): Promise<boolean> => {
-    return true;
-  };
-}
-
-/* eslint-enable @typescript-eslint/no-unused-vars */

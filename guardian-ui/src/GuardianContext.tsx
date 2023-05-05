@@ -16,7 +16,7 @@ import {
   ConsensusState,
   ServerStatus,
 } from './types';
-import { ApiInterface, NoopGuardianApi } from './GuardianApi';
+import { ApiInterface, GuardianApi } from './GuardianApi';
 import { JsonRpcError } from 'jsonrpc-client-websocket';
 import { formatApiErrorMessage } from './utils/api';
 
@@ -105,7 +105,7 @@ interface GuardianContextValue {
 }
 
 export const GuardianContext = createContext<GuardianContextValue>({
-  api: new NoopGuardianApi(),
+  api: new GuardianApi(),
   state: initialState,
   dispatch: () => null,
   submitFollowerConfiguration: () => Promise.reject(),
