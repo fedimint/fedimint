@@ -2,8 +2,10 @@ import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
 import {
   ConfigGenParams,
   ConsensusState,
+  ConsensusStatus,
   PeerHashMap,
   ServerStatus,
+  Versions,
 } from './types';
 
 export interface ApiInterface {
@@ -28,6 +30,11 @@ export interface ApiInterface {
   getVerifyConfigHash: () => Promise<PeerHashMap>;
   runDkg: () => Promise<void>;
   startConsensus: () => Promise<void>;
+
+  // Running RPC methods (only exist after run_consensus)
+  version: () => Promise<Versions>;
+  fetchEpochCount: () => Promise<number>;
+  consensusStatus: () => Promise<ConsensusStatus>;
 }
 
 const SESSION_STORAGE_KEY = 'guardian-ui-key';
@@ -189,6 +196,20 @@ export class GuardianApi implements ApiInterface {
     }
 
     return this.rpc('start_consensus', null, true /* authenticated */);
+  };
+
+  /*** Running RPC methods */
+
+  version = async (): Promise<Versions> => {
+    return this.rpc('version', null, true);
+  };
+
+  fetchEpochCount = async (): Promise<number> => {
+    return this.rpc('fetch_epoch_count', null, true);
+  };
+
+  consensusStatus = async (): Promise<ConsensusStatus> => {
+    return this.rpc('consensus_status', null, true);
   };
 
   /*** Internal private methods ***/

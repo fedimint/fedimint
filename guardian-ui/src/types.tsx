@@ -22,6 +22,11 @@ export enum ServerStatus {
   ConsensusRunning = 'ConsensusRunning',
 }
 
+export enum PeerConnectionStatus {
+  Connected = 'Connected',
+  Disconnected = 'Disconnected',
+}
+
 export enum Network {
   Testnet = 'testnet',
   Mainnet = 'mainnet',
@@ -60,6 +65,29 @@ export type ConfigGenParams = {
 export interface ConsensusState {
   requested: ConfigGenParams;
   peers: Record<string, Peer>;
+}
+
+export interface Versions {
+  core: {
+    consensus: string;
+    api: string;
+  };
+  modules: Record<number, { core: string; module: string; api: string }>;
+}
+
+export interface PeerStatus {
+  last_contribution?: number;
+  last_contribution_timestamp_seconds?: number;
+  connection_status: PeerConnectionStatus;
+  flagged: boolean;
+}
+
+export interface ConsensusStatus {
+  last_contribution: number;
+  peers_online: number;
+  peers_offline: number;
+  peers_flagged: number;
+  status_by_peer: Record<string, PeerStatus>;
 }
 
 export interface SetupState {
