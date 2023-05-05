@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -132,7 +133,7 @@ impl Bitcoind {
 #[derive(Clone)]
 pub struct Lightningd {
     rpc: Arc<Mutex<ClnRpc>>,
-    process: Option<ProcessHandle>,
+    process: ProcessHandle,
     bitcoind: Bitcoind,
 }
 
@@ -143,14 +144,14 @@ impl Lightningd {
 
         let socket_cln = PathBuf::from(cln_dir).join("regtest/lightning-rpc");
         poll("lightningd", || async {
-            Ok(fs::try_exists(&socket_cln).await?)
+            Ok(ClnRpc::new(socket_cln.clone()).await.is_ok())
         })
         .await?;
         let rpc = ClnRpc::new(socket_cln).await?;
         Ok(Self {
             bitcoind,
             rpc: Arc::new(Mutex::new(rpc)),
-            process: Some(process),
+            process,
         })
     }
 
@@ -168,13 +169,6 @@ impl Lightningd {
         );
 
         process_mgr.spawn_daemon("lightningd", cmd).await
-    }
-
-    pub async fn restart(&mut self, process_mgr: &ProcessManager) -> Result<()> {
-        let cln_dir = env::var("FM_CLN_DIR")?;
-        let process = Lightningd::start(process_mgr, cln_dir).await?;
-        self.process = Some(process);
-        Ok(())
     }
 
     pub async fn request<R: cln_rpc::model::IntoRequest>(&self, request: R) -> Result<R::Response>
@@ -206,19 +200,15 @@ impl Lightningd {
             .to_string())
     }
 
-    pub async fn kill(&mut self) -> Result<()> {
-        if let Some(process) = self.process.take() {
-            return process.kill().await;
-        }
-
-        Ok(())
+    pub async fn kill(self) -> Result<()> {
+        self.process.kill().await
     }
 }
 
 #[derive(Clone)]
 pub struct Lnd {
     client: Arc<Mutex<tonic_lnd::LndClient>>,
-    process: Option<ProcessHandle>,
+    process: ProcessHandle,
     _bitcoind: Bitcoind,
 }
 
@@ -228,7 +218,7 @@ impl Lnd {
         let this = Self {
             _bitcoind: bitcoind,
             client: Arc::new(Mutex::new(client)),
-            process: Some(process),
+            process,
         };
         // wait for lnd rpc to be active
         poll("lnd", || async { Ok(this.pub_key().await.is_ok()) }).await?;
@@ -268,14 +258,6 @@ impl Lnd {
         Ok((process, client))
     }
 
-    pub async fn restart(&mut self, process_mgr: &ProcessManager) -> Result<()> {
-        let (process, client) = Lnd::start(process_mgr).await?;
-        self.process = Some(process);
-        self.client = Arc::new(Mutex::new(client));
-        poll("lnd", || async { Ok(self.pub_key().await.is_ok()) }).await?;
-        Ok(())
-    }
-
     pub async fn client_lock(&self) -> Result<MappedMutexGuard<'_, tonic_lnd::LightningClient>> {
         let guard = self.client.lock().await;
         Ok(MutexGuard::map(guard, |client| client.lightning()))
@@ -305,12 +287,8 @@ impl Lnd {
         Ok(())
     }
 
-    pub async fn kill(&mut self) -> Result<()> {
-        if let Some(process) = self.process.take() {
-            return process.kill().await;
-        }
-
-        Ok(())
+    pub async fn kill(self) -> Result<()> {
+        self.process.kill().await
     }
 }
 
@@ -374,16 +352,31 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
 }
 
 #[derive(Clone)]
-pub enum ClnOrLnd {
+pub enum LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
 }
 
-impl ClnOrLnd {
-    fn name(&self) -> &'static str {
+impl LightningNode {
+    pub fn name(&self) -> LightningNodeName {
         match self {
-            ClnOrLnd::Cln(_) => "cln",
-            ClnOrLnd::Lnd(_) => "lnd",
+            LightningNode::Cln(_) => LightningNodeName::Cln,
+            LightningNode::Lnd(_) => LightningNodeName::Lnd,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum LightningNodeName {
+    Cln,
+    Lnd,
+}
+
+impl Display for LightningNodeName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            LightningNodeName::Cln => write!(f, "cln"),
+            LightningNodeName::Lnd => write!(f, "lnd"),
         }
     }
 }
@@ -391,15 +384,15 @@ impl ClnOrLnd {
 #[derive(Clone)]
 pub struct Gatewayd {
     _process: ProcessHandle,
-    ln: ClnOrLnd,
+    ln: Option<LightningNode>,
 }
 
 impl Gatewayd {
-    pub async fn new(process_mgr: &ProcessManager, ln: ClnOrLnd) -> Result<Self> {
+    pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
         let ln_name = ln.name();
         let test_dir = env::var("FM_TEST_DIR")?;
         let gateway_env: HashMap<String, String> = match ln {
-            ClnOrLnd::Cln(_) => HashMap::from_iter([
+            LightningNode::Cln(_) => HashMap::from_iter([
                 (
                     "FM_GATEWAY_DATA_DIR".to_owned(),
                     format!("{test_dir}/gw-cln"),
@@ -413,7 +406,7 @@ impl Gatewayd {
                     "http://127.0.0.1:8175".to_owned(),
                 ),
             ]),
-            ClnOrLnd::Lnd(_) => HashMap::from_iter([
+            LightningNode::Lnd(_) => HashMap::from_iter([
                 (
                     "FM_GATEWAY_DATA_DIR".to_owned(),
                     format!("{test_dir}/gw-lnd"),
@@ -436,37 +429,48 @@ impl Gatewayd {
             .await?;
 
         Ok(Self {
-            ln,
+            ln: Some(ln),
             _process: process,
         })
     }
 
-    pub async fn stop_lightning_node(&mut self) -> Result<()> {
-        match &mut self.ln {
-            ClnOrLnd::Lnd(lnd) => lnd.kill().await,
-            ClnOrLnd::Cln(cln) => cln.kill().await,
+    pub fn lightning_name(&self) -> String {
+        if let Some(ln) = &self.ln {
+            return ln.name().to_string();
         }
+
+        "None".to_string()
     }
 
-    pub async fn start_lightning_node(&mut self, process_mgr: &ProcessManager) -> Result<()> {
-        match &mut self.ln {
-            ClnOrLnd::Lnd(lnd) => lnd.restart(process_mgr).await,
-            ClnOrLnd::Cln(cln) => cln.restart(process_mgr).await,
+    pub fn set_lightning_node(&mut self, ln_node: LightningNode) {
+        self.ln = Some(ln_node);
+    }
+
+    pub async fn stop_lightning_node(&mut self) -> Result<()> {
+        match self.ln.take() {
+            Some(LightningNode::Lnd(lnd)) => lnd.kill().await,
+            Some(LightningNode::Cln(cln)) => cln.kill().await,
+            None => Err(anyhow::anyhow!(
+                "Cannot stop an already stopped Lightning Node"
+            )),
         }
     }
 
     pub async fn cmd(&self) -> Command {
         match &self.ln {
-            ClnOrLnd::Cln(_) => {
+            Some(LightningNode::Cln(_)) => {
                 cmd!("gateway-cli", "--rpcpassword=theresnosecondbest")
             }
-            ClnOrLnd::Lnd(_) => {
+            Some(LightningNode::Lnd(_)) => {
                 cmd!(
                     "gateway-cli",
                     "--rpcpassword=theresnosecondbest",
                     "-a",
                     "http://127.0.0.1:28175"
                 )
+            }
+            None => {
+                panic!("Cannot execute command when gateway is disconnected from Lightning Node");
             }
         }
     }
@@ -506,8 +510,8 @@ pub async fn dev_fed(task_group: &TaskGroup, process_mgr: &ProcessManager) -> Re
             )?;
             info!(LOG_DEVIMINT, "lightning started");
             let (gw_cln, gw_lnd, _) = tokio::try_join!(
-                Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())),
-                Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())),
+                Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
+                Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
                 open_channel(&bitcoind, &cln, &lnd),
             )?;
             info!(LOG_DEVIMINT, "gateways started");

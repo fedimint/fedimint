@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{fedimint_env, Fedimintd};
 use devimint::util::{poll, ProcessManager};
-use devimint::{cmd, dev_fed, external_daemons, Bitcoind, DevFed};
+use devimint::{cmd, dev_fed, external_daemons, Bitcoind, DevFed, LightningNode, Lightningd, Lnd};
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
@@ -605,6 +605,7 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
         esplora,
     } = dev_fed;
 
+    // Drop other references to CLN and LND so that the test can kill them
     drop(cln);
     drop(lnd);
 
@@ -612,29 +613,45 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
 
     for mut gw in gateways {
         // Verify that the gateway can query the lightning node for the pubkey and alias
-        let mut cmd = gw.cmd().await.arg("info");
-        assert!(cmd.run().await.is_ok());
+        let mut info_cmd = cmd!(gw, "info");
+        assert!(info_cmd.run().await.is_ok());
+
+        let ln_node = gw.lightning_name();
 
         // Verify that after stopping the lightning node, info no longer returns since
         // the lightning node is unreachable.
         gw.stop_lightning_node().await?;
-        let info_fut = cmd.run();
+        let info_fut = info_cmd.run();
 
         // CLN will timeout when trying to retrieve the info, LND will return an
         // explicit error
         let expected_timeout_or_failure = tokio::time::timeout(Duration::from_secs(3), info_fut)
             .await
-            .map_err(|_| anyhow::anyhow!("TimeoutError"))
+            .map_err(Into::into)
             .and_then(|result| result);
         assert!(expected_timeout_or_failure.is_err());
 
+        // Restart the Lightning Node
+        match ln_node.as_str() {
+            "cln" => {
+                let new_cln = Lightningd::new(process_mgr, bitcoind.clone()).await?;
+                gw.set_lightning_node(LightningNode::Cln(new_cln));
+            }
+            "lnd" => {
+                let new_lnd = Lnd::new(process_mgr, bitcoind.clone()).await?;
+                gw.set_lightning_node(LightningNode::Lnd(new_lnd));
+            }
+            _ => {
+                unreachable!()
+            }
+        }
+
         // Verify that after the lightning node has restarted, the gateway automatically
         // reconnects and can query the lightning node info again.
-        gw.start_lightning_node(process_mgr).await?;
-        assert!(cmd.run().await.is_ok());
+        assert!(info_cmd.run().await.is_ok());
     }
 
-    info!(LOG_TEST, "lightning_reconnect_test: success");
+    info!(LOG_DEVIMINT, "lightning_reconnect_test: success");
     Ok(())
 }
 

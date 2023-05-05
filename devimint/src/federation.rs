@@ -200,11 +200,19 @@ impl Federation {
 
     pub async fn use_gateway(&self, gw: &Gatewayd) -> Result<()> {
         let pub_key = match &gw.ln {
-            ClnOrLnd::Cln(cln) => cln.pub_key().await?,
-            ClnOrLnd::Lnd(lnd) => lnd.pub_key().await?,
+            Some(LightningNode::Cln(cln)) => cln.pub_key().await?,
+            Some(LightningNode::Lnd(lnd)) => lnd.pub_key().await?,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Gatewayd is disconnected from the Lightning Node"
+                ))
+            }
         };
         cmd!(self, "switch-gateway", pub_key).run().await?;
-        info!("Using {name} gateway", name = gw.ln.name());
+        info!(
+            "Using {name} gateway",
+            name = gw.ln.as_ref().unwrap().name()
+        );
         Ok(())
     }
 
