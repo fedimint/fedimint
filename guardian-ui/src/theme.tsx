@@ -240,6 +240,18 @@ export const theme = extendTheme(
               },
             },
           },
+          filled: {
+            field: {
+              bg: colors.gray[50],
+              color: colors.gray[600],
+              _placeholder: {
+                color: colors.gray[400],
+              },
+              _readOnly: {
+                bg: colors.white,
+              },
+            },
+          },
         },
       },
       Select: {

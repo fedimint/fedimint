@@ -1,5 +1,5 @@
 import { JsonRpcError } from 'jsonrpc-client-websocket';
-import { AnyFedimintModule, ConfigGenParams } from '../types';
+import { AnyFedimintModule, ConfigGenParams, Peer } from '../types';
 
 /**
  * Given a config and the name of the module, return the module
@@ -30,4 +30,16 @@ export function formatApiErrorMessage(err: unknown) {
     return (err as Error).message;
   }
   return (err as object).toString();
+}
+
+/**
+ * Given a map of peers, determine which one is you.
+ */
+export function getMyPeerId(peers: Record<string, Peer>) {
+  // TODO: Find a better way to do this than using env var?
+  const myApiUrl = new URL(process.env.REACT_APP_FM_CONFIG_API as string);
+  return Object.entries(peers).find((peer) => {
+    const apiUrl = new URL(peer[1].api_url);
+    return myApiUrl.origin === apiUrl.origin;
+  })?.[0];
 }
