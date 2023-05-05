@@ -176,7 +176,9 @@ export class GuardianApi implements ApiInterface {
     );
 
     return Promise.any([rpcPromise, timeoutPromise]).then(async () => {
-      // Calling `this.status()` will reboot connection to the server if it dropped.
+      // Restart a fresh socket and make sure the status is correct.
+      await this.shutdown();
+      await this.connect();
       const status = await this.status();
       if (status !== ServerStatus.ConsensusRunning) {
         throw new Error('Failed to start consensus, see logs for more info.');
