@@ -121,7 +121,7 @@ export class GuardianApi implements ApiInterface {
   /*** Shared RPC methods */
 
   status = async (): Promise<ServerStatus> => {
-    return this.rpc('status', null, true /* authenticated */);
+    return this.rpc('status');
   };
 
   /*** Setup RPC methods ***/
@@ -129,7 +129,7 @@ export class GuardianApi implements ApiInterface {
   setPassword = async (password: string): Promise<void> => {
     sessionStorage.setItem(SESSION_STORAGE_KEY, password);
 
-    return this.rpc('set_password', null, true /* authenticated */);
+    return this.rpc('set_password');
   };
 
   private clearPassword = () => {
@@ -145,86 +145,59 @@ export class GuardianApi implements ApiInterface {
       leader_api_url: leaderUrl,
     };
 
-    return this.rpc(
-      'set_config_gen_connections',
-      connections,
-      true /* authenticated */
-    );
+    return this.rpc('set_config_gen_connections', connections);
   };
 
-  getDefaultConfigGenParams = async (): Promise<ConfigGenParams> => {
-    let params: ConfigGenParams;
-    try {
-      params = await this.rpc(
-        'get_default_config_gen_params',
-        null,
-        false /* not-authenticated */
-      );
-    } catch (err) {
-      params = await this.rpc(
-        'get_default_config_gen_params',
-        null,
-        true /* authenticated */
-      );
-    }
-    return params;
+  getDefaultConfigGenParams = (): Promise<ConfigGenParams> => {
+    return this.rpc('get_default_config_gen_params');
   };
 
-  getConsensusConfigGenParams = async (): Promise<ConsensusState> => {
-    return this.rpc(
-      'get_consensus_config_gen_params',
-      null,
-      false /* not-authenticated */
-    );
+  getConsensusConfigGenParams = (): Promise<ConsensusState> => {
+    return this.rpc('get_consensus_config_gen_params');
   };
 
-  setConfigGenParams = async (params: ConfigGenParams): Promise<void> => {
-    return this.rpc('set_config_gen_params', params, true /* authenticated */);
+  setConfigGenParams = (params: ConfigGenParams): Promise<void> => {
+    return this.rpc('set_config_gen_params', params);
   };
 
-  getVerifyConfigHash = async (): Promise<PeerHashMap> => {
-    return this.rpc('get_verify_config_hash', null, true /* authenticated */);
+  getVerifyConfigHash = (): Promise<PeerHashMap> => {
+    return this.rpc('get_verify_config_hash');
   };
 
-  runDkg = async (): Promise<void> => {
-    return this.rpc('run_dkg', null, true /* authenticated */);
+  runDkg = (): Promise<void> => {
+    return this.rpc('run_dkg');
   };
 
-  startConsensus = async (): Promise<void> => {
-    if (this.getPassword() === null) {
-      throw new Error('password not set');
-    }
-
-    return this.rpc('start_consensus', null, true /* authenticated */);
+  startConsensus = (): Promise<void> => {
+    return this.rpc('start_consensus');
   };
 
   /*** Running RPC methods */
 
-  version = async (): Promise<Versions> => {
-    return this.rpc('version', null, true);
+  version = (): Promise<Versions> => {
+    return this.rpc('version');
   };
 
-  fetchEpochCount = async (): Promise<number> => {
-    return this.rpc('fetch_epoch_count', null, true);
+  fetchEpochCount = (): Promise<number> => {
+    return this.rpc('fetch_epoch_count');
   };
 
-  consensusStatus = async (): Promise<ConsensusStatus> => {
-    return this.rpc('consensus_status', null, true);
+  consensusStatus = (): Promise<ConsensusStatus> => {
+    return this.rpc('consensus_status');
   };
 
   /*** Internal private methods ***/
 
-  private rpc = async <P, T>(
+  private rpc = async <T>(
     method: string,
-    params: P,
-    authenticated: boolean
+    params: object | null = null
   ): Promise<T> => {
     try {
       const websocket = await this.connect();
 
       const response = await websocket.call(method, [
         {
-          auth: authenticated ? this.getPassword() : null,
+          auth: this.getPassword() || null,
           params,
         },
       ]);
