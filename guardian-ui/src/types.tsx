@@ -37,6 +37,8 @@ export interface Peer {
   status: ServerStatus;
 }
 
+export type PeerHashMap = Record<string, string>;
+
 export type LnFedimintModule = ['ln', null];
 export type MintFedimintModule = ['mint', { mint_amounts: number[] }];
 export type WalletFedimintModule = [

@@ -1,5 +1,10 @@
 import { JsonRpcError, JsonRpcWebsocket } from 'jsonrpc-client-websocket';
-import { ConfigGenParams, ConsensusState, ServerStatus } from './types';
+import {
+  ConfigGenParams,
+  ConsensusState,
+  PeerHashMap,
+  ServerStatus,
+} from './types';
 
 export interface ApiInterface {
   testPassword: (password: string) => Promise<boolean>;
@@ -13,7 +18,7 @@ export interface ApiInterface {
   status: () => Promise<ServerStatus>;
   getConsensusConfigGenParams: () => Promise<ConsensusState>;
   setConfigGenParams: (params: ConfigGenParams) => Promise<void>;
-  getVerifyConfigHash: () => Promise<string>;
+  getVerifyConfigHash: () => Promise<PeerHashMap>;
   awaitConfigGenPeers: (numPeers: number) => Promise<void>;
   runDkg: () => Promise<void>;
   verifyConfigs: (configHashes: string[]) => Promise<void>;
@@ -182,7 +187,7 @@ export class GuardianApi implements ApiInterface {
     return this.rpc('set_config_gen_params', params, true /* authenticated */);
   };
 
-  getVerifyConfigHash = async (): Promise<string> => {
+  getVerifyConfigHash = async (): Promise<PeerHashMap> => {
     return this.rpc('get_verify_config_hash', null, true /* authenticated */);
   };
 
@@ -248,7 +253,7 @@ export class NoopGuardianApi implements ApiInterface {
   setConfigGenParams = async (_params: ConfigGenParams): Promise<void> => {
     return;
   };
-  getVerifyConfigHash = async (): Promise<string> => {
+  getVerifyConfigHash = async (): Promise<PeerHashMap> => {
     throw 'not implemented';
   };
   awaitConfigGenPeers = async (_numPeers: number): Promise<void> => {
