@@ -18,7 +18,6 @@ import {
 } from './types';
 import { ApiInterface, GuardianApi } from './GuardianApi';
 import { JsonRpcError } from 'jsonrpc-client-websocket';
-import { formatApiErrorMessage } from './utils/api';
 
 const LOCAL_STORAGE_KEY = 'guardian-ui-state';
 
@@ -177,8 +176,8 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
             payload: true,
           });
         } else {
-          // TODO: Some better display than an alert!
-          alert(formatApiErrorMessage(err));
+          // TODO: Present error to user
+          console.error(err);
         }
       })
       .finally(() => {
