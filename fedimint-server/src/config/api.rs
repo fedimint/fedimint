@@ -9,7 +9,7 @@ use bitcoin_hashes::{sha256, Hash};
 use fedimint_aead::random_salt;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    PeerServerParams, WsAdminClient,
+    ConfigGenParamsResponse, PeerServerParams, WsAdminClient,
 };
 use fedimint_core::api::{ServerStatus, StatusResponse};
 use fedimint_core::config::ServerModuleGenRegistry;
@@ -141,24 +141,33 @@ impl ConfigGenApi {
     }
 
     /// Gets the consensus config gen params,
-    pub async fn get_consensus_config_gen_params(&self) -> ApiResult<ConfigGenParamsConsensus> {
+    pub async fn get_consensus_config_gen_params(&self) -> ApiResult<ConfigGenParamsResponse> {
         let state = self.state.lock().expect("lock poisoned").clone();
         let local = state.local.clone();
 
         // if we have a leader get it from the leader instead
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
             let client = WsAdminClient::new(url.clone(), PeerId::from(0), state.auth()?);
-            let consensus = client
+            let response = client
                 .get_consensus_config_gen_params()
                 .await
                 .map_err(|_| ApiError::not_found("Unable to get params from leader".to_string()))?;
-            return Ok(consensus);
+            let params = state.get_config_gen_params(response.consensus)?;
+            return Ok(ConfigGenParamsResponse {
+                consensus: params.consensus,
+                our_current_id: params.local.our_id,
+            });
         }
 
         let state = self.state.lock().expect("lock poisoned");
-        Ok(ConfigGenParamsConsensus {
+        let consensus = ConfigGenParamsConsensus {
             peers: state.get_peer_info(),
             requested: state.get_requested_params()?,
+        };
+        let params = state.get_config_gen_params(consensus)?;
+        Ok(ConfigGenParamsResponse {
+            consensus: params.consensus,
+            our_current_id: params.local.our_id,
         })
     }
 
@@ -166,12 +175,12 @@ impl ConfigGenApi {
     /// completion, calling a second time will return an error
     pub async fn run_dkg(&self) -> ApiResult<()> {
         // Update our state to running DKG
-        let consensus = self.get_consensus_config_gen_params().await?;
+        let response = self.get_consensus_config_gen_params().await?;
         let (params, registry) = {
             let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
             state.status = ServerStatus::ReadyForConfigGen;
             (
-                state.get_config_gen_params(consensus)?,
+                state.get_config_gen_params(response.consensus)?,
                 state.settings.registry.clone(),
             )
         };
@@ -538,7 +547,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         },
         api_endpoint! {
             "get_consensus_config_gen_params",
-            async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsConsensus {
+            async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsResponse {
                 config.get_consensus_config_gen_params().await
             }
         },
@@ -591,7 +600,7 @@ fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
@@ -713,8 +722,9 @@ mod tests {
         /// Helper for awaiting all servers have the status
         async fn wait_status(&self, status: ServerStatus) {
             loop {
-                let params = self.client.get_consensus_config_gen_params().await.unwrap();
-                let mismatched: Vec<_> = params
+                let response = self.client.get_consensus_config_gen_params().await.unwrap();
+                let mismatched: Vec<_> = response
+                    .consensus
                     .peers
                     .iter()
                     .filter(|(_, param)| param.status != Some(status.clone()))
@@ -810,9 +820,13 @@ mod tests {
             for peer in &followers {
                 configs.push(peer.client.get_consensus_config_gen_params().await.unwrap());
             }
-            // Confirm all configs are the same
-            configs.dedup();
-            assert_eq!(configs.len(), 1);
+            // Confirm all consensus configs are the same
+            let mut consensus: Vec<_> = configs.iter().map(|p| p.consensus.clone()).collect();
+            consensus.dedup();
+            assert_eq!(consensus.len(), 1);
+            // Confirm all peer ids are unique
+            let ids: BTreeSet<_> = configs.iter().map(|p| p.our_current_id).collect();
+            assert_eq!(ids.len(), followers.len());
 
             // all peers run DKG
             followers.push(leader);

@@ -122,7 +122,7 @@ impl WsAdminClient {
     /// DKG.
     pub async fn get_consensus_config_gen_params(
         &self,
-    ) -> FederationResult<ConfigGenParamsConsensus> {
+    ) -> FederationResult<ConfigGenParamsResponse> {
         self.request(
             "get_consensus_config_gen_params",
             ApiRequestErased::default(),
@@ -218,6 +218,15 @@ pub struct ConfigGenParamsConsensus {
     pub peers: BTreeMap<PeerId, PeerServerParams>,
     /// Params that were configured by the leader
     pub requested: ConfigGenParamsRequest,
+}
+
+/// The config gen params response which includes our peer id
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ConfigGenParamsResponse {
+    /// The same for all peers
+    pub consensus: ConfigGenParamsConsensus,
+    /// Our id (might change if new peers join)
+    pub our_current_id: PeerId,
 }
 
 /// Config gen values that can be configured by the config gen leader
