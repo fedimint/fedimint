@@ -14,6 +14,7 @@ import {
 export interface TableColumn<T extends string> {
   key: T;
   heading: React.ReactNode;
+  width?: string;
 }
 
 export type TableRow<T extends string> = { key: number | string } & {
@@ -69,7 +70,12 @@ export function Table<T extends string>({
           <Thead>
             <Tr>
               {columns.map((column) => (
-                <Th key={column.key} borderBottom={border} bg='#F9FAFB'>
+                <Th
+                  key={column.key}
+                  width={column.width}
+                  borderBottom={border}
+                  bg='#F9FAFB'
+                >
                   {column.heading}
                 </Th>
               ))}
@@ -81,6 +87,7 @@ export function Table<T extends string>({
                 {columns.map((column) => (
                   <Td
                     key={column.key}
+                    width={column.width}
                     borderBottom={border}
                     borderBottomWidth={idx === rows.length - 1 ? 0 : 1}
                     height='72px'
