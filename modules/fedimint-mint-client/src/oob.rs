@@ -11,7 +11,7 @@ use fedimint_mint_common::MintInput;
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
-use crate::{MintClientContext, SpendableNote};
+use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 #[aquamarine::aquamarine]
 /// State machine managing e-cash that has been taken out of the wallet for
@@ -194,7 +194,7 @@ async fn try_cancel_oob_spend(
         input: MintInput(notes),
         keys,
         state_machines: Arc::new(move |txid, input_idx| {
-            vec![MintInputStateMachine {
+            vec![MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id,
                     txid,
@@ -203,7 +203,7 @@ async fn try_cancel_oob_spend(
                 state: MintInputStates::Created(MintInputStateCreated {
                     notes: spendable_notes.clone(),
                 }),
-            }]
+            })]
         }),
     };
 
