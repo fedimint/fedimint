@@ -167,7 +167,7 @@ async fn trigger_created_submit(
     next_submission: SystemTime,
     context: DynGlobalClientContext,
 ) -> Result<(), String> {
-    tokio::time::sleep(
+    fedimint_core::task::sleep(
         next_submission
             .duration_since(now())
             .unwrap_or(Duration::ZERO),
