@@ -411,6 +411,13 @@
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::ops::Range;
 
@@ -424,7 +431,9 @@
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>; <span class="comment">// TODO: remove this
 
-</span><span class="doccomment">/// Create a map of environment variables which fedimintd and DKG can use,
+</span><span class="kw">type </span>EnvVars = HashMap&lt;String, String&gt;;
+
+<span class="doccomment">/// Create a map of environment variables which fedimintd and DKG can use,
 /// but which can&#39;t be defined by `build.sh` because multiple of these daemons
 /// run concurrently with different values.
 ///
@@ -466,11 +475,15 @@
     <span class="kw">pub async fn </span>new(
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
         bitcoind: Bitcoind,
-        ids: Range&lt;usize&gt;,
+        peer_ids: Range&lt;usize&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>members = BTreeMap::new();
-        <span class="kw">for </span>id <span class="kw">in </span>ids {
-            members.insert(id, Fedimintd::new(process_mgr, bitcoind.clone(), id).<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="kw">for </span>peer_id <span class="kw">in </span>peer_ids {
+            <span class="kw">let </span>env_vars = fedimint_env(peer_id)<span class="question-mark">?</span>;
+            members.insert(
+                peer_id,
+                Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, env_vars).<span class="kw">await</span><span class="question-mark">?</span>,
+            );
         }
 
         <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
@@ -499,9 +512,10 @@
         <span class="kw">if </span><span class="self">self</span>.members.contains_key(<span class="kw-2">&amp;</span>peer_id) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;fedimintd-{} already running&quot;</span>, peer_id));
         }
+        <span class="kw">let </span>env_vars = fedimint_env(peer_id)<span class="question-mark">?</span>;
         <span class="self">self</span>.members.insert(
             peer_id,
-            Fedimintd::new(process_mgr, <span class="self">self</span>.bitcoind.clone(), peer_id).<span class="kw">await</span><span class="question-mark">?</span>,
+            Fedimintd::new(process_mgr, <span class="self">self</span>.bitcoind.clone(), peer_id, env_vars).<span class="kw">await</span><span class="question-mark">?</span>,
         );
         <span class="prelude-val">Ok</span>(())
     }
@@ -649,9 +663,9 @@
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
         bitcoind: Bitcoind,
         peer_id: usize,
+        env_vars: EnvVars,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>env_vars = fedimint_env(peer_id)<span class="question-mark">?</span>;
         <span class="kw">let </span>data_dir = env_vars
             .get(<span class="string">&quot;FM_FEDIMINT_DATA_DIR&quot;</span>)
             .context(<span class="string">&quot;FM_FEDIMINT_DATA_DIR not found&quot;</span>)<span class="question-mark">?</span>;
