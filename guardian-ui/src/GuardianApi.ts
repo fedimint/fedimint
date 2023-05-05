@@ -169,7 +169,19 @@ export class GuardianApi implements ApiInterface {
   };
 
   startConsensus = (): Promise<void> => {
-    return this.rpc('start_consensus');
+    // Special case: start_consensus kills the server. Set a timeout and restart after short period.
+    const rpcPromise = this.rpc<null>('start_consensus');
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve(true), 5000)
+    );
+
+    return Promise.any([rpcPromise, timeoutPromise]).then(async () => {
+      // Calling `this.status()` will reboot connection to the server if it dropped.
+      const status = await this.status();
+      if (status !== ServerStatus.ConsensusRunning) {
+        throw new Error('Failed to start consensus, see logs for more info.');
+      }
+    });
   };
 
   /*** Running RPC methods */

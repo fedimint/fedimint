@@ -34,13 +34,14 @@ interface Props {
 export const VerifyGuardians: React.FC<Props> = ({ next }) => {
   const {
     api,
-    state: { role },
+    state: { role, numPeers },
   } = useGuardianContext();
   const theme = useTheme();
   const isHost = role === GuardianRole.Host;
   const [myHash, setMyHash] = useState('');
   const [peersWithHash, setPeersWithHash] = useState<PeerWithHash[]>();
   const [enteredHashes, setEnteredHashes] = useState<string[]>([]);
+  const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string>();
 
   const isAllValid =
@@ -80,20 +81,22 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
   }, [api]);
 
   const handleNext = useCallback(async () => {
+    setIsStarting(true);
     try {
       await api.startConsensus();
       next();
     } catch (err) {
       setError(formatApiErrorMessage(err));
     }
+    setIsStarting(false);
   }, [api]);
 
   // Host of one immediately skips this step.
   useEffect(() => {
-    if (isHost && isAllValid) {
+    if (isHost && !numPeers) {
       handleNext();
     }
-  }, [handleNext]);
+  }, [handleNext, numPeers]);
 
   const tableColumns = useMemo(
     () => [
@@ -171,6 +174,7 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
         <div>
           <Button
             isDisabled={!isAllValid}
+            isLoading={isStarting}
             onClick={isAllValid ? handleNext : undefined}
             leftIcon={<Icon as={ArrowRightIcon} />}
             mt={4}
