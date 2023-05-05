@@ -403,6 +403,14 @@
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
 <a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::ops::Range;
 
@@ -605,11 +613,19 @@
 
     <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>pub_key = <span class="kw">match </span><span class="kw-2">&amp;</span>gw.ln {
-            ClnOrLnd::Cln(cln) =&gt; cln.pub_key().<span class="kw">await</span><span class="question-mark">?</span>,
-            ClnOrLnd::Lnd(lnd) =&gt; lnd.pub_key().<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="prelude-val">Some</span>(LightningNode::Cln(cln)) =&gt; cln.pub_key().<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="prelude-val">Some</span>(LightningNode::Lnd(lnd)) =&gt; lnd.pub_key().<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
+                    <span class="string">&quot;Gatewayd is disconnected from the Lightning Node&quot;
+                </span>))
+            }
         };
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, pub_key).run().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(<span class="string">&quot;Using {name} gateway&quot;</span>, name = gw.ln.name());
+        <span class="macro">info!</span>(
+            <span class="string">&quot;Using {name} gateway&quot;</span>,
+            name = gw.ln.as_ref().unwrap().name()
+        );
         <span class="prelude-val">Ok</span>(())
     }
 

@@ -566,8 +566,79 @@
 <a href="#566" id="566">566</a>
 <a href="#567" id="567">567</a>
 <a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
+<span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -593,6 +664,7 @@
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 <span class="kw">use </span>tokio::time::sleep;
 <span class="kw">use </span>tonic_lnd::lnrpc::GetInfoRequest;
+<span class="kw">use </span>tonic_lnd::LndClient;
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">pub mod </span>util;
@@ -699,14 +771,29 @@
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Lightningd {
     rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
-    _process: ProcessHandle,
+    process: ProcessHandle,
     bitcoind: Bitcoind,
 }
 
 <span class="kw">impl </span>Lightningd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>cln_dir = env::var(<span class="string">&quot;FM_CLN_DIR&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="kw">let </span>socket_cln = PathBuf::from(cln_dir).join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
+        poll(<span class="string">&quot;lightningd&quot;</span>, || <span class="kw">async </span>{
+            <span class="prelude-val">Ok</span>(ClnRpc::new(socket_cln.clone()).<span class="kw">await</span>.is_ok())
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>rpc = ClnRpc::new(socket_cln).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            bitcoind,
+            rpc: Arc::new(Mutex::new(rpc)),
+            process,
+        })
+    }
+
+    <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, cln_dir: String) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessHandle&gt; {
         <span class="kw">let </span>extension_path = <span class="macro">cmd!</span>(<span class="string">&quot;which&quot;</span>, <span class="string">&quot;gateway-cln-extension&quot;</span>)
             .out_string()
             .<span class="kw">await
@@ -719,20 +806,8 @@
             <span class="string">&quot;--plugin={extension_path}&quot;
         </span>);
 
-        <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;lightningd&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>socket_cln = PathBuf::from(cln_dir).join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
-        poll(<span class="string">&quot;lightningd&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(fs::try_exists(<span class="kw-2">&amp;</span>socket_cln).<span class="kw">await</span><span class="question-mark">?</span>)
-        })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>rpc = ClnRpc::new(socket_cln).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            bitcoind,
-            rpc: Arc::new(Mutex::new(rpc)),
-            _process: process,
-        })
-    }
+        process_mgr.spawn_daemon(<span class="string">&quot;lightningd&quot;</span>, cmd).<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>request&lt;R: cln_rpc::model::IntoRequest&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, request: R) -&gt; <span class="prelude-ty">Result</span>&lt;R::Response&gt;
     <span class="kw">where
@@ -762,17 +837,33 @@
             </span>.id
             .to_string())
     }
+
+    <span class="kw">pub async fn </span>kill(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.process.kill().<span class="kw">await
+    </span>}
 }
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Lnd {
     client: Arc&lt;Mutex&lt;tonic_lnd::LndClient&gt;&gt;,
-    _process: ProcessHandle,
+    process: ProcessHandle,
     _bitcoind: Bitcoind,
 }
 
 <span class="kw">impl </span>Lnd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>(process, client) = Lnd::start(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>this = <span class="self">Self </span>{
+            _bitcoind: bitcoind,
+            client: Arc::new(Mutex::new(client)),
+            process,
+        };
+        <span class="comment">// wait for lnd rpc to be active
+        </span>poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(this.pub_key().<span class="kw">await</span>.is_ok()) }).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(this)
+    }
+
+    <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;(ProcessHandle, LndClient)&gt; {
         <span class="kw">let </span>lnd_dir = env::var(<span class="string">&quot;FM_LND_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(<span class="string">&quot;lnd&quot;</span>, <span class="string">&quot;--lnddir={lnd_dir}&quot;</span>);
 
@@ -784,20 +875,25 @@
             <span class="prelude-val">Ok</span>(fs::try_exists(<span class="kw-2">&amp;</span>lnd_tls_cert).<span class="kw">await</span><span class="question-mark">? </span>&amp;&amp; fs::try_exists(<span class="kw-2">&amp;</span>lnd_macaroon).<span class="kw">await</span><span class="question-mark">?</span>)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        poll(<span class="string">&quot;lnd_connect&quot;</span>, || <span class="kw">async </span>{
+            <span class="prelude-val">Ok</span>(tonic_lnd::connect(
+                lnd_rpc_addr.clone(),
+                lnd_tls_cert.clone(),
+                lnd_macaroon.clone(),
+            )
+            .<span class="kw">await
+            </span>.is_ok())
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>client = tonic_lnd::connect(
             lnd_rpc_addr.clone(),
             lnd_tls_cert.clone(),
             lnd_macaroon.clone(),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>this = <span class="self">Self </span>{
-            _bitcoind: bitcoind,
-            client: Arc::new(Mutex::new(client)),
-            _process: process,
-        };
-        <span class="comment">// wait for lnd rpc to be active
-        </span>poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(this.pub_key().<span class="kw">await</span>.is_ok()) }).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(this)
+        <span class="prelude-val">Ok</span>((process, client))
     }
 
     <span class="kw">pub async fn </span>client_lock(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;MappedMutexGuard&lt;<span class="lifetime">&#39;_</span>, tonic_lnd::LightningClient&gt;&gt; {
@@ -828,6 +924,10 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
+
+    <span class="kw">pub async fn </span>kill(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.process.kill().<span class="kw">await
+    </span>}
 }
 
 <span class="kw">pub async fn </span>open_channel(bitcoind: <span class="kw-2">&amp;</span>Bitcoind, cln: <span class="kw-2">&amp;</span>Lightningd, lnd: <span class="kw-2">&amp;</span>Lnd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -890,16 +990,31 @@
 }
 
 <span class="attr">#[derive(Clone)]
-</span><span class="kw">pub enum </span>ClnOrLnd {
+</span><span class="kw">pub enum </span>LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
 }
 
-<span class="kw">impl </span>ClnOrLnd {
-    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
+<span class="kw">impl </span>LightningNode {
+    <span class="kw">pub fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeName {
         <span class="kw">match </span><span class="self">self </span>{
-            ClnOrLnd::Cln(<span class="kw">_</span>) =&gt; <span class="string">&quot;cln&quot;</span>,
-            ClnOrLnd::Lnd(<span class="kw">_</span>) =&gt; <span class="string">&quot;lnd&quot;</span>,
+            LightningNode::Cln(<span class="kw">_</span>) =&gt; LightningNodeName::Cln,
+            LightningNode::Lnd(<span class="kw">_</span>) =&gt; LightningNodeName::Lnd,
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub enum </span>LightningNodeName {
+    Cln,
+    Lnd,
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>LightningNodeName {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::result::Result&lt;(), std::fmt::Error&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            LightningNodeName::Cln =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;cln&quot;</span>),
+            LightningNodeName::Lnd =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;lnd&quot;</span>),
         }
     }
 }
@@ -907,15 +1022,15 @@
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Gatewayd {
     _process: ProcessHandle,
-    ln: ClnOrLnd,
+    ln: <span class="prelude-ty">Option</span>&lt;LightningNode&gt;,
 }
 
 <span class="kw">impl </span>Gatewayd {
-    <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, ln: ClnOrLnd) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, ln: LightningNode) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>ln_name = ln.name();
         <span class="kw">let </span>test_dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>gateway_env: HashMap&lt;String, String&gt; = <span class="kw">match </span>ln {
-            ClnOrLnd::Cln(<span class="kw">_</span>) =&gt; HashMap::from_iter([
+            LightningNode::Cln(<span class="kw">_</span>) =&gt; HashMap::from_iter([
                 (
                     <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),
                     <span class="macro">format!</span>(<span class="string">&quot;{test_dir}/gw-cln&quot;</span>),
@@ -929,7 +1044,7 @@
                     <span class="string">&quot;http://127.0.0.1:8175&quot;</span>.to_owned(),
                 ),
             ]),
-            ClnOrLnd::Lnd(<span class="kw">_</span>) =&gt; HashMap::from_iter([
+            LightningNode::Lnd(<span class="kw">_</span>) =&gt; HashMap::from_iter([
                 (
                     <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),
                     <span class="macro">format!</span>(<span class="string">&quot;{test_dir}/gw-lnd&quot;</span>),
@@ -952,23 +1067,48 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            ln,
+            ln: <span class="prelude-val">Some</span>(ln),
             _process: process,
         })
     }
 
+    <span class="kw">pub fn </span>lightning_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(ln) = <span class="kw-2">&amp;</span><span class="self">self</span>.ln {
+            <span class="kw">return </span>ln.name().to_string();
+        }
+
+        <span class="string">&quot;None&quot;</span>.to_string()
+    }
+
+    <span class="kw">pub fn </span>set_lightning_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>, ln_node: LightningNode) {
+        <span class="self">self</span>.ln = <span class="prelude-val">Some</span>(ln_node);
+    }
+
+    <span class="kw">pub async fn </span>stop_lightning_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">match </span><span class="self">self</span>.ln.take() {
+            <span class="prelude-val">Some</span>(LightningNode::Lnd(lnd)) =&gt; lnd.kill().<span class="kw">await</span>,
+            <span class="prelude-val">Some</span>(LightningNode::Cln(cln)) =&gt; cln.kill().<span class="kw">await</span>,
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Cannot stop an already stopped Lightning Node&quot;
+            </span>)),
+        }
+    }
+
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ln {
-            ClnOrLnd::Cln(<span class="kw">_</span>) =&gt; {
+            <span class="prelude-val">Some</span>(LightningNode::Cln(<span class="kw">_</span>)) =&gt; {
                 <span class="macro">cmd!</span>(<span class="string">&quot;gateway-cli&quot;</span>, <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>)
             }
-            ClnOrLnd::Lnd(<span class="kw">_</span>) =&gt; {
+            <span class="prelude-val">Some</span>(LightningNode::Lnd(<span class="kw">_</span>)) =&gt; {
                 <span class="macro">cmd!</span>(
                     <span class="string">&quot;gateway-cli&quot;</span>,
                     <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>,
                     <span class="string">&quot;-a&quot;</span>,
                     <span class="string">&quot;http://127.0.0.1:28175&quot;
                 </span>)
+            }
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="macro">panic!</span>(<span class="string">&quot;Cannot execute command when gateway is disconnected from Lightning Node&quot;</span>);
             }
         }
     }
@@ -1008,8 +1148,8 @@
             )<span class="question-mark">?</span>;
             <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;lightning started&quot;</span>);
             <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
-                Gatewayd::new(process_mgr, ClnOrLnd::Cln(cln.clone())),
-                Gatewayd::new(process_mgr, ClnOrLnd::Lnd(lnd.clone())),
+                Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
+                Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
                 open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
             )<span class="question-mark">?</span>;
             <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateways started&quot;</span>);
