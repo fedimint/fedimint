@@ -1,19 +1,25 @@
 # Contributing
 
-Contributions are very welcome, just open an issue or PR if you see something to improve! See our other [communication channels](../README.md#getting-involved) above to coordinate with other contributors!
+Contributions are very welcome, just open an issue or PR if you see something to improve! 
 
 Please note that all contributions happen under the MIT license as described at the bottom of this page.
 
 ## Getting involved
 
-If you want to learn more about the general idea go to [fedimint.org](https://fedimint.org/), beyond a high level explanation you can also find links to talks and blog posts at the bottom of the page.
+Here are the recommended steps for new developers:
+1. Start by reading our [non-technical primer](https://fedimint.org/docs/intro) and viewing the [videos and articles on the blog](https://fedimint.org/blog)
+2. Before writing code you will need to [set up the dev environment](dev-env.md)
+3. [Run the dev environment](dev-running.md) to ensure that everything works on your computer
+4. Now take a look at our [GitHub Issues](https://github.com/fedimint/fedimint/issues) you may want to search for [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+5. Introduce yourself on our [Developer discord](https://chat.fedimint.org) and ask any questions there
+6. Join our [Developer calls](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com) especially the ones for new contributors
 
-To get started with development have a look at the:
+Small PRs fixing typos, TODOs, broken links are always welcome, but please discuss bigger changes on Discord or GitHub first.
 
-* [GitHub Issues](https://github.com/fedimint/fedimint/issues) - things to fix, planned features, longer term architectural choices, etc.
-* [Architecture](architecture.md) - high-level description of the codebase and design
-* [Integration tests](../integrationtests/README.md) - instructions on how to write and run the integration tests
-* [Scripts](../scripts/README.md) - useful scripts for running the tests and federation
+For commits, please use [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
+
+Happy hacking!
+
 
 ## Areas of Contribution
 
@@ -26,12 +32,8 @@ Below are some broad and general areas of contribution to get you started
     * [Developing Gateway-UI (aka, Mintgate)](./gateway.md#developing-gateway-ui-aka-mintgate)
 * [Fedimint Setup UI](./ui.md)
 * [Nix Build System](./nix-ci.md)
-
-PRs fixing TODOs or issues are always welcome, but please discuss more involved changes in an issue first. Smaller PRs to fix typos, broken links etc. are also very welcome.
-
-For commits, please use [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
-
-Happy hacking!
+* [Integration tests](../integrationtests/README.md)
+* [Scripts](../scripts/README.md)
 
 ## Developer Certificate of Origin
 
