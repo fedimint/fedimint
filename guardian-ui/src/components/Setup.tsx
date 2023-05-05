@@ -18,6 +18,7 @@ import { Login } from './Login';
 import { ConnectGuardians } from './ConnectGuardians';
 import { RunDKG } from './RunDKG';
 import { VerifyGuardians } from './VerifyGuardians';
+import { SetupComplete } from './SetupComplete';
 
 const PROGRESS_ORDER: SetupProgress[] = [
   SetupProgress.Start,
@@ -53,14 +54,8 @@ export const Setup: React.FC = () => {
 
   let title: React.ReactNode;
   let subtitle: React.ReactNode;
-  let canGoBack = true;
-  let content: React.ReactNode = (
-    <>
-      {/* TODO: Remove these defaults */}
-      <Heading>Nothing here yet!</Heading>
-      <Button onClick={handleNext}>Next</Button>
-    </>
-  );
+  let canGoBack = false;
+  let content: React.ReactNode;
   if (isInitializing) {
     content = <Spinner />;
   } else if (needsAuth && !password) {
@@ -80,6 +75,7 @@ export const Setup: React.FC = () => {
           ? 'Your Federation Followers will confirm this information on their end.'
           : 'Your Federation Leader will be setting up main Federation details. You’ll confirm them soon.';
         content = <SetConfiguration next={handleNext} />;
+        canGoBack = true;
         break;
       case SetupProgress.ConnectGuardians:
         title = isHost
@@ -89,6 +85,7 @@ export const Setup: React.FC = () => {
           ? 'Share the link with the other Guardians to get everyone on the same page. Once all the Guardians join, you’ll automatically move on to the next step.'
           : 'Make sure that the information here looks right, and that the Federation Guardians are correct. Click the Approve button when you’re sure it looks good.';
         content = <ConnectGuardians next={handleNext} />;
+        canGoBack = true;
         break;
       case SetupProgress.RunDKG:
         title = 'Boom! Sharing info between Guardians';
@@ -101,12 +98,9 @@ export const Setup: React.FC = () => {
         subtitle =
           'Ask each Guardian for their verification code, and paste them below to check validity. We’re almost done!';
         content = <VerifyGuardians next={handleNext} />;
-        canGoBack = false;
         break;
       case SetupProgress.SetupComplete:
-        title = 'Your Federation is now set up!';
-        subtitle = 'Get connected and start inviting members.';
-        canGoBack = false;
+        content = <SetupComplete />;
         break;
       default:
         title = 'Unknown step';
