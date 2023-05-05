@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
@@ -208,6 +208,16 @@ where
             .db
             .wait_key_exists(&ActiveStateKey::from_state(state))
             .await
+    }
+
+    /// Returns all IDs of operations that have active state machines
+    pub async fn get_active_operations(&self) -> HashSet<OperationId> {
+        self.inner
+            .get_active_states()
+            .await
+            .into_iter()
+            .map(|(state, _)| state.operation_id())
+            .collect()
     }
 
     /// Starts the background thread that runs the state machines. This cannot
