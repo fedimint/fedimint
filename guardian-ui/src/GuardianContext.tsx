@@ -17,6 +17,8 @@ import {
   ServerStatus,
 } from './types';
 import { ApiInterface, NoopGuardianApi } from './GuardianApi';
+import { JsonRpcError } from 'jsonrpc-client-websocket';
+import { formatApiErrorMessage } from './utils/api';
 
 const LOCAL_STORAGE_KEY = 'guardian-ui-state';
 
@@ -37,16 +39,16 @@ function makeInitialState(loadFromStorage = true): SetupState {
   }
 
   return {
+    isInitializing: true,
     role: null,
     progress: SetupProgress.Start,
     myName: '',
     configGenParams: null,
     password: '',
+    needsAuth: false,
     numPeers: 0,
     peers: [],
-    myVerificationCode: '',
-    peerVerificationCodes: [],
-    federationConnectionString: '',
+    isSetupComplete: false,
     ...storageState,
   };
 }
@@ -57,6 +59,8 @@ const reducer = (state: SetupState, action: SetupAction): SetupState => {
   switch (action.type) {
     case SETUP_ACTION_TYPE.SET_INITIAL_STATE:
       return makeInitialState(false);
+    case SETUP_ACTION_TYPE.SET_IS_INITIALIZING:
+      return { ...state, isInitializing: action.payload };
     case SETUP_ACTION_TYPE.SET_ROLE:
       return { ...state, role: action.payload };
     case SETUP_ACTION_TYPE.SET_PROGRESS:
@@ -66,17 +70,15 @@ const reducer = (state: SetupState, action: SetupAction): SetupState => {
     case SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS:
       return { ...state, configGenParams: action.payload };
     case SETUP_ACTION_TYPE.SET_PASSWORD:
-      return { ...state, password: action.payload };
+      return { ...state, password: action.payload, needsAuth: false };
+    case SETUP_ACTION_TYPE.SET_NEEDS_AUTH:
+      return { ...state, needsAuth: action.payload };
     case SETUP_ACTION_TYPE.SET_NUM_PEERS:
       return { ...state, numPeers: action.payload };
     case SETUP_ACTION_TYPE.SET_PEERS:
       return { ...state, peers: action.payload };
-    case SETUP_ACTION_TYPE.SET_MY_VERIFICATION_CODE:
-      return { ...state, myVerificationCode: action.payload };
-    case SETUP_ACTION_TYPE.SET_PEER_VERIFICATION_CODES:
-      return { ...state, peerVerificationCodes: action.payload };
-    case SETUP_ACTION_TYPE.SET_FEDERATION_CONNECTION_STRING:
-      return { ...state, federationConnectionString: action.payload };
+    case SETUP_ACTION_TYPE.SET_IS_SETUP_COMPLETE:
+      return { ...state, isSetupComplete: action.payload };
     default:
       return state;
   }
@@ -126,18 +128,31 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
   const { password, configGenParams, myName } = state;
   const [isPollingConsensus, setIsPollingConsensus] = useState(false);
 
-  // On mount, fetch what status the server has us at. Compare with state, and
-  // redirect to the correct step if necessary.
+  // On mount, fetch what status the server has us at, and set state accordingly.
   useEffect(() => {
     api
       .status()
       .then((status) => {
         // If we're still waiting for a password, restart the whole thing.
+        // Otherwise, fetch the password and indicate if we need auth.
         if (status === ServerStatus.AwaitingPassword) {
           dispatch({
             type: SETUP_ACTION_TYPE.SET_INITIAL_STATE,
             payload: null,
           });
+        } else {
+          const apiPassword = api.getPassword();
+          if (apiPassword) {
+            dispatch({
+              type: SETUP_ACTION_TYPE.SET_PASSWORD,
+              payload: apiPassword,
+            });
+          } else {
+            dispatch({
+              type: SETUP_ACTION_TYPE.SET_NEEDS_AUTH,
+              payload: true,
+            });
+          }
         }
         // If we're ready for DKG, move them to approve the config to start.
         if (status === ServerStatus.ReadyForConfigGen) {
@@ -154,8 +169,23 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
           });
         }
       })
-      .catch(() => {
-        /* no-op */
+      .catch((err) => {
+        // Missing password error
+        if ((err as JsonRpcError).code === 401) {
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_NEEDS_AUTH,
+            payload: true,
+          });
+        } else {
+          // TODO: Some better display than an alert!
+          alert(formatApiErrorMessage(err));
+        }
+      })
+      .finally(() => {
+        dispatch({
+          type: SETUP_ACTION_TYPE.SET_IS_INITIALIZING,
+          payload: false,
+        });
       });
   }, [api]);
 
