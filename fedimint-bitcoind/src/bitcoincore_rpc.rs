@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 use std::fmt;
+// use std::os::unix::fs::PermissionsExt;
+use std::env;
+// use std::{env, path::PathBuf};
+use anyhow::anyhow;
 
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
@@ -44,7 +48,13 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
                 url.host_str().unwrap_or("127.0.0.1")
             )
         }),
-        if url.username().is_empty() {
+        if env::var("BITCOIND_USE_COOKIE").is_ok() {
+            if let Some(cookie_file) = rpc_cookie_file() {
+                Auth::CookieFile(cookie_file.into())
+            } else {
+                return Err(anyhow!("Could not find cookie file"));
+            }
+        } else if url.username().is_empty() {
             Auth::None
         } else {
             Auth::UserPass(
@@ -54,7 +64,16 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
                     .to_owned(),
             )
         },
-    ))
+    ))  
+}
+
+fn rpc_cookie_file() -> Option<String> {
+    for (i, arg) in std::env::args().enumerate() {
+        if arg == "-rpccookiefile" && i + 1 < std::env::args().len() {
+            return Some(std::env::args().nth(i + 1).unwrap());
+        }
+    }
+    None
 }
 
 pub fn make_bitcoin_rpc_backend(
