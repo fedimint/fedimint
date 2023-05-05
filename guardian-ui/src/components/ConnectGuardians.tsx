@@ -4,21 +4,19 @@ import {
   VStack,
   Button,
   FormHelperText,
-  useTheme,
   Spinner,
   TableContainer,
   Table as ChakraTable,
   Tbody,
   Tr,
   Td,
-  HStack,
+  Tag,
 } from '@chakra-ui/react';
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useConsensusPolling, useGuardianContext } from '../hooks';
 import { GuardianRole, ServerStatus } from '../types';
 import { CopyInput } from './ui/CopyInput';
 import { Table, TableRow } from './ui/Table';
-import { CheckCircleIcon } from '@chakra-ui/icons';
 import { getModuleParamsFromConfig } from '../utils/api';
 
 interface Props {
@@ -30,7 +28,6 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
     state: { role, peers, numPeers, configGenParams },
     api,
   } = useGuardianContext();
-  const theme = useTheme();
 
   // Poll for peers and configGenParams while on this page.
   useConsensusPolling();
@@ -129,22 +126,17 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
         ? {
             key: peers[i].cert,
             name: peers[i].name,
-            status: (
-              <HStack align='center'>
-                <CheckCircleIcon boxSize={4} color={theme.colors.green[400]} />
-                <span>Connected</span>
-              </HStack>
-            ),
+            status:
+              peers[i].status === ServerStatus.ReadyForConfigGen ? (
+                <Tag colorScheme='green'>Approved</Tag>
+              ) : (
+                <Tag colorScheme='orange'>Pending</Tag>
+              ),
           }
         : {
             key: i,
             name: `Guardian ${i + 1}`,
-            status: (
-              <HStack align='center'>
-                <Spinner size='xs' />
-                <span>Waiting</span>
-              </HStack>
-            ),
+            status: <Tag colorScheme='gray'>Not joined</Tag>,
           };
       rows = [...rows, row];
     }
