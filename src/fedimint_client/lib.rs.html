@@ -1052,10 +1052,14 @@
 <a href="#1052" id="1052">1052</a>
 <a href="#1053" id="1053">1053</a>
 <a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
-<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::sync::Arc;
@@ -1536,6 +1540,10 @@
 
         operation_entries
     }
+
+    <span class="kw">pub async fn </span>get_active_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashSet&lt;OperationId&gt; {
+        <span class="self">self</span>.inner.executor.get_active_operations().<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>get_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;OperationLogEntry&gt; {
         <span class="self">self</span>.inner
