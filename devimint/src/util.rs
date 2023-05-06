@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail};
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::*;
 
@@ -51,12 +51,13 @@ impl Drop for ProcessHandleInner {
     }
 }
 
-#[derive(Default)]
-pub struct ProcessManager {}
+pub struct ProcessManager {
+    pub globals: vars::Global,
+}
 
 impl ProcessManager {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(globals: vars::Global) -> Self {
+        Self { globals }
     }
 
     /// Logs to $FM_LOGS_DIR/{name}.{out,err}
@@ -145,7 +146,7 @@ impl Command {
     }
 
     pub async fn run_inner(&mut self) -> Result<std::process::Output> {
-        info!(LOG_DEVIMINT, "> {}", self.command_debug());
+        debug!(LOG_DEVIMINT, "> {}", self.command_debug());
         let output = self.cmd.output().await?;
         if !output.status.success() {
             bail!(
@@ -164,6 +165,26 @@ impl Command {
             .run_inner()
             .await
             .with_context(|| format!("command: {}", self.command_debug()))?;
+        Ok(())
+    }
+
+    /// Run the command logging the output and error
+    pub async fn run_with_logging(&mut self, name: String) -> Result<()> {
+        let logs_dir = env::var("FM_LOGS_DIR")?;
+        let path = format!("{logs_dir}/{name}.log");
+        let log = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+            .await?
+            .into_std()
+            .await;
+        self.cmd.stdout(log.try_clone()?);
+        self.cmd.stderr(log);
+        let status = self.cmd.spawn()?.wait().await?;
+        if !status.success() {
+            bail!("{}", status);
+        }
         Ok(())
     }
 }

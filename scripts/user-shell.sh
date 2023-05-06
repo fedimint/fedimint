@@ -1,7 +1,6 @@
 # shellcheck shell=bash
 
-source .tmpenv
-
+eval "$(devimint env)"
 source ./scripts/aliases.sh
 
 function show_verbose_output()
@@ -28,8 +27,7 @@ function use_lnd_gw() {
 
 echo Waiting for fedimint start
 
-# waits for rust to write to this pipe
-STATUS=$(cat $FM_READY_FILE)
+STATUS="$(devimint wait)"
 if [ "$STATUS" = "ERROR" ]
 then
     echo "fedimint didn't start correctly"

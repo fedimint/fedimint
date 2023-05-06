@@ -893,6 +893,7 @@ dependencies = [
  "fedimint-ln-client",
  "fedimint-logging",
  "fedimint-wallet-client",
+ "futures",
  "nix",
  "serde",
  "serde_json",
