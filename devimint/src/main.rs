@@ -536,7 +536,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // # Clinet-NG tests
     // ## reissue e-cash
 
-    const CLIENT_NG_REISSE_AMOUNT: u64 = 420;
+    const CLIENT_NG_REISSUE_AMOUNT: u64 = 420;
     const CLIENT_NG_SPEND_AMOUNT: u64 = 42;
 
     let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
@@ -544,7 +544,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     assert_eq!(initial_clientng_balance, 0);
 
-    let reissue_notes = cmd!(fed, "spend", CLIENT_NG_REISSE_AMOUNT)
+    let reissue_notes = cmd!(fed, "spend", CLIENT_NG_REISSUE_AMOUNT)
         .out_json()
         .await?["note"]
         .as_str()
@@ -555,12 +555,12 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?
         .as_u64()
         .unwrap();
-    assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSE_AMOUNT);
+    assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSUE_AMOUNT);
 
     let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
-    assert_eq!(initial_clientng_balance, CLIENT_NG_REISSE_AMOUNT);
+    assert_eq!(initial_clientng_balance, CLIENT_NG_REISSUE_AMOUNT);
 
     // # Spend from client ng
     let reissue_notes_denominations = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
@@ -579,13 +579,28 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     assert_eq!(reissue_notes_denominations, expected_denominations);
 
+    info!("{}", cmd!(fed, "info").out_string().await?);
     let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
     assert_eq!(
         clientng_post_spend_balance,
-        CLIENT_NG_REISSE_AMOUNT - CLIENT_NG_SPEND_AMOUNT
+        CLIENT_NG_REISSUE_AMOUNT - CLIENT_NG_SPEND_AMOUNT
     );
+
+    let reissue_amount: u64 = 4096;
+
+    // Ensure that client ng can reissue after spending
+    let reissue_notes = cmd!(fed, "spend", reissue_amount).out_json().await?["note"]
+        .as_str()
+        .map(|s| s.to_owned())
+        .unwrap();
+    let client_ng_reissue_amt = cmd!(fed, "ng", "reissue", reissue_notes)
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    assert_eq!(client_ng_reissue_amt, reissue_amount);
 
     // TODO: test cancel/timeout
 
