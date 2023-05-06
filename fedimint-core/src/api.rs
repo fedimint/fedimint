@@ -537,9 +537,13 @@ where
             },
         );
 
-        self.request_with_strategy(qs, "config".to_owned(), ApiRequestErased::new(info.clone()))
-            .await
-            .map(|cfg: ClientConfigResponse| cfg.client_config)
+        self.request_with_strategy(
+            qs,
+            "config".to_owned(),
+            ApiRequestErased::new(info.to_string()),
+        )
+        .await
+        .map(|cfg: ClientConfigResponse| cfg.client_config)
     }
 
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {

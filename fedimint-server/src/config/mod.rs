@@ -136,6 +136,7 @@ pub struct ServerConfigConsensus {
     /// All configuration that needs to be the same for modules
     pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
     #[encodable_ignore]
+    // FIXME: Make modules encodable or we will not check module keys
     /// Human readable representation of [`Self::modules`]
     pub modules_json: BTreeMap<ModuleInstanceId, JsonWithKind>,
     /// Additional config the federation wants to transmit to the clients

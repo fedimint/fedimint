@@ -1,5 +1,5 @@
 //! Implements the client API through which users interact with the federation
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
@@ -31,7 +31,7 @@ use tokio::sync::RwLock;
 use tracing::debug;
 
 use super::peers::PeerStatusChannels;
-use crate::config::api::ApiResult;
+use crate::config::api::{get_verification_hashes, ApiResult};
 use crate::config::ServerConfig;
 use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::server::LatestContributionByPeer;
@@ -42,6 +42,7 @@ use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigSignatureKey, EpochHistoryKey,
     LastEpochKey, RejectedTransactionKey,
 };
+use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
 use crate::HasApiContext;
 
@@ -497,15 +498,23 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            "connection_code",
+            async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
+                Ok(fedimint.cfg.get_connect_info().to_string())
+            }
+        },
+        api_endpoint! {
             "config",
-            async |fedimint: &ConsensusApi, context, info: WsClientConnectInfo| -> ClientConfigResponse {
+            async |fedimint: &ConsensusApi, context, connection_code: String| -> ClientConfigResponse {
+                let info = connection_code.parse()
+                    .map_err(|_| ApiError::bad_request("Could not parse connection code".to_string()))?;
                 fedimint.download_config_with_token(info, &mut context.dbtx()).await
             }
         },
         api_endpoint! {
             "config_hash",
-            async |fedimint: &ConsensusApi, context, _v: ()| -> sha256::Hash {
-                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await.client_config.consensus_hash())
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
+                Ok(fedimint.cfg.consensus.consensus_hash())
             }
         },
         api_endpoint! {
@@ -542,6 +551,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     server: ServerStatus::ConsensusRunning,
                     consensus: Some(consensus_status)
                 })
+            }
+        },
+        api_endpoint! {
+            "get_verify_config_hash",
+            async |fedimint: &ConsensusApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
+                if context.has_auth() {
+                    Ok(get_verification_hashes(&fedimint.cfg))
+                } else {
+                    Err(ApiError::unauthorized())
+                }
             }
         },
     ]

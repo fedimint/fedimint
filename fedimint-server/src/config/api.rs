@@ -9,7 +9,7 @@ use bitcoin_hashes::{sha256, Hash};
 use fedimint_aead::random_salt;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    PeerServerParams, WsAdminClient,
+    ConfigGenParamsResponse, PeerServerParams, WsAdminClient,
 };
 use fedimint_core::api::{ServerStatus, StatusResponse};
 use fedimint_core::config::ServerModuleGenRegistry;
@@ -28,7 +28,7 @@ use tokio_rustls::rustls;
 use tracing::error;
 use url::Url;
 
-use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
+use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::db::ConsensusUpgradeKey;
 use crate::net::peers::DelayCalculator;
@@ -141,24 +141,33 @@ impl ConfigGenApi {
     }
 
     /// Gets the consensus config gen params,
-    pub async fn get_consensus_config_gen_params(&self) -> ApiResult<ConfigGenParamsConsensus> {
+    pub async fn get_consensus_config_gen_params(&self) -> ApiResult<ConfigGenParamsResponse> {
         let state = self.state.lock().expect("lock poisoned").clone();
         let local = state.local.clone();
 
         // if we have a leader get it from the leader instead
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
             let client = WsAdminClient::new(url.clone(), PeerId::from(0), state.auth()?);
-            let consensus = client
+            let response = client
                 .get_consensus_config_gen_params()
                 .await
                 .map_err(|_| ApiError::not_found("Unable to get params from leader".to_string()))?;
-            return Ok(consensus);
+            let params = state.get_config_gen_params(response.consensus)?;
+            return Ok(ConfigGenParamsResponse {
+                consensus: params.consensus,
+                our_current_id: params.local.our_id,
+            });
         }
 
         let state = self.state.lock().expect("lock poisoned");
-        Ok(ConfigGenParamsConsensus {
+        let consensus = ConfigGenParamsConsensus {
             peers: state.get_peer_info(),
             requested: state.get_requested_params()?,
+        };
+        let params = state.get_config_gen_params(consensus)?;
+        Ok(ConfigGenParamsResponse {
+            consensus: params.consensus,
+            our_current_id: params.local.our_id,
         })
     }
 
@@ -166,12 +175,12 @@ impl ConfigGenApi {
     /// completion, calling a second time will return an error
     pub async fn run_dkg(&self) -> ApiResult<()> {
         // Update our state to running DKG
-        let consensus = self.get_consensus_config_gen_params().await?;
+        let response = self.get_consensus_config_gen_params().await?;
         let (params, registry) = {
             let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
             state.status = ServerStatus::ReadyForConfigGen;
             (
-                state.get_config_gen_params(consensus)?,
+                state.get_config_gen_params(response.consensus)?,
                 state.settings.registry.clone(),
             )
         };
@@ -215,14 +224,21 @@ impl ConfigGenApi {
     /// with other peers
     pub fn get_verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
         let state = self.require_status(ServerStatus::VerifyingConfigs)?;
-        state.get_verification()
+        let config = state
+            .config
+            .clone()
+            .ok_or(ApiError::bad_request("Missing config".to_string()))?;
+
+        Ok(get_verification_hashes(&config))
     }
 
     /// Writes the configs to disk after they are generated
     fn write_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
         let auth = config.private.api_auth.0.clone();
-        write_new(self.data_dir.join(SALT_FILE), random_salt())
-            .map_err(|e| ApiError::server_error(format!("Unable to write to data dir {e:?}")))?;
+        let io_error = |e| ApiError::server_error(format!("Unable to write to data dir {e:?}"));
+        // TODO: Make writing password optional
+        write_new(self.data_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
+        write_new(self.data_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
         write_server_config(
             config,
             self.data_dir.clone(),
@@ -438,29 +454,23 @@ impl ConfigGenState {
 
         Ok(ConfigGenParams { local, consensus })
     }
+}
 
-    fn get_verification(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
-        let config = self
-            .config
-            .clone()
-            .ok_or(ApiError::bad_request("Missing config".to_string()))?;
+pub fn get_verification_hashes(config: &ServerConfig) -> BTreeMap<PeerId, sha256::Hash> {
+    let mut hashes = BTreeMap::new();
+    for (peer, cert) in config.consensus.tls_certs.iter() {
+        let mut engine = HashEngine::default();
 
-        let mut hashes = BTreeMap::new();
-        for (peer, cert) in config.consensus.tls_certs.iter() {
-            let mut engine = HashEngine::default();
-            let client_config_resp = config
-                .consensus
-                .try_to_config_response(&self.settings.registry)
-                .expect("hashes");
+        config
+            .consensus
+            .consensus_encode(&mut engine)
+            .expect("hashes");
+        cert.consensus_encode(&mut engine).expect("hashes");
 
-            client_config_resp.client_config.consensus_hash();
-            cert.consensus_encode(&mut engine).expect("hashes");
-
-            let hash = sha256::Hash::from_engine(engine);
-            hashes.insert(*peer, hash);
-        }
-        Ok(hashes)
+        let hash = sha256::Hash::from_engine(engine);
+        hashes.insert(*peer, hash);
     }
+    hashes
 }
 
 #[async_trait]
@@ -538,7 +548,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         },
         api_endpoint! {
             "get_consensus_config_gen_params",
-            async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsConsensus {
+            async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsResponse {
                 config.get_consensus_config_gen_params().await
             }
         },
@@ -591,7 +601,7 @@ fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
@@ -604,7 +614,6 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::task::{sleep, TaskGroup};
-    use fedimint_core::util::write_new;
     use fedimint_core::PeerId;
     use futures::future::join_all;
     use itertools::Itertools;
@@ -612,15 +621,13 @@ mod tests {
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::{DEFAULT_CONFIG_DOWNLOAD_LIMIT, DEFAULT_MAX_CLIENT_CONNECTIONS};
-    use crate::{FedimintServer, PLAINTEXT_PASSWORD};
+    use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
         client: WsAdminClient,
         name: String,
         settings: ConfigGenSettings,
-        auth: ApiAuth,
-        dir: PathBuf,
     }
 
     impl TestConfigApi {
@@ -654,22 +661,20 @@ mod tests {
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
 
             let api = FedimintServer {
-                data_dir: dir.clone(),
+                data_dir: dir,
                 settings: settings.clone(),
                 db,
             };
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = WsAdminClient::new(api_url, PeerId::from(0), auth.clone());
+            let client = WsAdminClient::new(api_url, PeerId::from(0), auth);
 
             (
                 TestConfigApi {
                     client,
                     name,
                     settings,
-                    auth,
-                    dir,
                 },
                 api,
             )
@@ -713,8 +718,9 @@ mod tests {
         /// Helper for awaiting all servers have the status
         async fn wait_status(&self, status: ServerStatus) {
             loop {
-                let params = self.client.get_consensus_config_gen_params().await.unwrap();
-                let mismatched: Vec<_> = params
+                let response = self.client.get_consensus_config_gen_params().await.unwrap();
+                let mismatched: Vec<_> = response
+                    .consensus
                     .peers
                     .iter()
                     .filter(|(_, param)| param.status != Some(status.clone()))
@@ -728,11 +734,6 @@ mod tests {
                 );
                 sleep(Duration::from_millis(10)).await;
             }
-        }
-
-        /// Helper for writing the password file to bypass the API
-        fn write_password_file(&self) {
-            write_new(self.dir.join(PLAINTEXT_PASSWORD), &self.auth.0).unwrap();
         }
     }
 
@@ -810,9 +811,13 @@ mod tests {
             for peer in &followers {
                 configs.push(peer.client.get_consensus_config_gen_params().await.unwrap());
             }
-            // Confirm all configs are the same
-            configs.dedup();
-            assert_eq!(configs.len(), 1);
+            // Confirm all consensus configs are the same
+            let mut consensus: Vec<_> = configs.iter().map(|p| p.consensus.clone()).collect();
+            consensus.dedup();
+            assert_eq!(consensus.len(), 1);
+            // Confirm all peer ids are unique
+            let ids: BTreeSet<_> = configs.iter().map(|p| p.our_current_id).collect();
+            assert_eq!(ids.len(), followers.len());
 
             // all peers run DKG
             followers.push(leader);
@@ -852,11 +857,6 @@ mod tests {
             join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
             test
         );
-
-        // Test writing the password file to bypass the API
-        for peer in followers.iter() {
-            peer.write_password_file();
-        }
 
         let test2 = async {
             // Confirm we are stuck in upgrading after an upgrade
