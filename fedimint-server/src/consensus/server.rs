@@ -265,10 +265,7 @@ impl ConsensusServer {
 
     /// Loop `run_conensus_epoch` until shut down
     pub async fn run_consensus(mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        let our_hash = self
-            .cfg
-            .consensus
-            .consensus_hash();
+        let our_hash = self.cfg.consensus.consensus_hash();
 
         // Confirm our hash matches with peers
         loop {

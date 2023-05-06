@@ -498,8 +498,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            "connection_code",
+            async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
+                Ok(fedimint.cfg.get_connect_info().to_string())
+            }
+        },
+        api_endpoint! {
             "config",
-            async |fedimint: &ConsensusApi, context, info: WsClientConnectInfo| -> ClientConfigResponse {
+            async |fedimint: &ConsensusApi, context, connection_code: String| -> ClientConfigResponse {
+                let info = connection_code.parse()
+                    .map_err(|_| ApiError::bad_request("Could not parse connection code".to_string()))?;
                 fedimint.download_config_with_token(info, &mut context.dbtx()).await
             }
         },
