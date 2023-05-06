@@ -28,7 +28,7 @@ use tokio_rustls::rustls;
 use tracing::error;
 use url::Url;
 
-use crate::config::io::{read_server_config, write_server_config, SALT_FILE};
+use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::db::ConsensusUpgradeKey;
 use crate::net::peers::DelayCalculator;
@@ -235,8 +235,10 @@ impl ConfigGenApi {
     /// Writes the configs to disk after they are generated
     fn write_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
         let auth = config.private.api_auth.0.clone();
-        write_new(self.data_dir.join(SALT_FILE), random_salt())
-            .map_err(|e| ApiError::server_error(format!("Unable to write to data dir {e:?}")))?;
+        let io_error = |e| ApiError::server_error(format!("Unable to write to data dir {e:?}"));
+        // TODO: Make writing password optional
+        write_new(self.data_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
+        write_new(self.data_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
         write_server_config(
             config,
             self.data_dir.clone(),
@@ -612,7 +614,6 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::task::{sleep, TaskGroup};
-    use fedimint_core::util::write_new;
     use fedimint_core::PeerId;
     use futures::future::join_all;
     use itertools::Itertools;
@@ -620,15 +621,13 @@ mod tests {
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::{DEFAULT_CONFIG_DOWNLOAD_LIMIT, DEFAULT_MAX_CLIENT_CONNECTIONS};
-    use crate::{FedimintServer, PLAINTEXT_PASSWORD};
+    use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
         client: WsAdminClient,
         name: String,
         settings: ConfigGenSettings,
-        auth: ApiAuth,
-        dir: PathBuf,
     }
 
     impl TestConfigApi {
@@ -662,22 +661,20 @@ mod tests {
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
 
             let api = FedimintServer {
-                data_dir: dir.clone(),
+                data_dir: dir,
                 settings: settings.clone(),
                 db,
             };
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = WsAdminClient::new(api_url, PeerId::from(0), auth.clone());
+            let client = WsAdminClient::new(api_url, PeerId::from(0), auth);
 
             (
                 TestConfigApi {
                     client,
                     name,
                     settings,
-                    auth,
-                    dir,
                 },
                 api,
             )
@@ -737,11 +734,6 @@ mod tests {
                 );
                 sleep(Duration::from_millis(10)).await;
             }
-        }
-
-        /// Helper for writing the password file to bypass the API
-        fn write_password_file(&self) {
-            write_new(self.dir.join(PLAINTEXT_PASSWORD), &self.auth.0).unwrap();
         }
     }
 
@@ -865,11 +857,6 @@ mod tests {
             join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
             test
         );
-
-        // Test writing the password file to bypass the API
-        for peer in followers.iter() {
-            peer.write_password_file();
-        }
 
         let test2 = async {
             // Confirm we are stuck in upgrading after an upgrade
