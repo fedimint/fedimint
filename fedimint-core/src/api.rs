@@ -863,7 +863,7 @@ fn url_to_string_with_default_port(url: &Url) -> String {
 impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 /// The status of a server, including how it views its peers
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConsensusStatus {
     /// The last contribution that this server has made to the consensus, it's
     /// equivalent to [`PeerConsensusStatus::last_contribution`] and
@@ -903,6 +903,32 @@ pub struct ConsensusContribution {
     pub value: u64,
     /// When the contribution was received
     pub time: SystemTime,
+}
+
+/// The state of the server returned via APIs
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
+pub enum ServerStatus {
+    /// Server needs a password to read configs
+    #[default]
+    AwaitingPassword,
+    /// Waiting for peers to share the config gen params
+    SharingConfigGenParams,
+    /// Ready to run config gen once all peers are ready
+    ReadyForConfigGen,
+    /// We failed running config gen
+    ConfigGenFailed,
+    /// Config is generated, peers should verify the config
+    VerifyingConfigs,
+    /// Restarted from a planned upgrade (requires action to start)
+    Upgrading,
+    /// Consensus is running
+    ConsensusRunning,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct StatusResponse {
+    pub server: ServerStatus,
+    pub consensus: Option<ConsensusStatus>,
 }
 
 #[cfg(test)]
