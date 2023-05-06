@@ -1179,6 +1179,10 @@
 <a href="#1179" id="1179">1179</a>
 <a href="#1180" id="1180">1180</a>
 <a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1718,9 +1722,13 @@
             },
         );
 
-        <span class="self">self</span>.request_with_strategy(qs, <span class="string">&quot;config&quot;</span>.to_owned(), ApiRequestErased::new(info.clone()))
-            .<span class="kw">await
-            </span>.map(|cfg: ClientConfigResponse| cfg.client_config)
+        <span class="self">self</span>.request_with_strategy(
+            qs,
+            <span class="string">&quot;config&quot;</span>.to_owned(),
+            ApiRequestErased::new(info.to_string()),
+        )
+        .<span class="kw">await
+        </span>.map(|cfg: ClientConfigResponse| cfg.client_config)
     }
 
     <span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {

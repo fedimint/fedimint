@@ -881,6 +881,7 @@
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
 <a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
@@ -1019,6 +1020,7 @@
     <span class="doccomment">/// All configuration that needs to be the same for modules
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConsensusConfig&gt;,
     <span class="attr">#[encodable_ignore]
+    </span><span class="comment">// FIXME: Make modules encodable or we will not check module keys
     </span><span class="doccomment">/// Human readable representation of [`Self::modules`]
     </span><span class="kw">pub </span>modules_json: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
     <span class="doccomment">/// Additional config the federation wants to transmit to the clients
