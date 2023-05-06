@@ -222,7 +222,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
-<span class="kw">use crate</span>::{MintClientContext, SpendableNote};
+<span class="kw">use crate</span>::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 <span class="attr">#[aquamarine::aquamarine]
 </span><span class="doccomment">/// State machine managing e-cash that has been taken out of the wallet for
@@ -405,7 +405,7 @@
         input: MintInput(notes),
         keys,
         state_machines: Arc::new(<span class="kw">move </span>|txid, input_idx| {
-            <span class="macro">vec!</span>[MintInputStateMachine {
+            <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id,
                     txid,
@@ -414,7 +414,7 @@
                 state: MintInputStates::Created(MintInputStateCreated {
                     notes: spendable_notes.clone(),
                 }),
-            }]
+            })]
         }),
     };
 
