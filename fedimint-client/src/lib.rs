@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
-use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -352,6 +352,10 @@ impl Client {
         self.inner.api.as_ref()
     }
 
+    pub fn federation_id(&self) -> FederationId {
+        self.inner.federation_id
+    }
+
     pub fn get_meta(&self, key: &str) -> Option<String> {
         self.inner.federation_meta.get(key).cloned()
     }
@@ -542,6 +546,7 @@ impl Client {
 
 struct ClientInner {
     db: Database,
+    federation_id: FederationId,
     federation_meta: BTreeMap<String, String>,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
@@ -922,6 +927,7 @@ impl ClientBuilder {
 
         let client_inner = Arc::new(ClientInner {
             db,
+            federation_id: config.federation_id,
             federation_meta: config.meta,
             primary_module,
             primary_module_instance,
