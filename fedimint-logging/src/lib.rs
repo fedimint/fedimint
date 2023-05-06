@@ -7,6 +7,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
 
 /// Constants for categorizing the logging type
+pub const LOG_BLOCKCHAIN: &str = "net::blockchain";
 pub const LOG_CONSENSUS: &str = "consensus";
 pub const LOG_CORE: &str = "core";
 pub const LOG_DB: &str = "db";

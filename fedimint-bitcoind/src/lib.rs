@@ -11,6 +11,7 @@ use bitcoin::{Block, BlockHash, Network, Transaction};
 use fedimint_core::bitcoin_rpc::BitcoinRpcBackendType;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::{dyn_newtype_define, Feerate};
+use fedimint_logging::LOG_BLOCKCHAIN;
 use tracing::info;
 
 #[cfg(feature = "bitcoincore-rpc")]
@@ -124,7 +125,7 @@ impl<C> RetryClient<C> {
                         return Err(e);
                     }
 
-                    info!("Bitcoind error {:?}, retrying", e);
+                    info!(LOG_BLOCKCHAIN, "Bitcoind error {:?}, retrying", e);
                     std::thread::sleep(retry_time);
                     retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * 2);
                 }

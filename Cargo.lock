@@ -1099,6 +1099,7 @@ dependencies = [
  "electrum-client",
  "esplora-client",
  "fedimint-core",
+ "fedimint-logging",
  "rand",
  "serde",
  "tracing",
