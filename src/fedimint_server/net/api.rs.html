@@ -728,11 +728,6 @@
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -741,9 +736,9 @@
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
 <span class="kw">use </span>fedimint_core::api::{
-    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, WsClientConnectInfo,
+    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
+    WsClientConnectInfo,
 };
 <span class="kw">use </span>fedimint_core::config::ClientConfigResponse;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -1267,21 +1262,16 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;consensus_status&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; ConsensusStatus {
-                fedimint.consensus_status_cache.get(|| <span class="kw">async </span>{
-                    fedimint.get_consensus_status().<span class="kw">await
-                </span>}).<span class="kw">await
-            </span>}
-        },
-        <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;status&quot;</span>,
-            <span class="kw">async </span>|_fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; ServerStatus {
-                <span class="kw">if </span>context.has_auth() {
-                    <span class="prelude-val">Ok</span>(ServerStatus::ConsensusRunning)
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(ApiError::unauthorized())
-                }
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; StatusResponse {
+                <span class="kw">let </span>consensus_status = fedimint
+                    .consensus_status_cache
+                    .get(|| fedimint.get_consensus_status())
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(StatusResponse {
+                    server: ServerStatus::ConsensusRunning,
+                    consensus: <span class="prelude-val">Some</span>(consensus_status)
+                })
             }
         },
     ]

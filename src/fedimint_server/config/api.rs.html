@@ -878,6 +878,7 @@
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -889,8 +890,9 @@
 <span class="kw">use </span>fedimint_aead::random_salt;
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
-    PeerServerParams, ServerStatus, WsAdminClient,
+    PeerServerParams, WsAdminClient,
 };
+<span class="kw">use </span>fedimint_core::api::{ServerStatus, StatusResponse};
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -1129,7 +1131,7 @@
     }
 
     <span class="doccomment">/// Returns the server status
-    </span><span class="kw">pub async fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerStatus {
+    </span><span class="kw">pub async fn </span>server_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerStatus {
         <span class="kw">let </span>has_upgrade_flag = { <span class="self">self</span>.has_upgrade_flag().<span class="kw">await </span>};
 
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
@@ -1448,12 +1450,12 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;status&quot;</span>,
-            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; ServerStatus {
-                <span class="kw">if </span>context.has_auth() {
-                    <span class="prelude-val">Ok</span>(config.status().<span class="kw">await</span>)
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">Err</span>(ApiError::unauthorized())
-                }
+            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, _context, _v: ()| -&gt; StatusResponse {
+                <span class="kw">let </span>server = config.server_status().<span class="kw">await</span>;
+                <span class="prelude-val">Ok</span>(StatusResponse {
+                    server,
+                    consensus: <span class="prelude-val">None
+                </span>})
             }
         },
     ]
@@ -1476,8 +1478,8 @@
     <span class="kw">use </span>std::time::Duration;
     <span class="kw">use </span>std::{env, fs};
 
-    <span class="kw">use </span>fedimint_core::admin_client::{ServerStatus, WsAdminClient};
-    <span class="kw">use </span>fedimint_core::api::FederationResult;
+    <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
+    <span class="kw">use </span>fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1576,7 +1578,7 @@
         </span>}
 
         <span class="doccomment">/// Helper for getting server status
-        </span><span class="kw">async fn </span>server_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerStatus {
+        </span><span class="kw">async fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatusResponse {
             <span class="kw">loop </span>{
                 <span class="kw">match </span><span class="self">self</span>.client.status().<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(status) =&gt; <span class="kw">return </span>status,
@@ -1647,7 +1649,7 @@
         }
 
         <span class="kw">let </span>test = <span class="kw">async </span>{
-            <span class="macro">assert_eq!</span>(leader.server_status().<span class="kw">await</span>, ServerStatus::AwaitingPassword);
+            <span class="macro">assert_eq!</span>(leader.status().<span class="kw">await</span>.server, ServerStatus::AwaitingPassword);
 
             <span class="comment">// Cannot set the password twice
             </span>leader.client.set_password().<span class="kw">await</span>.unwrap();
@@ -1665,7 +1667,7 @@
             <span class="comment">// Setup followers and send connection info
             </span><span class="kw">for </span>follower <span class="kw">in </span><span class="kw-2">&amp;mut </span>followers {
                 <span class="macro">assert_eq!</span>(
-                    follower.server_status().<span class="kw">await</span>,
+                    follower.status().<span class="kw">await</span>.server,
                     ServerStatus::AwaitingPassword
                 );
                 follower.client.set_password().<span class="kw">await</span>.unwrap();
@@ -1715,7 +1717,7 @@
             <span class="comment">// start consensus
             </span><span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
                 peer.client.start_consensus().<span class="kw">await</span>.ok();
-                <span class="macro">assert_eq!</span>(peer.server_status().<span class="kw">await</span>, ServerStatus::ConsensusRunning);
+                <span class="macro">assert_eq!</span>(peer.status().<span class="kw">await</span>.server, ServerStatus::ConsensusRunning);
             }
 
             <span class="comment">// shutdown
@@ -1740,9 +1742,9 @@
         <span class="kw">let </span>test2 = <span class="kw">async </span>{
             <span class="comment">// Confirm we are stuck in upgrading after an upgrade
             </span><span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
-                <span class="macro">assert_eq!</span>(peer.server_status().<span class="kw">await</span>, ServerStatus::Upgrading);
+                <span class="macro">assert_eq!</span>(peer.status().<span class="kw">await</span>.server, ServerStatus::Upgrading);
                 peer.client.start_consensus().<span class="kw">await</span>.ok();
-                <span class="macro">assert_eq!</span>(peer.server_status().<span class="kw">await</span>, ServerStatus::ConsensusRunning);
+                <span class="macro">assert_eq!</span>(peer.status().<span class="kw">await</span>.server, ServerStatus::ConsensusRunning);
             }
 
             <span class="comment">// shutdown again

@@ -258,25 +258,6 @@
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
-<a href="#273" id="273">273</a>
-<a href="#274" id="274">274</a>
-<a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -288,7 +269,8 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::{
-    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, WsFederationApi,
+    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
+    StatusResponse, WsFederationApi,
 };
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerModuleGenParamsRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -434,7 +416,7 @@
     </span>}
 
     <span class="doccomment">/// Returns the status of the server
-    </span><span class="kw">pub async fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ServerStatus&gt; {
+    </span><span class="kw">pub async fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;StatusResponse&gt; {
         <span class="self">self</span>.request_auth(<span class="string">&quot;status&quot;</span>, ApiRequestErased::default())
             .<span class="kw">await
     </span>}
@@ -460,26 +442,6 @@
             .request_current_consensus(method.to_owned(), params)
             .<span class="kw">await
     </span>}
-}
-
-<span class="doccomment">/// The state of the server returned via APIs
-</span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>ServerStatus {
-    <span class="doccomment">/// Server needs a password to read configs
-    </span><span class="attr">#[default]
-    </span>AwaitingPassword,
-    <span class="doccomment">/// Waiting for peers to share the config gen params
-    </span>SharingConfigGenParams,
-    <span class="doccomment">/// Ready to run config gen once all peers are ready
-    </span>ReadyForConfigGen,
-    <span class="doccomment">/// We failed running config gen
-    </span>ConfigGenFailed,
-    <span class="doccomment">/// Config is generated, peers should verify the config
-    </span>VerifyingConfigs,
-    <span class="doccomment">/// Restarted from a planned upgrade (requires action to start)
-    </span>Upgrading,
-    <span class="doccomment">/// Consensus is running
-    </span>ConsensusRunning,
 }
 
 <span class="doccomment">/// Sent by admin user to the API
