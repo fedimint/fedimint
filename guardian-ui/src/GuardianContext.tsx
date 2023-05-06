@@ -229,11 +229,11 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     const consensusState = await api.getConsensusConfigGenParams();
     dispatch({
       type: SETUP_ACTION_TYPE.SET_PEERS,
-      payload: Object.values(consensusState.peers),
+      payload: Object.values(consensusState.consensus.peers),
     });
     dispatch({
       type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
-      payload: consensusState.requested,
+      payload: consensusState.consensus.requested,
     });
     return consensusState;
   }, []);

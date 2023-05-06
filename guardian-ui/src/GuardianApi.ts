@@ -5,6 +5,7 @@ import {
   ConsensusStatus,
   PeerHashMap,
   ServerStatus,
+  StatusResponse,
   Versions,
 } from './types';
 
@@ -121,7 +122,8 @@ export class GuardianApi implements ApiInterface {
   /*** Shared RPC methods */
 
   status = async (): Promise<ServerStatus> => {
-    return this.rpc('status');
+    const statusResponse: StatusResponse = await this.rpc('status');
+    return statusResponse.server;
   };
 
   /*** Setup RPC methods ***/

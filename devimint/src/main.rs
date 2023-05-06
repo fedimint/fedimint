@@ -792,7 +792,7 @@ async fn run_ui(
                     .FM_LISTEN_UI
                     .as_ref()
                     .expect("FM_LISTEN_UI must be set for old ui"),
-                RunUiKind::New => &env_vars.FM_BIND_P2P,
+                RunUiKind::New => &env_vars.FM_BIND_API,
             };
 
             poll("waiting for ui/api startup", || async {

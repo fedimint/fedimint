@@ -51,7 +51,12 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
   useEffect(() => {
     async function assembleHashInfo() {
       try {
-        const [{ peers }, hashes] = await Promise.all([
+        const [
+          {
+            consensus: { peers },
+          },
+          hashes,
+        ] = await Promise.all([
           api.getConsensusConfigGenParams(),
           api.getVerifyConfigHash(),
         ]);

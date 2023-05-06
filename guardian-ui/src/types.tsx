@@ -22,6 +22,11 @@ export enum ServerStatus {
   ConsensusRunning = 'ConsensusRunning',
 }
 
+export interface StatusResponse {
+  server: ServerStatus;
+  consensus: ConsensusStatus;
+}
+
 export enum PeerConnectionStatus {
   Connected = 'Connected',
   Disconnected = 'Disconnected',
@@ -63,8 +68,11 @@ export type ConfigGenParams = {
 };
 
 export interface ConsensusState {
-  requested: ConfigGenParams;
-  peers: Record<string, Peer>;
+  consensus: {
+    requested: ConfigGenParams;
+    peers: Record<string, Peer>;
+  };
+  our_current_id: number;
 }
 
 export interface Versions {
