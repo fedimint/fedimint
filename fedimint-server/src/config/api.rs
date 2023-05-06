@@ -224,7 +224,12 @@ impl ConfigGenApi {
     /// with other peers
     pub fn get_verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
         let state = self.require_status(ServerStatus::VerifyingConfigs)?;
-        state.get_verification()
+        let config = state
+            .config
+            .clone()
+            .ok_or(ApiError::bad_request("Missing config".to_string()))?;
+
+        Ok(get_verification_hashes(&config))
     }
 
     /// Writes the configs to disk after they are generated
@@ -447,29 +452,23 @@ impl ConfigGenState {
 
         Ok(ConfigGenParams { local, consensus })
     }
+}
 
-    fn get_verification(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
-        let config = self
-            .config
-            .clone()
-            .ok_or(ApiError::bad_request("Missing config".to_string()))?;
+pub fn get_verification_hashes(config: &ServerConfig) -> BTreeMap<PeerId, sha256::Hash> {
+    let mut hashes = BTreeMap::new();
+    for (peer, cert) in config.consensus.tls_certs.iter() {
+        let mut engine = HashEngine::default();
 
-        let mut hashes = BTreeMap::new();
-        for (peer, cert) in config.consensus.tls_certs.iter() {
-            let mut engine = HashEngine::default();
-            let client_config_resp = config
-                .consensus
-                .try_to_config_response(&self.settings.registry)
-                .expect("hashes");
+        config
+            .consensus
+            .consensus_encode(&mut engine)
+            .expect("hashes");
+        cert.consensus_encode(&mut engine).expect("hashes");
 
-            client_config_resp.client_config.consensus_hash();
-            cert.consensus_encode(&mut engine).expect("hashes");
-
-            let hash = sha256::Hash::from_engine(engine);
-            hashes.insert(*peer, hash);
-        }
-        Ok(hashes)
+        let hash = sha256::Hash::from_engine(engine);
+        hashes.insert(*peer, hash);
     }
+    hashes
 }
 
 #[async_trait]

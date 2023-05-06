@@ -268,8 +268,6 @@ impl ConsensusServer {
         let our_hash = self
             .cfg
             .consensus
-            .to_config_response(&self.consensus.module_inits)
-            .client_config
             .consensus_hash();
 
         // Confirm our hash matches with peers
