@@ -17,7 +17,7 @@ interface FedConnectInfo {
 
 export const ConnectFederation = (connect: ConnectFederationProps) => {
 	const { mintgate } = React.useContext(ApiContext);
-
+	const [errorMsg, setErrorMsg] = useState<string>('');
 	const [connectInfo, setConnectInfo] = useState<FedConnectInfo>({
 		value: '',
 		isValid: false,
@@ -26,44 +26,17 @@ export const ConnectFederation = (connect: ConnectFederationProps) => {
 	const handleInputString = (event: React.ChangeEvent<HTMLInputElement>) => {
 		event.preventDefault();
 		const { value } = event.target;
-
-		try {
-			let parsed = JSON.parse(value);
-
-			if (typeof parsed === 'string') {
-				// Bug: why would we need a second pass at parsing json string?
-				parsed = JSON.parse(parsed);
-			}
-
-			const isValid =
-				Object.prototype.hasOwnProperty.call(parsed, 'members') &&
-				parsed['members'].length > 0 &&
-				parsed['members'].every((member: [number, string]) => {
-					return (
-						member.length === 2 &&
-						typeof member[0] === 'number' &&
-						typeof member[1] === 'string'
-						// TODO: validate member[1] is a valid web socket?
-					);
-				});
-
-			setConnectInfo({ value, isValid });
-			// TODO: Show progress UI
-		} catch {
-			setConnectInfo({ value, isValid: false });
-			// TODO: Show error UI
-		}
+		setConnectInfo({value, isValid:true});
 	};
 
 	const handleConnectFederation = async () => {
 		if (!connectInfo.isValid) return;
-
 		try {
 			const federation = await mintgate.connectFederation(connectInfo.value);
 			connect.renderConnectedFedCallback(federation);
 			// TODO: Show success UI
 		} catch (e: any) {
-			// TODO: Show error UI
+			setErrorMsg('Failed to connect to federation' + e.message);
 		}
 	};
 
@@ -93,6 +66,7 @@ export const ConnectFederation = (connect: ConnectFederationProps) => {
 					>
 						Connect 🚀
 					</Button>
+					<Box color="red.500">{errorMsg}</Box>
 				</HStack>
 			</Box>
 		</Collapse>
