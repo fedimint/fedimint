@@ -7,6 +7,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
 
 /// Constants for categorizing the logging type
+pub const LOG_BLOCKCHAIN: &str = "net::blockchain";
 pub const LOG_CONSENSUS: &str = "consensus";
 pub const LOG_CORE: &str = "core";
 pub const LOG_DB: &str = "db";
@@ -20,7 +21,6 @@ pub const LOG_TASK: &str = "task";
 pub const LOG_TEST: &str = "test";
 pub const LOG_TIMING: &str = "timing";
 pub const LOG_WALLET: &str = "wallet";
-pub const LOG_BITCOIND: &str = "bitcoind";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]
