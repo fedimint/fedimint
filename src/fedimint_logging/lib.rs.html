@@ -111,7 +111,23 @@
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::io;
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fs::File;
+<span class="kw">use </span>std::io;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
 
@@ -141,6 +157,7 @@
     tokio_console_bind: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
     with_jaeger: bool,
     with_chrome: bool,
+    with_file: <span class="prelude-ty">Option</span>&lt;File&gt;,
 }
 
 <span class="kw">impl </span>TracingSetup {
@@ -165,12 +182,25 @@
         <span class="self">self
     </span>}
 
+    <span class="kw">pub fn </span>with_file(<span class="kw-2">&amp;mut </span><span class="self">self</span>, file: <span class="prelude-ty">Option</span>&lt;File&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.with_file = file;
+        <span class="self">self
+    </span>}
+
     <span class="doccomment">/// Initialize the logging, must be called for tracing to begin
-    </span><span class="kw">pub fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">pub fn </span>init(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">use </span>tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
         <span class="kw">let </span>filter_layer =
             EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>));
+
+        <span class="kw">let </span>fmt_writer = <span class="kw">if let </span><span class="prelude-val">Some</span>(file) = <span class="self">self</span>.with_file.take() {
+            BoxMakeWriter::new(Tee::new(io::stderr, file))
+        } <span class="kw">else </span>{
+            BoxMakeWriter::new(io::stderr)
+        };
+
         <span class="kw">let </span>fmt_layer = tracing_subscriber::fmt::layer()
-            .with_writer(io::stderr)
+            .with_writer(fmt_writer)
             .with_filter(filter_layer);
 
         <span class="kw">let </span>console_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;&gt; {

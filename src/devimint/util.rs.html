@@ -274,13 +274,34 @@
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::process::Child;
-<span class="kw">use </span>tracing::warn;
+<span class="kw">use </span>tracing::{debug, warn};
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
@@ -327,12 +348,13 @@
     }
 }
 
-<span class="attr">#[derive(Default)]
-</span><span class="kw">pub struct </span>ProcessManager {}
+<span class="kw">pub struct </span>ProcessManager {
+    <span class="kw">pub </span>globals: vars::Global,
+}
 
 <span class="kw">impl </span>ProcessManager {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{}
+    <span class="kw">pub fn </span>new(globals: vars::Global) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ globals }
     }
 
     <span class="doccomment">/// Logs to $FM_LOGS_DIR/{name}.{out,err}
@@ -421,7 +443,7 @@
     }
 
     <span class="kw">pub async fn </span>run_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;std::process::Output&gt; {
-        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;&gt; {}&quot;</span>, <span class="self">self</span>.command_debug());
+        <span class="macro">debug!</span>(LOG_DEVIMINT, <span class="string">&quot;&gt; {}&quot;</span>, <span class="self">self</span>.command_debug());
         <span class="kw">let </span>output = <span class="self">self</span>.cmd.output().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!output.status.success() {
             <span class="macro">bail!</span>(
@@ -440,6 +462,26 @@
             </span>.run_inner()
             .<span class="kw">await
             </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;command: {}&quot;</span>, <span class="self">self</span>.command_debug()))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Run the command logging the output and error
+    </span><span class="kw">pub async fn </span>run_with_logging(<span class="kw-2">&amp;mut </span><span class="self">self</span>, name: String) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>logs_dir = env::var(<span class="string">&quot;FM_LOGS_DIR&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">&quot;{logs_dir}/{name}.log&quot;</span>);
+        <span class="kw">let </span>log = OpenOptions::new()
+            .append(<span class="bool-val">true</span>)
+            .create(<span class="bool-val">true</span>)
+            .open(path)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_std()
+            .<span class="kw">await</span>;
+        <span class="self">self</span>.cmd.stdout(log.try_clone()<span class="question-mark">?</span>);
+        <span class="self">self</span>.cmd.stderr(log);
+        <span class="kw">let </span>status = <span class="self">self</span>.cmd.spawn()<span class="question-mark">?</span>.wait().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>!status.success() {
+            <span class="macro">bail!</span>(<span class="string">&quot;{}&quot;</span>, status);
+        }
         <span class="prelude-val">Ok</span>(())
     }
 }

@@ -351,120 +351,19 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ops::Range;
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
+<span class="kw">use </span>futures::future;
 <span class="kw">use </span>tokio::fs;
-<span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>; <span class="comment">// TODO: remove this
 
-</span><span class="kw">type </span>EnvVars = HashMap&lt;String, String&gt;;
-
-<span class="doccomment">/// Create a map of environment variables which fedimintd and DKG can use,
-/// but which can&#39;t be defined by `build.sh` because multiple of these daemons
-/// run concurrently with different values.
-///
-/// We allow ranges of 10 ports for each fedimintd / dkg instance starting from
-/// 18173. Each port needed is incremented by 1 within this range.
-///
-/// * `peer_id` - ID of the server. Used to calculate port numbers.
-</span><span class="kw">pub fn </span>fedimint_env(peer_id: usize) -&gt; anyhow::Result&lt;HashMap&lt;String, String&gt;&gt; {
-    <span class="kw">let </span>base_port = <span class="number">8173 </span>+ <span class="number">10000</span>;
-    <span class="kw">let </span>p2p_port = base_port + (peer_id * <span class="number">10</span>);
-    <span class="kw">let </span>api_port = base_port + (peer_id * <span class="number">10</span>) + <span class="number">1</span>;
-    <span class="kw">let </span>ui_port = base_port + (peer_id * <span class="number">10</span>) + <span class="number">2</span>;
-    <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(HashMap::from_iter([
-        (<span class="string">&quot;FM_BIND_P2P&quot;</span>.into(), <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{p2p_port}&quot;</span>)),
-        (
-            <span class="string">&quot;FM_P2P_URL&quot;</span>.into(),
-            <span class="macro">format!</span>(<span class="string">&quot;fedimint://127.0.0.1:{p2p_port}&quot;</span>),
-        ),
-        (<span class="string">&quot;FM_BIND_API&quot;</span>.into(), <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{api_port}&quot;</span>)),
-        (<span class="string">&quot;FM_API_URL&quot;</span>.into(), <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{api_port}&quot;</span>)),
-        (<span class="string">&quot;FM_LISTEN_UI&quot;</span>.into(), <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{ui_port}&quot;</span>)),
-        (
-            <span class="string">&quot;FM_FEDIMINT_DATA_DIR&quot;</span>.into(),
-            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/server-{peer_id}&quot;</span>),
-        ),
-        (<span class="string">&quot;FM_PASSWORD&quot;</span>.into(), <span class="macro">format!</span>(<span class="string">&quot;pass{peer_id}&quot;</span>)),
-    ]))
-}
-
-<span class="kw">pub struct </span>Federation {
+</span><span class="kw">pub struct </span>Federation {
     <span class="comment">// client is only for internal use, use cli commands instead
     </span>client: Arc&lt;UserClient&gt;,
     members: BTreeMap&lt;usize, Fedimintd&gt;,
@@ -479,10 +378,16 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>members = BTreeMap::new();
         <span class="kw">for </span>peer_id <span class="kw">in </span>peer_ids {
-            <span class="kw">let </span>env_vars = fedimint_env(peer_id)<span class="question-mark">?</span>;
             members.insert(
                 peer_id,
-                Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, env_vars).<span class="kw">await</span><span class="question-mark">?</span>,
+                Fedimintd::new(
+                    process_mgr,
+                    bitcoind.clone(),
+                    peer_id,
+                    <span class="kw-2">&amp;</span>vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, peer_id, vars::UiKind::Old)
+                        .<span class="kw">await</span><span class="question-mark">?</span>,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>,
             );
         }
 
@@ -512,10 +417,15 @@
         <span class="kw">if </span><span class="self">self</span>.members.contains_key(<span class="kw-2">&amp;</span>peer_id) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;fedimintd-{} already running&quot;</span>, peer_id));
         }
-        <span class="kw">let </span>env_vars = fedimint_env(peer_id)<span class="question-mark">?</span>;
         <span class="self">self</span>.members.insert(
             peer_id,
-            Fedimintd::new(process_mgr, <span class="self">self</span>.bitcoind.clone(), peer_id, env_vars).<span class="kw">await</span><span class="question-mark">?</span>,
+            Fedimintd::new(
+                process_mgr,
+                <span class="self">self</span>.bitcoind.clone(),
+                peer_id,
+                <span class="kw-2">&amp;</span>vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, peer_id, vars::UiKind::Old).<span class="kw">await</span><span class="question-mark">?</span>,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>,
         );
         <span class="prelude-val">Ok</span>(())
     }
@@ -663,24 +573,17 @@
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
         bitcoind: Bitcoind,
         peer_id: usize,
-        env_vars: EnvVars,
+        env: <span class="kw-2">&amp;</span>vars::Fedimintd,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>data_dir = env_vars
-            .get(<span class="string">&quot;FM_FEDIMINT_DATA_DIR&quot;</span>)
-            .context(<span class="string">&quot;FM_FEDIMINT_DATA_DIR not found&quot;</span>)<span class="question-mark">?</span>;
-        fs::create_dir_all(data_dir).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="comment">// spawn fedimintd
-        </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(<span class="string">&quot;fedimintd&quot;</span>, <span class="string">&quot;--data-dir={cfg_dir}/server-{peer_id}&quot;</span>).envs(env_vars);
-
         <span class="macro">info!</span>(<span class="string">&quot;fedimintd-{peer_id} started&quot;</span>);
         <span class="kw">let </span>process = process_mgr
-            .spawn_daemon(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fedimintd-{peer_id}&quot;</span>), cmd)
+            .spawn_daemon(
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fedimintd-{peer_id}&quot;</span>),
+                <span class="macro">cmd!</span>(<span class="string">&quot;fedimintd&quot;</span>).envs(env.vars()),
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// TODO: wait for federation to start
-        </span><span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
             process,
         })
@@ -692,148 +595,111 @@
     }
 }
 
-<span class="kw">pub async fn </span>run_dkg(root_task_group: <span class="kw-2">&amp;</span>TaskGroup, servers: usize) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">async fn </span>create_tls(id: usize, sender: Sender&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="comment">// set env vars
-        </span><span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server {id}!&quot;</span>);
-        <span class="kw">let </span>env_vars = fedimint_env(id)<span class="question-mark">?</span>;
-        <span class="kw">let </span>p2p_url = env_vars.get(<span class="string">&quot;FM_P2P_URL&quot;</span>).context(<span class="string">&quot;FM_P2P_URL not found&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>api_url = env_vars.get(<span class="string">&quot;FM_API_URL&quot;</span>).context(<span class="string">&quot;FM_API_URL not found&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>out_dir = env_vars
-            .get(<span class="string">&quot;FM_FEDIMINT_DATA_DIR&quot;</span>)
-            .context(<span class="string">&quot;FM_FEDIMINT_DATA_DIR not found&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>cert_path = <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/tls-cert&quot;</span>);
+<span class="kw">pub async fn </span>run_dkg(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, servers: usize) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>create_tls(id: usize, env: <span class="kw-2">&amp;</span>vars::Fedimintd) -&gt; anyhow::Result&lt;String&gt; {
+        <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server {id}!&quot;</span>);
 
-        <span class="comment">// create out-dir
-        </span>fs::create_dir(<span class="kw-2">&amp;</span>out_dir).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="macro">info!</span>(<span class="string">&quot;creating TLS certs created for started {server_name} in {out_dir}&quot;</span>);
         <span class="macro">cmd!</span>(
             <span class="string">&quot;distributedgen&quot;</span>,
             <span class="string">&quot;create-cert&quot;</span>,
-            <span class="string">&quot;--p2p-url={p2p_url}&quot;</span>,
-            <span class="string">&quot;--api-url={api_url}&quot;</span>,
-            <span class="string">&quot;--out-dir={out_dir}&quot;</span>,
+            <span class="string">&quot;--p2p-url&quot;</span>,
+            <span class="kw-2">&amp;</span>env.FM_P2P_URL,
+            <span class="string">&quot;--api-url&quot;</span>,
+            <span class="kw-2">&amp;</span>env.FM_API_URL,
+            <span class="string">&quot;--out-dir&quot;</span>,
+            utf8(<span class="kw-2">&amp;</span>env.FM_DATA_DIR),
             <span class="string">&quot;--name={server_name}&quot;</span>,
         )
-        .envs(fedimint_env(id)<span class="question-mark">?</span>)
-        .run()
+        .envs(env.vars())
+        .run_with_logging(<span class="macro">format!</span>(<span class="string">&quot;fedimintd-{id}&quot;</span>))
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(<span class="string">&quot;TLS certs created for started {server_name}&quot;</span>);
 
-        <span class="comment">// TODO: read TLS cert from disk and return if over channel
-        </span><span class="kw">let </span>cert = fs::read_to_string(cert_path)
+        <span class="kw">let </span>cert = fs::read_to_string(env.FM_DATA_DIR.join(<span class="string">&quot;tls-cert&quot;</span>))
             .<span class="kw">await
             </span>.context(<span class="string">&quot;could not read TLS cert from disk&quot;</span>)<span class="question-mark">?</span>;
 
-        sender
-            .send(cert)
-            .<span class="kw">await
-            </span>.context(<span class="string">&quot;failed to send cert over channel&quot;</span>)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(cert)
     }
 
-    <span class="kw">async fn </span>run_distributedgen(id: usize, certs: Vec&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>run_distributedgen(
+        id: usize,
+        env: <span class="kw-2">&amp;</span>vars::Fedimintd,
+        certs: Vec&lt;String&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>certs = certs.join(<span class="string">&quot;,&quot;</span>);
-        <span class="kw">let </span>cfg_dir = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>server_name = <span class="macro">format!</span>(<span class="string">&quot;Server-{id}&quot;</span>);
 
-        <span class="kw">let </span>env_vars = fedimint_env(id)<span class="question-mark">?</span>;
-        <span class="kw">let </span>bind_p2p = env_vars
-            .get(<span class="string">&quot;FM_BIND_P2P&quot;</span>)
-            .expect(<span class="string">&quot;fedimint_env sets this key&quot;</span>);
-        <span class="kw">let </span>bind_api = env_vars
-            .get(<span class="string">&quot;FM_BIND_API&quot;</span>)
-            .expect(<span class="string">&quot;fedimint_env sets this key&quot;</span>);
-        <span class="kw">let </span>out_dir = env_vars
-            .get(<span class="string">&quot;FM_FEDIMINT_DATA_DIR&quot;</span>)
-            .expect(<span class="string">&quot;fedimint_env sets this key&quot;</span>);
-
-        <span class="macro">info!</span>(<span class="string">&quot;creating TLS certs created for started {server_name} in {out_dir}&quot;</span>);
         <span class="macro">cmd!</span>(
             <span class="string">&quot;distributedgen&quot;</span>,
             <span class="string">&quot;run&quot;</span>,
-            <span class="string">&quot;--bind-p2p={bind_p2p}&quot;</span>,
-            <span class="string">&quot;--bind-api={bind_api}&quot;</span>,
-            <span class="string">&quot;--out-dir={out_dir}&quot;</span>,
+            <span class="string">&quot;--bind-p2p&quot;</span>,
+            <span class="kw-2">&amp;</span>env.FM_BIND_P2P,
+            <span class="string">&quot;--bind-api&quot;</span>,
+            <span class="kw-2">&amp;</span>env.FM_BIND_API,
+            <span class="string">&quot;--out-dir&quot;</span>,
+            utf8(<span class="kw-2">&amp;</span>env.FM_DATA_DIR),
             <span class="string">&quot;--certs={certs}&quot;</span>,
         )
-        .envs(fedimint_env(id)<span class="question-mark">?</span>)
-        .run()
+        .envs(env.vars())
+        .run_with_logging(<span class="macro">format!</span>(<span class="string">&quot;fedimintd-{id}&quot;</span>))
         .<span class="kw">await
-        </span>.unwrap_or_else(|e| <span class="macro">panic!</span>(<span class="string">&quot;DKG failed for {server_name} {e:?}&quot;</span>));
+        </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;dkg run for {server_name}&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(<span class="string">&quot;DKG created for started {server_name}&quot;</span>);
-
-        <span class="comment">// copy configs to config directory
-        </span>fs::rename(
-            <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client-connect&quot;</span>),
-            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client-connect&quot;</span>),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-        fs::rename(
-            <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client.json&quot;</span>),
-            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client.json&quot;</span>),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(<span class="string">&quot;copied client configs&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">let </span><span class="kw-2">mut </span>task_group = root_task_group.make_subgroup().<span class="kw">await</span>;
-
-    <span class="comment">// generate TLS certs
-    </span><span class="kw">let </span>(sender, <span class="kw-2">mut </span>receiver): (Sender&lt;String&gt;, Receiver&lt;String&gt;) = mpsc::channel(<span class="number">1000</span>);
-    <span class="kw">for </span>id <span class="kw">in </span><span class="number">0</span>..servers {
-        <span class="kw">let </span>sender = sender.clone();
-        task_group
-            .spawn(
-                <span class="macro">format!</span>(<span class="string">&quot;create TLS certs for server {id}&quot;</span>),
-                <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                    <span class="macro">info!</span>(<span class="string">&quot;generating certs for server {}&quot;</span>, id);
-                    create_tls(id, sender).<span class="kw">await</span>.expect(<span class="string">&quot;create_tls failed&quot;</span>);
-                    <span class="macro">info!</span>(<span class="string">&quot;generating certs for server {}&quot;</span>, id);
-                },
-            )
-            .<span class="kw">await</span>;
-    }
-    task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;Generated TLS certs&quot;</span>);
+    <span class="kw">let </span>fedimintd_envs = future::try_join_all(
+        (<span class="number">0</span>..servers).map(|id| vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, id, vars::UiKind::Old)),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>certs = future::try_join_all(
+        fedimintd_envs
+            .iter()
+            .enumerate()
+            .map(|(id, env)| create_tls(id, env)),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="comment">// collect TLS certs
-    </span><span class="kw">let </span><span class="kw-2">mut </span>certs = <span class="macro">vec!</span>[];
-    <span class="kw">while </span>certs.len() &lt; servers {
-        <span class="kw">let </span>cert = receiver
-            .recv()
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;couldn&#39;t receive cert over channel&quot;</span>);
-        certs.push(cert)
-    }
-    <span class="kw">let </span>certs_string = certs.join(<span class="string">&quot;,&quot;</span>);
-    <span class="macro">info!</span>(<span class="string">&quot;Collected TLS certs: {certs_string}&quot;</span>);
+    <span class="macro">info!</span>(
+        <span class="string">&quot;Collected TLS certs: {certs_string}&quot;</span>,
+        certs_string = certs.join(<span class="string">&quot;,&quot;</span>)
+    );
 
-    <span class="comment">// generate keys
-    </span><span class="kw">let </span><span class="kw-2">mut </span>task_group = root_task_group.make_subgroup().<span class="kw">await</span>;
-    <span class="kw">for </span>id <span class="kw">in </span><span class="number">0</span>..servers {
-        <span class="kw">let </span>certs = certs.clone();
-        task_group
-            .spawn(
-                <span class="macro">format!</span>(<span class="string">&quot;create TLS certs for server {id}&quot;</span>),
-                <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                    <span class="macro">info!</span>(<span class="string">&quot;generating keys for server {}&quot;</span>, id);
-                    run_distributedgen(id, certs)
-                        .<span class="kw">await
-                        </span>.expect(<span class="string">&quot;run_distributedgen failed&quot;</span>);
-                    <span class="macro">info!</span>(<span class="string">&quot;generating keys for server {}&quot;</span>, id);
-                },
-            )
-            .<span class="kw">await</span>;
-    }
+    <span class="macro">info!</span>(<span class="string">&quot;running distributedgen&quot;</span>);
 
-    task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    future::try_join_all(
+        fedimintd_envs
+            .iter()
+            .enumerate()
+            .map(|(id, env)| run_distributedgen(id, env, certs.clone())),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>out_dir = <span class="kw-2">&amp;</span>fedimintd_envs
+        .first()
+        .context(<span class="string">&quot;must run dkg with at least one peer&quot;</span>)<span class="question-mark">?
+        </span>.FM_DATA_DIR;
+    <span class="kw">let </span>cfg_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_DATA_DIR;
+    <span class="kw">let </span>out_dir = utf8(out_dir);
+    <span class="kw">let </span>cfg_dir = utf8(cfg_dir);
+    <span class="comment">// copy configs to config directory
+    </span>fs::rename(
+        <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client-connect&quot;</span>),
+        <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client-connect&quot;</span>),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    fs::rename(
+        <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client.json&quot;</span>),
+        <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client.json&quot;</span>),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">info!</span>(<span class="string">&quot;copied client configs&quot;</span>);
+
     <span class="macro">info!</span>(<span class="string">&quot;DKG complete&quot;</span>);
 
     <span class="prelude-val">Ok</span>(())

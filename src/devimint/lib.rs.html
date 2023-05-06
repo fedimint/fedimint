@@ -636,11 +636,14 @@
 <a href="#636" id="636">636</a>
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::future::Future;
-<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -656,7 +659,6 @@
 <span class="kw">use </span>fedimint_core::config::load_from_file;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
@@ -668,7 +670,9 @@
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">pub mod </span>util;
+<span class="kw">pub mod </span>vars;
 <span class="kw">use </span>util::<span class="kw-2">*</span>;
+<span class="kw">use </span>vars::utf8;
 <span class="kw">pub mod </span>federation;
 
 <span class="kw">pub struct </span>DevFed {
@@ -690,12 +694,12 @@
 
 <span class="kw">impl </span>Bitcoind {
     <span class="kw">pub async fn </span>new(processmgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>btc_dir = env::var(<span class="string">&quot;FM_BTC_DIR&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>btc_dir = utf8(<span class="kw-2">&amp;</span>processmgr.globals.FM_BTC_DIR);
         <span class="kw">let </span>process = processmgr
             .spawn_daemon(<span class="string">&quot;bitcoind&quot;</span>, <span class="macro">cmd!</span>(<span class="string">&quot;bitcoind&quot;</span>, <span class="string">&quot;-datadir={btc_dir}&quot;</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>url = env::var(<span class="string">&quot;FM_TEST_BITCOIND_RPC&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>url = processmgr.globals.FM_TEST_BITCOIND_RPC.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>(host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(<span class="kw-2">&amp;</span>url)<span class="question-mark">?</span>;
         <span class="kw">let </span>client = Arc::new(bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>host, auth)<span class="question-mark">?</span>);
 
@@ -777,10 +781,10 @@
 
 <span class="kw">impl </span>Lightningd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>cln_dir = env::var(<span class="string">&quot;FM_CLN_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>cln_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_CLN_DIR;
+        <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>socket_cln = PathBuf::from(cln_dir).join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
+        <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
         poll(<span class="string">&quot;lightningd&quot;</span>, || <span class="kw">async </span>{
             <span class="prelude-val">Ok</span>(ClnRpc::new(socket_cln.clone()).<span class="kw">await</span>.is_ok())
         })
@@ -793,7 +797,7 @@
         })
     }
 
-    <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, cln_dir: String) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessHandle&gt; {
+    <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, cln_dir: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessHandle&gt; {
         <span class="kw">let </span>extension_path = <span class="macro">cmd!</span>(<span class="string">&quot;which&quot;</span>, <span class="string">&quot;gateway-cln-extension&quot;</span>)
             .out_string()
             .<span class="kw">await
@@ -802,7 +806,7 @@
             <span class="string">&quot;lightningd&quot;</span>,
             <span class="string">&quot;--dev-fast-gossip&quot;</span>,
             <span class="string">&quot;--dev-bitcoind-poll=1&quot;</span>,
-            <span class="string">&quot;--lightning-dir={cln_dir}&quot;</span>,
+            <span class="macro">format!</span>(<span class="string">&quot;--lightning-dir={}&quot;</span>, utf8(cln_dir)),
             <span class="string">&quot;--plugin={extension_path}&quot;
         </span>);
 
@@ -864,15 +868,17 @@
     }
 
     <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;(ProcessHandle, LndClient)&gt; {
-        <span class="kw">let </span>lnd_dir = env::var(<span class="string">&quot;FM_LND_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(<span class="string">&quot;lnd&quot;</span>, <span class="string">&quot;--lnddir={lnd_dir}&quot;</span>);
+        <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
+            <span class="string">&quot;lnd&quot;</span>,
+            <span class="macro">format!</span>(<span class="string">&quot;--lnddir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_DIR))
+        );
 
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;lnd&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>lnd_rpc_addr = env::var(<span class="string">&quot;FM_LND_RPC_ADDR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>lnd_macaroon = env::var(<span class="string">&quot;FM_LND_MACAROON&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>lnd_tls_cert = env::var(<span class="string">&quot;FM_LND_TLS_CERT&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>lnd_rpc_addr = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_RPC_ADDR;
+        <span class="kw">let </span>lnd_macaroon = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_MACAROON;
+        <span class="kw">let </span>lnd_tls_cert = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_TLS_CERT;
         poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(fs::try_exists(<span class="kw-2">&amp;</span>lnd_tls_cert).<span class="kw">await</span><span class="question-mark">? </span>&amp;&amp; fs::try_exists(<span class="kw-2">&amp;</span>lnd_macaroon).<span class="kw">await</span><span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(fs::try_exists(lnd_tls_cert).<span class="kw">await</span><span class="question-mark">? </span>&amp;&amp; fs::try_exists(lnd_macaroon).<span class="kw">await</span><span class="question-mark">?</span>)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1028,12 +1034,12 @@
 <span class="kw">impl </span>Gatewayd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, ln: LightningNode) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>ln_name = ln.name();
-        <span class="kw">let </span>test_dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>test_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_TEST_DIR;
         <span class="kw">let </span>gateway_env: HashMap&lt;String, String&gt; = <span class="kw">match </span>ln {
             LightningNode::Cln(<span class="kw">_</span>) =&gt; HashMap::from_iter([
                 (
                     <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),
-                    <span class="macro">format!</span>(<span class="string">&quot;{test_dir}/gw-cln&quot;</span>),
+                    <span class="macro">format!</span>(<span class="string">&quot;{}/gw-cln&quot;</span>, utf8(test_dir)),
                 ),
                 (
                     <span class="string">&quot;FM_GATEWAY_LISTEN_ADDR&quot;</span>.to_owned(),
@@ -1047,7 +1053,7 @@
             LightningNode::Lnd(<span class="kw">_</span>) =&gt; HashMap::from_iter([
                 (
                     <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),
-                    <span class="macro">format!</span>(<span class="string">&quot;{test_dir}/gw-lnd&quot;</span>),
+                    <span class="macro">format!</span>(<span class="string">&quot;{}/gw-lnd&quot;</span>, utf8(test_dir)),
                 ),
                 (
                     <span class="string">&quot;FM_GATEWAY_LISTEN_ADDR&quot;</span>.to_owned(),
@@ -1137,7 +1143,7 @@
     }
 }
 
-<span class="kw">pub async fn </span>dev_fed(task_group: <span class="kw-2">&amp;</span>TaskGroup, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
+<span class="kw">pub async fn </span>dev_fed(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
     <span class="kw">let </span>start_time = fedimint_core::time::now();
     <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = <span class="macro">tokio::try_join!</span>(
@@ -1158,7 +1164,7 @@
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         <span class="kw">async </span>{
-            run_dkg(task_group, <span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            run_dkg(process_mgr, <span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;dkg done&quot;</span>);
             Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..<span class="number">4</span>).<span class="kw">await
         </span>},
