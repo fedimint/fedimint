@@ -1056,6 +1056,12 @@
 <a href="#1056" id="1056">1056</a>
 <a href="#1057" id="1057">1057</a>
 <a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -1066,7 +1072,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -1410,6 +1416,10 @@
         <span class="self">self</span>.inner.api.as_ref()
     }
 
+    <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
+        <span class="self">self</span>.inner.federation_id
+    }
+
     <span class="kw">pub fn </span>get_meta(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
         <span class="self">self</span>.inner.federation_meta.get(key).cloned()
     }
@@ -1600,6 +1610,7 @@
 
 <span class="kw">struct </span>ClientInner {
     db: Database,
+    federation_id: FederationId,
     federation_meta: BTreeMap&lt;String, String&gt;,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
@@ -1980,6 +1991,7 @@
 
         <span class="kw">let </span>client_inner = Arc::new(ClientInner {
             db,
+            federation_id: config.federation_id,
             federation_meta: config.meta,
             primary_module,
             primary_module_instance,
