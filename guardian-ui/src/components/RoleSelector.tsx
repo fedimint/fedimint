@@ -1,97 +1,64 @@
-import React from 'react';
-import {
-	Button,
-	Flex,
-	Image,
-	Radio,
-	RadioGroup,
-	VStack,
-	HStack,
-	Text,
-} from '@chakra-ui/react';
-import { GuardianRole } from '../types';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Button, VStack, Icon } from '@chakra-ui/react';
+import { GuardianRole, SETUP_ACTION_TYPE } from '../types';
 
-import Leader from './assets/Leader.png';
-import Follower from './assets/Follower.png';
-import { CustomButton } from './index';
+import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
+import { ReactComponent as StarsIcon } from '../assets/svgs/stars.svg';
+import { ReactComponent as IntersectSquareIcon } from '../assets/svgs/intersect-square.svg';
+import { RadioButtonGroup, RadioButtonOption } from './ui/RadioButtonGroup';
+import { useGuardianContext } from '../hooks';
 
-interface RoleSelectorProps {
-	selectGuardianRole: (role: GuardianRole) => void;
+interface Props {
+  next(): void;
 }
 
-export const RoleSelector = React.memo(
-	({ selectGuardianRole }: RoleSelectorProps) => {
-		return (
-			<>
-				<VStack alignItems='left'>
-					<Text fontSize='3xl'>Welcome to Fedimint!</Text>
-					<Text fontSize='xl'>
-						Are you setting up your Fedimint as a Leader or Follower?
-					</Text>
-				</VStack>
+export const RoleSelector = React.memo<Props>(({ next }) => {
+  const { dispatch } = useGuardianContext();
+  const [role, setRole] = useState<GuardianRole>();
+  const options: RadioButtonOption<GuardianRole>[] = useMemo(
+    () => [
+      {
+        value: GuardianRole.Host,
+        label: 'Leader',
+        description:
+          'Choose one of your Guardians as a Leader. The Leader will input information about the Federation.',
+        icon: StarsIcon,
+      },
+      {
+        value: GuardianRole.Follower,
+        label: 'Follower',
+        description:
+          'Guardian Followers (all other Guardians) will confirm information that the Leader inputs.',
+        icon: IntersectSquareIcon,
+      },
+    ],
+    []
+  );
 
-				<RoleOption
-					image={Leader}
-					text={'Leader'}
-					description={
-						'Choose one of your Guardians as a leader. The Leader will input information about the federation.'
-					}
-					selectOption={() => selectGuardianRole(GuardianRole.Host)}
-				/>
-				<RoleOption
-					image={Follower}
-					text={'Follower'}
-					description={
-						'Guardian Followers (all other Guardians) will confirm information that the Leader inputs.'
-					}
-					selectOption={() => selectGuardianRole(GuardianRole.Follower)}
-				/>
-				<CustomButton />
-			</>
-		);
-	}
-);
+  const handleNext = useCallback(() => {
+    if (!role) return;
+    dispatch({ type: SETUP_ACTION_TYPE.SET_ROLE, payload: role });
+    next();
+  }, [role, dispatch, next]);
 
-interface RoleOptionProps {
-	image: string;
-	text: string;
-	description: string;
-	selectOption: () => void;
-}
+  return (
+    <VStack gap={8} align='left' justify='left'>
+      <RadioButtonGroup
+        options={options}
+        value={role}
+        onChange={(value) => setRole(value)}
+      />
 
-export const RoleOption = React.memo(
-	({ image, text, description, selectOption }: RoleOptionProps) => {
-		return (
-			<Button
-				onClick={selectOption}
-				_hover={{
-					bg: '#EFF8FF',
-					color: '#175CD3',
-				}}
-				mt={5}
-				p={10}
-				width='full'
-				height={{
-					base: '106px',
-					md: '50%',
-					xl: '25%',
-				}}
-			>
-				<Flex gap={4} pr={5} alignItems='left' flexDirection='row'>
-					<Image src={image} boxSize='40px' />
-					<HStack alignItems='left' textAlign='start' flexDirection='column'>
-						<Text fontSize='16px' mb={3} pl={2}>
-							{text}
-						</Text>
-						<Text mb={8} fontSize='16px'>
-							{description}
-						</Text>
-					</HStack>
-				</Flex>
-				<RadioGroup>
-					<Radio colorScheme='#EFF8FF' pl={16} pb={10} />
-				</RadioGroup>
-			</Button>
-		);
-	}
-);
+      <div>
+        <Button
+          width='auto'
+          leftIcon={<Icon as={ArrowRightIcon} />}
+          isDisabled={!role}
+          onClick={handleNext}
+        >
+          Next
+        </Button>
+      </div>
+    </VStack>
+  );
+});

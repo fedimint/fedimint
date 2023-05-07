@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
+use config::io::PLAINTEXT_PASSWORD;
 use config::ServerConfig;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
@@ -28,7 +29,6 @@ use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
-use crate::config::io::PLAINTEXT_PASSWORD;
 use crate::consensus::server::ConsensusServer;
 use crate::consensus::HbbftConsensusOutcome;
 use crate::net::api::RpcHandlerCtx;
