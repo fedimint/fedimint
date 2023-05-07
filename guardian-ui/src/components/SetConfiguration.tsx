@@ -113,15 +113,15 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
             meta: { federation_name: federationName },
             modules: {
               // TODO: figure out way to not hard-code modules here
-              0: ['mint', { mint_amounts: mintAmounts }],
-              1: [
+              0: ['ln', null],
+              1: ['mint', { mint_amounts: mintAmounts }],
+              2: [
                 'wallet',
                 {
                   finality_delay: parseInt(blockConfirmations, 10),
                   network: network as Network,
                 },
               ],
-              2: ['ln', null],
             },
           },
         });
