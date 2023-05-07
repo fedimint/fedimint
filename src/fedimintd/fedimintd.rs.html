@@ -266,30 +266,74 @@
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
 <span class="kw">use </span>fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
-<span class="kw">use </span>fedimint_core::timing;
 <span class="kw">use </span>fedimint_core::util::write_overwrite;
+<span class="kw">use </span>fedimint_core::{timing, Amount};
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{
-    read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG, PLAINTEXT_PASSWORD,
+    CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG, PLAINTEXT_PASSWORD,
 };
 <span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
+<span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::attach_default_module_gen_params;
 <span class="kw">use </span><span class="kw">crate</span>::ui::{run_ui, UiMessage};
 
 <span class="doccomment">/// Time we will wait before forcefully shutting down tasks
@@ -304,7 +348,7 @@
     </span><span class="comment">// TODO: should probably never send password to the server directly, rather send the hash via
     // the API
     </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
-    </span><span class="kw">pub </span>password: String,
+    </span><span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// Port to run admin UI on
     </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_LISTEN_UI&quot;</span>)]
     </span><span class="kw">pub </span>listen_ui: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
@@ -314,6 +358,29 @@
     <span class="doccomment">/// Enable telemetry logging
     </span><span class="attr">#[arg(long, default_value = <span class="string">&quot;false&quot;</span>)]
     </span><span class="kw">pub </span>with_telemetry: bool,
+
+    <span class="doccomment">/// Address we bind to for federation communication
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_BIND_P2P&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8173&quot;</span>)]
+    </span>bind_p2p: SocketAddr,
+    <span class="doccomment">/// Our external address for communicating with our peers
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_P2P_URL&quot;</span>, default_value = <span class="string">&quot;fedimint://127.0.0.1:8173&quot;</span>)]
+    </span>p2p_url: Url,
+    <span class="doccomment">/// Address we bind to for exposing the API
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_BIND_API&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:8174&quot;</span>)]
+    </span>bind_api: SocketAddr,
+    <span class="doccomment">/// Our API address for clients to connect to us
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_API_URL&quot;</span>, default_value = <span class="string">&quot;ws://127.0.0.1:8174&quot;</span>)]
+    </span>api_url: Url,
+    <span class="doccomment">/// Max denomination of notes issued by the federation (in millisats)
+    /// default = 10 BTC
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_MAX_DENOMINATION&quot;</span>, default_value = <span class="string">&quot;1000000000000&quot;</span>)]
+    </span>max_denomination: Amount,
+    <span class="doccomment">/// The bitcoin network that fedimint will be running on
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_BITCOIN_NETWORK&quot;</span>, default_value = <span class="string">&quot;regtest&quot;</span>)]
+    </span>network: bitcoin::network::constants::Network,
+    <span class="doccomment">/// The bitcoin network that fedimint will be running on
+    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_FINALITY_DELAY&quot;</span>, default_value = <span class="string">&quot;10&quot;</span>)]
+    </span>finality_delay: u32,
 }
 
 <span class="doccomment">/// `fedimintd` builder
@@ -461,19 +528,19 @@
     opts: ServerOpts,
     <span class="kw-2">mut </span>task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
+    <span class="kw-2">mut </span>module_gens_params: ServerModuleGenParamsRegistry,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>(ui_sender, <span class="kw-2">mut </span>ui_receiver) = tokio::sync::mpsc::channel(<span class="number">1</span>);
 
     <span class="macro">info!</span>(<span class="string">&quot;Starting pre-check&quot;</span>);
 
     <span class="comment">// Run admin UI if a socket address was given for it
-    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(listen_ui) = opts.listen_ui {
+    </span><span class="kw">let </span>module_gens_params_clone = module_gens_params.clone();
+    <span class="kw">if let </span>(<span class="prelude-val">Some</span>(listen_ui), <span class="prelude-val">Some</span>(password)) = (opts.listen_ui, opts.password.clone()) {
         <span class="kw">let </span>module_gens = module_gens.clone();
         <span class="comment">// Spawn admin UI
         </span><span class="kw">let </span>data_dir = opts.data_dir.clone();
         <span class="kw">let </span>ui_task_group = task_group.make_subgroup().<span class="kw">await</span>;
-        <span class="kw">let </span>password = opts.password.clone();
         task_group
             .spawn(<span class="string">&quot;admin-ui&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
                 run_ui(
@@ -483,7 +550,7 @@
                     password,
                     ui_task_group,
                     module_gens,
-                    module_gens_params,
+                    module_gens_params_clone,
                 )
                 .<span class="kw">await</span>;
             })
@@ -505,10 +572,17 @@
         }
     }
 
-    <span class="macro">info!</span>(<span class="string">&quot;Starting consensus&quot;</span>);
+    attach_default_module_gen_params(
+        <span class="kw-2">&amp;mut </span>module_gens_params,
+        opts.max_denomination,
+        opts.network,
+        opts.finality_delay,
+    );
 
-    <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>opts.password, opts.data_dir.clone())<span class="question-mark">?</span>;
-    <span class="kw">let </span>decoders = module_gens.decoders(cfg.iter_module_instances())<span class="question-mark">?</span>;
+    <span class="kw">let </span>module_kinds = module_gens_params
+        .iter_modules()
+        .map(|(id, kind, <span class="kw">_</span>)| (id, kind));
+    <span class="kw">let </span>decoders = module_gens.decoders(module_kinds.into_iter())<span class="question-mark">?</span>;
     <span class="kw">let </span>db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
         decoders.clone(),
@@ -517,16 +591,22 @@
     <span class="comment">// TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed passsword, so we need to
     // overwrite
-    </span>write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)<span class="question-mark">?</span>;
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(password) = opts.password {
+        write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), password)<span class="question-mark">?</span>;
+    };
+    <span class="kw">let </span>default_params = ConfigGenParamsRequest {
+        meta: BTreeMap::new(),
+        modules: module_gens_params,
+    };
     <span class="kw">let </span><span class="kw-2">mut </span>api = FedimintServer {
         data_dir: opts.data_dir,
         settings: ConfigGenSettings {
-            download_token_limit: cfg.local.download_token_limit,
-            p2p_bind: cfg.local.fed_bind,
-            api_bind: cfg.local.api_bind,
-            p2p_url: cfg.local.p2p_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
-            api_url: cfg.consensus.api_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
-            default_params: Default::default(),
+            download_token_limit: <span class="prelude-val">None</span>,
+            p2p_bind: opts.bind_p2p,
+            api_bind: opts.bind_api,
+            p2p_url: opts.p2p_url,
+            api_url: opts.api_url,
+            default_params,
             max_connections: fedimint_server::config::max_connections(),
             registry: module_gens,
         },

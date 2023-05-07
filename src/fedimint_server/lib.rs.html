@@ -277,6 +277,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, Context};
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>config::io::PLAINTEXT_PASSWORD;
 <span class="kw">use </span>config::ServerConfig;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -296,7 +297,6 @@
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenApi, ConfigGenSettings};
-<span class="kw">use </span><span class="kw">crate</span>::config::io::PLAINTEXT_PASSWORD;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::ConsensusServer;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::HbbftConsensusOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::RpcHandlerCtx;
