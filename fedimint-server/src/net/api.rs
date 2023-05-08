@@ -653,6 +653,7 @@ impl<T: Clone> ExpiringCache<T> {
 mod tests {
 
     use fedimint_core::api::ConsensusContribution;
+    use fedimint_core::task;
     use fedimint_core::time::now;
 
     use super::*;
@@ -788,7 +789,7 @@ mod tests {
             })
             .await;
         assert_eq!(result, 1);
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        task::sleep(Duration::from_secs(2)).await;
         let result = cache
             .get(|| async {
                 counter += 1;

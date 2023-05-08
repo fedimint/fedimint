@@ -5,7 +5,7 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, State
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{TieredMulti, TransactionId};
+use fedimint_core::{task, TieredMulti, TransactionId};
 use fedimint_mint_common::MintInput;
 
 use crate::input::{
@@ -152,7 +152,7 @@ async fn transition_user_cancel(
 
 async fn await_timeout_cancel(deadline: SystemTime) {
     if let Ok(time_until_deadline) = deadline.duration_since(fedimint_core::time::now()) {
-        tokio::time::sleep(time_until_deadline).await;
+        task::sleep(time_until_deadline).await;
     }
 }
 

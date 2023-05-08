@@ -8,7 +8,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::TransactionId;
+use fedimint_core::{task, TransactionId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
@@ -212,7 +212,7 @@ async fn trigger_created_accepted(
                 }
             }
         }
-        tokio::time::sleep(FETCH_INTERVAL).await;
+        task::sleep(FETCH_INTERVAL).await;
     }
 }
 
@@ -239,14 +239,14 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiRequestErased;
-    use fedimint_core::task::TaskGroup;
+    use fedimint_core::task::{sleep, TaskGroup};
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
     use fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
     use rand::thread_rng;
     use serde_json::Value;
     use tokio::sync::Mutex;
-    use tokio::time::{sleep, timeout};
+    use tokio::time::timeout;
 
     use crate::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationId, OperationState};
     use crate::transaction::{

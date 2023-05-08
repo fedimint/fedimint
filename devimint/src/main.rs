@@ -16,6 +16,7 @@ use devimint::{
 };
 use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
 use tokio::net::TcpStream;
@@ -997,8 +998,8 @@ struct Args {
 async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result<T> {
     let ready_file = &global.FM_READY_FILE;
     match result {
-        Ok(_) => fs::write(ready_file, "READY").await?,
-        Err(_) => fs::write(ready_file, "ERROR").await?,
+        Ok(_) => write_overwrite_async(ready_file, "READY").await?,
+        Err(_) => write_overwrite_async(ready_file, "ERROR").await?,
     }
     result
 }
@@ -1032,7 +1033,11 @@ use std::fmt::Write;
 
 async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     let globals = vars::Global::new(&arg.test_dir, arg.fed_size).await?;
-    let log_file = fs::File::create(globals.FM_LOGS_DIR.join("devimint.log"))
+    let log_file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(globals.FM_LOGS_DIR.join("devimint.log"))
         .await?
         .into_std()
         .await;
@@ -1046,7 +1051,7 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         writeln!(env_string, r#"export {var}="{value}""#)?; // hope that value doesn't contain a "
         std::env::set_var(var, value);
     }
-    fs::write(globals.FM_TEST_DIR.join("env"), env_string).await?;
+    write_overwrite_async(globals.FM_TEST_DIR.join("env"), env_string).await?;
     let process_mgr = ProcessManager::new(globals);
     let task_group = TaskGroup::new();
     task_group.install_kill_handler();

@@ -9,9 +9,9 @@ use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_core::maybe_add_send_sync;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::{maybe_add_send_sync, task};
 use futures::future::select_all;
 use futures::stream::StreamExt;
 use tokio::select;
@@ -306,7 +306,7 @@ where
         if active_states.is_empty() {
             // FIXME: what to do in this case? Probably best to subscribe to DB eventually
             debug!("No state transitions available, waiting before re-trying");
-            fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).await;
+            task::sleep(EXECUTOR_POLL_INTERVAL).await;
             return Ok(());
         }
         trace!("Active states: {:?}", active_states);
@@ -781,7 +781,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::task::TaskGroup;
+    use fedimint_core::task::{self, TaskGroup};
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
@@ -955,9 +955,9 @@ mod tests {
         );
 
         // TODO build await fn+timeout or allow manual driving of executor
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        task::sleep(Duration::from_secs(1)).await;
         sender.send(0).unwrap();
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        task::sleep(Duration::from_secs(2)).await;
 
         assert!(
             executor

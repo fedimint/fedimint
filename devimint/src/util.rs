@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 
 use anyhow::{anyhow, bail};
+use fedimint_core::task;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
@@ -264,7 +265,7 @@ where
             );
             last_time = now;
         }
-        tokio::time::sleep(POLL_INTERVAL).await;
+        task::sleep(POLL_INTERVAL).await;
     }
 }
 
