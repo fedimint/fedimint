@@ -12,12 +12,16 @@ rules:
   languages:
     - rust
   message: Overwritting existing files is rarely a good idea. Use fedimint-core::util::write_overwrite if you are really sure you want to overwrite existing data or `fedimint-core::util::write_overwrite::write_new` if you don't. Alternatively use `fs::File::options` and express intention explicitly.
-  pattern: std::fs::write
+  pattern-either:
+    - tokio::fs::write
+    - std::fs::write
   severity: WARNING
 
 - id: ban-file-create
   languages:
     - rust
   message: Overwritting existing files is rarely a good idea. `fs::File::options` and express intention explicitly.
-  pattern: std::fs::File::create
+  pattern-either:
+    - pattern: std::fs::File::create
+    - pattern: tokio::fs::File::create
   severity: WARNING
