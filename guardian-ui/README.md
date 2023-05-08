@@ -14,7 +14,7 @@ From root repo directory:
 
 Run the following in separate terminals:
 
-1. In repository root, run `./scripts/run-ui.sh`
+1. In repository root, run `./scripts/run-ui.sh new`
 1. In `guardian-ui/`, run `PORT=3000 REACT_APP_FM_CONFIG_API="ws://127.0.0.1:18174" yarn start`
    - This will be your "Host" instance
 1. In `guardian-ui/`, run `PORT=3001 REACT_APP_FM_CONFIG_API="ws://127.0.0.1:18184" yarn start`
