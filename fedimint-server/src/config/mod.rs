@@ -57,9 +57,6 @@ const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 /// The env var for maximum open connections the API can handle
 const ENV_MAX_CLIENT_CONNECTIONS: &str = "FM_MAX_CLIENT_CONNECTIONS";
 
-/// How many times a config download token can be used by a client
-const DEFAULT_CONFIG_DOWNLOAD_LIMIT: u64 = 100;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
 pub struct ServerConfig {
@@ -734,7 +731,7 @@ impl ConfigGenParams {
             our_id,
             peers,
             federation_name,
-            Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
+            None,
             module_params,
         ))
     }
