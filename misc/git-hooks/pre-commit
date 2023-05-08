@@ -71,7 +71,7 @@ function check_nix() {
   set -eo pipefail
 
   # shellcheck disable=SC2046
-  nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$') 2> >(grep -v "0 / 7 would have been reformatted")
+  nixpkgs-fmt --check $(echo "$git_ls_nonbinary_files" | grep -E '.*\.nix$') 2> >(grep -v "0 / 7 would have been reformatted")
 }
 export -f check_nix
 
@@ -91,7 +91,7 @@ function check_dbg() {
   set -eo pipefail
 
   errors=""
-  for path in $(echo "$git_ls_files" | grep  '.*\.rs'); do
+  for path in $(echo "$git_ls_nonbinary_files" | grep  '.*\.rs'); do
     if grep 'dbg!(' "$path"  > /dev/null; then
       >&2 echo "$path contains dbg! macro"
       errors="true"
@@ -122,7 +122,7 @@ export -f check_semgrep
 function check_shellcheck() {
   set -eo pipefail
 
-  for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
+  for path in $(echo "$git_ls_nonbinary_files" | grep -E '.*\.sh$')  ; do
     shellcheck --severity=warning "$path"
   done
 }
@@ -133,7 +133,7 @@ function check_eof() {
   set -eo pipefail
 
   errors=""
-  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png|log)' | grep -v -E '^db/'); do
+  for path in $(echo "$git_ls_nonbinary_files" | grep -v -E '.*\.(ods|jpg|png|log)' | grep -v -E '^db/'); do
 
     # extra branches for clarity
     if [ ! -s "$path" ]; then
