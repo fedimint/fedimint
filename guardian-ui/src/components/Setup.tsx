@@ -19,6 +19,7 @@ import { ConnectGuardians } from './ConnectGuardians';
 import { RunDKG } from './RunDKG';
 import { VerifyGuardians } from './VerifyGuardians';
 import { SetupComplete } from './SetupComplete';
+import { FederationDashboard } from './FederationDashboard';
 
 const PROGRESS_ORDER: SetupProgress[] = [
   SetupProgress.Start,
@@ -31,7 +32,14 @@ const PROGRESS_ORDER: SetupProgress[] = [
 
 export const Setup: React.FC = () => {
   const {
-    state: { progress, role, password, needsAuth, isInitializing },
+    state: {
+      progress,
+      role,
+      password,
+      needsAuth,
+      isInitializing,
+      isSetupComplete,
+    },
     dispatch,
   } = useGuardianContext();
 
@@ -62,6 +70,8 @@ export const Setup: React.FC = () => {
     title = 'Welcome back!';
     subtitle = 'Please enter your password.';
     content = <Login />;
+  } else if (isSetupComplete) {
+    content = <FederationDashboard />;
   } else {
     switch (progress) {
       case SetupProgress.Start:
