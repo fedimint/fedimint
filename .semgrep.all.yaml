@@ -25,3 +25,10 @@ rules:
     - pattern: std::fs::File::create
     - pattern: tokio::fs::File::create
   severity: WARNING
+
+- id: ban-tokio-sleep
+  languages:
+    - rust
+  message: `tokio::time::sleep` doesn't work in WASM. Use `fedimint_core::task::sleep` instead.
+  pattern: tokio::time::sleep
+  severity: WARNING
