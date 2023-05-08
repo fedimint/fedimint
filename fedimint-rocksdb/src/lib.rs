@@ -112,8 +112,8 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         })
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        fedimint_core::task::block_in_place(|| {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        Ok(fedimint_core::task::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
@@ -130,7 +130,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
                 })
                 .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
             Box::pin(stream::iter(rocksdb_iter))
-        })
+        }))
     }
 
     async fn raw_find_by_prefix_sorted_descending(
@@ -197,8 +197,8 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
         panic!("Cannot remove from a read only transaction");
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
-        fedimint_core::task::block_in_place(|| {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        Ok(fedimint_core::task::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let rocksdb_iter = self
                 .0
@@ -211,7 +211,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
                 })
                 .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
             Box::pin(stream::iter(rocksdb_iter))
-        })
+        }))
     }
 
     async fn raw_find_by_prefix_sorted_descending(
