@@ -77,10 +77,17 @@ export interface ConsensusState {
 
 export interface Versions {
   core: {
-    consensus: string;
-    api: string;
+    consensus: number;
+    api: { major: number; minor: number }[];
   };
-  modules: Record<number, { core: string; module: string; api: string }>;
+  modules: Record<
+    number,
+    {
+      core: string;
+      module: string;
+      api: { major: number; minor: number }[];
+    }
+  >;
 }
 
 export interface PeerStatus {

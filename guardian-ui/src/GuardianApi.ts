@@ -17,7 +17,7 @@ export interface ApiInterface {
   testPassword: (password: string) => Promise<boolean>;
 
   // Shared RPC methods
-  status: () => Promise<ServerStatus>;
+  status: () => Promise<StatusResponse>;
 
   // Setup RPC methods (only exist during setup)
   setPassword: (password: string) => Promise<void>;
@@ -35,7 +35,6 @@ export interface ApiInterface {
   // Running RPC methods (only exist after run_consensus)
   version: () => Promise<Versions>;
   fetchEpochCount: () => Promise<number>;
-  consensusStatus: () => Promise<ConsensusStatus>;
 }
 
 const SESSION_STORAGE_KEY = 'guardian-ui-key';
@@ -124,9 +123,8 @@ export class GuardianApi implements ApiInterface {
 
   /*** Shared RPC methods */
 
-  status = async (): Promise<ServerStatus> => {
-    const statusResponse: StatusResponse = await this.rpc('status');
-    return statusResponse.server;
+  status = (): Promise<StatusResponse> => {
+    return this.rpc('status');
   };
 
   /*** Setup RPC methods ***/
@@ -192,7 +190,7 @@ export class GuardianApi implements ApiInterface {
       // Confirm satus.
       try {
         const status = await this.status();
-        if (status === ServerStatus.ConsensusRunning) {
+        if (status.server === ServerStatus.ConsensusRunning) {
           return;
         } else {
           throw new Error(`Expected status ConsensusRunning, got ${status}`);

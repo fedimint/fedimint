@@ -134,7 +134,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
       .then((status) => {
         // If we're still waiting for a password, restart the whole thing.
         // Otherwise, fetch the password and indicate if we need auth.
-        if (status === ServerStatus.AwaitingPassword) {
+        if (status.server === ServerStatus.AwaitingPassword) {
           dispatch({
             type: SETUP_ACTION_TYPE.SET_INITIAL_STATE,
             payload: null,
@@ -154,21 +154,21 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
           }
         }
         // If we're ready for DKG, move them to approve the config to start.
-        if (status === ServerStatus.ReadyForConfigGen) {
+        if (status.server === ServerStatus.ReadyForConfigGen) {
           dispatch({
             type: SETUP_ACTION_TYPE.SET_PROGRESS,
             payload: SetupProgress.ConnectGuardians,
           });
         }
         // If we're supposed to be verifying, jump to peer validation screen
-        if (status === ServerStatus.VerifyingConfigs) {
+        if (status.server === ServerStatus.VerifyingConfigs) {
           dispatch({
             type: SETUP_ACTION_TYPE.SET_PROGRESS,
             payload: SetupProgress.VerifyGuardians,
           });
         }
         // If consensus is running, skip past all setup
-        if (status === ServerStatus.ConsensusRunning) {
+        if (status.server === ServerStatus.ConsensusRunning) {
           dispatch({
             type: SETUP_ACTION_TYPE.SET_IS_SETUP_COMPLETE,
             payload: true,
