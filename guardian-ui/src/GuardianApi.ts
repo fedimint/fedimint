@@ -91,6 +91,9 @@ export class GuardianApi implements ApiInterface {
   };
 
   shutdown = async (): Promise<boolean> => {
+    if (this.connectPromise) {
+      this.connectPromise = null;
+    }
     if (this.websocket) {
       const evt: CloseEvent = await this.websocket.close();
       this.websocket = null;
@@ -170,22 +173,44 @@ export class GuardianApi implements ApiInterface {
     return this.rpc('run_dkg');
   };
 
-  startConsensus = (): Promise<void> => {
-    // Special case: start_consensus kills the server. Set a timeout and restart after short period.
-    const rpcPromise = this.rpc<null>('start_consensus');
-    const timeoutPromise = new Promise((resolve) =>
-      setTimeout(() => resolve(true), 5000)
-    );
+  startConsensus = async (): Promise<void> => {
+    const sleep = (time: number) =>
+      new Promise((resolve) => setTimeout(resolve, time));
 
-    return Promise.any([rpcPromise, timeoutPromise]).then(async () => {
-      // Restart a fresh socket and make sure the status is correct.
+    // Special case: start_consensus kills the server, which sometimes causes it not to respond.
+    // If it doesn't respond within 5 seconds, continue on with status checks.
+    await Promise.any([this.rpc<null>('start_consensus'), sleep(5000)]);
+
+    // Try to reconnect and confirm that status is ConsensusRunning. Retry multiple
+    // times, but eventually give up and just throw.
+    let tries = 0;
+    const maxTries = 10;
+    const attempConfirmConsensusRunning = async (): Promise<void> => {
+      // Explicitly start a fresh socket.
       await this.shutdown();
       await this.connect();
-      const status = await this.status();
-      if (status !== ServerStatus.ConsensusRunning) {
+      // Confirm satus.
+      try {
+        const status = await this.status();
+        if (status === ServerStatus.ConsensusRunning) {
+          return;
+        } else {
+          throw new Error(`Expected status ConsensusRunning, got ${status}`);
+        }
+      } catch (err) {
+        console.warn('Failed to confirm consensus running:', err);
+      }
+      // Retry after a delay if we haven't exceeded the max number of tries, otherwise give up.
+      if (tries < maxTries) {
+        tries++;
+        await sleep(1000);
+        return attempConfirmConsensusRunning();
+      } else {
         throw new Error('Failed to start consensus, see logs for more info.');
       }
-    });
+    };
+
+    return attempConfirmConsensusRunning();
   };
 
   /*** Running RPC methods */
