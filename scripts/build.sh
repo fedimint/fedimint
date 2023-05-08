@@ -18,6 +18,7 @@ else
 fi
 export FM_TEST_DIR
 export FM_PID_FILE="$FM_TEST_DIR/.pid"
+export FM_LOGS_DIR="$FM_TEST_DIR/logs"
 export FM_POLL_INTERVAL=1
 
 echo "Setting up env variables in $FM_TEST_DIR"
