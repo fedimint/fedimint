@@ -369,14 +369,14 @@
         <span class="prelude-val">Ok</span>(ret)
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
         <span class="kw">let </span>data = <span class="self">self
             </span>.tx_data
             .range::&lt;Vec&lt;u8&gt;, <span class="kw">_</span>&gt;((key_prefix.to_vec())..)
             .take_while(|(key, <span class="kw">_</span>)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        Box::pin(stream::iter(data))
+        <span class="prelude-val">Ok</span>(Box::pin(stream::iter(data)))
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(

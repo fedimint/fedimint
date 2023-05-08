@@ -654,8 +654,8 @@
         })
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
-        fedimint_core::task::block_in_place(|| {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
@@ -672,7 +672,7 @@
                 })
                 .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
             Box::pin(stream::iter(rocksdb_iter))
-        })
+        }))
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
@@ -739,8 +739,8 @@
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot remove from a read only transaction&quot;</span>);
     }
 
-    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
-        fedimint_core::task::block_in_place(|| {
+    <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
             <span class="kw">let </span>rocksdb_iter = <span class="self">self
                 </span>.<span class="number">0
@@ -753,7 +753,7 @@
                 })
                 .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
             Box::pin(stream::iter(rocksdb_iter))
-        })
+        }))
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(

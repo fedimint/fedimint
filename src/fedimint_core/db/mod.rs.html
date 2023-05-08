@@ -2468,7 +2468,6 @@
 <a href="#2468" id="2468">2468</a>
 <a href="#2469" id="2469">2469</a>
 <a href="#2470" id="2470">2470</a>
-<a href="#2471" id="2471">2471</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2843,7 +2842,7 @@
 
     <span class="doccomment">/// Returns an stream of key-value pairs with keys that start with
     /// `key_prefix`. No particular ordering is guaranteed.
-    </span><span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;;
+    </span><span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt;;
 
     <span class="doccomment">/// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
     </span><span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
@@ -2856,7 +2855,7 @@
     </span><span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>keys = <span class="self">self
             </span>.raw_find_by_prefix(key_prefix)
-            .<span class="kw">await
+            .<span class="kw">await</span><span class="question-mark">?
             </span>.map(|kv| kv.<span class="number">0</span>)
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
@@ -2958,13 +2957,12 @@
     </span>}
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.<span class="number">0
+        <span class="self">self</span>.<span class="number">0
             </span>.as_mut()
             .context(<span class="string">&quot;Cannot retrieve from already consumed transaction&quot;</span>)<span class="question-mark">?
             </span>.raw_find_by_prefix(key_prefix)
-            .<span class="kw">await</span>)
-    }
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
@@ -4718,7 +4716,7 @@
             <span class="kw">async fn </span>raw_find_by_prefix(
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>,
                 _key_prefix: <span class="kw-2">&amp;</span>[u8],
-            ) -&gt; <span class="kw">crate</span>::db::PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt; {
+            ) -&gt; anyhow::Result&lt;<span class="kw">crate</span>::db::PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
                 <span class="macro">unimplemented!</span>()
             }
 
