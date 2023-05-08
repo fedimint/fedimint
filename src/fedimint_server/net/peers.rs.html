@@ -863,15 +863,6 @@
 <a href="#863" id="863">863</a>
 <a href="#864" id="864">864</a>
 <a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1084,39 +1075,31 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; (<span class="self">Self</span>, PeerStatusChannels) {
         <span class="kw">let </span>shared_connector: SharedAnyConnector&lt;PeerMessage&lt;T&gt;&gt; = connect.into();
+        <span class="kw">let </span><span class="kw-2">mut </span>connection_senders = HashMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>status_query_senders = HashMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>connections = HashMap::new();
 
-        <span class="kw">let </span>(connection_senders, (status_query_senders, connections)): (
-            <span class="kw">_</span>,
-            (HashMap&lt;PeerId, PeerStatusChannelSender&gt;, <span class="kw">_</span>),
-        ) = cfg
-            .peers
-            .iter()
-            .filter(|(<span class="kw-2">&amp;</span>peer, <span class="kw">_</span>)| peer != cfg.identity)
-            .map(|(<span class="kw-2">&amp;</span>peer, peer_address)| {
-                <span class="kw">let </span>(connection_sender, connection_receiver) =
-                    tokio::sync::mpsc::channel::&lt;AnyFramedTransport&lt;PeerMessage&lt;T&gt;&gt;&gt;(<span class="number">4</span>);
-                <span class="kw">let </span>(status_query_sender, status_query_receiver) =
-                    tokio::sync::mpsc::channel::&lt;PeerStatusQuery&gt;(<span class="number">1</span>); <span class="comment">// better block the sender than flood the receiver
-                </span>(
-                    (peer, connection_sender),
-                    (
-                        (peer, status_query_sender),
-                        (
-                            peer,
-                            PeerConnection::new(
-                                peer,
-                                peer_address.clone(),
-                                delay_calculator,
-                                shared_connector.clone(),
-                                connection_receiver,
-                                status_query_receiver,
-                                task_group,
-                            ),
-                        ),
-                    ),
-                )
-            })
-            .unzip();
+        <span class="kw">for </span>(peer, peer_address) <span class="kw">in </span>cfg.peers.iter().filter(|(<span class="kw-2">&amp;</span>peer, <span class="kw">_</span>)| peer != cfg.identity) {
+            <span class="kw">let </span>(connection_sender, connection_receiver) =
+                tokio::sync::mpsc::channel::&lt;AnyFramedTransport&lt;PeerMessage&lt;T&gt;&gt;&gt;(<span class="number">4</span>);
+            <span class="kw">let </span>(status_query_sender, status_query_receiver) =
+                tokio::sync::mpsc::channel::&lt;PeerStatusQuery&gt;(<span class="number">1</span>); <span class="comment">// better block the sender than flood the receiver
+
+            </span><span class="kw">let </span>connection = PeerConnection::new(
+                <span class="kw-2">*</span>peer,
+                peer_address.clone(),
+                delay_calculator,
+                shared_connector.clone(),
+                connection_receiver,
+                status_query_receiver,
+                task_group,
+            )
+            .<span class="kw">await</span>;
+
+            connection_senders.insert(<span class="kw-2">*</span>peer, connection_sender);
+            status_query_senders.insert(<span class="kw-2">*</span>peer, status_query_sender);
+            connections.insert(<span class="kw-2">*</span>peer, connection);
+        }
         task_group
             .spawn(<span class="string">&quot;listen task&quot;</span>, <span class="kw">move </span>|handle| {
                 <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
@@ -1557,7 +1540,7 @@
 <span class="kw">where
     </span>M: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">fn </span>new(
+    <span class="kw">async fn </span>new(
         id: PeerId,
         peer_address: Url,
         delay_calculator: DelayCalculator,
@@ -1569,9 +1552,8 @@
         <span class="kw">let </span>(outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
         <span class="kw">let </span>(incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
 
-        futures::executor::block_on(task_group.spawn(
-            <span class="macro">format!</span>(<span class="string">&quot;io-thread-peer-{id}&quot;</span>),
-            <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+        task_group
+            .spawn(<span class="macro">format!</span>(<span class="string">&quot;io-thread-peer-{id}&quot;</span>), <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                 <span class="self">Self</span>::run_io_thread(
                     incoming_sender,
                     outgoing_receiver,
@@ -1584,8 +1566,8 @@
                     <span class="kw-2">&amp;</span>handle,
                 )
                 .<span class="kw">await
-            </span>},
-        ));
+            </span>})
+            .<span class="kw">await</span>;
 
         PeerConnection {
             outgoing: outgoing_sender,

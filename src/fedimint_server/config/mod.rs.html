@@ -882,6 +882,12 @@
 <a href="#882" id="882">882</a>
 <a href="#883" id="883">883</a>
 <a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
@@ -900,9 +906,7 @@
     ClientConfig, ClientConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl,
     ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
 };
-<span class="kw">use </span>fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
-};
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, PeerHandle,
@@ -912,6 +916,7 @@
 <span class="kw">use </span>fedimint_core::task::{timeout, Elapsed, TaskGroup};
 <span class="kw">use </span>fedimint_core::{timing, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
+<span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>hbbft::NetworkInfo;
 <span class="kw">use </span>itertools::Itertools;
@@ -1369,7 +1374,6 @@
         )
         .<span class="kw">await</span>;
         <span class="kw">let </span>connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
 
         <span class="kw">let </span>peers = <span class="kw-2">&amp;</span>params.peer_ids();
         <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span>params.local.our_id;
@@ -1390,25 +1394,28 @@
         dkg.add(KeyType::Epoch, peers.threshold());
 
         <span class="comment">// run DKG for epoch and hbbft keys
-        </span><span class="kw">let </span>keys = dkg
-            .run_g1(MODULE_INSTANCE_ID_GLOBAL, <span class="kw-2">&amp;</span>connections, <span class="kw-2">&amp;mut </span>rng)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>keys = dkg.run_g1(MODULE_INSTANCE_ID_GLOBAL, <span class="kw-2">&amp;</span>connections).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>auth_keys = keys[<span class="kw-2">&amp;</span>KeyType::Auth].threshold_crypto();
         <span class="kw">let </span>hbbft_keys = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
         <span class="kw">let </span>epoch_keys = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = Default::default();
         <span class="kw">let </span>modules = params.consensus.requested.modules.iter_modules();
-        <span class="kw">for </span>(module_instance_id, kind, module_params) <span class="kw">in </span>modules {
+        <span class="kw">let </span>modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
             <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
-            module_cfgs.insert(
-                module_instance_id,
-                registry
+            <span class="kw">let </span>registry = registry.clone();
+
+            <span class="kw">async move </span>{
+                <span class="kw">let </span>result = registry
                     .get(kind)
                     .expect(<span class="string">&quot;Module not registered&quot;</span>)
                     .distributed_gen(<span class="kw-2">&amp;</span>dkg, module_params)
-                    .<span class="kw">await</span><span class="question-mark">?</span>,
-            );
+                    .<span class="kw">await</span>;
+                (module_instance_id, result)
+            }
+        });
+        <span class="kw">for </span>(module_instance_id, config) <span class="kw">in </span>join_all(modules_runner).<span class="kw">await </span>{
+            module_cfgs.insert(module_instance_id, config<span class="question-mark">?</span>);
         }
 
         <span class="macro">info!</span>(
@@ -1418,8 +1425,13 @@
         <span class="comment">// Note: Since our outgoing buffers are asynchronous, we don&#39;t actually know
         // if other peers received our message, just because we received theirs.
         // That&#39;s why we need to do a one last best effort sync.
-        </span>connections
-            .send(peers, MODULE_INSTANCE_ID_DKG_DONE, DkgPeerMsg::Done)
+        </span><span class="kw">let </span>dkg_done = <span class="string">&quot;DKG DONE&quot;</span>.to_string();
+        connections
+            .send(
+                peers,
+                (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
+                DkgPeerMsg::Done,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">info!</span>(
@@ -1430,7 +1442,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>done_peers = BTreeSet::from([<span class="kw-2">*</span>our_id]);
 
             <span class="kw">while </span>done_peers.len() &lt; peers.len() {
-                <span class="kw">match </span>connections.receive(MODULE_INSTANCE_ID_DKG_DONE).<span class="kw">await </span>{
+                <span class="kw">match </span>connections.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>((peer_id, DkgPeerMsg::Done)) =&gt; {
                         <span class="macro">info!</span>(
                             target: LOG_NET_PEER_DKG,

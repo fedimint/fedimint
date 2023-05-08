@@ -547,6 +547,22 @@
 <a href="#547" id="547">547</a>
 <a href="#548" id="548">548</a>
 <a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -563,7 +579,6 @@
 <span class="kw">use </span>fedimint_core::{BitcoinHash, PeerId};
 <span class="kw">use </span>hbbft::crypto::poly::Commitment;
 <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
-<span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tbs::hash::hash_bytes_to_curve;
@@ -822,10 +837,9 @@
     </span><span class="kw">pub async fn </span>run_g2(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         module_id: ModuleInstanceId,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
-        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
     ) -&gt; DkgResult&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt; {
-        <span class="self">self</span>.run(module_id, G2Projective::generator(), connections, rng)
+        <span class="self">self</span>.run(module_id, G2Projective::generator(), connections)
             .<span class="kw">await
     </span>}
 
@@ -833,84 +847,98 @@
     </span><span class="kw">pub async fn </span>run_g1(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         module_id: ModuleInstanceId,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
-        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
     ) -&gt; DkgResult&lt;HashMap&lt;T, DkgKeys&lt;G1Projective&gt;&gt;&gt; {
-        <span class="self">self</span>.run(module_id, G1Projective::generator(), connections, rng)
+        <span class="self">self</span>.run(module_id, G1Projective::generator(), connections)
             .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Runs the DKG algorithms with our peers
+    ///
+    /// WARNING: Currently we do not handle any unexpected messages, all peers
+    /// are expected to be cooperative
     </span><span class="kw">pub async fn </span>run&lt;G: DkgGroup&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         module_id: ModuleInstanceId,
         group: G,
-        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
-        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
+        connections: <span class="kw-2">&amp;</span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
     ) -&gt; DkgResult&lt;HashMap&lt;T, DkgKeys&lt;G&gt;&gt;&gt;
     <span class="kw">where
         </span>DkgMessage&lt;G&gt;: ISupportedDkgMessage,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>dkgs: HashMap&lt;T, Dkg&lt;G&gt;&gt; = HashMap::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>results: HashMap&lt;T, DkgKeys&lt;G&gt;&gt; = HashMap::new();
+        <span class="comment">// Use tokio channel to await on `recv` or we might block
+        </span><span class="kw">let </span>(send, <span class="kw-2">mut </span>receive) = tokio::sync::mpsc::channel(<span class="number">10_000</span>);
 
-        <span class="comment">// create the dkgs and send our initial messages
-        </span><span class="kw">for </span>(key, threshold) <span class="kw">in </span><span class="self">self</span>.dkg_config.iter() {
-            <span class="kw">let </span>our_id = <span class="self">self</span>.our_id;
-            <span class="kw">let </span>peers = <span class="self">self</span>.peers.clone();
-            <span class="kw">let </span>(dkg, step) = Dkg::new(group, our_id, peers, <span class="kw-2">*</span>threshold, rng);
-            <span class="kw">if let </span>DkgStep::Messages(messages) = step {
-                <span class="kw">for </span>(peer, msg) <span class="kw">in </span>messages {
-                    connections
-                        .send(
-                            <span class="kw-2">&amp;</span>[peer],
-                            module_id,
-                            DkgPeerMsg::DistributedGen((
-                                serde_json::to_string(key).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>),
-                                msg.to_msg(),
-                            )),
-                        )
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-                }
+        <span class="comment">// For every `key` we run DKG in a new tokio task
+        </span><span class="self">self</span>.dkg_config
+            .clone()
+            .into_iter()
+            .for_each(|(key, threshold)| {
+                <span class="kw">let </span>our_id = <span class="self">self</span>.our_id;
+                <span class="kw">let </span>peers = <span class="self">self</span>.peers.clone();
+                <span class="kw">let </span>connections = connections.clone();
+                <span class="kw">let </span>key = serde_json::to_string(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>);
+                <span class="kw">let </span>send = send.clone();
+
+                tokio::spawn(<span class="kw">async move </span>{
+                    <span class="kw">let </span>(dkg, step) = Dkg::new(group, our_id, peers, threshold, <span class="kw-2">&amp;mut </span>OsRng);
+                    <span class="kw">let </span>result =
+                        <span class="self">Self</span>::run_dkg_key((module_id, key.clone()), connections, dkg, step).<span class="kw">await</span>;
+                    send.send((key, result)).<span class="kw">await</span>.expect(<span class="string">&quot;channel open&quot;</span>);
+                });
+            });
+
+        <span class="comment">// Collect every key, returning an error if any fails
+        </span><span class="kw">let </span><span class="kw-2">mut </span>results: HashMap&lt;T, DkgKeys&lt;G&gt;&gt; = HashMap::new();
+        <span class="kw">while </span>results.len() &lt; <span class="self">self</span>.dkg_config.len() {
+            <span class="kw">let </span>(key, result) = receive.recv().<span class="kw">await</span>.expect(<span class="string">&quot;channel open&quot;</span>);
+            <span class="kw">let </span>key = serde_json::from_str(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>);
+            results.insert(key, result<span class="question-mark">?</span>);
+        }
+        <span class="prelude-val">Ok</span>(results)
+    }
+
+    <span class="doccomment">/// Runs the DKG algorithms for a given key and module id
+    </span><span class="kw">async fn </span>run_dkg_key&lt;G: DkgGroup&gt;(
+        key_id: (ModuleInstanceId, String),
+        connections: MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
+        <span class="kw-2">mut </span>dkg: Dkg&lt;G&gt;,
+        initial_step: DkgStep&lt;G&gt;,
+    ) -&gt; DkgResult&lt;DkgKeys&lt;G&gt;&gt;
+    <span class="kw">where
+        </span>DkgMessage&lt;G&gt;: ISupportedDkgMessage,
+    {
+        <span class="kw">if let </span>DkgStep::Messages(messages) = initial_step {
+            <span class="kw">for </span>(peer, msg) <span class="kw">in </span>messages {
+                <span class="kw">let </span>send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
+                connections.send(<span class="kw-2">&amp;</span>[peer], key_id.clone(), send_msg).<span class="kw">await</span><span class="question-mark">?</span>;
             }
-            dkgs.insert(key.clone(), dkg);
         }
 
         <span class="comment">// process steps for each key
-        // TODO: fix error handling here; what do we do on a malfunctining peer when
-        // building the federation?
         </span><span class="kw">loop </span>{
-            <span class="kw">let </span>(peer, msg) = connections.receive(module_id).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>(peer, msg) = connections.receive(key_id.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>parsed_msg = <span class="kw">match </span>msg {
+            <span class="kw">let </span>message = <span class="kw">match </span>msg {
                 DkgPeerMsg::DistributedGen(v) =&gt; <span class="prelude-val">Ok</span>(v),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(
-                    <span class="string">&quot;Module {module_id} wrong message received: {msg:?}&quot;
+                    <span class="string">&quot;Key {key_id:?} wrong message received: {msg:?}&quot;
                 </span>)),
-            };
+            }<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>(key_string, message) = parsed_msg<span class="question-mark">?</span>;
-            <span class="kw">let </span>key = serde_json::from_str(<span class="kw-2">&amp;</span>key_string)
-                .map_err(|e| <span class="macro">format_err!</span>(<span class="string">&quot;Failed to parse {}&quot;</span>, e))<span class="question-mark">?</span>;
             <span class="kw">let </span>message = ISupportedDkgMessage::from_msg(message)<span class="question-mark">?</span>;
-            <span class="kw">let </span>step = dkgs.get_mut(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;exists&quot;</span>).step(peer, message)<span class="question-mark">?</span>;
+            <span class="kw">let </span>step = dkg.step(peer, message)<span class="question-mark">?</span>;
 
             <span class="kw">match </span>step {
                 DkgStep::Messages(messages) =&gt; {
                     <span class="kw">for </span>(peer, msg) <span class="kw">in </span>messages {
-                        <span class="kw">let </span>send_msg =
-                            DkgPeerMsg::DistributedGen((key_string.clone(), msg.to_msg()));
-
-                        connections.send(<span class="kw-2">&amp;</span>[peer], module_id, send_msg).<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
+                        connections.send(<span class="kw-2">&amp;</span>[peer], key_id.clone(), send_msg).<span class="kw">await</span><span class="question-mark">?</span>;
                     }
                 }
                 DkgStep::Result(result) =&gt; {
-                    results.insert(key, result);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
                 }
-            }
-
-            <span class="kw">if </span>results.len() == dkgs.len() {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(results);
             }
         }
     }
@@ -1040,6 +1068,7 @@
 
     <span class="kw">async fn </span>exchange_pubkeys(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dkg_key: String,
         key: secp256k1::PublicKey,
     ) -&gt; DkgResult&lt;BTreeMap&lt;PeerId, secp256k1::PublicKey&gt;&gt;;
 }
@@ -1051,8 +1080,7 @@
         </span>T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new(v, <span class="self">self</span>.peers.threshold(), <span class="kw-2">&amp;</span><span class="self">self</span>.our_id, <span class="kw-2">&amp;</span><span class="self">self</span>.peers);
-        dkg.run_g1(<span class="self">self</span>.module_instance_id, <span class="self">self</span>.connections, <span class="kw-2">&amp;mut </span>OsRng)
-            .<span class="kw">await
+        dkg.run_g1(<span class="self">self</span>.module_instance_id, <span class="self">self</span>.connections).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>run_dkg_multi_g2&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, v: Vec&lt;T&gt;) -&gt; DkgResult&lt;HashMap&lt;T, DkgKeys&lt;G2Projective&gt;&gt;&gt;
@@ -1061,12 +1089,12 @@
     {
         <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::multi(v, <span class="self">self</span>.peers.threshold(), <span class="kw-2">&amp;</span><span class="self">self</span>.our_id, <span class="kw-2">&amp;</span><span class="self">self</span>.peers);
 
-        dkg.run_g2(<span class="self">self</span>.module_instance_id, <span class="self">self</span>.connections, <span class="kw-2">&amp;mut </span>OsRng)
-            .<span class="kw">await
+        dkg.run_g2(<span class="self">self</span>.module_instance_id, <span class="self">self</span>.connections).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>exchange_pubkeys(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dkg_key: String,
         key: secp256k1::PublicKey,
     ) -&gt; DkgResult&lt;BTreeMap&lt;PeerId, secp256k1::PublicKey&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>peer_peg_in_keys: BTreeMap&lt;PeerId, secp256k1::PublicKey&gt; = BTreeMap::new();
@@ -1074,14 +1102,18 @@
         <span class="self">self</span>.connections
             .send(
                 <span class="kw-2">&amp;</span><span class="self">self</span>.peers,
-                <span class="self">self</span>.module_instance_id,
+                (<span class="self">self</span>.module_instance_id, dkg_key.clone()),
                 DkgPeerMsg::PublicKey(key),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         peer_peg_in_keys.insert(<span class="self">self</span>.our_id, key);
         <span class="kw">while </span>peer_peg_in_keys.len() &lt; <span class="self">self</span>.peers.len() {
-            <span class="kw">match </span><span class="self">self</span>.connections.receive(<span class="self">self</span>.module_instance_id).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">match </span><span class="self">self
+                </span>.connections
+                .receive((<span class="self">self</span>.module_instance_id, dkg_key.clone()))
+                .<span class="kw">await</span><span class="question-mark">?
+            </span>{
                 (peer, DkgPeerMsg::PublicKey(key)) =&gt; {
                     peer_peg_in_keys.insert(peer, key);
                 }

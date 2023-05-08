@@ -251,20 +251,39 @@
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, VecDeque};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
-<span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_core::cancellable::Cancellable;
+<span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tokio::sync::Mutex;
-<span class="kw">use </span>tokio::time::sleep;
+<span class="kw">use </span>tokio::sync::mpsc::{channel, Receiver, Sender};
+<span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tracing::{debug, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
@@ -287,8 +306,10 @@
 }
 
 <span class="kw">struct </span>ModuleMultiplexerOutOfOrder&lt;MuxKey, Msg&gt; {
-    <span class="doccomment">/// Messages per `ModuleId` in a queue each
+    <span class="doccomment">/// Cached messages per `ModuleId` waiting for callback
     </span>msgs: HashMap&lt;MuxKey, VecDeque&lt;(PeerId, Msg)&gt;&gt;,
+    <span class="doccomment">/// Callback queue from tasks that want to receive
+    </span>callbacks: HashMap&lt;MuxKey, VecDeque&lt;oneshot::Sender&lt;(PeerId, Msg)&gt;&gt;&gt;,
     <span class="doccomment">/// Track pending messages per peer to avoid a potential DoS
     </span>peer_counts: HashMap&lt;PeerId, u64&gt;,
 }
@@ -297,17 +318,10 @@
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             msgs: Default::default(),
+            callbacks: Default::default(),
             peer_counts: Default::default(),
         }
     }
-}
-
-<span class="doccomment">/// Shared, mutable (wrapped in mutex) data of [`PeerConnectionMultiplexer`].
-</span><span class="kw">struct </span>ModuleMultiplexerInner&lt;MuxKey, Msg&gt; {
-    <span class="doccomment">/// Underlying connection pool
-    </span>connections: Mutex&lt;PeerConnections&lt;ModuleMultiplexed&lt;MuxKey, Msg&gt;&gt;&gt;,
-    <span class="doccomment">/// Messages that arrived before an interested thread asked for them
-    </span>out_of_order: Mutex&lt;ModuleMultiplexerOutOfOrder&lt;MuxKey, Msg&gt;&gt;,
 }
 
 <span class="doccomment">/// A wrapper around `AnyPeerConnections` multiplexing communication between
@@ -319,20 +333,99 @@
 /// This type is thread-safe and can be cheaply cloned.
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>PeerConnectionMultiplexer&lt;MuxKey, Msg&gt; {
-    inner: Arc&lt;ModuleMultiplexerInner&lt;MuxKey, Msg&gt;&gt;,
+    <span class="doccomment">/// Sender of send requests
+    </span>send_requests_tx: Sender&lt;(Vec&lt;PeerId&gt;, MuxKey, Msg)&gt;,
+    <span class="doccomment">/// Sender of receive callbacks
+    </span>receive_callbacks_tx: Sender&lt;Callback&lt;MuxKey, Msg&gt;&gt;,
+    <span class="doccomment">/// Sender of peer bans
+    </span>peer_bans_tx: Sender&lt;PeerId&gt;,
 }
+
+<span class="kw">type </span>Callback&lt;MuxKey, Msg&gt; = (MuxKey, oneshot::Sender&lt;(PeerId, Msg)&gt;);
 
 <span class="kw">impl</span>&lt;MuxKey, Msg&gt; PeerConnectionMultiplexer&lt;MuxKey, Msg&gt;
 <span class="kw">where
-    </span>Msg: Serialize + DeserializeOwned + Unpin + Send + Debug,
-    MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone,
+    </span>Msg: Serialize + DeserializeOwned + Unpin + Send + Debug + <span class="lifetime">&#39;static</span>,
+    MuxKey: Serialize + DeserializeOwned + Unpin + Send + Debug + Eq + Hash + Clone + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">pub fn </span>new(connections: PeerConnections&lt;ModuleMultiplexed&lt;MuxKey, Msg&gt;&gt;) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>(send_requests_tx, send_requests_rx) = channel(<span class="number">1000</span>);
+        <span class="kw">let </span>(receive_callbacks_tx, receive_callbacks_rx) = channel(<span class="number">1000</span>);
+        <span class="kw">let </span>(peer_bans_tx, peer_bans_rx) = channel(<span class="number">1000</span>);
+
+        tokio::spawn(<span class="self">Self</span>::run(
+            connections,
+            Default::default(),
+            send_requests_rx,
+            receive_callbacks_rx,
+            peer_bans_rx,
+        ));
+
         <span class="self">Self </span>{
-            inner: Arc::new(ModuleMultiplexerInner {
-                connections: Mutex::new(connections),
-                out_of_order: Default::default(),
-            }),
+            send_requests_tx,
+            receive_callbacks_tx,
+            peer_bans_tx,
+        }
+    }
+
+    <span class="kw">async fn </span>run(
+        <span class="kw-2">mut </span>connections: PeerConnections&lt;ModuleMultiplexed&lt;MuxKey, Msg&gt;&gt;,
+        <span class="kw-2">mut </span>out_of_order: ModuleMultiplexerOutOfOrder&lt;MuxKey, Msg&gt;,
+        <span class="kw-2">mut </span>send_requests_rx: Receiver&lt;(Vec&lt;PeerId&gt;, MuxKey, Msg)&gt;,
+        <span class="kw-2">mut </span>receive_callbacks_rx: Receiver&lt;Callback&lt;MuxKey, Msg&gt;&gt;,
+        <span class="kw-2">mut </span>peer_bans_rx: Receiver&lt;PeerId&gt;,
+    ) -&gt; Cancellable&lt;()&gt; {
+        <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>key_inserted: <span class="prelude-ty">Option</span>&lt;MuxKey&gt; = <span class="prelude-val">None</span>;
+            <span class="macro">tokio::select! </span>{
+                 <span class="comment">// Send requests are forwarded to underlying connections
+                 </span>send_request = send_requests_rx.recv() =&gt; {
+                    <span class="kw">let </span>(peers, key, msg) = send_request.ok_or(Cancelled)<span class="question-mark">?</span>;
+                    connections.send(<span class="kw-2">&amp;</span>peers, ModuleMultiplexed { key, msg }).<span class="kw">await</span><span class="question-mark">?</span>;
+                }
+                <span class="comment">// Ban requests are forwarded to underlying connections
+                </span>peer_ban = peer_bans_rx.recv() =&gt; {
+                    <span class="kw">let </span>peer = peer_ban.ok_or(Cancelled)<span class="question-mark">?</span>;
+                    connections.ban_peer(peer).<span class="kw">await</span>;
+                }
+                <span class="comment">// Receive callbacks are added to callback queue by key
+                </span>receive_callback = receive_callbacks_rx.recv() =&gt; {
+                    <span class="kw">let </span>(key, callback) = receive_callback.ok_or(Cancelled)<span class="question-mark">?</span>;
+                    out_of_order.callbacks.entry(key.clone()).or_default().push_back(callback);
+                    key_inserted = <span class="prelude-val">Some</span>(key);
+                }
+                <span class="comment">// Actual received messages are added message queue by key
+                </span>receive = connections.receive() =&gt; {
+                    <span class="kw">let </span>(peer, ModuleMultiplexed { key, msg }) = receive<span class="question-mark">?</span>;
+                    <span class="kw">let </span>peer_pending = out_of_order.peer_counts.entry(peer).or_default();
+                    <span class="comment">// We limit our messages from any given peer to avoid OOM
+                    // In practice this would halt DKG
+                    </span><span class="kw">if </span><span class="kw-2">*</span>peer_pending &gt; MAX_PEER_OUT_OF_ORDER_MESSAGES {
+                        <span class="macro">warn!</span>(
+                            target: LOG_NET_PEER,
+                            <span class="string">&quot;Peer {peer} has {peer_pending} pending messages. Dropping new message.&quot;
+                        </span>);
+                    } <span class="kw">else </span>{
+                        <span class="kw-2">*</span>peer_pending += <span class="number">1</span>;
+                        out_of_order.msgs.entry(key.clone()).or_default().push_back((peer, msg));
+                        key_inserted = <span class="prelude-val">Some</span>(key);
+                    }
+                }
+            }
+
+            <span class="comment">// If a key was inserted, check to see if we can fulfill a callback
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(key) = key_inserted {
+                <span class="kw">let </span>callbacks = out_of_order.callbacks.entry(key.clone()).or_default();
+                <span class="kw">let </span>msgs = out_of_order.msgs.entry(key.clone()).or_default();
+
+                <span class="kw">if </span>!callbacks.is_empty() &amp;&amp; !msgs.is_empty() {
+                    <span class="kw">let </span>callback = callbacks.pop_front().expect(<span class="string">&quot;checked&quot;</span>);
+                    <span class="kw">let </span>(peer, msg) = msgs.pop_front().expect(<span class="string">&quot;checked&quot;</span>);
+                    <span class="kw">let </span>peer_pending = out_of_order.peer_counts.entry(peer).or_default();
+                    <span class="kw-2">*</span>peer_pending -= <span class="number">1</span>;
+                    callback.send((peer, msg)).map_err(|<span class="kw">_</span>| Cancelled)<span class="question-mark">?</span>;
+                }
+            }
         }
     }
 }
@@ -345,83 +438,25 @@
 {
     <span class="kw">async fn </span>send(<span class="kw-2">&amp;</span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], key: MuxKey, msg: Msg) -&gt; Cancellable&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Sending to {peers:?}/{key:?}, {msg:?}&quot;</span>);
-        <span class="self">self</span>.inner
-            .connections
-            .lock()
+        <span class="self">self</span>.send_requests_tx
+            .send((peers.to_vec(), key, msg))
             .<span class="kw">await
-            </span>.send(peers, ModuleMultiplexed { key, msg })
-            .<span class="kw">await
-    </span>}
+            </span>.map_err(|_e| Cancelled)
+    }
 
     <span class="doccomment">/// Await receipt of a message from any connected peer.
-    </span><span class="comment">//
-    // TODO: I don&#39;t think this is cancelation-correct. --dpc
     </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;</span><span class="self">self</span>, key: MuxKey) -&gt; Cancellable&lt;(PeerId, Msg)&gt; {
-        <span class="kw">loop </span>{
-            <span class="comment">// Note: tokio locks are FIFO, so no need to sleep between loop iterations,
-            // as each thread should get a chance to check for a message.
-            // However, there is a one minor problem with this implementation -
-            // other threads can only check if there is something for them,
-            // when
-            // Note: Naive implementation could have some subtle problems. If
-            // one lock was used, either other threads could not check `out_of_order`
-            // while some thread is blocked (and holding the lock) in `recv`,
-            // or there would be subtle errors where a thread could miss a newly
-            // received item and go into `recv`, possibly blocking indefinitely
-            // if no more messages are being delivered.
-            </span><span class="kw">let </span><span class="kw-2">mut </span>out_of_order = <span class="self">self</span>.inner.out_of_order.lock().<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(queue) = out_of_order.msgs.get_mut(<span class="kw-2">&amp;</span>key) {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(existing) = queue.pop_front() {
-                    <span class="kw-2">*</span>out_of_order
-                        .peer_counts
-                        .get_mut(<span class="kw-2">&amp;</span>existing.<span class="number">0</span>)
-                        .expect(<span class="string">&quot;peer must have an entry if had a message already&quot;</span>) -= <span class="number">1</span>;
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(existing);
-                }
-            }
-
-            <span class="comment">// try lock is used to avoid a deadlock (see below)
-            </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="kw-2">mut </span>connections) = <span class="self">self</span>.inner.connections.try_lock() {
-                <span class="comment">// `out_of_order` lock guard is dropped *after* we obtained `connections`,
-                // guaranteeing that new elements could have been added to `out_of_order`
-                // since we&#39;ve last checked.
-                </span>drop(out_of_order);
-
-                <span class="kw">let </span>(peer, new_msg) = connections.receive().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if </span>key == new_msg.key {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>((peer, new_msg.msg));
-                }
-
-                <span class="comment">// Since all other threads holding `out_of_order` use `connections.try_lock`,
-                // and release `out_of_order`, we are guaranteed to get this lock and not
-                // deadlock.
-                // TODO: Can drop `new_msg` on cancelation. Which we currently don&#39;t do, but
-                // worth mentioning. --dpc
-                </span><span class="kw">let </span><span class="kw-2">mut </span>out_of_order = <span class="self">self</span>.inner.out_of_order.lock().<span class="kw">await</span>;
-                <span class="comment">// TODO: use `raw_entry` to avoid clone once stable
-                </span><span class="kw">let </span>peer_msgs_pending_count = out_of_order.peer_counts.entry(peer).or_default();
-                <span class="kw">if </span><span class="kw-2">*</span>peer_msgs_pending_count &lt; MAX_PEER_OUT_OF_ORDER_MESSAGES {
-                    <span class="kw-2">*</span>peer_msgs_pending_count += <span class="number">1</span>;
-                    out_of_order
-                        .msgs
-                        .entry(new_msg.key.clone())
-                        .or_default()
-                        .push_back((peer, new_msg.msg));
-                } <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="string">&quot;Peer {peer} has already {peer_msgs_pending_count} pending out of order messages. Dropping new message.&quot;</span>);
-                }
-            } <span class="kw">else </span>{
-                drop(out_of_order);
-                <span class="comment">// Sleep just enough to not hog the CPU continuously.
-                // TODO: 99% this can be done better with `CondVar`, but
-                // it&#39;s not essential RN
-                </span>sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
-            }
-        }
+        <span class="kw">let </span>(callback_tx, callback_rx) = oneshot::channel();
+        <span class="self">self</span>.receive_callbacks_tx
+            .send((key, callback_tx))
+            .<span class="kw">await
+            </span>.map_err(|_e| Cancelled)<span class="question-mark">?</span>;
+        callback_rx.<span class="kw">await</span>.map_err(|_e| Cancelled)
     }
 
     <span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) {
-        <span class="self">self</span>.inner.connections.lock().<span class="kw">await</span>.ban_peer(peer).<span class="kw">await</span>;
+        <span class="comment">// We don&#39;t return a `Cancellable` for bans
+        </span><span class="kw">let _ </span>= <span class="self">self</span>.peer_bans_tx.send(peer).<span class="kw">await</span>;
     }
 }
 
@@ -434,7 +469,8 @@
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>rand::rngs::OsRng;
-    <span class="kw">use </span>rand::Rng;
+    <span class="kw">use </span>rand::seq::SliceRandom;
+    <span class="kw">use </span>rand::{thread_rng, Rng};
     <span class="kw">use </span>tokio::time::sleep;
 
     <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
@@ -465,8 +501,11 @@
                 PeerConnectionMultiplexer::new(conn2).into_dyn(),
             );
 
-            <span class="kw">for </span>mux_key <span class="kw">in </span><span class="number">0</span>..NUM_MODULES {
-                <span class="kw">let </span>(conn1, conn2) = (conn1.clone(), conn2.clone());
+            <span class="kw">let </span><span class="kw-2">mut </span>modules: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..NUM_MODULES).collect();
+            modules.shuffle(<span class="kw-2">&amp;mut </span>thread_rng());
+
+            <span class="kw">for </span>mux_key <span class="kw">in </span>modules.clone() {
+                <span class="kw">let </span>conn1 = conn1.clone();
                 <span class="kw">let </span>task_handle = task_handle.clone();
                 task_group
                     .spawn(<span class="macro">format!</span>(<span class="string">&quot;sender-{mux_key}&quot;</span>), <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
@@ -485,6 +524,11 @@
                         }
                     })
                     .<span class="kw">await</span>;
+            }
+
+            modules.shuffle(<span class="kw-2">&amp;mut </span>thread_rng());
+            <span class="kw">for </span>mux_key <span class="kw">in </span>modules.clone() {
+                <span class="kw">let </span>conn2 = conn2.clone();
                 task_group
                     .spawn(<span class="macro">format!</span>(<span class="string">&quot;receiver-{mux_key}&quot;</span>), <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
                         <span class="kw">for </span>msg_i <span class="kw">in </span><span class="number">0</span>..NUM_MSGS_PER_MODULE {
@@ -497,8 +541,6 @@
                     })
                     .<span class="kw">await</span>;
             }
-            drop(conn1);
-            drop(conn2);
 
             task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span>.expect(<span class="string">&quot;no failures&quot;</span>);
         }

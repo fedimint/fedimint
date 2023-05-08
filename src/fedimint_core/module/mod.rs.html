@@ -2128,7 +2128,7 @@
     <span class="comment">// TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     </span><span class="attr">#[doc(hidden)]
-    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
+    </span><span class="kw">pub </span>connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
     <span class="attr">#[doc(hidden)]
     </span><span class="kw">pub </span>module_instance_id: ModuleInstanceId,
     <span class="attr">#[doc(hidden)]
@@ -2139,7 +2139,7 @@
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; PeerHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub fn </span>new(
-        connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;ModuleInstanceId, DkgPeerMsg&gt;,
+        connections: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MuxPeerConnections&lt;(ModuleInstanceId, String), DkgPeerMsg&gt;,
         module_instance_id: ModuleInstanceId,
         our_id: PeerId,
         peers: Vec&lt;PeerId&gt;,

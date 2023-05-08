@@ -1495,7 +1495,7 @@
 </span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
 </span><span class="kw">pub enum </span>DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
-    DistributedGen((String, SupportedDkgMessage)),
+    DistributedGen(SupportedDkgMessage),
     <span class="comment">// Dkg completed on our side
     </span>Done,
 }
