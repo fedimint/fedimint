@@ -153,7 +153,7 @@ impl ServerModuleGen for WalletGen {
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
         let peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = peers
-            .exchange_pubkeys(our_key.key)
+            .exchange_pubkeys("wallet".to_string(), our_key.key)
             .await?
             .into_iter()
             .map(|(k, key)| (k, CompressedPublicKey { key }))

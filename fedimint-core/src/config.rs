@@ -659,7 +659,7 @@ pub trait TypedClientModuleConfig:
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
-    DistributedGen((String, SupportedDkgMessage)),
+    DistributedGen(SupportedDkgMessage),
     // Dkg completed on our side
     Done,
 }
