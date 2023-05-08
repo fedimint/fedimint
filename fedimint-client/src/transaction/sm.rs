@@ -221,7 +221,7 @@ mod tests {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::ApiRequestErased;
+    use fedimint_core::module::{ApiAuth, ApiRequestErased};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
@@ -271,6 +271,7 @@ mod tests {
             _peer_id: PeerId,
             method: &str,
             params: &[Value],
+            _auth: Option<&ApiAuth>,
         ) -> JsonRpcResult<Value> {
             match method {
                 "transaction" => {

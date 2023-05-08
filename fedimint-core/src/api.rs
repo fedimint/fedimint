@@ -40,7 +40,7 @@ use url::Url;
 
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use crate::module::ApiRequestErased;
+use crate::module::{ApiAuth, ApiRequestErased};
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
@@ -145,6 +145,7 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
         peer_id: PeerId,
         method: &str,
         params: &[Value],
+        auth: Option<&ApiAuth>,
     ) -> result::Result<Value, jsonrpsee_core::Error>;
 }
 
@@ -172,7 +173,7 @@ pub trait FederationApiExt: IFederationApi {
                 PeerResponse {
                     peer: *peer_id,
                     result: self
-                        .request_raw(*peer_id, &method, &[params.to_json()])
+                        .request_raw(*peer_id, &method, &[params.to_json()], params.auth.as_ref())
                         .await
                         .map(AbbreviateDebug),
                 }
@@ -227,6 +228,7 @@ pub trait FederationApiExt: IFederationApi {
                                                     retry_peer,
                                                     method,
                                                     &[params.to_json()],
+                                                    params.auth.as_ref(),
                                                 )
                                                 .await
                                                 .map(AbbreviateDebug),
@@ -687,6 +689,7 @@ impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync + 'static> IFederationApi
         peer_id: PeerId,
         method: &str,
         params: &[Value],
+        auth: Option<&ApiAuth>,
     ) -> JsonRpcResult<Value> {
         let member = self
             .members
@@ -698,21 +701,31 @@ impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync + 'static> IFederationApi
             None => method.to_string(),
             Some(id) => format!("module_{id}_{method}"),
         };
-        member.request(&method, params).await
+        member.request(&method, params, auth).await
     }
 }
 
 #[apply(async_trait_maybe_send!)]
 pub trait JsonRpcClient: ClientT + Sized {
-    async fn connect(url: &Url) -> result::Result<Self, JsonRpcError>;
+    async fn connect(url: &Url, auth: Option<&ApiAuth>) -> result::Result<Self, JsonRpcError>;
     fn is_connected(&self) -> bool;
 }
 
 #[apply(async_trait_maybe_send!)]
 impl JsonRpcClient for WsClient {
-    async fn connect(url: &Url) -> result::Result<Self, JsonRpcError> {
+    async fn connect(url: &Url, auth: Option<&ApiAuth>) -> result::Result<Self, JsonRpcError> {
+        let mut headers = jsonrpsee_ws_client::HeaderMap::new();
+        if let Some(auth) = auth {
+            headers.insert(
+                "Authorization",
+                jsonrpsee_ws_client::HeaderValue::from_str(&format!("Bearer {}", auth.0))
+                    .expect("token to be valid"), /* FIXME: some validation should be done
+                                                   * somewhere */
+            );
+        }
         #[cfg(not(target_family = "wasm"))]
         return WsClientBuilder::default()
+            .set_headers(headers)
             .use_webpki_rustls()
             .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
             .await;
@@ -797,7 +810,12 @@ pub struct PeerResponse<R> {
 
 impl<C: JsonRpcClient> FederationMember<C> {
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
-    pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
+    pub async fn request(
+        &self,
+        method: &str,
+        params: &[Value],
+        auth: Option<&ApiAuth>,
+    ) -> JsonRpcResult<Value> {
         let rclient = self.client.read().await;
         match &*rclient {
             Some(client) if client.is_connected() => {
@@ -823,7 +841,7 @@ impl<C: JsonRpcClient> FederationMember<C> {
             _ => {
                 // write lock is acquired before creating a new client
                 // so only one task will try to create a new client
-                match C::connect(&self.url).await {
+                match C::connect(&self.url, auth).await {
                     Ok(client) => {
                         *wclient = Some(client);
                         // drop the write lock before making the request
@@ -976,7 +994,7 @@ mod tests {
             self.0.is_connected()
         }
 
-        async fn connect(_url: &Url) -> Result<Self> {
+        async fn connect(_url: &Url, _auth: Option<&ApiAuth>) -> Result<Self> {
             Ok(Self(C::connect().await?))
         }
     }
@@ -1047,14 +1065,14 @@ mod tests {
             "should not connect before first request"
         );
 
-        fed.request("", &[]).await.unwrap();
+        fed.request("", &[], None).await.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             1,
             "should connect once after first request"
         );
 
-        fed.request("", &[]).await.unwrap();
+        fed.request("", &[], None).await.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             1,
@@ -1064,7 +1082,7 @@ mod tests {
         // disconnect
         CONNECTED.store(false, Ordering::SeqCst);
 
-        fed.request("", &[]).await.unwrap();
+        fed.request("", &[], None).await.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             2,
@@ -1115,12 +1133,12 @@ mod tests {
         FAIL.lock().unwrap().insert(0);
 
         assert!(
-            fed.request("", &[]).await.is_err(),
+            fed.request("", &[], None).await.is_err(),
             "connect for client 0 should fail"
         );
 
         // connect for client 1 should succeed
-        fed.request("", &[]).await.unwrap();
+        fed.request("", &[], None).await.unwrap();
 
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -1132,7 +1150,7 @@ mod tests {
         FAIL.lock().unwrap().insert(1);
 
         // only connect once even for two concurrent requests
-        let (reqa, reqb) = tokio::join!(fed.request("", &[]), fed.request("", &[]));
+        let (reqa, reqb) = tokio::join!(fed.request("", &[], None), fed.request("", &[], None));
         reqa.expect("both request should be successful");
         reqb.expect("both request should be successful");
 
@@ -1150,7 +1168,7 @@ mod tests {
         FAIL.lock().unwrap().insert(3);
 
         // only connect once even for two concurrent requests
-        let (reqa, reqb) = tokio::join!(fed.request("", &[]), fed.request("", &[]));
+        let (reqa, reqb) = tokio::join!(fed.request("", &[], None), fed.request("", &[], None));
 
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::module::ApiRequest;
+use fedimint_core::module::{ApiAuth, ApiRequest};
 use fedimint_core::PeerId;
 use futures::Future;
 use jsonrpsee_types::error::INVALID_PARAMS_CODE;
@@ -113,6 +113,7 @@ where
         _peer_id: PeerId,
         method: &str,
         params: &[Value],
+        _auth: Option<&ApiAuth>,
     ) -> JsonRpcResult<Value> {
         if let Some(handler) = self.handlers.get(method) {
             info!(

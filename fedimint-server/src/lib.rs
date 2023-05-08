@@ -26,6 +26,8 @@ use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use rand::rngs::OsRng;
 use tokio::runtime::Runtime;
+use tower::ServiceBuilder;
+use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
@@ -137,7 +139,7 @@ impl FedimintServer {
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
-        let handler = Self::spawn_api(&self.settings.api_bind, rpc_module, 10).await;
+        let handler = Self::spawn_api(&self.settings.api_bind, rpc_module, 10, None).await;
 
         let cfg = config_generated_rx.recv().await.expect("should not close");
         handler.stop().await;
@@ -155,7 +157,13 @@ impl FedimintServer {
             Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
         }
 
-        Self::spawn_api(&cfg.api_bind, rpc_module, cfg.max_connections).await
+        Self::spawn_api(
+            &cfg.api_bind,
+            rpc_module,
+            cfg.max_connections,
+            Some(&server.cfg.private.api_auth),
+        )
+        .await
     }
 
     /// Spawns an API server
@@ -163,9 +171,15 @@ impl FedimintServer {
         api_bind: &SocketAddr,
         module: RpcModule<RpcHandlerCtx<T>>,
         max_connections: u32,
+        auth: Option<&ApiAuth>,
     ) -> FedimintApiHandler {
         let runtime = Runtime::new().expect("Creates runtime");
+        let service_builder = ServiceBuilder::new()
+            .layer(tower_http::trace::TraceLayer::new_for_http())
+            .option_layer(auth.map(|auth| ValidateRequestHeaderLayer::bearer(&auth.0)));
+
         let handle = ServerBuilder::new()
+            .set_middleware(service_builder)
             .max_connections(max_connections)
             .ping_interval(Duration::from_secs(10))
             .custom_tokio_runtime(runtime.handle().clone())
