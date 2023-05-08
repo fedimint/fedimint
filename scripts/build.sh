@@ -30,7 +30,7 @@ SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )
 cd $SRC_DIR || exit 1
 # Note: Respect 'CARGO_PROFILE' that crane uses
 cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
-export PATH="$PWD/target/$CARGO_PROFILE:$PATH"
+export PATH="$PWD/target/${CARGO_PROFILE:-debug}:$PATH"
 
 
 # Function for killing processes stored in FM_PID_FILE in reverse-order they were created in
