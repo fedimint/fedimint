@@ -76,6 +76,9 @@
             };
 
           craneLibNative = craneExtendBuild (craneExtendCommon craneLibNative');
+          craneLibDevShell = craneLibNative.overrideScope' (self: prev: {
+            commonProfile = null;
+          });
           craneLibCross = target: craneExtendBuild (craneExtendCommon craneLibCross'.${target});
 
           # Replace placeholder git hash in a binary
@@ -302,7 +305,7 @@
             let
               shellCommon = craneLib:
                 let
-                  build = craneLibNative;
+                  build = craneLibDevShell;
                   commonArgs = build.commonArgs;
                   commonEnvs = build.commonEnvs;
                 in
