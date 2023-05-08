@@ -167,6 +167,13 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
             payload: SetupProgress.VerifyGuardians,
           });
         }
+        // If consensus is running, skip past all setup
+        if (status === ServerStatus.ConsensusRunning) {
+          dispatch({
+            type: SETUP_ACTION_TYPE.SET_IS_SETUP_COMPLETE,
+            payload: true,
+          });
+        }
       })
       .catch((err) => {
         // Missing password error
