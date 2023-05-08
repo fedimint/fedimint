@@ -372,7 +372,7 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
 
     /// Returns an stream of key-value pairs with keys that start with
     /// `key_prefix`. No particular ordering is guaranteed.
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_>;
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
 
     /// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
     async fn raw_find_by_prefix_sorted_descending(
@@ -385,7 +385,7 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let keys = self
             .raw_find_by_prefix(key_prefix)
-            .await
+            .await?
             .map(|kv| kv.0)
             .collect::<Vec<_>>()
             .await;
@@ -487,12 +487,11 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        Ok(self
-            .0
+        self.0
             .as_mut()
             .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_prefix(key_prefix)
-            .await)
+            .await
     }
 
     async fn raw_find_by_prefix_sorted_descending(
@@ -2247,7 +2246,7 @@ mod test_utils {
             async fn raw_find_by_prefix(
                 &mut self,
                 _key_prefix: &[u8],
-            ) -> crate::db::PrefixStream<'_> {
+            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
 

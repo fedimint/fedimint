@@ -11,7 +11,7 @@ use futures::stream;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{ConnectOptions, Error, Executor, Row, Sqlite, SqlitePool, Transaction};
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Debug)]
 pub struct SqliteDb(SqlitePool);
@@ -115,27 +115,21 @@ impl<'a> IDatabaseTransaction<'a> for SqliteDbTransaction<'a> {
         Ok(None)
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         let str_prefix = get_key_prefix_search_hex(key_prefix);
         let query = "SELECT key, value FROM kv WHERE hex(key) LIKE ? ORDER BY value DESC";
         let query_prepared = sqlx::query(query).bind(str_prefix);
         // FIXME: this should be a stream
-        let results = self.tx.fetch_all(query_prepared).await;
+        let results = self.tx.fetch_all(query_prepared).await?;
 
-        // FIXME: this should return an error or panic
-        if results.is_err() {
-            warn!("sqlite find_by_prefix failed to retrieve key range. Returning empty iterator");
-            return Box::pin(stream::iter(Vec::new()));
-        }
-
-        let rows = results.unwrap().into_iter().map(|row| {
+        let rows = results.into_iter().map(|row| {
             (
                 row.get::<Vec<u8>, &str>("key"),
                 row.get::<Vec<u8>, &str>("value"),
             )
         });
 
-        Box::pin(stream::iter(rows))
+        Ok(Box::pin(stream::iter(rows)))
     }
 
     async fn raw_find_by_prefix_sorted_descending(
