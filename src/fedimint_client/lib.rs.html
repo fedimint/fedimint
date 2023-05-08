@@ -1502,7 +1502,7 @@
         operation_type: <span class="kw-2">&amp;</span>str,
         operation_meta: <span class="kw">impl </span>serde::Serialize,
     ) {
-        dbtx.insert_entry(
+        dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>OperationLogKey { operation_id },
             <span class="kw-2">&amp;</span>OperationLogEntry {
                 operation_type: operation_type.to_string(),
@@ -1511,7 +1511,7 @@
             },
         )
         .<span class="kw">await</span>;
-        dbtx.insert_entry(
+        dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>ChronologicalOperationLogKey {
                 creation_time: now(),
                 operation_id,
