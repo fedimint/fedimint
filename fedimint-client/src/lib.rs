@@ -53,7 +53,7 @@ use crate::transaction::{
 };
 
 /// Database keys used by the client
-mod db;
+pub mod db;
 /// Module client interface definitions
 pub mod module;
 /// Client state machine interfaces and executor implementation
