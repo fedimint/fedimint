@@ -36,7 +36,7 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
       try {
         const status = await api.status();
         if (canceled) return;
-        switch (status) {
+        switch (status.server) {
           case ServerStatus.SharingConfigGenParams:
             await api.runDkg().catch((err) => {
               // If we timed out, np just try again
