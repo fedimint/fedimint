@@ -44,7 +44,7 @@ use crate::sm::executor::{
 };
 use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
-    OperationState,
+    OperationState, State,
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -94,6 +94,13 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: InstancelessDynClientOutput,
     ) -> anyhow::Result<TransactionId>;
+
+    /// Adds a state machine to the executor.
+    async fn add_state_machine_dyn(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+    ) -> anyhow::Result<()>;
 
     async fn transaction_update_stream(
         &self,
@@ -206,6 +213,20 @@ impl DynGlobalClientContext {
         )
         .await
     }
+
+    /// Allows adding state machines from inside a transition to the executor.
+    /// The added state machine belongs to the same module instance as the state
+    /// machine from inside which it was spawned.
+    pub async fn add_state_machine<S>(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        sm: S,
+    ) -> anyhow::Result<()>
+    where
+        S: State<GlobalContext = DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+    {
+        self.add_state_machine_dyn(dbtx, box_up_state(sm)).await
+    }
 }
 
 fn states_to_instanceless_dyn<
@@ -301,6 +322,19 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
                 self.operation,
                 TransactionBuilder::new().with_output(instance_output),
             )
+            .await
+    }
+
+    async fn add_state_machine_dyn(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+    ) -> anyhow::Result<()> {
+        let state = DynState::from_parts(self.module_instance_id, sm);
+
+        self.client
+            .executor
+            .add_state_machines_dbtx(dbtx.global_tx(), vec![state])
             .await
     }
 
