@@ -1062,6 +1062,40 @@
 <a href="#1062" id="1062">1062</a>
 <a href="#1063" id="1063">1063</a>
 <a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
 
 </span><span class="kw">use </span>std::cmp::Ordering;
@@ -1108,7 +1142,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
-    OperationState,
+    OperationState, State,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
@@ -1158,6 +1192,13 @@
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         output: InstancelessDynClientOutput,
     ) -&gt; anyhow::Result&lt;TransactionId&gt;;
+
+    <span class="doccomment">/// Adds a state machine to the executor.
+    </span><span class="kw">async fn </span>add_state_machine_dyn(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt;)&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt;;
 
     <span class="kw">async fn </span>transaction_update_stream(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1270,6 +1311,20 @@
         )
         .<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Allows adding state machines from inside a transition to the executor.
+    /// The added state machine belongs to the same module instance as the state
+    /// machine from inside which it was spawned.
+    </span><span class="kw">pub async fn </span>add_state_machine&lt;S&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        sm: S,
+    ) -&gt; anyhow::Result&lt;()&gt;
+    <span class="kw">where
+        </span>S: State&lt;GlobalContext = DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="self">self</span>.add_state_machine_dyn(dbtx, box_up_state(sm)).<span class="kw">await
+    </span>}
 }
 
 <span class="kw">fn </span>states_to_instanceless_dyn&lt;
@@ -1365,6 +1420,19 @@
                 <span class="self">self</span>.operation,
                 TransactionBuilder::new().with_output(instance_output),
             )
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>add_state_machine_dyn(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
+        sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt;)&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>state = DynState::from_parts(<span class="self">self</span>.module_instance_id, sm);
+
+        <span class="self">self</span>.client
+            .executor
+            .add_state_machines_dbtx(dbtx.global_tx(), <span class="macro">vec!</span>[state])
             .<span class="kw">await
     </span>}
 
