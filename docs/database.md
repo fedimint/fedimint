@@ -116,6 +116,19 @@ Fedimint has defined a number of different structs for implementing the necessar
 follow the [adapter pattern](https://en.wikipedia.org/wiki/Adapter_pattern) to wrap and isolate the features. Below is an explanation of
 each interface/struct.
 
+## Migrations
+In order to avoid breaking changes, `fedimintd`, `gatewayd`, and the client must know of the structure of the data written to disk. If a code upgrade
+has occurred, it is possible that the new version of the code expects the data written to disk to be structured differently. When this happens, a database
+migration must occur to maintain backwards compatiability. Migrations are defined on a per-module basis in the `get_database_migrations` function and applied
+using `apply_migrations`.
+
+Since introducing a database breaking change is easy (just modifying a struct), tests have been introduced to catch DB breaking changes. `prepare_migration_snapshots` will prepare a database backup of dummy data for a module. `test_migrations` will try to read from this database backup. If the
+structure of the data has changed and the backup cannot be reading, this test will fail.
+
+There are sometimes when making a DB breaking change is intentional. In that case, to fix the migration tests, `prepare_migration_snapshot` needs to be updated
+to reflect the new structure of the data. Then, the db/ folder at the root of the repository needs to be deleted. Then `cargo test prepare_migration_snapshot` can
+be run to re-generate the database backup. `test_migrations` will need to be updated to read the newly added/modified data.
+
 ### Interfaces
  - **ISingleUseDatabaseTransaction** - The interface that each adapter struct implements. The main difference with this interface is that commit_tx
 does not take self by move.
