@@ -122,7 +122,7 @@ impl TracingSetup {
             .with(console_opt())
             .with(telemetry_layer_opt())
             .with(chrome_layer_opt())
-            .init();
+            .try_init()?;
         Ok(())
     }
 }

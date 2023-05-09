@@ -234,7 +234,7 @@ impl ConsensusApi {
         &self,
         info: WsClientConnectInfo,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ApiResult<ClientConfigResponse> {
+    ) -> ApiResult<ClientConfig> {
         let token = self.cfg.local.download_token.clone();
 
         if info.download_token != token {
@@ -260,11 +260,7 @@ impl ConsensusApi {
             }
         }
 
-        self.get_config_with_sig(dbtx)
-            .await
-            .ok_or(ApiError::server_error(
-                "Client signature not ready".to_string(),
-            ))
+        Ok(self.client_cfg.clone())
     }
 
     pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
@@ -283,18 +279,6 @@ impl ConsensusApi {
             .await
             .map(|ep_hist_key| ep_hist_key.0 + 1)
             .unwrap_or(0)
-    }
-
-    /// Returns the client config, if signed
-    pub async fn get_config_with_sig(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> Option<ClientConfigResponse> {
-        let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
-        maybe_sig.map(|signature| ClientConfigResponse {
-            client_config: self.client_cfg.clone(),
-            signature,
-        })
     }
 
     /// Sends an upgrade signal to the fedimint server thread
@@ -514,8 +498,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 let info = connection_code.parse()
                     .map_err(|_| ApiError::bad_request("Could not parse connection code".to_string()))?;
                 let future = context.wait_key_exists(ClientConfigSignatureKey);
-                future.await;
-                fedimint.download_client_config(info, &mut context.dbtx()).await
+                let signature = future.await;
+                let client_config = fedimint.download_client_config(info, &mut context.dbtx()).await?;
+                Ok(ClientConfigResponse{
+                    client_config,
+                    signature
+                })
             }
         },
         api_endpoint! {

@@ -1165,7 +1165,7 @@ impl FederationTest {
         let mut handles = vec![];
         for server in &self.servers {
             let s = server.lock().await;
-            handles.push(FedimintServer::spawn_consensus_api(&s.fedimint).await);
+            handles.push(FedimintServer::spawn_consensus_api(&s.fedimint, true).await);
         }
         handles
     }

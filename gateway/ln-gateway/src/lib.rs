@@ -31,7 +31,7 @@ use fedimint_client_legacy::{ClientError, GatewayClient};
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{RwLock, TaskGroup};
+use fedimint_core::task::{RwLock, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_client::contracts::Preimage;
 use gatewaylnrpc::GetNodeInfoResponse;
@@ -502,7 +502,7 @@ impl Gateway {
         Ok(())
     }
 
-    pub async fn run(mut self, listen: SocketAddr, password: String) -> Result<()> {
+    pub async fn spawn_webserver(&self, listen: SocketAddr, password: String) {
         let sender = GatewayRpcSender::new(self.sender.clone());
         let tx = run_webserver(
             password,
@@ -528,7 +528,9 @@ impl Gateway {
                 })
             }))
             .await;
+    }
 
+    pub async fn run(mut self, loop_ctrl: TaskHandle) -> Result<()> {
         // Handle messages from webserver and plugin
         while let Some(msg) = self.receiver.recv().await {
             tracing::trace!("Gateway received message {:?}", msg);
@@ -619,11 +621,5 @@ impl Gateway {
         }
 
         Ok(())
-    }
-}
-
-impl Drop for Gateway {
-    fn drop(&mut self) {
-        futures::executor::block_on(self.task_group.shutdown());
     }
 }

@@ -48,8 +48,8 @@ pub async fn run_webserver(
         .layer(CorsLayer::permissive());
 
     let (tx, rx) = oneshot::channel::<()>();
+    let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
     tg.spawn("Gateway Webserver", move |_| async move {
-        let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
         let graceful = server.with_graceful_shutdown(async {
             rx.await.ok();
         });

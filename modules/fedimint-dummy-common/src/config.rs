@@ -13,6 +13,14 @@ pub struct DummyConfigGenParams {
     pub tx_fee: Amount,
 }
 
+impl Default for DummyConfigGenParams {
+    fn default() -> Self {
+        Self {
+            tx_fee: Amount::ZERO,
+        }
+    }
+}
+
 /// Contains all the configuration for the server
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DummyConfig {

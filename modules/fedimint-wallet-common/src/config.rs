@@ -17,6 +17,15 @@ pub struct WalletGenParams {
     pub finality_delay: u32,
 }
 
+impl Default for WalletGenParams {
+    fn default() -> Self {
+        Self {
+            network: Network::Regtest,
+            finality_delay: 10,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {
     /// Contains all configuration that will be encrypted such as private key

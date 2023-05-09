@@ -1,94 +1,31 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::atomic::{AtomicU16, Ordering};
 
-use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
+use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::admin_client::{
     ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
 };
+use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
-    META_FEDERATION_NAME_KEY,
+    ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
-use fedimint_core::module::{ApiAuth, DynServerModuleGen, IServerModuleGen};
-use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::module::ApiAuth;
+use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
+use fedimint_logging::TracingSetup;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::ConsensusServer;
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector};
 use fedimint_server::net::peers::DelayCalculator;
-use fedimint_server::{FedimintApiHandler, FedimintServer};
+use fedimint_server::FedimintServer;
 use tokio_rustls::rustls;
 
-// Offset from the normal port by 30000 to avoid collisions
-static BASE_PORT: AtomicU16 = AtomicU16::new(38173);
-
-/// Constructs the FederationTest and Clients
-#[derive(Default)]
-pub struct FederationFixture {
-    num_peers: u16,
-    ids: Vec<ModuleInstanceId>,
-    clients: Vec<DynClientModuleGen>,
-    servers: Vec<DynServerModuleGen>,
-    params: ServerModuleGenParamsRegistry,
-    primary_client: ModuleInstanceId,
-}
-
-impl FederationFixture {
-    pub fn new_with_peers(num_peers: u16) -> Self {
-        Self {
-            num_peers,
-            ..Default::default()
-        }
-    }
-
-    /// Add a module to the federation
-    pub fn with_module(
-        mut self,
-        id: ModuleInstanceId,
-        client: impl IClientModuleGen + MaybeSend + MaybeSync + 'static,
-        server: impl IServerModuleGen + MaybeSend + MaybeSync + 'static,
-        params: impl ModuleGenParams,
-    ) -> Self {
-        self.params
-            .attach_config_gen_params(id, server.module_kind(), params);
-        self.ids.push(id);
-        self.clients.push(DynClientModuleGen::from(client));
-        self.servers.push(DynServerModuleGen::from(server));
-        self
-    }
-
-    /// Set the primary client module
-    pub fn with_primary_module(mut self, id: ModuleInstanceId) -> Self {
-        self.primary_client = id;
-        self
-    }
-
-    pub(crate) fn build(&mut self, task: TaskGroup) -> FederationTest {
-        // Enough ports to not have collisions with other tests
-        let base_port = BASE_PORT.fetch_add(self.num_peers * 10, Ordering::Relaxed);
-        let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
-        let params = local_config_gen_params(&peers, base_port, self.params.clone())
-            .expect("Generates local config");
-        let server_gen = ServerModuleGenRegistry::from(self.servers.clone());
-        let configs = ServerConfig::trusted_dealer_gen(&params, server_gen.clone());
-
-        FederationTest {
-            configs,
-            server_gen,
-            client_gen: ClientModuleGenRegistry::from(self.clients.clone()),
-            primary_client: self.primary_client,
-            task,
-        }
-    }
-}
-
-/// Test fixture for running a fedimint federation
+/// Test fixture for a running fedimint federation
 pub struct FederationTest {
     configs: BTreeMap<PeerId, ServerConfig>,
     server_gen: ServerModuleGenRegistry,
@@ -98,6 +35,12 @@ pub struct FederationTest {
 }
 
 impl FederationTest {
+    /// Create two clients, useful for send/receive tests
+    pub async fn two_clients(&self) -> (Client, Client) {
+        (self.new_client().await, self.new_client().await)
+    }
+
+    /// Create a client connected to this fed
     pub async fn new_client(&self) -> Client {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
@@ -115,36 +58,64 @@ impl FederationTest {
             .expect("Failed to build client")
     }
 
-    /// Spawns federation consensus servers and APIs
-    pub(crate) async fn start(&mut self) -> (Vec<ConsensusServer>, Vec<FedimintApiHandler>) {
-        let mut servers = vec![];
-        let mut handles = vec![];
+    /// Return first connection code for gateways
+    pub fn connection_code(&self) -> WsClientConnectInfo {
+        self.configs[&PeerId::from(0)].get_connect_info()
+    }
+
+    pub(crate) async fn new(
+        num_peers: u16,
+        base_port: u16,
+        params: ServerModuleGenParamsRegistry,
+        server_gen: ServerModuleGenRegistry,
+        client_gen: ClientModuleGenRegistry,
+        primary_client: ModuleInstanceId,
+    ) -> Self {
+        // Ensure tracing has been set once
+        let _ = TracingSetup::default().init();
+
+        let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
+        let params =
+            local_config_gen_params(&peers, base_port, params).expect("Generates local config");
+
+        let configs = ServerConfig::trusted_dealer_gen(&params, server_gen.clone());
         let network = MockNetwork::new();
 
-        for (peer_id, config) in self.configs.clone() {
+        let mut task = TaskGroup::new();
+        for (peer_id, config) in configs.clone() {
             let reliability = StreamReliability::INTEGRATION_TEST;
             let connections = network.connector(peer_id, reliability).into_dyn();
 
             let instances = config.consensus.iter_module_instances();
-            let decoders = self.server_gen.decoders(instances).unwrap();
+            let decoders = server_gen.decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
 
             let server = ConsensusServer::new_with(
                 config.clone(),
                 db.clone(),
-                self.server_gen.clone(),
+                server_gen.clone(),
                 connections,
                 DelayCalculator::TEST_DEFAULT,
-                &mut self.task,
+                &mut task,
             )
             .await
             .expect("Failed to init server");
 
-            let api_handle = FedimintServer::spawn_consensus_api(&server).await;
-            handles.push(api_handle);
-            servers.push(server);
+            let api_handle = FedimintServer::spawn_consensus_api(&server, false).await;
+            task.spawn("fedimintd", move |handle| async {
+                server.run_consensus(handle).await.unwrap();
+                api_handle.stop().await;
+            })
+            .await;
         }
-        (servers, handles)
+
+        Self {
+            configs,
+            server_gen,
+            client_gen,
+            primary_client,
+            task,
+        }
     }
 }
 
