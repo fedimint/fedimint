@@ -834,6 +834,7 @@
 <a href="#834" id="834">834</a>
 <a href="#835" id="835">835</a>
 <a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -852,6 +853,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::epoch::SerdeSignature;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -860,7 +862,7 @@
 <span class="kw">use </span>tbs::{serde_impl, Scalar};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
-<span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective, Signature};
+<span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
@@ -965,7 +967,7 @@
     <span class="doccomment">/// The client config
     </span><span class="kw">pub </span>client_config: ClientConfig,
     <span class="doccomment">/// Auth key signature over the `client_config`
-    </span><span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;Signature&gt;,
+    </span><span class="kw">pub </span>signature: SerdeSignature,
 }
 
 <span class="doccomment">/// The federation id is a copy of the authentication threshold public key of

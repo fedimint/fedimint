@@ -320,8 +320,8 @@
     <span class="kw">pub async fn </span>new_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Client {
         <span class="kw">let </span>client_config = <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
             .consensus
-            .to_config_response(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
-            .client_config;
+            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
+            .unwrap();
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
         client_builder.with_module_gens(<span class="self">self</span>.client_gen.clone());

@@ -409,6 +409,7 @@
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -523,7 +524,8 @@
     key = ClientConfigSignatureKey,
     value = SerdeSignature,
     db_prefix = DbKeyPrefix::ClientConfigSignature,
-);
+    notify_on_modify = <span class="bool-val">true
+</span>);
 <span class="macro">impl_db_lookup!</span>(
     key = ClientConfigSignatureKey,
     query_prefix = ClientConfigSignatureKeyPrefix

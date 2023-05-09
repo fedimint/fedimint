@@ -897,7 +897,7 @@
 
         <span class="comment">// Build API that can handle requests
         </span><span class="kw">let </span>(api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
-        <span class="kw">let </span>client_cfg = cfg.consensus.to_config_response(<span class="kw-2">&amp;</span>module_inits);
+        <span class="kw">let </span>client_cfg = cfg.consensus.to_client_config(<span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>;
         <span class="kw">let </span>modules = ModuleRegistry::from(modules);
 
         <span class="kw">let </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt; = Default::default();
