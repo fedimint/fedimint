@@ -525,7 +525,7 @@
             <span class="macro-nonterminal">$this</span>.cmd().<span class="kw">await
                 </span>$(.arg(<span class="macro-nonterminal">$arg</span>))*
                 .kill_on_drop(<span class="bool-val">true</span>)
-
+                .env(<span class="string">&quot;RUST_BACKTRACE&quot;</span>, <span class="string">&quot;1&quot;</span>)
         }
     };
 }
