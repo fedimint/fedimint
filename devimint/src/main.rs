@@ -279,7 +279,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     let initial_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     let add_invoice = lnd
@@ -313,7 +313,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     let final_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
@@ -373,7 +373,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     let initial_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     let invoice = cln
@@ -412,7 +412,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     let final_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(

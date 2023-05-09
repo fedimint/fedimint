@@ -19,17 +19,21 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::GatewayTest;
-use ln_gateway::rpc::rpc_client::RpcClient;
-use tracing::info;
+use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 
-async fn fixtures() -> (FederationTest, FederationTest, GatewayTest, RpcClient) {
+async fn fixtures() -> (
+    FederationTest,
+    FederationTest,
+    GatewayTest,
+    GatewayRpcClient,
+) {
     // TODO: use new client modules without legacy instances
     let fixtures = Fixtures::default()
         .with_primary(1, DummyClientGen, DummyGen, DummyConfigGenParams::default())
         .with_module(0, LightningClientGen, LightningGen, LightningGenParams);
 
-    let fed1 = fixtures.new_fed(2).await;
-    let fed2 = fixtures.new_fed(2).await;
+    let fed1 = fixtures.new_fed(1).await;
+    let fed2 = fixtures.new_fed(1).await;
     let gateway = fixtures.new_gateway().await;
     gateway.connect_fed(&fed1).await;
     gateway.connect_fed(&fed2).await;
@@ -45,12 +49,10 @@ async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn gatewayd_shows_info_about_all_connected_federations() -> anyhow::Result<()> {
-    let (_, _, gateway, client) = fixtures().await;
-    let info = client.get_info(gateway.password.clone()).await;
-    // TODO: Assertion
-    info!("{info:?}");
-    Ok(())
+async fn gatewayd_shows_info_about_all_connected_federations() {
+    let (_, _, _, client) = fixtures().await;
+    let info = client.get_info().await.unwrap();
+    assert_eq!(info.federations.len(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread")]
