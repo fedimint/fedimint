@@ -225,7 +225,7 @@ mod tests {
     use fedimint_core::task::TaskGroup;
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
-    use fedimint_core::{PeerId, TransactionId};
+    use fedimint_core::{maybe_add_send_sync, PeerId, TransactionId};
     use rand::thread_rng;
     use serde_json::Value;
     use tokio::sync::Mutex;
@@ -237,7 +237,7 @@ mod tests {
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
     };
     use crate::{
-        DynGlobalClientContext, IGlobalClientContext, InstancelessDynClientInput,
+        DynGlobalClientContext, IGlobalClientContext, IState, InstancelessDynClientInput,
         InstancelessDynClientOutput,
     };
 
@@ -369,6 +369,14 @@ mod tests {
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             _output: InstancelessDynClientOutput,
         ) -> anyhow::Result<TransactionId> {
+            unimplemented!()
+        }
+
+        async fn add_state_machine_dyn(
+            &self,
+            _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+            _sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+        ) -> anyhow::Result<()> {
             unimplemented!()
         }
 

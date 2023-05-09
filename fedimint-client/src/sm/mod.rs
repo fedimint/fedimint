@@ -14,8 +14,7 @@ pub use dbtx::ClientSMDatabaseTransaction;
 pub use executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 pub use notifier::{ModuleNotifier, Notifier};
-pub(crate) use state::IState;
-pub use state::{Context, DynContext, DynState, OperationState, State, StateTransition};
+pub use state::{Context, DynContext, DynState, IState, OperationState, State, StateTransition};
 
 /// Context given to all state machines
 pub trait GlobalContext: Debug + Clone + MaybeSync + MaybeSend + 'static {}
