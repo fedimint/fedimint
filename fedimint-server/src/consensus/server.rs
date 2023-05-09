@@ -218,7 +218,7 @@ impl ConsensusServer {
 
         // Build API that can handle requests
         let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
-        let client_cfg = cfg.consensus.to_config_response(&module_inits);
+        let client_cfg = cfg.consensus.to_client_config(&module_inits)?;
         let modules = ModuleRegistry::from(modules);
 
         let latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>> = Default::default();

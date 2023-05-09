@@ -1209,10 +1209,6 @@ async fn limits_client_config_downloads() -> Result<()> {
         let res = api.consensus_config_hash().await;
         assert!(res.is_ok());
 
-        // fed needs to run an epoch to combine shares and verify sig
-        let res = api.download_client_config(connect).await;
-        assert_matches!(res, Err(_));
-
         fed.run_consensus_epochs(1).await;
         let cfg = api.download_client_config(connect).await.unwrap();
         assert_eq!(cfg, user.config());

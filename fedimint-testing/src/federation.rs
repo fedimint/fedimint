@@ -101,8 +101,8 @@ impl FederationTest {
     pub async fn new_client(&self) -> Client {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
-            .to_config_response(&self.server_gen)
-            .client_config;
+            .to_client_config(&self.server_gen)
+            .unwrap();
 
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_gens(self.client_gen.clone());

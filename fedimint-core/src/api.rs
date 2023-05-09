@@ -528,12 +528,7 @@ where
             false,
             move |config: &ClientConfigResponse| {
                 let hash = config.client_config.consensus_hash();
-
-                if let Some(sig) = &config.signature {
-                    id.0.verify(sig, hash)
-                } else {
-                    false
-                }
+                id.0.verify(&config.signature.0, hash)
             },
         );
 

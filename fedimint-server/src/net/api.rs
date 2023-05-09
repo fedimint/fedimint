@@ -10,10 +10,10 @@ use fedimint_core::api::{
     ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
     WsClientConnectInfo,
 };
-use fedimint_core::config::ClientConfigResponse;
+use fedimint_core::config::{ClientConfig, ClientConfigResponse};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{SerdeEpochHistory, SerdeSignature, SignedEpochOutcome};
+use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -74,8 +74,8 @@ pub struct ConsensusApi {
     pub db: Database,
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
-    /// Cached client config response
-    pub client_cfg: ClientConfigResponse,
+    /// Cached client config
+    pub client_cfg: ClientConfig,
     /// For sending API events to consensus such as transactions
     pub api_sender: Sender<ApiEvent>,
     pub peer_status_channels: PeerStatusChannels,
@@ -230,7 +230,7 @@ impl ConsensusApi {
         }
     }
 
-    pub async fn download_config_with_token(
+    pub async fn download_client_config(
         &self,
         info: WsClientConnectInfo,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
@@ -246,9 +246,10 @@ impl ConsensusApi {
         let times_used = dbtx
             .get_value(&ClientConfigDownloadKey(token.clone()))
             .await
-            .unwrap_or_default();
+            .unwrap_or_default()
+            + 1;
 
-        dbtx.insert_entry(&ClientConfigDownloadKey(token), &(times_used + 1))
+        dbtx.insert_entry(&ClientConfigDownloadKey(token), &times_used)
             .await;
 
         if let Some(limit) = self.cfg.local.download_token_limit {
@@ -259,7 +260,11 @@ impl ConsensusApi {
             }
         }
 
-        Ok(self.get_config_with_sig(dbtx).await)
+        self.get_config_with_sig(dbtx)
+            .await
+            .ok_or(ApiError::server_error(
+                "Client signature not ready".to_string(),
+            ))
     }
 
     pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
@@ -280,16 +285,16 @@ impl ConsensusApi {
             .unwrap_or(0)
     }
 
+    /// Returns the client config, if signed
     pub async fn get_config_with_sig(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ClientConfigResponse {
-        let mut client = self.client_cfg.clone();
+    ) -> Option<ClientConfigResponse> {
         let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
-        if let Some(SerdeSignature(sig)) = maybe_sig {
-            client.signature = Some(sig);
-        }
-        client
+        maybe_sig.map(|signature| ClientConfigResponse {
+            client_config: self.client_cfg.clone(),
+            signature,
+        })
     }
 
     /// Sends an upgrade signal to the fedimint server thread
@@ -508,7 +513,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, context, connection_code: String| -> ClientConfigResponse {
                 let info = connection_code.parse()
                     .map_err(|_| ApiError::bad_request("Could not parse connection code".to_string()))?;
-                fedimint.download_config_with_token(info, &mut context.dbtx()).await
+                let future = context.wait_key_exists(ClientConfigSignatureKey);
+                future.await;
+                fedimint.download_client_config(info, &mut context.dbtx()).await
             }
         },
         api_endpoint! {
