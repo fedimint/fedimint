@@ -137,6 +137,7 @@
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
@@ -267,7 +268,8 @@
         exit(<span class="number">1</span>)
     });
 
-    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = gateway.run(listen, password).<span class="kw">await </span>{
+    gateway.spawn_webserver(listen, password).<span class="kw">await</span>;
+    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = gateway.run(task_group.make_handle()).<span class="kw">await </span>{
         task_group.shutdown_join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">error!</span>(<span class="string">&quot;Gateway stopped with error: {}&quot;</span>, e);

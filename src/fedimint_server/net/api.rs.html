@@ -742,18 +742,6 @@
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -990,7 +978,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         info: WsClientConnectInfo,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ApiResult&lt;ClientConfigResponse&gt; {
+    ) -&gt; ApiResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>token = <span class="self">self</span>.cfg.local.download_token.clone();
 
         <span class="kw">if </span>info.download_token != token {
@@ -1016,11 +1004,7 @@
             }
         }
 
-        <span class="self">self</span>.get_config_with_sig(dbtx)
-            .<span class="kw">await
-            </span>.ok_or(ApiError::server_error(
-                <span class="string">&quot;Client signature not ready&quot;</span>.to_string(),
-            ))
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_cfg.clone())
     }
 
     <span class="kw">pub async fn </span>epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt; {
@@ -1039,18 +1023,6 @@
             .<span class="kw">await
             </span>.map(|ep_hist_key| ep_hist_key.<span class="number">0 </span>+ <span class="number">1</span>)
             .unwrap_or(<span class="number">0</span>)
-    }
-
-    <span class="doccomment">/// Returns the client config, if signed
-    </span><span class="kw">pub async fn </span>get_config_with_sig(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientConfigResponse&gt; {
-        <span class="kw">let </span>maybe_sig = dbtx.get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey).<span class="kw">await</span>;
-        maybe_sig.map(|signature| ClientConfigResponse {
-            client_config: <span class="self">self</span>.client_cfg.clone(),
-            signature,
-        })
     }
 
     <span class="doccomment">/// Sends an upgrade signal to the fedimint server thread
@@ -1270,9 +1242,13 @@
                 <span class="kw">let </span>info = connection_code.parse()
                     .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;Could not parse connection code&quot;</span>.to_string()))<span class="question-mark">?</span>;
                 <span class="kw">let </span>future = context.wait_key_exists(ClientConfigSignatureKey);
-                future.<span class="kw">await</span>;
-                fedimint.download_client_config(info, <span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await
-            </span>}
+                <span class="kw">let </span>signature = future.<span class="kw">await</span>;
+                <span class="kw">let </span>client_config = fedimint.download_client_config(info, <span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(ClientConfigResponse{
+                    client_config,
+                    signature
+                })
+            }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;config_hash&quot;</span>,

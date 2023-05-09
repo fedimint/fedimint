@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["test","Allows users to easily run integration tests"],["test_btc",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["test_dir","If `FM_TEST_DIR` is set, use it as a base, otherwise use a tempdir"]],"static":[["BASE_PORT",""]],"struct":[["Fixtures","A tool for easily writing fedimint integration tests"]]};

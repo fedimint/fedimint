@@ -53,6 +53,14 @@
 <a href="#53" id="53">53</a>
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Amount};
@@ -66,6 +74,14 @@
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DummyConfigGenParams {
     <span class="kw">pub </span>tx_fee: Amount,
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>DummyConfigGenParams {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            tx_fee: Amount::ZERO,
+        }
+    }
 }
 
 <span class="doccomment">/// Contains all the configuration for the server

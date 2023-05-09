@@ -411,8 +411,8 @@
             .create_new(<span class="bool-val">true</span>)
             .write(<span class="bool-val">true</span>)
             .open(path)
-            .expect(<span class="string">&quot;Could not create gateway cfg file&quot;</span>);
-        serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>config).expect(<span class="string">&quot;Could not write gateway cfg&quot;</span>);
+            .map_err(anyhow::Error::from)<span class="question-mark">?</span>;
+        serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>config).map_err(anyhow::Error::from)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }

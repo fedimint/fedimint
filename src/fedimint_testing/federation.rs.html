@@ -188,126 +188,34 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
-<span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 
-<span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
+<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
 };
+<span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
-    META_FEDERATION_NAME_KEY,
+    ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::module::{ApiAuth, DynServerModuleGen, IServerModuleGen};
-<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+<span class="kw">use </span>fedimint_core::module::ApiAuth;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenParamsLocal;
 <span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::consensus::server::ConsensusServer;
 <span class="kw">use </span>fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 <span class="kw">use </span>fedimint_server::net::connect::{parse_host_port, Connector};
 <span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
-<span class="kw">use </span>fedimint_server::{FedimintApiHandler, FedimintServer};
+<span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>tokio_rustls::rustls;
 
-<span class="comment">// Offset from the normal port by 30000 to avoid collisions
-</span><span class="kw">static </span>BASE_PORT: AtomicU16 = AtomicU16::new(<span class="number">38173</span>);
-
-<span class="doccomment">/// Constructs the FederationTest and Clients
-</span><span class="attr">#[derive(Default)]
-</span><span class="kw">pub struct </span>FederationFixture {
-    num_peers: u16,
-    ids: Vec&lt;ModuleInstanceId&gt;,
-    clients: Vec&lt;DynClientModuleGen&gt;,
-    servers: Vec&lt;DynServerModuleGen&gt;,
-    params: ServerModuleGenParamsRegistry,
-    primary_client: ModuleInstanceId,
-}
-
-<span class="kw">impl </span>FederationFixture {
-    <span class="kw">pub fn </span>new_with_peers(num_peers: u16) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            num_peers,
-            ..Default::default()
-        }
-    }
-
-    <span class="doccomment">/// Add a module to the federation
-    </span><span class="kw">pub fn </span>with_module(
-        <span class="kw-2">mut </span><span class="self">self</span>,
-        id: ModuleInstanceId,
-        client: <span class="kw">impl </span>IClientModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        server: <span class="kw">impl </span>IServerModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        params: <span class="kw">impl </span>ModuleGenParams,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.params
-            .attach_config_gen_params(id, server.module_kind(), params);
-        <span class="self">self</span>.ids.push(id);
-        <span class="self">self</span>.clients.push(DynClientModuleGen::from(client));
-        <span class="self">self</span>.servers.push(DynServerModuleGen::from(server));
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Set the primary client module
-    </span><span class="kw">pub fn </span>with_primary_module(<span class="kw-2">mut </span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.primary_client = id;
-        <span class="self">self
-    </span>}
-
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task: TaskGroup) -&gt; FederationTest {
-        <span class="comment">// Enough ports to not have collisions with other tests
-        </span><span class="kw">let </span>base_port = BASE_PORT.fetch_add(<span class="self">self</span>.num_peers * <span class="number">10</span>, Ordering::Relaxed);
-        <span class="kw">let </span>peers = (<span class="number">0</span>..<span class="self">self</span>.num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span>params = local_config_gen_params(<span class="kw-2">&amp;</span>peers, base_port, <span class="self">self</span>.params.clone())
-            .expect(<span class="string">&quot;Generates local config&quot;</span>);
-        <span class="kw">let </span>server_gen = ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone());
-        <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, server_gen.clone());
-
-        FederationTest {
-            configs,
-            server_gen,
-            client_gen: ClientModuleGenRegistry::from(<span class="self">self</span>.clients.clone()),
-            primary_client: <span class="self">self</span>.primary_client,
-            task,
-        }
-    }
-}
-
-<span class="doccomment">/// Test fixture for running a fedimint federation
+<span class="doccomment">/// Test fixture for a running fedimint federation
 </span><span class="kw">pub struct </span>FederationTest {
     configs: BTreeMap&lt;PeerId, ServerConfig&gt;,
     server_gen: ServerModuleGenRegistry,
@@ -317,7 +225,13 @@
 }
 
 <span class="kw">impl </span>FederationTest {
-    <span class="kw">pub async fn </span>new_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Client {
+    <span class="doccomment">/// Create two clients, useful for send/receive tests
+    </span><span class="kw">pub async fn </span>two_clients(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (Client, Client) {
+        (<span class="self">self</span>.new_client().<span class="kw">await</span>, <span class="self">self</span>.new_client().<span class="kw">await</span>)
+    }
+
+    <span class="doccomment">/// Create a client connected to this fed
+    </span><span class="kw">pub async fn </span>new_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Client {
         <span class="kw">let </span>client_config = <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
             .consensus
             .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
@@ -334,36 +248,64 @@
             </span>.expect(<span class="string">&quot;Failed to build client&quot;</span>)
     }
 
-    <span class="doccomment">/// Spawns federation consensus servers and APIs
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>start(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; (Vec&lt;ConsensusServer&gt;, Vec&lt;FedimintApiHandler&gt;) {
-        <span class="kw">let </span><span class="kw-2">mut </span>servers = <span class="macro">vec!</span>[];
-        <span class="kw">let </span><span class="kw-2">mut </span>handles = <span class="macro">vec!</span>[];
+    <span class="doccomment">/// Return first connection code for gateways
+    </span><span class="kw">pub fn </span>connection_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; WsClientConnectInfo {
+        <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].get_connect_info()
+    }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
+        num_peers: u16,
+        base_port: u16,
+        params: ServerModuleGenParamsRegistry,
+        server_gen: ServerModuleGenRegistry,
+        client_gen: ClientModuleGenRegistry,
+        primary_client: ModuleInstanceId,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="comment">// Ensure tracing has been set once
+        </span><span class="kw">let _ </span>= TracingSetup::default().init();
+
+        <span class="kw">let </span>peers = (<span class="number">0</span>..num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>params =
+            local_config_gen_params(<span class="kw-2">&amp;</span>peers, base_port, params).expect(<span class="string">&quot;Generates local config&quot;</span>);
+
+        <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, server_gen.clone());
         <span class="kw">let </span>network = MockNetwork::new();
 
-        <span class="kw">for </span>(peer_id, config) <span class="kw">in </span><span class="self">self</span>.configs.clone() {
+        <span class="kw">let </span><span class="kw-2">mut </span>task = TaskGroup::new();
+        <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
             <span class="kw">let </span>reliability = StreamReliability::INTEGRATION_TEST;
             <span class="kw">let </span>connections = network.connector(peer_id, reliability).into_dyn();
 
             <span class="kw">let </span>instances = config.consensus.iter_module_instances();
-            <span class="kw">let </span>decoders = <span class="self">self</span>.server_gen.decoders(instances).unwrap();
+            <span class="kw">let </span>decoders = server_gen.decoders(instances).unwrap();
             <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
             <span class="kw">let </span>server = ConsensusServer::new_with(
                 config.clone(),
                 db.clone(),
-                <span class="self">self</span>.server_gen.clone(),
+                server_gen.clone(),
                 connections,
                 DelayCalculator::TEST_DEFAULT,
-                <span class="kw-2">&amp;mut </span><span class="self">self</span>.task,
+                <span class="kw-2">&amp;mut </span>task,
             )
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to init server&quot;</span>);
 
-            <span class="kw">let </span>api_handle = FedimintServer::spawn_consensus_api(<span class="kw-2">&amp;</span>server).<span class="kw">await</span>;
-            handles.push(api_handle);
-            servers.push(server);
+            <span class="kw">let </span>api_handle = FedimintServer::spawn_consensus_api(<span class="kw-2">&amp;</span>server, <span class="bool-val">false</span>).<span class="kw">await</span>;
+            task.spawn(<span class="string">&quot;fedimintd&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async </span>{
+                server.run_consensus(handle).<span class="kw">await</span>.unwrap();
+                api_handle.stop().<span class="kw">await</span>;
+            })
+            .<span class="kw">await</span>;
         }
-        (servers, handles)
+
+        <span class="self">Self </span>{
+            configs,
+            server_gen,
+            client_gen,
+            primary_client,
+            task,
+        }
     }
 }
 

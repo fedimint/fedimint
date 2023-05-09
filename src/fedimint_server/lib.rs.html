@@ -266,6 +266,30 @@
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -363,7 +387,7 @@
         </span>.unwrap();
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Starting consensus API&quot;</span>);
-        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_consensus_api(<span class="kw-2">&amp;</span>server).<span class="kw">await</span>;
+        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_consensus_api(<span class="kw-2">&amp;</span>server, <span class="bool-val">true</span>).<span class="kw">await</span>;
 
         server.run_consensus(task_group.make_handle()).<span class="kw">await</span><span class="question-mark">?</span>;
         handler.stop().<span class="kw">await</span>;
@@ -405,7 +429,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config::api::server_endpoints(), <span class="prelude-val">None</span>);
-        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_api(<span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_api(<span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>, <span class="bool-val">true</span>).<span class="kw">await</span>;
 
         <span class="kw">let </span>cfg = config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">&quot;should not close&quot;</span>);
         handler.stop().<span class="kw">await</span>;
@@ -413,8 +437,11 @@
     }
 
     <span class="doccomment">/// Runs the `ConsensusApi` which serves endpoints while consensus is
-    /// running
-    </span><span class="kw">pub async fn </span>spawn_consensus_api(server: <span class="kw-2">&amp;</span>ConsensusServer) -&gt; FedimintApiHandler {
+    /// running.
+    </span><span class="kw">pub async fn </span>spawn_consensus_api(
+        server: <span class="kw-2">&amp;</span>ConsensusServer,
+        force_shutdown: bool,
+    ) -&gt; FedimintApiHandler {
         <span class="kw">let </span>api = <span class="kw-2">&amp;</span>server.consensus.api;
         <span class="kw">let </span>cfg = <span class="kw-2">&amp;</span>api.cfg.local;
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
@@ -423,20 +450,39 @@
             <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
         }
 
-        <span class="self">Self</span>::spawn_api(<span class="kw-2">&amp;</span>cfg.api_bind, rpc_module, cfg.max_connections).<span class="kw">await
+        <span class="self">Self</span>::spawn_api(
+            <span class="kw-2">&amp;</span>cfg.api_bind,
+            rpc_module,
+            cfg.max_connections,
+            force_shutdown,
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Spawns an API server
+    ///
+    /// `force_shutdown` runs the API in a new runtime that the
+    /// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
+    /// easily be killed.
     </span><span class="kw">async fn </span>spawn_api&lt;T&gt;(
         api_bind: <span class="kw-2">&amp;</span>SocketAddr,
         module: RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
         max_connections: u32,
+        force_shutdown: bool,
     ) -&gt; FedimintApiHandler {
-        <span class="kw">let </span>runtime = Runtime::new().expect(<span class="string">&quot;Creates runtime&quot;</span>);
-        <span class="kw">let </span>handle = ServerBuilder::new()
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = ServerBuilder::new()
             .max_connections(max_connections)
-            .ping_interval(Duration::from_secs(<span class="number">10</span>))
-            .custom_tokio_runtime(runtime.handle().clone())
+            .ping_interval(Duration::from_secs(<span class="number">10</span>));
+
+        <span class="kw">let </span>runtime = <span class="kw">if </span>force_shutdown {
+            <span class="kw">let </span>runtime = Runtime::new().expect(<span class="string">&quot;Creates runtime&quot;</span>);
+            builder = builder.custom_tokio_runtime(runtime.handle().clone());
+            <span class="prelude-val">Some</span>(runtime)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
+        <span class="kw">let </span>handle = builder
             .build(<span class="kw-2">&amp;</span>api_bind.to_string())
             .<span class="kw">await
             </span>.context(<span class="macro">format!</span>(<span class="string">&quot;Bind address: {api_bind}&quot;</span>))
@@ -522,7 +568,7 @@
 }
 
 <span class="kw">pub struct </span>FedimintApiHandler {
-    runtime: Runtime,
+    runtime: <span class="prelude-ty">Option</span>&lt;Runtime&gt;,
     handle: ServerHandle,
 }
 
@@ -530,7 +576,9 @@
     <span class="doccomment">/// Attempts to stop the API
     </span><span class="kw">pub async fn </span>stop(<span class="self">self</span>) {
         <span class="kw">let _ </span>= <span class="self">self</span>.handle.stop();
-        <span class="self">self</span>.runtime.shutdown_background();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(runtime) = <span class="self">self</span>.runtime {
+            runtime.shutdown_background();
+        }
         <span class="self">self</span>.handle.stopped().<span class="kw">await</span>;
     }
 }

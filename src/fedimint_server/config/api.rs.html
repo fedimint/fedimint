@@ -869,16 +869,6 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1483,10 +1473,10 @@
 </span><span class="kw">mod </span>tests {
 
     <span class="kw">use </span>std::collections::{BTreeSet, HashSet};
+    <span class="kw">use </span>std::fs;
     <span class="kw">use </span>std::path::PathBuf;
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
-    <span class="kw">use </span>std::{env, fs};
 
     <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
     <span class="kw">use </span>fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
@@ -1496,6 +1486,7 @@
     <span class="kw">use </span>fedimint_core::module::ApiAuth;
     <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
     <span class="kw">use </span>fedimint_core::PeerId;
+    <span class="kw">use </span>fedimint_testing::fixtures::test_dir;
     <span class="kw">use </span>futures::future::join_all;
     <span class="kw">use </span>itertools::Itertools;
     <span class="kw">use </span>url::Url;
@@ -1620,18 +1611,7 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_config_api() {
-        <span class="kw">let </span>(parent, _maybe_tmp_dir_guard) = <span class="kw">match </span>env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>) {
-            <span class="prelude-val">Ok</span>(directory) =&gt; (directory, <span class="prelude-val">None</span>),
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="kw">let </span>guard = tempfile::Builder::new()
-                    .prefix(<span class="string">&quot;fm-cfg-api&quot;</span>)
-                    .tempdir()
-                    .unwrap();
-                <span class="kw">let </span>directory = guard.path().to_str().unwrap().to_owned();
-                (directory, <span class="prelude-val">Some</span>(guard))
-            }
-        };
-        <span class="kw">let </span>data_dir = PathBuf::from(parent).join(<span class="string">&quot;test-config-api&quot;</span>);
+        <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">&quot;test-config-api&quot;</span>);
 
         <span class="comment">// TODO: Choose port in common way with `fedimint_env`
         </span><span class="kw">let </span>base_port = <span class="number">18103</span>;
