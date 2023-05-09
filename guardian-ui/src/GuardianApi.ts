@@ -187,13 +187,15 @@ export class GuardianApi implements ApiInterface {
       // Explicitly start a fresh socket.
       await this.shutdown();
       await this.connect();
-      // Confirm satus.
+      // Confirm status.
       try {
         const status = await this.status();
         if (status.server === ServerStatus.ConsensusRunning) {
           return;
         } else {
-          throw new Error(`Expected status ConsensusRunning, got ${status}`);
+          throw new Error(
+            `Expected status ConsensusRunning, got ${status.server}`
+          );
         }
       } catch (err) {
         console.warn('Failed to confirm consensus running:', err);

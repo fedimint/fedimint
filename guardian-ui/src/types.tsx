@@ -83,8 +83,8 @@ export interface Versions {
   modules: Record<
     number,
     {
-      core: string;
-      module: string;
+      core: number;
+      module: number;
       api: { major: number; minor: number }[];
     }
   >;

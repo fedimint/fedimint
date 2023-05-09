@@ -23,7 +23,7 @@ export const SetupComplete: React.FC = () => {
         🎉 🎉 🎉
       </Heading>
       <Heading size='md' fontWeight='medium' mb={2}>
-        Congratualations
+        Congratulations
       </Heading>
       <Text mb={16} fontWeight='medium'>
         All Guardians’ verification codes have been verified.
