@@ -10,6 +10,33 @@
 //! * `IFederationApi` - fake implementation of `IFederationApi` that simulates
 //!   gateway federation client dependency.
 
+use fedimint_dummy_client::DummyClientGen;
+use fedimint_dummy_common::config::DummyConfigGenParams;
+use fedimint_dummy_server::DummyGen;
+use fedimint_ln_client::LightningClientGen;
+use fedimint_ln_common::config::LightningGenParams;
+use fedimint_ln_server::LightningGen;
+use fedimint_testing::federation::FederationTest;
+use fedimint_testing::fixtures::Fixtures;
+use fedimint_testing::gateway::GatewayTest;
+use ln_gateway::rpc::rpc_client::RpcClient;
+use tracing::info;
+
+async fn fixtures() -> (FederationTest, FederationTest, GatewayTest, RpcClient) {
+    // TODO: use new client modules without legacy instances
+    let fixtures = Fixtures::default()
+        .with_primary(1, DummyClientGen, DummyGen, DummyConfigGenParams::default())
+        .with_module(0, LightningClientGen, LightningGen, LightningGenParams);
+
+    let fed1 = fixtures.new_fed(2).await;
+    let fed2 = fixtures.new_fed(2).await;
+    let gateway = fixtures.new_gateway().await;
+    gateway.connect_fed(&fed1).await;
+    gateway.connect_fed(&fed2).await;
+    let client = gateway.new_client().await;
+    (fed1, fed2, gateway, client)
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
     // todo: implement test case
@@ -19,8 +46,10 @@ async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_shows_info_about_all_connected_federations() -> anyhow::Result<()> {
-    // todo: implement test case
-
+    let (_, _, gateway, client) = fixtures().await;
+    let info = client.get_info(gateway.password.clone()).await;
+    // TODO: Assertion
+    info!("{info:?}");
     Ok(())
 }
 

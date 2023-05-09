@@ -602,10 +602,10 @@ fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
 mod tests {
 
     use std::collections::{BTreeSet, HashSet};
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
-    use std::{env, fs};
 
     use fedimint_core::admin_client::WsAdminClient;
     use fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
@@ -615,6 +615,7 @@ mod tests {
     use fedimint_core::module::ApiAuth;
     use fedimint_core::task::{sleep, TaskGroup};
     use fedimint_core::PeerId;
+    use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
     use url::Url;
@@ -739,18 +740,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_api() {
-        let (parent, _maybe_tmp_dir_guard) = match env::var("FM_TEST_DIR") {
-            Ok(directory) => (directory, None),
-            Err(_) => {
-                let guard = tempfile::Builder::new()
-                    .prefix("fm-cfg-api")
-                    .tempdir()
-                    .unwrap();
-                let directory = guard.path().to_str().unwrap().to_owned();
-                (directory, Some(guard))
-            }
-        };
-        let data_dir = PathBuf::from(parent).join("test-config-api");
+        let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-config-api");
 
         // TODO: Choose port in common way with `fedimint_env`
         let base_port = 18103;

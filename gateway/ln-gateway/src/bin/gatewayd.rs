@@ -128,7 +128,8 @@ async fn main() -> Result<(), anyhow::Error> {
         exit(1)
     });
 
-    if let Err(e) = gateway.run(listen, password).await {
+    gateway.spawn_webserver(listen, password).await;
+    if let Err(e) = gateway.run(task_group.make_handle()).await {
         task_group.shutdown_join_all(Some(SHUTDOWN_TIMEOUT)).await?;
 
         error!("Gateway stopped with error: {}", e);

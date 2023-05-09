@@ -186,8 +186,8 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
             .create_new(true)
             .write(true)
             .open(path)
-            .expect("Could not create gateway cfg file");
-        serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
+            .map_err(anyhow::Error::from)?;
+        serde_json::to_writer_pretty(file, &config).map_err(anyhow::Error::from)?;
 
         Ok(())
     }

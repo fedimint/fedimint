@@ -333,9 +333,12 @@ impl FedimintConsensus {
         outcome: &HbbftConsensusOutcome,
         drop_peers: &mut Vec<PeerId>,
     ) {
-        let config = self.api.get_config_with_sig(&mut dbtx.get_isolated()).await;
+        let sig = dbtx
+            .get_isolated()
+            .get_value(&ClientConfigSignatureKey)
+            .await;
 
-        if config.is_none() {
+        if sig.is_none() {
             let client_hash = self.api.client_cfg.consensus_hash();
             let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
             let mut contributing_peers = HashSet::new();
@@ -526,11 +529,14 @@ impl FedimintConsensus {
 
         // Add a signature share for the client config hash if we don't have it signed
         // yet
-        let config = self.api.get_config_with_sig(&mut dbtx.get_isolated()).await;
-        if config.is_none() {
+        let sig = dbtx
+            .get_isolated()
+            .get_value(&ClientConfigSignatureKey)
+            .await;
+        if sig.is_none() {
             let hash = self.api.client_cfg.consensus_hash();
-            let sig = self.cfg.private.auth_sks.0.sign(hash);
-            let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig));
+            let share = self.cfg.private.auth_sks.0.sign(hash);
+            let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
             items.push(item);
         }
 

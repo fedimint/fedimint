@@ -95,9 +95,10 @@ where
         let listen = listen.unwrap();
         let password = password.unwrap();
 
+        gateway.spawn_webserver(listen, password).await;
         task_group
-            .spawn("Run Gateway", move |_| async move {
-                if gateway.run(listen, password).await.is_err() {}
+            .spawn("Run Gateway", move |handle| async move {
+                if gateway.run(handle).await.is_err() {}
             })
             .await;
 
