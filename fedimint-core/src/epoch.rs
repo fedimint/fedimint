@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use fedimint_core::core::DynModuleConsensusItem as ModuleConsensusItem;
@@ -49,6 +49,30 @@ pub struct SignedEpochOutcome {
 
 pub type SerdeEpochHistory = SerdeModuleEncoding<SignedEpochOutcome>;
 
+/// Combines signature shares from peers, ignoring bad signatures to avoid a DoS
+/// attack.  If not enough valid shares, returns the peers that were valid.
+pub fn combine_sigs<M: AsRef<[u8]>>(
+    pks: &PublicKeySet,
+    shares: &BTreeMap<PeerId, SerdeSignatureShare>,
+    msg: &M,
+) -> Result<SerdeSignature, BTreeSet<PeerId>> {
+    // Remove bad sigs
+    let mut valid_peers = BTreeSet::new();
+    let valid_shares = shares.iter().filter_map(|(peer, share)| {
+        if pks.public_key_share(peer.to_usize()).verify(&share.0, msg) {
+            valid_peers.insert(*peer);
+            Some((peer.to_usize(), &share.0))
+        } else {
+            None
+        }
+    });
+
+    match pks.combine_signatures(valid_shares) {
+        Ok(sig) => Ok(SerdeSignature(sig)),
+        Err(_) => Err(valid_peers),
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct EpochOutcome {
     pub epoch: u64,
@@ -96,39 +120,19 @@ impl SignedEpochOutcome {
         pks: &PublicKeySet,
         mut prev_epoch: SignedEpochOutcome,
     ) -> Result<SignedEpochOutcome, EpochVerifyError> {
-        let mut contributing_peers = HashSet::new();
-
         let sigs: BTreeMap<_, _> = self
             .outcome
             .items
             .iter()
             .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
             .filter_map(|(peer, item)| match item {
-                ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig)) => {
-                    Some((peer, sig))
-                }
+                ConsensusItem::EpochOutcomeSignatureShare(sig) => Some((peer, sig.clone())),
                 _ => None,
-            })
-            .filter(|(peer, sig)| {
-                let pub_key = pks.public_key_share(peer.to_usize());
-                pub_key.verify(sig, prev_epoch.hash)
-            })
-            .map(|(peer, sig)| {
-                contributing_peers.insert(peer);
-                (peer.to_usize(), sig)
             })
             .collect();
 
-        if let Ok(final_sig) = pks.combine_signatures(sigs) {
-            assert!(pks.public_key().verify(&final_sig, prev_epoch.hash));
-
-            prev_epoch.signature = Some(SerdeSignature(final_sig));
-            Ok(prev_epoch)
-        } else {
-            Err(EpochVerifyError::NotEnoughValidSigShares(
-                contributing_peers,
-            ))
-        }
+        prev_epoch.signature = Some(combine_sigs(pks, &sigs, &prev_epoch.hash)?);
+        Ok(prev_epoch)
     }
 
     pub fn verify_sig(&self, pk: &PublicKey) -> Result<(), EpochVerifyError> {
@@ -173,7 +177,13 @@ pub enum EpochVerifyError {
     MissingPreviousEpoch,
     InvalidEpochHash,
     InvalidPreviousEpochHash,
-    NotEnoughValidSigShares(HashSet<PeerId>),
+    NotEnoughValidSigShares(BTreeSet<PeerId>),
+}
+
+impl From<BTreeSet<PeerId>> for EpochVerifyError {
+    fn from(valid_peers: BTreeSet<PeerId>) -> Self {
+        EpochVerifyError::NotEnoughValidSigShares(valid_peers)
+    }
 }
 
 impl Encodable for SerdeSignature {
@@ -214,10 +224,11 @@ impl Decodable for SerdeSignatureShare {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::{BTreeMap, BTreeSet};
 
     use bitcoin::hashes::Hash;
     use fedimint_core::encoding::Encodable;
+    use fedimint_core::epoch::combine_sigs;
     use fedimint_core::PeerId;
     use rand::rngs::OsRng;
     use threshold_crypto::{SecretKey, SecretKeySet};
@@ -259,6 +270,48 @@ mod tests {
     }
 
     #[test]
+    fn combines_single_share() {
+        let mut rng = OsRng;
+        let sk_set = SecretKeySet::random(0, &mut rng);
+        let pk_set = sk_set.public_keys();
+        let msg = "test message";
+
+        let shares = BTreeMap::from([(
+            PeerId::from(0),
+            SerdeSignatureShare(sk_set.secret_key_share(0).sign(msg)),
+        )]);
+
+        assert!(combine_sigs(&pk_set, &shares, &msg.to_string()).is_ok());
+    }
+
+    #[test]
+    fn combines_shares() {
+        let mut rng = OsRng;
+        let sk_set = SecretKeySet::random(1, &mut rng);
+        let pk_set = sk_set.public_keys();
+        let msg = "test message";
+
+        let mut shares = BTreeMap::from([
+            (
+                PeerId::from(0),
+                SerdeSignatureShare(sk_set.secret_key_share(0).sign(msg)),
+            ),
+            (
+                PeerId::from(1),
+                SerdeSignatureShare(sk_set.secret_key_share(1).sign(msg)),
+            ),
+        ]);
+
+        assert!(combine_sigs(&pk_set, &shares, &msg.to_string()).is_ok());
+
+        shares.remove(&PeerId::from(0));
+        assert_eq!(
+            combine_sigs(&pk_set, &shares, &msg.to_string()),
+            Err(BTreeSet::from([PeerId::from(1)]))
+        );
+    }
+
+    #[test]
     fn adds_sig_to_prev_epoch() {
         let mut rng = OsRng;
         let sk_set = SecretKeySet::random(2, &mut rng);
@@ -287,7 +340,7 @@ mod tests {
             items: sigs[0..1].to_vec(),
             rejected_txs: BTreeSet::default(),
         };
-        let contributing = HashSet::from([PeerId::from(0)]);
+        let contributing = BTreeSet::from([PeerId::from(0)]);
         let result = epoch1.add_sig_to_prev(&pk_set, epoch0.clone()).unwrap_err();
         assert_eq!(
             result,
