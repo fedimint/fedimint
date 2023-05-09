@@ -228,7 +228,7 @@ macro_rules! cmd {
             $this.cmd().await
                 $(.arg($arg))*
                 .kill_on_drop(true)
-
+                .env("RUST_BACKTRACE", "1")
         }
     };
 }
