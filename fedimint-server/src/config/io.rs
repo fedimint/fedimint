@@ -143,10 +143,7 @@ pub fn write_server_config(
     let salt = fs::read_to_string(path.join(SALT_FILE))?;
     let key = get_encryption_key(password, &salt)?;
 
-    let client_config = server
-        .consensus
-        .to_config_response(module_config_gens)
-        .client_config;
+    let client_config = server.consensus.to_client_config(module_config_gens)?;
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
     plaintext_display_write(&server.get_connect_info(), &path.join(CLIENT_CONNECT_FILE))?;

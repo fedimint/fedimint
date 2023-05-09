@@ -13,8 +13,8 @@ use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
-    ClientConfig, ClientConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl,
-    ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
+    ClientConfig, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl, ServerModuleConfig,
+    ServerModuleGenRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::module::registry::ServerModuleRegistry;
@@ -179,18 +179,7 @@ impl ServerConfigConsensus {
         self.modules.iter().map(|(k, v)| (*k, &v.kind))
     }
 
-    pub fn try_to_config_response(
-        &self,
-        // TODO: remove
-        module_config_gens: &ServerModuleGenRegistry,
-    ) -> anyhow::Result<ClientConfigResponse> {
-        Ok(ClientConfigResponse {
-            client_config: self.to_client_config(module_config_gens)?,
-            signature: None,
-        })
-    }
-
-    fn to_client_config(
+    pub fn to_client_config(
         &self,
         module_config_gens: &ModuleGenRegistry<DynServerModuleGen>,
     ) -> Result<ClientConfig, anyhow::Error> {
@@ -211,14 +200,6 @@ impl ServerConfigConsensus {
             meta: self.meta.clone(),
         };
         Ok(client)
-    }
-
-    pub fn to_config_response(
-        &self,
-        module_config_gens: &ServerModuleGenRegistry,
-    ) -> ClientConfigResponse {
-        self.try_to_config_response(module_config_gens)
-            .expect("configuration mismatch")
     }
 }
 

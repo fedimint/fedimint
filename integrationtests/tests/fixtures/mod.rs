@@ -351,8 +351,8 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
-                .to_config_response(&server_module_inits)
-                .client_config;
+                .to_client_config(&server_module_inits)
+                .unwrap();
 
             let lightning = FakeLightningTest::new();
             let ln_arc = Arc::new(RwLock::new(lightning.clone()));
@@ -557,7 +557,7 @@ async fn distributed_config(
 
     Ok((
         configs.into_iter().collect(),
-        config.consensus.to_config_response(&registry).client_config,
+        config.consensus.to_client_config(&registry).unwrap(),
     ))
 }
 

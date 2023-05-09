@@ -112,6 +112,7 @@ impl_db_record!(
     key = ClientConfigSignatureKey,
     value = SerdeSignature,
     db_prefix = DbKeyPrefix::ClientConfigSignature,
+    notify_on_modify = true
 );
 impl_db_lookup!(
     key = ClientConfigSignatureKey,

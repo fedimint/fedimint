@@ -16,6 +16,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::encoding::Encodable;
+use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
@@ -24,7 +25,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tbs::{serde_impl, Scalar};
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
-use threshold_crypto::{G1Projective, G2Projective, Signature};
+use threshold_crypto::{G1Projective, G2Projective};
 use url::Url;
 
 use crate::encoding::Decodable;
@@ -129,7 +130,7 @@ pub struct ClientConfigResponse {
     /// The client config
     pub client_config: ClientConfig,
     /// Auth key signature over the `client_config`
-    pub signature: Option<Signature>,
+    pub signature: SerdeSignature,
 }
 
 /// The federation id is a copy of the authentication threshold public key of
