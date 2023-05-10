@@ -1,3 +1,5 @@
+import { Transaction, Vout } from '../bitcoin.types';
+
 export interface Explorer {
 	// Try get transaction status for a tx with given address
 	watchAddressForTransaction: (
@@ -45,6 +47,7 @@ interface ChaintipCache {
 	fetched: number;
 }
 
+
 export class BlockstreamExplorer implements Explorer {
 	// Base url for the blockstream explorer
 	public baseUrl: string;
@@ -63,7 +66,7 @@ export class BlockstreamExplorer implements Explorer {
 			);
 
 			if (res.ok) {
-				const txns = await res.json();
+				const txns: Transaction[] = await res.json();
 
 				if (txns.length === 0) {
 					return Promise.reject('No transaction found in the mempool');
@@ -71,8 +74,8 @@ export class BlockstreamExplorer implements Explorer {
 
 				let txout: { value: number } | undefined;
 
-				const tx = txns.find((tx: any) => {
-					txout = tx.vout.find((out: any) => {
+				const tx = txns.find((tx: Transaction) => {
+					txout = tx.vout.find((out: Vout) => {
 						return out.scriptpubkey_address === address;
 					});
 					return txout !== undefined;
@@ -109,7 +112,7 @@ export class BlockstreamExplorer implements Explorer {
 			if (res.ok) {
 				const tx = await res.json();
 
-				const txout = tx.vout.find((out: any) => {
+				const txout = tx.vout.find((out: Vout) => {
 					return out.scriptpubkey_address === address;
 				});
 

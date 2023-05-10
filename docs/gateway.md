@@ -94,23 +94,7 @@ As described in [Running Fedimint for dev testing](./dev-running.md#using-the-ga
 
 ### Developing Gateway-UI (aka, Mintgate)
 
-To interact with and develop Mintgate, open a new terminal and change directories to `/gateway/ui/` and start the development shell
-
-```sh
-cd /gateway/ui
-nix develop .#fedimint-ui
-```
-
-Install the required dependencies and run the Mintgate client
-
-```sh
-yarn install
-yarn start
-```
-
-You should see a running Mintgate instance in your local browser. Probably at `https://localhost:3000`
-
----
+See [instructions in Gateway UI readme](../fedimint-ui/apps/gateway-ui/README.md#development)
 
 ## Deploying a Gateway in Production
 

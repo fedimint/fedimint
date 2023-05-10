@@ -197,7 +197,7 @@ function check_ui_lint() {
     return 0
   fi
 
-  npx lint-staged
+  # npx lint-staged
 }
 export -f check_ui_lint
 

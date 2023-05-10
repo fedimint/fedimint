@@ -1,6 +1,8 @@
 import { Federation } from '../federation.types';
 import { GatewayInfo, Mintgate } from './Mintgate';
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 // MockMintgate is a mock implementation of the Mintgate API
 export class MockMintgate implements Mintgate {
 	fetchInfo = async (): Promise<GatewayInfo> => {
@@ -92,3 +94,5 @@ export class MockMintgate implements Mintgate {
 		);
 	};
 }
+
+/* eslint-enable @typescript-eslint/no-unused-vars */

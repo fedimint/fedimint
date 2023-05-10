@@ -1,5 +1,7 @@
 # Guardian UI
 
+Web app experience for setting up and administering fedimints. This is used by the Fedimint guardians
+
 ## Development
 
 ### Environment setup
