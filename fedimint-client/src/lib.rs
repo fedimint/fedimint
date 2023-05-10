@@ -114,7 +114,7 @@ use crate::sm::{
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
+    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
@@ -187,6 +187,7 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
+    // TODO: Remove in favor of `await_tx_accepted`
     pub async fn await_tx_rejected(&self, operation_id: OperationId, txid: TransactionId) {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
@@ -206,22 +207,16 @@ impl DynGlobalClientContext {
         &self,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
         let query_txid = txid;
         update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid: event_txid }
-                        if event_txid == query_txid =>
-                    {
-                        Some(Ok(()))
-                    }
-                    TxSubmissionStates::Rejected { txid: event_txid }
-                        if event_txid == query_txid =>
-                    {
-                        Some(Err(()))
+                    TxSubmissionStates::Accepted { txid } if txid == query_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected { txid, error } if txid == query_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })
@@ -883,15 +878,16 @@ pub struct TransactionUpdates {
 impl TransactionUpdates {
     /// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
-    pub async fn await_tx_accepted(self, txid: TransactionId) -> Result<(), ()> {
+    pub async fn await_tx_accepted(
+        self,
+        await_txid: TransactionId,
+    ) -> Result<(), TxSubmissionError> {
         self.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid: event_txid } if event_txid == txid => {
-                        Some(Ok(()))
-                    }
-                    TxSubmissionStates::Rejected { txid: event_txid } if event_txid == txid => {
-                        Some(Err(()))
+                    TxSubmissionStates::Accepted { txid } if txid == await_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected { txid, error } if txid == await_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })

@@ -120,11 +120,7 @@ impl DummyClientExt for Client {
             .await?;
 
         let tx_subscription = self.transaction_updates(op_id).await;
-        // TODO: Return actual API error if any
-        tx_subscription
-            .await_tx_accepted(txid)
-            .await
-            .expect("Tx failed");
+        tx_subscription.await_tx_accepted(txid).await?;
 
         Ok(outpoint(txid))
     }

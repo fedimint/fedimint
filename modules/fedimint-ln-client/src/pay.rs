@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, TxSubmissionError};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -135,14 +135,14 @@ impl LightningPayCreatedOutgoingLnContract {
         common: LightningPayCommon,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         global_context
             .await_tx_accepted(common.operation_id, txid)
             .await
     }
 
     async fn transition_outgoing_contract_funded(
-        result: Result<(), ()>,
+        result: Result<(), TxSubmissionError>,
         old_state: LightningPayStateMachine,
         common: LightningPayCommon,
         contract_id: ContractId,
@@ -465,14 +465,14 @@ impl LightningPayRefund {
         common: LightningPayCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         global_context
             .await_tx_accepted(common.operation_id, refund_txid)
             .await
     }
 
     async fn transition_refund_success(
-        result: Result<(), ()>,
+        result: Result<(), TxSubmissionError>,
         old_state: LightningPayStateMachine,
         refund_txid: TransactionId,
     ) -> LightningPayStateMachine {

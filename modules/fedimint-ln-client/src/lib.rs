@@ -359,7 +359,7 @@ impl LightningClientExt for Client {
                     }
 
                 },
-                Err(()) => {
+                Err(_) => {
                     yield LnPayState::Canceled;
                 }
             }

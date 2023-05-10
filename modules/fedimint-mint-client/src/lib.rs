@@ -231,8 +231,8 @@ impl MintClientExt for Client {
                 Ok(()) => {
                     yield ReissueExternalNotesState::Issuing;
                 },
-                Err(()) => {
-                    yield ReissueExternalNotesState::Failed("Transaction not accepted".to_string());
+                Err(e) => {
+                    yield ReissueExternalNotesState::Failed(format!("Transaction not accepted {e:?}"));
                 }
             }
 
@@ -337,7 +337,7 @@ impl MintClientExt for Client {
                     Ok(()) => {
                         yield SpendOOBState::UserCanceledSuccess;
                     },
-                    Err(()) => {
+                    Err(_) => {
                         yield SpendOOBState::UserCanceledFailure;
                     }
                 }
@@ -346,7 +346,7 @@ impl MintClientExt for Client {
                     Ok(()) => {
                         yield SpendOOBState::Refunded;
                     },
-                    Err(()) => {
+                    Err(_) => {
                         yield SpendOOBState::Success;
                     }
                 }
