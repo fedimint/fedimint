@@ -43,6 +43,7 @@ fedimint-core = { path = "../../fedimint-core" }
 fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
+fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"

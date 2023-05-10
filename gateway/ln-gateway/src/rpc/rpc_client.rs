@@ -21,7 +21,7 @@ pub struct GatewayRpcClient {
     // A request client
     client: reqwest::Client,
     // Password
-    pub password: String,
+    password: String,
 }
 
 impl GatewayRpcClient {

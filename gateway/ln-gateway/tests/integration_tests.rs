@@ -34,9 +34,7 @@ async fn fixtures() -> (
 
     let fed1 = fixtures.new_fed(1).await;
     let fed2 = fixtures.new_fed(1).await;
-    let gateway = fixtures.new_gateway().await;
-    gateway.connect_fed(&fed1).await;
-    gateway.connect_fed(&fed2).await;
+    let gateway = fixtures.new_gateway(vec![&fed1, &fed2]).await;
     let client = gateway.new_client().await;
     (fed1, fed2, gateway, client)
 }

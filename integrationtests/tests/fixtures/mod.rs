@@ -63,10 +63,10 @@ use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
 use fedimint_wallet_server::common::SpendableUTXO;
 use fedimint_wallet_server::{Wallet, WalletGen};
+use fedimint_wallet_tests::FakeWalletGen;
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
-use gen::FakeWalletGen;
 use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
 use ln_gateway::actor::GatewayActor;
@@ -84,7 +84,6 @@ use url::Url;
 use crate::fixtures::user::{IGatewayClient, ILegacyTestClient};
 use crate::ConsensusItem;
 
-mod gen;
 mod legacy;
 pub mod user;
 
@@ -342,7 +341,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             let bitcoin_rpc = || bitcoin.clone().into();
 
             let server_module_inits = ServerModuleGenRegistry::from(vec![
-                DynServerModuleGen::from(FakeWalletGen::new(bitcoin.clone().into())),
+                DynServerModuleGen::from(FakeWalletGen::with_rpc(bitcoin.clone().into())),
                 DynServerModuleGen::from(MintGen),
                 DynServerModuleGen::from(LightningGen),
             ]);

@@ -24,7 +24,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::IFederationApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
@@ -39,6 +39,7 @@ pub use fedimint_ln_common::*;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::WalletClientExt;
 use futures::StreamExt;
+use itertools::Itertools;
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
@@ -60,19 +61,20 @@ const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 
 #[apply(async_trait_maybe_send!)]
 pub trait LightningClientExt {
-    async fn fetch_active_gateway(&self) -> anyhow::Result<LightningGateway>;
-    async fn switch_active_gateway(
-        &self,
-        node_pub_key: Option<secp256k1::PublicKey>,
-        dbtx: DatabaseTransaction<'_>,
-    ) -> anyhow::Result<LightningGateway>;
+    /// The set active gateway, or a random one if none has been set
+    async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway>;
+
+    /// Sets the gateway to be used by all other operations
+    async fn set_active_gateway(&self, node_pub_key: &secp256k1::PublicKey) -> anyhow::Result<()>;
+
+    /// Gateways actively registered with the fed
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
 
+    /// Pays a LN invoice with our available funds
     async fn pay_bolt11_invoice(
         &self,
         fed_id: FederationId,
         invoice: Invoice,
-        active_gateway: LightningGateway,
     ) -> anyhow::Result<OperationId>;
 
     async fn subscribe_ln_pay_updates(
@@ -80,12 +82,12 @@ pub trait LightningClientExt {
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<LnPayState>>;
 
+    /// Receive over LN with a new invoice
     async fn create_bolt11_invoice_and_receive(
         &self,
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
-        gateway: LightningGateway,
     ) -> anyhow::Result<(OperationId, Invoice)>;
 
     async fn subscribe_to_ln_receive_updates(
@@ -120,61 +122,43 @@ pub enum LnReceiveState {
 
 #[apply(async_trait_maybe_send!)]
 impl LightningClientExt for Client {
-    async fn fetch_active_gateway(&self) -> anyhow::Result<LightningGateway> {
+    async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway> {
         let (ln_client_id, _) = ln_client(self);
         let mut dbtx = self.db().begin_transaction().await;
-        {
-            let mut isolated_dbtx = dbtx.with_module_prefix(ln_client_id);
-            // FIXME: forgetting about old gws might not always be ideal. We assume that the
-            // gateway stays the same except for route hints for now.
-            if let Some(gateway) = isolated_dbtx
-                .get_value(&LightningGatewayKey)
-                .await
-                .filter(|gw| gw.valid_until > fedimint_core::time::now())
-            {
-                return Ok(gateway);
-            }
+        let mut isolated_dbtx = dbtx.with_module_prefix(ln_client_id);
+        match isolated_dbtx.get_value(&LightningGatewayKey).await {
+            Some(active_gateway) => Ok(active_gateway),
+            None => self
+                .fetch_registered_gateways()
+                .await?
+                .into_iter()
+                .find_or_first(|gw| gw.valid_until <= fedimint_core::time::now())
+                .ok_or(anyhow::anyhow!("Could not find any gateways")),
         }
-
-        self.switch_active_gateway(None, dbtx).await
     }
 
-    /// Switches the clients active gateway to a registered gateway with the
-    /// given node pubkey. If no pubkey is given (node_pub_key == None) the
-    /// first available registered gateway is activated. This behavior is
-    /// useful for scenarios where we don't know any registered gateways in
-    /// advance.
-    async fn switch_active_gateway(
-        &self,
-        node_pub_key: Option<secp256k1::PublicKey>,
-        mut dbtx: DatabaseTransaction<'_>,
-    ) -> anyhow::Result<LightningGateway> {
+    /// Switches the clients active gateway to a registered gateway.
+    async fn set_active_gateway(&self, node_pub_key: &secp256k1::PublicKey) -> anyhow::Result<()> {
+        let (ln_client_id, _) = ln_client(self);
+        let mut dbtx = self.db().begin_transaction().await;
+
         let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
             debug!("Could not find any gateways");
             return Err(anyhow::anyhow!("Could not find any gateways"));
         };
-        let gateway = match node_pub_key {
-            // If a pubkey was provided, try to select and activate a gateway with that pubkey.
-            Some(pub_key) => gateways
-                .into_iter()
-                .find(|g| g.node_pub_key == pub_key)
-                .ok_or_else(|| {
-                    debug!("Could not find gateway with public key {:?}", pub_key);
-                    anyhow::anyhow!("Could not find gateway with public key {:?}", pub_key)
-                })?,
-            // Otherwise (no pubkey provided), select and activate the first registered gateway.
-            None => {
-                debug!("No public key for gateway supplied, using first registered one");
-                gateways[0].clone()
-            }
-        };
-        let (ln_client_id, _) = ln_client(self);
+        let gateway = gateways
+            .into_iter()
+            .find(|g| &g.node_pub_key == node_pub_key)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Could not find gateway with public key {:?}", node_pub_key)
+            })?;
+
         dbtx.with_module_prefix(ln_client_id)
             .insert_entry(&LightningGatewayKey, &gateway)
             .await;
         dbtx.commit_tx().await;
-        Ok(gateway)
+        Ok(())
     }
 
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>> {
@@ -190,10 +174,10 @@ impl LightningClientExt for Client {
         &self,
         fed_id: FederationId,
         invoice: Invoice,
-        active_gateway: LightningGateway,
     ) -> anyhow::Result<OperationId> {
         let operation_id = invoice.payment_hash().into_inner();
         let (ln_client_id, ln_client) = ln_client(self);
+        let active_gateway = self.select_active_gateway().await?;
 
         let output = ln_client
             .create_outgoing_output(
@@ -238,9 +222,9 @@ impl LightningClientExt for Client {
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
-        gateway: LightningGateway,
     ) -> anyhow::Result<(OperationId, Invoice)> {
         let (ln_client_id, ln_client) = ln_client(self);
+        let active_gateway = self.select_active_gateway().await?;
 
         // TODO: This gets the `bitcoin::Network` from the wallet module. Ideally
         // modules should not be dependent on each other. This should be moved
@@ -252,7 +236,7 @@ impl LightningClientExt for Client {
                 description,
                 rand::rngs::OsRng,
                 expiry_time,
-                gateway,
+                active_gateway,
                 network,
             )
             .await?;

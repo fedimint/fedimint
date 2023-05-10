@@ -14,6 +14,7 @@ use fedimint_core::module::{
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{apply, async_trait_maybe_send, PeerId};
+use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::WalletCommonGen;
 use fedimint_wallet_server::{Wallet, WalletGen};
 
@@ -25,7 +26,11 @@ pub struct FakeWalletGen {
 }
 
 impl FakeWalletGen {
-    pub fn new(bitcoin_rpc: DynBitcoindRpc) -> Self {
+    pub fn new(fixtures: &Fixtures) -> Self {
+        Self::with_rpc(fixtures.bitcoin_rpc())
+    }
+
+    pub fn with_rpc(bitcoin_rpc: DynBitcoindRpc) -> Self {
         Self {
             inner: WalletGen,
             bitcoin_rpc,

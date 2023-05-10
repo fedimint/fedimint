@@ -119,10 +119,10 @@ pub async fn handle_ng_command(
             description,
             expiry_time,
         } => {
-            let active_gateway = client.fetch_active_gateway().await?;
+            client.select_active_gateway().await?;
 
             let (operation_id, _) = client
-                .create_bolt11_invoice_and_receive(amount, description, expiry_time, active_gateway)
+                .create_bolt11_invoice_and_receive(amount, description, expiry_time)
                 .await?;
             let mut updates = client.subscribe_to_ln_receive_updates(operation_id).await?;
             while let Some(update) = updates.next().await {
@@ -143,10 +143,10 @@ pub async fn handle_ng_command(
             return Err(anyhow::anyhow!("Unknown Lightning receive state"));
         }
         ClientNg::LnPay { bolt11 } => {
-            let active_gateway = client.fetch_active_gateway().await?;
+            client.select_active_gateway().await?;
 
             let operation_id = client
-                .pay_bolt11_invoice(config.federation_id, bolt11, active_gateway)
+                .pay_bolt11_invoice(config.federation_id, bolt11)
                 .await?;
 
             let mut updates = client.subscribe_ln_pay_updates(operation_id).await?;
@@ -178,7 +178,7 @@ pub async fn handle_ng_command(
             }
 
             let mut gateways_json = json!(&gateways);
-            let active_gateway = client.fetch_active_gateway().await?;
+            let active_gateway = client.select_active_gateway().await?;
 
             gateways_json
                 .as_array_mut()
@@ -194,8 +194,8 @@ pub async fn handle_ng_command(
             Ok(serde_json::to_value(gateways_json).unwrap())
         }
         ClientNg::SwitchGateway { pubkey } => {
-            let dbtx = client.db().begin_transaction().await;
-            let gateway = client.switch_active_gateway(Some(pubkey), dbtx).await?;
+            client.set_active_gateway(&pubkey).await?;
+            let gateway = client.select_active_gateway().await?;
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())

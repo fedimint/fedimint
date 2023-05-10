@@ -1500,6 +1500,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-ln-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-ln-client",
+ "fedimint-ln-common",
+ "fedimint-ln-server",
+ "fedimint-logging",
+ "fedimint-server",
+ "fedimint-testing",
+ "fedimint-wallet-client",
+ "fedimint-wallet-common",
+ "fedimint-wallet-server",
+ "fedimint-wallet-tests",
+ "tokio",
+]
+
+[[package]]
 name = "fedimint-logging"
 version = "0.1.0"
 dependencies = [
@@ -1741,6 +1764,7 @@ dependencies = [
  "fedimint-testing",
  "fedimint-wallet-client",
  "fedimint-wallet-server",
+ "fedimint-wallet-tests",
  "fedimintd",
  "futures",
  "hbbft",
@@ -1841,6 +1865,28 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "validator",
+]
+
+[[package]]
+name = "fedimint-wallet-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-bitcoind",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-server",
+ "fedimint-testing",
+ "fedimint-wallet-client",
+ "fedimint-wallet-common",
+ "fedimint-wallet-server",
+ "tokio",
 ]
 
 [[package]]
