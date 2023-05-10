@@ -14,7 +14,7 @@ import { GuardianProvider } from './GuardianContext';
 import { Setup } from './components/Setup';
 import { formatApiErrorMessage } from './utils/api';
 
-export const App = React.memo(() => {
+export const App = React.memo(function App() {
   const api = useMemo(() => new GuardianApi(), []);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string>();

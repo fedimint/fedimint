@@ -1,7 +1,7 @@
 import { useContext, useEffect } from 'react';
-import { GuardianContext } from '../GuardianContext';
+import { GuardianContext, GuardianContextValue } from '../GuardianContext';
 
-export function useGuardianContext() {
+export function useGuardianContext(): GuardianContextValue {
   return useContext(GuardianContext);
 }
 

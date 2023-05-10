@@ -21,10 +21,10 @@ import { FormGroupHeading } from './ui/FormGroupHeading';
 import { formatApiErrorMessage, getModuleParamsFromConfig } from '../utils/api';
 
 interface Props {
-  next(): void;
+  next: () => void;
 }
 
-export const SetConfiguration: React.FC<Props> = ({ next }) => {
+export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
   const {
     state: {
       role,
@@ -160,7 +160,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }) => {
             isDisabled={!!statePassword}
           />
           <FormHelperText>
-            You'll need this every time you visit this page.
+            {'You\'ll need this every time you visit this page.'}
           </FormHelperText>
         </FormControl>
         {!isHost && (

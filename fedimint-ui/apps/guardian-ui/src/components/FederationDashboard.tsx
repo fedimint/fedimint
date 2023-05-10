@@ -73,7 +73,7 @@ export const FederationDashboard: React.FC = () => {
               <Tbody>
                 {Object.entries(status?.consensus.status_by_peer).map(
                   ([peerId, peerStatus]) => (
-                    <Tr>
+                    <Tr key={peerId}>
                       <Td>Peer {peerId}</Td>
                       <Td>{peerStatus.connection_status}</Td>
                     </Tr>
