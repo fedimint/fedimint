@@ -621,7 +621,7 @@ mod tests {
     use url::Url;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    use crate::config::{DEFAULT_CONFIG_DOWNLOAD_LIMIT, DEFAULT_MAX_CLIENT_CONNECTIONS};
+    use crate::config::DEFAULT_MAX_CLIENT_CONNECTIONS;
     use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
@@ -649,7 +649,7 @@ mod tests {
                 .parse()
                 .expect("parses");
             let settings = ConfigGenSettings {
-                download_token_limit: Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
+                download_token_limit: None,
                 p2p_bind,
                 api_bind,
                 p2p_url,
