@@ -9,10 +9,12 @@ import { RadioButtonGroup, RadioButtonOption } from './ui/RadioButtonGroup';
 import { useGuardianContext } from '../hooks';
 
 interface Props {
-  next(): void;
+  next: () => void;
 }
 
-export const RoleSelector = React.memo<Props>(({ next }) => {
+export const RoleSelector = React.memo<Props>(function RoleSelector({
+  next,
+}: Props) {
   const { dispatch } = useGuardianContext();
   const [role, setRole] = useState<GuardianRole>();
   const options: RadioButtonOption<GuardianRole>[] = useMemo(

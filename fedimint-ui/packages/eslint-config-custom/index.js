@@ -8,6 +8,14 @@ module.exports = {
   ],
   plugins: ["@typescript-eslint"],
   parser: "@typescript-eslint/parser",
+  parserOptions: {
+    ecmaVersion: "latest",
+    sourceType: "module",
+  },
+  rules: {
+    quotes: ["error", "single"],
+    semi: ["error", "always", { omitLastInOneLineBlock: true }],
+  },
   settings: {
     react: {
       version: "detect",

@@ -5,8 +5,6 @@
   "compilerOptions": {
     "allowJs": false,
     "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "lib": ["dom", "dom.iterable", "esnext"],
@@ -14,10 +12,7 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitAny": true,
     "noEmit": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "resolveJsonModule": true,
-    "strict": false,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
     "target": "es5"

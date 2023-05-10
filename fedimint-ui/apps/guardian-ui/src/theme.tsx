@@ -1,3 +1,4 @@
+import React from 'react';
 import { Global } from '@emotion/react';
 import { extendTheme, withDefaultColorScheme } from '@chakra-ui/react';
 

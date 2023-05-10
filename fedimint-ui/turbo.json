@@ -5,6 +5,11 @@
       "outputs": ["build/**", "dist/**"],
       "dependsOn": ["^build"]
     },
+    "fedimint-ui#build": {
+      "outputs": ["build/**", "dist/**"],
+      "dependsOn": ["^build"],
+      "env": ["REACT_APP_FM_CONFIG_API"]
+    },
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": []

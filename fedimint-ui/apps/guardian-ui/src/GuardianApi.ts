@@ -110,7 +110,7 @@ export class GuardianApi implements ApiInterface {
     // Replace with password to check.
     sessionStorage.setItem(SESSION_STORAGE_KEY, password);
 
-    // Attempt a "status" rpc call with the temporary password.
+    // Attempt a 'status' rpc call with the temporary password.
     try {
       await this.status();
       return true;
@@ -252,7 +252,7 @@ export class GuardianApi implements ApiInterface {
 
       return result;
     } catch (error: unknown) {
-      console.error(`error calling "${method}" on websocket rpc : `, error);
+      console.error(`error calling '${method}' on websocket rpc : `, error);
       throw 'error' in (error as { error: JsonRpcError })
         ? (error as { error: JsonRpcError }).error
         : error;

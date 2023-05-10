@@ -28,7 +28,7 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
   useConsensusPolling();
 
   // Keep trying to run DKG until it's finished, or we get an unexpected error.
-  // "Cancel" the effect on re-run to prevent calling `runDkg` multiple times.
+  // 'Cancel' the effect on re-run to prevent calling `runDkg` multiple times.
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     let canceled = false;
@@ -56,7 +56,7 @@ export const RunDKG: React.FC<Props> = ({ next }) => {
             );
             break;
           default:
-            setError(`Not ready for DKG, your current status is "${status}"`);
+            setError(`Not ready for DKG, your current status is '${status}'`);
         }
       } catch (err) {
         setError(formatApiErrorMessage(err));

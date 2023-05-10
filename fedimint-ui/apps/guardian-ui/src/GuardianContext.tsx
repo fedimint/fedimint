@@ -83,7 +83,7 @@ const reducer = (state: SetupState, action: SetupAction): SetupState => {
   }
 };
 
-interface GuardianContextValue {
+export interface GuardianContextValue {
   api: ApiInterface;
   state: SetupState;
   dispatch: Dispatch<SetupAction>;
