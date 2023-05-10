@@ -77,7 +77,7 @@ pub async fn handle_ng_command<D: IDatabase>(
         ClientNg::Reissue { notes } => {
             let amount = notes.total_amount();
 
-            let operation_id = client.reissue_external_notes(notes).await?;
+            let operation_id = client.reissue_external_notes(notes, ()).await?;
             let mut updates = client
                 .subscribe_reissue_external_notes_updates(operation_id)
                 .await
@@ -94,7 +94,9 @@ pub async fn handle_ng_command<D: IDatabase>(
             Ok(serde_json::to_value(amount).unwrap())
         }
         ClientNg::Spend { amount } => {
-            let (operation, notes) = client.spend_notes(amount, Duration::from_secs(30)).await?;
+            let (operation, notes) = client
+                .spend_notes(amount, Duration::from_secs(30), ())
+                .await?;
             info!("Spend e-cash operation: {operation:?}");
 
             Ok(serde_json::to_value(notes).unwrap())
