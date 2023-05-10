@@ -1,17 +1,16 @@
-use std::process::exit;
-
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_client_legacy::utils::from_hex;
 use fedimint_core::config::FederationId;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_logging::TracingSetup;
-use ln_gateway::rpc::rpc_client::RpcClient;
+use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
     LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 use ln_gateway::LightningMode;
+use serde::Serialize;
 use url::Url;
 
 #[derive(Parser)]
@@ -92,33 +91,25 @@ async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
     let cli = Cli::parse();
-    let client = RpcClient::new(cli.address);
+    let client = GatewayRpcClient::new(cli.address, source_password(cli.rpcpassword));
 
     match cli.command {
         Commands::VersionHash => {
             println!("version: {}", env!("CODE_VERSION"));
         }
         Commands::Info => {
-            let response = client.get_info(source_password(cli.rpcpassword)).await?;
+            let response = client.get_info().await?;
 
             print_response(response).await;
         }
         Commands::Balance { federation_id } => {
-            let response = client
-                .get_balance(
-                    source_password(cli.rpcpassword),
-                    BalancePayload { federation_id },
-                )
-                .await?;
+            let response = client.get_balance(BalancePayload { federation_id }).await?;
 
             print_response(response).await;
         }
         Commands::Address { federation_id } => {
             let response = client
-                .get_deposit_address(
-                    source_password(cli.rpcpassword),
-                    DepositAddressPayload { federation_id },
-                )
+                .get_deposit_address(DepositAddressPayload { federation_id })
                 .await?;
 
             print_response(response).await;
@@ -129,14 +120,11 @@ async fn main() -> anyhow::Result<()> {
             transaction,
         } => {
             let response = client
-                .deposit(
-                    source_password(cli.rpcpassword),
-                    DepositPayload {
-                        federation_id,
-                        txout_proof,
-                        transaction,
-                    },
-                )
+                .deposit(DepositPayload {
+                    federation_id,
+                    txout_proof,
+                    transaction,
+                })
                 .await?;
 
             print_response(response).await;
@@ -147,47 +135,27 @@ async fn main() -> anyhow::Result<()> {
             address,
         } => {
             let response = client
-                .withdraw(
-                    source_password(cli.rpcpassword),
-                    WithdrawPayload {
-                        federation_id,
-                        amount,
-                        address,
-                    },
-                )
+                .withdraw(WithdrawPayload {
+                    federation_id,
+                    amount,
+                    address,
+                })
                 .await?;
 
             print_response(response).await;
         }
         Commands::ConnectFed { connect } => {
             let response = client
-                .connect_federation(
-                    source_password(cli.rpcpassword),
-                    ConnectFedPayload { connect },
-                )
+                .connect_federation(ConnectFedPayload { connect })
                 .await?;
 
             print_response(response).await;
         }
         Commands::Backup { federation_id } => {
-            let response = client
-                .backup(
-                    source_password(cli.rpcpassword),
-                    BackupPayload { federation_id },
-                )
-                .await?;
-
-            print_response(response).await;
+            client.backup(BackupPayload { federation_id }).await?;
         }
         Commands::Restore { federation_id } => {
-            let response = client
-                .restore(
-                    source_password(cli.rpcpassword),
-                    RestorePayload { federation_id },
-                )
-                .await?;
-
-            print_response(response).await;
+            client.restore(RestorePayload { federation_id }).await?;
         }
         Commands::ReconnectLightning { lightning_mode } => {
             let payload = match lightning_mode {
@@ -206,33 +174,18 @@ async fn main() -> anyhow::Result<()> {
                     }),
                 },
             };
-            let response = client
-                .reconnect(source_password(cli.rpcpassword), payload)
-                .await?;
-            print_response(response).await;
+            client.reconnect(payload).await?;
         }
     }
 
     Ok(())
 }
 
-pub async fn print_response(response: reqwest::Response) {
-    match response.status() {
-        reqwest::StatusCode::OK => {
-            let text = response.text().await.expect("Failed to read response body");
-            if !text.is_empty() {
-                let val: serde_json::Value =
-                    serde_json::from_str(&text).expect("failed to parse response as json");
-                let formatted =
-                    serde_json::to_string_pretty(&val).expect("failed to format response");
-                println!("\n{formatted}")
-            }
-        }
-        _ => {
-            eprintln!("\nError: {}", &response.text().await.unwrap());
-            exit(1)
-        }
-    }
+pub async fn print_response<T: Serialize>(val: T) {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&val).expect("Cannot serialize")
+    )
 }
 
 pub fn source_password(rpcpassword: Option<String>) -> String {

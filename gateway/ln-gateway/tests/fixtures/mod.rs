@@ -16,7 +16,7 @@ use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory};
 use ln_gateway::lnrpc_client::ILnRpcClient;
-use ln_gateway::rpc::rpc_client::RpcClient;
+use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::Gateway;
 use url::Url;
 
@@ -28,7 +28,7 @@ pub struct Fixtures {
     pub bitcoin: Box<dyn BitcoinTest>,
     pub lightning: Box<dyn LightningTest>,
     pub gateway: Gateway,
-    pub rpc: RpcClient,
+    pub rpc: GatewayRpcClient,
 }
 
 pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
@@ -59,7 +59,7 @@ pub async fn fixtures(api_addr: Url) -> Result<Fixtures> {
     .await
     .unwrap();
 
-    let rpc = RpcClient::new(api_addr);
+    let rpc = GatewayRpcClient::new(api_addr, "".to_string());
     let bitcoin = Box::new(FakeBitcoinTest::new());
     let lightning = Box::new(FakeLightningTest::new());
 
@@ -78,7 +78,12 @@ pub async fn test<B>(
     api_addr: Url,
     listen: Option<SocketAddr>,
     password: Option<String>,
-    testfn: impl FnOnce(Box<dyn BitcoinTest>, Box<dyn LightningTest>, Option<Gateway>, RpcClient) -> B,
+    testfn: impl FnOnce(
+        Box<dyn BitcoinTest>,
+        Box<dyn LightningTest>,
+        Option<Gateway>,
+        GatewayRpcClient,
+    ) -> B,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,

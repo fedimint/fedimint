@@ -6,7 +6,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::ILnRpcClient;
-use ln_gateway::rpc::rpc_client::RpcClient;
+use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::Gateway;
 use tempfile::TempDir;
@@ -18,8 +18,7 @@ use crate::federation::FederationTest;
 use crate::fixtures::test_dir;
 
 pub struct GatewayTest {
-    // TODO: make private and set the password in `RpcClient`
-    pub password: String,
+    password: String,
     address: Url,
     _config_dir: Option<TempDir>,
     _task: TaskGroup,
@@ -27,15 +26,15 @@ pub struct GatewayTest {
 
 impl GatewayTest {
     /// RPC client for communicating with the gateway admin API
-    pub async fn new_client(&self) -> RpcClient {
-        RpcClient::new(self.address.clone())
+    pub async fn new_client(&self) -> GatewayRpcClient {
+        GatewayRpcClient::new(self.address.clone(), self.password.clone())
     }
 
     pub async fn connect_fed(&self, fed: &FederationTest) {
         let connect = fed.connection_code().to_string();
         let client = self.new_client().await;
         client
-            .connect_federation(self.password.clone(), ConnectFedPayload { connect })
+            .connect_federation(ConnectFedPayload { connect })
             .await
             .unwrap();
     }

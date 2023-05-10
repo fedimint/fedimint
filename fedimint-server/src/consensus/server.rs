@@ -439,9 +439,11 @@ impl ConsensusServer {
     ) -> anyhow::Result<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
         if self.cfg.local.p2p_endpoints.len() == 1 {
-            tokio::select! {
-              _ = Pin::new(&mut self.api_receiver).peek() => (),
-              () = self.consensus.await_consensus_proposal() => (),
+            if self.hbbft.next_epoch() > 0 {
+                tokio::select! {
+                    _ = Pin::new(&mut self.api_receiver).peek() => (),
+                    () = self.consensus.await_consensus_proposal() => (),
+                }
             }
             let proposal = self.process_events_then_propose(override_proposal).await;
             let epoch = self.hbbft.epoch();

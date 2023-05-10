@@ -122,7 +122,7 @@ impl Federation {
         let fed_id = self.federation_id().await;
         let pegin_addr = cmd!(gw_cln, "address", "--federation-id={fed_id}")
             .out_json()
-            .await?["address"]
+            .await?
             .as_str()
             .context("address must be a string")?
             .to_owned();

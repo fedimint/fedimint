@@ -104,7 +104,7 @@ The [lightning gateway](../gateway/ln-gateway) connects the federation to the li
 $ gateway-cln balance <FEDERATION-ID>
 
 {
-  "balance_msat": 30000000
+  30000000
 }
 ```
 
