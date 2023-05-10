@@ -10,7 +10,7 @@ use fedimint_wallet_common::config::WalletGenParams;
 use fedimint_wallet_tests::FakeWalletGen;
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::default();
+    let fixtures = Fixtures::new();
     let wallet_gen = FakeWalletGen::new(&fixtures);
     fixtures
         .with_primary(1, DummyClientGen, DummyGen, DummyConfigGenParams::default())
@@ -22,7 +22,7 @@ fn fixtures() -> Fixtures {
 #[tokio::test(flavor = "multi_thread")]
 async fn can_switch_active_gateway() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed(2).await;
+    let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
     let gateway1 = fixtures.new_gateway(vec![&fed]).await.last_registration();
     assert_eq!(client.select_active_gateway().await?, gateway1);

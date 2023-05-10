@@ -23,6 +23,7 @@ static BASE_PORT: AtomicU16 = AtomicU16::new(38173);
 /// A tool for easily writing fedimint integration tests
 #[derive(Default)]
 pub struct Fixtures {
+    real_testing: bool,
     ids: Vec<ModuleInstanceId>,
     clients: Vec<DynClientModuleGen>,
     servers: Vec<DynServerModuleGen>,
@@ -31,6 +32,13 @@ pub struct Fixtures {
 }
 
 impl Fixtures {
+    pub fn new() -> Self {
+        Self {
+            real_testing: env::var("FM_TEST_USE_REAL_DAEMONS") == Ok("1".to_string()),
+            ..Default::default()
+        }
+    }
+
     /// Add primary client module to the fed
     // TODO: Auto-assign instance ids after removing legacy id order
     pub fn with_primary(
@@ -61,8 +69,17 @@ impl Fixtures {
         self
     }
 
-    /// Starts a new federation
-    pub async fn new_fed(&self, num_peers: u16) -> FederationTest {
+    /// Starts a new federation with default number of peers for testing
+    pub async fn new_fed(&self) -> FederationTest {
+        let num_peers = match self.real_testing {
+            true => 2,
+            false => 1,
+        };
+        self.new_fed_with_peers(num_peers).await
+    }
+
+    /// Starts a new federation with number of peers
+    pub async fn new_fed_with_peers(&self, num_peers: u16) -> FederationTest {
         FederationTest::new(
             num_peers,
             BASE_PORT.fetch_add(num_peers * 2, Ordering::Relaxed),

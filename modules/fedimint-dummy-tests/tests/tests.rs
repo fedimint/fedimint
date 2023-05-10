@@ -10,7 +10,7 @@ fn fixtures() -> Fixtures {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_print_and_send_money() {
-    let fed = fixtures().new_fed(2).await;
+    let fed = fixtures().new_fed().await;
     let (client1, client2) = fed.two_clients().await;
 
     client1.print_money(sats(1000)).await.unwrap();
@@ -24,7 +24,7 @@ async fn can_print_and_send_money() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_threshold_sign_message() {
-    let fed = fixtures().new_fed(2).await;
+    let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
 
     let message = "Hello fed!";
