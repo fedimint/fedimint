@@ -68,11 +68,12 @@ pub trait LightningClientExt {
     ) -> anyhow::Result<LightningGateway>;
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
 
-    async fn pay_bolt11_invoice(
+    async fn pay_bolt11_invoice<M: Serialize + Send>(
         &self,
         fed_id: FederationId,
         invoice: Invoice,
         active_gateway: LightningGateway,
+        extra_meta: M,
     ) -> anyhow::Result<OperationId>;
 
     async fn subscribe_ln_pay_updates(
@@ -80,12 +81,13 @@ pub trait LightningClientExt {
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<LnPayState>>;
 
-    async fn create_bolt11_invoice_and_receive(
+    async fn create_bolt11_invoice_and_receive<M: Serialize + Send>(
         &self,
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
         gateway: LightningGateway,
+        extra_meta: M,
     ) -> anyhow::Result<(OperationId, Invoice)>;
 
     async fn subscribe_to_ln_receive_updates(
@@ -186,11 +188,12 @@ impl LightningClientExt for Client {
             .await?)
     }
 
-    async fn pay_bolt11_invoice(
+    async fn pay_bolt11_invoice<M: Serialize + Send>(
         &self,
         fed_id: FederationId,
         invoice: Invoice,
         active_gateway: LightningGateway,
+        extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         let operation_id = invoice.payment_hash().into_inner();
         let (ln_client_id, ln_client) = ln_client(self);
@@ -207,7 +210,14 @@ impl LightningClientExt for Client {
             .await?;
 
         let tx = TransactionBuilder::new().with_output(output.into_dyn(ln_client_id));
-        let operation_meta_gen = |txid| OutPoint { txid, out_idx: 0 };
+        let extra_meta = serde_json::to_value(extra_meta)
+            .expect("LightningClientExt::pay_bolt11_invoice extra_meta is serializable");
+        let operation_meta_gen = |txid| LightningMeta {
+            variant: LightningMetaVariants::Pay {
+                out_point: OutPoint { txid, out_idx: 0 },
+            },
+            extra_meta: extra_meta.clone(),
+        };
 
         let txid = self
             .finalize_and_submit_transaction(
@@ -223,7 +233,7 @@ impl LightningClientExt for Client {
             &mut dbtx,
             operation_id,
             LightningCommonGen::KIND.as_str(),
-            LightningMeta::Pay {
+            LightningMetaVariants::Pay {
                 out_point: OutPoint { txid, out_idx: 0 },
             },
         )
@@ -233,12 +243,13 @@ impl LightningClientExt for Client {
         Ok(operation_id)
     }
 
-    async fn create_bolt11_invoice_and_receive(
+    async fn create_bolt11_invoice_and_receive<M: Serialize + Send>(
         &self,
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
         gateway: LightningGateway,
+        extra_meta: M,
     ) -> anyhow::Result<(OperationId, Invoice)> {
         let (ln_client_id, ln_client) = ln_client(self);
 
@@ -257,7 +268,16 @@ impl LightningClientExt for Client {
             )
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(ln_client_id));
-        let operation_meta_gen = |txid| OutPoint { txid, out_idx: 0 };
+        let extra_meta = serde_json::to_value(extra_meta).expect(
+            "LightningClientExt::create_bolt11_invoice_and_receive extra_meta is serializable",
+        );
+        let operation_meta_gen = |txid| LightningMeta {
+            variant: LightningMetaVariants::Receive {
+                out_point: OutPoint { txid, out_idx: 0 },
+                invoice: invoice.clone(),
+            },
+            extra_meta: extra_meta.clone(),
+        };
         let txid = self
             .finalize_and_submit_transaction(
                 operation_id,
@@ -272,7 +292,7 @@ impl LightningClientExt for Client {
             &mut dbtx,
             operation_id,
             LightningCommonGen::KIND.as_str(),
-            LightningMeta::Receive {
+            LightningMetaVariants::Receive {
                 out_point: OutPoint { txid, out_idx: 0 },
                 invoice: invoice.clone(),
             },
@@ -287,8 +307,8 @@ impl LightningClientExt for Client {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<LnReceiveState>> {
-        let (out_point, invoice) = match ln_operation(self, operation_id).await? {
-            LightningMeta::Receive { out_point, invoice } => (out_point, invoice),
+        let (out_point, invoice) = match ln_operation(self, operation_id).await?.variant {
+            LightningMetaVariants::Receive { out_point, invoice } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
 
@@ -338,8 +358,8 @@ impl LightningClientExt for Client {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<LnPayState>> {
-        let out_point = match ln_operation(self, operation_id).await? {
-            LightningMeta::Pay { out_point } => out_point,
+        let out_point = match ln_operation(self, operation_id).await?.variant {
+            LightningMetaVariants::Pay { out_point } => out_point,
             _ => bail!("Operation is not a lightning payment"),
         };
 
@@ -418,7 +438,13 @@ async fn ln_operation(client: &Client, operation_id: OperationId) -> anyhow::Res
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum LightningMeta {
+pub struct LightningMeta {
+    variant: LightningMetaVariants,
+    extra_meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum LightningMetaVariants {
     Pay {
         out_point: OutPoint,
     },
