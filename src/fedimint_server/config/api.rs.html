@@ -1492,7 +1492,7 @@
     <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    <span class="kw">use </span><span class="kw">crate</span>::config::{DEFAULT_CONFIG_DOWNLOAD_LIMIT, DEFAULT_MAX_CLIENT_CONNECTIONS};
+    <span class="kw">use </span><span class="kw">crate</span>::config::DEFAULT_MAX_CLIENT_CONNECTIONS;
     <span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
 
     <span class="doccomment">/// Helper in config API tests for simulating a guardian&#39;s client and server
@@ -1520,7 +1520,7 @@
                 .parse()
                 .expect(<span class="string">&quot;parses&quot;</span>);
             <span class="kw">let </span>settings = ConfigGenSettings {
-                download_token_limit: <span class="prelude-val">Some</span>(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
+                download_token_limit: <span class="prelude-val">None</span>,
                 p2p_bind,
                 api_bind,
                 p2p_url,

@@ -1096,7 +1096,139 @@
 <a href="#1096" id="1096">1096</a>
 <a href="#1097" id="1097">1097</a>
 <a href="#1098" id="1098">1098</a>
-</pre><pre class="rust"><code><span class="doccomment">//! Client library for fedimintd
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
+<a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
+<a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+</pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
+//!
+//! This library provides a client interface to build module clients that can be
+//! plugged together into a fedimint client that exposes a high-level interface
+//! for application authors to integrate with.
+//!
+//! ## Module Clients
+//! Module clients have to at least implement the [`module::ClientModule`] trait
+//! and a factory struct implementing [`module::gen::ClientModuleGen`]. The
+//! `ClientModule` trait defines the module types (tx inputs, outputs, etc.) as
+//! well as the module&#39;s [state machines](sm::State).
+//!
+//! ### State machines
+//! State machines are spawned when starting operations and drive them
+//! forward in the background. All module state machines are run by a central
+//! [`sm::Executor`]. This means typically starting an operation shall return
+//! instantly.
+//!
+//! For example when doing a deposit the function starting it would immediately
+//! return a deposit address and a [`OperationId`] (important concept, highly
+//! recommended to read the docs) while spawning a state machine checking the
+//! blockchain for incoming bitcoin transactions. The progress of these state
+//! machines can then be *observed* using the operation id, but no further user
+//! interaction is required to drive them forward.
+//!
+//! ### State Machine Contexts
+//! State machines have access to both a [global context](sm::GlobalContext) as
+//! well as to a [module-specific context](module::ClientModule::context).
+//!
+//! The global context provides access to the federation API and allows to claim
+//! module outputs (and transferring the value into the client&#39;s wallet), which
+//! can be used for refunds.
+//!
+//! The client-specific context can be used for other purposes, such as
+//! supplying config to the state transitions or giving access to other APIs
+//! (e.g. LN gateway in case of the lightning module).
+//!
+//! ### Extension traits
+//! The modules themselves can only create inputs and outputs that then have to
+//! be combined into transactions by the user and submitted via
+//! [`Client::finalize_and_submit_transaction`]. To make this easier most module
+//! client implementations contain an extension trait which is implemented for
+//! [`Client`] and allows to create the most typical fedimint transactions with
+//! a single function call.
+//!
+//! To observe the progress each high level operation function should be
+//! accompanied by one returning a stream of high-level operation updates.
+//! Internally that stream queries the state machines belonging to the
+//! operation to determine the high-level operation state.
+//!
+//! ### Primary Modules
+//! Not all modules have the ability to hold money for long. E.g. the lightning
+//! module and its smart contracts are only used to incentivize LN payments, not
+//! to hold money. The mint module on the other hand holds e-cash note and can
+//! thus be used to fund transactions and to absorb change. Module clients with
+//! this ability should implement the [`module::PrimaryClientModule`] trait so
+//! they can be chosen as the primary module for a [`Client`].
+//!
+//! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
+//!
+//! ## Client
+//! The [`Client`] struct is the main entry point for application authors. It is
+//! constructed using its builder which can be obtained via [`Client::builder`].
+//! The supported module clients have to be chosen at compile time while the
+//! actually available ones will be determined by the config loaded at runtime.
+//!
+//! For a hacky instantiation of a complete client see the [`ng` subcommand of `fedimint-cli`](https://github.com/fedimint/fedimint/blob/55f9d88e17d914b92a7018de677d16e57ed42bf6/fedimint-cli/src/ng.rs#L56-L73).
 
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
