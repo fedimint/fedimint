@@ -1,1 +1,1 @@
-module.exports = require('eslint-config-custom');
+module.exports = require('@fedimint/eslint-config');

@@ -1,5 +1,5 @@
 {
-  "name": "guardian-ui",
+  "name": "@fedimint/guardian-ui",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -34,10 +34,10 @@
     "@types/react-dom": "^18.2.0",
     "@typescript-eslint/eslint-plugin": "^5.48.1",
     "@typescript-eslint/parser": "^5.48.2",
+    "@fedimint/eslint-config": "*",
+    "@fedimint/tsconfig": "*",
     "eslint": "^8.4.1",
-    "eslint-config-custom": "*",
     "prettier": "^2.8.3",
-    "tsconfig": "*",
     "typescript": "^4.5.4"
   },
   "browserslist": {
