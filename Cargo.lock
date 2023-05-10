@@ -285,6 +285,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -302,6 +303,7 @@ dependencies = [
  "rustversion",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -883,6 +885,7 @@ name = "devimint"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "bitcoincore-rpc",
  "clap",
  "cln-rpc",
@@ -895,10 +898,12 @@ dependencies = [
  "fedimint-wallet-client",
  "futures",
  "nix",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
  "tonic_lnd",
+ "tower-http",
  "tracing",
  "tracing-subscriber",
 ]

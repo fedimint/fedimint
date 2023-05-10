@@ -93,6 +93,7 @@ declare_vars! {
         FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join("esplora")).await?;
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join("ready");
 
+        FM_CLN_SOCKET: PathBuf = FM_CLN_DIR.join("regtest/lightning-rpc");
         FM_LND_RPC_ADDR: String = "http://localhost:11009";
         FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join("tls.cert");
         FM_LND_MACAROON: PathBuf = FM_LND_DIR.join("data/chain/bitcoin/regtest/admin.macaroon");
@@ -104,6 +105,7 @@ declare_vars! {
 
         FM_CLN_EXTENSION_LISTEN_ADDRESS: String = "0.0.0.0:8177";
         FM_GATEWAY_LIGHTNING_ADDR: String = "http://localhost:8177";
+        FM_FAUCET_BIND_ADDR: String = "0.0.0.0:15243";
 
         // clients
         FM_LIGHTNING_CLI: String = f!("lightning-cli --network regtest --lightning-dir={}", utf8(&FM_CLN_DIR));
