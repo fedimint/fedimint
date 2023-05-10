@@ -1,0 +1,28 @@
+[package]
+name = "fedimint-mint-tests"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-mint-tests contains integration tests for the mint module"
+license = "MIT"
+
+[[test]]
+name = "fedimint_mint_tests"
+path = "tests/tests.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+assert_matches = "1.5.0"
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-mint-common = { path = "../fedimint-mint-common" }
+fedimint-mint-client = { path = "../fedimint-mint-client" }
+fedimint-mint-server = { path = "../fedimint-mint-server" }
+fedimint-testing = { path = "../../fedimint-testing" }
+fedimint-client = { path = "../../fedimint-client" }
+fedimint-core ={ path = "../../fedimint-core" }
+fedimint-server = { path = "../../fedimint-server" }
+fedimint-logging = { path = "../../fedimint-logging" }
+tokio = { version = "1.26.0", features = ["sync"] }
+tracing = "0.1.37"

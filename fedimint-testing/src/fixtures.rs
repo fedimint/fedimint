@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU16, Ordering};
+use std::time::Duration;
 use std::{env, fs};
 
 use fedimint_bitcoind::DynBitcoindRpc;
@@ -10,6 +11,8 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
 use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::util::BoxStream;
+use futures::StreamExt;
 use tempfile::TempDir;
 
 use crate::btc::mock::FakeBitcoinTest;
@@ -17,7 +20,10 @@ use crate::federation::FederationTest;
 use crate::gateway::GatewayTest;
 use crate::ln::mock::FakeLightningTest;
 
-// Offset from the normal port by 30000 to avoid collisions
+/// A default timeout for things happening in tests
+pub const TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Offset from the normal port by 30000 to avoid collisions
 static BASE_PORT: AtomicU16 = AtomicU16::new(38173);
 
 /// A tool for easily writing fedimint integration tests
@@ -130,4 +136,11 @@ pub fn test_dir(pathname: &str) -> (PathBuf, Option<TempDir>) {
     let fullpath = PathBuf::from(parent).join(pathname);
     fs::create_dir_all(fullpath.clone()).expect("Can make dirs");
     (fullpath, maybe_tmp_dir_guard)
+}
+
+/// Awaits the next value from the BoxStream
+///
+/// Useful for testing the client state machines
+pub async fn next<T>(stream: &mut BoxStream<'_, T>) -> T {
+    stream.next().await.expect("No next value found")
 }

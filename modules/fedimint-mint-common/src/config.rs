@@ -13,6 +13,19 @@ pub struct MintGenParams {
     pub mint_amounts: Vec<Amount>,
 }
 
+const TEN_BTC_IN_SATS: u64 = 10 * 100_000_000;
+
+impl Default for MintGenParams {
+    fn default() -> Self {
+        MintGenParams {
+            mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
+                .tiers()
+                .cloned()
+                .collect(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
     /// Contains all configuration that will be encrypted such as private key

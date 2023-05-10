@@ -26,6 +26,7 @@ members = [
     "modules/fedimint-mint-common",
     "modules/fedimint-mint-client",
     "modules/fedimint-mint-server",
+    "modules/fedimint-mint-tests",
     "modules/fedimint-ln-common",
     "modules/fedimint-ln-client",
     "modules/fedimint-ln-server",

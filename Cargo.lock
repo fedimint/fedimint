@@ -1631,6 +1631,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-mint-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-mint-client",
+ "fedimint-mint-common",
+ "fedimint-mint-server",
+ "fedimint-server",
+ "fedimint-testing",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-rocksdb"
 version = "0.1.0"
 dependencies = [
