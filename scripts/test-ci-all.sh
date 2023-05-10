@@ -67,6 +67,16 @@ function cli_test_cli() {
 }
 export -f cli_test_cli
 
+function cli_load_test_tool_test() {
+  set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
+
+  echo "## START: ${FUNCNAME[0]}"
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/load-test-tool-test.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
+}
+export -f cli_load_test_tool_test
+
 function cli_test_rust_tests_bitcoind() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
@@ -145,7 +155,8 @@ if parallel \
   cli_test_latency \
   cli_test_reconnect \
   cli_test_lightning_reconnect \
-  cli_test_cli ; then
+  cli_test_cli \
+  cli_load_test_tool_test ; then
   >&2 echo "All tests successful"
 else
   >&2 echo "Some tests failed. Full job log:"

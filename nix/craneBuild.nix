@@ -126,6 +126,13 @@ craneLib.overrideScope' (self: prev: {
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/cli-test.sh";
   });
 
+  cliLoadTestToolTest = self.mkCargoDerivation (self.commonCliTestArgs // {
+    pname = "${self.commonCliTestArgs.pname}-cli";
+    version = "0.0.1";
+    cargoArtifacts = self.workspaceBuild;
+    buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/load-test-tool-test.sh";
+  });
+
   cliRustTests = self.mkCargoDerivation (self.commonCliTestArgs // {
     pname = "${self.commonCliTestArgs.pname}-rust-tests";
     version = "0.0.1";
@@ -277,6 +284,13 @@ craneLib.overrideScope' (self: prev: {
     name = "devimint";
     pkgs = {
       devimint = { };
+    };
+  };
+
+  fedimint-load-test-tool = self.pkgsBuild {
+    name = "fedimint-load-test-tool";
+    pkgs = {
+      fedimint-load-test-tool = { };
     };
   };
 })
