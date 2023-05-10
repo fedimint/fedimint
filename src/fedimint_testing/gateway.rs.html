@@ -81,7 +81,6 @@
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -90,7 +89,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 <span class="kw">use </span>ln_gateway::lnrpc_client::ILnRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::rpc_client::RpcClient;
+<span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tempfile::TempDir;
@@ -102,8 +101,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fixtures::test_dir;
 
 <span class="kw">pub struct </span>GatewayTest {
-    <span class="comment">// TODO: make private and set the password in `RpcClient`
-    </span><span class="kw">pub </span>password: String,
+    password: String,
     address: Url,
     _config_dir: <span class="prelude-ty">Option</span>&lt;TempDir&gt;,
     _task: TaskGroup,
@@ -111,15 +109,15 @@
 
 <span class="kw">impl </span>GatewayTest {
     <span class="doccomment">/// RPC client for communicating with the gateway admin API
-    </span><span class="kw">pub async fn </span>new_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcClient {
-        RpcClient::new(<span class="self">self</span>.address.clone())
+    </span><span class="kw">pub async fn </span>new_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcClient {
+        GatewayRpcClient::new(<span class="self">self</span>.address.clone(), <span class="self">self</span>.password.clone())
     }
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) {
         <span class="kw">let </span>connect = fed.connection_code().to_string();
         <span class="kw">let </span>client = <span class="self">self</span>.new_client().<span class="kw">await</span>;
         client
-            .connect_federation(<span class="self">self</span>.password.clone(), ConnectFedPayload { connect })
+            .connect_federation(ConnectFedPayload { connect })
             .<span class="kw">await
             </span>.unwrap();
     }

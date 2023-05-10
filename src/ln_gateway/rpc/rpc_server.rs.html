@@ -250,7 +250,7 @@
     Json(payload): Json&lt;BalancePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>amount = rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>({ <span class="string">&quot;balance_msat&quot;</span>: amount.msats })))
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(amount)))
 }
 
 <span class="doccomment">/// Generate deposit address
@@ -261,7 +261,7 @@
     Json(payload): Json&lt;DepositAddressPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>address = rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>({ <span class="string">&quot;address&quot;</span>: address })))
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(address)))
 }
 
 <span class="doccomment">/// Deposit into a gateway federation.
@@ -272,7 +272,7 @@
     Json(payload): Json&lt;DepositPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>txid = rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>({ <span class="string">&quot;fedimint_txid&quot;</span>: txid.to_string() })))
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
 }
 
 <span class="doccomment">/// Withdraw from a gateway federation.
@@ -283,7 +283,7 @@
     Json(payload): Json&lt;WithdrawPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>txid = rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>({ <span class="string">&quot;fedimint_txid&quot;</span>: txid.to_string() })))
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
 }
 
 <span class="attr">#[instrument(skip_all, err)]

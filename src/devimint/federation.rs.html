@@ -475,8 +475,8 @@
         <span class="kw">let </span>fed_id = <span class="self">self</span>.federation_id().<span class="kw">await</span>;
         <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw_cln, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
             .out_json()
-            .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;address&quot;</span>]
-            .as_str()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.as_str()
             .context(<span class="string">&quot;address must be a string&quot;</span>)<span class="question-mark">?
             </span>.to_owned();
         <span class="kw">let </span>txid = <span class="self">self</span>.bitcoind.send_to(pegin_addr, amt).<span class="kw">await</span><span class="question-mark">?</span>;

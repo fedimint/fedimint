@@ -677,6 +677,8 @@
 <a href="#677" id="677">677</a>
 <a href="#678" id="678">678</a>
 <a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::os::unix::ffi::OsStrExt;
@@ -1118,9 +1120,11 @@
     ) -&gt; anyhow::Result&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
         <span class="comment">// for testing federations with one peer
         </span><span class="kw">if </span><span class="self">self</span>.cfg.local.p2p_endpoints.len() == <span class="number">1 </span>{
-            <span class="macro">tokio::select! </span>{
-              <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; (),
-              () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
+            <span class="kw">if </span><span class="self">self</span>.hbbft.next_epoch() &gt; <span class="number">0 </span>{
+                <span class="macro">tokio::select! </span>{
+                    <span class="kw">_ </span>= Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; (),
+                    () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
+                }
             }
             <span class="kw">let </span>proposal = <span class="self">self</span>.process_events_then_propose(override_proposal).<span class="kw">await</span>;
             <span class="kw">let </span>epoch = <span class="self">self</span>.hbbft.epoch();
