@@ -88,7 +88,7 @@ impl ProcessManager {
 
 pub struct Command {
     pub cmd: tokio::process::Command,
-    args_debug: Vec<String>,
+    pub args_debug: Vec<String>,
 }
 
 impl Command {

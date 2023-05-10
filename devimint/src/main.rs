@@ -942,6 +942,63 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
+    let data_dir = env::var("FM_DATA_DIR")?;
+    let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
+    dev_fed.fed.pegin(10_000).await?;
+    let output = cmd!(
+        "fedimint-load-test-tool",
+        "--archive-dir",
+        load_test_temp.display(),
+        "--users",
+        "1",
+        "load-test",
+        "--notes-per-user",
+        "1",
+        "--generate-invoice-with",
+        "cln-lightning-cli"
+    )
+    .out_string()
+    .await?;
+    println!("{output}");
+    anyhow::ensure!(
+        output.contains("2 reissue_notes"),
+        "reissued different number notes than expected"
+    );
+    anyhow::ensure!(
+        output.contains("1 gateway_pay_invoice"),
+        "paid different number of invoices than expected"
+    );
+    let output = cmd!(
+        "fedimint-load-test-tool",
+        "--archive-dir",
+        load_test_temp.display(),
+        "--users",
+        "1",
+        "load-test",
+        "--notes-per-user",
+        "1",
+        "--generate-invoice-with",
+        "ln-cli"
+    )
+    .out_string()
+    .await?;
+    println!("{output}");
+    anyhow::ensure!(
+        output.contains("compared to previous"),
+        "did not compare to previous run"
+    );
+    anyhow::ensure!(
+        output.contains("2 reissue_notes"),
+        "reissued different number notes than expected"
+    );
+    anyhow::ensure!(
+        output.contains("1 gateway_pay_invoice"),
+        "paid different number of invoices than expected"
+    );
+    Ok(())
+}
+
 async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     #[allow(unused_variables)]
     let DevFed {
@@ -1057,6 +1114,7 @@ enum Cmd {
     LatencyTests,
     ReconnectTest,
     CliTests,
+    LoadTestToolTest,
     LightningReconnectTest,
     #[clap(flatten)]
     Rpc(RpcCmd),
@@ -1188,6 +1246,11 @@ async fn main() -> Result<()> {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_tests(dev_fed).await?;
+        }
+        Cmd::LoadTestToolTest => {
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            cli_load_test_tool_test(dev_fed).await?;
         }
         Cmd::LightningReconnectTest => {
             let (process_mgr, _) = setup(args.common).await?;
