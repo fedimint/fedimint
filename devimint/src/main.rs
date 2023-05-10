@@ -31,6 +31,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
+        faucet,
     } = dev_fed;
 
     fed.pegin(10_000_000).await?;
@@ -140,6 +141,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
+        faucet,
     } = dev_fed;
 
     cmd!(
@@ -621,6 +623,7 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
         gw_lnd,
         electrs,
         esplora,
+        faucet,
     } = dev_fed;
 
     // Drop other references to CLN and LND so that the test can kill them
@@ -684,6 +687,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
         gw_lnd,
         electrs,
         esplora,
+        faucet,
     } = dev_fed;
 
     bitcoind.mine_blocks(110).await?;
