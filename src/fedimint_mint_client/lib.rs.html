@@ -1092,6 +1092,34 @@
 <a href="#1092" id="1092">1092</a>
 <a href="#1093" id="1093">1093</a>
 <a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Database keys used throughout the mint client module
 </span><span class="kw">mod </span>db;
 <span class="doccomment">/// State machines for mint inputs
@@ -1120,6 +1148,7 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
@@ -1156,9 +1185,10 @@
     <span class="doccomment">/// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
     /// [`MintClientExt::subscribe_reissue_external_notes_updates`].
-    </span><span class="kw">async fn </span>reissue_external_notes(
+    </span><span class="kw">async fn </span>reissue_external_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         notes: TieredMulti&lt;SpendableNote&gt;,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;OperationId&gt;;
 
     <span class="doccomment">/// Subscribe to updates on the progress of a reissue operation started with
@@ -1179,10 +1209,11 @@
     /// should be chosen such that the recipient (who is potentially offline at
     /// the time of receiving the e-cash notes) had a reasonable timeframe to
     /// come online and reissue the notes themselves.
-    </span><span class="kw">async fn </span>spend_notes(
+    </span><span class="kw">async fn </span>spend_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         min_amount: Amount,
         try_cancel_after: Duration,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, TieredMulti&lt;SpendableNote&gt;)&gt;;
 
     <span class="doccomment">/// Try to cancel a spend operation started with
@@ -1249,9 +1280,10 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>MintClientExt <span class="kw">for </span>Client {
-    <span class="kw">async fn </span>reissue_external_notes(
+    <span class="kw">async fn </span>reissue_external_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         notes: TieredMulti&lt;SpendableNote&gt;,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="kw">let </span>(mint_client_instance, mint_client) = mint_client(<span class="self">self</span>);
 
@@ -1260,14 +1292,21 @@
             <span class="macro">bail!</span>(<span class="string">&quot;We already reissued these notes&quot;</span>);
         }
 
+        <span class="kw">let </span>amount = notes.total_amount();
         <span class="kw">let </span>mint_input = mint_client
             .create_input_from_notes(operation_id, notes)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx = TransactionBuilder::new().with_input(mint_input.into_dyn(mint_client_instance));
 
-        <span class="kw">let </span>operation_meta_gen = |txid| MintMeta::Reissuance {
-            out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
+            .expect(<span class="string">&quot;MintClientExt::reissue_external_notes extra_meta is serializable&quot;</span>);
+        <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|txid| MintMeta {
+            variant: MintMetaVariants::Reissuance {
+                out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
+            },
+            amount,
+            extra_meta: extra_meta.clone(),
         };
 
         <span class="self">self</span>.finalize_and_submit_transaction(
@@ -1298,8 +1337,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;BoxStream&lt;ReissueExternalNotesState&gt;&gt; {
-        <span class="kw">let </span>out_point = <span class="kw">match </span>mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">? </span>{
-            MintMeta::Reissuance { out_point } =&gt; out_point,
+        <span class="kw">let </span>out_point = <span class="kw">match </span>mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>.variant {
+            MintMetaVariants::Reissuance { out_point } =&gt; out_point,
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a reissuance&quot;</span>),
         };
 
@@ -1334,16 +1373,20 @@
         }))
     }
 
-    <span class="kw">async fn </span>spend_notes(
+    <span class="kw">async fn </span>spend_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         min_amount: Amount,
         try_cancel_after: Duration,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, TieredMulti&lt;SpendableNote&gt;)&gt; {
         <span class="kw">let </span>(mint_client_instance, mint_client) = mint_client(<span class="self">self</span>);
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
+            .expect(<span class="string">&quot;MintClientExt::spend_notes extra_meta is serializable&quot;</span>);
 
         <span class="self">self</span>.db()
             .autocommit(
-                |dbtx| {
+                <span class="kw">move </span>|dbtx| {
+                    <span class="kw">let </span>extra_meta = extra_meta.clone();
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>(operation_id, states, notes) = mint_client
                             .spend_notes_oob(
@@ -1363,7 +1406,13 @@
                             dbtx,
                             operation_id,
                             MintCommonGen::KIND.as_str(),
-                            MintMeta::SpendOOB,
+                            MintMeta {
+                                variant: MintMetaVariants::SpendOOB {
+                                    requested_amount: min_amount,
+                                },
+                                amount: notes.total_amount(),
+                                extra_meta,
+                            },
                         )
                         .<span class="kw">await</span>;
 
@@ -1393,8 +1442,8 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;BoxStream&lt;SpendOOBState&gt;&gt; {
         <span class="kw">if </span>!<span class="macro">matches!</span>(
-            mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>,
-            MintMeta::SpendOOB
+            mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>.variant,
+            MintMetaVariants::SpendOOB { .. }
         ) {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a out-of-band spend&quot;</span>);
         };
@@ -1457,9 +1506,16 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">enum </span>MintMeta {
+</span><span class="kw">pub struct </span>MintMeta {
+    variant: MintMetaVariants,
+    amount: Amount,
+    extra_meta: serde_json::Value,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">enum </span>MintMetaVariants {
     Reissuance { out_point: OutPoint },
-    SpendOOB,
+    SpendOOB { requested_amount: Amount },
 }
 
 <span class="attr">#[derive(Debug, Clone)]

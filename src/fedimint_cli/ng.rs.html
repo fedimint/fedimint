@@ -231,6 +231,8 @@
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
 <a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
@@ -310,7 +312,7 @@
         ClientNg::Reissue { notes } =&gt; {
             <span class="kw">let </span>amount = notes.total_amount();
 
-            <span class="kw">let </span>operation_id = client.reissue_external_notes(notes).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>operation_id = client.reissue_external_notes(notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client
                 .subscribe_reissue_external_notes_updates(operation_id)
                 .<span class="kw">await
@@ -327,7 +329,9 @@
             <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
         }
         ClientNg::Spend { amount } =&gt; {
-            <span class="kw">let </span>(operation, notes) = client.spend_notes(amount, Duration::from_secs(<span class="number">30</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>(operation, notes) = client
+                .spend_notes(amount, Duration::from_secs(<span class="number">30</span>), ())
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation:?}&quot;</span>);
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(notes).unwrap())
