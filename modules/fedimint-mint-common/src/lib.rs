@@ -16,7 +16,7 @@ pub mod config;
 pub mod common;
 pub mod db;
 
-const KIND: ModuleKind = ModuleKind::from_static_str("mint");
+pub const KIND: ModuleKind = ModuleKind::from_static_str("mint");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 /// By default, the maximum notes per denomination when change-making for users

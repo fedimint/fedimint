@@ -1133,6 +1133,7 @@ dependencies = [
  "fedimint-ln-client",
  "fedimint-logging",
  "fedimint-mint-client",
+ "fedimint-mint-common",
  "fedimint-rocksdb",
  "fedimint-wallet-client",
  "futures",

@@ -7,7 +7,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
@@ -216,9 +216,7 @@ pub async fn handle_ng_command(
 }
 
 async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> {
-    let mint_client = client
-        .get_module_client::<MintClientModule>(LEGACY_HARDCODED_INSTANCE_ID_MINT)
-        .unwrap();
+    let (mint_client, _) = client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
     let summary = mint_client
         .get_wallet_summary(&mut client.db().begin_transaction().await.with_module_prefix(1))
         .await;

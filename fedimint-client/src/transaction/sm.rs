@@ -356,6 +356,10 @@ mod tests {
             &self.api
         }
 
+        fn module_api(&self) -> DynFederationApi {
+            unimplemented!()
+        }
+
         async fn claim_input_dyn(
             &self,
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,

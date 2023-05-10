@@ -5,7 +5,6 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, State
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, TransactionId};
@@ -296,8 +295,7 @@ impl LightningPayFunded {
             },
             Err(GatewayPayError::GatewayInternalError) => {
                 let contract = global_context
-                    .api()
-                    .with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+                    .module_api()
                     .get_outgoing_contract(contract_id)
                     .await;
                 let timelock = match contract {
@@ -406,8 +404,7 @@ impl LightningPayRefundable {
         // TODO: Remove polling
         loop {
             let contract = global_context
-                .api()
-                .with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+                .module_api()
                 .get_outgoing_contract(contract_id)
                 .await;
             if let Ok(contract) = contract {
@@ -424,8 +421,7 @@ impl LightningPayRefundable {
         // TODO: Remove polling
         loop {
             let consensus_block_height = global_context
-                .api()
-                .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+                .module_api()
                 .fetch_consensus_block_height()
                 .await
                 .map_err(|_| anyhow::anyhow!("ApiError"));

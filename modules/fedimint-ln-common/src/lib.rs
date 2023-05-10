@@ -26,7 +26,7 @@ use url::Url;
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
 
-const KIND: ModuleKind = ModuleKind::from_static_str("ln");
+pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

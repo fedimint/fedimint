@@ -11,7 +11,7 @@ use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::core::{IntoDynInstance, KeyPair, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, KeyPair};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
@@ -21,7 +21,7 @@ pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
     fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
-    DummyOutputOutcome,
+    DummyOutputOutcome, KIND,
 };
 use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
@@ -63,7 +63,7 @@ pub trait DummyClientExt {
 #[apply(async_trait_maybe_send!)]
 impl DummyClientExt for Client {
     async fn print_money(&self, amount: Amount) -> anyhow::Result<()> {
-        let (id, _) = dummy_client(self);
+        let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
         let op_id = rand::random();
 
         // TODO: Building a tx could be easier
@@ -79,10 +79,10 @@ impl DummyClientExt for Client {
 
         // Build and send tx to the fed
         // Will output to our primary client module
-        let tx = TransactionBuilder::new().with_input(input.into_dyn(id));
+        let tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
         let outpoint = |txid| OutPoint { txid, out_idx: 0 };
         let txid = self
-            .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .await?;
 
         self.receive_money(outpoint(txid)).await
@@ -93,14 +93,14 @@ impl DummyClientExt for Client {
         account: XOnlyPublicKey,
         amount: Amount,
     ) -> anyhow::Result<OutPoint> {
-        let (id, dummy) = dummy_client(self);
-        let mut dbtx = self.db().begin_transaction().await;
+        let (dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
         let op_id = rand::random();
 
         // TODO: Building a tx could be easier
         // Create input using our own account
         let input = dummy
-            .create_sufficient_input(&mut dbtx.with_module_prefix(id), op_id, amount)
+            .create_sufficient_input(&mut dbtx.get_isolated(), op_id, amount)
             .await?;
         dbtx.commit_tx().await;
 
@@ -112,8 +112,8 @@ impl DummyClientExt for Client {
 
         // Build and send tx to the fed
         let tx = TransactionBuilder::new()
-            .with_input(input.into_dyn(id))
-            .with_output(output.into_dyn(id));
+            .with_input(input.into_dyn(instance.id))
+            .with_output(output.into_dyn(instance.id));
         let outpoint = |txid| OutPoint { txid, out_idx: 0 };
         let txid = self
             .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
@@ -130,8 +130,8 @@ impl DummyClientExt for Client {
     }
 
     async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()> {
-        let (id, dummy) = dummy_client(self);
-
+        let (dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
         let DummyOutputOutcome(amount, account) = self
             .api()
             .await_output_outcome(outpoint, Duration::from_secs(10), &dummy.decoder())
@@ -141,8 +141,6 @@ impl DummyClientExt for Client {
             return Err(format_err!("Wrong account id"));
         }
 
-        let mod_db = self.db().new_isolated(id);
-        let mut dbtx = mod_db.begin_transaction().await;
         let funds = self.total_funds().await + amount;
         dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
         dbtx.commit_tx().await;
@@ -150,43 +148,28 @@ impl DummyClientExt for Client {
     }
 
     async fn fed_signature(&self, message: &str) -> anyhow::Result<Signature> {
-        let (id, _) = dummy_client(self);
-        let api = self.api().with_module(id);
-        api.sign_message(message.to_string()).await?;
-        let sig = api.wait_signed(message.to_string()).await?;
+        let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        instance.api.sign_message(message.to_string()).await?;
+        let sig = instance.api.wait_signed(message.to_string()).await?;
         Ok(sig.0)
     }
 
     async fn total_funds(&self) -> Amount {
-        // TODO: Not very nice to get to the module db
-        let (id, _) = dummy_client(self);
-        let mut dbtx = self.db().begin_transaction().await;
-        let mut mod_dbtx = dbtx.with_module_prefix(id);
-        get_funds(&mut mod_dbtx).await
+        let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
+        let funds = get_funds(&mut dbtx.get_isolated()).await;
+        funds
     }
 
     fn account(&self) -> XOnlyPublicKey {
-        let (_, client) = dummy_client(self);
-        client.key.x_only_public_key().0
+        let (dummy, _instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        dummy.key.x_only_public_key().0
     }
 
     fn fed_public_key(&self) -> PublicKey {
-        let (_, dummy) = dummy_client(self);
+        let (dummy, _instance) = self.get_first_module::<DummyClientModule>(&KIND);
         dummy.cfg.fed_public_key
     }
-}
-
-// TODO: Boiler-plate
-fn dummy_client(client: &Client) -> (ModuleInstanceId, &DummyClientModule) {
-    let id = client
-        .get_first_instance(&DummyCommonGen::KIND)
-        .expect("No mint module attached to client");
-
-    let client = client
-        .get_module_client::<DummyClientModule>(id)
-        .expect("Instance ID exists, we just fetched it");
-
-    (id, client)
 }
 
 #[derive(Debug)]

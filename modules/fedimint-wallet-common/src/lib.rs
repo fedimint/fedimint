@@ -24,7 +24,7 @@ pub mod keys;
 pub mod tweakable;
 pub mod txoproof;
 
-const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
+pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 pub const CONFIRMATION_TARGET: u16 = 10;
