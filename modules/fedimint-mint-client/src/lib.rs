@@ -181,7 +181,7 @@ impl MintClientExt for Client {
     ) -> anyhow::Result<OperationId> {
         let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
 
-        let operation_id: OperationId = notes.consensus_hash().into_inner();
+        let operation_id = OperationId(notes.consensus_hash().into_inner());
         if self.get_operation(operation_id).await.is_some() {
             bail!("We already reissued these notes");
         }
@@ -784,7 +784,7 @@ impl MintClientModule {
     )> {
         let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
 
-        let operation_id = spendable_selected_notes.consensus_hash().into_inner();
+        let operation_id = OperationId(spendable_selected_notes.consensus_hash().into_inner());
 
         for (amount, note) in spendable_selected_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
