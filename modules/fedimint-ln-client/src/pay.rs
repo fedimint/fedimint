@@ -4,14 +4,16 @@ use std::time::Duration;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, TxSubmissionError};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::outgoing::OutgoingContract;
 use fedimint_ln_common::contracts::{ContractId, IdentifiableContract, Preimage};
-use fedimint_ln_common::{LightningGateway, LightningInput};
+use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome};
 use fedimint_wallet_client::api::WalletFederationApi;
+use futures::future;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -67,12 +69,12 @@ impl State for LightningPayStateMachine {
 
     fn transitions(
         &self,
-        _context: &Self::ModuleContext,
+        context: &Self::ModuleContext,
         global_context: &Self::GlobalContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) => {
-                created_outgoing_ln_contract.transitions(&self.common, global_context)
+                created_outgoing_ln_contract.transitions(&self.common, &context, global_context)
             }
             LightningPayStates::Canceled => {
                 vec![]
@@ -110,6 +112,7 @@ impl LightningPayCreatedOutgoingLnContract {
     fn transitions(
         &self,
         common: &LightningPayCommon,
+        context: &LightningClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let txid = self.funding_txid;
@@ -118,7 +121,7 @@ impl LightningPayCreatedOutgoingLnContract {
         let success_context = global_context.clone();
         let gateway = self.gateway.clone();
         vec![StateTransition::new(
-            Self::await_outgoing_contract_funded(funded_common.clone(), success_context, txid),
+            Self::await_outgoing_contract_funded(context.ln_decoder.clone(), success_context, txid),
             move |_dbtx, result, old_state| {
                 Box::pin(Self::transition_outgoing_contract_funded(
                     result,
@@ -132,17 +135,26 @@ impl LightningPayCreatedOutgoingLnContract {
     }
 
     async fn await_outgoing_contract_funded(
-        common: LightningPayCommon,
+        module_decoder: Decoder,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
-    ) -> Result<(), TxSubmissionError> {
+    ) -> Result<(), GatewayPayError> {
+        let out_point = OutPoint { txid, out_idx: 0 };
         global_context
-            .await_tx_accepted(common.operation_id, txid)
+            .api()
+            .await_output_outcome::<LightningOutputOutcome>(
+                out_point,
+                Duration::MAX,
+                &module_decoder,
+            )
             .await
+            .map_err(|_| GatewayPayError::OutgoingContractError)?;
+
+        Ok(())
     }
 
     async fn transition_outgoing_contract_funded(
-        result: Result<(), TxSubmissionError>,
+        result: Result<(), GatewayPayError>,
         old_state: LightningPayStateMachine,
         common: LightningPayCommon,
         contract_id: ContractId,
@@ -183,6 +195,8 @@ pub struct LightningPayFunded {
 enum GatewayPayError {
     #[error("Lightning Gateway failed to pay invoice")]
     GatewayInternalError,
+    #[error("OutgoingContract was not created in the federation")]
+    OutgoingContractError,
 }
 
 impl LightningPayFunded {
@@ -194,34 +208,22 @@ impl LightningPayFunded {
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timeout_context = global_context.clone();
-        vec![
-            StateTransition::new(
-                // Wait for the result of the payment by the gateway
-                Self::await_outgoing_contract_execution(gateway, payload),
-                move |_dbtx, result, old_state| {
-                    Box::pin(Self::transition_outgoing_contract_execution(
-                        old_state,
-                        timeout_context.clone(),
-                        result,
-                        contract_id,
-                    ))
-                },
-            ),
-            // wait for gatewayd for two minutes before timing out
-            StateTransition::new(
-                sleep(Duration::from_secs(120)),
-                move |_dbtx, (), old_state| {
-                    Box::pin(Self::transition_pay_timeout(
-                        old_state,
-                        global_context.clone(),
-                        contract_id,
-                    ))
-                },
-            ),
-        ]
+        vec![StateTransition::new(
+            // Immediately try to pay the invoice by contacting the gateway
+            future::ready(()),
+            move |_dbtx, (), old_state| {
+                Box::pin(Self::transition_outgoing_contract_execution(
+                    old_state,
+                    timeout_context.clone(),
+                    contract_id,
+                    gateway.clone(),
+                    payload.clone(),
+                ))
+            },
+        )]
     }
 
-    async fn await_outgoing_contract_execution(
+    async fn gateway_pay_invoice(
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
@@ -250,50 +252,19 @@ impl LightningPayFunded {
         Ok(preimage[1..length - 1].to_string())
     }
 
-    async fn transition_pay_timeout(
-        old_state: LightningPayStateMachine,
-        global_context: DynGlobalClientContext,
-        contract_id: ContractId,
-    ) -> LightningPayStateMachine {
-        // TODO: Retry contacting gateway
-
-        let contract = global_context
-            .api()
-            .get_outgoing_contract(contract_id)
-            .await;
-        let timelock = match contract {
-            Ok(contract) => contract.contract.timelock,
-            Err(_) => {
-                return LightningPayStateMachine {
-                    common: old_state.common,
-                    state: LightningPayStates::Failure(
-                        "Failed to retrieve OutgoingContract".to_string(),
-                    ),
-                }
-            }
-        };
-
-        LightningPayStateMachine {
-            common: old_state.common,
-            state: LightningPayStates::Refundable(LightningPayRefundable {
-                contract_id,
-                block_timelock: timelock,
-            }),
-        }
-    }
-
     async fn transition_outgoing_contract_execution(
         old_state: LightningPayStateMachine,
         global_context: DynGlobalClientContext,
-        result: Result<String, GatewayPayError>,
         contract_id: ContractId,
+        gateway: LightningGateway,
+        payload: PayInvoicePayload,
     ) -> LightningPayStateMachine {
-        match result {
+        match Self::gateway_pay_invoice(gateway, payload).await {
             Ok(preimage) => LightningPayStateMachine {
                 common: old_state.common,
                 state: LightningPayStates::Success(preimage),
             },
-            Err(GatewayPayError::GatewayInternalError) => {
+            Err(_) => {
                 let contract = global_context
                     .module_api()
                     .get_outgoing_contract(contract_id)

@@ -24,6 +24,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -31,6 +32,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
+use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
@@ -114,6 +116,12 @@ pub trait MintClientExt {
         &self,
         operation_id: OperationId,
         refund_txid: TransactionId,
+    ) -> anyhow::Result<()>;
+
+    async fn await_mint_change(
+        &self,
+        operation_id: OperationId,
+        txid: TransactionId,
     ) -> anyhow::Result<()>;
 }
 
@@ -206,6 +214,34 @@ impl MintClientExt for Client {
         let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
         let out_point = OutPoint { txid, out_idx: 0 };
         mint.await_output_finalized(operation_id, out_point).await
+    }
+
+    async fn await_mint_change(
+        &self,
+        operation_id: OperationId,
+        txid: TransactionId,
+    ) -> anyhow::Result<()> {
+        let tx_outcome = self.api().await_tx_outcome(&txid).await?;
+        if let TransactionStatus::Accepted {
+            epoch: _epoch,
+            outputs,
+        } = tx_outcome
+        {
+            // Assume that if the transaction has more than one output, the output
+            // at index 1 is the change.
+            if outputs.len() > 1 {
+                let (_, mint_client) = mint_client(self);
+                let out_point = OutPoint { txid, out_idx: 1 };
+                return mint_client
+                    .await_output_finalized(operation_id, out_point)
+                    .await;
+            } else {
+                // No change on this transaction
+                return Ok(());
+            }
+        }
+
+        Err(anyhow::anyhow!("Transaction was not accepted"))
     }
 
     async fn subscribe_reissue_external_notes_updates(

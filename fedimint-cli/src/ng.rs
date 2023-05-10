@@ -10,7 +10,7 @@ use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary, OutPoint};
 use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
 use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 use futures::StreamExt;
@@ -145,7 +145,7 @@ pub async fn handle_ng_command(
         ClientNg::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
 
-            let operation_id = client
+            let (operation_id, txid) = client
                 .pay_bolt11_invoice(config.federation_id, bolt11)
                 .await?;
 
@@ -154,6 +154,7 @@ pub async fn handle_ng_command(
             while let Some(update) = updates.next().await {
                 match update {
                     LnPayState::Success { preimage } => {
+                        client.await_mint_change(operation_id, OutPoint {txid, out_idx: 1 }).await?;
                         return Ok(serde_json::to_value(PayInvoiceResponse {
                             operation_id: operation_id.to_hex(),
                             preimage,

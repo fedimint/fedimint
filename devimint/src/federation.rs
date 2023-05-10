@@ -192,7 +192,8 @@ impl Federation {
                 ))
             }
         };
-        cmd!(self, "switch-gateway", pub_key).run().await?;
+        cmd!(self, "switch-gateway", pub_key.clone()).run().await?;
+        cmd!(self, "ng", "switch-gateway", pub_key).run().await?;
         info!(
             "Using {name} gateway",
             name = gw.ln.as_ref().unwrap().name()
