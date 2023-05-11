@@ -571,6 +571,9 @@ enum Command {
     /// Force processing an epoch
     ForceEpoch { hex_outcome: String },
 
+    /// Show the status according to the `status` endpoint
+    Status,
+
     #[clap(subcommand)]
     Ng(ng::ClientNg),
 }
@@ -1048,6 +1051,13 @@ impl FedimintCli {
                     ng::handle_ng_command(command, config, client)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                ))
+            }
+            Command::Status => {
+                let status = cli.admin_client().await?.status().await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(status)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
             }
         }
