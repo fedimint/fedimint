@@ -982,8 +982,10 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
         .await
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        self.inner_tx.raw_remove_by_prefix(key_prefix).await
+    async fn raw_remove_by_prefix(&mut self, key: &[u8]) -> Result<()> {
+        let mut key_with_prefix = self.prefix.clone();
+        key_with_prefix.extend_from_slice(key);
+        self.inner_tx.raw_remove_by_prefix(&key_with_prefix).await
     }
 
     async fn commit_tx(&mut self) -> Result<()> {
