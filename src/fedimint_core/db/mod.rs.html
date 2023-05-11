@@ -2468,6 +2468,8 @@
 <a href="#2468" id="2468">2468</a>
 <a href="#2469" id="2469">2469</a>
 <a href="#2470" id="2470">2470</a>
+<a href="#2471" id="2471">2471</a>
+<a href="#2472" id="2472">2472</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3452,8 +3454,10 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.inner_tx.raw_remove_by_prefix(key_prefix).<span class="kw">await
+    <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>key_with_prefix = <span class="self">self</span>.prefix.clone();
+        key_with_prefix.extend_from_slice(key);
+        <span class="self">self</span>.inner_tx.raw_remove_by_prefix(<span class="kw-2">&amp;</span>key_with_prefix).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>commit_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
