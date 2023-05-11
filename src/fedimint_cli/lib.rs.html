@@ -1090,6 +1090,16 @@
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
 <a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1663,6 +1673,9 @@
     <span class="doccomment">/// Force processing an epoch
     </span>ForceEpoch { hex_outcome: String },
 
+    <span class="doccomment">/// Show the status according to the `status` endpoint
+    </span>Status,
+
     <span class="attr">#[clap(subcommand)]
     </span>Ng(ng::ClientNg),
 }
@@ -2140,6 +2153,13 @@
                     ng::handle_ng_command(command, config, client)
                         .<span class="kw">await
                         </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
+                ))
+            }
+            Command::Status =&gt; {
+                <span class="kw">let </span>status = cli.admin_client().<span class="kw">await</span><span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(
+                    serde_json::to_value(status)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invalid response&quot;</span>)<span class="question-mark">?</span>,
                 ))
             }
         }
