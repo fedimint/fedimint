@@ -691,7 +691,7 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         }
     }
 
-    #[instrument(level = "debug", skip_all, fields(?key), ret)]
+    #[instrument(level = "debug", skip_all, fields(?key))]
     pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
@@ -1100,7 +1100,7 @@ impl<'parent> DatabaseTransaction<'parent> {
             .expect("Unrecoverable error occurred while committing to the database.");
     }
 
-    #[instrument(level = "debug", skip_all, fields(?key), ret)]
+    #[instrument(level = "debug", skip_all, fields(?key))]
     pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
