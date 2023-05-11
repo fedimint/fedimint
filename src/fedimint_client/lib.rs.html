@@ -1232,6 +1232,10 @@
 <a href="#1232" id="1232">1232</a>
 <a href="#1233" id="1233">1233</a>
 <a href="#1234" id="1234">1234</a>
+<a href="#1235" id="1235">1235</a>
+<a href="#1236" id="1236">1236</a>
+<a href="#1237" id="1237">1237</a>
+<a href="#1238" id="1238">1238</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1321,11 +1325,12 @@
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
-<span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
+<span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::distributions::{Distribution, Standard};
 <span class="kw">use </span>rand::{thread_rng, Rng};
 <span class="kw">use </span>secp256k1_zkp::Secp256k1;
+<span class="kw">use </span>secret::DeriveableSecretClientExt;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -1360,6 +1365,9 @@
 </span><span class="kw">pub mod </span>sm;
 <span class="doccomment">/// Structs and interfaces to construct Fedimint transactions
 </span><span class="kw">pub mod </span>transaction;
+
+<span class="doccomment">/// Secret handling &amp; derivation
+</span><span class="kw">pub mod </span>secret;
 
 <span class="kw">pub type </span>InstancelessDynClientInput = ClientInput&lt;
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">&#39;static</span>)&gt;,
@@ -2246,7 +2254,7 @@
                             module_config,
                             db.clone(),
                             module_instance,
-                            root_secret.child_key(ChildId(module_instance <span class="kw">as </span>u64)),
+                            root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2265,7 +2273,7 @@
                             // keys were derived using *module kind*-specific derivation paths.
                             // Since the new client has to support multiple, segregated modules of
                             // the same kind we have to use the instance id instead.
-                            </span>root_secret.child_key(ChildId(module_instance <span class="kw">as </span>u64)),
+                            </span>root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
