@@ -320,7 +320,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     anyhow::ensure!(
         initial_client_balance - final_client_balance == 101_000,
-        "Client balance changed by {}, expected 101000",
+        "Legacy Client balance changed by {}, expected 101000",
         initial_client_balance - final_client_balance
     );
     anyhow::ensure!(
@@ -419,7 +419,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     anyhow::ensure!(
         initial_client_balance - final_client_balance == 101_000,
-        "Client balance changed by {}, expected 101000",
+        "Legacy Client balance changed by {}, expected 101000",
         initial_client_balance - final_client_balance
     );
     anyhow::ensure!(
@@ -606,6 +606,124 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     assert_eq!(client_ng_reissue_amt, reissue_amount);
+
+    // OUTGOING: fedimint-cli NG pays LND via CLN gateway
+    fed.use_gateway(&gw_cln).await?;
+
+    let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    let initial_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    let add_invoice = lnd
+        .client_lock()
+        .await?
+        .add_invoice(tonic_lnd::lnrpc::Invoice {
+            value_msat: 3000,
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    let invoice = add_invoice.payment_request;
+    let payment_hash = add_invoice.r_hash;
+    cmd!(fed, "ng", "ln-pay", invoice).run().await?;
+
+    let invoice_status = lnd
+        .client_lock()
+        .await?
+        .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
+            r_hash: payment_hash,
+            ..Default::default()
+        })
+        .await?
+        .into_inner()
+        .state();
+    anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+
+    // Assert balances changed by 3000 msat (amount sent) + 30 msat (fee)
+    let final_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    anyhow::ensure!(
+        initial_client_ng_balance - final_client_ng_balance == 3030,
+        "Client NG balance changed by {}, expected 1010",
+        initial_client_ng_balance - final_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_cln_gateway_balance - initial_cln_gateway_balance == 3030,
+        "CLN Gateway balance changed by {}, expected 1010",
+        final_cln_gateway_balance - initial_cln_gateway_balance
+    );
+
+    // LND gateway tests
+    fed.use_gateway(&gw_lnd).await?;
+
+    // OUTGOING: fedimint-cli NG pays CLN via LND gateaway
+    let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    let initial_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    let invoice = cln
+        .request(cln_rpc::model::InvoiceRequest {
+            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(1000)),
+            description: "lnd-gw-to-cln".to_string(),
+            label: "test-client-ng".to_string(),
+            expiry: Some(60),
+            fallbacks: None,
+            preimage: None,
+            exposeprivatechannels: None,
+            cltv: None,
+            deschashonly: None,
+        })
+        .await?
+        .bolt11;
+    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+    cmd!(fed, "ng", "ln-pay", invoice.clone()).run().await?;
+    let fed_id = fed.federation_id().await;
+
+    let invoice_status = cln
+        .request(cln_rpc::model::WaitanyinvoiceRequest {
+            lastpay_index: None,
+            timeout: None,
+        })
+        .await?
+        .status;
+    anyhow::ensure!(matches!(
+        invoice_status,
+        cln_rpc::model::WaitanyinvoiceStatus::PAID
+    ));
+
+    // Assert balances changed by 1000 msat (amount sent) + 10 msat (fee)
+    let final_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    anyhow::ensure!(
+        initial_client_ng_balance - final_client_ng_balance == 1010,
+        "Client NG balance changed by {}, expected 1010",
+        initial_client_ng_balance - final_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_lnd_gateway_balance - initial_lnd_gateway_balance == 1010,
+        "LND Gateway balance changed by {}, expected 1010",
+        final_lnd_gateway_balance - initial_lnd_gateway_balance
+    );
 
     // TODO: test cancel/timeout
 

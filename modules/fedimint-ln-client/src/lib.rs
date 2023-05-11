@@ -16,14 +16,16 @@ use bitcoin_hashes::Hash;
 use db::LightningGatewayKey;
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::ClientModule;
+use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::IFederationApi;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET};
+use fedimint_core::core::{
+    Decoder, IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -75,7 +77,7 @@ pub trait LightningClientExt {
         &self,
         fed_id: FederationId,
         invoice: Invoice,
-    ) -> anyhow::Result<OperationId>;
+    ) -> anyhow::Result<(OperationId, TransactionId)>;
 
     async fn subscribe_ln_pay_updates(
         &self,
@@ -167,7 +169,7 @@ impl LightningClientExt for Client {
         &self,
         fed_id: FederationId,
         invoice: Invoice,
-    ) -> anyhow::Result<OperationId> {
+    ) -> anyhow::Result<(OperationId, TransactionId)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let operation_id = invoice.payment_hash().into_inner();
         let active_gateway = self.select_active_gateway().await?;
@@ -184,7 +186,9 @@ impl LightningClientExt for Client {
             .await?;
 
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |txid| OutPoint { txid, out_idx: 0 };
+        let operation_meta_gen = |txid| LightningMeta::Pay {
+            out_point: OutPoint { txid, out_idx: 0 },
+        };
 
         let txid = self
             .finalize_and_submit_transaction(
@@ -195,19 +199,7 @@ impl LightningClientExt for Client {
             )
             .await?;
 
-        let mut dbtx = self.db().begin_transaction().await;
-        self.add_operation_log_entry(
-            &mut dbtx,
-            operation_id,
-            LightningCommonGen::KIND.as_str(),
-            LightningMeta::Pay {
-                out_point: OutPoint { txid, out_idx: 0 },
-            },
-        )
-        .await;
-        dbtx.commit_tx().await;
-
-        Ok(operation_id)
+        Ok((operation_id, txid))
     }
 
     async fn create_bolt11_invoice_and_receive(
@@ -338,7 +330,7 @@ impl LightningClientExt for Client {
                     // await success or waiting for refund
                     match payment_success.await {
                         Ok(preimage) => {
-                            yield LnPayState::Success {preimage };
+                            yield LnPayState::Success {preimage};
                         }
                         Err(LightningPayError::Refundable(refundable)) => {
                             yield LnPayState::WaitingForRefund{ block_height: refundable };
@@ -418,7 +410,9 @@ impl ClientModuleGen for LightningClientGen {
     }
 }
 #[derive(Debug, Clone)]
-pub struct LightningClientContext {}
+pub struct LightningClientContext {
+    pub ln_decoder: Decoder,
+}
 
 impl Context for LightningClientContext {}
 
@@ -435,7 +429,9 @@ impl ClientModule for LightningClientModule {
     type States = LightningClientStateMachines;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
-        LightningClientContext {}
+        LightningClientContext {
+            ln_decoder: self.decoder(),
+        }
     }
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
