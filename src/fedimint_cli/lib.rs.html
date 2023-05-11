@@ -1090,56 +1090,6 @@
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
 <a href="#1092" id="1092">1092</a>
-<a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a>
-<a href="#1097" id="1097">1097</a>
-<a href="#1098" id="1098">1098</a>
-<a href="#1099" id="1099">1099</a>
-<a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a>
-<a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a>
-<a href="#1111" id="1111">1111</a>
-<a href="#1112" id="1112">1112</a>
-<a href="#1113" id="1113">1113</a>
-<a href="#1114" id="1114">1114</a>
-<a href="#1115" id="1115">1115</a>
-<a href="#1116" id="1116">1116</a>
-<a href="#1117" id="1117">1117</a>
-<a href="#1118" id="1118">1118</a>
-<a href="#1119" id="1119">1119</a>
-<a href="#1120" id="1120">1120</a>
-<a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a>
-<a href="#1123" id="1123">1123</a>
-<a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a>
-<a href="#1126" id="1126">1126</a>
-<a href="#1127" id="1127">1127</a>
-<a href="#1128" id="1128">1128</a>
-<a href="#1129" id="1129">1129</a>
-<a href="#1130" id="1130">1130</a>
-<a href="#1131" id="1131">1131</a>
-<a href="#1132" id="1132">1132</a>
-<a href="#1133" id="1133">1133</a>
-<a href="#1134" id="1134">1134</a>
-<a href="#1135" id="1135">1135</a>
-<a href="#1136" id="1136">1136</a>
-<a href="#1137" id="1137">1137</a>
-<a href="#1138" id="1138">1138</a>
-<a href="#1139" id="1139">1139</a>
-<a href="#1140" id="1140">1140</a>
-<a href="#1141" id="1141">1141</a>
-<a href="#1142" id="1142">1142</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1150,15 +1100,13 @@
 <span class="kw">use </span>std::process::exit;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::{ffi, fs, result};
+<span class="kw">use </span>std::{fs, result};
 
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Network, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_aead::get_password_hash;
-<span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
-<span class="kw">use </span>fedimint_client::get_client_root_secret;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
-<span class="kw">use </span>fedimint_client::sm::Notifier;
+<span class="kw">use </span>fedimint_client::ClientBuilder;
 <span class="kw">use </span>fedimint_client_legacy::mint::backup::Metadata;
 <span class="kw">use </span>fedimint_client_legacy::mint::SpendableNote;
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -1174,7 +1122,6 @@
     IFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, FederationId};
-<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -1547,6 +1494,23 @@
         )
         .<span class="kw">await</span>)
     }
+
+    <span class="kw">async fn </span>build_client_ng(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_gens: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+    ) -&gt; CliResult&lt;fedimint_client::Client&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+        <span class="kw">let </span>cfg = <span class="self">self</span>.load_config()<span class="question-mark">?</span>.<span class="number">0</span>;
+        <span class="kw">let </span>db = <span class="self">self</span>.load_rocks_db()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
+        client_builder.with_module_gens(module_gens.clone());
+        client_builder.with_primary_module(<span class="number">1</span>);
+        client_builder.with_config(cfg.clone());
+        client_builder.with_database(db);
+
+        client_builder.build(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>.map_err_cli_general()
+    }
 }
 
 <span class="attr">#[derive(Subcommand, Clone)]
@@ -1699,36 +1663,8 @@
     <span class="doccomment">/// Force processing an epoch
     </span>ForceEpoch { hex_outcome: String },
 
-    <span class="doccomment">/// Call module-specific commands
-    </span>Module {
-        <span class="attr">#[clap(long)]
-        </span>id: ModuleSelector,
-
-        <span class="doccomment">/// Command with arguments to call the module with
-        </span><span class="attr">#[clap(long)]
-        </span>arg: Vec&lt;ffi::OsString&gt;,
-    },
-
     <span class="attr">#[clap(subcommand)]
     </span>Ng(ng::ClientNg),
-}
-
-<span class="attr">#[derive(Clone)]
-</span><span class="kw">pub enum </span>ModuleSelector {
-    Id(ModuleInstanceId),
-    Kind(ModuleKind),
-}
-
-<span class="kw">impl </span>FromStr <span class="kw">for </span>ModuleSelector {
-    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
-
-    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
-        <span class="prelude-val">Ok</span>(<span class="kw">if </span>s.chars().all(|ch| ch.is_ascii_digit()) {
-            <span class="self">Self</span>::Id(s.parse()<span class="question-mark">?</span>)
-        } <span class="kw">else </span>{
-            <span class="self">Self</span>::Kind(ModuleKind::clone_from_str(s))
-        })
-    }
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
@@ -2194,50 +2130,14 @@
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::ForceEpoch)
             }
-            Command::Module { id, arg } =&gt; {
-                <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
-                <span class="kw">let </span>decoders = cli.load_decoders(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens);
-                <span class="kw">let </span>db = cli.load_db(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-                <span class="kw">let </span>root_secret = get_client_root_secret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
-
-                <span class="kw">let </span>(id, module_cfg) = <span class="kw">match </span>id {
-                    ModuleSelector::Id(id) =&gt; (
-                        id,
-                        cfg.as_ref()
-                            .get_module_cfg(id)
-                            .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;Can&#39;t load module&quot;</span>)<span class="question-mark">?</span>,
-                    ),
-                    ModuleSelector::Kind(kind) =&gt; {
-                        cfg.as_ref()
-                            .get_first_module_by_kind_cfg(kind)
-                            .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid kind&quot;</span>)<span class="question-mark">?
-                    </span>}
-                };
-                <span class="kw">let </span>module_gen =
-                    <span class="self">self</span>.module_gens.get(module_cfg.kind()).unwrap(<span class="comment">/* already checked */</span>);
-
-                <span class="kw">let </span>module = module_gen
-                    .init(
-                        module_cfg,
-                        db.clone(),
-                        id,
-                        root_secret.child_key(ChildId(id <span class="kw">as </span>u64)),
-                        Notifier::new(db),
-                    )
-                    .<span class="kw">await
-                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;Loading module failed&quot;</span>)<span class="question-mark">?</span>;
-
-                <span class="prelude-val">Ok</span>(CliOutput::Raw(
-                    module
-                        .handle_cli_command(<span class="kw-2">&amp;</span>arg)
-                        .<span class="kw">await
-                        </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
-                ))
-            }
             Command::Ng(command) =&gt; {
-                <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
+                <span class="kw">let </span>config = cli.load_config()<span class="question-mark">?</span>.<span class="number">0</span>;
+                <span class="kw">let </span>client = cli
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
-                    ng::handle_ng_command(command, cfg.<span class="number">0</span>, cli.load_rocks_db().unwrap())
+                    ng::handle_ng_command(command, config, client)
                         .<span class="kw">await
                         </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
                 ))

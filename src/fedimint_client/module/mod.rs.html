@@ -264,6 +264,9 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
@@ -280,7 +283,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, OperationId, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput};
-<span class="kw">use </span><span class="kw">crate</span>::DynGlobalClientContext;
+<span class="kw">use crate</span>::{Client, DynGlobalClientContext};
 
 <span class="kw">pub mod </span>gen;
 
@@ -312,6 +315,7 @@
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _client: <span class="kw-2">&amp;</span>Client,
         _args: <span class="kw-2">&amp;</span>[ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
         <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
@@ -342,7 +346,8 @@
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _args: <span class="kw-2">&amp;</span>[ffi::OsString],
+        client: <span class="kw-2">&amp;</span>Client,
+        args: <span class="kw-2">&amp;</span>[ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt;;
 
     <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>DynInput) -&gt; TransactionItemAmount;
@@ -369,9 +374,10 @@
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        client: <span class="kw-2">&amp;</span>Client,
         args: <span class="kw-2">&amp;</span>[ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
-        &lt;T <span class="kw">as </span>ClientModule&gt;::handle_cli_command(<span class="self">self</span>, args).<span class="kw">await
+        &lt;T <span class="kw">as </span>ClientModule&gt;::handle_cli_command(<span class="self">self</span>, client, args).<span class="kw">await
     </span>}
 
     <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>DynInput) -&gt; TransactionItemAmount {

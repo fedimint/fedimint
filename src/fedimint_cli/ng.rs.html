@@ -233,27 +233,68 @@
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::ffi;
+<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
-<span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
+<span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
-<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-<span class="kw">use </span>fedimint_core::db::IDatabase;
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
-<span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState, LnReceiveState};
-<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
-<span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
+<span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
+<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tracing::info;
+
+<span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub enum </span>ModuleSelector {
+    Id(ModuleInstanceId),
+    Kind(ModuleKind),
+}
+
+<span class="kw">impl </span>FromStr <span class="kw">for </span>ModuleSelector {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
+
+    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="prelude-val">Ok</span>(<span class="kw">if </span>s.chars().all(|ch| ch.is_ascii_digit()) {
+            <span class="self">Self</span>::Id(s.parse()<span class="question-mark">?</span>)
+        } <span class="kw">else </span>{
+            <span class="self">Self</span>::Kind(ModuleKind::clone_from_str(s))
+        })
+    }
+}
 
 <span class="attr">#[derive(Debug, Clone, Subcommand)]
 </span><span class="kw">pub enum </span>ClientNg {
@@ -282,29 +323,26 @@
         </span><span class="attr">#[clap(value_parser = parse_node_pub_key)]
         </span>pubkey: secp256k1::PublicKey,
     },
+    <span class="doccomment">/// Call module-specific commands
+    </span>Mod {
+        <span class="attr">#[clap(long)]
+        </span>id: ModuleSelector,
+
+        <span class="doccomment">/// Command with arguments to call the module with
+        </span><span class="attr">#[clap(long)]
+        </span>arg: Vec&lt;ffi::OsString&gt;,
+    },
 }
 
 <span class="kw">pub fn </span>parse_node_pub_key(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
     secp256k1::PublicKey::from_str(s)
 }
 
-<span class="kw">pub async fn </span>handle_ng_command&lt;D: IDatabase&gt;(
+<span class="kw">pub async fn </span>handle_ng_command(
     command: ClientNg,
-    cfg: ClientConfig,
-    db: D,
+    config: ClientConfig,
+    client: Client,
 ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-
-    <span class="kw">let </span>fed_id = cfg.federation_id;
-    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
-    client_builder.with_module(MintClientGen);
-    client_builder.with_module(LightningClientGen);
-    client_builder.with_module(WalletClientGen);
-    client_builder.with_primary_module(<span class="number">1</span>);
-    client_builder.with_config(cfg);
-    client_builder.with_database(db);
-    <span class="kw">let </span>client = client_builder.build(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span><span class="question-mark">?</span>;
-
     <span class="kw">match </span>command {
         ClientNg::Info =&gt; {
             <span class="kw">return </span>get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>;
@@ -368,7 +406,7 @@
             <span class="kw">let </span>active_gateway = client.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>operation_id = client
-                .pay_bolt11_invoice(fed_id, bolt11, active_gateway)
+                .pay_bolt11_invoice(config.federation_id, bolt11, active_gateway)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_pay_updates(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -421,6 +459,18 @@
             <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
             gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateway_json).unwrap())
+        }
+        ClientNg::Mod { id, arg } =&gt; {
+            <span class="kw">let </span>(id, <span class="kw">_</span>) = <span class="kw">match </span>id {
+                ModuleSelector::Id(id) =&gt; (id, config.get_module_cfg(id)<span class="question-mark">?</span>),
+                ModuleSelector::Kind(kind) =&gt; config.get_first_module_by_kind_cfg(kind)<span class="question-mark">?</span>,
+            };
+
+            <span class="kw">let </span>module = client
+                .get_module_client_dyn(id)
+                .expect(<span class="string">&quot;Module exists according to cfg&quot;</span>);
+
+            <span class="prelude-val">Ok</span>(module.handle_cli_command(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>arg).<span class="kw">await</span><span class="question-mark">?</span>)
         }
     }
 }
