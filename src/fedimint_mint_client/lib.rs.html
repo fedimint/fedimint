@@ -1163,6 +1163,39 @@
 <a href="#1163" id="1163">1163</a>
 <a href="#1164" id="1164">1164</a>
 <a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
+<a href="#1173" id="1173">1173</a>
+<a href="#1174" id="1174">1174</a>
+<a href="#1175" id="1175">1175</a>
+<a href="#1176" id="1176">1176</a>
+<a href="#1177" id="1177">1177</a>
+<a href="#1178" id="1178">1178</a>
+<a href="#1179" id="1179">1179</a>
+<a href="#1180" id="1180">1180</a>
+<a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Database keys used throughout the mint client module
 </span><span class="kw">mod </span>db;
 <span class="doccomment">/// State machines for mint inputs
@@ -1189,6 +1222,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1196,6 +1230,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
+<span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
@@ -1279,6 +1314,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         refund_txid: TransactionId,
+    ) -&gt; anyhow::Result&lt;()&gt;;
+
+    <span class="comment">// TODO: This function needs to be generalized to await any primary module
+    // change
+    </span><span class="kw">async fn </span>await_mint_change(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
     ) -&gt; anyhow::Result&lt;()&gt;;
 }
 
@@ -1372,6 +1415,29 @@
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
         mint.await_output_finalized(operation_id, out_point).<span class="kw">await
     </span>}
+
+    <span class="kw">async fn </span>await_mint_change(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>tx_outcome = <span class="self">self</span>.api().await_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if let </span>TransactionStatus::Accepted {
+            epoch: _epoch,
+            outputs,
+        } = tx_outcome
+        {
+            <span class="kw">if </span>out_point.out_idx &lt; outputs.len() <span class="kw">as </span>u64 {
+                <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+                <span class="kw">return </span>mint.await_output_finalized(operation_id, out_point).<span class="kw">await</span>;
+            } <span class="kw">else </span>{
+                <span class="comment">// No change on this transaction
+                </span><span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+        }
+
+        <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Transaction was not accepted&quot;</span>))
+    }
 
     <span class="kw">async fn </span>subscribe_reissue_external_notes_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

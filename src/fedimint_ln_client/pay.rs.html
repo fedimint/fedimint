@@ -512,49 +512,23 @@
 <a href="#512" id="512">512</a>
 <a href="#513" id="513">513</a>
 <a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
-<a href="#520" id="520">520</a>
-<a href="#521" id="521">521</a>
-<a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a>
-<a href="#524" id="524">524</a>
-<a href="#525" id="525">525</a>
-<a href="#526" id="526">526</a>
-<a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a>
-<a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, TxSubmissionError};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
+<span class="kw">use </span>fedimint_core::core::Decoder;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::{Amount, TransactionId};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContract;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, IdentifiableContract, Preimage};
-<span class="kw">use </span>fedimint_ln_common::{LightningGateway, LightningInput};
+<span class="kw">use </span>fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome};
 <span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
+<span class="kw">use </span>futures::future;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
@@ -610,12 +584,12 @@
 
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
+        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         global_context: <span class="kw-2">&amp;</span><span class="self">Self</span>::GlobalContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) =&gt; {
-                created_outgoing_ln_contract.transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context)
+                created_outgoing_ln_contract.transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, context, global_context)
             }
             LightningPayStates::Canceled =&gt; {
                 <span class="macro">vec!</span>[]
@@ -653,6 +627,7 @@
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         common: <span class="kw-2">&amp;</span>LightningPayCommon,
+        context: <span class="kw-2">&amp;</span>LightningClientContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;LightningPayStateMachine&gt;&gt; {
         <span class="kw">let </span>txid = <span class="self">self</span>.funding_txid;
@@ -661,7 +636,7 @@
         <span class="kw">let </span>success_context = global_context.clone();
         <span class="kw">let </span>gateway = <span class="self">self</span>.gateway.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_outgoing_contract_funded(funded_common.clone(), success_context, txid),
+            <span class="self">Self</span>::await_outgoing_contract_funded(context.ln_decoder.clone(), success_context, txid),
             <span class="kw">move </span>|_dbtx, result, old_state| {
                 Box::pin(<span class="self">Self</span>::transition_outgoing_contract_funded(
                     result,
@@ -675,17 +650,26 @@
     }
 
     <span class="kw">async fn </span>await_outgoing_contract_funded(
-        common: LightningPayCommon,
+        module_decoder: Decoder,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), GatewayPayError&gt; {
+        <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
         global_context
-            .await_tx_accepted(common.operation_id, txid)
+            .api()
+            .await_output_outcome::&lt;LightningOutputOutcome&gt;(
+                out_point,
+                Duration::from_millis(i32::MAX <span class="kw">as </span>u64),
+                <span class="kw-2">&amp;</span>module_decoder,
+            )
             .<span class="kw">await
-    </span>}
+            </span>.map_err(|<span class="kw">_</span>| GatewayPayError::OutgoingContractError)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
 
     <span class="kw">async fn </span>transition_outgoing_contract_funded(
-        result: <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;(), GatewayPayError&gt;,
         old_state: LightningPayStateMachine,
         common: LightningPayCommon,
         contract_id: ContractId,
@@ -726,6 +710,8 @@
 </span><span class="kw">enum </span>GatewayPayError {
     <span class="attr">#[error(<span class="string">&quot;Lightning Gateway failed to pay invoice&quot;</span>)]
     </span>GatewayInternalError,
+    <span class="attr">#[error(<span class="string">&quot;OutgoingContract was not created in the federation&quot;</span>)]
+    </span>OutgoingContractError,
 }
 
 <span class="kw">impl </span>LightningPayFunded {
@@ -736,35 +722,22 @@
         <span class="kw">let </span>gateway = <span class="self">self</span>.gateway.clone();
         <span class="kw">let </span>payload = <span class="self">self</span>.payload.clone();
         <span class="kw">let </span>contract_id = <span class="self">self</span>.payload.contract_id;
-        <span class="kw">let </span>timeout_context = global_context.clone();
-        <span class="macro">vec!</span>[
-            StateTransition::new(
-                <span class="comment">// Wait for the result of the payment by the gateway
-                </span><span class="self">Self</span>::await_outgoing_contract_execution(gateway, payload),
-                <span class="kw">move </span>|_dbtx, result, old_state| {
-                    Box::pin(<span class="self">Self</span>::transition_outgoing_contract_execution(
-                        old_state,
-                        timeout_context.clone(),
-                        result,
-                        contract_id,
-                    ))
-                },
-            ),
-            <span class="comment">// wait for gatewayd for two minutes before timing out
-            </span>StateTransition::new(
-                sleep(Duration::from_secs(<span class="number">120</span>)),
-                <span class="kw">move </span>|_dbtx, (), old_state| {
-                    Box::pin(<span class="self">Self</span>::transition_pay_timeout(
-                        old_state,
-                        global_context.clone(),
-                        contract_id,
-                    ))
-                },
-            ),
-        ]
+        <span class="macro">vec!</span>[StateTransition::new(
+            <span class="comment">// Immediately try to pay the invoice by contacting the gateway
+            </span>future::ready(()),
+            <span class="kw">move </span>|_dbtx, (), old_state| {
+                Box::pin(<span class="self">Self</span>::transition_outgoing_contract_execution(
+                    old_state,
+                    global_context.clone(),
+                    contract_id,
+                    gateway.clone(),
+                    payload.clone(),
+                ))
+            },
+        )]
     }
 
-    <span class="kw">async fn </span>await_outgoing_contract_execution(
+    <span class="kw">async fn </span>gateway_pay_invoice(
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
@@ -793,50 +766,19 @@
         <span class="prelude-val">Ok</span>(preimage[<span class="number">1</span>..length - <span class="number">1</span>].to_string())
     }
 
-    <span class="kw">async fn </span>transition_pay_timeout(
-        old_state: LightningPayStateMachine,
-        global_context: DynGlobalClientContext,
-        contract_id: ContractId,
-    ) -&gt; LightningPayStateMachine {
-        <span class="comment">// TODO: Retry contacting gateway
-
-        </span><span class="kw">let </span>contract = global_context
-            .api()
-            .get_outgoing_contract(contract_id)
-            .<span class="kw">await</span>;
-        <span class="kw">let </span>timelock = <span class="kw">match </span>contract {
-            <span class="prelude-val">Ok</span>(contract) =&gt; contract.contract.timelock,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="kw">return </span>LightningPayStateMachine {
-                    common: old_state.common,
-                    state: LightningPayStates::Failure(
-                        <span class="string">&quot;Failed to retrieve OutgoingContract&quot;</span>.to_string(),
-                    ),
-                }
-            }
-        };
-
-        LightningPayStateMachine {
-            common: old_state.common,
-            state: LightningPayStates::Refundable(LightningPayRefundable {
-                contract_id,
-                block_timelock: timelock,
-            }),
-        }
-    }
-
     <span class="kw">async fn </span>transition_outgoing_contract_execution(
         old_state: LightningPayStateMachine,
         global_context: DynGlobalClientContext,
-        result: <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt;,
         contract_id: ContractId,
+        gateway: LightningGateway,
+        payload: PayInvoicePayload,
     ) -&gt; LightningPayStateMachine {
-        <span class="kw">match </span>result {
+        <span class="kw">match </span><span class="self">Self</span>::gateway_pay_invoice(gateway, payload).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(preimage) =&gt; LightningPayStateMachine {
                 common: old_state.common,
                 state: LightningPayStates::Success(preimage),
             },
-            <span class="prelude-val">Err</span>(GatewayPayError::GatewayInternalError) =&gt; {
+            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                 <span class="kw">let </span>contract = global_context
                     .module_api()
                     .get_outgoing_contract(contract_id)

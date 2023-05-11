@@ -256,6 +256,9 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -268,7 +271,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, ParseAmountError, TieredMulti, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
 <span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 <span class="kw">use </span>futures::StreamExt;
@@ -403,7 +406,7 @@
         ClientNg::LnPay { bolt11 } =&gt; {
             client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>operation_id = client
+            <span class="kw">let </span>(operation_id, txid) = client
                 .pay_bolt11_invoice(config.federation_id, bolt11)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -412,6 +415,9 @@
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                 <span class="kw">match </span>update {
                     LnPayState::Success { preimage } =&gt; {
+                        client
+                            .await_mint_change(operation_id, OutPoint { txid, out_idx: <span class="number">1 </span>})
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(PayInvoiceResponse {
                             operation_id: operation_id.to_hex(),
                             preimage,

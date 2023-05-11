@@ -351,6 +351,7 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ops::Range;
 
@@ -545,7 +546,8 @@
                 </span>))
             }
         };
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, pub_key).run().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, pub_key.clone()).run().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;ng&quot;</span>, <span class="string">&quot;switch-gateway&quot;</span>, pub_key).run().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(
             <span class="string">&quot;Using {name} gateway&quot;</span>,
             name = gw.ln.as_ref().unwrap().name()
