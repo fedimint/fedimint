@@ -2,12 +2,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client_legacy::modules::ln::LightningGateway;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::ConnectFedPayload;
+use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::Gateway;
 use tempfile::TempDir;
 use tokio::sync::RwLock;
@@ -18,8 +19,9 @@ use crate::federation::FederationTest;
 use crate::fixtures::test_dir;
 
 pub struct GatewayTest {
+    feds: Vec<FederationInfo>,
+    api: Url,
     password: String,
-    address: Url,
     _config_dir: Option<TempDir>,
     _task: TaskGroup,
 }
@@ -27,16 +29,24 @@ pub struct GatewayTest {
 impl GatewayTest {
     /// RPC client for communicating with the gateway admin API
     pub async fn new_client(&self) -> GatewayRpcClient {
-        GatewayRpcClient::new(self.address.clone(), self.password.clone())
+        GatewayRpcClient::new(self.api.clone(), self.password.clone())
     }
 
-    pub async fn connect_fed(&self, fed: &FederationTest) {
+    /// Connects to a new federation and stores the info
+    pub async fn connect_fed(&mut self, fed: &FederationTest) {
         let connect = fed.connection_code().to_string();
         let client = self.new_client().await;
-        client
-            .connect_federation(ConnectFedPayload { connect })
-            .await
-            .unwrap();
+        self.feds.push(
+            client
+                .connect_federation(ConnectFedPayload { connect })
+                .await
+                .unwrap(),
+        );
+    }
+
+    /// Returns the last registration we sent to a fed
+    pub fn last_registration(&self) -> LightningGateway {
+        self.feds.last().unwrap().registration.clone()
     }
 
     pub(crate) async fn new(
@@ -44,6 +54,7 @@ impl GatewayTest {
         lightning: impl ILnRpcClient + 'static,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
+        feds: Vec<&FederationTest>,
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: Url = format!("http://{listen}").parse().unwrap();
@@ -73,11 +84,17 @@ impl GatewayTest {
         })
         .await;
 
-        Self {
+        let mut gateway = Self {
+            feds: vec![],
             password,
-            address,
+            api: address,
             _config_dir,
             _task: task,
+        };
+
+        for fed in feds {
+            gateway.connect_fed(fed).await;
         }
+        gateway
     }
 }

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::{env, fs};
 
+use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
 use fedimint_core::config::{
     ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
@@ -11,6 +12,7 @@ use fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use tempfile::TempDir;
 
+use crate::btc::mock::FakeBitcoinTest;
 use crate::federation::FederationTest;
 use crate::gateway::GatewayTest;
 use crate::ln::mock::FakeLightningTest;
@@ -72,8 +74,8 @@ impl Fixtures {
         .await
     }
 
-    /// Starts a new gateway
-    pub async fn new_gateway(&self) -> GatewayTest {
+    /// Starts a new gateway connected to feds
+    pub async fn new_gateway(&self, feds: Vec<&FederationTest>) -> GatewayTest {
         // TODO: Make construction easier
         let server_gens = ServerModuleGenRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
@@ -84,8 +86,14 @@ impl Fixtures {
             FakeLightningTest::new(),
             decoders,
             ClientModuleGenRegistry::from(self.clients.clone()),
+            feds,
         )
         .await
+    }
+
+    /// Get a test bitcoin RPC client
+    pub fn bitcoin_rpc(&self) -> DynBitcoindRpc {
+        FakeBitcoinTest::new().into()
     }
 }
 

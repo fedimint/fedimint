@@ -11,6 +11,7 @@ use fedimint_client_legacy::{GatewayClient, PaymentParameters};
 use fedimint_core::task::{RwLock, TaskGroup};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, TransactionId};
+use fedimint_ln_common::LightningGateway;
 use futures::stream::{BoxStream, StreamExt};
 use rand::{CryptoRng, RngCore};
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -38,6 +39,7 @@ pub struct GatewayActor {
     task_group: TaskGroup,
     gw_rpc: GatewayRpcSender,
     pub sender: Sender<Arc<AtomicBool>>,
+    registration: LightningGateway,
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +151,10 @@ impl GatewayActor {
         gw_rpc: GatewayRpcSender,
     ) -> Result<Self> {
         let register_client = client.clone();
+        let registration = register_client
+            .config()
+            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
+        let registration_sent = registration.clone();
         task_group
             .spawn("Register with federation", |_| async move {
                 loop {
@@ -157,13 +163,8 @@ impl GatewayActor {
                         String::from("Register With Federation"),
                         #[allow(clippy::unit_arg)]
                         || async {
-                            let gateway_registration =
-                                register_client.config().to_gateway_registration_info(
-                                    route_hints.clone(),
-                                    GW_ANNOUNCEMENT_TTL,
-                                );
                             Ok(register_client
-                                .register_with_federation(gateway_registration.clone())
+                                .register_with_federation(registration_sent.clone())
                                 .await?)
                         },
                         Duration::from_secs(1),
@@ -193,6 +194,7 @@ impl GatewayActor {
             task_group,
             gw_rpc,
             sender,
+            registration,
         };
 
         actor.route_htlcs(receiver).await?;
@@ -642,7 +644,7 @@ impl GatewayActor {
         let cfg = self.client.config();
         Ok(FederationInfo {
             federation_id: cfg.client_config.federation_id,
-            mint_pubkey: cfg.redeem_key.x_only_public_key().0,
+            registration: self.registration.clone(),
         })
     }
 }
