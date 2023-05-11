@@ -80,7 +80,9 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{DynState, OperationId, State, StateTransition};
+<span class="kw">use </span>fedimint_client::transaction::TxSubmissionError;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::ModuleDatabaseTransaction;
@@ -150,7 +152,7 @@
     context: DynGlobalClientContext,
     id: OperationId,
     txid: TransactionId,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
     context.await_tx_accepted(id, txid).<span class="kw">await
 </span>}
 

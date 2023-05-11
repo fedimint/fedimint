@@ -303,27 +303,6 @@
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -337,7 +316,7 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{Client, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
-<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, KeyPair, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, KeyPair};
 <span class="kw">use </span>fedimint_core::db::{Database, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
@@ -347,7 +326,7 @@
 <span class="kw">use </span>fedimint_dummy_common::config::DummyClientConfig;
 <span class="kw">use </span>fedimint_dummy_common::{
     fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
-    DummyOutputOutcome,
+    DummyOutputOutcome, KIND,
 };
 <span class="kw">use </span>secp256k1::{Secp256k1, XOnlyPublicKey};
 <span class="kw">use </span>states::DummyStateMachine;
@@ -389,7 +368,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>DummyClientExt <span class="kw">for </span>Client {
     <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>(id, <span class="kw">_</span>) = dummy_client(<span class="self">self</span>);
+        <span class="kw">let </span>(_dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>op_id = rand::random();
 
         <span class="comment">// TODO: Building a tx could be easier
@@ -405,10 +384,10 @@
 
         <span class="comment">// Build and send tx to the fed
         // Will output to our primary client module
-        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_input(input.into_dyn(id));
+        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
         <span class="kw">let </span>outpoint = |txid| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>txid = <span class="self">self
-            </span>.finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
+            </span>.finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="self">self</span>.receive_money(outpoint(txid)).<span class="kw">await
@@ -419,14 +398,14 @@
         account: XOnlyPublicKey,
         amount: Amount,
     ) -&gt; anyhow::Result&lt;OutPoint&gt; {
-        <span class="kw">let </span>(id, dummy) = dummy_client(<span class="self">self</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>(dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>op_id = rand::random();
 
         <span class="comment">// TODO: Building a tx could be easier
         // Create input using our own account
         </span><span class="kw">let </span>input = dummy
-            .create_sufficient_input(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(id), op_id, amount)
+            .create_sufficient_input(<span class="kw-2">&amp;mut </span>dbtx.get_isolated(), op_id, amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
 
@@ -438,26 +417,22 @@
 
         <span class="comment">// Build and send tx to the fed
         </span><span class="kw">let </span>tx = TransactionBuilder::new()
-            .with_input(input.into_dyn(id))
-            .with_output(output.into_dyn(id));
+            .with_input(input.into_dyn(instance.id))
+            .with_output(output.into_dyn(instance.id));
         <span class="kw">let </span>outpoint = |txid| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>txid = <span class="self">self
             </span>.finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx_subscription = <span class="self">self</span>.transaction_updates(op_id).<span class="kw">await</span>;
-        <span class="comment">// TODO: Return actual API error if any
-        </span>tx_subscription
-            .await_tx_accepted(txid)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Tx failed&quot;</span>);
+        tx_subscription.await_tx_accepted(txid).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(outpoint(txid))
     }
 
     <span class="kw">async fn </span>receive_money(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>(id, dummy) = dummy_client(<span class="self">self</span>);
-
+        <span class="kw">let </span>(dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>DummyOutputOutcome(amount, account) = <span class="self">self
             </span>.api()
             .await_output_outcome(outpoint, Duration::from_secs(<span class="number">10</span>), <span class="kw-2">&amp;</span>dummy.decoder())
@@ -467,8 +442,6 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Wrong account id&quot;</span>));
         }
 
-        <span class="kw">let </span>mod_db = <span class="self">self</span>.db().new_isolated(id);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = mod_db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>funds = <span class="self">self</span>.total_funds().<span class="kw">await </span>+ amount;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>funds).<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
@@ -476,43 +449,28 @@
     }
 
     <span class="kw">async fn </span>fed_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;Signature&gt; {
-        <span class="kw">let </span>(id, <span class="kw">_</span>) = dummy_client(<span class="self">self</span>);
-        <span class="kw">let </span>api = <span class="self">self</span>.api().with_module(id);
-        api.sign_message(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>sig = api.wait_signed(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(_dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        instance.api.sign_message(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>sig = instance.api.wait_signed(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(sig.<span class="number">0</span>)
     }
 
     <span class="kw">async fn </span>total_funds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        <span class="comment">// TODO: Not very nice to get to the module db
-        </span><span class="kw">let </span>(id, <span class="kw">_</span>) = dummy_client(<span class="self">self</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>mod_dbtx = dbtx.with_module_prefix(id);
-        get_funds(<span class="kw-2">&amp;mut </span>mod_dbtx).<span class="kw">await
-    </span>}
+        <span class="kw">let </span>(_dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>funds = get_funds(<span class="kw-2">&amp;mut </span>dbtx.get_isolated()).<span class="kw">await</span>;
+        funds
+    }
 
     <span class="kw">fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; XOnlyPublicKey {
-        <span class="kw">let </span>(<span class="kw">_</span>, client) = dummy_client(<span class="self">self</span>);
-        client.key.x_only_public_key().<span class="number">0
+        <span class="kw">let </span>(dummy, _instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        dummy.key.x_only_public_key().<span class="number">0
     </span>}
 
     <span class="kw">fn </span>fed_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
-        <span class="kw">let </span>(<span class="kw">_</span>, dummy) = dummy_client(<span class="self">self</span>);
+        <span class="kw">let </span>(dummy, _instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         dummy.cfg.fed_public_key
     }
-}
-
-<span class="comment">// TODO: Boiler-plate
-</span><span class="kw">fn </span>dummy_client(client: <span class="kw-2">&amp;</span>Client) -&gt; (ModuleInstanceId, <span class="kw-2">&amp;</span>DummyClientModule) {
-    <span class="kw">let </span>id = client
-        .get_first_instance(<span class="kw-2">&amp;</span>DummyCommonGen::KIND)
-        .expect(<span class="string">&quot;No mint module attached to client&quot;</span>);
-
-    <span class="kw">let </span>client = client
-        .get_module_client::&lt;DummyClientModule&gt;(id)
-        .expect(<span class="string">&quot;Instance ID exists, we just fetched it&quot;</span>);
-
-    (id, client)
 }
 
 <span class="attr">#[derive(Debug)]

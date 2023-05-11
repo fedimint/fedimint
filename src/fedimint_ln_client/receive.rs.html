@@ -343,17 +343,14 @@
 <a href="#343" id="343">343</a>
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Add;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, TxSubmissionError};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
@@ -475,12 +472,12 @@
         global_context: DynGlobalClientContext,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
         global_context.await_tx_accepted(operation_id, txid).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_confirmed_invoice(
-        result: <span class="prelude-ty">Result</span>&lt;(), ()&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt;,
         old_state: LightningReceiveStateMachine,
         invoice: Invoice,
         keypair: KeyPair,
@@ -544,8 +541,7 @@
         </span><span class="kw">loop </span>{
             <span class="kw">let </span>contract_id = (<span class="kw-2">*</span>invoice.payment_hash()).into();
             <span class="kw">let </span>contract = global_context
-                .api()
-                .with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+                .module_api()
                 .get_incoming_contract(contract_id)
                 .<span class="kw">await</span>;
 
@@ -649,12 +645,12 @@
         operation_id: OperationId,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
         global_context.await_tx_accepted(operation_id, txid).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_claim_success(
-        result: <span class="prelude-ty">Result</span>&lt;(), ()&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt;,
         old_state: LightningReceiveStateMachine,
         txid: TransactionId,
     ) -&gt; LightningReceiveStateMachine {

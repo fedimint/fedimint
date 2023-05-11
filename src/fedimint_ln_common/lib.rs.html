@@ -284,6 +284,8 @@
 <a href="#284" id="284">284</a>
 <a href="#285" id="285">285</a>
 <a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -312,7 +314,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::OfferId;
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
 
-<span class="kw">const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;ln&quot;</span>);
+<span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">&quot;ln&quot;</span>);
 <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(<span class="number">0</span>);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -438,14 +440,16 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+<span class="doccomment">/// Information a gateway registers with a fed
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>LightningGateway {
     <span class="doccomment">/// Channel identifier assigned to the mint by the gateway.
     /// All clients in this federation should use this value as
     /// `short_channel_id` when creating invoices to be settled by this
     /// gateway.
     </span><span class="kw">pub </span>mint_channel_id: u64,
-    <span class="kw">pub </span>mint_pub_key: secp256k1::XOnlyPublicKey,
+    <span class="doccomment">/// Key used to pay the gateway
+    </span><span class="kw">pub </span>mint_pub_key: secp256k1::XOnlyPublicKey,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
     <span class="kw">pub </span>api: Url,
     <span class="doccomment">/// Route hints to reach the LN node of the gateway.

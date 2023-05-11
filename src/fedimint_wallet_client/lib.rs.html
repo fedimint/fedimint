@@ -108,20 +108,6 @@
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -133,9 +119,7 @@
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::module::{
-    CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
-};
+<span class="kw">use </span>fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>fedimint_wallet_common::config::WalletClientConfig;
 <span class="kw">pub use </span>fedimint_wallet_common::<span class="kw-2">*</span>;
@@ -146,21 +130,9 @@
 
 <span class="kw">impl </span>WalletClientExt <span class="kw">for </span>Client {
     <span class="kw">fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
-        <span class="kw">let </span>(<span class="kw">_</span>, wallet_client) = wallet_client(<span class="self">self</span>);
-        wallet_client.get_network()
+        <span class="kw">let </span>(wallet, _instance) = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        wallet.get_network()
     }
-}
-
-<span class="kw">fn </span>wallet_client(client: <span class="kw-2">&amp;</span>Client) -&gt; (ModuleInstanceId, <span class="kw-2">&amp;</span>WalletClientModule) {
-    <span class="kw">let </span>wallet_client_instance = client
-        .get_first_instance(<span class="kw-2">&amp;</span>WalletCommonGen::KIND)
-        .expect(<span class="string">&quot;No ln module attached to client&quot;</span>);
-
-    <span class="kw">let </span>wallet_client = client
-        .get_module_client::&lt;WalletClientModule&gt;(wallet_client_instance)
-        .expect(<span class="string">&quot;Instance ID exists, we just fetched it&quot;</span>);
-
-    (wallet_client_instance, wallet_client)
 }
 
 <span class="attr">#[derive(Debug, Clone)]

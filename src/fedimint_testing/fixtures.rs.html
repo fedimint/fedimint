@@ -106,10 +106,19 @@
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 <span class="kw">use </span>std::{env, fs};
 
+<span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
 <span class="kw">use </span>fedimint_core::config::{
     ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
@@ -119,6 +128,7 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>tempfile::TempDir;
 
+<span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinTest;
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway::GatewayTest;
 <span class="kw">use </span><span class="kw">crate</span>::ln::mock::FakeLightningTest;
@@ -180,8 +190,8 @@
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Starts a new gateway
-    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayTest {
+    <span class="doccomment">/// Starts a new gateway connected to feds
+    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, feds: Vec&lt;<span class="kw-2">&amp;</span>FederationTest&gt;) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier
         </span><span class="kw">let </span>server_gens = ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone());
         <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
@@ -192,9 +202,15 @@
             FakeLightningTest::new(),
             decoders,
             ClientModuleGenRegistry::from(<span class="self">self</span>.clients.clone()),
+            feds,
         )
         .<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Get a test bitcoin RPC client
+    </span><span class="kw">pub fn </span>bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynBitcoindRpc {
+        FakeBitcoinTest::new().into()
+    }
 }
 
 <span class="doccomment">/// If `FM_TEST_DIR` is set, use it as a base, otherwise use a tempdir

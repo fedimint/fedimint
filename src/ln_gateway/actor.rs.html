@@ -646,6 +646,8 @@
 <a href="#646" id="646">646</a>
 <a href="#647" id="647">647</a>
 <a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -659,6 +661,7 @@
 <span class="kw">use </span>fedimint_core::task::{RwLock, TaskGroup};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_ln_common::LightningGateway;
 <span class="kw">use </span>futures::stream::{BoxStream, StreamExt};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
@@ -686,6 +689,7 @@
     task_group: TaskGroup,
     gw_rpc: GatewayRpcSender,
     <span class="kw">pub </span>sender: Sender&lt;Arc&lt;AtomicBool&gt;&gt;,
+    registration: LightningGateway,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -797,6 +801,10 @@
         gw_rpc: GatewayRpcSender,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>register_client = client.clone();
+        <span class="kw">let </span>registration = register_client
+            .config()
+            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
+        <span class="kw">let </span>registration_sent = registration.clone();
         task_group
             .spawn(<span class="string">&quot;Register with federation&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
@@ -805,13 +813,8 @@
                         String::from(<span class="string">&quot;Register With Federation&quot;</span>),
                         <span class="attr">#[allow(clippy::unit_arg)]
                         </span>|| <span class="kw">async </span>{
-                            <span class="kw">let </span>gateway_registration =
-                                register_client.config().to_gateway_registration_info(
-                                    route_hints.clone(),
-                                    GW_ANNOUNCEMENT_TTL,
-                                );
                             <span class="prelude-val">Ok</span>(register_client
-                                .register_with_federation(gateway_registration.clone())
+                                .register_with_federation(registration_sent.clone())
                                 .<span class="kw">await</span><span class="question-mark">?</span>)
                         },
                         Duration::from_secs(<span class="number">1</span>),
@@ -841,6 +844,7 @@
             task_group,
             gw_rpc,
             sender,
+            registration,
         };
 
         actor.route_htlcs(receiver).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1290,7 +1294,7 @@
         <span class="kw">let </span>cfg = <span class="self">self</span>.client.config();
         <span class="prelude-val">Ok</span>(FederationInfo {
             federation_id: cfg.client_config.federation_id,
-            mint_pubkey: cfg.redeem_key.x_only_public_key().<span class="number">0</span>,
+            registration: <span class="self">self</span>.registration.clone(),
         })
     }
 }

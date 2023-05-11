@@ -237,7 +237,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::ClientInput;
+<span class="kw">use </span>fedimint_client::transaction::{ClientInput, TxSubmissionError};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{TieredMulti, TransactionId};
@@ -337,14 +337,14 @@
     <span class="kw">async fn </span>await_success(
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
         global_context
             .await_tx_accepted(common.operation_id, common.txid)
             .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_success(
-        result: <span class="prelude-ty">Result</span>&lt;(), ()&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt;,
         old_state: MintInputStateMachine,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         global_context: DynGlobalClientContext,
@@ -419,14 +419,14 @@
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
         global_context
             .await_tx_accepted(common.operation_id, refund_txid)
             .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_refund_success(
-        result: <span class="prelude-ty">Result</span>&lt;(), ()&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt;,
         old_state: MintInputStateMachine,
     ) -&gt; MintInputStateMachine {
         <span class="kw">let </span>refund_txid = <span class="kw">match </span>old_state.state {

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["dummy_client",""],["get_funds",""]],"mod":[["api",""],["db",""],["states",""]],"struct":[["DummyClientContext","Data needed by the state machine"],["DummyClientGen",""],["DummyClientModule",""]],"trait":[["DummyClientExt","Exposed API calls for client apps"]]};
+window.SIDEBAR_ITEMS = {"fn":[["get_funds",""]],"mod":[["api",""],["db",""],["states",""]],"struct":[["DummyClientContext","Data needed by the state machine"],["DummyClientGen",""],["DummyClientModule",""]],"trait":[["DummyClientExt","Exposed API calls for client apps"]]};

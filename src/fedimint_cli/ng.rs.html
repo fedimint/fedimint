@@ -256,8 +256,6 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -267,7 +265,7 @@
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
-<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
@@ -379,10 +377,10 @@
             description,
             expiry_time,
         } =&gt; {
-            <span class="kw">let </span>active_gateway = client.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>(operation_id, <span class="kw">_</span>) = client
-                .create_bolt11_invoice_and_receive(amount, description, expiry_time, active_gateway)
+                .create_bolt11_invoice_and_receive(amount, description, expiry_time)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_to_ln_receive_updates(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
@@ -403,10 +401,10 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown Lightning receive state&quot;</span>));
         }
         ClientNg::LnPay { bolt11 } =&gt; {
-            <span class="kw">let </span>active_gateway = client.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>operation_id = client
-                .pay_bolt11_invoice(config.federation_id, bolt11, active_gateway)
+                .pay_bolt11_invoice(config.federation_id, bolt11)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_pay_updates(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -438,7 +436,7 @@
             }
 
             <span class="kw">let </span><span class="kw-2">mut </span>gateways_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways);
-            <span class="kw">let </span>active_gateway = client.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>active_gateway = client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             gateways_json
                 .as_array_mut()
@@ -454,8 +452,8 @@
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateways_json).unwrap())
         }
         ClientNg::SwitchGateway { pubkey } =&gt; {
-            <span class="kw">let </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-            <span class="kw">let </span>gateway = client.switch_active_gateway(<span class="prelude-val">Some</span>(pubkey), dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+            client.set_active_gateway(<span class="kw-2">&amp;</span>pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>gateway = client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
             gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateway_json).unwrap())
@@ -476,9 +474,7 @@
 }
 
 <span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>Client) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
-    <span class="kw">let </span>mint_client = client
-        .get_module_client::&lt;MintClientModule&gt;(LEGACY_HARDCODED_INSTANCE_ID_MINT)
-        .unwrap();
+    <span class="kw">let </span>(mint_client, <span class="kw">_</span>) = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
     <span class="kw">let </span>summary = mint_client
         .get_wallet_summary(<span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>))
         .<span class="kw">await</span>;

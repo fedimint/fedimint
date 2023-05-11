@@ -81,16 +81,34 @@
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::LightningGateway;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 <span class="kw">use </span>ln_gateway::lnrpc_client::ILnRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
+<span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tempfile::TempDir;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -101,8 +119,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::fixtures::test_dir;
 
 <span class="kw">pub struct </span>GatewayTest {
+    feds: Vec&lt;FederationInfo&gt;,
+    api: Url,
     password: String,
-    address: Url,
     _config_dir: <span class="prelude-ty">Option</span>&lt;TempDir&gt;,
     _task: TaskGroup,
 }
@@ -110,16 +129,24 @@
 <span class="kw">impl </span>GatewayTest {
     <span class="doccomment">/// RPC client for communicating with the gateway admin API
     </span><span class="kw">pub async fn </span>new_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcClient {
-        GatewayRpcClient::new(<span class="self">self</span>.address.clone(), <span class="self">self</span>.password.clone())
+        GatewayRpcClient::new(<span class="self">self</span>.api.clone(), <span class="self">self</span>.password.clone())
     }
 
-    <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) {
+    <span class="doccomment">/// Connects to a new federation and stores the info
+    </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) {
         <span class="kw">let </span>connect = fed.connection_code().to_string();
         <span class="kw">let </span>client = <span class="self">self</span>.new_client().<span class="kw">await</span>;
-        client
-            .connect_federation(ConnectFedPayload { connect })
-            .<span class="kw">await
-            </span>.unwrap();
+        <span class="self">self</span>.feds.push(
+            client
+                .connect_federation(ConnectFedPayload { connect })
+                .<span class="kw">await
+                </span>.unwrap(),
+        );
+    }
+
+    <span class="doccomment">/// Returns the last registration we sent to a fed
+    </span><span class="kw">pub fn </span>last_registration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningGateway {
+        <span class="self">self</span>.feds.last().unwrap().registration.clone()
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
@@ -127,6 +154,7 @@
         lightning: <span class="kw">impl </span>ILnRpcClient + <span class="lifetime">&#39;static</span>,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
+        feds: Vec&lt;<span class="kw-2">&amp;</span>FederationTest&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>address: Url = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
@@ -156,12 +184,18 @@
         })
         .<span class="kw">await</span>;
 
-        <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>gateway = <span class="self">Self </span>{
+            feds: <span class="macro">vec!</span>[],
             password,
-            address,
+            api: address,
             _config_dir,
             _task: task,
+        };
+
+        <span class="kw">for </span>fed <span class="kw">in </span>feds {
+            gateway.connect_fed(fed).<span class="kw">await</span>;
         }
+        gateway
     }
 }
 </code></pre></div>

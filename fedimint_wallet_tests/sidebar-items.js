@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["FakeWalletGen","Used to create a wallet module with a mock bitcoind"]]};
