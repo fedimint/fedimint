@@ -35,6 +35,7 @@ export const ConnectFederation = (connect: ConnectFederationProps) => {
 			const federation = await mintgate.connectFederation(connectInfo.value);
 			connect.renderConnectedFedCallback(federation);
 			// TODO: Show success UI
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		} catch (e: any) {
 			setErrorMsg('Failed to connect to federation' + e.message);
 		}

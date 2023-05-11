@@ -197,7 +197,10 @@ function check_ui_lint() {
     return 0
   fi
 
-  npx lint-staged
+  # Disable lint-staged for now then revisit how to set it up for the whole workspace
+  # Issue #2488: Enable lint-stage for the whole Fedimint UI workspace
+
+  # npx lint-staged
 }
 export -f check_ui_lint
 

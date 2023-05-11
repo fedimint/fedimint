@@ -1,6 +1,6 @@
 {
-	"short_name": "Mintgate",
-	"name": "Fedimint gateway admin UI",
+	"short_name": "Fedimint",
+	"name": "Fedimint Gateway UI",
 	"icons": [
 		{
 			"src": "favicon.ico",
