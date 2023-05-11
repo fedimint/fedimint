@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   VStack,
   HStack,
@@ -7,8 +8,6 @@ import {
   Flex,
   useTheme,
 } from '@chakra-ui/react';
-import React from 'react';
-import { ReactComponent as CheckIcon } from '../../assets/svgs/check.svg';
 
 export interface RadioButtonOption<T extends string | number> {
   icon: React.FunctionComponent<React.SVGAttributes<SVGElement>>;
@@ -20,6 +19,7 @@ export interface RadioButtonOption<T extends string | number> {
 export interface RadioButtonGroupProps<T extends string | number> {
   options: RadioButtonOption<T>[];
   value?: T;
+  activeIcon?: React.FunctionComponent<React.SVGAttributes<SVGElement>>;
   onChange(value: T): void;
 }
 
@@ -27,6 +27,7 @@ export function RadioButtonGroup<T extends string | number>({
   options,
   value,
   onChange,
+  activeIcon,
 }: RadioButtonGroupProps<T>): React.ReactElement {
   const theme = useTheme();
   const defaultStyles = {
@@ -133,7 +134,7 @@ export function RadioButtonGroup<T extends string | number>({
                       }
                 }
               >
-                {isActive && <Icon boxSize='14px' as={CheckIcon} />}
+                {isActive && activeIcon && <Icon as={activeIcon} />}
               </Flex>
             </HStack>
           </Button>

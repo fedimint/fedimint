@@ -1,5 +1,5 @@
-import { Flex, Icon, Heading } from '@chakra-ui/react';
 import React from 'react';
+import { Flex, Icon, Heading } from '@chakra-ui/react';
 
 export const FormGroupHeading: React.FC<{
   icon?: React.FunctionComponent<React.SVGAttributes<SVGElement>>;

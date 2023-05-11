@@ -1,5 +1,5 @@
-import { VStack } from '@chakra-ui/react';
 import React from 'react';
+import { VStack } from '@chakra-ui/react';
 
 export const FormGroup: React.FC<{ children: React.ReactNode }> = ({
   children,

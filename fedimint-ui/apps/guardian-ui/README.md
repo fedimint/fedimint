@@ -24,13 +24,13 @@ Do the following in separate terminals:
 - **Second Terminal**
 
 1. Confirm you are in `guardian-ui/` directory
-1. From the current directory, `guardian-ui/`, run `PORT=3000 REACT_APP_FM_CONFIG_API="ws://127.0.0.1:18174" yarn dev`
+1. Run `PORT=3000 REACT_APP_FM_CONFIG_API="ws://127.0.0.1:18174" yarn dev`
    - This will be your "Leader" instance
 
 - **Third Terminal**
 
 1. Confirm you are in `guardian-ui/` directory
-1. From the current directory, `guardian-ui/`, run `PORT=3001 REACT_APP_FM_CONFIG_API="ws://127.0.0.1:18184" yarn dev`
+1. Run `PORT=3001 REACT_APP_FM_CONFIG_API="ws://127.0.0.1:18184" yarn dev`
    - This will be your "Follower" instance
 
 - **Other Terminals** (optional)

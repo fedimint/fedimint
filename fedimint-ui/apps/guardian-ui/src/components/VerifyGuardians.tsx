@@ -1,3 +1,4 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   FormControl,
@@ -12,14 +13,12 @@ import {
   Tag,
   useTheme,
 } from '@chakra-ui/react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FormGroup } from './ui/FormGroup';
+import { CopyInput, FormGroup, Table } from '@fedimint/ui';
 import { useGuardianContext } from '../hooks';
 import { GuardianRole, Peer } from '../types';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
-import { CopyInput } from './ui/CopyInput';
+import { ReactComponent as CopyIcon } from '../assets/svgs/copy.svg';
 import { formatApiErrorMessage, getMyPeerId } from '../utils/api';
-import { Table } from './ui/Table';
 
 interface PeerWithHash {
   id: string;
@@ -164,7 +163,7 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
         <FormGroup>
           <FormControl>
             <FormLabel>Your verification code</FormLabel>
-            <CopyInput value={myHash} />
+            <CopyInput value={myHash} buttonLeftIcon={<Icon as={CopyIcon} />} />
             <FormHelperText>
               Share this code with other guardians
             </FormHelperText>

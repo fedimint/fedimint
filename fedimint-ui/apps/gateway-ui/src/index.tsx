@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { ChakraProvider } from '@chakra-ui/react';
-import { theme, Fonts } from './theme';
+import { SharedChakraProvider, theme, Fonts } from '@fedimint/ui';
 import { Admin } from './Admin';
 import { BlockstreamExplorer, MockMintgate } from './api';
 import './index.css';
@@ -21,12 +20,12 @@ const root = ReactDOM.createRoot(
 );
 
 root.render(
-	<React.StrictMode>
-		<Fonts />
-		<ChakraProvider theme={theme}>
-			<ApiProvider props={{ mintgate, explorer }}>
-				<Admin />
-			</ApiProvider>
-		</ChakraProvider>
-	</React.StrictMode>
+  <React.StrictMode>
+    <Fonts />
+    <SharedChakraProvider theme={theme}>
+      <ApiProvider props={{ mintgate, explorer }}>
+        <Admin />
+      </ApiProvider>
+    </SharedChakraProvider>
+  </React.StrictMode>
 );
