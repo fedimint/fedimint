@@ -15,7 +15,7 @@ use thiserror::Error;
 pub mod config;
 
 /// Unique name for this module
-const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
+pub const KIND: ModuleKind = ModuleKind::from_static_str("dummy");
 
 /// Modules are non-compatible with older versions
 pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);

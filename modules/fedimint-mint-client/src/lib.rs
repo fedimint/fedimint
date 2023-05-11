@@ -164,7 +164,7 @@ impl MintClientExt for Client {
         notes: TieredMulti<SpendableNote>,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
-        let (mint_client_instance, mint_client) = mint_client(self);
+        let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
 
         let operation_id: OperationId = notes.consensus_hash().into_inner();
         if self.get_operation(operation_id).await.is_some() {
@@ -172,11 +172,9 @@ impl MintClientExt for Client {
         }
 
         let amount = notes.total_amount();
-        let mint_input = mint_client
-            .create_input_from_notes(operation_id, notes)
-            .await?;
+        let mint_input = mint.create_input_from_notes(operation_id, notes).await?;
 
-        let tx = TransactionBuilder::new().with_input(mint_input.into_dyn(mint_client_instance));
+        let tx = TransactionBuilder::new().with_input(mint_input.into_dyn(instance.id));
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::reissue_external_notes extra_meta is serializable");
@@ -205,29 +203,26 @@ impl MintClientExt for Client {
         operation_id: OperationId,
         txid: TransactionId,
     ) -> anyhow::Result<()> {
-        let (_, mint_client) = mint_client(self);
+        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
         let out_point = OutPoint { txid, out_idx: 0 };
-        mint_client
-            .await_output_finalized(operation_id, out_point)
-            .await
+        mint.await_output_finalized(operation_id, out_point).await
     }
 
     async fn subscribe_reissue_external_notes_updates(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<ReissueExternalNotesState>> {
+        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
         let out_point = match mint_operation(self, operation_id).await?.variant {
             MintMetaVariants::Reissuance { out_point } => out_point,
             _ => bail!("Operation is not a reissuance"),
         };
 
-        let (_, mint_client) = mint_client(self);
-
         let tx_accepted_future = self
             .transaction_updates(operation_id)
             .await
             .await_tx_accepted(out_point.txid);
-        let output_finalized_future = mint_client.await_output_finalized(operation_id, out_point);
+        let output_finalized_future = mint.await_output_finalized(operation_id, out_point);
 
         Ok(Box::pin(stream! {
             yield ReissueExternalNotesState::Created;
@@ -236,8 +231,8 @@ impl MintClientExt for Client {
                 Ok(()) => {
                     yield ReissueExternalNotesState::Issuing;
                 },
-                Err(()) => {
-                    yield ReissueExternalNotesState::Failed("Transaction not accepted".to_string());
+                Err(e) => {
+                    yield ReissueExternalNotesState::Failed(format!("Transaction not accepted {e:?}"));
                 }
             }
 
@@ -258,7 +253,7 @@ impl MintClientExt for Client {
         try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, TieredMulti<SpendableNote>)> {
-        let (mint_client_instance, mint_client) = mint_client(self);
+        let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::spend_notes extra_meta is serializable");
 
@@ -267,9 +262,9 @@ impl MintClientExt for Client {
                 move |dbtx| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async move {
-                        let (operation_id, states, notes) = mint_client
+                        let (operation_id, states, notes) = mint
                             .spend_notes_oob(
-                                &mut dbtx.with_module_prefix(mint_client_instance),
+                                &mut dbtx.with_module_prefix(instance.id),
                                 min_amount,
                                 try_cancel_after,
                             )
@@ -277,7 +272,7 @@ impl MintClientExt for Client {
 
                         let dyn_states = states
                             .into_iter()
-                            .map(|s| s.into_dyn(mint_client_instance))
+                            .map(|s| s.into_dyn(instance.id))
                             .collect();
 
                         self.add_state_machines(dbtx, dyn_states).await?;
@@ -310,16 +305,17 @@ impl MintClientExt for Client {
     }
 
     async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
-        let (_, mint_client) = mint_client(self);
+        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
 
         // TODO: make robust by writing to the DB, this can fail
-        let _ = mint_client.cancel_oob_payment_bc.send(operation_id);
+        let _ = mint.cancel_oob_payment_bc.send(operation_id);
     }
 
     async fn subscribe_spend_notes_updates(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<SpendOOBState>> {
+        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
         if !matches!(
             mint_operation(self, operation_id).await?.variant,
             MintMetaVariants::SpendOOB { .. }
@@ -328,7 +324,7 @@ impl MintClientExt for Client {
         };
 
         let tx_subscription = self.transaction_updates(operation_id).await;
-        let refund_future = mint_client(self).1.await_spend_oob_refund(operation_id);
+        let refund_future = mint.await_spend_oob_refund(operation_id);
 
         // TODO: check if operation exists and is a spend operation
         Ok(Box::pin(stream! {
@@ -341,7 +337,7 @@ impl MintClientExt for Client {
                     Ok(()) => {
                         yield SpendOOBState::UserCanceledSuccess;
                     },
-                    Err(()) => {
+                    Err(_) => {
                         yield SpendOOBState::UserCanceledFailure;
                     }
                 }
@@ -350,25 +346,13 @@ impl MintClientExt for Client {
                     Ok(()) => {
                         yield SpendOOBState::Refunded;
                     },
-                    Err(()) => {
+                    Err(_) => {
                         yield SpendOOBState::Success;
                     }
                 }
             }
         }))
     }
-}
-
-fn mint_client(client: &Client) -> (ModuleInstanceId, &MintClientModule) {
-    let mint_client_instance = client
-        .get_first_instance(&MintCommonGen::KIND)
-        .expect("No mint module attached to client");
-
-    let mint_client = client
-        .get_module_client::<MintClientModule>(mint_client_instance)
-        .expect("Instance ID exists, we just fetched it");
-
-    (mint_client_instance, mint_client)
 }
 
 async fn mint_operation(client: &Client, operation_id: OperationId) -> anyhow::Result<MintMeta> {

@@ -9,6 +9,8 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tracing::warn;
 
 use crate::sm::{Context, DynContext, OperationId, OperationState, State, StateTransition};
@@ -78,9 +80,16 @@ pub enum TxSubmissionStates {
     /// **This state is final**
     Rejected {
         txid: TransactionId,
-        // TODO: enable again after awaiting DB prefix writes becomes available
-        //error: String
+        error: TxSubmissionError,
     },
+}
+
+#[derive(Debug, Error, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+pub enum TxSubmissionError {
+    #[error("Tx submission rejected: {0}")]
+    SubmitRejected(String),
+    #[error("Tx rejected by consensus: {0}")]
+    ConsensusRejected(String),
 }
 
 impl State for TxSubmissionStates {
@@ -117,12 +126,15 @@ impl State for TxSubmissionStates {
                                 };
 
                                 match res {
-                                    Ok(()) => TxSubmissionStates::Created {
+                                    Ok(txid) => TxSubmissionStates::Created {
                                         txid,
                                         tx,
                                         next_submission: next_submission + RESUBMISSION_INTERVAL,
                                     },
-                                    Err(_e) => TxSubmissionStates::Rejected { txid },
+                                    Err(error) => TxSubmissionStates::Rejected {
+                                        txid,
+                                        error: TxSubmissionError::SubmitRejected(error),
+                                    },
                                 }
                             })
                         },
@@ -133,7 +145,10 @@ impl State for TxSubmissionStates {
                             Box::pin(async move {
                                 match res {
                                     Ok(_epoch) => TxSubmissionStates::Accepted { txid },
-                                    Err(_error) => TxSubmissionStates::Rejected { txid },
+                                    Err(error) => TxSubmissionStates::Rejected {
+                                        txid,
+                                        error: TxSubmissionError::ConsensusRejected(error),
+                                    },
                                 }
                             })
                         },
@@ -166,7 +181,7 @@ async fn trigger_created_submit(
     tx: Transaction,
     next_submission: SystemTime,
     context: DynGlobalClientContext,
-) -> Result<(), String> {
+) -> Result<TransactionId, String> {
     fedimint_core::task::sleep(
         next_submission
             .duration_since(now())
@@ -178,7 +193,6 @@ async fn trigger_created_submit(
         .api()
         .submit_transaction(tx)
         .await
-        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -354,6 +368,10 @@ mod tests {
     impl IGlobalClientContext for FakeGlobalContext {
         fn api(&self) -> &(dyn IFederationApi + 'static) {
             &self.api
+        }
+
+        fn module_api(&self) -> DynFederationApi {
+            unimplemented!()
         }
 
         async fn claim_input_dyn(

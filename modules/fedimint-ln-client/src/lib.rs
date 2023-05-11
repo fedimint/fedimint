@@ -123,10 +123,9 @@ pub enum LnReceiveState {
 #[apply(async_trait_maybe_send!)]
 impl LightningClientExt for Client {
     async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway> {
-        let (ln_client_id, _) = ln_client(self);
-        let mut dbtx = self.db().begin_transaction().await;
-        let mut isolated_dbtx = dbtx.with_module_prefix(ln_client_id);
-        match isolated_dbtx.get_value(&LightningGatewayKey).await {
+        let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
+        match dbtx.get_value(&LightningGatewayKey).await {
             Some(active_gateway) => Ok(active_gateway),
             None => self
                 .fetch_registered_gateways()
@@ -139,8 +138,8 @@ impl LightningClientExt for Client {
 
     /// Switches the clients active gateway to a registered gateway.
     async fn set_active_gateway(&self, node_pub_key: &secp256k1::PublicKey) -> anyhow::Result<()> {
-        let (ln_client_id, _) = ln_client(self);
-        let mut dbtx = self.db().begin_transaction().await;
+        let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
 
         let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
@@ -154,20 +153,14 @@ impl LightningClientExt for Client {
                 anyhow::anyhow!("Could not find gateway with public key {:?}", node_pub_key)
             })?;
 
-        dbtx.with_module_prefix(ln_client_id)
-            .insert_entry(&LightningGatewayKey, &gateway)
-            .await;
+        dbtx.insert_entry(&LightningGatewayKey, &gateway).await;
         dbtx.commit_tx().await;
         Ok(())
     }
 
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>> {
-        let (ln_client_id, _) = ln_client(self);
-        Ok(self
-            .api()
-            .with_module(ln_client_id)
-            .fetch_gateways()
-            .await?)
+        let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        Ok(instance.api.fetch_gateways().await?)
     }
 
     async fn pay_bolt11_invoice(
@@ -175,11 +168,11 @@ impl LightningClientExt for Client {
         fed_id: FederationId,
         invoice: Invoice,
     ) -> anyhow::Result<OperationId> {
+        let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let operation_id = invoice.payment_hash().into_inner();
-        let (ln_client_id, ln_client) = ln_client(self);
         let active_gateway = self.select_active_gateway().await?;
 
-        let output = ln_client
+        let output = lightning
             .create_outgoing_output(
                 operation_id,
                 self.api(),
@@ -190,7 +183,7 @@ impl LightningClientExt for Client {
             )
             .await?;
 
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(ln_client_id));
+        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |txid| OutPoint { txid, out_idx: 0 };
 
         let txid = self
@@ -223,14 +216,14 @@ impl LightningClientExt for Client {
         description: String,
         expiry_time: Option<u64>,
     ) -> anyhow::Result<(OperationId, Invoice)> {
-        let (ln_client_id, ln_client) = ln_client(self);
+        let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let active_gateway = self.select_active_gateway().await?;
 
         // TODO: This gets the `bitcoin::Network` from the wallet module. Ideally
         // modules should not be dependent on each other. This should be moved
         // to the global config.
         let network = self.get_network();
-        let (operation_id, invoice, output) = ln_client
+        let (operation_id, invoice, output) = lightning
             .create_lightning_receive_output(
                 amount,
                 description,
@@ -240,7 +233,7 @@ impl LightningClientExt for Client {
                 network,
             )
             .await?;
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(ln_client_id));
+        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |txid| OutPoint { txid, out_idx: 0 };
         let txid = self
             .finalize_and_submit_transaction(
@@ -271,20 +264,19 @@ impl LightningClientExt for Client {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<LnReceiveState>> {
+        let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let (out_point, invoice) = match ln_operation(self, operation_id).await? {
             LightningMeta::Receive { out_point, invoice } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
-
-        let (_, lightning_client) = ln_client(self);
 
         let tx_accepted_future = self
             .transaction_updates(operation_id)
             .await
             .await_tx_accepted(out_point.txid);
 
-        let receive_success = lightning_client.await_receive_success(operation_id);
-        let claim_success = lightning_client.await_claim_acceptance(operation_id);
+        let receive_success = lightning.await_receive_success(operation_id);
+        let claim_success = lightning.await_claim_acceptance(operation_id);
 
         Ok(Box::pin(stream! {
             yield LnReceiveState::Created;
@@ -322,20 +314,19 @@ impl LightningClientExt for Client {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<LnPayState>> {
+        let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let out_point = match ln_operation(self, operation_id).await? {
             LightningMeta::Pay { out_point } => out_point,
             _ => bail!("Operation is not a lightning payment"),
         };
 
-        let (_, lightning_client) = ln_client(self);
-
         let tx_accepted_future = self
             .transaction_updates(operation_id)
             .await
             .await_tx_accepted(out_point.txid);
-        let payment_success = lightning_client.await_payment_success(operation_id);
+        let payment_success = lightning.await_payment_success(operation_id);
 
-        let refund_success = lightning_client.await_refund(operation_id);
+        let refund_success = lightning.await_refund(operation_id);
 
         Ok(Box::pin(stream! {
             yield LnPayState::Created;
@@ -368,24 +359,12 @@ impl LightningClientExt for Client {
                     }
 
                 },
-                Err(()) => {
+                Err(_) => {
                     yield LnPayState::Canceled;
                 }
             }
         }))
     }
-}
-
-fn ln_client(client: &Client) -> (ModuleInstanceId, &LightningClientModule) {
-    let ln_client_instance = client
-        .get_first_instance(&LightningCommonGen::KIND)
-        .expect("No ln module attached to client");
-
-    let ln_client = client
-        .get_module_client::<LightningClientModule>(ln_client_instance)
-        .expect("Instance ID exists, we just fetched it");
-
-    (ln_client_instance, ln_client)
 }
 
 async fn ln_operation(client: &Client, operation_id: OperationId) -> anyhow::Result<LightningMeta> {

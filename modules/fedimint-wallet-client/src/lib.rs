@@ -9,9 +9,7 @@ use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{
-    CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
-};
+use fedimint_core::module::{ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_wallet_common::config::WalletClientConfig;
 pub use fedimint_wallet_common::*;
@@ -22,21 +20,9 @@ pub trait WalletClientExt {
 
 impl WalletClientExt for Client {
     fn get_network(&self) -> Network {
-        let (_, wallet_client) = wallet_client(self);
-        wallet_client.get_network()
+        let (wallet, _instance) = self.get_first_module::<WalletClientModule>(&KIND);
+        wallet.get_network()
     }
-}
-
-fn wallet_client(client: &Client) -> (ModuleInstanceId, &WalletClientModule) {
-    let wallet_client_instance = client
-        .get_first_instance(&WalletCommonGen::KIND)
-        .expect("No ln module attached to client");
-
-    let wallet_client = client
-        .get_module_client::<WalletClientModule>(wallet_client_instance)
-        .expect("Instance ID exists, we just fetched it");
-
-    (wallet_client_instance, wallet_client)
 }
 
 #[derive(Debug, Clone)]

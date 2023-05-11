@@ -114,7 +114,7 @@ use crate::sm::{
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
+    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
@@ -139,10 +139,15 @@ pub type InstancelessDynClientOutput = ClientOutput<
 
 #[apply(async_trait_maybe_send!)]
 pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
+    /// Returned a reference client's module API client, so that module-specific
+    /// calls can be made
+    fn module_api(&self) -> DynFederationApi;
+
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IFederationApi`] typically does not provide the necessary
     /// functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
+    // TODO: Could be removed in favor of client() except for testing
     fn api(&self) -> &(dyn IFederationApi + 'static);
 
     /// This function is mostly meant for internal use, you are probably looking
@@ -182,6 +187,7 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
+    // TODO: Remove in favor of `await_tx_accepted`
     pub async fn await_tx_rejected(&self, operation_id: OperationId, txid: TransactionId) {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
@@ -201,22 +207,16 @@ impl DynGlobalClientContext {
         &self,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
         let query_txid = txid;
         update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid: event_txid }
-                        if event_txid == query_txid =>
-                    {
-                        Some(Ok(()))
-                    }
-                    TxSubmissionStates::Rejected { txid: event_txid }
-                        if event_txid == query_txid =>
-                    {
-                        Some(Err(()))
+                    TxSubmissionStates::Accepted { txid } if txid == query_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected { txid, error } if txid == query_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })
@@ -347,6 +347,10 @@ struct ModuleGlobalClientContext {
 
 #[apply(async_trait_maybe_send!)]
 impl IGlobalClientContext for ModuleGlobalClientContext {
+    fn module_api(&self) -> DynFederationApi {
+        self.api().with_module(self.module_instance_id)
+    }
+
     fn api(&self) -> &(dyn IFederationApi + 'static) {
         self.client.api.as_ref()
     }
@@ -600,20 +604,27 @@ impl Client {
             .await
     }
 
-    /// Returns a reference to a typed module client instance. Returns an error
-    /// if the instance isn't registered or the module kind doesn't match.
-    pub fn get_module_client<M: ClientModule>(
+    /// Returns a reference to a typed module client instance by kind
+    pub fn get_first_module<M: ClientModule>(
         &self,
-        instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<&M> {
-        let module = self
+        module_kind: &ModuleKind,
+    ) -> (&M, ClientModuleInstance) {
+        let id = self
+            .get_first_instance(module_kind)
+            .unwrap_or_else(|| panic!("No modules found of kind {module_kind}"));
+        let module: &M = self
             .inner
-            .try_get_module(instance_id)
-            .ok_or(anyhow!("Unknown module instance {}", instance_id))?;
-        module
+            .try_get_module(id)
+            .unwrap_or_else(|| panic!("Unknown module instance {id}"))
             .as_any()
             .downcast_ref::<M>()
-            .ok_or_else(|| anyhow::anyhow!("Module is not of type {}", std::any::type_name::<M>()))
+            .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
+        let instance = ClientModuleInstance {
+            id,
+            db: self.db().new_isolated(id),
+            api: self.api().with_module(id),
+        };
+        (module, instance)
     }
 
     pub fn get_module_client_dyn(
@@ -651,6 +662,16 @@ impl Client {
             .find(|(_, kind, _module)| *kind == module_kind)
             .map(|(instance_id, _, _)| instance_id)
     }
+}
+
+/// Resources particular to a module instance
+pub struct ClientModuleInstance {
+    /// Instance id of the module
+    pub id: ModuleInstanceId,
+    /// Module-specific DB
+    pub db: Database,
+    /// Module-specific API
+    pub api: DynFederationApi,
 }
 
 struct ClientInner {
@@ -857,15 +878,16 @@ pub struct TransactionUpdates {
 impl TransactionUpdates {
     /// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
-    pub async fn await_tx_accepted(self, txid: TransactionId) -> Result<(), ()> {
+    pub async fn await_tx_accepted(
+        self,
+        await_txid: TransactionId,
+    ) -> Result<(), TxSubmissionError> {
         self.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid: event_txid } if event_txid == txid => {
-                        Some(Ok(()))
-                    }
-                    TxSubmissionStates::Rejected { txid: event_txid } if event_txid == txid => {
-                        Some(Err(()))
+                    TxSubmissionStates::Accepted { txid } if txid == await_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected { txid, error } if txid == await_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })

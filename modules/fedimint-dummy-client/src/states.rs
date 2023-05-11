@@ -1,4 +1,5 @@
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
+use fedimint_client::transaction::TxSubmissionError;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::ModuleDatabaseTransaction;
@@ -68,7 +69,7 @@ async fn await_tx_accepted(
     context: DynGlobalClientContext,
     id: OperationId,
     txid: TransactionId,
-) -> Result<(), ()> {
+) -> Result<(), TxSubmissionError> {
     context.await_tx_accepted(id, txid).await
 }
 
