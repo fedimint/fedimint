@@ -371,7 +371,60 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>fedimint_core::core::DynModuleConsensusItem <span class="kw">as </span>ModuleConsensusItem;
@@ -422,6 +475,30 @@
 
 <span class="kw">pub type </span>SerdeEpochHistory = SerdeModuleEncoding&lt;SignedEpochOutcome&gt;;
 
+<span class="doccomment">/// Combines signature shares from peers, ignoring bad signatures to avoid a DoS
+/// attack.  If not enough valid shares, returns the peers that were valid.
+</span><span class="kw">pub fn </span>combine_sigs&lt;M: AsRef&lt;[u8]&gt;&gt;(
+    pks: <span class="kw-2">&amp;</span>PublicKeySet,
+    shares: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, SerdeSignatureShare&gt;,
+    msg: <span class="kw-2">&amp;</span>M,
+) -&gt; <span class="prelude-ty">Result</span>&lt;SerdeSignature, BTreeSet&lt;PeerId&gt;&gt; {
+    <span class="comment">// Remove bad sigs
+    </span><span class="kw">let </span><span class="kw-2">mut </span>valid_peers = BTreeSet::new();
+    <span class="kw">let </span>valid_shares = shares.iter().filter_map(|(peer, share)| {
+        <span class="kw">if </span>pks.public_key_share(peer.to_usize()).verify(<span class="kw-2">&amp;</span>share.<span class="number">0</span>, msg) {
+            valid_peers.insert(<span class="kw-2">*</span>peer);
+            <span class="prelude-val">Some</span>((peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>}
+    });
+
+    <span class="kw">match </span>pks.combine_signatures(valid_shares) {
+        <span class="prelude-val">Ok</span>(sig) =&gt; <span class="prelude-val">Ok</span>(SerdeSignature(sig)),
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(valid_peers),
+    }
+}
+
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>EpochOutcome {
     <span class="kw">pub </span>epoch: u64,
@@ -469,39 +546,19 @@
         pks: <span class="kw-2">&amp;</span>PublicKeySet,
         <span class="kw-2">mut </span>prev_epoch: SignedEpochOutcome,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;SignedEpochOutcome, EpochVerifyError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>contributing_peers = HashSet::new();
-
         <span class="kw">let </span>sigs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = <span class="self">self
             </span>.outcome
             .items
             .iter()
             .flat_map(|(peer, items)| items.iter().map(|i| (<span class="kw-2">*</span>peer, i)))
             .filter_map(|(peer, item)| <span class="kw">match </span>item {
-                ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig)) =&gt; {
-                    <span class="prelude-val">Some</span>((peer, sig))
-                }
+                ConsensusItem::EpochOutcomeSignatureShare(sig) =&gt; <span class="prelude-val">Some</span>((peer, sig.clone())),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-            })
-            .filter(|(peer, sig)| {
-                <span class="kw">let </span>pub_key = pks.public_key_share(peer.to_usize());
-                pub_key.verify(sig, prev_epoch.hash)
-            })
-            .map(|(peer, sig)| {
-                contributing_peers.insert(peer);
-                (peer.to_usize(), sig)
             })
             .collect();
 
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(final_sig) = pks.combine_signatures(sigs) {
-            <span class="macro">assert!</span>(pks.public_key().verify(<span class="kw-2">&amp;</span>final_sig, prev_epoch.hash));
-
-            prev_epoch.signature = <span class="prelude-val">Some</span>(SerdeSignature(final_sig));
-            <span class="prelude-val">Ok</span>(prev_epoch)
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(EpochVerifyError::NotEnoughValidSigShares(
-                contributing_peers,
-            ))
-        }
+        prev_epoch.signature = <span class="prelude-val">Some</span>(combine_sigs(pks, <span class="kw-2">&amp;</span>sigs, <span class="kw-2">&amp;</span>prev_epoch.hash)<span class="question-mark">?</span>);
+        <span class="prelude-val">Ok</span>(prev_epoch)
     }
 
     <span class="kw">pub fn </span>verify_sig(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: <span class="kw-2">&amp;</span>PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
@@ -546,7 +603,13 @@
     MissingPreviousEpoch,
     InvalidEpochHash,
     InvalidPreviousEpochHash,
-    NotEnoughValidSigShares(HashSet&lt;PeerId&gt;),
+    NotEnoughValidSigShares(BTreeSet&lt;PeerId&gt;),
+}
+
+<span class="kw">impl </span>From&lt;BTreeSet&lt;PeerId&gt;&gt; <span class="kw">for </span>EpochVerifyError {
+    <span class="kw">fn </span>from(valid_peers: BTreeSet&lt;PeerId&gt;) -&gt; <span class="self">Self </span>{
+        EpochVerifyError::NotEnoughValidSigShares(valid_peers)
+    }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>SerdeSignature {
@@ -587,10 +650,11 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::collections::{BTreeSet, HashSet};
+    <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
+    <span class="kw">use </span>fedimint_core::epoch::combine_sigs;
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>threshold_crypto::{SecretKey, SecretKeySet};
@@ -632,6 +696,48 @@
     }
 
     <span class="attr">#[test]
+    </span><span class="kw">fn </span>combines_single_share() {
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
+        <span class="kw">let </span>sk_set = SecretKeySet::random(<span class="number">0</span>, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>pk_set = sk_set.public_keys();
+        <span class="kw">let </span>msg = <span class="string">&quot;test message&quot;</span>;
+
+        <span class="kw">let </span>shares = BTreeMap::from([(
+            PeerId::from(<span class="number">0</span>),
+            SerdeSignatureShare(sk_set.secret_key_share(<span class="number">0</span>).sign(msg)),
+        )]);
+
+        <span class="macro">assert!</span>(combine_sigs(<span class="kw-2">&amp;</span>pk_set, <span class="kw-2">&amp;</span>shares, <span class="kw-2">&amp;</span>msg.to_string()).is_ok());
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>combines_shares() {
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
+        <span class="kw">let </span>sk_set = SecretKeySet::random(<span class="number">1</span>, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>pk_set = sk_set.public_keys();
+        <span class="kw">let </span>msg = <span class="string">&quot;test message&quot;</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>shares = BTreeMap::from([
+            (
+                PeerId::from(<span class="number">0</span>),
+                SerdeSignatureShare(sk_set.secret_key_share(<span class="number">0</span>).sign(msg)),
+            ),
+            (
+                PeerId::from(<span class="number">1</span>),
+                SerdeSignatureShare(sk_set.secret_key_share(<span class="number">1</span>).sign(msg)),
+            ),
+        ]);
+
+        <span class="macro">assert!</span>(combine_sigs(<span class="kw-2">&amp;</span>pk_set, <span class="kw-2">&amp;</span>shares, <span class="kw-2">&amp;</span>msg.to_string()).is_ok());
+
+        shares.remove(<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>));
+        <span class="macro">assert_eq!</span>(
+            combine_sigs(<span class="kw-2">&amp;</span>pk_set, <span class="kw-2">&amp;</span>shares, <span class="kw-2">&amp;</span>msg.to_string()),
+            <span class="prelude-val">Err</span>(BTreeSet::from([PeerId::from(<span class="number">1</span>)]))
+        );
+    }
+
+    <span class="attr">#[test]
     </span><span class="kw">fn </span>adds_sig_to_prev_epoch() {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="kw">let </span>sk_set = SecretKeySet::random(<span class="number">2</span>, <span class="kw-2">&amp;mut </span>rng);
@@ -660,7 +766,7 @@
             items: sigs[<span class="number">0</span>..<span class="number">1</span>].to_vec(),
             rejected_txs: BTreeSet::default(),
         };
-        <span class="kw">let </span>contributing = HashSet::from([PeerId::from(<span class="number">0</span>)]);
+        <span class="kw">let </span>contributing = BTreeSet::from([PeerId::from(<span class="number">0</span>)]);
         <span class="kw">let </span>result = epoch1.add_sig_to_prev(<span class="kw-2">&amp;</span>pk_set, epoch0.clone()).unwrap_err();
         <span class="macro">assert_eq!</span>(
             result,

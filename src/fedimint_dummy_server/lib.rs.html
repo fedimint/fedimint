@@ -445,8 +445,6 @@
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::string::ToString;
@@ -458,7 +456,7 @@
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
-<span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
+<span class="kw">use </span>fedimint_core::epoch::{combine_sigs, SerdeSignature, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
@@ -481,7 +479,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
-<span class="kw">use </span>threshold_crypto::{PublicKeySet, SecretKeySet, SignatureShare};
+<span class="kw">use </span>threshold_crypto::{PublicKeySet, SecretKeySet};
 <span class="kw">use </span>tokio::sync::Notify;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
@@ -694,14 +692,20 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConsensusProposal&lt;DummyConsensusItem&gt; {
         <span class="comment">// Sign and send the print requests to consensus
-        </span><span class="kw">let </span>items =
-            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DummySignV1Prefix)
-                .<span class="kw">await
-                </span>.map(|(DummySignKeyV1(message), <span class="kw">_</span>)| {
-                    <span class="kw">let </span>sig = <span class="self">self</span>.cfg.private.private_key_share.sign(<span class="kw-2">&amp;</span>message);
-                    DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
-                });
-        ConsensusProposal::new_auto_trigger(items.collect().<span class="kw">await</span>)
+        </span><span class="kw">let </span>sign_requests: Vec&lt;<span class="kw">_</span>&gt; = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>DummySignV1Prefix)
+            .<span class="kw">await
+            </span>.collect()
+            .<span class="kw">await</span>;
+
+        <span class="kw">let </span>consensus_items = sign_requests
+            .into_iter()
+            .filter(|(<span class="kw">_</span>, sig)| sig.is_none())
+            .map(|(DummySignKeyV1(message), <span class="kw">_</span>)| {
+                <span class="kw">let </span>sig = <span class="self">self</span>.cfg.private.private_key_share.sign(<span class="kw-2">&amp;</span>message);
+                DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
+            });
+        ConsensusProposal::new_auto_trigger(consensus_items.collect())
     }
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
@@ -711,26 +715,18 @@
         _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
         <span class="comment">// Collect all signatures consensus items by message
-        </span><span class="kw">let </span><span class="kw-2">mut </span>sigs = HashMap::&lt;String, Vec&lt;(usize, <span class="kw-2">&amp;</span>SignatureShare)&gt;&gt;::new();
+        </span><span class="kw">let </span><span class="kw-2">mut </span>sigs = HashMap::&lt;String, BTreeMap&lt;PeerId, SerdeSignatureShare&gt;&gt;::new();
         <span class="kw">for </span>(peer, DummyConsensusItem::Sign(request, share)) <span class="kw">in </span><span class="kw-2">&amp;</span>consensus_items {
             <span class="kw">let </span>entry = sigs.entry(request.clone()).or_default();
-            entry.push((peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>));
+            entry.insert(<span class="kw-2">*</span>peer, share.clone());
         }
 
         <span class="kw">let </span>pks = <span class="self">self</span>.cfg.consensus.public_key_set.clone();
         <span class="kw">for </span>(message, shares) <span class="kw">in </span>sigs {
             <span class="kw">let </span>key = DummySignKeyV1(message.to_string());
-
             <span class="comment">// If a threshold of us signed, we can combine signatures
-            // TODO: We could make combining + verifying peer sigs easier
-            </span><span class="kw">match </span>pks.combine_signatures(shares) {
-                <span class="prelude-val">Ok</span>(sig) <span class="kw">if </span>pks.public_key().verify(<span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>message) =&gt; {
-                    dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(SerdeSignature(sig))).<span class="kw">await</span>;
-                }
-                <span class="kw">_ </span>=&gt; {
-                    dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>;
-                }
-            }
+            </span>dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>combine_sigs(<span class="kw-2">&amp;</span>pks, <span class="kw-2">&amp;</span>shares, <span class="kw-2">&amp;</span>message).ok())
+                .<span class="kw">await</span>;
         }
         <span class="macro">vec!</span>[]
     }
