@@ -6,6 +6,7 @@ use fedimint_client::transaction::{ClientInput, TxSubmissionError};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::Decoder;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
@@ -74,7 +75,7 @@ impl State for LightningPayStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) => {
-                created_outgoing_ln_contract.transitions(&self.common, &context, global_context)
+                created_outgoing_ln_contract.transitions(&self.common, context, global_context)
             }
             LightningPayStates::Canceled => {
                 vec![]
@@ -144,7 +145,7 @@ impl LightningPayCreatedOutgoingLnContract {
             .api()
             .await_output_outcome::<LightningOutputOutcome>(
                 out_point,
-                Duration::MAX,
+                Duration::from_millis(i32::MAX as u64),
                 &module_decoder,
             )
             .await
@@ -207,14 +208,13 @@ impl LightningPayFunded {
         let gateway = self.gateway.clone();
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
-        let timeout_context = global_context.clone();
         vec![StateTransition::new(
             // Immediately try to pay the invoice by contacting the gateway
             future::ready(()),
             move |_dbtx, (), old_state| {
                 Box::pin(Self::transition_outgoing_contract_execution(
                     old_state,
-                    timeout_context.clone(),
+                    global_context.clone(),
                     contract_id,
                     gateway.clone(),
                     payload.clone(),

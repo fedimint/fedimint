@@ -320,7 +320,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     anyhow::ensure!(
         initial_client_balance - final_client_balance == 101_000,
-        "Client balance changed by {}, expected 101000",
+        "Legacy Client balance changed by {}, expected 101000",
         initial_client_balance - final_client_balance
     );
     anyhow::ensure!(
@@ -419,7 +419,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     anyhow::ensure!(
         initial_client_balance - final_client_balance == 101_000,
-        "Client balance changed by {}, expected 101000",
+        "Legacy Client balance changed by {}, expected 101000",
         initial_client_balance - final_client_balance
     );
     anyhow::ensure!(
@@ -613,7 +613,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
-    let initial_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+    let initial_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
@@ -647,20 +647,20 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
-    let final_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+    let final_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
         initial_client_ng_balance - final_client_ng_balance == 3030,
-        "Client balance changed by {}, expected 1010",
+        "Client NG balance changed by {}, expected 1010",
         initial_client_ng_balance - final_client_ng_balance
     );
     anyhow::ensure!(
-        final_gateway_balance - initial_gateway_balance == 3030,
-        "Gateway balance changed by {}, expected 1010",
-        final_gateway_balance - initial_gateway_balance
+        final_cln_gateway_balance - initial_cln_gateway_balance == 3030,
+        "CLN Gateway balance changed by {}, expected 1010",
+        final_cln_gateway_balance - initial_cln_gateway_balance
     );
 
     // LND gateway tests
@@ -670,7 +670,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
-    let initial_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+    let initial_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
@@ -709,20 +709,20 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
-    let final_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+    let final_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
         initial_client_ng_balance - final_client_ng_balance == 1010,
-        "Client balance changed by {}, expected 1010",
-        initial_client_balance - final_client_balance
+        "Client NG balance changed by {}, expected 1010",
+        initial_client_ng_balance - final_client_ng_balance
     );
     anyhow::ensure!(
-        final_gateway_balance - initial_gateway_balance == 1010,
-        "Gateway balance changed by {}, expected 1010",
-        final_gateway_balance - initial_gateway_balance
+        final_lnd_gateway_balance - initial_lnd_gateway_balance == 1010,
+        "LND Gateway balance changed by {}, expected 1010",
+        final_lnd_gateway_balance - initial_lnd_gateway_balance
     );
 
     // TODO: test cancel/timeout

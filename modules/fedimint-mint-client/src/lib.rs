@@ -118,10 +118,12 @@ pub trait MintClientExt {
         refund_txid: TransactionId,
     ) -> anyhow::Result<()>;
 
+    // TODO: This function needs to be generalized to await any primary module
+    // change
     async fn await_mint_change(
         &self,
         operation_id: OperationId,
-        txid: TransactionId,
+        out_point: OutPoint,
     ) -> anyhow::Result<()>;
 }
 
@@ -219,22 +221,17 @@ impl MintClientExt for Client {
     async fn await_mint_change(
         &self,
         operation_id: OperationId,
-        txid: TransactionId,
+        out_point: OutPoint,
     ) -> anyhow::Result<()> {
-        let tx_outcome = self.api().await_tx_outcome(&txid).await?;
+        let tx_outcome = self.api().await_tx_outcome(&out_point.txid).await?;
         if let TransactionStatus::Accepted {
             epoch: _epoch,
             outputs,
         } = tx_outcome
         {
-            // Assume that if the transaction has more than one output, the output
-            // at index 1 is the change.
-            if outputs.len() > 1 {
-                let (_, mint_client) = mint_client(self);
-                let out_point = OutPoint { txid, out_idx: 1 };
-                return mint_client
-                    .await_output_finalized(operation_id, out_point)
-                    .await;
+            if out_point.out_idx < outputs.len() as u64 {
+                let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+                return mint.await_output_finalized(operation_id, out_point).await;
             } else {
                 // No change on this transaction
                 return Ok(());

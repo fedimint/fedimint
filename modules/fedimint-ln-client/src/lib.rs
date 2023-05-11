@@ -26,7 +26,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     Decoder, IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{Database};
+use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
@@ -185,7 +185,7 @@ impl LightningClientExt for Client {
             )
             .await?;
 
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(ln_client_id));
+        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |txid| LightningMeta::Pay {
             out_point: OutPoint { txid, out_idx: 0 },
         };
