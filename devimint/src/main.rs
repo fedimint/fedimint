@@ -848,6 +848,34 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // TODO: test cancel/timeout
 
+    // # Wallet NG tests
+    // ## Deposit
+    let initial_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+
+    let deposit = cmd!(fed, "ng", "deposit-address").out_json().await?;
+    let deposit_address = deposit["address"].as_str().unwrap();
+    let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
+
+    bitcoind
+        .send_to(deposit_address.to_owned(), 100_000) // deposit in sats
+        .await?;
+    bitcoind.mine_blocks(100).await?;
+
+    cmd!(fed, "ng", "await-deposit", deposit_operation_id)
+        .run()
+        .await?;
+
+    let post_deposit_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+
+    assert_eq!(
+        post_deposit_walletng_balance,
+        initial_walletng_balance + 100_000_000 // deposit in msats
+    );
+
     Ok(())
 }
 
