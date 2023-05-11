@@ -1,24 +1,40 @@
+use std::ffi;
 use std::str::FromStr;
 use std::time::Duration;
 
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
-use fedimint_client::{Client, ClientBuilder};
+use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-use fedimint_core::db::IDatabase;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
-use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState, LnReceiveState};
-use fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
-use fedimint_wallet_client::WalletClientGen;
+use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
+use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
+
+#[derive(Debug, Clone)]
+pub enum ModuleSelector {
+    Id(ModuleInstanceId),
+    Kind(ModuleKind),
+}
+
+impl FromStr for ModuleSelector {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(if s.chars().all(|ch| ch.is_ascii_digit()) {
+            Self::Id(s.parse()?)
+        } else {
+            Self::Kind(ModuleKind::clone_from_str(s))
+        })
+    }
+}
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum ClientNg {
@@ -47,29 +63,26 @@ pub enum ClientNg {
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
+    /// Call module-specific commands
+    Mod {
+        #[clap(long)]
+        id: ModuleSelector,
+
+        /// Command with arguments to call the module with
+        #[clap(long)]
+        arg: Vec<ffi::OsString>,
+    },
 }
 
 pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
 }
 
-pub async fn handle_ng_command<D: IDatabase>(
+pub async fn handle_ng_command(
     command: ClientNg,
-    cfg: ClientConfig,
-    db: D,
+    config: ClientConfig,
+    client: Client,
 ) -> anyhow::Result<serde_json::Value> {
-    let mut tg = TaskGroup::new();
-
-    let fed_id = cfg.federation_id;
-    let mut client_builder = ClientBuilder::default();
-    client_builder.with_module(MintClientGen);
-    client_builder.with_module(LightningClientGen);
-    client_builder.with_module(WalletClientGen);
-    client_builder.with_primary_module(1);
-    client_builder.with_config(cfg);
-    client_builder.with_database(db);
-    let client = client_builder.build(&mut tg).await?;
-
     match command {
         ClientNg::Info => {
             return get_note_summary(&client).await;
@@ -133,7 +146,7 @@ pub async fn handle_ng_command<D: IDatabase>(
             let active_gateway = client.fetch_active_gateway().await?;
 
             let operation_id = client
-                .pay_bolt11_invoice(fed_id, bolt11, active_gateway)
+                .pay_bolt11_invoice(config.federation_id, bolt11, active_gateway)
                 .await?;
 
             let mut updates = client.subscribe_ln_pay_updates(operation_id).await?;
@@ -186,6 +199,18 @@ pub async fn handle_ng_command<D: IDatabase>(
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
+        }
+        ClientNg::Mod { id, arg } => {
+            let (id, _) = match id {
+                ModuleSelector::Id(id) => (id, config.get_module_cfg(id)?),
+                ModuleSelector::Kind(kind) => config.get_first_module_by_kind_cfg(kind)?,
+            };
+
+            let module = client
+                .get_module_client_dyn(id)
+                .expect("Module exists according to cfg");
+
+            Ok(module.handle_cli_command(&client, &arg).await?)
         }
     }
 }

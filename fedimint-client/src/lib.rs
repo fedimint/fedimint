@@ -616,6 +616,15 @@ impl Client {
             .ok_or_else(|| anyhow::anyhow!("Module is not of type {}", std::any::type_name::<M>()))
     }
 
+    pub fn get_module_client_dyn(
+        &self,
+        instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
+        self.inner
+            .try_get_module(instance_id)
+            .ok_or(anyhow!("Unknown module instance {}", instance_id))
+    }
+
     pub fn db(&self) -> &Database {
         &self.inner.db
     }
@@ -875,6 +884,7 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
+    /// Replace module generator registry entirely
     pub fn with_module_gens(&mut self, module_gens: ClientModuleGenRegistry) {
         self.module_gens = module_gens;
     }

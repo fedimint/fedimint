@@ -14,7 +14,7 @@ use fedimint_core::{
 
 use crate::sm::{Context, DynContext, DynState, OperationId, State};
 use crate::transaction::{ClientInput, ClientOutput};
-use crate::DynGlobalClientContext;
+use crate::{Client, DynGlobalClientContext};
 
 pub mod gen;
 
@@ -46,6 +46,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     async fn handle_cli_command(
         &self,
+        _client: &Client,
         _args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         Err(anyhow::format_err!(
@@ -76,7 +77,8 @@ pub trait IClientModule: Debug {
 
     async fn handle_cli_command(
         &self,
-        _args: &[ffi::OsString],
+        client: &Client,
+        args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value>;
 
     fn input_amount(&self, input: &DynInput) -> TransactionItemAmount;
@@ -103,9 +105,10 @@ where
 
     async fn handle_cli_command(
         &self,
+        client: &Client,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
-        <T as ClientModule>::handle_cli_command(self, args).await
+        <T as ClientModule>::handle_cli_command(self, client, args).await
     }
 
     fn input_amount(&self, input: &DynInput) -> TransactionItemAmount {
