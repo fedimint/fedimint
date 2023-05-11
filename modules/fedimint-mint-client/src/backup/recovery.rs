@@ -220,7 +220,7 @@ impl MintRestoreInProgressState {
         epoch_pk: threshold_crypto::PublicKey,
         secret: DerivableSecret,
     ) -> Self {
-        assert_eq!(secret.level(), 1);
+        assert_eq!(secret.level(), 2);
         let epoch_range =
             self.next_epoch..cmp::min(self.next_epoch.wrapping_add(100), self.end_epoch);
         let mut epoch_stream = Self::fetch_epochs_stream(api, epoch_pk, decoders, epoch_range);
