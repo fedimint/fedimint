@@ -15,6 +15,7 @@ use fedimint_ln_common::LightningGateway;
 use futures::stream::{BoxStream, StreamExt};
 use rand::{CryptoRng, RngCore};
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::Notify;
 use tonic::Status;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -155,6 +156,8 @@ impl GatewayActor {
             .config()
             .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
         let registration_sent = registration.clone();
+        let notify = Arc::new(Notify::new());
+        let notfiy_sent = notify.clone();
         task_group
             .spawn("Register with federation", |_| async move {
                 loop {
@@ -174,6 +177,7 @@ impl GatewayActor {
                     {
                         Ok(_) => {
                             info!("Connected with federation");
+                            notfiy_sent.notify_one();
                             tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
                         }
                         Err(e) => {
@@ -184,6 +188,8 @@ impl GatewayActor {
                 }
             })
             .await;
+        // Block until we have registered to return
+        notify.notified().await;
 
         // Create a channel that will be used to shutdown the HTLC thread
         let (sender, receiver) = mpsc::channel::<Arc<AtomicBool>>(100);

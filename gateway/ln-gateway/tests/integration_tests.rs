@@ -28,12 +28,12 @@ async fn fixtures() -> (
     GatewayRpcClient,
 ) {
     // TODO: use new client modules without legacy instances
-    let fixtures = Fixtures::default()
+    let fixtures = Fixtures::new()
         .with_primary(1, DummyClientGen, DummyGen, DummyConfigGenParams::default())
         .with_module(0, LightningClientGen, LightningGen, LightningGenParams);
 
-    let fed1 = fixtures.new_fed(1).await;
-    let fed2 = fixtures.new_fed(1).await;
+    let fed1 = fixtures.new_fed().await;
+    let fed2 = fixtures.new_fed().await;
     let gateway = fixtures.new_gateway(vec![&fed1, &fed2]).await;
     let client = gateway.new_client().await;
     (fed1, fed2, gateway, client)

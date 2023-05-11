@@ -125,11 +125,15 @@ pub trait MintClientExt {
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<()>;
+
+    /// Returns the total value of our notes
+    // TODO: Make getting total asserts part of the core client
+    async fn total_amount(&self) -> Amount;
 }
 
 /// The high-level state of a reissue operation started with
 /// [`MintClientExt::reissue_external_notes`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ReissueExternalNotesState {
     /// The operation has been created and is waiting to be accepted by the
     /// federation.
@@ -145,6 +149,7 @@ pub enum ReissueExternalNotesState {
 
 /// The high-level state of a raw e-cash spend operation started with
 /// [`MintClientExt::spend_notes`].
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SpendOOBState {
     /// The e-cash has been selected and given to the caller
     Created,
@@ -385,6 +390,18 @@ impl MintClientExt for Client {
                 }
             }
         }))
+    }
+
+    async fn total_amount(&self) -> Amount {
+        let (_mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
+        dbtx.find_by_prefix(&NoteKeyPrefix)
+            .await
+            .fold(
+                Amount::ZERO,
+                |acc, (key, _note)| async move { acc + key.amount },
+            )
+            .await
     }
 }
 

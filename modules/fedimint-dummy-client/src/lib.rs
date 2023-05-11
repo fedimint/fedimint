@@ -38,7 +38,7 @@ mod states;
 #[apply(async_trait_maybe_send!)]
 pub trait DummyClientExt {
     /// Request the federation prints money for us
-    async fn print_money(&self, amount: Amount) -> anyhow::Result<()>;
+    async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)>;
 
     /// Send money to another user
     async fn send_money(&self, account: XOnlyPublicKey, amount: Amount)
@@ -62,7 +62,7 @@ pub trait DummyClientExt {
 
 #[apply(async_trait_maybe_send!)]
 impl DummyClientExt for Client {
-    async fn print_money(&self, amount: Amount) -> anyhow::Result<()> {
+    async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
         let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
         let op_id = rand::random();
 
@@ -85,7 +85,7 @@ impl DummyClientExt for Client {
             .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .await?;
 
-        self.receive_money(outpoint(txid)).await
+        Ok((op_id, outpoint(txid)))
     }
 
     async fn send_money(
