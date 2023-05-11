@@ -11,7 +11,7 @@ use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
     InactiveStateKey,
 };
-use crate::sm::{DynState, GlobalContext, OperationId, State};
+use crate::sm::{ActiveState, DynState, GlobalContext, InactiveState, OperationId, State};
 
 /// State transition notifier owned by the modularized client used to inform
 /// modules of state transitions.
@@ -125,8 +125,10 @@ where
                     _pd: Default::default(),
                 })
                 .await
-                .map(|(key, _): (ActiveStateKey<GC>, _)| to_typed_state(key.state))
-                .collect::<Vec<S>>()
+                .map(|(key, val): (ActiveStateKey<GC>, ActiveState)| {
+                    (to_typed_state(key.state), val.created_at)
+                })
+                .collect::<Vec<(S, _)>>()
                 .await;
 
             let inactive_states = dbtx
@@ -136,13 +138,22 @@ where
                     _pd: Default::default(),
                 })
                 .await
-                .map(|(key, _): (InactiveStateKey<GC>, _)| to_typed_state(key.state))
-                .collect::<Vec<S>>()
+                .map(|(key, val): (InactiveStateKey<GC>, InactiveState)| {
+                    (to_typed_state(key.state), val.created_at)
+                })
+                .collect::<Vec<(S, _)>>()
                 .await;
 
-            active_states
+            // FIXME: don't rely on SystemTime for ordering and introduce a state transition
+            // index instead (dpc was right again xD)
+            let mut all_states_timed = active_states
                 .into_iter()
                 .chain(inactive_states)
+                .collect::<Vec<(S, _)>>();
+            all_states_timed.sort_by(|(_, t1), (_, t2)| t1.cmp(t2));
+            all_states_timed
+                .into_iter()
+                .map(|(s, _)| s)
                 .collect::<Vec<S>>()
         };
 
