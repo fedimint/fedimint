@@ -69,7 +69,12 @@ echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"
 FED_ID="$(get_federation_id)"
 
 # get a peg-in address from either the gateway or the client
-if [ "$USE_GATEWAY" == 1 ]; then ADDR="$($GATEWAY_CLI address --federation-id "$FED_ID" | jq -e -r '.address')"; else ADDR="$($FM_MINT_CLIENT peg-in-address | jq -e -r '.address')"; fi
+if [ "$USE_GATEWAY" == 1 ]; then 
+    ADDR="$($GATEWAY_CLI address --federation-id "$FED_ID")"
+    ADDR="${ADDR:1:-1}"
+else 
+    ADDR="$($FM_MINT_CLIENT peg-in-address | jq -e -r '.address')"; 
+fi
 # send bitcoin to that address and save the txid
 TX_ID=$(send_bitcoin $ADDR $PEG_IN_AMOUNT)
 # wait for confirmation and wait for the fed to sync
