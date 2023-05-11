@@ -818,7 +818,7 @@ impl MintClientModule {
         amount: Amount,
         note_idx: NoteIndex,
     ) -> DerivableSecret {
-        assert_eq!(secret.level(), 1);
+        assert_eq!(secret.level(), 2);
         debug!(?secret, %amount, %note_idx, "Deriving new mint note");
         secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache

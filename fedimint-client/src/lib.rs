@@ -87,11 +87,12 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
-use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_derive_secret::DerivableSecret;
 use futures::StreamExt;
 use rand::distributions::{Distribution, Standard};
 use rand::{thread_rng, Rng};
 use secp256k1_zkp::Secp256k1;
+use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -126,6 +127,9 @@ pub mod module;
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
+
+/// Secret handling & derivation
+pub mod secret;
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
@@ -1012,7 +1016,7 @@ impl ClientBuilder {
                             module_config,
                             db.clone(),
                             module_instance,
-                            root_secret.child_key(ChildId(module_instance as u64)),
+                            root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
                         )
                         .await?;
@@ -1031,7 +1035,7 @@ impl ClientBuilder {
                             // keys were derived using *module kind*-specific derivation paths.
                             // Since the new client has to support multiple, segregated modules of
                             // the same kind we have to use the instance id instead.
-                            root_secret.child_key(ChildId(module_instance as u64)),
+                            root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
                         )
                         .await?;
