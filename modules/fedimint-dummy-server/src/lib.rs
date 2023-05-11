@@ -9,7 +9,7 @@ use fedimint_core::config::{
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
+use fedimint_core::epoch::{combine_sigs, SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
@@ -32,7 +32,7 @@ use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::{PublicKeySet, SecretKeySet, SignatureShare};
+use threshold_crypto::{PublicKeySet, SecretKeySet};
 use tokio::sync::Notify;
 
 use crate::db::{
@@ -245,14 +245,20 @@ impl ServerModule for Dummy {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<DummyConsensusItem> {
         // Sign and send the print requests to consensus
-        let items =
-            dbtx.find_by_prefix(&DummySignV1Prefix)
-                .await
-                .map(|(DummySignKeyV1(message), _)| {
-                    let sig = self.cfg.private.private_key_share.sign(&message);
-                    DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
-                });
-        ConsensusProposal::new_auto_trigger(items.collect().await)
+        let sign_requests: Vec<_> = dbtx
+            .find_by_prefix(&DummySignV1Prefix)
+            .await
+            .collect()
+            .await;
+
+        let consensus_items = sign_requests
+            .into_iter()
+            .filter(|(_, sig)| sig.is_none())
+            .map(|(DummySignKeyV1(message), _)| {
+                let sig = self.cfg.private.private_key_share.sign(&message);
+                DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
+            });
+        ConsensusProposal::new_auto_trigger(consensus_items.collect())
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
@@ -262,26 +268,18 @@ impl ServerModule for Dummy {
         _consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
         // Collect all signatures consensus items by message
-        let mut sigs = HashMap::<String, Vec<(usize, &SignatureShare)>>::new();
+        let mut sigs = HashMap::<String, BTreeMap<PeerId, SerdeSignatureShare>>::new();
         for (peer, DummyConsensusItem::Sign(request, share)) in &consensus_items {
             let entry = sigs.entry(request.clone()).or_default();
-            entry.push((peer.to_usize(), &share.0));
+            entry.insert(*peer, share.clone());
         }
 
         let pks = self.cfg.consensus.public_key_set.clone();
         for (message, shares) in sigs {
             let key = DummySignKeyV1(message.to_string());
-
             // If a threshold of us signed, we can combine signatures
-            // TODO: We could make combining + verifying peer sigs easier
-            match pks.combine_signatures(shares) {
-                Ok(sig) if pks.public_key().verify(&sig, &message) => {
-                    dbtx.insert_entry(&key, &Some(SerdeSignature(sig))).await;
-                }
-                _ => {
-                    dbtx.insert_entry(&key, &None).await;
-                }
-            }
+            dbtx.insert_entry(&key, &combine_sigs(&pks, &shares, &message).ok())
+                .await;
         }
         vec![]
     }

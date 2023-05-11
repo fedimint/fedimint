@@ -341,7 +341,6 @@ impl FedimintConsensus {
         if sig.is_none() {
             let client_hash = self.api.client_cfg.consensus_hash();
             let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
-            let mut contributing_peers = HashSet::new();
             let pks = self.cfg.consensus.auth_pk_set.clone();
 
             let shares: BTreeMap<_, _> = outcome
@@ -349,36 +348,27 @@ impl FedimintConsensus {
                 .iter()
                 .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
                 .filter_map(|(peer, item)| match item {
-                    ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig)) => {
-                        Some((peer, sig))
-                    }
+                    ConsensusItem::ClientConfigSignatureShare(sig) => Some((peer, sig.clone())),
                     _ => None,
-                })
-                .filter(|(peer, sig)| {
-                    let pub_key = pks.public_key_share(peer.to_usize());
-                    pub_key.verify(sig, client_hash)
-                })
-                .map(|(peer, sig)| {
-                    contributing_peers.insert(peer);
-                    (peer.to_usize(), sig)
                 })
                 .collect();
 
-            if let Ok(final_sig) = pks.combine_signatures(shares) {
-                assert!(pks.public_key().verify(&final_sig, client_hash));
-                let serde_sig = SerdeSignature(final_sig);
-                dbtx.insert_entry(&ClientConfigSignatureKey, &serde_sig)
-                    .await;
-            } else {
-                warn!(
-                    target: LOG_CONSENSUS,
-                    "Did not receive enough valid client config sig shares"
-                )
-            }
-
-            for peer in peers {
-                if !contributing_peers.contains(&peer) {
-                    drop_peers.push(peer);
+            match combine_sigs(&pks, &shares, &client_hash) {
+                Ok(final_sig) => {
+                    assert!(pks.public_key().verify(&final_sig.0, client_hash));
+                    dbtx.insert_entry(&ClientConfigSignatureKey, &final_sig)
+                        .await;
+                }
+                Err(contributing_peers) => {
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        "Did not receive enough valid client config sig shares"
+                    );
+                    for peer in peers {
+                        if !contributing_peers.contains(&peer) {
+                            drop_peers.push(peer);
+                        }
+                    }
                 }
             }
         }
