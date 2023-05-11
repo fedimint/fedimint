@@ -343,7 +343,7 @@
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>DummyClientExt {
     <span class="doccomment">/// Request the federation prints money for us
-    </span><span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;()&gt;;
+    </span><span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt;;
 
     <span class="doccomment">/// Send money to another user
     </span><span class="kw">async fn </span>send_money(<span class="kw-2">&amp;</span><span class="self">self</span>, account: XOnlyPublicKey, amount: Amount)
@@ -367,7 +367,7 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>DummyClientExt <span class="kw">for </span>Client {
-    <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
         <span class="kw">let </span>(_dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>op_id = rand::random();
 
@@ -390,8 +390,8 @@
             </span>.finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="self">self</span>.receive_money(outpoint(txid)).<span class="kw">await
-    </span>}
+        <span class="prelude-val">Ok</span>((op_id, outpoint(txid)))
+    }
 
     <span class="kw">async fn </span>send_money(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

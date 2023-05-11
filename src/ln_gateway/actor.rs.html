@@ -648,6 +648,12 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -665,6 +671,7 @@
 <span class="kw">use </span>futures::stream::{BoxStream, StreamExt};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
+<span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, warn};
 
@@ -805,6 +812,8 @@
             .config()
             .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
         <span class="kw">let </span>registration_sent = registration.clone();
+        <span class="kw">let </span>notify = Arc::new(Notify::new());
+        <span class="kw">let </span>notfiy_sent = notify.clone();
         task_group
             .spawn(<span class="string">&quot;Register with federation&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
@@ -824,6 +833,7 @@
                     </span>{
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                             <span class="macro">info!</span>(<span class="string">&quot;Connected with federation&quot;</span>);
+                            notfiy_sent.notify_one();
                             tokio::time::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">2</span>).<span class="kw">await</span>;
                         }
                         <span class="prelude-val">Err</span>(e) =&gt; {
@@ -834,6 +844,8 @@
                 }
             })
             .<span class="kw">await</span>;
+        <span class="comment">// Block until we have registered to return
+        </span>notify.notified().<span class="kw">await</span>;
 
         <span class="comment">// Create a channel that will be used to shutdown the HTLC thread
         </span><span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;Arc&lt;AtomicBool&gt;&gt;(<span class="number">100</span>);
