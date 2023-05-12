@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bitcoin::secp256k1;
+use bitcoin_hashes::hex::{FromHex, ToHex};
 use clap::Subcommand;
 use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
@@ -17,6 +18,8 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
+
+use crate::LnInvoiceResponse;
 
 #[derive(Debug, Clone)]
 pub enum ModuleSelector {
@@ -53,6 +56,10 @@ pub enum ClientNg {
         description: String,
         #[clap(long)]
         expiry_time: Option<u64>,
+    },
+    WaitInvoice {
+        #[clap(long, value_parser = parse_operation_id)]
+        operation_id: OperationId,
     },
     LnPay {
         bolt11: lightning_invoice::Invoice,
@@ -121,9 +128,16 @@ pub async fn handle_ng_command(
         } => {
             client.select_active_gateway().await?;
 
-            let (operation_id, _) = client
-                .create_bolt11_invoice_and_receive(amount, description, expiry_time)
+            let (operation_id, invoice) = client
+                .create_bolt11_invoice(amount, description, expiry_time)
                 .await?;
+            Ok(serde_json::to_value(LnInvoiceResponse {
+                operation_id: operation_id.to_hex(),
+                invoice: invoice.to_string(),
+            })
+            .unwrap())
+        }
+        ClientNg::WaitInvoice { operation_id } => {
             let mut updates = client.subscribe_to_ln_receive_updates(operation_id).await?;
             while let Some(update) = updates.next().await {
                 match update {
@@ -140,7 +154,7 @@ pub async fn handle_ng_command(
                 info!("Update: {:?}", update);
             }
 
-            return Err(anyhow::anyhow!("Unknown Lightning receive state"));
+            return Err(anyhow::anyhow!("Lightning receive failed"));
         }
         ClientNg::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
@@ -158,7 +172,7 @@ pub async fn handle_ng_command(
                             .await_mint_change(operation_id, OutPoint { txid, out_idx: 1 })
                             .await?;
                         return Ok(serde_json::to_value(PayInvoiceResponse {
-                            operation_id,
+                            operation_id: operation_id.to_hex(),
                             preimage,
                         })
                         .unwrap());
@@ -236,6 +250,10 @@ struct InfoResponse {
     denominations_msat: TieredSummary,
 }
 
+pub fn parse_operation_id(s: &str) -> anyhow::Result<OperationId> {
+    OperationId::from_hex(s).map_err(Into::into)
+}
+
 pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmountError> {
     if let Some(i) = s.find(char::is_alphabetic) {
         let (amt, denom) = s.split_at(i);
@@ -256,6 +274,6 @@ pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PayInvoiceResponse {
-    operation_id: OperationId,
+    operation_id: String,
     preimage: String,
 }

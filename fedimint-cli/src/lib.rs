@@ -1064,6 +1064,12 @@ impl FedimintCli {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LnInvoiceResponse {
+    pub operation_id: String,
+    pub invoice: String,
+}
+
 /// Convert clap arguments to backup metadata
 fn metadata_from_clap_cli(metadata: Vec<String>) -> Result<BTreeMap<String, String>, CliError> {
     let metadata: BTreeMap<String, String> = metadata
