@@ -1,0 +1,12 @@
+[package]
+name = "fedimint-bip39"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bip39 = { version = "2.0.0", features = ["rand"] }
+fedimint-client = { path = "../fedimint-client" }
+fedimint-core = { path = "../fedimint-core" }
+rand = "0.8.5"

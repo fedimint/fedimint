@@ -7,6 +7,7 @@ members = [
     "gateway/ln-gateway",
     "gateway/cli",
     "fedimintd",
+    "fedimint-bip39",
     "fedimint-bitcoind",
     "fedimint-core",
     "fedimint-client",
