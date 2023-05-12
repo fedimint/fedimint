@@ -12,8 +12,9 @@ use fedimint_core::config::FederationId;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_client::contracts::Preimage;
-use fedimint_ln_common::LightningGateway;
+use fedimint_ln_common::{serde_routing_fees, LightningGateway};
 use futures::Future;
+use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
@@ -127,6 +128,8 @@ pub struct GatewayInfo {
     pub federations: Vec<FederationInfo>,
     pub lightning_pub_key: String,
     pub lightning_alias: String,
+    #[serde(with = "serde_routing_fees")]
+    pub fees: RoutingFees,
 }
 
 #[derive(Debug)]

@@ -403,6 +403,7 @@ impl Gateway {
             version_hash: env!("CODE_VERSION").to_string(),
             lightning_pub_key: ln_info.pub_key.to_hex(),
             lightning_alias: ln_info.alias,
+            fees: self.fees,
         })
     }
 
