@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::Client;
-use crate::secret::DeriveableSecretClientExt;
-use crate::{get_client_secret, ClientSecret};
+use crate::get_client_root_secret_encoding;
+use crate::secret::{DeriveableSecretClientExt, RootSecretStrategy};
 
 /// Backup metadata
 ///
@@ -420,7 +420,10 @@ impl Client {
         Self::get_derived_backup_signing_key_static(&self.root_secret())
     }
 
-    pub async fn get_secret(&self) -> ClientSecret {
-        get_client_secret(self.db()).await
+    pub async fn get_secret<S>(&self) -> S::Encoding
+    where
+        S: RootSecretStrategy,
+    {
+        get_client_root_secret_encoding::<S>(self.db()).await
     }
 }

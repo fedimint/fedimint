@@ -6,6 +6,7 @@ use bitcoin::secp256k1;
 use bitcoin_hashes::hex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
+use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
@@ -254,8 +255,8 @@ pub async fn handle_ng_command(
             Ok(serde_json::to_value(()).unwrap())
         }
         ClientNg::PrintSecret => {
-            let secret = client.get_secret().await;
-            let hex_secret = hex::ToHex::to_hex(secret.0.as_ref());
+            let secret = client.get_secret::<PlainRootSecretStrategy>().await;
+            let hex_secret = hex::ToHex::to_hex(&secret[..]);
 
             Ok(json!({
                 "secret": hex_secret,

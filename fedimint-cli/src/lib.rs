@@ -14,6 +14,7 @@ use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
+use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::{ClientBuilder, ClientSecret};
 use fedimint_client_legacy::mint::backup::Metadata;
@@ -412,7 +413,10 @@ impl Opts {
     ) -> CliResult<fedimint_client::Client> {
         let mut tg = TaskGroup::new();
         let client_builder = self.build_client_ng_builder(module_gens).await?;
-        client_builder.build(&mut tg).await.map_err_cli_general()
+        client_builder
+            .build::<PlainRootSecretStrategy>(&mut tg)
+            .await
+            .map_err_cli_general()
     }
 
     async fn build_client_ng_builder(
@@ -1058,7 +1062,10 @@ impl FedimintCli {
                     .build_client_ng_builder(&self.module_gens)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
-                    .build_restoring_from_backup(&mut tg, ClientSecret(secret))
+                    .build_restoring_from_backup(
+                        &mut tg,
+                        ClientSecret::<PlainRootSecretStrategy>::new(secret),
+                    )
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
 
