@@ -136,7 +136,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             DummyStateMachine::Input(<span class="kw">_</span>, <span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
             DummyStateMachine::Output(<span class="kw">_</span>, <span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
-            DummyStateMachine::Done =&gt; [<span class="number">0</span>; <span class="number">32</span>],
+            DummyStateMachine::Done =&gt; OperationId([<span class="number">0</span>; <span class="number">32</span>]),
         }
     }
 }

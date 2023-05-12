@@ -369,7 +369,7 @@
 </span><span class="kw">impl </span>DummyClientExt <span class="kw">for </span>Client {
     <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
         <span class="kw">let </span>(_dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span>op_id = rand::random();
+        <span class="kw">let </span>op_id = OperationId(rand::random());
 
         <span class="comment">// TODO: Building a tx could be easier
         // Create input using the fed&#39;s account
@@ -400,7 +400,7 @@
     ) -&gt; anyhow::Result&lt;OutPoint&gt; {
         <span class="kw">let </span>(dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>op_id = rand::random();
+        <span class="kw">let </span>op_id = OperationId(rand::random());
 
         <span class="comment">// TODO: Building a tx could be easier
         // Create input using our own account

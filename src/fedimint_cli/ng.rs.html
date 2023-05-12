@@ -264,8 +264,8 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::secp256k1;
-<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
+<span class="kw">use </span>fedimint_client::sm::OperationId;
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -419,7 +419,7 @@
                             .await_mint_change(operation_id, OutPoint { txid, out_idx: <span class="number">1 </span>})
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(PayInvoiceResponse {
-                            operation_id: operation_id.to_hex(),
+                            operation_id,
                             preimage,
                         })
                         .unwrap());
@@ -517,7 +517,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">struct </span>PayInvoiceResponse {
-    operation_id: String,
+    operation_id: OperationId,
     preimage: String,
 }
 </code></pre></div>

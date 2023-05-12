@@ -979,7 +979,7 @@
         invoice: Invoice,
     ) -&gt; anyhow::Result&lt;(OperationId, TransactionId)&gt; {
         <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span>operation_id = invoice.payment_hash().into_inner();
+        <span class="kw">let </span>operation_id = OperationId(invoice.payment_hash().into_inner());
         <span class="kw">let </span>active_gateway = <span class="self">self</span>.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>output = lightning
@@ -1521,7 +1521,7 @@
         <span class="kw">let </span>invoice = invoice_builder
             .build_signed(|hash| <span class="self">self</span>.secp.sign_ecdsa_recoverable(hash, <span class="kw-2">&amp;</span>node_secret_key))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>operation_id = invoice.payment_hash().into_inner();
+        <span class="kw">let </span>operation_id = OperationId(invoice.payment_hash().into_inner());
 
         <span class="kw">let </span>sm_invoice = invoice.clone();
         <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid: TransactionId, _input_idx: u64| {
