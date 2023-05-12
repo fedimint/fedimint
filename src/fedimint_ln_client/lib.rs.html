@@ -804,6 +804,8 @@
 <a href="#804" id="804">804</a>
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
@@ -984,7 +986,7 @@
             .create_outgoing_output(
                 operation_id,
                 <span class="self">self</span>.api(),
-                invoice,
+                invoice.clone(),
                 active_gateway,
                 fed_id,
                 rand::rngs::OsRng,
@@ -994,6 +996,7 @@
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         <span class="kw">let </span>operation_meta_gen = |txid| LightningMeta::Pay {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
+            invoice: invoice.clone(),
         };
 
         <span class="kw">let </span>txid = <span class="self">self
@@ -1114,7 +1117,7 @@
     ) -&gt; anyhow::Result&lt;BoxStream&lt;LnPayState&gt;&gt; {
         <span class="kw">let </span>(lightning, _instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>out_point = <span class="kw">match </span>ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">? </span>{
-            LightningMeta::Pay { out_point } =&gt; out_point,
+            LightningMeta::Pay { out_point, .. } =&gt; out_point,
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
 
@@ -1182,6 +1185,7 @@
 </span><span class="kw">enum </span>LightningMeta {
     Pay {
         out_point: OutPoint,
+        invoice: Invoice,
     },
     Receive {
         out_point: OutPoint,
