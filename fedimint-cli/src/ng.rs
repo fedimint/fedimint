@@ -3,7 +3,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bitcoin::secp256k1;
-use bitcoin_hashes::hex::{FromHex, ToHex};
 use clap::Subcommand;
 use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
@@ -58,7 +57,6 @@ pub enum ClientNg {
         expiry_time: Option<u64>,
     },
     WaitInvoice {
-        #[clap(long, value_parser = parse_operation_id)]
         operation_id: OperationId,
     },
     LnPay {
@@ -132,7 +130,7 @@ pub async fn handle_ng_command(
                 .create_bolt11_invoice(amount, description, expiry_time)
                 .await?;
             Ok(serde_json::to_value(LnInvoiceResponse {
-                operation_id: operation_id.to_hex(),
+                operation_id,
                 invoice: invoice.to_string(),
             })
             .unwrap())
@@ -172,7 +170,7 @@ pub async fn handle_ng_command(
                             .await_mint_change(operation_id, OutPoint { txid, out_idx: 1 })
                             .await?;
                         return Ok(serde_json::to_value(PayInvoiceResponse {
-                            operation_id: operation_id.to_hex(),
+                            operation_id,
                             preimage,
                         })
                         .unwrap());
@@ -250,10 +248,6 @@ struct InfoResponse {
     denominations_msat: TieredSummary,
 }
 
-pub fn parse_operation_id(s: &str) -> anyhow::Result<OperationId> {
-    OperationId::from_hex(s).map_err(Into::into)
-}
-
 pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmountError> {
     if let Some(i) = s.find(char::is_alphabetic) {
         let (amt, denom) = s.split_at(i);
@@ -274,6 +268,6 @@ pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PayInvoiceResponse {
-    operation_id: String,
+    operation_id: OperationId,
     preimage: String,
 }

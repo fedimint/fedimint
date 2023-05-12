@@ -14,6 +14,7 @@ use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
+use fedimint_client::sm::OperationId;
 use fedimint_client::ClientBuilder;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
@@ -1066,7 +1067,7 @@ impl FedimintCli {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LnInvoiceResponse {
-    pub operation_id: String,
+    pub operation_id: OperationId,
     pub invoice: String,
 }
 
