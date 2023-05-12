@@ -178,7 +178,7 @@ impl LightningClientExt for Client {
             .create_outgoing_output(
                 operation_id,
                 self.api(),
-                invoice,
+                invoice.clone(),
                 active_gateway,
                 fed_id,
                 rand::rngs::OsRng,
@@ -188,6 +188,7 @@ impl LightningClientExt for Client {
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |txid| LightningMeta::Pay {
             out_point: OutPoint { txid, out_idx: 0 },
+            invoice: invoice.clone(),
         };
 
         let txid = self
@@ -308,7 +309,7 @@ impl LightningClientExt for Client {
     ) -> anyhow::Result<BoxStream<LnPayState>> {
         let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let out_point = match ln_operation(self, operation_id).await? {
-            LightningMeta::Pay { out_point } => out_point,
+            LightningMeta::Pay { out_point, .. } => out_point,
             _ => bail!("Operation is not a lightning payment"),
         };
 
@@ -376,6 +377,7 @@ async fn ln_operation(client: &Client, operation_id: OperationId) -> anyhow::Res
 enum LightningMeta {
     Pay {
         out_point: OutPoint,
+        invoice: Invoice,
     },
     Receive {
         out_point: OutPoint,
