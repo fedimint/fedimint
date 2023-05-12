@@ -16,6 +16,7 @@ use fedimint_core::db::Database;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_wallet_client::WalletClientGen;
+use tokio::fs;
 use tracing::info;
 
 pub mod util;
@@ -168,8 +169,16 @@ pub struct Faucet {
 
 impl Faucet {
     pub async fn new(process_mgr: &ProcessManager) -> Result<Self> {
+        let connect_string =
+            fs::read_to_string(process_mgr.globals.FM_DATA_DIR.join("client-connect")).await?;
+
         Ok(Self {
-            _process: process_mgr.spawn_daemon("faucet", cmd!("faucet")).await?,
+            _process: process_mgr
+                .spawn_daemon(
+                    "faucet",
+                    cmd!("faucet", "--connect-string={connect_string}"),
+                )
+                .await?,
         })
     }
 }
@@ -177,28 +186,30 @@ impl Faucet {
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let ((cln, lnd, gw_cln, gw_lnd, faucet), electrs, esplora, fed) = tokio::try_join!(
+    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, (fed, faucet)) = tokio::try_join!(
         async {
             let (cln, lnd) = tokio::try_join!(
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )?;
             info!(LOG_DEVIMINT, "lightning started");
-            let (gw_cln, gw_lnd, faucet, _) = tokio::try_join!(
+            let (gw_cln, gw_lnd, _) = tokio::try_join!(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-                Faucet::new(process_mgr),
                 open_channel(&bitcoind, &cln, &lnd),
             )?;
             info!(LOG_DEVIMINT, "gateways started");
-            Ok((cln, lnd, gw_cln, gw_lnd, faucet))
+            Ok((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         async {
             run_dkg(process_mgr, 4).await?;
             info!(LOG_DEVIMINT, "dkg done");
-            Federation::new(process_mgr, bitcoind.clone(), 0..4).await
+            tokio::try_join!(
+                Federation::new(process_mgr, bitcoind.clone(), 0..4),
+                Faucet::new(process_mgr)
+            )
         },
     )?;
     info!(LOG_DEVIMINT, "federation and gateways started");
