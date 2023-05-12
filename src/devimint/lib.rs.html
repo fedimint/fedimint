@@ -223,6 +223,17 @@
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::future::Future;
@@ -241,6 +252,7 @@
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
+<span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">pub mod </span>util;
@@ -393,8 +405,16 @@
 
 <span class="kw">impl </span>Faucet {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>connect_string =
+            fs::read_to_string(process_mgr.globals.FM_DATA_DIR.join(<span class="string">&quot;client-connect&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            _process: process_mgr.spawn_daemon(<span class="string">&quot;faucet&quot;</span>, <span class="macro">cmd!</span>(<span class="string">&quot;faucet&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>,
+            _process: process_mgr
+                .spawn_daemon(
+                    <span class="string">&quot;faucet&quot;</span>,
+                    <span class="macro">cmd!</span>(<span class="string">&quot;faucet&quot;</span>, <span class="string">&quot;--connect-string={connect_string}&quot;</span>),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>,
         })
     }
 }
@@ -402,29 +422,31 @@
 <span class="kw">pub async fn </span>dev_fed(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
     <span class="kw">let </span>start_time = fedimint_core::time::now();
     <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd, faucet), electrs, esplora, fed) = <span class="macro">tokio::try_join!</span>(
+    <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd), electrs, esplora, (fed, faucet)) = <span class="macro">tokio::try_join!</span>(
         <span class="kw">async </span>{
             <span class="kw">let </span>(cln, lnd) = <span class="macro">tokio::try_join!</span>(
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )<span class="question-mark">?</span>;
             <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;lightning started&quot;</span>);
-            <span class="kw">let </span>(gw_cln, gw_lnd, faucet, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
+            <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-                Faucet::new(process_mgr),
                 open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
             )<span class="question-mark">?</span>;
             <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateways started&quot;</span>);
-            <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd, faucet))
+            <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         <span class="kw">async </span>{
             run_dkg(process_mgr, <span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;dkg done&quot;</span>);
-            Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..<span class="number">4</span>).<span class="kw">await
-        </span>},
+            <span class="macro">tokio::try_join!</span>(
+                Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..<span class="number">4</span>),
+                Faucet::new(process_mgr)
+            )
+        },
     )<span class="question-mark">?</span>;
     <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;federation and gateways started&quot;</span>);
     <span class="macro">tokio::try_join!</span>(gw_cln.connect_fed(<span class="kw-2">&amp;</span>fed), gw_lnd.connect_fed(<span class="kw-2">&amp;</span>fed))<span class="question-mark">?</span>;
