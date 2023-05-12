@@ -654,7 +654,6 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    #[cfg(feature = "native")]
     pub async fn new(
         cfg: WalletConfig,
         db: Database,
@@ -676,16 +675,6 @@ impl Wallet {
         )?;
 
         Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group).await?)
-    }
-
-    #[cfg(not(feature = "native"))]
-    pub async fn new(
-        cfg: WalletConfig,
-        db: Database,
-        env: &BTreeMap<OsString, OsString>,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Wallet> {
-        panic!("Native cargo feature not enabled, can't initialize modules")
     }
 
     pub async fn new_with_bitcoind(

@@ -30,7 +30,7 @@ tracing = "0.1.37"
 # Remove once we modularize the gw / ln server
 fedimint-wallet-common = { path = "../fedimint-wallet-common" }
 fedimint-wallet-client = { path = "../fedimint-wallet-client" }
-fedimint-wallet-server = { path = "../fedimint-wallet-server", features = ["native"] }
+fedimint-wallet-server = { path = "../fedimint-wallet-server" }
 fedimint-wallet-tests = { path = "../fedimint-wallet-tests" }
 fedimint-mint-common = { path = "../fedimint-mint-common" }
 fedimint-mint-client = { path = "../fedimint-mint-client" }
