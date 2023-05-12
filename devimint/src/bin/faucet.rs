@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::Router;
 use clap::Parser;
 use cln_rpc::primitives::{Amount as ClnAmount, AmountOrAny};
@@ -19,6 +19,8 @@ struct Cmd {
     bitcoind_rpc: String,
     #[clap(long, env = "FM_CLN_SOCKET")]
     cln_socket: String,
+    #[clap(long, env = "FM_CONNECT_STRING")]
+    connect_string: String,
 }
 
 #[derive(Clone)]
@@ -93,6 +95,10 @@ async fn main() -> anyhow::Result<()> {
     let cmd = Cmd::parse();
     let faucet = Faucet::new(&cmd).await?;
     let router = Router::new()
+        .route(
+            "/connect-string",
+            get(|| async move { cmd.connect_string.clone() }),
+        )
         .route(
             "/pay",
             post(|State(faucet): State<Faucet>, invoice: String| async move {
