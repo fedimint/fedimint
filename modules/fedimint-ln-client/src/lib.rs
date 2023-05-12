@@ -171,7 +171,7 @@ impl LightningClientExt for Client {
         invoice: Invoice,
     ) -> anyhow::Result<(OperationId, TransactionId)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
-        let operation_id = invoice.payment_hash().into_inner();
+        let operation_id = OperationId(invoice.payment_hash().into_inner());
         let active_gateway = self.select_active_gateway().await?;
 
         let output = lightning
@@ -713,7 +713,7 @@ impl LightningClientModule {
         let invoice = invoice_builder
             .build_signed(|hash| self.secp.sign_ecdsa_recoverable(hash, &node_secret_key))?;
 
-        let operation_id = invoice.payment_hash().into_inner();
+        let operation_id = OperationId(invoice.payment_hash().into_inner());
 
         let sm_invoice = invoice.clone();
         let sm_gen = Arc::new(move |txid: TransactionId, _input_idx: u64| {

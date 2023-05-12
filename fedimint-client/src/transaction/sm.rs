@@ -442,7 +442,7 @@ mod tests {
             .start_executor(&mut tg, Arc::new(move |_, _| dyn_context_gen_clone.clone()))
             .await;
 
-        let operation_id = [0x42; 32];
+        let operation_id = OperationId([0x42; 32]);
 
         let tx_builder = TransactionBuilder::new();
 

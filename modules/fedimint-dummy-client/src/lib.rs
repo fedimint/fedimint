@@ -64,7 +64,7 @@ pub trait DummyClientExt {
 impl DummyClientExt for Client {
     async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
         let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
-        let op_id = rand::random();
+        let op_id = OperationId(rand::random());
 
         // TODO: Building a tx could be easier
         // Create input using the fed's account
@@ -95,7 +95,7 @@ impl DummyClientExt for Client {
     ) -> anyhow::Result<OutPoint> {
         let (dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
         let mut dbtx = instance.db.begin_transaction().await;
-        let op_id = rand::random();
+        let op_id = OperationId(rand::random());
 
         // TODO: Building a tx could be easier
         // Create input using our own account

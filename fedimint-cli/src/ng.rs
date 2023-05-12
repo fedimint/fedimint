@@ -3,8 +3,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bitcoin::secp256k1;
-use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
+use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -158,7 +158,7 @@ pub async fn handle_ng_command(
                             .await_mint_change(operation_id, OutPoint { txid, out_idx: 1 })
                             .await?;
                         return Ok(serde_json::to_value(PayInvoiceResponse {
-                            operation_id: operation_id.to_hex(),
+                            operation_id,
                             preimage,
                         })
                         .unwrap());
@@ -256,6 +256,6 @@ pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PayInvoiceResponse {
-    operation_id: String,
+    operation_id: OperationId,
     preimage: String,
 }

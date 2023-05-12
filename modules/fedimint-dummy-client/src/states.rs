@@ -53,7 +53,7 @@ impl State for DummyStateMachine {
         match self {
             DummyStateMachine::Input(_, _, id) => *id,
             DummyStateMachine::Output(_, _, id) => *id,
-            DummyStateMachine::Done => [0; 32],
+            DummyStateMachine::Done => OperationId([0; 32]),
         }
     }
 }

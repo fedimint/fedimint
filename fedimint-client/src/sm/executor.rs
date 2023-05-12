@@ -834,7 +834,7 @@ mod tests {
         }
 
         fn operation_id(&self) -> OperationId {
-            [0u8; 32]
+            OperationId([0u8; 32])
         }
     }
 
