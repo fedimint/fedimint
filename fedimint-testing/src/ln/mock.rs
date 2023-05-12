@@ -42,7 +42,7 @@ impl FakeLightningTest {
         let amount_sent = Arc::new(Mutex::new(0));
 
         FakeLightningTest {
-            preimage: Preimage([1; 32]),
+            preimage: Preimage([0; 32]),
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
@@ -106,13 +106,12 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
         let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
-        *self.amount_sent.lock().unwrap() += Invoice::from_signed(signed)
-            .unwrap()
-            .amount_milli_satoshis()
-            .unwrap();
+        let invoice = Invoice::from_signed(signed);
+        *self.amount_sent.lock().unwrap() +=
+            invoice.clone().unwrap().amount_milli_satoshis().unwrap();
 
         Ok(PayInvoiceResponse {
-            preimage: self.preimage.0.to_vec(),
+            preimage: invoice.unwrap().payment_secret().0.to_vec(),
         })
     }
 
@@ -123,11 +122,11 @@ impl ILnRpcClient for FakeLightningTest {
         self.task_group
             .spawn("FakeRoutingThread", |handle| async move {
                 let mut stream = events.into_inner();
-                while let Some(_route_htlc) = stream.recv().await {
+                while let Some(route_htlc) = stream.recv().await {
                     if handle.is_shutting_down() {
                         break;
                     }
-                    tracing::info!("FakeLightningTest received HTLC message");
+                    tracing::debug!("FakeLightningTest received HTLC message {:?}", route_htlc);
                 }
             })
             .await;

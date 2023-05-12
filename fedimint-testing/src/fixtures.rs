@@ -97,21 +97,22 @@ impl Fixtures {
         .await
     }
 
-    /// Starts a new gateway connected to feds
-    pub async fn new_gateway(&self, feds: Vec<&FederationTest>) -> GatewayTest {
+    /// Starts a new gateway connected to a fed
+    pub async fn new_gateway(&self, fed: &FederationTest) -> GatewayTest {
         // TODO: Make construction easier
         let server_gens = ServerModuleGenRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
         let decoders = server_gens.decoders(module_kinds).unwrap();
 
-        GatewayTest::new(
+        let mut gateway = GatewayTest::new(
             BASE_PORT.fetch_add(1, Ordering::Relaxed),
             FakeLightningTest::new(),
             decoders,
             ClientModuleGenRegistry::from(self.clients.clone()),
-            feds,
         )
-        .await
+        .await;
+        gateway.connect_fed(fed).await;
+        gateway
     }
 
     /// Get a test bitcoin RPC client

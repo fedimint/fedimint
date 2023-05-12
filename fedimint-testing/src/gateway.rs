@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use fedimint_client::module::gen::ClientModuleGenRegistry;
-use fedimint_client_legacy::modules::ln::LightningGateway;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
@@ -28,14 +27,14 @@ pub struct GatewayTest {
 
 impl GatewayTest {
     /// RPC client for communicating with the gateway admin API
-    pub async fn new_client(&self) -> GatewayRpcClient {
+    pub async fn get_rpc(&self) -> GatewayRpcClient {
         GatewayRpcClient::new(self.api.clone(), self.password.clone())
     }
 
     /// Connects to a new federation and stores the info
     pub async fn connect_fed(&mut self, fed: &FederationTest) {
         let connect = fed.connection_code().to_string();
-        let client = self.new_client().await;
+        let client = self.get_rpc().await;
         self.feds.push(
             client
                 .connect_federation(ConnectFedPayload { connect })
@@ -45,8 +44,8 @@ impl GatewayTest {
     }
 
     /// Returns the last registration we sent to a fed
-    pub fn last_registration(&self) -> LightningGateway {
-        self.feds.last().unwrap().registration.clone()
+    pub fn last_info(&self) -> FederationInfo {
+        self.feds.last().unwrap().clone()
     }
 
     pub(crate) async fn new(
@@ -54,7 +53,6 @@ impl GatewayTest {
         lightning: impl ILnRpcClient + 'static,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
-        feds: Vec<&FederationTest>,
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: Url = format!("http://{listen}").parse().unwrap();
@@ -84,17 +82,12 @@ impl GatewayTest {
         })
         .await;
 
-        let mut gateway = Self {
+        Self {
             feds: vec![],
             password,
             api: address,
             _config_dir,
             _task: task,
-        };
-
-        for fed in feds {
-            gateway.connect_fed(fed).await;
         }
-        gateway
     }
 }

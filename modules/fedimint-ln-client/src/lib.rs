@@ -100,7 +100,7 @@ pub trait LightningClientExt {
 
 /// The high-level state of a reissue operation started with
 /// [`LightningClientExt::pay_bolt11_invoice`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LnPayState {
     Created,
     Canceled,
@@ -113,7 +113,7 @@ pub enum LnPayState {
 
 /// The high-level state of a reissue operation started with
 /// [`LightningClientExt::create_bolt11_invoice`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LnReceiveState {
     Created,
     WaitingForPayment { invoice: String, timeout: Duration },

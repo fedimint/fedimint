@@ -21,7 +21,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 use fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigGenParams, DummyConfigPrivate,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate, DummyGenParams,
 };
 use fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
@@ -86,7 +86,7 @@ impl ServerModuleGen for DummyGen {
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         // Coerce config gen params into type
-        let params = params.to_typed::<DummyConfigGenParams>().unwrap();
+        let params = params.to_typed::<DummyGenParams>().unwrap();
         // Create trusted set of threshold keys
         let sks = SecretKeySet::random(peers.degree(), &mut OsRng);
         let pks: PublicKeySet = sks.public_keys();
@@ -114,7 +114,7 @@ impl ServerModuleGen for DummyGen {
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
         // Coerce config gen params into type
-        let params = params.to_typed::<DummyConfigGenParams>().unwrap();
+        let params = params.to_typed::<DummyGenParams>().unwrap();
         // Runs distributed key generation
         // Could create multiple keys, here we use '()' to create one
         let g1 = peers.run_dkg_g1(()).await?;

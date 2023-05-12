@@ -9,11 +9,11 @@ use crate::DummyCommonGen;
 
 /// Parameters necessary to generate this module's configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DummyConfigGenParams {
+pub struct DummyGenParams {
     pub tx_fee: Amount,
 }
 
-impl Default for DummyConfigGenParams {
+impl Default for DummyGenParams {
     fn default() -> Self {
         Self {
             tx_fee: Amount::ZERO,
@@ -55,7 +55,7 @@ pub struct DummyConfigPrivate {
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     DummyCommonGen,
-    DummyConfigGenParams,
+    DummyGenParams,
     DummyConfig,
     DummyConfigPrivate,
     DummyConfigConsensus,
