@@ -14,6 +14,7 @@ use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
+use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::ClientBuilder;
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
@@ -417,7 +418,10 @@ impl Opts {
         client_builder.with_config(cfg.clone());
         client_builder.with_database(db);
 
-        client_builder.build(&mut tg).await.map_err_cli_general()
+        client_builder
+            .build::<PlainRootSecretStrategy>(&mut tg)
+            .await
+            .map_err_cli_general()
     }
 }
 

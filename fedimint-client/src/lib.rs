@@ -89,8 +89,7 @@ use fedimint_core::{
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use futures::StreamExt;
-use rand::distributions::{Distribution, Standard};
-use rand::{thread_rng, Rng};
+use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
@@ -106,6 +105,7 @@ use crate::module::gen::{
 use crate::module::{
     ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule, StateGenerator,
 };
+use crate::secret::RootSecretStrategy;
 use crate::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
@@ -666,6 +666,15 @@ impl Client {
             .find(|(_, kind, _module)| *kind == module_kind)
             .map(|(instance_id, _, _)| instance_id)
     }
+
+    /// Returns the data from which the client's root secret is derived (e.g.
+    /// BIP39 seed phrase struct).
+    pub async fn root_secret_encoding<S>(&self) -> S::Encoding
+    where
+        S: RootSecretStrategy,
+    {
+        get_client_root_secret_encoding::<S>(self.db()).await
+    }
 }
 
 /// Resources particular to a module instance
@@ -967,14 +976,20 @@ impl ClientBuilder {
     }
 
     /// Build a [`Client`] and start its executor
-    pub async fn build(self, tg: &mut TaskGroup) -> anyhow::Result<Client> {
-        let client = self.build_stopped().await?;
+    pub async fn build<S>(self, tg: &mut TaskGroup) -> anyhow::Result<Client>
+    where
+        S: RootSecretStrategy,
+    {
+        let client = self.build_stopped::<S>().await?;
         client.start_executor(tg).await;
         Ok(client)
     }
 
     /// Build a [`Client`] but do not start the executor
-    pub async fn build_stopped(self) -> anyhow::Result<Client> {
+    pub async fn build_stopped<S>(self) -> anyhow::Result<Client>
+    where
+        S: RootSecretStrategy,
+    {
         let config = self.config.ok_or(anyhow!("No config was provided"))?;
         let primary_module_instance = self
             .primary_module_instance
@@ -1000,7 +1015,7 @@ impl ClientBuilder {
 
         let api = DynFederationApi::from(WsFederationApi::from_config(&config));
 
-        let root_secret = get_client_root_secret(&db).await;
+        let root_secret = get_client_root_secret::<S>(&db).await;
 
         let (modules, (primary_module_kind, primary_module)) = {
             let mut modules = ClientModuleRegistry::default();
@@ -1080,16 +1095,25 @@ impl ClientBuilder {
     }
 }
 
-/// Fetches the client secret from the database or generates a new one if
-/// none is present
-pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
+/// Fetches the client secret encoding from the database or generates a new one
+/// if none is present
+pub async fn get_client_root_secret_encoding<S>(db: &Database) -> S::Encoding
+where
+    S: RootSecretStrategy,
+{
     let mut tx = db.begin_transaction().await;
-    let client_secret = tx.get_value(&ClientSecretKey).await;
+    let client_secret = tx.get_value(&ClientSecretKey::<S>::default()).await;
     let secret = if let Some(client_secret) = client_secret {
-        client_secret
+        client_secret.0
     } else {
-        let secret: ClientSecret = thread_rng().gen();
-        let no_replacement = tx.insert_entry(&ClientSecretKey, &secret).await.is_none();
+        let secret = S::random(&mut thread_rng());
+        let no_replacement = tx
+            .insert_entry(
+                &ClientSecretKey::<S>::default(),
+                &ClientSecret(secret.clone()),
+            )
+            .await
+            .is_none();
         assert!(
             no_replacement,
             "We would have overwritten our secret key, aborting!"
@@ -1097,41 +1121,64 @@ pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
         secret
     };
     tx.commit_tx().await;
-    secret.into_root_secret()
+    secret
+}
+
+/// Fetches the client secret from the database or generates a new one if
+/// none is present
+pub async fn get_client_root_secret<S>(db: &Database) -> DerivableSecret
+where
+    S: RootSecretStrategy,
+{
+    let encoding = get_client_root_secret_encoding::<S>(db).await;
+    S::to_root_secret(&encoding)
 }
 
 /// Secret input key material from which the [`DerivableSecret`] used by the
 /// client will be seeded
-#[derive(Encodable, Decodable)]
-pub struct ClientSecret([u8; 64]);
+pub struct ClientSecret<S: RootSecretStrategy>(S::Encoding);
 
-impl ClientSecret {
-    fn into_root_secret(self) -> DerivableSecret {
-        const FEDIMINT_CLIENT_NONCE: &[u8] = b"Fedimint Client Salt";
-        DerivableSecret::new_root(&self.0, FEDIMINT_CLIENT_NONCE)
-    }
-}
-
-impl Distribution<ClientSecret> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ClientSecret {
-        let mut secret = [0u8; 64];
-        rng.fill(&mut secret);
-        ClientSecret(secret)
-    }
-}
-
-impl Debug for ClientSecret {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClientSecret([redacted])")
-    }
-}
-
-impl Serialize for ClientSecret {
+impl<ES> Serialize for ClientSecret<ES>
+where
+    ES: RootSecretStrategy,
+{
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serializer.serialize_bytes(&self.0)
+        let mut bytes = Vec::new();
+        ES::consensus_encode(&self.0, &mut bytes).expect("Writing to vec can't fail");
+        serializer.serialize_bytes(&bytes)
+    }
+}
+
+impl<S> Encodable for ClientSecret<S>
+where
+    S: RootSecretStrategy,
+{
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> std::result::Result<usize, Error> {
+        S::consensus_encode(&self.0, writer)
+    }
+}
+
+impl<S> Decodable for ClientSecret<S>
+where
+    S: RootSecretStrategy,
+{
+    fn consensus_decode<R: Read>(
+        reader: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> std::result::Result<Self, DecodeError> {
+        Ok(ClientSecret(S::consensus_decode(reader)?))
+    }
+}
+
+impl<S> Debug for ClientSecret<S>
+where
+    S: RootSecretStrategy,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ClientSecret([redacted])")
     }
 }
 
