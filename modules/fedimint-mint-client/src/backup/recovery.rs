@@ -142,7 +142,7 @@ impl MintRestoreInProgressState {
             async move {
                 self_clone
                     .make_progress(
-                        global_context.module_api(),
+                        global_context.api().clone(),
                         global_context.decoders().clone(),
                         global_context.client_config().epoch_pk,
                         secret,
