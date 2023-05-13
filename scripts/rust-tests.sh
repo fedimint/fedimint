@@ -37,8 +37,8 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
 fi
 
 # Switch to electrum and run wallet tests
-unset FM_BITCOIND_RPC
-export FM_ELECTRUM_RPC="tcp://127.0.0.1:50001"
+export FM_BITCOIN_RPC_KIND="electrum"
+export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:50001"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
   >&2 echo "### Testing against electrs"
@@ -47,8 +47,8 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
 fi
 
 # Switch to esplora and run wallet tests
-unset FM_ELECTRUM_RPC
-export FM_ESPLORA_RPC="http://127.0.0.1:50002"
+export FM_BITCOIN_RPC_KIND="esplora"
+export FM_BITCOIN_RPC_URL="http://127.0.0.1:50002"
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
   >&2 echo "### Testing against esplora"
   env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"

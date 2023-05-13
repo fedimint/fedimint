@@ -1,19 +1,83 @@
 use std::cmp::min;
+use std::collections::BTreeMap;
+use std::env;
 use std::fmt::Debug;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use anyhow::format_err;
 pub use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin::{BlockHash, Network, Transaction};
 use fedimint_core::task::TaskHandle;
 use fedimint_core::{dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
+use lazy_static::lazy_static;
 use tracing::info;
+use url::Url;
+
+use crate::bitcoincore_rpc::{BitcoindFactory, ElectrumFactory, EsploraFactory};
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore_rpc;
+
+/// Env var for bitcoin RPC kind
+pub const FM_BITCOIN_RPC_KIND: &str = "FM_BITCOIN_RPC_KIND";
+/// Env var for bitcoin URL
+pub const FM_BITCOIN_RPC_URL: &str = "FM_BITCOIN_RPC_URL";
+
+/// Configuration for the bitcoin RPC
+#[derive(Debug, Clone)]
+pub struct BitcoinRpcConfig {
+    pub kind: String,
+    pub url: Url,
+}
+
+impl BitcoinRpcConfig {
+    pub fn from_env_vars() -> Result<Self> {
+        Ok(Self {
+            kind: env::var(FM_BITCOIN_RPC_KIND).map_err(anyhow::Error::from)?,
+            url: env::var(FM_BITCOIN_RPC_URL)
+                .map_err(anyhow::Error::from)?
+                .parse()
+                .map_err(anyhow::Error::from)?,
+        })
+    }
+}
+
+lazy_static! {
+    /// Global factories for creating bitcoin RPCs
+    static ref BITCOIN_RPC_REGISTRY: Mutex<BTreeMap<String, DynBitcoindRpcFactory>> =
+        Mutex::new(BTreeMap::from([
+            ("esplora".to_string(), EsploraFactory.into()),
+            ("electrum".to_string(), ElectrumFactory.into()),
+            ("bitcoind".to_string(), BitcoindFactory.into()),
+        ]));
+}
+
+/// Create a bitcoin RPC of a given kind
+pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {
+    let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
+    let maybe_factory = registry.get(&config.kind);
+    let factory = maybe_factory.ok_or(format_err!("{} bitcoind not registered", config.kind))?;
+    factory.create(&config.url, handle)
+}
+
+/// Register a new factory for creating bitcoin RPCs
+pub fn register_bitcoind(kind: String, factory: DynBitcoindRpcFactory) {
+    let mut registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
+    registry.insert(kind, factory);
+}
+
+pub trait IBitcoindRpcFactory: Debug {
+    fn create(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc>;
+}
+
+dyn_newtype_define! {
+    #[derive(Clone)]
+    pub DynBitcoindRpcFactory(Arc<IBitcoindRpcFactory>)
+}
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///

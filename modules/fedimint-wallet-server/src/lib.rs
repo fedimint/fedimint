@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{Infallible, TryInto};
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
@@ -24,10 +24,7 @@ use common::{
     WalletError, WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome,
     CONFIRMATION_TARGET,
 };
-use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_core::bitcoin_rpc::{
-    select_bitcoin_backend_from_envs, FM_BITCOIND_RPC_ENV, FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
-};
+use fedimint_bitcoind::{create_bitcoind, BitcoinRpcConfig, DynBitcoindRpc};
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -657,23 +654,12 @@ impl Wallet {
     pub async fn new(
         cfg: WalletConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
+        _env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
-        let bitcoin_backend = select_bitcoin_backend_from_envs(
-            env.get(OsStr::new(FM_BITCOIND_RPC_ENV))
-                .map(OsString::as_os_str),
-            env.get(OsStr::new(FM_ELECTRUM_RPC_ENV))
-                .map(OsString::as_os_str),
-            env.get(OsStr::new(FM_ESPLORA_RPC_ENV))
-                .map(OsString::as_os_str),
-        )?;
-
-        let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoin_rpc_backend(
-            &bitcoin_backend,
-            task_group.make_handle(),
-        )?;
-
+        // TODO: should come from wallet config gen params
+        let rpc_config = BitcoinRpcConfig::from_env_vars()?;
+        let btc_rpc = create_bitcoind(&rpc_config, task_group.make_handle())?;
         Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group).await?)
     }
 

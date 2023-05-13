@@ -4,10 +4,9 @@ use std::fmt;
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
 use ::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
-use anyhow::{bail, format_err, Context};
+use anyhow::{bail, format_err};
 use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
-use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
 use fedimint_core::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
@@ -57,37 +56,34 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
     ))
 }
 
-pub fn make_bitcoin_rpc_backend(
-    backend: &BitcoindRpcBackend,
-    task_handle: TaskHandle,
-) -> Result<DynBitcoindRpc> {
-    match backend {
-        BitcoindRpcBackend::Bitcoind(url) => make_bitcoind_rpc(url, task_handle)
-            .context("bitcoind rpc backend initialization failed"),
-        BitcoindRpcBackend::Electrum(url) => make_electrum_rpc(url, task_handle)
-            .context("electrum rpc backend initialization failed"),
-        BitcoindRpcBackend::Esplora(url) => make_esplora_rpc(url, task_handle),
+#[derive(Debug)]
+pub struct ElectrumFactory;
+impl IBitcoindRpcFactory for ElectrumFactory {
+    fn create(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc> {
+        Ok(RetryClient::new(ElectrumClient::new(url)?, handle).into())
     }
 }
 
-pub fn make_bitcoind_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
-    let (url, auth) = from_url_to_url_auth(url)?;
-    let bitcoind_client =
-        ::bitcoincore_rpc::Client::new(&url, auth).map_err(anyhow::Error::from)?;
-    let retry_client = RetryClient::new(
-        Client(ErrorReporting::new(url, bitcoind_client)),
-        task_handle,
-    );
-
-    Ok(retry_client.into())
+#[derive(Debug)]
+pub struct EsploraFactory;
+impl IBitcoindRpcFactory for EsploraFactory {
+    fn create(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc> {
+        Ok(RetryClient::new(EsploraClient::new(url)?, handle).into())
+    }
 }
 
-pub fn make_electrum_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
-    Ok(RetryClient::new(ElectrumClient::new(url)?, task_handle).into())
-}
+#[derive(Debug)]
+pub struct BitcoindFactory;
+impl IBitcoindRpcFactory for BitcoindFactory {
+    fn create(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc> {
+        let (url, auth) = from_url_to_url_auth(url)?;
+        let bitcoind_client =
+            ::bitcoincore_rpc::Client::new(&url, auth).map_err(anyhow::Error::from)?;
+        let retry_client =
+            RetryClient::new(Client(ErrorReporting::new(url, bitcoind_client)), handle);
 
-pub fn make_esplora_rpc(url: &Url, task_handle: TaskHandle) -> Result<DynBitcoindRpc> {
-    Ok(RetryClient::new(EsploraClient::new(url)?, task_handle).into())
+        Ok(retry_client.into())
+    }
 }
 
 /// Wrapper around [`bitcoincore_rpc::Client`] logging failures
