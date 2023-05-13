@@ -4,11 +4,9 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::bail;
 pub use anyhow::Result;
 use async_trait::async_trait;
-use bitcoin::{Block, BlockHash, Network, Transaction};
-use fedimint_core::bitcoin_rpc::BitcoinRpcBackendType;
+use bitcoin::{BlockHash, Network, Transaction};
 use fedimint_core::task::TaskHandle;
 use fedimint_core::{dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
@@ -22,14 +20,6 @@ pub mod bitcoincore_rpc;
 /// Functions may panic if the bitcoind node is not reachable.
 #[async_trait]
 pub trait IBitcoindRpc: Debug + Send + Sync {
-    /// `true` if it's real-bitcoin (not electrum) backend and thus supports
-    /// `get_block` call
-    ///
-    /// This is a bit of a workaround to support electrum.
-    fn backend_type(&self) -> BitcoinRpcBackendType {
-        BitcoinRpcBackendType::Bitcoind
-    }
-
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 
@@ -48,12 +38,6 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     /// prevented by only querying hashes for blocks tailing the chain tip
     /// by a certain number of blocks.
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash>;
-
-    /// Returns the block with the given hash
-    ///
-    /// # Panics
-    /// If the block doesn't exist.
-    async fn get_block(&self, hash: &BlockHash) -> Result<bitcoin::Block>;
 
     /// Estimates the fee rate for a given confirmation target. Make sure that
     /// all federation members use the same algorithm to avoid widely
@@ -80,11 +64,9 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     /// Check if a transaction was included in a given (only electrum)
     async fn was_transaction_confirmed_in(
         &self,
-        _transaction: &Transaction,
-        _height: u64,
-    ) -> Result<bool> {
-        bail!("was_transaction_confirmed_in call not supported in standard (non-electrum/esplora) backends")
-    }
+        transaction: &Transaction,
+        height: u64,
+    ) -> Result<bool>;
 }
 
 dyn_newtype_define! {
@@ -140,10 +122,6 @@ impl<C> IBitcoindRpc for RetryClient<C>
 where
     C: IBitcoindRpc,
 {
-    fn backend_type(&self) -> BitcoinRpcBackendType {
-        self.inner.backend_type()
-    }
-
     async fn get_network(&self) -> Result<Network> {
         self.retry_call(|| async { self.inner.get_network().await })
             .await
@@ -156,11 +134,6 @@ where
 
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
         self.retry_call(|| async { self.inner.get_block_hash(height).await })
-            .await
-    }
-
-    async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
-        self.retry_call(|| async { self.inner.get_block(hash).await })
             .await
     }
 

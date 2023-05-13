@@ -26,8 +26,7 @@ use common::{
 };
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::bitcoin_rpc::{
-    select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
-    FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
+    select_bitcoin_backend_from_envs, FM_BITCOIND_RPC_ENV, FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
 };
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
@@ -1001,33 +1000,14 @@ impl Wallet {
                 .collect::<HashMap<_, _>>()
                 .await;
 
-            match self.btc_rpc.backend_type() {
-                BitcoinRpcBackendType::Bitcoind | BitcoinRpcBackendType::Esplora => {
-                    if !pending_transactions.is_empty() {
-                        let block = self
-                            .btc_rpc
-                            .get_block(&block_hash)
-                            .await
-                            .expect("bitcoin rpc failed");
-                        for transaction in block.txdata {
-                            if let Some(pending_tx) = pending_transactions.get(&transaction.txid())
-                            {
-                                self.recognize_change_utxo(dbtx, pending_tx).await;
-                            }
-                        }
-                    }
-                }
-                BitcoinRpcBackendType::Electrum => {
-                    for transaction in &pending_transactions {
-                        if self
-                            .btc_rpc
-                            .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
-                            .await
-                            .expect("bitcoin electrum rpc backend failed")
-                        {
-                            self.recognize_change_utxo(dbtx, transaction.1).await;
-                        }
-                    }
+            for transaction in &pending_transactions {
+                if self
+                    .btc_rpc
+                    .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
+                    .await
+                    .expect("bitcoin rpc backend failed")
+                {
+                    self.recognize_change_utxo(dbtx, transaction.1).await;
                 }
             }
 

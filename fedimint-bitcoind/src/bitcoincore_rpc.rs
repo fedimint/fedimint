@@ -189,21 +189,6 @@ where
 
     #[instrument(
         skip(self),
-        name = "bitcoincore_rpc::get_block",
-        level = "DEBUG",
-        ret,
-        err
-    )]
-    async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
-        fedimint_core::task::block_in_place(|| {
-            bitcoincore_rpc::RpcApi::get_block(&self.0, hash)
-                .map_err(anyhow::Error::from)
-                .map_err(Into::into)
-        })
-    }
-
-    #[instrument(
-        skip(self),
         name = "bitcoincore_rpc::get_fee_rate",
         level = "DEBUG",
         ret,
@@ -234,6 +219,21 @@ where
             Ok(_) => {}
         })
     }
+
+    async fn was_transaction_confirmed_in(
+        &self,
+        transaction: &Transaction,
+        height: u64,
+    ) -> Result<bool> {
+        let block_hash = self.get_block_hash(height).await?;
+        let block = fedimint_core::task::block_in_place(|| {
+            self.0.get_block(&block_hash).map_err(anyhow::Error::from)
+        })?;
+        Ok(block
+            .txdata
+            .iter()
+            .any(|tx| tx.txid() == transaction.txid()))
+    }
 }
 
 pub struct ElectrumClient(electrum_client::Client);
@@ -252,10 +252,6 @@ impl fmt::Debug for ElectrumClient {
 
 #[async_trait]
 impl IBitcoindRpc for ElectrumClient {
-    fn backend_type(&self) -> BitcoinRpcBackendType {
-        BitcoinRpcBackendType::Electrum
-    }
-
     async fn get_network(&self) -> Result<Network> {
         let resp = fedimint_core::task::block_in_place(|| {
             self.0.server_features().map_err(anyhow::Error::from)
@@ -287,10 +283,6 @@ impl IBitcoindRpc for ElectrumClient {
                 .ok_or_else(|| format_err!("empty block headers response"))?
                 .block_hash())
         })
-    }
-
-    async fn get_block(&self, _hash: &BlockHash) -> Result<Block> {
-        bail!("get_block call not supported on electrum rpc backend")
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
@@ -368,10 +360,6 @@ impl fmt::Debug for EsploraClient {
 
 #[async_trait]
 impl IBitcoindRpc for EsploraClient {
-    fn backend_type(&self) -> BitcoinRpcBackendType {
-        BitcoinRpcBackendType::Esplora
-    }
-
     async fn get_network(&self) -> Result<Network> {
         let genesis_height: u32 = 0;
         let genesis_hash = self.0.get_block_hash(genesis_height).await?;
@@ -404,21 +392,6 @@ impl IBitcoindRpc for EsploraClient {
             .map_err(Into::into)
     }
 
-    async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
-        self.0
-            .get_block_by_hash(hash)
-            .await
-            .map(|block| {
-                block.ok_or_else(|| {
-                    anyhow::Error::msg(format!(
-                        "The fetched block for given height {hash} has not been not found"
-                    ))
-                })
-            })?
-            .map_err(anyhow::Error::from)
-            .map_err(Into::into)
-    }
-
     async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>> {
         let fee_estimates: HashMap<String, f64> = self.0.get_fee_estimates().await?;
 
@@ -436,5 +409,20 @@ impl IBitcoindRpc for EsploraClient {
         let _ = self.0.broadcast(&transaction).await.map_err(|error| {
             info!(?error, "Error broadcasting transaction");
         });
+    }
+
+    async fn was_transaction_confirmed_in(
+        &self,
+        transaction: &Transaction,
+        height: u64,
+    ) -> Result<bool> {
+        let status = self
+            .0
+            .get_tx_status(&transaction.txid())
+            .await
+            .map_err(anyhow::Error::from)?;
+        Ok(status
+            .map(|status| status.block_height == Some(height as u32))
+            .unwrap_or(false))
     }
 }
