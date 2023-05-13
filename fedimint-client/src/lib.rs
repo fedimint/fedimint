@@ -96,6 +96,7 @@ use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::backup::Metadata;
 use crate::db::{
     ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, ClientSecretKey,
     OperationLogKey,
@@ -994,6 +995,45 @@ impl ClientBuilder {
         );
     }
 
+    pub async fn build_restoring_from_backup(
+        self,
+        tg: &mut TaskGroup,
+        secret: ClientSecret,
+    ) -> anyhow::Result<(Client, Metadata)> {
+        let raw_dbtx = self
+            .db
+            .as_ref()
+            .expect("No database was provided")
+            .begin_transaction()
+            .await;
+
+        // TODO: assert DB is empty (what does that mean? maybe needs a method that
+        // checks if "wipe" was called on modules?)
+
+        // let db_is_empty = raw_dbtx
+        //     .raw_find_by_prefix(&[])
+        //     .await
+        //     .expect("DB read failed")
+        //     .next()
+        //     .await
+        //     .is_none();
+        // assert!(
+        //     db_is_empty,
+        //     "Database is not empty, cannot restore from backup"
+        // );
+
+        // Write new root secret to DB before starting client
+        let fake_notifications = Default::default();
+        let mut dbtx = DatabaseTransaction::new(raw_dbtx, Default::default(), &fake_notifications);
+        set_client_root_secret(&mut dbtx, &secret).await;
+        dbtx.commit_tx().await;
+
+        let client = self.build(tg).await?;
+        let metadata = client.restore_from_backup().await?;
+
+        Ok((client, metadata))
+    }
+
     /// Build a [`Client`] and start its executor
     pub async fn build(self, tg: &mut TaskGroup) -> anyhow::Result<Client> {
         let client = self.build_stopped().await?;
@@ -1114,27 +1154,33 @@ impl ClientBuilder {
 /// Fetches the client secret from the database or generates a new one if
 /// none is present
 pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
-    let mut tx = db.begin_transaction().await;
-    let client_secret = tx.get_value(&ClientSecretKey).await;
+    let mut dbtx = db.begin_transaction().await;
+    let client_secret = dbtx.get_value(&ClientSecretKey).await;
     let secret = if let Some(client_secret) = client_secret {
         client_secret
     } else {
         let secret: ClientSecret = thread_rng().gen();
-        let no_replacement = tx.insert_entry(&ClientSecretKey, &secret).await.is_none();
+        let replacement_happened = set_client_root_secret(&mut dbtx, &secret).await;
         assert!(
-            no_replacement,
+            !replacement_happened,
             "We would have overwritten our secret key, aborting!"
         );
         secret
     };
-    tx.commit_tx().await;
+    dbtx.commit_tx().await;
     secret.into_root_secret()
+}
+
+/// Sets the client secret in the database, returns if an old secret was
+/// overwritten
+async fn set_client_root_secret(dbtx: &mut DatabaseTransaction<'_>, secret: &ClientSecret) -> bool {
+    dbtx.insert_entry(&ClientSecretKey, secret).await.is_some()
 }
 
 /// Secret input key material from which the [`DerivableSecret`] used by the
 /// client will be seeded
 #[derive(Encodable, Decodable)]
-pub struct ClientSecret([u8; 64]);
+pub struct ClientSecret(pub [u8; 64]);
 
 impl ClientSecret {
     fn into_root_secret(self) -> DerivableSecret {

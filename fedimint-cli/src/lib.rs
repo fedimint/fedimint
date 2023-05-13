@@ -15,7 +15,7 @@ use clap::{Parser, Subcommand};
 use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 use fedimint_client::sm::OperationId;
-use fedimint_client::ClientBuilder;
+use fedimint_client::{ClientBuilder, ClientSecret};
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -42,12 +42,14 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_client::MintClientGen;
+use fedimint_mint_client::{MintClientExt, MintClientGen};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tracing::info;
 use url::Url;
+
+use crate::ng::ClientNg;
 
 /// Type of output the cli produces
 #[derive(Serialize)]
@@ -409,16 +411,24 @@ impl Opts {
         module_gens: &ClientModuleGenRegistry,
     ) -> CliResult<fedimint_client::Client> {
         let mut tg = TaskGroup::new();
+        let client_builder = self.build_client_ng_builder(module_gens).await?;
+        client_builder.build(&mut tg).await.map_err_cli_general()
+    }
+
+    async fn build_client_ng_builder(
+        &self,
+        module_gens: &ClientModuleGenRegistry,
+    ) -> CliResult<fedimint_client::ClientBuilder> {
         let cfg = self.load_config()?.0;
         let db = self.load_rocks_db()?;
 
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_gens(module_gens.clone());
         client_builder.with_primary_module(1);
-        client_builder.with_config(cfg.clone());
+        client_builder.with_config(cfg);
         client_builder.with_database(db);
 
-        client_builder.build(&mut tg).await.map_err_cli_general()
+        Ok(client_builder)
     }
 }
 
@@ -1041,6 +1051,24 @@ impl FedimintCli {
                     .force_process_epoch(SerdeEpochHistory::from(&outcome))
                     .await?;
                 Ok(CliOutput::ForceEpoch)
+            }
+            Command::Ng(ClientNg::Restore { secret }) => {
+                let mut tg = TaskGroup::new();
+                let (client, metadata) = cli
+                    .build_client_ng_builder(&self.module_gens)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
+                    .build_restoring_from_backup(&mut tg, ClientSecret(secret))
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+
+                info!("Waiting for restore to complete");
+                client
+                    .await_restore_finished()
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+
+                Ok(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
             }
             Command::Ng(command) => {
                 let config = cli.load_config()?.0;

@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 use bitcoin::secp256k1;
+use bitcoin_hashes::hex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::sm::OperationId;
@@ -85,11 +86,18 @@ pub enum ClientNg {
     },
     /// Restore the previously created backup of mint notes (with `backup`
     /// command)
-    Restore,
+    Restore {
+        #[clap(value_parser = parse_secret)]
+        secret: [u8; 64],
+    },
 }
 
 pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
+}
+
+fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
+    hex::FromHex::from_hex(s)
 }
 
 pub async fn handle_ng_command(
@@ -233,7 +241,9 @@ pub async fn handle_ng_command(
                 .await?;
             Ok(serde_json::to_value(()).unwrap())
         }
-        ClientNg::Restore => Ok(client.restore_from_backup().await?.to_json_value()?),
+        ClientNg::Restore { .. } => {
+            panic!("Has to be handled before initializing client")
+        }
         ClientNg::Wipe { force } => {
             if !force {
                 bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
