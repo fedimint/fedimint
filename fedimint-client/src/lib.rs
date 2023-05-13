@@ -935,7 +935,12 @@ pub struct ClientBuilder {
     module_gens: ClientModuleGenRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     config: Option<ClientConfig>,
-    db: Option<Box<dyn IDatabase>>,
+    db: Option<DatabaseSource>,
+}
+
+pub enum DatabaseSource {
+    Fresh(Box<dyn IDatabase>),
+    Reuse(Client),
 }
 
 impl ClientBuilder {
@@ -988,7 +993,22 @@ impl ClientBuilder {
     /// Uses this database to store the client state, allowing for flexibility
     /// on the caller side by accepting a type-erased trait object.
     pub fn with_dyn_database(&mut self, db: Box<dyn IDatabase>) {
-        let was_replaced = self.db.replace(db).is_some();
+        let was_replaced = self.db.replace(DatabaseSource::Fresh(db)).is_some();
+        assert!(
+            !was_replaced,
+            "Only one database can be given to the builder."
+        );
+    }
+
+    /// Re-uses the database of an old client. Useful for restarting the client
+    /// on recovery without fully shutting down the DB and not being able to
+    /// re-open it.
+    ///
+    /// ## Panics
+    /// If the old and new client use different config since that might make the
+    /// DB incompatible.
+    pub fn with_old_client_database(&mut self, client: Client) {
+        let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
         assert!(
             !was_replaced,
             "Only one database can be given to the builder."
@@ -1000,12 +1020,15 @@ impl ClientBuilder {
         tg: &mut TaskGroup,
         secret: ClientSecret,
     ) -> anyhow::Result<(Client, Metadata)> {
-        let raw_dbtx = self
-            .db
-            .as_ref()
-            .expect("No database was provided")
-            .begin_transaction()
-            .await;
+        let fake_notifications = Default::default();
+        let mut dbtx = match self.db.as_ref().expect("No database provided") {
+            DatabaseSource::Fresh(db) => DatabaseTransaction::new(
+                db.begin_transaction().await,
+                Default::default(),
+                &fake_notifications,
+            ),
+            DatabaseSource::Reuse(db) => db.db().begin_transaction().await,
+        };
 
         // TODO: assert DB is empty (what does that mean? maybe needs a method that
         // checks if "wipe" was called on modules?)
@@ -1023,8 +1046,6 @@ impl ClientBuilder {
         // );
 
         // Write new root secret to DB before starting client
-        let fake_notifications = Default::default();
-        let mut dbtx = DatabaseTransaction::new(raw_dbtx, Default::default(), &fake_notifications);
         set_client_root_secret(&mut dbtx, &secret).await;
         dbtx.commit_tx().await;
 
@@ -1047,7 +1068,6 @@ impl ClientBuilder {
         let primary_module_instance = self
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
-        let db = self.db.ok_or(anyhow!("No database was provided"))?;
 
         let mut decoders = client_decoders(
             &self.module_gens,
@@ -1062,7 +1082,16 @@ impl ClientBuilder {
             tx_submission_sm_decoder(),
         );
 
-        let db = Database::new_from_box(db, decoders.clone());
+        let db = match self.db.ok_or(anyhow!("No database was provided"))? {
+            DatabaseSource::Fresh(db) => Database::new_from_box(db, decoders.clone()),
+            DatabaseSource::Reuse(client) => {
+                assert_eq!(
+                    client.inner.config, config,
+                    "Can only reuse DB for clients started with the same config"
+                );
+                client.inner.db.clone()
+            }
+        };
 
         let notifier = Notifier::new(db.clone());
 
