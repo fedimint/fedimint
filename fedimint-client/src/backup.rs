@@ -16,6 +16,7 @@ use tracing::{debug, info, warn};
 
 use super::Client;
 use crate::secret::DeriveableSecretClientExt;
+use crate::{get_client_secret, ClientSecret};
 
 /// Backup metadata
 ///
@@ -417,5 +418,9 @@ impl Client {
 
     fn get_derived_backup_signing_key(&self) -> secp256k1::KeyPair {
         Self::get_derived_backup_signing_key_static(&self.root_secret())
+    }
+
+    pub async fn get_secret(&self) -> ClientSecret {
+        get_client_secret(self.db()).await
     }
 }
