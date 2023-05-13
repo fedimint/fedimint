@@ -891,6 +891,7 @@ dependencies = [
  "clap",
  "cln-rpc",
  "fedimint-bitcoind",
+ "fedimint-cli",
  "fedimint-client",
  "fedimint-client-legacy",
  "fedimint-core",

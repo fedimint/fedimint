@@ -85,7 +85,7 @@ pub trait LightningClientExt {
     ) -> anyhow::Result<BoxStream<LnPayState>>;
 
     /// Receive over LN with a new invoice
-    async fn create_bolt11_invoice_and_receive(
+    async fn create_bolt11_invoice(
         &self,
         amount: Amount,
         description: String,
@@ -112,7 +112,7 @@ pub enum LnPayState {
 }
 
 /// The high-level state of a reissue operation started with
-/// [`LightningClientExt::create_bolt11_invoice_and_receive`].
+/// [`LightningClientExt::create_bolt11_invoice`].
 #[derive(Debug, Clone)]
 pub enum LnReceiveState {
     Created,
@@ -203,7 +203,7 @@ impl LightningClientExt for Client {
         Ok((operation_id, txid))
     }
 
-    async fn create_bolt11_invoice_and_receive(
+    async fn create_bolt11_invoice(
         &self,
         amount: Amount,
         description: String,
@@ -227,7 +227,10 @@ impl LightningClientExt for Client {
             )
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |txid| OutPoint { txid, out_idx: 0 };
+        let operation_meta_gen = |txid| LightningMeta::Receive {
+            out_point: OutPoint { txid, out_idx: 0 },
+            invoice: invoice.clone(),
+        };
         let txid = self
             .finalize_and_submit_transaction(
                 operation_id,
@@ -237,18 +240,13 @@ impl LightningClientExt for Client {
             )
             .await?;
 
-        let mut dbtx = self.db().begin_transaction().await;
-        self.add_operation_log_entry(
-            &mut dbtx,
-            operation_id,
-            LightningCommonGen::KIND.as_str(),
-            LightningMeta::Receive {
-                out_point: OutPoint { txid, out_idx: 0 },
-                invoice: invoice.clone(),
-            },
-        )
-        .await;
-        dbtx.commit_tx().await;
+        // Wait for the transaction to be accepted by the federation, otherwise the
+        // invoice will not be able to be paid
+        self.transaction_updates(operation_id)
+            .await
+            .await_tx_accepted(txid)
+            .await
+            .map_err(|e| anyhow::anyhow!("Offer transaction was not accepted: {e:?}"))?;
 
         Ok((operation_id, invoice))
     }

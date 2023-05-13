@@ -14,6 +14,7 @@ use devimint::util::{poll, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
 };
+use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
@@ -644,32 +645,90 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
     // Assert balances changed by 3000 msat (amount sent) + 30 msat (fee)
-    let final_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+    let final_cln_outgoing_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
         .as_u64()
         .unwrap();
-    let final_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+    let final_cln_outgoing_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        initial_client_ng_balance - final_client_ng_balance == 3030,
-        "Client NG balance changed by {}, expected 1010",
-        initial_client_ng_balance - final_client_ng_balance
+        initial_client_ng_balance - final_cln_outgoing_client_ng_balance == 3030,
+        "Client NG balance changed by {} on CLN outgoing payment, expected 1010",
+        initial_client_ng_balance - final_cln_outgoing_client_ng_balance
     );
     anyhow::ensure!(
-        final_cln_gateway_balance - initial_cln_gateway_balance == 3030,
-        "CLN Gateway balance changed by {}, expected 1010",
-        final_cln_gateway_balance - initial_cln_gateway_balance
+        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == 3030,
+        "CLN Gateway balance changed by {} on CLN outgoing payment, expected 1010",
+        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance
+    );
+
+    let ln_response_val = cmd!(
+        fed,
+        "ng",
+        "ln-invoice",
+        "--amount=1000msat",
+        "--description='incoming-ng-over-cln-gw'"
+    )
+    .out_json()
+    .await?;
+    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
+    let invoice = ln_invoice_response.invoice;
+    let payment = lnd
+        .client_lock()
+        .await?
+        .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+            payment_request: invoice.clone(),
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    lnd.client_lock()
+        .await?
+        .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
+            include_incomplete: true,
+            ..Default::default()
+        })
+        .await?
+        .into_inner()
+        .payments
+        .into_iter()
+        .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+        .context("payment not in list")?
+        .status();
+    anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
+
+    // Receive the ecash notes
+    let operation_id = ln_invoice_response.operation_id;
+    cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
+
+    // Assert balances changed by 1000 msat
+    let final_cln_incoming_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_cln_incoming_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    anyhow::ensure!(
+        final_cln_incoming_client_ng_balance - final_cln_outgoing_client_ng_balance == 1000,
+        "Client NG balance changed by {} on CLN incoming payment, expected 1000",
+        final_cln_incoming_client_ng_balance - final_cln_outgoing_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1000,
+        "CLN Gateway balance changed by {} on CLN incoming payment, expected 1000",
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
     );
 
     // LND gateway tests
     fed.use_gateway(&gw_lnd).await?;
 
     // OUTGOING: fedimint-cli NG pays CLN via LND gateaway
-    let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
     let initial_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -706,23 +765,83 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ));
 
     // Assert balances changed by 1000 msat (amount sent) + 10 msat (fee)
-    let final_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+    let final_lnd_outgoing_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
         .as_u64()
         .unwrap();
-    let final_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+    let final_lnd_outgoing_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        initial_client_ng_balance - final_client_ng_balance == 1010,
-        "Client NG balance changed by {}, expected 1010",
-        initial_client_ng_balance - final_client_ng_balance
+        final_cln_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance == 1010,
+        "Client NG balance changed by {} on LND outgoing payment, expected 1010",
+        final_cln_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance
     );
     anyhow::ensure!(
-        final_lnd_gateway_balance - initial_lnd_gateway_balance == 1010,
-        "LND Gateway balance changed by {}, expected 1010",
-        final_lnd_gateway_balance - initial_lnd_gateway_balance
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 1010,
+        "LND Gateway balance changed by {} on LND outgoing payment, expected 1010",
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance
+    );
+
+    // INCOMING: fedimint-cli NG receives from CLN via LND gateway
+    let ln_response_val = cmd!(
+        fed,
+        "ng",
+        "ln-invoice",
+        "--amount=1000msat",
+        "--description='incoming-ng-over-lnd-gw'"
+    )
+    .out_json()
+    .await?;
+    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
+    let invoice = ln_invoice_response.invoice;
+    let invoice_status = cln
+        .request(cln_rpc::model::PayRequest {
+            bolt11: invoice,
+            amount_msat: None,
+            label: None,
+            riskfactor: None,
+            maxfeepercent: None,
+            retry_for: None,
+            maxdelay: None,
+            exemptfee: None,
+            localinvreqid: None,
+            exclude: None,
+            maxfee: None,
+            description: None,
+        })
+        .await?
+        .status;
+    anyhow::ensure!(matches!(
+        invoice_status,
+        cln_rpc::model::PayStatus::COMPLETE
+    ));
+
+    // Receive the ecash notes
+    let operation_id = ln_invoice_response.operation_id;
+    cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
+
+    // Assert balances changed by 1000 msat
+    let final_lnd_incoming_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_lnd_incoming_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    anyhow::ensure!(
+        final_lnd_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance == 1000,
+        "Client NG balance changed by {} on LND incoming payment, expected 1000",
+        final_lnd_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1000,
+        "LND Gateway balance changed by {} on LND incoming payment, expected 1000",
+        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance
     );
 
     // TODO: test cancel/timeout
