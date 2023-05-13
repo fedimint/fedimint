@@ -226,13 +226,13 @@ impl MintRestoreInProgressState {
         let mut epoch_stream = Self::fetch_epochs_stream(api, epoch_pk, decoders, epoch_range);
         while let Some((epoch, epoch_history)) = epoch_stream.next().await {
             assert_eq!(epoch_history.outcome.epoch, epoch);
+            self.next_epoch = epoch + 1;
 
             info!(target: LOG_ECASH_RECOVERY, epoch, "Processing epoch");
             let mut processed_txs = Default::default();
             for (peer_id, items) in &epoch_history.outcome.items {
                 for item in items {
                     self.handle_consensus_item(
-                        epoch,
                         *peer_id,
                         item,
                         &mut processed_txs,
@@ -614,7 +614,6 @@ impl MintRestoreInProgressState {
 
     pub(crate) fn handle_consensus_item(
         &mut self,
-        epoch: u64,
         peer_id: PeerId,
         item: &ConsensusItem,
         processed_txs: &mut HashSet<TransactionId>,
@@ -622,8 +621,7 @@ impl MintRestoreInProgressState {
         secret: &DerivableSecret,
     ) {
         debug!(target: LOG_ECASH_RECOVERY, ?item, "handling consensus item");
-        assert!(epoch == self.next_epoch);
-        self.next_epoch = epoch;
+        // assert_eq!(epoch, self.next_epoch);
         match item {
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();

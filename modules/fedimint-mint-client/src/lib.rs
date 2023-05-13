@@ -10,7 +10,6 @@ mod oob;
 mod output;
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::ffi;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -1001,7 +1000,7 @@ impl MintClientModule {
                 .find_by_prefix(&NoteKeyPrefix)
                 .await
                 .map(|(key, note)| (key.amount, note))
-                .collect::<BTreeMap<_, _>>()
+                .collect::<Vec<_>>()
                 .await)
                 .into_iter(),
         )
