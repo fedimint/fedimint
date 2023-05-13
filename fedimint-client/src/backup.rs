@@ -278,7 +278,7 @@ impl Client {
     ///
     /// This will restore (or initialize restoration process) in all sub-modules
     /// that support it.
-    pub async fn restore_from_backup(&self) -> Result<Metadata> {
+    pub(crate) async fn restore_from_backup(&self) -> Result<Metadata> {
         info!(target: LOG_CLIENT_RECOVERY, "Restoring from backup");
         let backup = if let Some(backup) = self.download_backup_from_federation().await? {
             info!(

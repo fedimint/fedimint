@@ -71,6 +71,8 @@ use crate::output::{
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
+const MINT_BACKUP_RESTORE_OPERATION_ID: OperationId = OperationId([0x01; 32]);
+
 pub const LOG_TARGET: &str = "client::module::mint";
 
 #[apply(async_trait_maybe_send!)]
@@ -141,6 +143,9 @@ pub trait MintClientExt {
     /// Returns the total value of our notes
     // TODO: Make getting total asserts part of the core client
     async fn total_amount(&self) -> Amount;
+
+    /// Awaits the backup restoration to complete
+    async fn await_restore_finished(&self) -> anyhow::Result<()>;
 }
 
 /// The high-level state of a reissue operation started with
@@ -415,6 +420,12 @@ impl MintClientExt for Client {
             )
             .await
     }
+
+    /// Waits for the mint backup restoration to finish
+    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+        mint.await_restore_finished().await
+    }
 }
 
 async fn mint_operation(client: &Client, operation_id: OperationId) -> anyhow::Result<MintMeta> {
@@ -668,7 +679,7 @@ impl ClientModule for MintClientModule {
                 vec![DynState::from_typed(
                     module_instance_id,
                     MintClientStateMachines::Restore(MintRestoreStateMachine {
-                        operation_id: OperationId::new_random(),
+                        operation_id: MINT_BACKUP_RESTORE_OPERATION_ID,
                         state: MintRestoreStates::InProgress(state),
                     }),
                 )],
@@ -938,6 +949,32 @@ impl MintClientModule {
         )
         .next_or_pending()
         .await
+    }
+
+    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+        let mut restore_stream = self
+            .notifier
+            .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
+            .await;
+        while let Some(restore_step) = restore_stream.next().await {
+            match restore_step {
+                MintClientStateMachines::Restore(MintRestoreStateMachine {
+                    state: MintRestoreStates::Success,
+                    ..
+                }) => {
+                    return Ok(());
+                }
+                MintClientStateMachines::Restore(MintRestoreStateMachine {
+                    state: MintRestoreStates::Failed(error),
+                    ..
+                }) => {
+                    return Err(anyhow!("Restore failed: {}", error.reason));
+                }
+                _ => {}
+            }
+        }
+
+        Err(anyhow!("Restore stream closed without success or failure"))
     }
 
     /// Select notes with total amount of *at least* `amount`. If more than
