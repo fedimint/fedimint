@@ -90,6 +90,8 @@ pub enum ClientNg {
         #[clap(value_parser = parse_secret)]
         secret: [u8; 64],
     },
+    /// Print the secret key of the client
+    PrintSecret,
 }
 
 pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
@@ -250,6 +252,14 @@ pub async fn handle_ng_command(
             }
             client.wipe_state().await?;
             Ok(serde_json::to_value(()).unwrap())
+        }
+        ClientNg::PrintSecret => {
+            let secret = client.get_secret().await;
+            let hex_secret = hex::ToHex::to_hex(secret.0.as_ref());
+
+            Ok(json!({
+                "secret": hex_secret,
+            }))
         }
     }
 }

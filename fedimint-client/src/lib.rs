@@ -1068,7 +1068,7 @@ impl ClientBuilder {
 
         let api = DynFederationApi::from(WsFederationApi::from_config(&config));
 
-        let root_secret = get_client_root_secret(&db).await;
+        let root_secret = get_client_secret(&db).await.into_root_secret();
 
         let (modules, (primary_module_kind, primary_module)) = {
             let mut modules = ClientModuleRegistry::default();
@@ -1153,7 +1153,7 @@ impl ClientBuilder {
 
 /// Fetches the client secret from the database or generates a new one if
 /// none is present
-pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
+pub async fn get_client_secret(db: &Database) -> ClientSecret {
     let mut dbtx = db.begin_transaction().await;
     let client_secret = dbtx.get_value(&ClientSecretKey).await;
     let secret = if let Some(client_secret) = client_secret {
@@ -1168,7 +1168,7 @@ pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
         secret
     };
     dbtx.commit_tx().await;
-    secret.into_root_secret()
+    secret
 }
 
 /// Sets the client secret in the database, returns if an old secret was
