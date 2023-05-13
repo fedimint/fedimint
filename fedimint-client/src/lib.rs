@@ -155,7 +155,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
     // TODO: Could be removed in favor of client() except for testing
-    fn api(&self) -> &(dyn IFederationApi + 'static);
+    fn api(&self) -> &DynFederationApi;
 
     fn decoders(&self) -> &ModuleDecoderRegistry;
 
@@ -360,8 +360,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.api().with_module(self.module_instance_id)
     }
 
-    fn api(&self) -> &(dyn IFederationApi + 'static) {
-        self.client.api.as_ref()
+    fn api(&self) -> &DynFederationApi {
+        &self.client.api
     }
 
     fn decoders(&self) -> &ModuleDecoderRegistry {

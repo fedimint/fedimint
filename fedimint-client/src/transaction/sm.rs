@@ -327,6 +327,8 @@ mod tests {
 
     struct FakeGlobalContext {
         api: FakeApiClient,
+        /// Clone of API wrapped as dyn API (avoids a lot of casting)
+        dyn_api: DynFederationApi,
         executor: Executor<DynGlobalClientContext>,
     }
 
@@ -367,8 +369,8 @@ mod tests {
 
     #[async_trait]
     impl IGlobalClientContext for FakeGlobalContext {
-        fn api(&self) -> &(dyn IFederationApi + 'static) {
-            &self.api
+        fn api(&self) -> &DynFederationApi {
+            &self.dyn_api
         }
 
         fn client_config(&self) -> &ClientConfig {
@@ -441,8 +443,10 @@ mod tests {
             .build(db.clone(), Notifier::new(db.clone()))
             .await;
 
+        let fake_api = FakeApiClient::default();
         let context = Arc::new(FakeGlobalContext {
-            api: FakeApiClient::default(),
+            api: fake_api.clone(),
+            dyn_api: DynFederationApi::from(fake_api),
             executor: executor.clone(),
         });
         let dyn_context = DynGlobalClientContext::from(context.clone());
