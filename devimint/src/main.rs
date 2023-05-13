@@ -986,6 +986,8 @@ enum RpcCmd {
 struct CommonArgs {
     #[clap(short = 'd', long, env = "FM_TEST_DIR")]
     test_dir: PathBuf,
+    #[clap(short = 'n', long, env = "FM_FED_SIZE")]
+    fed_size: usize,
 }
 
 #[derive(Parser)]
@@ -1010,10 +1012,11 @@ async fn run_ui(
     process_mgr: &ProcessManager,
     task_group: &TaskGroup,
     kind: &RunUiKind,
+    fed_size: usize,
 ) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
     // don't drop fedimintds
-    let _fedimintds = futures::future::try_join_all((0..2).map(|peer_id| {
+    let _fedimintds = futures::future::try_join_all((0..fed_size).map(|peer_id| {
         let bitcoind = bitcoind.clone();
         async move {
             let env_vars = match kind {
@@ -1093,8 +1096,9 @@ async fn main() -> Result<()> {
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::RunUi(kind) => {
+            let fed_size = args.common.fed_size;
             let (process_mgr, task_group) = setup(args.common).await?;
-            run_ui(&process_mgr, &task_group, &kind).await?
+            run_ui(&process_mgr, &task_group, &kind, fed_size).await?
         }
         Cmd::LatencyTests => {
             let (process_mgr, _) = setup(args.common).await?;
