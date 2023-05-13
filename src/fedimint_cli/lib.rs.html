@@ -1100,6 +1100,13 @@
 <a href="#1100" id="1100">1100</a>
 <a href="#1101" id="1101">1101</a>
 <a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1116,6 +1123,7 @@
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_aead::get_password_hash;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
+<span class="kw">use </span>fedimint_client::sm::OperationId;
 <span class="kw">use </span>fedimint_client::ClientBuilder;
 <span class="kw">use </span>fedimint_client_legacy::mint::backup::Metadata;
 <span class="kw">use </span>fedimint_client_legacy::mint::SpendableNote;
@@ -2164,6 +2172,12 @@
             }
         }
     }
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>LnInvoiceResponse {
+    <span class="kw">pub </span>operation_id: OperationId,
+    <span class="kw">pub </span>invoice: String,
 }
 
 <span class="doccomment">/// Convert clap arguments to backup metadata

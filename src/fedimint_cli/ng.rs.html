@@ -259,6 +259,18 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -278,6 +290,8 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tracing::info;
+
+<span class="kw">use </span><span class="kw">crate</span>::LnInvoiceResponse;
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub enum </span>ModuleSelector {
@@ -314,6 +328,9 @@
         </span>description: String,
         <span class="attr">#[clap(long)]
         </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    },
+    WaitInvoice {
+        operation_id: OperationId,
     },
     LnPay {
         bolt11: lightning_invoice::Invoice,
@@ -382,9 +399,16 @@
         } =&gt; {
             client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>(operation_id, <span class="kw">_</span>) = client
-                .create_bolt11_invoice_and_receive(amount, description, expiry_time)
+            <span class="kw">let </span>(operation_id, invoice) = client
+                .create_bolt11_invoice(amount, description, expiry_time)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(serde_json::to_value(LnInvoiceResponse {
+                operation_id,
+                invoice: invoice.to_string(),
+            })
+            .unwrap())
+        }
+        ClientNg::WaitInvoice { operation_id } =&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_to_ln_receive_updates(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                 <span class="kw">match </span>update {
@@ -401,7 +425,7 @@
                 <span class="macro">info!</span>(<span class="string">&quot;Update: {:?}&quot;</span>, update);
             }
 
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown Lightning receive state&quot;</span>));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Lightning receive failed&quot;</span>));
         }
         ClientNg::LnPay { bolt11 } =&gt; {
             client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
