@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::ops::Sub;
 
@@ -74,7 +73,6 @@ impl ServerModuleGen for MintGen {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(Mint::new(cfg.to_typed()?).into())

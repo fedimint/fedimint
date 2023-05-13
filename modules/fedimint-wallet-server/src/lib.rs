@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{Infallible, TryInto};
-use std::ffi::OsString;
 use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
@@ -89,12 +88,9 @@ impl ServerModuleGen for WalletGen {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        Ok(Wallet::new(cfg.to_typed()?, db, env, task_group)
-            .await?
-            .into())
+        Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
     }
 
     fn trusted_dealer_gen(
@@ -654,7 +650,6 @@ impl Wallet {
     pub async fn new(
         cfg: WalletConfig,
         db: Database,
-        _env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
         // TODO: should come from wallet config gen params

@@ -2,7 +2,6 @@ pub mod audit;
 pub mod interconnect;
 pub mod registry;
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsString;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -445,7 +444,6 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
 
@@ -658,7 +656,6 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
 
@@ -713,10 +710,9 @@ where
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        <Self as ServerModuleGen>::init(self, cfg, db, env, task_group).await
+        <Self as ServerModuleGen>::init(self, cfg, db, task_group).await
     }
 
     fn get_database_migrations(&self) -> MigrationMap {

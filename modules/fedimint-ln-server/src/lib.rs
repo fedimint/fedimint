@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
 use std::ops::Sub;
 
 use anyhow::bail;
@@ -72,7 +71,6 @@ impl ServerModuleGen for LightningGen {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(Lightning::new(cfg.to_typed()?).into())
