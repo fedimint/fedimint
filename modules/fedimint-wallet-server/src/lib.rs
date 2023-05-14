@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{Infallible, TryInto};
-use std::ffi::{OsStr, OsString};
 use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
@@ -24,11 +23,7 @@ use common::{
     WalletError, WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome,
     CONFIRMATION_TARGET,
 };
-use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_core::bitcoin_rpc::{
-    select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
-    FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
-};
+use fedimint_bitcoind::{create_bitcoind, BitcoinRpcConfig, DynBitcoindRpc};
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -93,12 +88,9 @@ impl ServerModuleGen for WalletGen {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        Ok(Wallet::new(cfg.to_typed()?, db, env, task_group)
-            .await?
-            .into())
+        Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
     }
 
     fn trusted_dealer_gen(
@@ -657,23 +649,11 @@ impl Wallet {
     pub async fn new(
         cfg: WalletConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
-        let bitcoin_backend = select_bitcoin_backend_from_envs(
-            env.get(OsStr::new(FM_BITCOIND_RPC_ENV))
-                .map(OsString::as_os_str),
-            env.get(OsStr::new(FM_ELECTRUM_RPC_ENV))
-                .map(OsString::as_os_str),
-            env.get(OsStr::new(FM_ESPLORA_RPC_ENV))
-                .map(OsString::as_os_str),
-        )?;
-
-        let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoin_rpc_backend(
-            &bitcoin_backend,
-            task_group.make_handle(),
-        )?;
-
+        // TODO: should come from wallet config gen params
+        let rpc_config = BitcoinRpcConfig::from_env_vars()?;
+        let btc_rpc = create_bitcoind(&rpc_config, task_group.make_handle())?;
         Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group).await?)
     }
 
@@ -990,33 +970,14 @@ impl Wallet {
                 .collect::<HashMap<_, _>>()
                 .await;
 
-            match self.btc_rpc.backend_type() {
-                BitcoinRpcBackendType::Bitcoind | BitcoinRpcBackendType::Esplora => {
-                    if !pending_transactions.is_empty() {
-                        let block = self
-                            .btc_rpc
-                            .get_block(&block_hash)
-                            .await
-                            .expect("bitcoin rpc failed");
-                        for transaction in block.txdata {
-                            if let Some(pending_tx) = pending_transactions.get(&transaction.txid())
-                            {
-                                self.recognize_change_utxo(dbtx, pending_tx).await;
-                            }
-                        }
-                    }
-                }
-                BitcoinRpcBackendType::Electrum => {
-                    for transaction in &pending_transactions {
-                        if self
-                            .btc_rpc
-                            .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
-                            .await
-                            .expect("bitcoin electrum rpc backend failed")
-                        {
-                            self.recognize_change_utxo(dbtx, transaction.1).await;
-                        }
-                    }
+            for transaction in &pending_transactions {
+                if self
+                    .btc_rpc
+                    .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
+                    .await
+                    .expect("bitcoin rpc backend failed")
+                {
+                    self.recognize_change_utxo(dbtx, transaction.1).await;
                 }
             }
 

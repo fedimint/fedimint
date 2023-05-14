@@ -25,7 +25,6 @@ use crate::module::registry::ModuleDecoderRegistry;
 #[cfg(not(target_family = "wasm"))]
 pub mod admin_client;
 pub mod api;
-pub mod bitcoin_rpc;
 pub mod cancellable;
 pub mod config;
 pub mod core;

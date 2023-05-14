@@ -35,6 +35,7 @@ clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error
 futures = "0.3.24"
 itertools = "0.10.5"
 jsonrpsee = { version = "0.16.2", features = ["server"] }
+fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-core ={ path = "../fedimint-core" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-server = { path = "../fedimint-server" }

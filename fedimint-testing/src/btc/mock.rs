@@ -1,10 +1,10 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::BTreeMap;
 use std::iter::repeat;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitcoin::hash_types::Txid;
-use bitcoin::hashes::{sha256d, Hash};
+use bitcoin::hashes::Hash;
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Transaction, TxOut,
@@ -200,17 +200,6 @@ impl IBitcoindRpc for FakeBitcoinTest {
             .block_hash())
     }
 
-    async fn get_block(&self, hash: &BlockHash) -> BitcoinRpcResult<Block> {
-        Ok(self
-            .blocks
-            .lock()
-            .unwrap()
-            .iter()
-            .find(|block| *hash == block.header.block_hash())
-            .unwrap()
-            .clone())
-    }
-
     async fn get_fee_rate(&self, _confirmation_target: u16) -> BitcoinRpcResult<Option<Feerate>> {
         Ok(None)
     }
@@ -233,6 +222,18 @@ impl IBitcoindRpc for FakeBitcoinTest {
 
         *pending = filtered.into_values().collect();
     }
+
+    async fn was_transaction_confirmed_in(
+        &self,
+        transaction: &Transaction,
+        height: u64,
+    ) -> BitcoinRpcResult<bool> {
+        let block = &self.blocks.lock().unwrap()[(height - 1) as usize];
+        Ok(block
+            .txdata
+            .iter()
+            .any(|tx| tx.txid() == transaction.txid()))
+    }
 }
 
 fn output_sum(tx: &Transaction) -> u64 {
@@ -241,127 +242,4 @@ fn output_sum(tx: &Transaction) -> u64 {
 
 fn inputs(tx: &Transaction) -> Vec<OutPoint> {
     tx.input.iter().map(|input| input.previous_output).collect()
-}
-
-#[derive(Debug, Default)]
-pub struct FakeBitcoindRpcState {
-    fee_rate: Option<Feerate>,
-    block_height: u64,
-    transactions: VecDeque<Transaction>,
-    tx_in_blocks: HashMap<BlockHash, Vec<Transaction>>,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct FakeBitcoindRpc {
-    state: Arc<Mutex<FakeBitcoindRpcState>>,
-}
-
-pub struct FakeBitcoindRpcController {
-    pub state: Arc<Mutex<FakeBitcoindRpcState>>,
-}
-
-#[async_trait]
-impl IBitcoindRpc for FakeBitcoindRpc {
-    async fn get_network(&self) -> anyhow::Result<Network> {
-        Ok(bitcoin::Network::Regtest)
-    }
-
-    async fn get_block_height(&self) -> anyhow::Result<u64> {
-        Ok(self.state.lock().unwrap().block_height)
-    }
-
-    async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
-        Ok(height_hash(height))
-    }
-
-    async fn get_block(&self, hash: &BlockHash) -> anyhow::Result<Block> {
-        let txdata = self
-            .state
-            .lock()
-            .unwrap()
-            .tx_in_blocks
-            .get(hash)
-            .cloned()
-            .unwrap_or_default();
-        Ok(Block {
-            header: BlockHeader {
-                version: 0,
-                prev_blockhash: sha256d::Hash::hash(b"").into(),
-                merkle_root: sha256d::Hash::hash(b"").into(),
-                time: 0,
-                bits: 0,
-                nonce: 0,
-            },
-            txdata,
-        })
-    }
-
-    async fn get_fee_rate(&self, _confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
-        Ok(self.state.lock().unwrap().fee_rate)
-    }
-
-    async fn submit_transaction(&self, transaction: Transaction) {
-        self.state
-            .lock()
-            .unwrap()
-            .transactions
-            .push_back(transaction);
-    }
-}
-
-impl FakeBitcoindRpc {
-    pub fn new() -> FakeBitcoindRpc {
-        FakeBitcoindRpc::default()
-    }
-
-    pub fn controller(&self) -> FakeBitcoindRpcController {
-        FakeBitcoindRpcController {
-            state: self.state.clone(),
-        }
-    }
-}
-
-impl FakeBitcoindRpcController {
-    pub async fn set_fee_rate(&self, fee_rate: Option<Feerate>) {
-        self.state.lock().unwrap().fee_rate = fee_rate;
-    }
-
-    pub async fn set_block_height(&self, block_height: u64) {
-        self.state.lock().unwrap().block_height = block_height
-    }
-
-    pub async fn is_btc_sent_to(
-        &self,
-        amount: bitcoin::Amount,
-        recipient: bitcoin::Address,
-    ) -> bool {
-        self.state
-            .lock()
-            .unwrap()
-            .transactions
-            .iter()
-            .flat_map(|tx| tx.output.iter())
-            .any(|output| {
-                output.value == amount.to_sat() && output.script_pubkey == recipient.script_pubkey()
-            })
-    }
-
-    pub async fn add_pending_tx_to_block(&self, block: u64) {
-        let block_hash = height_hash(block);
-        let mut state = self.state.lock().unwrap();
-        #[allow(clippy::needless_collect)]
-        let txns = state.transactions.drain(..).collect::<Vec<_>>();
-        state
-            .tx_in_blocks
-            .entry(block_hash)
-            .or_default()
-            .extend(txns.into_iter());
-    }
-}
-
-fn height_hash(height: u64) -> BlockHash {
-    let mut bytes = [0u8; 32];
-    // Exceptionally use little endian to match bitcoin consensus encoding
-    bytes[..8].copy_from_slice(&height.to_le_bytes()[..]);
-    BlockHash::from_inner(bytes)
 }

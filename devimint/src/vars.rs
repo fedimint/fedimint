@@ -120,7 +120,8 @@ declare_vars! {
 
         // fedimint config variables
         FM_TEST_BITCOIND_RPC: String = "http://bitcoin:bitcoin@127.0.0.1:18443";
-        FM_BITCOIND_RPC: String = "http://bitcoin:bitcoin@127.0.0.1:18443";
+        FM_BITCOIN_RPC_URL: String = "http://bitcoin:bitcoin@127.0.0.1:18443";
+        FM_BITCOIN_RPC_KIND: String = "bitcoind";
     }
 }
 

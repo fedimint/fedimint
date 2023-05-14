@@ -11,14 +11,12 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
-use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_bitcoind::{create_bitcoind, BitcoinRpcConfig, DynBitcoindRpc};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
 use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::api::WsClientConnectInfo;
-use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::{
@@ -259,24 +257,8 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 .expect("Must have bitcoind RPC defined for real tests")
                 .parse()
                 .expect("Invalid bitcoind RPC URL");
-            let bitcoin_rpc =
-                match read_bitcoin_backend_from_global_env().expect("invalid bitcoin rpc url") {
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Bitcoind(url) => {
-                        info!("Running tests with Bitcoin rpc");
-                        make_bitcoind_rpc(&url, task_group.make_handle())
-                            .expect("Could not create Bitcoin rpc")
-                    }
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Electrum(url) => {
-                        info!("Running tests with Electrum rpc");
-                        make_electrum_rpc(&url, task_group.make_handle())
-                            .expect("Could not create Electrum rpc")
-                    }
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Esplora(url) => {
-                        info!("Running tests with Esplora rpc");
-                        make_esplora_rpc(&url, task_group.make_handle())
-                            .expect("Could not create Esplora rpc")
-                    }
-                };
+            let rpc_config = BitcoinRpcConfig::from_env_vars()?;
+            let bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle())?;
             let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
             let lightning = RealLightningTest::new(&dir, &gateway_node).await;
 

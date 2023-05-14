@@ -35,7 +35,7 @@ impl Bitcoind {
             .spawn_daemon("bitcoind", cmd!("bitcoind", "-datadir={btc_dir}"))
             .await?;
 
-        let url = processmgr.globals.FM_TEST_BITCOIND_RPC.parse()?;
+        let url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
         let (host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(&url)?;
         let client = Arc::new(bitcoincore_rpc::Client::new(&host, auth)?);
 

@@ -1,34 +1,88 @@
 use std::cmp::min;
+use std::collections::BTreeMap;
+use std::env;
 use std::fmt::Debug;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::bail;
+use anyhow::format_err;
 pub use anyhow::Result;
 use async_trait::async_trait;
-use bitcoin::{Block, BlockHash, Network, Transaction};
-use fedimint_core::bitcoin_rpc::BitcoinRpcBackendType;
+use bitcoin::{BlockHash, Network, Transaction};
 use fedimint_core::task::TaskHandle;
 use fedimint_core::{dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
+use lazy_static::lazy_static;
 use tracing::info;
+use url::Url;
+
+use crate::bitcoincore_rpc::{BitcoindFactory, ElectrumFactory, EsploraFactory};
 
 pub mod bitcoincore_rpc;
+
+/// Env var for bitcoin RPC kind
+pub const FM_BITCOIN_RPC_KIND: &str = "FM_BITCOIN_RPC_KIND";
+/// Env var for bitcoin URL
+pub const FM_BITCOIN_RPC_URL: &str = "FM_BITCOIN_RPC_URL";
+
+/// Configuration for the bitcoin RPC
+#[derive(Debug, Clone)]
+pub struct BitcoinRpcConfig {
+    pub kind: String,
+    pub url: Url,
+}
+
+impl BitcoinRpcConfig {
+    pub fn from_env_vars() -> Result<Self> {
+        Ok(Self {
+            kind: env::var(FM_BITCOIN_RPC_KIND).map_err(anyhow::Error::from)?,
+            url: env::var(FM_BITCOIN_RPC_URL)
+                .map_err(anyhow::Error::from)?
+                .parse()
+                .map_err(anyhow::Error::from)?,
+        })
+    }
+}
+
+lazy_static! {
+    /// Global factories for creating bitcoin RPCs
+    static ref BITCOIN_RPC_REGISTRY: Mutex<BTreeMap<String, DynBitcoindRpcFactory>> =
+        Mutex::new(BTreeMap::from([
+            ("esplora".to_string(), EsploraFactory.into()),
+            ("electrum".to_string(), ElectrumFactory.into()),
+            ("bitcoind".to_string(), BitcoindFactory.into()),
+        ]));
+}
+
+/// Create a bitcoin RPC of a given kind
+pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {
+    let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
+    let maybe_factory = registry.get(&config.kind);
+    let factory = maybe_factory.ok_or(format_err!("{} bitcoind not registered", config.kind))?;
+    factory.create(&config.url, handle)
+}
+
+/// Register a new factory for creating bitcoin RPCs
+pub fn register_bitcoind(kind: String, factory: DynBitcoindRpcFactory) {
+    let mut registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
+    registry.insert(kind, factory);
+}
+
+pub trait IBitcoindRpcFactory: Debug {
+    fn create(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc>;
+}
+
+dyn_newtype_define! {
+    #[derive(Clone)]
+    pub DynBitcoindRpcFactory(Arc<IBitcoindRpcFactory>)
+}
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if the bitcoind node is not reachable.
 #[async_trait]
 pub trait IBitcoindRpc: Debug + Send + Sync {
-    /// `true` if it's real-bitcoin (not electrum) backend and thus supports
-    /// `get_block` call
-    ///
-    /// This is a bit of a workaround to support electrum.
-    fn backend_type(&self) -> BitcoinRpcBackendType {
-        BitcoinRpcBackendType::Bitcoind
-    }
-
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 
@@ -47,12 +101,6 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     /// prevented by only querying hashes for blocks tailing the chain tip
     /// by a certain number of blocks.
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash>;
-
-    /// Returns the block with the given hash
-    ///
-    /// # Panics
-    /// If the block doesn't exist.
-    async fn get_block(&self, hash: &BlockHash) -> Result<bitcoin::Block>;
 
     /// Estimates the fee rate for a given confirmation target. Make sure that
     /// all federation members use the same algorithm to avoid widely
@@ -79,11 +127,9 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     /// Check if a transaction was included in a given (only electrum)
     async fn was_transaction_confirmed_in(
         &self,
-        _transaction: &Transaction,
-        _height: u64,
-    ) -> Result<bool> {
-        bail!("was_transaction_confirmed_in call not supported in standard (non-electrum/esplora) backends")
-    }
+        transaction: &Transaction,
+        height: u64,
+    ) -> Result<bool>;
 }
 
 dyn_newtype_define! {
@@ -139,10 +185,6 @@ impl<C> IBitcoindRpc for RetryClient<C>
 where
     C: IBitcoindRpc,
 {
-    fn backend_type(&self) -> BitcoinRpcBackendType {
-        self.inner.backend_type()
-    }
-
     async fn get_network(&self) -> Result<Network> {
         self.retry_call(|| async { self.inner.get_network().await })
             .await
@@ -155,11 +197,6 @@ where
 
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
         self.retry_call(|| async { self.inner.get_block_hash(height).await })
-            .await
-    }
-
-    async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
-        self.retry_call(|| async { self.inner.get_block(hash).await })
             .await
     }
 

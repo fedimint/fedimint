@@ -11,10 +11,9 @@ use axum::routing::{get, post};
 use axum::Router;
 use axum_macros::debug_handler;
 use bitcoin::Network;
-use fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
+use fedimint_bitcoind::{FM_BITCOIN_RPC_KIND, FM_BITCOIN_RPC_URL};
 use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::SanitizedUrl;
 use fedimint_core::Amount;
 use fedimint_server::config::io::{
     create_cert, parse_peer_params, read_server_config, write_server_config, CONSENSUS_CONFIG,
@@ -223,7 +222,7 @@ async fn post_guardians(
 #[derive(Template)]
 #[template(path = "params.html")]
 struct UrlConnection {
-    ro_bitcoin_rpc_type: &'static str,
+    ro_bitcoin_rpc_type: String,
     ro_bitcoin_rpc_url: String,
     bitcoin_network: String,
     federation_name: String,
@@ -237,22 +236,10 @@ struct UrlConnection {
 async fn params_page(
     axum::extract::State(_state): axum::extract::State<MutableState>,
 ) -> UrlConnection {
-    let (ro_bitcoin_rpc_type, ro_bitcoin_rpc_url) =
-        match fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env() {
-            Ok(BitcoindRpcBackend::Bitcoind(url)) => {
-                let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
-                ("bitcoind", url_str)
-            }
-            Ok(BitcoindRpcBackend::Electrum(url)) => {
-                let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
-                ("electrum", url_str)
-            }
-            Ok(BitcoindRpcBackend::Esplora(url)) => {
-                let url_str = format!("{}", SanitizedUrl::new_borrowed(&url));
-                ("esplora", url_str)
-            }
-            Err(e) => ("error", e.to_string()),
-        };
+    let (ro_bitcoin_rpc_type, ro_bitcoin_rpc_url) = (
+        env::var(FM_BITCOIN_RPC_KIND).expect("FM_BITCOIN_RPC_URL not set"),
+        env::var(FM_BITCOIN_RPC_URL).expect("FM_BITCOIN_RPC_URL not set"),
+    );
     UrlConnection {
         ro_bitcoin_rpc_type,
         ro_bitcoin_rpc_url,

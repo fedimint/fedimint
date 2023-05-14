@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::ffi::OsString;
 
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::config::{
@@ -54,7 +53,6 @@ impl ServerModuleGen for FakeWalletGen {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        _env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(Wallet::new_with_bitcoind(

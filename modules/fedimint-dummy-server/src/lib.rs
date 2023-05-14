@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
 use std::string::ToString;
 
 use anyhow::bail;
@@ -66,7 +65,6 @@ impl ServerModuleGen for DummyGen {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(Dummy::new(cfg.to_typed()?).into())

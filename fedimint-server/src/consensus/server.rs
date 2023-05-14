@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::os::unix::ffi::OsStrExt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -140,12 +139,6 @@ impl ConsensusServer {
     ) -> anyhow::Result<Self> {
         // Apply database migrations and build `ServerModuleRegistry`
         let mut modules = BTreeMap::new();
-        let env = std::env::vars_os()
-            // We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
-            .collect();
 
         apply_migrations(
             &db,
@@ -173,12 +166,7 @@ impl ConsensusServer {
             .await?;
 
             let module = init
-                .init(
-                    cfg.get_module_config(*module_id)?,
-                    isolated_db,
-                    &env,
-                    task_group,
-                )
+                .init(cfg.get_module_config(*module_id)?, isolated_db, task_group)
                 .await?;
             modules.insert(*module_id, (kind, module));
         }
