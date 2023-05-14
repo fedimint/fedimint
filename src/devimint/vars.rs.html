@@ -175,6 +175,7 @@
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -297,7 +298,8 @@
 
         <span class="comment">// fedimint config variables
         </span>FM_TEST_BITCOIND_RPC: String = <span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:18443&quot;</span>;
-        FM_BITCOIND_RPC: String = <span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:18443&quot;</span>;
+        FM_BITCOIN_RPC_URL: String = <span class="string">&quot;http://bitcoin:bitcoin@127.0.0.1:18443&quot;</span>;
+        FM_BITCOIN_RPC_KIND: String = <span class="string">&quot;bitcoind&quot;</span>;
     }
 }
 

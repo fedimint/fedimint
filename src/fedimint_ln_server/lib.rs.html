@@ -1176,10 +1176,7 @@
 <a href="#1176" id="1176">1176</a>
 <a href="#1177" id="1177">1177</a>
 <a href="#1178" id="1178">1178</a>
-<a href="#1179" id="1179">1179</a>
-<a href="#1180" id="1180">1180</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::ops::Sub;
 
 <span class="kw">use </span>anyhow::bail;
@@ -1252,7 +1249,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>).into())

@@ -422,32 +422,15 @@
 <a href="#422" id="422">422</a>
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <span class="kw">use </span>::bitcoincore_rpc::jsonrpc::error::RpcError;
 <span class="kw">use </span>::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
-<span class="kw">use </span>anyhow::{bail, format_err, Context};
+<span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>electrum_client::ElectrumApi;
-<span class="kw">use </span>fedimint_core::bitcoin_rpc::BitcoindRpcBackend;
 <span class="kw">use </span>fedimint_core::module::__reexports::serde_json::Value;
 <span class="kw">use </span>jsonrpc::error::Error <span class="kw">as </span>JsonError;
 <span class="kw">use </span>serde::Deserialize;
@@ -497,37 +480,34 @@
     ))
 }
 
-<span class="kw">pub fn </span>make_bitcoin_rpc_backend(
-    backend: <span class="kw-2">&amp;</span>BitcoindRpcBackend,
-    task_handle: TaskHandle,
-) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
-    <span class="kw">match </span>backend {
-        BitcoindRpcBackend::Bitcoind(url) =&gt; make_bitcoind_rpc(url, task_handle)
-            .context(<span class="string">&quot;bitcoind rpc backend initialization failed&quot;</span>),
-        BitcoindRpcBackend::Electrum(url) =&gt; make_electrum_rpc(url, task_handle)
-            .context(<span class="string">&quot;electrum rpc backend initialization failed&quot;</span>),
-        BitcoindRpcBackend::Esplora(url) =&gt; make_esplora_rpc(url, task_handle),
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>ElectrumFactory;
+<span class="kw">impl </span>IBitcoindRpcFactory <span class="kw">for </span>ElectrumFactory {
+    <span class="kw">fn </span>create(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
+        <span class="prelude-val">Ok</span>(RetryClient::new(ElectrumClient::new(url)<span class="question-mark">?</span>, handle).into())
     }
 }
 
-<span class="kw">pub fn </span>make_bitcoind_rpc(url: <span class="kw-2">&amp;</span>Url, task_handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
-    <span class="kw">let </span>(url, auth) = from_url_to_url_auth(url)<span class="question-mark">?</span>;
-    <span class="kw">let </span>bitcoind_client =
-        ::bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>url, auth).map_err(anyhow::Error::from)<span class="question-mark">?</span>;
-    <span class="kw">let </span>retry_client = RetryClient::new(
-        Client(ErrorReporting::new(url, bitcoind_client)),
-        task_handle,
-    );
-
-    <span class="prelude-val">Ok</span>(retry_client.into())
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>EsploraFactory;
+<span class="kw">impl </span>IBitcoindRpcFactory <span class="kw">for </span>EsploraFactory {
+    <span class="kw">fn </span>create(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
+        <span class="prelude-val">Ok</span>(RetryClient::new(EsploraClient::new(url)<span class="question-mark">?</span>, handle).into())
+    }
 }
 
-<span class="kw">pub fn </span>make_electrum_rpc(url: <span class="kw-2">&amp;</span>Url, task_handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
-    <span class="prelude-val">Ok</span>(RetryClient::new(ElectrumClient::new(url)<span class="question-mark">?</span>, task_handle).into())
-}
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>BitcoindFactory;
+<span class="kw">impl </span>IBitcoindRpcFactory <span class="kw">for </span>BitcoindFactory {
+    <span class="kw">fn </span>create(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
+        <span class="kw">let </span>(url, auth) = from_url_to_url_auth(url)<span class="question-mark">?</span>;
+        <span class="kw">let </span>bitcoind_client =
+            ::bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>url, auth).map_err(anyhow::Error::from)<span class="question-mark">?</span>;
+        <span class="kw">let </span>retry_client =
+            RetryClient::new(Client(ErrorReporting::new(url, bitcoind_client)), handle);
 
-<span class="kw">pub fn </span>make_esplora_rpc(url: <span class="kw-2">&amp;</span>Url, task_handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
-    <span class="prelude-val">Ok</span>(RetryClient::new(EsploraClient::new(url)<span class="question-mark">?</span>, task_handle).into())
+        <span class="prelude-val">Ok</span>(retry_client.into())
+    }
 }
 
 <span class="doccomment">/// Wrapper around [`bitcoincore_rpc::Client`] logging failures
@@ -629,21 +609,6 @@
 
     <span class="attr">#[instrument(
         skip(<span class="self">self</span>),
-        name = <span class="string">&quot;bitcoincore_rpc::get_block&quot;</span>,
-        level = <span class="string">&quot;DEBUG&quot;</span>,
-        ret,
-        err
-    )]
-    </span><span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;Block&gt; {
-        fedimint_core::task::block_in_place(|| {
-            bitcoincore_rpc::RpcApi::get_block(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, hash)
-                .map_err(anyhow::Error::from)
-                .map_err(Into::into)
-        })
-    }
-
-    <span class="attr">#[instrument(
-        skip(<span class="self">self</span>),
         name = <span class="string">&quot;bitcoincore_rpc::get_fee_rate&quot;</span>,
         level = <span class="string">&quot;DEBUG&quot;</span>,
         ret,
@@ -674,6 +639,21 @@
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
         })
     }
+
+    <span class="kw">async fn </span>was_transaction_confirmed_in(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        transaction: <span class="kw-2">&amp;</span>Transaction,
+        height: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="kw">let </span>block_hash = <span class="self">self</span>.get_block_hash(height).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>block = fedimint_core::task::block_in_place(|| {
+            <span class="self">self</span>.<span class="number">0</span>.get_block(<span class="kw-2">&amp;</span>block_hash).map_err(anyhow::Error::from)
+        })<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(block
+            .txdata
+            .iter()
+            .any(|tx| tx.txid() == transaction.txid()))
+    }
 }
 
 <span class="kw">pub struct </span>ElectrumClient(electrum_client::Client);
@@ -692,10 +672,6 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>ElectrumClient {
-    <span class="kw">fn </span>backend_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcBackendType {
-        BitcoinRpcBackendType::Electrum
-    }
-
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Network&gt; {
         <span class="kw">let </span>resp = fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.server_features().map_err(anyhow::Error::from)
@@ -727,10 +703,6 @@
                 .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;empty block headers response&quot;</span>))<span class="question-mark">?
                 </span>.block_hash())
         })
-    }
-
-    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, _hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;Block&gt; {
-        <span class="macro">bail!</span>(<span class="string">&quot;get_block call not supported on electrum rpc backend&quot;</span>)
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
@@ -808,10 +780,6 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>EsploraClient {
-    <span class="kw">fn </span>backend_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcBackendType {
-        BitcoinRpcBackendType::Esplora
-    }
-
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Network&gt; {
         <span class="kw">let </span>genesis_height: u32 = <span class="number">0</span>;
         <span class="kw">let </span>genesis_hash = <span class="self">self</span>.<span class="number">0</span>.get_block_hash(genesis_height).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -844,21 +812,6 @@
             .map_err(Into::into)
     }
 
-    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;Block&gt; {
-        <span class="self">self</span>.<span class="number">0
-            </span>.get_block_by_hash(hash)
-            .<span class="kw">await
-            </span>.map(|block| {
-                block.ok_or_else(|| {
-                    anyhow::Error::msg(<span class="macro">format!</span>(
-                        <span class="string">&quot;The fetched block for given height {hash} has not been not found&quot;
-                    </span>))
-                })
-            })<span class="question-mark">?
-            </span>.map_err(anyhow::Error::from)
-            .map_err(Into::into)
-    }
-
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
         <span class="kw">let </span>fee_estimates: HashMap&lt;String, f64&gt; = <span class="self">self</span>.<span class="number">0</span>.get_fee_estimates().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -876,6 +829,21 @@
         <span class="kw">let _ </span>= <span class="self">self</span>.<span class="number">0</span>.broadcast(<span class="kw-2">&amp;</span>transaction).<span class="kw">await</span>.map_err(|error| {
             <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Error broadcasting transaction&quot;</span>);
         });
+    }
+
+    <span class="kw">async fn </span>was_transaction_confirmed_in(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        transaction: <span class="kw-2">&amp;</span>Transaction,
+        height: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="kw">let </span>status = <span class="self">self
+            </span>.<span class="number">0
+            </span>.get_tx_status(<span class="kw-2">&amp;</span>transaction.txid())
+            .<span class="kw">await
+            </span>.map_err(anyhow::Error::from)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(status
+            .map(|status| status.block_height == <span class="prelude-val">Some</span>(height <span class="kw">as </span>u32))
+            .unwrap_or(<span class="bool-val">false</span>))
     }
 }
 </code></pre></div>

@@ -487,7 +487,7 @@
             .spawn_daemon(<span class="string">&quot;bitcoind&quot;</span>, <span class="macro">cmd!</span>(<span class="string">&quot;bitcoind&quot;</span>, <span class="string">&quot;-datadir={btc_dir}&quot;</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>url = processmgr.globals.FM_TEST_BITCOIND_RPC.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>(host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(<span class="kw-2">&amp;</span>url)<span class="question-mark">?</span>;
         <span class="kw">let </span>client = Arc::new(bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>host, auth)<span class="question-mark">?</span>);
 

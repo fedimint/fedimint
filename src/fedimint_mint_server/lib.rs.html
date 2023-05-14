@@ -1432,10 +1432,7 @@
 <a href="#1432" id="1432">1432</a>
 <a href="#1433" id="1433">1433</a>
 <a href="#1434" id="1434">1434</a>
-<a href="#1435" id="1435">1435</a>
-<a href="#1436" id="1436">1436</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::ops::Sub;
 
@@ -1510,7 +1507,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(Mint::new(cfg.to_typed()<span class="question-mark">?</span>).into())

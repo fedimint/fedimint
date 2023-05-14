@@ -443,10 +443,7 @@
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::ffi::OsString;
 <span class="kw">use </span>std::string::ToString;
 
 <span class="kw">use </span>anyhow::bail;
@@ -513,7 +510,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="prelude-val">Ok</span>(Dummy::new(cfg.to_typed()<span class="question-mark">?</span>).into())
