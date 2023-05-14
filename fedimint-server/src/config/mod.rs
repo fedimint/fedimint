@@ -151,8 +151,6 @@ pub struct ServerConfigLocal {
     pub api_bind: SocketAddr,
     /// How many API connections we will accept
     pub max_connections: u32,
-    /// Non-consensus, non-private configuration from modules
-    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
     /// Required to download the client config
     pub download_token: ClientConfigDownloadToken,
     /// Limit on the number of times a config download token can be used
@@ -234,7 +232,6 @@ impl ServerConfig {
             fed_bind: params.local.p2p_bind,
             api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-            modules: Default::default(),
             download_token: ClientConfigDownloadToken(OsRng.gen()),
             download_token_limit: params.local.download_token_limit,
         };
@@ -276,13 +273,11 @@ impl ServerConfig {
     pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {
         for (name, config) in modules.into_iter() {
             let ServerModuleConfig {
-                local,
                 private,
                 consensus,
                 consensus_json,
             } = config;
 
-            self.local.modules.insert(name, local);
             self.private.modules.insert(name, private);
             self.consensus.modules.insert(name, consensus);
             self.consensus.modules_json.insert(name, consensus_json);
@@ -294,7 +289,6 @@ impl ServerConfig {
         &self,
         id: ModuleInstanceId,
     ) -> anyhow::Result<T> {
-        let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
         let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
         let consensus = self
             .consensus
@@ -303,7 +297,7 @@ impl ServerConfig {
             .ok_or_else(|| format_err!("Module {id} not found"))?
             .clone();
         let consensus_json = Self::get_module_cfg_by_instance_id(&self.consensus.modules_json, id)?;
-        let module = ServerModuleConfig::from(local, private, consensus, consensus_json);
+        let module = ServerModuleConfig::from(private, consensus, consensus_json);
 
         module.to_typed()
     }
@@ -323,7 +317,6 @@ impl ServerConfig {
 
     /// Constructs a module config by id
     pub fn get_module_config(&self, id: ModuleInstanceId) -> anyhow::Result<ServerModuleConfig> {
-        let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
         let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
         let consensus = self
             .consensus
@@ -332,12 +325,7 @@ impl ServerConfig {
             .ok_or_else(|| format_err!("Module {id} not found"))?
             .clone();
         let consensus_json = Self::get_module_cfg_by_instance_id(&self.consensus.modules_json, id)?;
-        Ok(ServerModuleConfig::from(
-            local,
-            private,
-            consensus,
-            consensus_json,
-        ))
+        Ok(ServerModuleConfig::from(private, consensus, consensus_json))
     }
 
     fn get_module_cfg_by_instance_id(

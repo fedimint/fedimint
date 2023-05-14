@@ -187,22 +187,16 @@ macro_rules! plugin_types_trait_impl_config {
         }
 
         impl fedimint_core::config::TypedServerModuleConfig for $cfg {
-            type Local = ();
             type Private = $cfg_private;
             type Consensus = $cfg_consensus;
 
-            fn from_parts(
-                _: Self::Local,
-                private: Self::Private,
-                consensus: Self::Consensus,
-            ) -> Self {
+            fn from_parts(private: Self::Private, consensus: Self::Consensus) -> Self {
                 Self { private, consensus }
             }
 
-            fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
+            fn to_parts(self) -> (ModuleKind, Self::Private, Self::Consensus) {
                 (
                     <$common_gen as fedimint_core::module::CommonModuleGen>::KIND,
-                    (),
                     self.private,
                     self.consensus,
                 )
