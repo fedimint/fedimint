@@ -11,12 +11,13 @@ pub struct LightningGenParams;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
-    /// Contains all configuration that will be encrypted such as private key
-    /// material
+    pub local: LightningConfigLocal,
     pub private: LightningConfigPrivate,
-    /// Contains all configuration that needs to be the same for every server
     pub consensus: LightningConfigConsensus,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct LightningConfigLocal;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningConfigConsensus {
@@ -51,6 +52,7 @@ plugin_types_trait_impl_config!(
     LightningCommonGen,
     LightningGenParams,
     LightningConfig,
+    LightningConfigLocal,
     LightningConfigPrivate,
     LightningConfigConsensus,
     LightningClientConfig

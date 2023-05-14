@@ -24,8 +24,8 @@ use fedimint_core::{
 };
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
-    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
-    MintGenParams,
+    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal,
+    MintConfigPrivate, MintGenParams,
 };
 use fedimint_mint_common::db::{
     DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
@@ -100,6 +100,7 @@ impl ServerModuleGen for MintGen {
             .iter()
             .map(|&peer| {
                 let config = MintConfig {
+                    local: MintConfigLocal,
                     consensus: MintConfigConsensus {
                         peer_tbs_pks: peers
                             .iter()
@@ -152,6 +153,7 @@ impl ServerModuleGen for MintGen {
             .collect::<HashMap<_, _>>();
 
         let server = MintConfig {
+            local: MintConfigLocal,
             private: MintConfigPrivate {
                 tbs_sks: amounts_keys
                     .iter()
@@ -986,8 +988,8 @@ mod test {
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
     use crate::{
-        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigPrivate,
-        MintGen, MintGenParams, PeerErrorType,
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigLocal,
+        MintConfigPrivate, MintGen, MintGenParams, PeerErrorType,
     };
 
     const THRESHOLD: usize = 1;
@@ -1176,6 +1178,7 @@ mod test {
         let (mint_server_cfg2, _) = build_configs();
 
         Mint::new(MintConfig {
+            local: MintConfigLocal,
             consensus: MintConfigConsensus {
                 peer_tbs_pks: mint_server_cfg2[0]
                     .to_typed::<MintConfig>()

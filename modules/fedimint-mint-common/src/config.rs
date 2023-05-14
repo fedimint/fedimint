@@ -28,12 +28,13 @@ impl Default for MintGenParams {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
-    /// Contains all configuration that will be encrypted such as private key
-    /// material
+    pub local: MintConfigLocal,
     pub private: MintConfigPrivate,
-    /// Contains all configuration that needs to be the same for every server
     pub consensus: MintConfigConsensus,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct MintConfigLocal;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct MintConfigConsensus {
@@ -65,6 +66,7 @@ plugin_types_trait_impl_config!(
     MintCommonGen,
     MintGenParams,
     MintConfig,
+    MintConfigLocal,
     MintConfigPrivate,
     MintConfigConsensus,
     MintClientConfig

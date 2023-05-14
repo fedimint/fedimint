@@ -20,7 +20,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 use fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate, DummyGenParams,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
+    DummyGenParams,
 };
 use fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
@@ -94,6 +95,7 @@ impl ServerModuleGen for DummyGen {
             .map(|&peer| {
                 let private_key_share = SerdeSecret(sks.secret_key_share(peer.to_usize()));
                 let config = DummyConfig {
+                    local: DummyConfigLocal,
                     private: DummyConfigPrivate { private_key_share },
                     consensus: DummyConfigConsensus {
                         public_key_set: pks.clone(),
@@ -119,6 +121,7 @@ impl ServerModuleGen for DummyGen {
         let keys = g1[&()].threshold_crypto();
 
         Ok(DummyConfig {
+            local: DummyConfigLocal,
             private: DummyConfigPrivate {
                 private_key_share: keys.secret_key_share,
             },

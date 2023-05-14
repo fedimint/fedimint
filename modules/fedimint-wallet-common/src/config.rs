@@ -28,12 +28,13 @@ impl Default for WalletGenParams {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {
-    /// Contains all configuration that will be encrypted such as private key
-    /// material
+    pub local: WalletConfigLocal,
     pub private: WalletConfigPrivate,
-    /// Contains all configuration that needs to be the same for every server
     pub consensus: WalletConfigConsensus,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct WalletConfigLocal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigPrivate {
@@ -98,6 +99,7 @@ impl WalletConfig {
         );
 
         Self {
+            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -130,6 +132,7 @@ plugin_types_trait_impl_config!(
     WalletCommonGen,
     WalletGenParams,
     WalletConfig,
+    WalletConfigLocal,
     WalletConfigPrivate,
     WalletConfigConsensus,
     WalletClientConfig

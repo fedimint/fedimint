@@ -27,7 +27,7 @@ use fedimint_core::{
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigPrivate,
+    LightningConfigLocal, LightningConfigPrivate,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{
@@ -92,6 +92,7 @@ impl ServerModuleGen for LightningGen {
                 (
                     peer,
                     LightningConfig {
+                        local: LightningConfigLocal,
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
@@ -118,6 +119,7 @@ impl ServerModuleGen for LightningGen {
         let keys = g1[&()].threshold_crypto();
 
         let server = LightningConfig {
+            local: LightningConfigLocal,
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: Default::default(),

@@ -24,6 +24,7 @@ impl Default for DummyGenParams {
 /// Contains all the configuration for the server
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DummyConfig {
+    pub local: DummyConfigLocal,
     pub private: DummyConfigPrivate,
     pub consensus: DummyConfigConsensus,
 }
@@ -35,6 +36,10 @@ pub struct DummyClientConfig {
     pub tx_fee: Amount,
     pub fed_public_key: PublicKey,
 }
+
+/// Locally unencrypted config unique to each member
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct DummyConfigLocal;
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
@@ -57,6 +62,7 @@ plugin_types_trait_impl_config!(
     DummyCommonGen,
     DummyGenParams,
     DummyConfig,
+    DummyConfigLocal,
     DummyConfigPrivate,
     DummyConfigConsensus,
     DummyClientConfig
