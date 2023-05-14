@@ -173,6 +173,18 @@ pub struct LightningGateway {
     pub valid_until: SystemTime,
 }
 
+impl LightningGateway {
+    /// Check if two gateway registrations are the same except for the expiry
+    /// time
+    pub fn is_same_gateway_registration(&self, other: &LightningGateway) -> bool {
+        self.mint_channel_id == other.mint_channel_id
+            && self.mint_pub_key == other.mint_pub_key
+            && self.node_pub_key == other.node_pub_key
+            && self.api == other.api
+            && self.route_hints == other.route_hints
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct LightningConsensusItem {
     pub contract_id: ContractId,

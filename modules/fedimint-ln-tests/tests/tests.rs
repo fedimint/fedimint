@@ -45,14 +45,20 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
 
     // Client selects a gateway by default
     let gateway1 = fixtures.new_gateway(&fed).await.last_info().registration;
-    assert_eq!(client.select_active_gateway().await?, gateway1);
+    assert!(client
+        .select_active_gateway()
+        .await?
+        .is_same_gateway_registration(&gateway1));
 
     let gateway2 = fixtures.new_gateway(&fed).await.last_info().registration;
     let gateways = client.fetch_registered_gateways().await.unwrap();
     assert_eq!(gateways.len(), 2);
 
     client.set_active_gateway(&gateway2.node_pub_key).await?;
-    assert_eq!(client.select_active_gateway().await?, gateway2);
+    assert!(client
+        .select_active_gateway()
+        .await?
+        .is_same_gateway_registration(&gateway2));
     Ok(())
 }
 

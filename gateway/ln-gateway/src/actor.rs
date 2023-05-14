@@ -155,7 +155,6 @@ impl GatewayActor {
         let registration = register_client
             .config()
             .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
-        let registration_sent = registration.clone();
         let notify = Arc::new(Notify::new());
         let notfiy_sent = notify.clone();
         task_group
@@ -166,8 +165,13 @@ impl GatewayActor {
                         String::from("Register With Federation"),
                         #[allow(clippy::unit_arg)]
                         || async {
+                            let registration =
+                                register_client.config().to_gateway_registration_info(
+                                    route_hints.clone(),
+                                    GW_ANNOUNCEMENT_TTL,
+                                );
                             Ok(register_client
-                                .register_with_federation(registration_sent.clone())
+                                .register_with_federation(registration)
                                 .await?)
                         },
                         Duration::from_secs(1),
