@@ -2042,17 +2042,6 @@
 <a href="#2042" id="2042">2042</a>
 <a href="#2043" id="2043">2043</a>
 <a href="#2044" id="2044">2044</a>
-<a href="#2045" id="2045">2045</a>
-<a href="#2046" id="2046">2046</a>
-<a href="#2047" id="2047">2047</a>
-<a href="#2048" id="2048">2048</a>
-<a href="#2049" id="2049">2049</a>
-<a href="#2050" id="2050">2050</a>
-<a href="#2051" id="2051">2051</a>
-<a href="#2052" id="2052">2052</a>
-<a href="#2053" id="2053">2053</a>
-<a href="#2054" id="2054">2054</a>
-<a href="#2055" id="2055">2055</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ffi::{OsStr, OsString};
@@ -2709,8 +2698,7 @@
 }
 
 <span class="kw">impl </span>Wallet {
-    <span class="attr">#[cfg(feature = <span class="string">&quot;native&quot;</span>)]
-    </span><span class="kw">pub async fn </span>new(
+    <span class="kw">pub async fn </span>new(
         cfg: WalletConfig,
         db: Database,
         env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
@@ -2731,16 +2719,6 @@
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(cfg, db, btc_rpc, task_group).<span class="kw">await</span><span class="question-mark">?</span>)
-    }
-
-    <span class="attr">#[cfg(not(feature = <span class="string">&quot;native&quot;</span>))]
-    </span><span class="kw">pub async fn </span>new(
-        cfg: WalletConfig,
-        db: Database,
-        env: <span class="kw-2">&amp;</span>BTreeMap&lt;OsString, OsString&gt;,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;Wallet&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Native cargo feature not enabled, can&#39;t initialize modules&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>new_with_bitcoind(

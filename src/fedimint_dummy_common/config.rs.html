@@ -72,11 +72,11 @@
 
 <span class="doccomment">/// Parameters necessary to generate this module&#39;s configuration
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>DummyConfigGenParams {
+</span><span class="kw">pub struct </span>DummyGenParams {
     <span class="kw">pub </span>tx_fee: Amount,
 }
 
-<span class="kw">impl </span>Default <span class="kw">for </span>DummyConfigGenParams {
+<span class="kw">impl </span>Default <span class="kw">for </span>DummyGenParams {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             tx_fee: Amount::ZERO,
@@ -118,7 +118,7 @@
 <span class="comment">// Wire together the configs for this module
 </span><span class="macro">plugin_types_trait_impl_config!</span>(
     DummyCommonGen,
-    DummyConfigGenParams,
+    DummyGenParams,
     DummyConfig,
     DummyConfigPrivate,
     DummyConfigConsensus,

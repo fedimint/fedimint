@@ -468,7 +468,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigGenParams, DummyConfigPrivate,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate, DummyGenParams,
 };
 <span class="kw">use </span>fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
@@ -533,7 +533,7 @@
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="comment">// Coerce config gen params into type
-        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyConfigGenParams&gt;().unwrap();
+        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyGenParams&gt;().unwrap();
         <span class="comment">// Create trusted set of threshold keys
         </span><span class="kw">let </span>sks = SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>pks: PublicKeySet = sks.public_keys();
@@ -561,7 +561,7 @@
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
         <span class="comment">// Coerce config gen params into type
-        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyConfigGenParams&gt;().unwrap();
+        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyGenParams&gt;().unwrap();
         <span class="comment">// Runs distributed key generation
         // Could create multiple keys, here we use &#39;()&#39; to create one
         </span><span class="kw">let </span>g1 = peers.run_dkg_g1(()).<span class="kw">await</span><span class="question-mark">?</span>;

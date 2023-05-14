@@ -185,7 +185,6 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -202,8 +201,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_BLOCKCHAIN;
 <span class="kw">use </span>tracing::info;
 
-<span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
-</span><span class="kw">pub mod </span>bitcoincore_rpc;
+<span class="kw">pub mod </span>bitcoincore_rpc;
 
 <span class="doccomment">/// Trait that allows interacting with the Bitcoin blockchain
 ///

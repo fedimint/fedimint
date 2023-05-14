@@ -906,7 +906,7 @@
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`LightningClientExt::pay_bolt11_invoice`].
-</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>LnPayState {
     Created,
     Canceled,
@@ -919,7 +919,7 @@
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`LightningClientExt::create_bolt11_invoice`].
-</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>LnReceiveState {
     Created,
     WaitingForPayment { invoice: String, timeout: Duration },
