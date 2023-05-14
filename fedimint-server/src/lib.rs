@@ -197,6 +197,7 @@ impl FedimintServer {
             .expect("Could not start API server")
             .start(module)
             .expect("Could not start API server");
+        info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
 
         FedimintApiHandler { handle, runtime }
     }

@@ -1045,7 +1045,7 @@ async fn run_ui(
                 Ok(TcpStream::connect(server_addr).await.is_ok())
             })
             .await?;
-            info!(LOG_DEVIMINT, "Started ui/api on http://{server_addr}");
+
             anyhow::Ok(fm)
         }
     }))

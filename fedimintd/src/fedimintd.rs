@@ -247,6 +247,7 @@ async fn run(
                 .await;
             })
             .await;
+        info!(target: "old-ui", "Started ui on http://{listen_ui}");
 
         // If federation configs (e.g. local.json) missing, wait for admin UI to report
         // DKG completion
