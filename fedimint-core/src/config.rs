@@ -11,10 +11,7 @@ use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use fedimint_core::cancellable::Cancelled;
-use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::registry::ModuleRegistry;
@@ -358,26 +355,6 @@ impl<M> ModuleGenRegistry<M> {
     pub fn get(&self, k: &ModuleKind) -> Option<&M> {
         self.0.get(k)
     }
-
-    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
-    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter<M>
-    where
-        M: Clone,
-    {
-        for hardcoded_module in ["mint", "ln", "wallet"] {
-            if !self
-                .0
-                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
-            {
-                panic!("Missing {hardcoded_module} module");
-            }
-        }
-
-        LegacyInitOrderIter {
-            next_id: 0,
-            rest: self.0.clone(),
-        }
-    }
 }
 
 impl ModuleRegistry<ConfigGenModuleParams> {
@@ -424,55 +401,6 @@ where
             modules.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
         Ok(ModuleDecoderRegistry::from(modules))
-    }
-}
-
-/// Iterate over module generators in a legacy, hardcoded order: ln, mint,
-/// wallet, rest... Returning each `kind` exactly once, so that
-/// `LEGACY_HARDCODED_` constants correspond to correct module kind.
-///
-/// We would like to get rid of it eventually, but old client and test code
-/// assumes it in multiple places, and it will take work to fix it, while we
-/// want new code to not assume this 1:1 relationship.
-pub struct LegacyInitOrderIter<M> {
-    /// Counter of what module id will this returned value get assigned
-    next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, M>,
-}
-
-impl<M> Iterator for LegacyInitOrderIter<M> {
-    type Item = (ModuleKind, M);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let ret = match self.next_id {
-            LEGACY_HARDCODED_INSTANCE_ID_LN => {
-                let kind = ModuleKind::from_static_str("ln");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
-                let kind = ModuleKind::from_static_str("mint");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
-                let kind = ModuleKind::from_static_str("wallet");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            _ => self.rest.pop_first(),
-        };
-
-        if ret.is_some() {
-            self.next_id += 1;
-        }
-        ret
     }
 }
 
