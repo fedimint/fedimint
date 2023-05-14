@@ -404,7 +404,22 @@ where
     }
 }
 
+/// Empty struct for if there are no params
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct EmptyGenParams;
+
 pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
+    /// Locally configurable parameters for config generation
+    type Local: DeserializeOwned + Serialize;
+    /// Consensus parameters for config generation
+    type Consensus: DeserializeOwned + Serialize;
+
+    /// Assemble from the distinct parts
+    fn from_parts(local: Self::Local, consensus: Self::Consensus) -> Self;
+
+    /// Split the config into its distinct parts
+    fn to_parts(self) -> (Self::Local, Self::Consensus);
+
     fn from_json<P: ModuleGenParams>(value: serde_json::Value) -> anyhow::Result<Self> {
         serde_json::from_value(value)
             .map_err(|e| anyhow::Error::new(e).context("Invalid module gen params"))

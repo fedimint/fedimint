@@ -1,3 +1,4 @@
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::plugin_types_trait_impl_config;
@@ -6,8 +7,11 @@ use threshold_crypto::serde_impl::SerdeSecret;
 
 use crate::LightningCommonGen;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParams;
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct LightningGenParams {
+    pub local: EmptyGenParams,
+    pub consensus: EmptyGenParams,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
@@ -51,6 +55,8 @@ pub struct LightningClientConfig {
 plugin_types_trait_impl_config!(
     LightningCommonGen,
     LightningGenParams,
+    EmptyGenParams,
+    EmptyGenParams,
     LightningConfig,
     LightningConfigLocal,
     LightningConfigPrivate,

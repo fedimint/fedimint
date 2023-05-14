@@ -99,7 +99,7 @@ impl ServerModuleGen for DummyGen {
                     private: DummyConfigPrivate { private_key_share },
                     consensus: DummyConfigConsensus {
                         public_key_set: pks.clone(),
-                        tx_fee: params.tx_fee,
+                        tx_fee: params.consensus.tx_fee,
                     },
                 };
                 (peer, config.to_erased())
@@ -127,7 +127,7 @@ impl ServerModuleGen for DummyGen {
             },
             consensus: DummyConfigConsensus {
                 public_key_set: keys.public_key_set,
-                tx_fee: params.tx_fee,
+                tx_fee: params.consensus.tx_fee,
             },
         }
         .to_erased())

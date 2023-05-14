@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use bitcoin::Network;
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
@@ -13,6 +14,12 @@ use crate::{PegInDescriptor, WalletCommonGen};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
+    pub local: EmptyGenParams,
+    pub consensus: WalletGenParamsConsensus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletGenParamsConsensus {
     pub network: bitcoin::network::constants::Network,
     pub finality_delay: u32,
 }
@@ -20,8 +27,11 @@ pub struct WalletGenParams {
 impl Default for WalletGenParams {
     fn default() -> Self {
         Self {
-            network: Network::Regtest,
-            finality_delay: 10,
+            local: EmptyGenParams,
+            consensus: WalletGenParamsConsensus {
+                network: Network::Regtest,
+                finality_delay: 10,
+            },
         }
     }
 }
@@ -131,6 +141,8 @@ impl WalletClientConfig {
 plugin_types_trait_impl_config!(
     WalletCommonGen,
     WalletGenParams,
+    EmptyGenParams,
+    WalletGenParamsConsensus,
     WalletConfig,
     WalletConfigLocal,
     WalletConfigPrivate,

@@ -1,3 +1,4 @@
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Amount};
@@ -10,13 +11,23 @@ use crate::DummyCommonGen;
 /// Parameters necessary to generate this module's configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DummyGenParams {
+    pub local: EmptyGenParams,
+    pub consensus: DummyGenParamsConsensus,
+}
+
+/// Consensus parameters for config generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DummyGenParamsConsensus {
     pub tx_fee: Amount,
 }
 
 impl Default for DummyGenParams {
     fn default() -> Self {
         Self {
-            tx_fee: Amount::ZERO,
+            local: EmptyGenParams,
+            consensus: DummyGenParamsConsensus {
+                tx_fee: Amount::ZERO,
+            },
         }
     }
 }
@@ -61,6 +72,8 @@ pub struct DummyConfigPrivate {
 plugin_types_trait_impl_config!(
     DummyCommonGen,
     DummyGenParams,
+    EmptyGenParams,
+    DummyGenParamsConsensus,
     DummyConfig,
     DummyConfigLocal,
     DummyConfigPrivate,

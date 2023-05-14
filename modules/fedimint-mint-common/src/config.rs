@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId, Tiered};
@@ -10,6 +11,12 @@ use crate::MintCommonGen;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintGenParams {
+    pub local: EmptyGenParams,
+    pub consensus: MintGenParamsConsensus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MintGenParamsConsensus {
     pub mint_amounts: Vec<Amount>,
 }
 
@@ -18,10 +25,13 @@ const TEN_BTC_IN_SATS: u64 = 10 * 100_000_000;
 impl Default for MintGenParams {
     fn default() -> Self {
         MintGenParams {
-            mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
-                .tiers()
-                .cloned()
-                .collect(),
+            consensus: MintGenParamsConsensus {
+                mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
+                    .tiers()
+                    .cloned()
+                    .collect(),
+            },
+            local: EmptyGenParams,
         }
     }
 }
@@ -65,6 +75,8 @@ pub struct MintClientConfig {
 plugin_types_trait_impl_config!(
     MintCommonGen,
     MintGenParams,
+    EmptyGenParams,
+    MintGenParamsConsensus,
     MintConfig,
     MintConfigLocal,
     MintConfigPrivate,

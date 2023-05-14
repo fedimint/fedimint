@@ -88,6 +88,7 @@ impl ServerModuleGen for MintGen {
             .expect("Invalid mint params");
 
         let tbs_keys = params
+            .consensus
             .mint_amounts
             .iter()
             .map(|&amount| {
@@ -106,6 +107,7 @@ impl ServerModuleGen for MintGen {
                             .iter()
                             .map(|&key_peer| {
                                 let keys = params
+                                    .consensus
                                     .mint_amounts
                                     .iter()
                                     .map(|amount| {
@@ -120,6 +122,7 @@ impl ServerModuleGen for MintGen {
                     },
                     private: MintConfigPrivate {
                         tbs_sks: params
+                            .consensus
                             .mint_amounts
                             .iter()
                             .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
@@ -145,7 +148,9 @@ impl ServerModuleGen for MintGen {
             .to_typed::<MintGenParams>()
             .expect("Invalid mint gen params");
 
-        let g2 = peers.run_dkg_multi_g2(params.mint_amounts.to_vec()).await?;
+        let g2 = peers
+            .run_dkg_multi_g2(params.consensus.mint_amounts.to_vec())
+            .await?;
 
         let amounts_keys = g2
             .into_iter()
@@ -987,6 +992,7 @@ mod test {
     use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
+    use crate::common::config::MintGenParamsConsensus;
     use crate::{
         BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigLocal,
         MintConfigPrivate, MintGen, MintGenParams, PeerErrorType,
@@ -1000,7 +1006,10 @@ mod test {
         let mint_cfg = MintGen.trusted_dealer_gen(
             &peers,
             &ConfigGenModuleParams::from_typed(MintGenParams {
-                mint_amounts: vec![Amount::from_sats(1)],
+                local: Default::default(),
+                consensus: MintGenParamsConsensus {
+                    mint_amounts: vec![Amount::from_sats(1)],
+                },
             })
             .unwrap(),
         );

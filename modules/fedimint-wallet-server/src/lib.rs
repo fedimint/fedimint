@@ -119,8 +119,8 @@ impl ServerModuleGen for WalletGen {
                         .collect(),
                     *sk,
                     peers.threshold(),
-                    params.network,
-                    params.finality_delay,
+                    params.consensus.network,
+                    params.consensus.finality_delay,
                 );
                 (*id, cfg)
             })
@@ -155,8 +155,8 @@ impl ServerModuleGen for WalletGen {
             peer_peg_in_keys,
             sk,
             peers.peer_ids().threshold(),
-            params.network,
-            params.finality_delay,
+            params.consensus.network,
+            params.consensus.finality_delay,
         );
 
         Ok(wallet_cfg.to_erased())
