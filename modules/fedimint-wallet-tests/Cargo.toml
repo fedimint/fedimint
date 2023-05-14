@@ -13,7 +13,7 @@ erased-serde = "0.3"
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 fedimint-wallet-common = { path = "../fedimint-wallet-common" }
 fedimint-wallet-client = { path = "../fedimint-wallet-client" }
-fedimint-wallet-server = { path = "../fedimint-wallet-server", features = ["native"] }
+fedimint-wallet-server = { path = "../fedimint-wallet-server" }
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }

@@ -1508,6 +1508,7 @@ name = "fedimint-ln-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
@@ -1517,13 +1518,18 @@ dependencies = [
  "fedimint-ln-common",
  "fedimint-ln-server",
  "fedimint-logging",
+ "fedimint-mint-client",
+ "fedimint-mint-common",
+ "fedimint-mint-server",
  "fedimint-server",
  "fedimint-testing",
  "fedimint-wallet-client",
  "fedimint-wallet-common",
  "fedimint-wallet-server",
  "fedimint-wallet-tests",
+ "lightning-invoice",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

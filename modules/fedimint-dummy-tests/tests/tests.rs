@@ -1,11 +1,11 @@
 use fedimint_core::sats;
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
-use fedimint_dummy_common::config::DummyConfigGenParams;
+use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_testing::fixtures::Fixtures;
 
 fn fixtures() -> Fixtures {
-    Fixtures::default().with_primary(0, DummyClientGen, DummyGen, DummyConfigGenParams::default())
+    Fixtures::default().with_primary(0, DummyClientGen, DummyGen, DummyGenParams::default())
 }
 
 #[tokio::test(flavor = "multi_thread")]

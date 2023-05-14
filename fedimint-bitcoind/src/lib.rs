@@ -14,7 +14,6 @@ use fedimint_core::{dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
 use tracing::info;
 
-#[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore_rpc;
 
 /// Trait that allows interacting with the Bitcoin blockchain

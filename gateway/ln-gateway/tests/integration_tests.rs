@@ -11,7 +11,7 @@
 //!   gateway federation client dependency.
 
 use fedimint_dummy_client::DummyClientGen;
-use fedimint_dummy_common::config::DummyConfigGenParams;
+use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_ln_common::config::LightningGenParams;
@@ -29,13 +29,14 @@ async fn fixtures() -> (
 ) {
     // TODO: use new client modules without legacy instances
     let fixtures = Fixtures::new()
-        .with_primary(1, DummyClientGen, DummyGen, DummyConfigGenParams::default())
+        .with_primary(1, DummyClientGen, DummyGen, DummyGenParams::default())
         .with_module(0, LightningClientGen, LightningGen, LightningGenParams);
 
     let fed1 = fixtures.new_fed().await;
     let fed2 = fixtures.new_fed().await;
-    let gateway = fixtures.new_gateway(vec![&fed1, &fed2]).await;
-    let client = gateway.new_client().await;
+    let mut gateway = fixtures.new_gateway(&fed1).await;
+    gateway.connect_fed(&fed2).await;
+    let client = gateway.get_rpc().await;
     (fed1, fed2, gateway, client)
 }
 

@@ -113,7 +113,7 @@ pub struct WithdrawPayload {
 }
 
 /// Information about one of the feds we are connected to
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederationInfo {
     /// Unique identifier of the fed
     pub federation_id: FederationId,

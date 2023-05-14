@@ -12,10 +12,7 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.66"
-fedimint-wallet-common = { path = "../fedimint-wallet-common" }
-fedimint-wallet-client = { path = "../fedimint-wallet-client" }
-fedimint-wallet-server = { path = "../fedimint-wallet-server", features = ["native"] }
-fedimint-wallet-tests = { path = "../fedimint-wallet-tests" }
+assert_matches = "1.5.0"
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
@@ -27,4 +24,14 @@ fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
+lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
 tokio = { version = "1.26.0", features = ["sync"] }
+tracing = "0.1.37"
+# Remove once we modularize the gw / ln server
+fedimint-wallet-common = { path = "../fedimint-wallet-common" }
+fedimint-wallet-client = { path = "../fedimint-wallet-client" }
+fedimint-wallet-server = { path = "../fedimint-wallet-server" }
+fedimint-wallet-tests = { path = "../fedimint-wallet-tests" }
+fedimint-mint-common = { path = "../fedimint-mint-common" }
+fedimint-mint-client = { path = "../fedimint-mint-client" }
+fedimint-mint-server = { path = "../fedimint-mint-server" }
