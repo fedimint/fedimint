@@ -344,8 +344,8 @@
 </span><span class="kw">pub struct </span>LnRpcAdapter {
     <span class="doccomment">/// The actual `ILnRpcClient` that we add behavior to.
     </span>client: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
-    <span class="doccomment">/// A pair of &lt;PayInvoiceRequest&gt; and &lt;Count&gt; where client.pay() will fail
-    /// &lt;Count&gt; times for each &lt;String&gt; (bolt11 invoice)
+    <span class="doccomment">/// A pair of [`PayInvoiceRequest`] and `u8` where client.pay() will fail
+    /// `u8` times for each `String` (bolt11 invoice)
     </span>fail_invoices: Arc&lt;sync::Mutex&lt;HashMap&lt;String, u8&gt;&gt;&gt;,
 }
 
@@ -359,7 +359,7 @@
         }
     }
 
-    <span class="doccomment">/// Register &lt;invoice&gt; to fail &lt;times&gt; before (attempt) succeeding. The
+    <span class="doccomment">/// Register `invoice` to fail `times` before (attempt) succeeding. The
     /// invoice will be dropped from the HashMap after succeeding
     </span><span class="attr">#[allow(dead_code)]
     </span><span class="kw">pub async fn </span>fail_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest, times: u8) {
