@@ -192,10 +192,13 @@ pub struct LightningPayFunded {
     gateway: LightningGateway,
 }
 
-#[derive(Error, Debug, Serialize, Deserialize)]
-enum GatewayPayError {
-    #[error("Lightning Gateway failed to pay invoice")]
-    GatewayInternalError,
+#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+pub enum GatewayPayError {
+    #[error("Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}")]
+    GatewayInternalError {
+        error_code: Option<u16>,
+        error_message: String,
+    },
     #[error("OutgoingContract was not created in the federation")]
     OutgoingContractError,
 }
@@ -238,16 +241,26 @@ impl LightningPayFunded {
             .json(&payload)
             .send()
             .await
-            .map_err(|_| GatewayPayError::GatewayInternalError)?;
+            .map_err(|e| GatewayPayError::GatewayInternalError {
+                error_code: None,
+                error_message: e.to_string(),
+            })?;
 
         if !response.status().is_success() {
-            return Err(GatewayPayError::GatewayInternalError);
+            return Err(GatewayPayError::GatewayInternalError {
+                error_code: Some(response.status().as_u16()),
+                error_message: response.status().to_string(),
+            });
         }
 
-        let preimage = response
-            .text()
-            .await
-            .map_err(|_| GatewayPayError::GatewayInternalError)?;
+        let preimage =
+            response
+                .text()
+                .await
+                .map_err(|_| GatewayPayError::GatewayInternalError {
+                    error_code: None,
+                    error_message: "Error retrieving preimage from response".to_string(),
+                })?;
         let length = preimage.len();
         Ok(preimage[1..length - 1].to_string())
     }
@@ -264,7 +277,7 @@ impl LightningPayFunded {
                 common: old_state.common,
                 state: LightningPayStates::Success(preimage),
             },
-            Err(_) => {
+            Err(e) => {
                 let contract = global_context
                     .module_api()
                     .get_outgoing_contract(contract_id)
@@ -286,6 +299,7 @@ impl LightningPayFunded {
                     state: LightningPayStates::Refundable(LightningPayRefundable {
                         contract_id,
                         block_timelock: timelock,
+                        error: e,
                     }),
                 }
             }
@@ -297,6 +311,7 @@ impl LightningPayFunded {
 pub struct LightningPayRefundable {
     contract_id: ContractId,
     pub block_timelock: u32,
+    pub error: GatewayPayError,
 }
 
 impl LightningPayRefundable {
@@ -360,7 +375,7 @@ impl LightningPayRefundable {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let refund_txid = global_context.claim_input(dbtx, refund_client_input).await;
+        let (refund_txid, _) = global_context.claim_input(dbtx, refund_client_input).await;
 
         LightningPayStateMachine {
             common: old_state.common,
@@ -392,10 +407,10 @@ impl LightningPayRefundable {
         // TODO: Remove polling
         loop {
             let consensus_block_height = global_context
-                .module_api()
+                .api()
                 .fetch_consensus_block_height()
                 .await
-                .map_err(|_| anyhow::anyhow!("ApiError"));
+                .map_err(|e| anyhow::anyhow!("ApiError: {e:?}"));
 
             if let Ok(current_block_height) = consensus_block_height {
                 if timelock as u64 <= current_block_height {

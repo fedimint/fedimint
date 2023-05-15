@@ -1362,6 +1362,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-common",
+ "futures",
  "rand",
  "secp256k1",
  "threshold_crypto",

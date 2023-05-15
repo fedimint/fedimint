@@ -254,7 +254,7 @@ impl LightningReceiveConfirmedInvoice {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let txid = global_context.claim_input(dbtx, client_input).await;
+        let (txid, _) = global_context.claim_input(dbtx, client_input).await;
         OutPoint { txid, out_idx: 0 }
     }
 

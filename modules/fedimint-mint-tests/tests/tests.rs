@@ -21,7 +21,9 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     let fed = fixtures().new_fed().await;
     let (client1, client2) = fed.two_clients().await;
     let (op, outpoint) = client1.print_money(sats(1000)).await?;
-    client1.await_claim_notes(op, outpoint.txid).await?;
+    client1
+        .await_primary_module_output_finalized(op, outpoint)
+        .await?;
 
     // Spend from client1 to client2
     let (op, notes) = client1.spend_notes(sats(750), TIMEOUT, ()).await?;

@@ -84,7 +84,8 @@ use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
+    TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
@@ -166,7 +167,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> TransactionId;
+    ) -> (TransactionId, Option<OutPoint>);
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -174,7 +175,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: InstancelessDynClientOutput,
-    ) -> anyhow::Result<TransactionId>;
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)>;
 
     /// Adds a state machine to the executor.
     async fn add_state_machine_dyn(
@@ -247,7 +248,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: ClientInput<I, S>,
-    ) -> TransactionId
+    ) -> (TransactionId, Option<OutPoint>)
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
@@ -275,7 +276,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: ClientOutput<O, S>,
-    ) -> anyhow::Result<TransactionId>
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)>
     where
         O: IOutput + MaybeSend + MaybeSync + 'static,
         S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
@@ -377,7 +378,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> TransactionId {
+    ) -> (TransactionId, Option<OutPoint>) {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
@@ -398,7 +399,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: InstancelessDynClientOutput,
-    ) -> anyhow::Result<TransactionId> {
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
         let instance_output = ClientOutput {
             output: DynOutput::from_parts(self.module_instance_id, output.output),
             state_machines: states_add_instance(self.module_instance_id, output.state_machines),
@@ -497,7 +498,7 @@ impl Client {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId>
     where
-        F: Fn(TransactionId) -> M + Clone + MaybeSend + MaybeSync,
+        F: Fn(TransactionId, Option<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
         let operation_type = operation_type.to_owned();
@@ -515,7 +516,7 @@ impl Client {
                             bail!("There already exists an operation with id {operation_id:?}")
                         }
 
-                        let txid = self
+                        let (txid, change_outpoint) = self
                             .inner
                             .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
                             .await?;
@@ -524,7 +525,7 @@ impl Client {
                             dbtx,
                             operation_id,
                             &operation_type,
-                            operation_meta(txid),
+                            operation_meta(txid, change_outpoint),
                         )
                         .await;
 
@@ -694,6 +695,16 @@ impl Client {
     {
         get_client_root_secret_encoding::<S>(self.db()).await
     }
+
+    pub async fn await_primary_module_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<()> {
+        self.inner
+            .await_primary_module_output_finalized(operation_id, out_point)
+            .await
+    }
 }
 
 /// Resources particular to a module instance
@@ -801,7 +812,11 @@ impl ClientInner {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(Transaction, Vec<DynState<DynGlobalClientContext>>)> {
+    ) -> anyhow::Result<(
+        Transaction,
+        Vec<DynState<DynGlobalClientContext>>,
+        Option<u64>,
+    )> {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
@@ -817,6 +832,7 @@ impl ClientInner {
             partial_transaction.inputs.push(input);
         }
 
+        let mut change_idx: Option<u64> = None;
         if let TransactionBuilderBalance::Overfunded(excess_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
@@ -829,6 +845,7 @@ impl ClientInner {
                     excess_amount,
                 )
                 .await;
+            change_idx = Some(partial_transaction.outputs.len() as u64);
             partial_transaction.outputs.push(output);
         }
 
@@ -840,7 +857,9 @@ impl ClientInner {
             "Transaction is balanced after the previous two operations"
         );
 
-        Ok(partial_transaction.build(&self.secp_ctx, thread_rng()))
+        let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
+
+        Ok((tx, states, change_idx))
     }
 
     async fn finalize_and_submit_transaction(
@@ -848,11 +867,12 @@ impl ClientInner {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<TransactionId> {
-        let (transaction, mut states) = self
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
+        let (transaction, mut states, change_idx) = self
             .finalize_transaction(dbtx, operation_id, tx_builder)
             .await?;
         let txid = transaction.tx_hash();
+        let change_outpoint = change_idx.map(|out_idx| OutPoint { txid, out_idx });
 
         let tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -869,7 +889,7 @@ impl ClientInner {
 
         self.executor.add_state_machines_dbtx(dbtx, states).await?;
 
-        Ok(txid)
+        Ok((txid, change_outpoint))
     }
 
     async fn transaction_update_stream(
@@ -910,6 +930,16 @@ impl ClientInner {
             .is_some();
 
         active_state_exists || inactive_state_exists
+    }
+
+    pub async fn await_primary_module_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<()> {
+        self.primary_module
+            .await_primary_module_output_finalized(operation_id, out_point)
+            .await
     }
 }
 

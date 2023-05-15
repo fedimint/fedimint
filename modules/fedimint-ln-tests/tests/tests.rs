@@ -7,7 +7,7 @@ use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState, LnReceiveState};
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_server::LightningGen;
-use fedimint_mint_client::{MintClientExt, MintClientGen};
+use fedimint_mint_client::MintClientGen;
 use fedimint_mint_common::config::MintGenParams;
 use fedimint_mint_server::MintGen;
 use fedimint_testing::federation::FederationTest;
@@ -77,7 +77,9 @@ async fn makes_internal_payments_within_gateway() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2.print_money(sats(1000)).await.unwrap();
-    client2.await_claim_notes(op, outpoint.txid).await?;
+    client2
+        .await_primary_module_output_finalized(op, outpoint)
+        .await?;
 
     let (op, invoice) = client1
         .create_bolt11_invoice(sats(250), "description".to_string(), None)
@@ -86,7 +88,7 @@ async fn makes_internal_payments_within_gateway() -> anyhow::Result<()> {
     assert_eq!(next(sub1).await, LnReceiveState::Created);
     assert_matches!(next(sub1).await, LnReceiveState::WaitingForPayment { .. });
 
-    let (op, _txid) = client2.pay_bolt11_invoice(fed_id, invoice).await.unwrap();
+    let op = client2.pay_bolt11_invoice(fed_id, invoice).await.unwrap();
     let sub2 = &mut client2.subscribe_ln_pay_updates(op).await.unwrap();
     assert_eq!(next(sub2).await, LnPayState::Created);
     // TODO: Finish after gw moves from legacy client

@@ -39,7 +39,6 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
@@ -123,22 +122,6 @@ pub trait MintClientExt {
         operation_id: OperationId,
     ) -> anyhow::Result<BoxStream<SpendOOBState>>;
 
-    // Wait for the refund transaction to complete after a lightning invoice
-    // failed to be paid.
-    async fn await_claim_notes(
-        &self,
-        operation_id: OperationId,
-        refund_txid: TransactionId,
-    ) -> anyhow::Result<()>;
-
-    // TODO: This function needs to be generalized to await any primary module
-    // change
-    async fn await_mint_change(
-        &self,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -> anyhow::Result<()>;
-
     /// Returns the total value of our notes
     // TODO: Make getting total asserts part of the core client
     async fn total_amount(&self) -> Amount;
@@ -209,7 +192,7 @@ impl MintClientExt for Client {
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::reissue_external_notes extra_meta is serializable");
-        let operation_meta_gen = move |txid| MintMeta {
+        let operation_meta_gen = move |txid, _| MintMeta {
             variant: MintMetaVariants::Reissuance {
                 out_point: OutPoint { txid, out_idx: 0 },
             },
@@ -227,39 +210,6 @@ impl MintClientExt for Client {
         .expect("Transactions can only fail if the operation already exists, which we checked previously");
 
         Ok(operation_id)
-    }
-
-    async fn await_claim_notes(
-        &self,
-        operation_id: OperationId,
-        txid: TransactionId,
-    ) -> anyhow::Result<()> {
-        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
-        let out_point = OutPoint { txid, out_idx: 0 };
-        mint.await_output_finalized(operation_id, out_point).await
-    }
-
-    async fn await_mint_change(
-        &self,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -> anyhow::Result<()> {
-        let tx_outcome = self.api().await_tx_outcome(&out_point.txid).await?;
-        if let TransactionStatus::Accepted {
-            epoch: _epoch,
-            outputs,
-        } = tx_outcome
-        {
-            if out_point.out_idx < outputs.len() as u64 {
-                let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
-                return mint.await_output_finalized(operation_id, out_point).await;
-            } else {
-                // No change on this transaction
-                return Ok(());
-            }
-        }
-
-        Err(anyhow::anyhow!("Transaction was not accepted"))
     }
 
     async fn subscribe_reissue_external_notes_updates(
@@ -720,6 +670,14 @@ impl PrimaryClientModule for MintClientModule {
     ) -> ClientOutput<MintOutput, MintClientStateMachines> {
         // FIXME: don't hardcode notes per denomination
         self.create_output(dbtx, operation_id, 2, amount).await
+    }
+
+    async fn await_primary_module_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<()> {
+        self.await_output_finalized(operation_id, out_point).await
     }
 }
 
