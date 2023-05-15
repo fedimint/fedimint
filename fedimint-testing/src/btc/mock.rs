@@ -9,12 +9,46 @@ use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Transaction, TxOut,
 };
-use fedimint_bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};
+use fedimint_bitcoind::{
+    register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
+    Result as BitcoinRpcResult,
+};
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, Feerate};
 use rand::rngs::OsRng;
+use url::Url;
 
 use super::BitcoinTest;
+
+#[derive(Debug, Clone)]
+pub struct FakeBitcoinFactory {
+    pub bitcoin: FakeBitcoinTest,
+    pub config: BitcoinRpcConfig,
+}
+
+impl FakeBitcoinFactory {
+    /// Registers a fake bitcoin rpc factory for testing
+    pub fn register_new() -> FakeBitcoinFactory {
+        let kind = format!("test_btc-{}", rand::random::<u64>());
+        let factory = FakeBitcoinFactory {
+            bitcoin: FakeBitcoinTest::new(),
+            config: BitcoinRpcConfig {
+                kind: kind.clone(),
+                url: "http://ignored".parse().unwrap(),
+            },
+        };
+        register_bitcoind(kind, factory.clone().into());
+        factory
+    }
+}
+
+impl IBitcoindRpcFactory for FakeBitcoinFactory {
+    fn create(&self, _url: &Url, _handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
+        Ok(self.bitcoin.clone().into())
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct FakeBitcoinTest {

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{DkgError, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{self, TaskGroup};
@@ -192,6 +193,7 @@ impl DistributedGen {
             } => {
                 let mut module_gens_params = ServerModuleGenParamsRegistry::default();
                 attach_default_module_gen_params(
+                    BitcoinRpcConfig::from_env_vars()?,
                     &mut module_gens_params,
                     max_denomination,
                     network,

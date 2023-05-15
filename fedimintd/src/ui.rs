@@ -11,7 +11,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use axum_macros::debug_handler;
 use bitcoin::Network;
-use fedimint_core::bitcoinrpc::{FM_BITCOIN_RPC_KIND, FM_BITCOIN_RPC_URL};
+use fedimint_core::bitcoinrpc::{BitcoinRpcConfig, FM_BITCOIN_RPC_KIND, FM_BITCOIN_RPC_URL};
 use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
@@ -155,6 +155,7 @@ async fn post_guardians(
     let module_gens = state.module_gens.clone();
     let mut module_gens_params = state.module_gens_params.clone();
     attach_default_module_gen_params(
+        BitcoinRpcConfig::from_env_vars()?,
         &mut module_gens_params,
         max_denomination,
         params.network,

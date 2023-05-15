@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use fedimint_core::admin_client::ConfigGenParamsRequest;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
@@ -265,6 +266,7 @@ async fn run(
     }
 
     attach_default_module_gen_params(
+        BitcoinRpcConfig::from_env_vars()?,
         &mut module_gens_params,
         opts.max_denomination,
         opts.network,

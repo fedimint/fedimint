@@ -18,6 +18,18 @@ pub struct WalletGenParams {
     pub consensus: WalletGenParamsConsensus,
 }
 
+impl WalletGenParams {
+    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> WalletGenParams {
+        WalletGenParams {
+            local: WalletGenParamsLocal { bitcoin_rpc },
+            consensus: WalletGenParamsConsensus {
+                network: Network::Regtest,
+                finality_delay: 10,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParamsLocal {
     pub bitcoin_rpc: BitcoinRpcConfig,

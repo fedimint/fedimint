@@ -25,6 +25,7 @@ pub mod fedimintd;
 
 /// Generates the configuration for the modules configured in the server binary
 pub fn attach_default_module_gen_params(
+    bitcoin_rpc: BitcoinRpcConfig,
     module_gen_params: &mut ServerModuleGenParamsRegistry,
     max_denomination: Amount,
     network: Network,
@@ -35,12 +36,7 @@ pub fn attach_default_module_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),
             WalletGenParams {
-                local: WalletGenParamsLocal {
-                    bitcoin_rpc: BitcoinRpcConfig::from_env_vars().unwrap_or(BitcoinRpcConfig {
-                        kind: "bitcoind".to_string(),
-                        url: "http://bitcoin:bitcoin@127.0.0.1:18443".parse().unwrap(),
-                    }),
-                },
+                local: WalletGenParamsLocal { bitcoin_rpc },
                 consensus: WalletGenParamsConsensus {
                     network,
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next
