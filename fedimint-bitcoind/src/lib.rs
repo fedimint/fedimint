@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
-use std::env;
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -10,6 +9,7 @@ use anyhow::format_err;
 pub use anyhow::Result;
 use async_trait::async_trait;
 use bitcoin::{BlockHash, Network, Transaction};
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::{dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
@@ -20,30 +20,6 @@ use url::Url;
 use crate::bitcoincore_rpc::{BitcoindFactory, ElectrumFactory, EsploraFactory};
 
 pub mod bitcoincore_rpc;
-
-/// Env var for bitcoin RPC kind
-pub const FM_BITCOIN_RPC_KIND: &str = "FM_BITCOIN_RPC_KIND";
-/// Env var for bitcoin URL
-pub const FM_BITCOIN_RPC_URL: &str = "FM_BITCOIN_RPC_URL";
-
-/// Configuration for the bitcoin RPC
-#[derive(Debug, Clone)]
-pub struct BitcoinRpcConfig {
-    pub kind: String,
-    pub url: Url,
-}
-
-impl BitcoinRpcConfig {
-    pub fn from_env_vars() -> Result<Self> {
-        Ok(Self {
-            kind: env::var(FM_BITCOIN_RPC_KIND).map_err(anyhow::Error::from)?,
-            url: env::var(FM_BITCOIN_RPC_URL)
-                .map_err(anyhow::Error::from)?
-                .parse()
-                .map_err(anyhow::Error::from)?,
-        })
-    }
-}
 
 lazy_static! {
     /// Global factories for creating bitcoin RPCs

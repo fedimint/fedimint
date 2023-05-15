@@ -1,4 +1,5 @@
 use bitcoin::Network;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::ServerModuleGenParamsRegistry;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -10,7 +11,9 @@ use fedimint_ln_server::common::config::LightningGenParams;
 use fedimint_ln_server::LightningGen;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintGen;
-use fedimint_wallet_server::common::config::{WalletGenParams, WalletGenParamsConsensus};
+use fedimint_wallet_server::common::config::{
+    WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
+};
 use fedimint_wallet_server::WalletGen;
 
 mod ui;
@@ -32,7 +35,12 @@ pub fn attach_default_module_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),
             WalletGenParams {
-                local: Default::default(),
+                local: WalletGenParamsLocal {
+                    bitcoin_rpc: BitcoinRpcConfig::from_env_vars().unwrap_or(BitcoinRpcConfig {
+                        kind: "bitcoind".to_string(),
+                        url: "http://bitcoin:bitcoin@127.0.0.1:18443".parse().unwrap(),
+                    }),
+                },
                 consensus: WalletGenParamsConsensus {
                     network,
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next
@@ -46,7 +54,6 @@ pub fn attach_default_module_gen_params(
             MintGen::kind(),
             MintGenParams {
                 local: Default::default(),
-
                 consensus: MintGenParamsConsensus {
                     mint_amounts: Tiered::gen_denominations(max_denomination)
                         .tiers()

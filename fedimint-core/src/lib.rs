@@ -26,6 +26,7 @@ use crate::module::registry::ModuleDecoderRegistry;
 pub mod admin_client;
 pub mod api;
 pub mod backup;
+pub mod bitcoinrpc;
 pub mod cancellable;
 pub mod config;
 pub mod core;

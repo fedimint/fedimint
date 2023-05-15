@@ -107,8 +107,9 @@ impl WsAdminClient {
             .await
     }
 
-    /// Used by the leader to set the config gen params, after which
-    /// `ConfigGenParams` can be created
+    /// Leader sets the consensus params, everyone sets the local params
+    ///
+    /// After calling this `ConfigGenParams` can be created for DKG
     pub async fn set_config_gen_params(
         &self,
         requested: ConfigGenParamsRequest,
@@ -216,8 +217,10 @@ pub struct PeerServerParams {
 pub struct ConfigGenParamsConsensus {
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerServerParams>,
-    /// Params that were configured by the leader
-    pub requested: ConfigGenParamsRequest,
+    /// Guardian-defined key-value pairs that will be passed to the client
+    pub meta: BTreeMap<String, String>,
+    /// Config gen params (also contains local params from us)
+    pub modules: ServerModuleGenParamsRegistry,
 }
 
 /// The config gen params response which includes our peer id
@@ -229,15 +232,12 @@ pub struct ConfigGenParamsResponse {
     pub our_current_id: PeerId,
 }
 
-/// Config gen values that can be configured by the config gen leader
+/// Config gen params that can be configured from the UI
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConfigGenParamsRequest {
-    /// Guardian-defined key-value pairs that will be passed to the client.
-    /// These should be the same for all guardians since they become part of
-    /// the consensus config.
+    /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
-    /// Params for the modules we wish to configure, can contain custom
-    /// parameters
+    /// Set the params (if leader) or just the local params (if follower)
     pub modules: ServerModuleGenParamsRegistry,
 }
 

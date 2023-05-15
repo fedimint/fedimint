@@ -1,4 +1,3 @@
-use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Amount};
@@ -11,9 +10,13 @@ use crate::DummyCommonGen;
 /// Parameters necessary to generate this module's configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DummyGenParams {
-    pub local: EmptyGenParams,
+    pub local: DummyGenParamsLocal,
     pub consensus: DummyGenParamsConsensus,
 }
+
+/// Local parameters for config generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DummyGenParamsLocal(pub String);
 
 /// Consensus parameters for config generation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +27,7 @@ pub struct DummyGenParamsConsensus {
 impl Default for DummyGenParams {
     fn default() -> Self {
         Self {
-            local: EmptyGenParams,
+            local: DummyGenParamsLocal("example".to_string()),
             consensus: DummyGenParamsConsensus {
                 tx_fee: Amount::ZERO,
             },
@@ -50,7 +53,9 @@ pub struct DummyClientConfig {
 
 /// Locally unencrypted config unique to each member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct DummyConfigLocal;
+pub struct DummyConfigLocal {
+    pub example: String,
+}
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
@@ -72,7 +77,7 @@ pub struct DummyConfigPrivate {
 plugin_types_trait_impl_config!(
     DummyCommonGen,
     DummyGenParams,
-    EmptyGenParams,
+    DummyGenParamsLocal,
     DummyGenParamsConsensus,
     DummyConfig,
     DummyConfigLocal,

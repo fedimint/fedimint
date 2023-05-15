@@ -11,12 +11,13 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_bitcoind::{create_bitcoind, BitcoinRpcConfig, DynBitcoindRpc};
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
 use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::{

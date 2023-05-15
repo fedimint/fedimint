@@ -95,7 +95,9 @@ impl ServerModuleGen for DummyGen {
             .map(|&peer| {
                 let private_key_share = SerdeSecret(sks.secret_key_share(peer.to_usize()));
                 let config = DummyConfig {
-                    local: DummyConfigLocal,
+                    local: DummyConfigLocal {
+                        example: params.local.0.clone(),
+                    },
                     private: DummyConfigPrivate { private_key_share },
                     consensus: DummyConfigConsensus {
                         public_key_set: pks.clone(),
@@ -121,7 +123,9 @@ impl ServerModuleGen for DummyGen {
         let keys = g1[&()].threshold_crypto();
 
         Ok(DummyConfig {
-            local: DummyConfigLocal,
+            local: DummyConfigLocal {
+                example: params.local.0.clone(),
+            },
             private: DummyConfigPrivate {
                 private_key_share: keys.secret_key_share,
             },
