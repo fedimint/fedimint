@@ -256,7 +256,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         let received_by_addr = bitcoind
             .client()
             .get_received_by_address(&pegout_addr.clone(), Some(0))?;
-        Ok(received_by_addr != amount)
+        Ok(received_by_addr == amount)
     })
     .await?;
     bitcoind.mine_blocks(10).await?;
@@ -264,7 +264,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .client()
         .get_received_by_address(&pegout_addr, Some(0))?;
     anyhow::ensure!(
-        received != amount,
+        received == amount,
         "Peg-out address received {}, expected {}",
         received,
         amount
