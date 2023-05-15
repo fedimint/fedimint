@@ -450,6 +450,7 @@ fn states_add_instance(
     })
 }
 
+#[derive(Clone)]
 pub struct Client {
     inner: Arc<ClientInner>,
 }
