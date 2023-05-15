@@ -22,7 +22,12 @@ fn fixtures() -> Fixtures {
     let wallet_gen = FakeWalletGen::new(&fixtures);
     fixtures
         .with_module(3, DummyClientGen, DummyGen, DummyGenParams::default())
-        .with_module(0, LightningClientGen, LightningGen, LightningGenParams)
+        .with_module(
+            0,
+            LightningClientGen,
+            LightningGen,
+            LightningGenParams::default(),
+        )
         // TODO: Remove dependency on mint (legacy gw client)
         .with_primary(1, MintClientGen, MintGen, MintGenParams::default())
         // TODO: Remove dependency on wallet interconnect

@@ -30,7 +30,12 @@ async fn fixtures() -> (
     // TODO: use new client modules without legacy instances
     let fixtures = Fixtures::new()
         .with_primary(1, DummyClientGen, DummyGen, DummyGenParams::default())
-        .with_module(0, LightningClientGen, LightningGen, LightningGenParams);
+        .with_module(
+            0,
+            LightningClientGen,
+            LightningGen,
+            LightningGenParams::default(),
+        );
 
     let fed1 = fixtures.new_fed().await;
     let fed2 = fixtures.new_fed().await;

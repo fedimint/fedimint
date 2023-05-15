@@ -1,3 +1,4 @@
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::plugin_types_trait_impl_config;
@@ -6,17 +7,21 @@ use threshold_crypto::serde_impl::SerdeSecret;
 
 use crate::LightningCommonGen;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParams;
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct LightningGenParams {
+    pub local: EmptyGenParams,
+    pub consensus: EmptyGenParams,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
-    /// Contains all configuration that will be encrypted such as private key
-    /// material
+    pub local: LightningConfigLocal,
     pub private: LightningConfigPrivate,
-    /// Contains all configuration that needs to be the same for every server
     pub consensus: LightningConfigConsensus,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct LightningConfigLocal;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningConfigConsensus {
@@ -50,7 +55,10 @@ pub struct LightningClientConfig {
 plugin_types_trait_impl_config!(
     LightningCommonGen,
     LightningGenParams,
+    EmptyGenParams,
+    EmptyGenParams,
     LightningConfig,
+    LightningConfigLocal,
     LightningConfigPrivate,
     LightningConfigConsensus,
     LightningClientConfig

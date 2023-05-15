@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use bitcoin::Network;
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
@@ -13,6 +14,12 @@ use crate::{PegInDescriptor, WalletCommonGen};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
+    pub local: EmptyGenParams,
+    pub consensus: WalletGenParamsConsensus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletGenParamsConsensus {
     pub network: bitcoin::network::constants::Network,
     pub finality_delay: u32,
 }
@@ -20,20 +27,24 @@ pub struct WalletGenParams {
 impl Default for WalletGenParams {
     fn default() -> Self {
         Self {
-            network: Network::Regtest,
-            finality_delay: 10,
+            local: EmptyGenParams,
+            consensus: WalletGenParamsConsensus {
+                network: Network::Regtest,
+                finality_delay: 10,
+            },
         }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {
-    /// Contains all configuration that will be encrypted such as private key
-    /// material
+    pub local: WalletConfigLocal,
     pub private: WalletConfigPrivate,
-    /// Contains all configuration that needs to be the same for every server
     pub consensus: WalletConfigConsensus,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct WalletConfigLocal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigPrivate {
@@ -98,6 +109,7 @@ impl WalletConfig {
         );
 
         Self {
+            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -129,7 +141,10 @@ impl WalletClientConfig {
 plugin_types_trait_impl_config!(
     WalletCommonGen,
     WalletGenParams,
+    EmptyGenParams,
+    WalletGenParamsConsensus,
     WalletConfig,
+    WalletConfigLocal,
     WalletConfigPrivate,
     WalletConfigConsensus,
     WalletClientConfig
