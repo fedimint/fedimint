@@ -1,3 +1,5 @@
+// Backup and restore logic
+pub(crate) mod backup;
 /// Database keys used throughout the mint client module
 mod db;
 /// State machines for mint inputs
@@ -15,18 +17,23 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use async_stream::stream;
+use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::Hash;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{
     ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
 };
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
+use fedimint_client::sm::{
+    Context, DynState, Executor, ModuleNotifier, OperationId, State, StateTransition,
+};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{DynFederationApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -47,8 +54,10 @@ use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tbs::AggregatePublicKey;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
+use crate::backup::recovery::MintRestoreInProgressState;
+use crate::backup::EcashBackup;
 use crate::db::{NextECashNoteIndexKey, NoteKey, NoteKeyPrefix};
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -60,6 +69,10 @@ use crate::output::{
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
+
+const MINT_BACKUP_RESTORE_OPERATION_ID: OperationId = OperationId([0x01; 32]);
+
+pub const LOG_TARGET: &str = "client::module::mint";
 
 #[apply(async_trait_maybe_send!)]
 pub trait MintClientExt {
@@ -129,6 +142,9 @@ pub trait MintClientExt {
     /// Returns the total value of our notes
     // TODO: Make getting total asserts part of the core client
     async fn total_amount(&self) -> Amount;
+
+    /// Awaits the backup restoration to complete
+    async fn await_restore_finished(&self) -> anyhow::Result<()>;
 }
 
 /// The high-level state of a reissue operation started with
@@ -403,6 +419,12 @@ impl MintClientExt for Client {
             )
             .await
     }
+
+    /// Waits for the mint backup restoration to finish
+    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+        mint.await_restore_finished().await
+    }
 }
 
 async fn mint_operation(client: &Client, operation_id: OperationId) -> anyhow::Result<MintMeta> {
@@ -488,6 +510,7 @@ pub struct MintClientModule {
 pub struct MintClientContext {
     pub mint_decoder: Decoder,
     pub mint_keys: Tiered<AggregatePublicKey>,
+    pub secret: DerivableSecret,
     pub cancel_oob_payment_bc: tokio::sync::broadcast::Sender<OperationId>,
 }
 
@@ -509,6 +532,7 @@ impl ClientModule for MintClientModule {
         MintClientContext {
             mint_decoder: self.decoder(),
             mint_keys: self.cfg.tbs_pks.clone(),
+            secret: self.secret.clone(),
             cancel_oob_payment_bc: self.cancel_oob_payment_bc.clone(),
         }
     }
@@ -578,6 +602,102 @@ impl ClientModule for MintClientModule {
                 "Unknown command: {command}, supported commands: reissue"
             )),
         }
+    }
+
+    fn supports_backup(&self) -> bool {
+        true
+    }
+
+    async fn backup(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynFederationApi,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>> {
+        let backup = self
+            .prepare_plaintext_ecash_backup(dbtx, executor, api, module_instance_id)
+            .await?;
+
+        Ok(backup.consensus_encode_to_vec()?)
+    }
+
+    async fn restore(
+        &self,
+        // dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynFederationApi,
+        snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        if !Self::get_all_spendable_notes(&mut dbtx.with_module_prefix(module_instance_id))
+            .await
+            .is_empty()
+        {
+            warn!(
+                target: LOG_TARGET,
+                "Can not start recovery - existing spendable notes found"
+            );
+            bail!("Found existing spendable notes. Mint module recovery must be started on an empty state.")
+        }
+
+        if executor
+            .get_active_states()
+            .await
+            .into_iter()
+            .any(|s| s.0.module_instance_id() == module_instance_id)
+        {
+            warn!(
+                target: LOG_TARGET,
+                "Can not start recovery - existing state machines found"
+            );
+            bail!("Found existing active state machines. Mint module recovery must be started on an empty state.")
+        }
+
+        let snapshot = snapshot
+            .map(|mut s| EcashBackup::consensus_decode(&mut s, &Default::default()))
+            .transpose()?
+            .unwrap_or(EcashBackup::new_empty());
+
+        let current_epoch_count = api.fetch_epoch_count().await?;
+        let state = MintRestoreInProgressState::from_backup(
+            current_epoch_count,
+            snapshot,
+            30,
+            self.cfg.tbs_pks.clone(),
+            self.cfg.peer_tbs_pks.clone(),
+            &self.secret,
+        );
+
+        debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
+
+        executor
+            .add_state_machines_dbtx(
+                dbtx,
+                vec![DynState::from_typed(
+                    module_instance_id,
+                    MintClientStateMachines::Restore(MintRestoreStateMachine {
+                        operation_id: MINT_BACKUP_RESTORE_OPERATION_ID,
+                        state: MintRestoreStates::InProgress(state),
+                    }),
+                )],
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn wipe(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()> {
+        debug!(target: LOG_TARGET, "Wiping mint module state");
+        Self::wipe_all_spendable_notes(dbtx).await;
+        // TODO: wipe active states or all states?
+        Ok(())
     }
 }
 
@@ -830,6 +950,32 @@ impl MintClientModule {
         .await
     }
 
+    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+        let mut restore_stream = self
+            .notifier
+            .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
+            .await;
+        while let Some(restore_step) = restore_stream.next().await {
+            match restore_step {
+                MintClientStateMachines::Restore(MintRestoreStateMachine {
+                    state: MintRestoreStates::Success,
+                    ..
+                }) => {
+                    return Ok(());
+                }
+                MintClientStateMachines::Restore(MintRestoreStateMachine {
+                    state: MintRestoreStates::Failed(error),
+                    ..
+                }) => {
+                    return Err(anyhow!("Restore failed: {}", error.reason));
+                }
+                _ => {}
+            }
+        }
+
+        Err(anyhow!("Restore stream closed without success or failure"))
+    }
+
     /// Select notes with total amount of *at least* `amount`. If more than
     /// requested amount of notes are returned it was because exact change
     /// couldn't be made, and the next smallest amount will be returned.
@@ -844,6 +990,26 @@ impl MintClientModule {
             .await
             .map(|(key, note)| (key.amount, note));
         select_notes_from_stream(note_stream, amount).await
+    }
+
+    async fn get_all_spendable_notes(
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> TieredMulti<SpendableNote> {
+        TieredMulti::from_iter(
+            (dbtx
+                .find_by_prefix(&NoteKeyPrefix)
+                .await
+                .map(|(key, note)| (key.amount, note))
+                .collect::<Vec<_>>()
+                .await)
+                .into_iter(),
+        )
+    }
+
+    async fn wipe_all_spendable_notes(dbtx: &mut ModuleDatabaseTransaction<'_>) {
+        debug!(target: LOG_TARGET, "Wiping all spendable notes");
+        dbtx.remove_by_prefix(&NoteKeyPrefix).await;
+        assert!(Self::get_all_spendable_notes(dbtx).await.is_empty());
     }
 
     async fn get_next_note_index(
@@ -992,6 +1158,7 @@ pub enum MintClientStateMachines {
     Output(MintOutputStateMachine),
     Input(MintInputStateMachine),
     OOB(MintOOBStateMachine),
+    Restore(MintRestoreStateMachine),
 }
 
 impl IntoDynInstance for MintClientStateMachines {
@@ -1030,6 +1197,12 @@ impl State for MintClientStateMachines {
                     MintClientStateMachines::OOB
                 )
             }
+            MintClientStateMachines::Restore(restore_state) => {
+                sm_enum_variant_translation!(
+                    restore_state.transitions(context, global_context),
+                    MintClientStateMachines::Restore
+                )
+            }
         }
     }
 
@@ -1038,6 +1211,7 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Output(issuance_state) => issuance_state.operation_id(),
             MintClientStateMachines::Input(redemption_state) => redemption_state.operation_id(),
             MintClientStateMachines::OOB(oob_state) => oob_state.operation_id(),
+            MintClientStateMachines::Restore(state) => state.operation_id(),
         }
     }
 }

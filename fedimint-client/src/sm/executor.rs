@@ -75,6 +75,10 @@ where
         ExecutorBuilder::default()
     }
 
+    pub async fn get_active_states(&self) -> Vec<(DynState<GC>, ActiveState)> {
+        self.inner.get_active_states().await
+    }
+
     /// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
     ///

@@ -319,7 +319,7 @@ impl NoteIssuanceRequest {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 pub struct MultiNoteIssuanceRequest {
     /// Finalization data for all note outputs in this request
-    notes: TieredMulti<NoteIssuanceRequest>,
+    pub notes: TieredMulti<NoteIssuanceRequest>,
 }
 
 impl MultiNoteIssuanceRequest {

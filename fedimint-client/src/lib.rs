@@ -96,6 +96,7 @@ use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::backup::Metadata;
 use crate::db::{
     ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, ClientSecretKey,
     OperationLogKey,
@@ -119,17 +120,18 @@ use crate::transaction::{
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
+/// Client backup
+pub mod backup;
 /// Database keys used by the client
 pub mod db;
 /// Module client interface definitions
 pub mod module;
+/// Secret handling & derivation
+pub mod secret;
 /// Client state machine interfaces and executor implementation
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
-
-/// Secret handling & derivation
-pub mod secret;
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
@@ -147,12 +149,16 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// calls can be made
     fn module_api(&self) -> DynFederationApi;
 
+    fn client_config(&self) -> &ClientConfig;
+
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IFederationApi`] typically does not provide the necessary
     /// functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
     // TODO: Could be removed in favor of client() except for testing
-    fn api(&self) -> &(dyn IFederationApi + 'static);
+    fn api(&self) -> &DynFederationApi;
+
+    fn decoders(&self) -> &ModuleDecoderRegistry;
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::claim_input`].
@@ -355,8 +361,16 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.api().with_module(self.module_instance_id)
     }
 
-    fn api(&self) -> &(dyn IFederationApi + 'static) {
-        self.client.api.as_ref()
+    fn api(&self) -> &DynFederationApi {
+        &self.client.api
+    }
+
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        self.client.decoders()
+    }
+
+    fn client_config(&self) -> &ClientConfig {
+        self.client.config()
     }
 
     async fn claim_input_dyn(
@@ -466,6 +480,10 @@ impl Client {
 
     pub fn get_meta(&self, key: &str) -> Option<String> {
         self.inner.federation_meta.get(key).cloned()
+    }
+
+    fn root_secret(&self) -> DerivableSecret {
+        self.inner.root_secret.clone()
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
@@ -679,6 +697,8 @@ pub struct ClientModuleInstance {
 }
 
 struct ClientInner {
+    config: ClientConfig,
+    decoders: ModuleDecoderRegistry,
     db: Database,
     federation_id: FederationId,
     federation_meta: BTreeMap<String, String>,
@@ -688,6 +708,7 @@ struct ClientInner {
     modules: ClientModuleRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynFederationApi,
+    root_secret: DerivableSecret,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 }
 
@@ -702,6 +723,14 @@ impl ClientInner {
             }
             .into()
         })
+    }
+
+    fn config(&self) -> &ClientConfig {
+        &self.config
+    }
+
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.decoders
     }
 
     /// Returns a reference to the module, panics if not found
@@ -906,7 +935,12 @@ pub struct ClientBuilder {
     module_gens: ClientModuleGenRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     config: Option<ClientConfig>,
-    db: Option<Box<dyn IDatabase>>,
+    db: Option<DatabaseSource>,
+}
+
+pub enum DatabaseSource {
+    Fresh(Box<dyn IDatabase>),
+    Reuse(Client),
 }
 
 impl ClientBuilder {
@@ -959,11 +993,66 @@ impl ClientBuilder {
     /// Uses this database to store the client state, allowing for flexibility
     /// on the caller side by accepting a type-erased trait object.
     pub fn with_dyn_database(&mut self, db: Box<dyn IDatabase>) {
-        let was_replaced = self.db.replace(db).is_some();
+        let was_replaced = self.db.replace(DatabaseSource::Fresh(db)).is_some();
         assert!(
             !was_replaced,
             "Only one database can be given to the builder."
         );
+    }
+
+    /// Re-uses the database of an old client. Useful for restarting the client
+    /// on recovery without fully shutting down the DB and not being able to
+    /// re-open it.
+    ///
+    /// ## Panics
+    /// If the old and new client use different config since that might make the
+    /// DB incompatible.
+    pub fn with_old_client_database(&mut self, client: Client) {
+        let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
+        assert!(
+            !was_replaced,
+            "Only one database can be given to the builder."
+        );
+    }
+
+    pub async fn build_restoring_from_backup(
+        self,
+        tg: &mut TaskGroup,
+        secret: ClientSecret,
+    ) -> anyhow::Result<(Client, Metadata)> {
+        let fake_notifications = Default::default();
+        let mut dbtx = match self.db.as_ref().expect("No database provided") {
+            DatabaseSource::Fresh(db) => DatabaseTransaction::new(
+                db.begin_transaction().await,
+                Default::default(),
+                &fake_notifications,
+            ),
+            DatabaseSource::Reuse(db) => db.db().begin_transaction().await,
+        };
+
+        // TODO: assert DB is empty (what does that mean? maybe needs a method that
+        // checks if "wipe" was called on modules?)
+
+        // let db_is_empty = raw_dbtx
+        //     .raw_find_by_prefix(&[])
+        //     .await
+        //     .expect("DB read failed")
+        //     .next()
+        //     .await
+        //     .is_none();
+        // assert!(
+        //     db_is_empty,
+        //     "Database is not empty, cannot restore from backup"
+        // );
+
+        // Write new root secret to DB before starting client
+        set_client_root_secret(&mut dbtx, &secret).await;
+        dbtx.commit_tx().await;
+
+        let client = self.build(tg).await?;
+        let metadata = client.restore_from_backup().await?;
+
+        Ok((client, metadata))
     }
 
     /// Build a [`Client`] and start its executor
@@ -979,7 +1068,6 @@ impl ClientBuilder {
         let primary_module_instance = self
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
-        let db = self.db.ok_or(anyhow!("No database was provided"))?;
 
         let mut decoders = client_decoders(
             &self.module_gens,
@@ -994,18 +1082,27 @@ impl ClientBuilder {
             tx_submission_sm_decoder(),
         );
 
-        let db = Database::new_from_box(db, decoders);
+        let db = match self.db.ok_or(anyhow!("No database was provided"))? {
+            DatabaseSource::Fresh(db) => Database::new_from_box(db, decoders.clone()),
+            DatabaseSource::Reuse(client) => {
+                assert_eq!(
+                    client.inner.config, config,
+                    "Can only reuse DB for clients started with the same config"
+                );
+                client.inner.db.clone()
+            }
+        };
 
         let notifier = Notifier::new(db.clone());
 
         let api = DynFederationApi::from(WsFederationApi::from_config(&config));
 
-        let root_secret = get_client_root_secret(&db).await;
+        let root_secret = get_client_secret(&db).await.into_root_secret();
 
         let (modules, (primary_module_kind, primary_module)) = {
             let mut modules = ClientModuleRegistry::default();
             let mut primary_module = None;
-            for (module_instance, module_config) in config.modules {
+            for (module_instance, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
                 if module_instance == primary_module_instance {
                     let module = self
@@ -1062,6 +1159,8 @@ impl ClientBuilder {
         };
 
         let client_inner = Arc::new(ClientInner {
+            config: config.clone(),
+            decoders,
             db,
             federation_id: config.federation_id,
             federation_meta: config.meta,
@@ -1072,6 +1171,7 @@ impl ClientBuilder {
             executor,
             api,
             secp_ctx: Secp256k1::new(),
+            root_secret,
         });
 
         Ok(Client {
@@ -1082,28 +1182,34 @@ impl ClientBuilder {
 
 /// Fetches the client secret from the database or generates a new one if
 /// none is present
-pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
-    let mut tx = db.begin_transaction().await;
-    let client_secret = tx.get_value(&ClientSecretKey).await;
+pub async fn get_client_secret(db: &Database) -> ClientSecret {
+    let mut dbtx = db.begin_transaction().await;
+    let client_secret = dbtx.get_value(&ClientSecretKey).await;
     let secret = if let Some(client_secret) = client_secret {
         client_secret
     } else {
         let secret: ClientSecret = thread_rng().gen();
-        let no_replacement = tx.insert_entry(&ClientSecretKey, &secret).await.is_none();
+        let replacement_happened = set_client_root_secret(&mut dbtx, &secret).await;
         assert!(
-            no_replacement,
+            !replacement_happened,
             "We would have overwritten our secret key, aborting!"
         );
         secret
     };
-    tx.commit_tx().await;
-    secret.into_root_secret()
+    dbtx.commit_tx().await;
+    secret
+}
+
+/// Sets the client secret in the database, returns if an old secret was
+/// overwritten
+async fn set_client_root_secret(dbtx: &mut DatabaseTransaction<'_>, secret: &ClientSecret) -> bool {
+    dbtx.insert_entry(&ClientSecretKey, secret).await.is_some()
 }
 
 /// Secret input key material from which the [`DerivableSecret`] used by the
 /// client will be seeded
 #[derive(Encodable, Decodable)]
-pub struct ClientSecret([u8; 64]);
+pub struct ClientSecret(pub [u8; 64]);
 
 impl ClientSecret {
     fn into_root_secret(self) -> DerivableSecret {
