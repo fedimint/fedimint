@@ -1342,6 +1342,7 @@
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
 <a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1794,7 +1795,8 @@
     })
 }
 
-<span class="kw">pub struct </span>Client {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>Client {
     inner: Arc&lt;ClientInner&gt;,
 }
 
