@@ -286,6 +286,18 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -459,6 +471,18 @@
     </span><span class="kw">pub </span>route_hints: Vec&lt;route_hints::RouteHint&gt;,
     <span class="doccomment">/// Limits the validity of the announcement to allow updates
     </span><span class="kw">pub </span>valid_until: SystemTime,
+}
+
+<span class="kw">impl </span>LightningGateway {
+    <span class="doccomment">/// Check if two gateway registrations are the same except for the expiry
+    /// time
+    </span><span class="kw">pub fn </span>is_same_gateway_registration(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>LightningGateway) -&gt; bool {
+        <span class="self">self</span>.mint_channel_id == other.mint_channel_id
+            &amp;&amp; <span class="self">self</span>.mint_pub_key == other.mint_pub_key
+            &amp;&amp; <span class="self">self</span>.node_pub_key == other.node_pub_key
+            &amp;&amp; <span class="self">self</span>.api == other.api
+            &amp;&amp; <span class="self">self</span>.route_hints == other.route_hints
+    }
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

@@ -654,6 +654,10 @@
 <a href="#654" id="654">654</a>
 <a href="#655" id="655">655</a>
 <a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -811,7 +815,6 @@
         <span class="kw">let </span>registration = register_client
             .config()
             .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
-        <span class="kw">let </span>registration_sent = registration.clone();
         <span class="kw">let </span>notify = Arc::new(Notify::new());
         <span class="kw">let </span>notfiy_sent = notify.clone();
         task_group
@@ -822,8 +825,13 @@
                         String::from(<span class="string">&quot;Register With Federation&quot;</span>),
                         <span class="attr">#[allow(clippy::unit_arg)]
                         </span>|| <span class="kw">async </span>{
+                            <span class="kw">let </span>registration =
+                                register_client.config().to_gateway_registration_info(
+                                    route_hints.clone(),
+                                    GW_ANNOUNCEMENT_TTL,
+                                );
                             <span class="prelude-val">Ok</span>(register_client
-                                .register_with_federation(registration_sent.clone())
+                                .register_with_federation(registration)
                                 .<span class="kw">await</span><span class="question-mark">?</span>)
                         },
                         Duration::from_secs(<span class="number">1</span>),
