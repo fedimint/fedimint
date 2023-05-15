@@ -40,7 +40,7 @@ craneLib.overrideScope' (self: prev: {
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
     preConfigure = ''
-      export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
+      export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings'
     '';
     buildPhaseCargoCommand = "cargo doc --no-deps --document-private-items";
     doInstallCargoArtifacts = false;
@@ -57,7 +57,7 @@ craneLib.overrideScope' (self: prev: {
     # about the docs
     cargoArtifacts = null;
     preConfigure = ''
-      export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -Z unstable-options --enable-index-page'
+      export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -Z unstable-options --enable-index-page -D warnings'
     '';
     buildPhaseCargoCommand = "cargo doc --no-deps --document-private-items";
     doInstallCargoArtifacts = false;
