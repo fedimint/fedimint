@@ -141,8 +141,8 @@ impl ILnRpcClient for FakeLightningTest {
 pub struct LnRpcAdapter {
     /// The actual `ILnRpcClient` that we add behavior to.
     client: Arc<RwLock<dyn ILnRpcClient>>,
-    /// A pair of <PayInvoiceRequest> and <Count> where client.pay() will fail
-    /// <Count> times for each <String> (bolt11 invoice)
+    /// A pair of [`PayInvoiceRequest`] and `u8` where client.pay() will fail
+    /// `u8` times for each `String` (bolt11 invoice)
     fail_invoices: Arc<sync::Mutex<HashMap<String, u8>>>,
 }
 
@@ -156,7 +156,7 @@ impl LnRpcAdapter {
         }
     }
 
-    /// Register <invoice> to fail <times> before (attempt) succeeding. The
+    /// Register `invoice` to fail `times` before (attempt) succeeding. The
     /// invoice will be dropped from the HashMap after succeeding
     #[allow(dead_code)]
     pub async fn fail_invoice(&self, invoice: PayInvoiceRequest, times: u8) {
