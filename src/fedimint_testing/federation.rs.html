@@ -188,9 +188,11 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
@@ -243,7 +245,7 @@
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
         client_builder
-            .build(<span class="kw-2">&amp;mut </span><span class="self">self</span>.task.make_subgroup().<span class="kw">await</span>)
+            .build::&lt;PlainRootSecretStrategy&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>.task.make_subgroup().<span class="kw">await</span>)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to build client&quot;</span>)
     }

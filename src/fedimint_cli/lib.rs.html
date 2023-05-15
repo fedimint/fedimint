@@ -1135,6 +1135,13 @@
 <a href="#1135" id="1135">1135</a>
 <a href="#1136" id="1136">1136</a>
 <a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1151,6 +1158,7 @@
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_aead::get_password_hash;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
+<span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::sm::OperationId;
 <span class="kw">use </span>fedimint_client::{ClientBuilder, ClientSecret};
 <span class="kw">use </span>fedimint_client_legacy::mint::backup::Metadata;
@@ -1549,7 +1557,10 @@
     ) -&gt; CliResult&lt;fedimint_client::Client&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
         <span class="kw">let </span>client_builder = <span class="self">self</span>.build_client_ng_builder(module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
-        client_builder.build(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>.map_err_cli_general()
+        client_builder
+            .build::&lt;PlainRootSecretStrategy&gt;(<span class="kw-2">&amp;mut </span>tg)
+            .<span class="kw">await
+            </span>.map_err_cli_general()
     }
 
     <span class="kw">async fn </span>build_client_ng_builder(
@@ -2195,7 +2206,10 @@
                     .build_client_ng_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?
-                    </span>.build_restoring_from_backup(<span class="kw-2">&amp;mut </span>tg, ClientSecret(secret))
+                    </span>.build_restoring_from_backup(
+                        <span class="kw-2">&amp;mut </span>tg,
+                        ClientSecret::&lt;PlainRootSecretStrategy&gt;::new(secret),
+                    )
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
 

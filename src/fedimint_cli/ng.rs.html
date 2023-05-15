@@ -305,6 +305,7 @@
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
@@ -313,6 +314,7 @@
 <span class="kw">use </span>bitcoin_hashes::hex;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_client::backup::Metadata;
+<span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::sm::OperationId;
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
@@ -561,8 +563,8 @@
             <span class="prelude-val">Ok</span>(serde_json::to_value(()).unwrap())
         }
         ClientNg::PrintSecret =&gt; {
-            <span class="kw">let </span>secret = client.get_secret().<span class="kw">await</span>;
-            <span class="kw">let </span>hex_secret = hex::ToHex::to_hex(secret.<span class="number">0</span>.as_ref());
+            <span class="kw">let </span>secret = client.get_secret::&lt;PlainRootSecretStrategy&gt;().<span class="kw">await</span>;
+            <span class="kw">let </span>hex_secret = hex::ToHex::to_hex(<span class="kw-2">&amp;</span>secret[..]);
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">&quot;secret&quot;</span>: hex_secret,

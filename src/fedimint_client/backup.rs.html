@@ -424,6 +424,9 @@
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::BTreeMap;
 
@@ -441,8 +444,8 @@
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">super</span>::Client;
-<span class="kw">use </span><span class="kw">crate</span>::secret::DeriveableSecretClientExt;
-<span class="kw">use crate</span>::{get_client_secret, ClientSecret};
+<span class="kw">use </span><span class="kw">crate</span>::get_client_root_secret_encoding;
+<span class="kw">use </span><span class="kw">crate</span>::secret::{DeriveableSecretClientExt, RootSecretStrategy};
 
 <span class="doccomment">/// Backup metadata
 ///
@@ -846,8 +849,11 @@
         <span class="self">Self</span>::get_derived_backup_signing_key_static(<span class="kw-2">&amp;</span><span class="self">self</span>.root_secret())
     }
 
-    <span class="kw">pub async fn </span>get_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientSecret {
-        get_client_secret(<span class="self">self</span>.db()).<span class="kw">await
+    <span class="kw">pub async fn </span>get_secret&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; S::Encoding
+    <span class="kw">where
+        </span>S: RootSecretStrategy,
+    {
+        get_client_root_secret_encoding::&lt;S&gt;(<span class="self">self</span>.db()).<span class="kw">await
     </span>}
 }
 </code></pre></div>

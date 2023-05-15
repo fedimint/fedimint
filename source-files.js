@@ -4,6 +4,7 @@ var sourcesIndex = JSON.parse('{\
 "distributedgen":["",[],["distributedgen.rs"]],\
 "faucet":["",[],["faucet.rs"]],\
 "fedimint_aead":["",[],["lib.rs"]],\
+"fedimint_bip39":["",[],["lib.rs"]],\
 "fedimint_bitcoind":["",[],["bitcoincore_rpc.rs","lib.rs"]],\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
