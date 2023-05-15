@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::admin_client::{
     ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
@@ -53,7 +54,7 @@ impl FederationTest {
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
         client_builder
-            .build(&mut self.task.make_subgroup().await)
+            .build::<PlainRootSecretStrategy>(&mut self.task.make_subgroup().await)
             .await
             .expect("Failed to build client")
     }

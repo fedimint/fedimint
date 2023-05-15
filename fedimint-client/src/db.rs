@@ -1,8 +1,13 @@
-use fedimint_core::encoding::{Decodable, Encodable};
+use std::io::{Error, Read, Write};
+use std::marker::PhantomData;
+
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::secret::RootSecretStrategy;
 use crate::sm::OperationId;
 use crate::{ClientSecret, OperationLogEntry};
 
@@ -20,14 +25,39 @@ impl std::fmt::Display for DbKeyPrefix {
     }
 }
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientSecretKey;
+#[derive(Debug, Serialize)]
+pub struct ClientSecretKey<S>(PhantomData<S>);
 
-impl_db_record!(
-    key = ClientSecretKey,
-    value = ClientSecret,
-    db_prefix = DbKeyPrefix::ClientSecret
-);
+impl<S> Default for ClientSecretKey<S> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<S> Encodable for ClientSecretKey<S> {
+    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
+        Ok(0)
+    }
+}
+
+impl<S> Decodable for ClientSecretKey<S> {
+    fn consensus_decode<R: Read>(
+        _r: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(ClientSecretKey::default())
+    }
+}
+
+impl<S> ::fedimint_core::db::DatabaseRecord for ClientSecretKey<S>
+where
+    S: RootSecretStrategy,
+{
+    const DB_PREFIX: u8 = DbKeyPrefix::ClientSecret as u8;
+
+    type Key = Self;
+    type Value = ClientSecret<S>;
+}
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct OperationLogKey {

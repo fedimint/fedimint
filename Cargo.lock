@@ -421,6 +421,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bip39"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f2635620bf0b9d4576eb7bb9a38a55df78bd1205d26fa994b25911a69f212f"
+dependencies = [
+ "bitcoin_hashes",
+ "rand",
+ "rand_core",
+ "serde",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "bitcoin"
 version = "0.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1093,6 +1106,16 @@ dependencies = [
  "hex",
  "rand",
  "ring",
+]
+
+[[package]]
+name = "fedimint-bip39"
+version = "0.1.0"
+dependencies = [
+ "bip39",
+ "fedimint-client",
+ "fedimint-core",
+ "rand",
 ]
 
 [[package]]
