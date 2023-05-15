@@ -443,6 +443,9 @@
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::string::ToString;
 
@@ -465,7 +468,8 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate, DummyGenParams,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
+    DummyGenParams,
 };
 <span class="kw">use </span>fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
@@ -539,10 +543,11 @@
             .map(|<span class="kw-2">&amp;</span>peer| {
                 <span class="kw">let </span>private_key_share = SerdeSecret(sks.secret_key_share(peer.to_usize()));
                 <span class="kw">let </span>config = DummyConfig {
+                    local: DummyConfigLocal,
                     private: DummyConfigPrivate { private_key_share },
                     consensus: DummyConfigConsensus {
                         public_key_set: pks.clone(),
-                        tx_fee: params.tx_fee,
+                        tx_fee: params.consensus.tx_fee,
                     },
                 };
                 (peer, config.to_erased())
@@ -564,12 +569,13 @@
         <span class="kw">let </span>keys = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
 
         <span class="prelude-val">Ok</span>(DummyConfig {
+            local: DummyConfigLocal,
             private: DummyConfigPrivate {
                 private_key_share: keys.secret_key_share,
             },
             consensus: DummyConfigConsensus {
                 public_key_set: keys.public_key_set,
-                tx_fee: params.tx_fee,
+                tx_fee: params.consensus.tx_fee,
             },
         }
         .to_erased())

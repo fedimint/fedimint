@@ -2124,8 +2124,8 @@
                         .collect(),
                     <span class="kw-2">*</span>sk,
                     peers.threshold(),
-                    params.network,
-                    params.finality_delay,
+                    params.consensus.network,
+                    params.consensus.finality_delay,
                 );
                 (<span class="kw-2">*</span>id, cfg)
             })
@@ -2160,8 +2160,8 @@
             peer_peg_in_keys,
             sk,
             peers.peer_ids().threshold(),
-            params.network,
-            params.finality_delay,
+            params.consensus.network,
+            params.consensus.finality_delay,
         );
 
         <span class="prelude-val">Ok</span>(wallet_cfg.to_erased())

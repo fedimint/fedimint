@@ -84,8 +84,23 @@
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
+<span class="kw">use </span>fedimint_core::config::EmptyGenParams;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId, Tiered};
@@ -96,6 +111,12 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintGenParams {
+    <span class="kw">pub </span>local: EmptyGenParams,
+    <span class="kw">pub </span>consensus: MintGenParamsConsensus,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>MintGenParamsConsensus {
     <span class="kw">pub </span>mint_amounts: Vec&lt;Amount&gt;,
 }
 
@@ -104,22 +125,26 @@
 <span class="kw">impl </span>Default <span class="kw">for </span>MintGenParams {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         MintGenParams {
-            mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
-                .tiers()
-                .cloned()
-                .collect(),
+            consensus: MintGenParamsConsensus {
+                mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
+                    .tiers()
+                    .cloned()
+                    .collect(),
+            },
+            local: EmptyGenParams,
         }
     }
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintConfig {
-    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key
-    /// material
-    </span><span class="kw">pub </span>private: MintConfigPrivate,
-    <span class="doccomment">/// Contains all configuration that needs to be the same for every server
-    </span><span class="kw">pub </span>consensus: MintConfigConsensus,
+    <span class="kw">pub </span>local: MintConfigLocal,
+    <span class="kw">pub </span>private: MintConfigPrivate,
+    <span class="kw">pub </span>consensus: MintConfigConsensus,
 }
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>MintConfigLocal;
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>MintConfigConsensus {
@@ -150,7 +175,10 @@
 </span><span class="macro">plugin_types_trait_impl_config!</span>(
     MintCommonGen,
     MintGenParams,
+    EmptyGenParams,
+    MintGenParamsConsensus,
     MintConfig,
+    MintConfigLocal,
     MintConfigPrivate,
     MintConfigConsensus,
     MintClientConfig

@@ -1176,6 +1176,8 @@
 <a href="#1176" id="1176">1176</a>
 <a href="#1177" id="1177">1177</a>
 <a href="#1178" id="1178">1178</a>
+<a href="#1179" id="1179">1179</a>
+<a href="#1180" id="1180">1180</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ops::Sub;
 
@@ -1205,7 +1207,7 @@
 <span class="kw">pub use </span>fedimint_ln_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigPrivate,
+    LightningConfigLocal, LightningConfigPrivate,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_ln_common::contracts::{
@@ -1270,6 +1272,7 @@
                 (
                     peer,
                     LightningConfig {
+                        local: LightningConfigLocal,
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
@@ -1296,6 +1299,7 @@
         <span class="kw">let </span>keys = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
 
         <span class="kw">let </span>server = LightningConfig {
+            local: LightningConfigLocal,
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: Default::default(),

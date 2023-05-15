@@ -134,9 +134,25 @@
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>fedimint_core::config::EmptyGenParams;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
@@ -149,6 +165,12 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletGenParams {
+    <span class="kw">pub </span>local: EmptyGenParams,
+    <span class="kw">pub </span>consensus: WalletGenParamsConsensus,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletGenParamsConsensus {
     <span class="kw">pub </span>network: bitcoin::network::constants::Network,
     <span class="kw">pub </span>finality_delay: u32,
 }
@@ -156,20 +178,24 @@
 <span class="kw">impl </span>Default <span class="kw">for </span>WalletGenParams {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            network: Network::Regtest,
-            finality_delay: <span class="number">10</span>,
+            local: EmptyGenParams,
+            consensus: WalletGenParamsConsensus {
+                network: Network::Regtest,
+                finality_delay: <span class="number">10</span>,
+            },
         }
     }
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfig {
-    <span class="doccomment">/// Contains all configuration that will be encrypted such as private key
-    /// material
-    </span><span class="kw">pub </span>private: WalletConfigPrivate,
-    <span class="doccomment">/// Contains all configuration that needs to be the same for every server
-    </span><span class="kw">pub </span>consensus: WalletConfigConsensus,
+    <span class="kw">pub </span>local: WalletConfigLocal,
+    <span class="kw">pub </span>private: WalletConfigPrivate,
+    <span class="kw">pub </span>consensus: WalletConfigConsensus,
 }
+
+<span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>WalletConfigLocal;
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfigPrivate {
@@ -234,6 +260,7 @@
         );
 
         <span class="self">Self </span>{
+            local: WalletConfigLocal,
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -265,7 +292,10 @@
 <span class="macro">plugin_types_trait_impl_config!</span>(
     WalletCommonGen,
     WalletGenParams,
+    EmptyGenParams,
+    WalletGenParamsConsensus,
     WalletConfig,
+    WalletConfigLocal,
     WalletConfigPrivate,
     WalletConfigConsensus,
     WalletClientConfig

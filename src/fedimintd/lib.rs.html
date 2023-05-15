@@ -54,6 +54,13 @@
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
 <a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::core::{
@@ -64,9 +71,9 @@
 <span class="kw">use </span>fedimint_core::{Amount, Tiered};
 <span class="kw">use </span>fedimint_ln_server::common::config::LightningGenParams;
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
-<span class="kw">use </span>fedimint_mint_server::common::config::MintGenParams;
+<span class="kw">use </span>fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 <span class="kw">use </span>fedimint_mint_server::MintGen;
-<span class="kw">use </span>fedimint_wallet_server::common::config::WalletGenParams;
+<span class="kw">use </span>fedimint_wallet_server::common::config::{WalletGenParams, WalletGenParamsConsensus};
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
 
 <span class="kw">mod </span>ui;
@@ -88,26 +95,33 @@
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),
             WalletGenParams {
-                network,
-                <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next commit
-                // anyway
-                </span>finality_delay,
+                local: Default::default(),
+                consensus: WalletGenParamsConsensus {
+                    network,
+                    <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next
+                    // commit anyway
+                    </span>finality_delay,
+                },
             },
         )
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
             MintGen::kind(),
             MintGenParams {
-                mint_amounts: Tiered::gen_denominations(max_denomination)
-                    .tiers()
-                    .cloned()
-                    .collect(),
+                local: Default::default(),
+
+                consensus: MintGenParamsConsensus {
+                    mint_amounts: Tiered::gen_denominations(max_denomination)
+                        .tiers()
+                        .cloned()
+                        .collect(),
+                },
             },
         )
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_LN,
             LightningGen::kind(),
-            LightningGenParams,
+            LightningGenParams::default(),
         );
 }
 </code></pre></div>
