@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, VStack, Spinner, Heading, Text, Center } from '@chakra-ui/react';
-import { theme, Fonts } from './theme';
-import { SharedChakraProvider } from '@fedimint/ui';
+import { theme, Fonts, SharedChakraProvider } from '@fedimint/ui';
 import { GuardianApi } from './GuardianApi';
 import { GuardianProvider } from './GuardianContext';
 import { Setup } from './components/Setup';

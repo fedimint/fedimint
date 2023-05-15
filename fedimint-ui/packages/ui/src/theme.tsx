@@ -5,7 +5,7 @@ import { extendTheme, withDefaultColorScheme } from '@chakra-ui/react';
 const SPACE_GROTESK = 'Space Grotesk';
 const INTER = 'Inter';
 
-const palette = {
+export const palette = {
   black: '#000000',
   white: '#FFFFFF',
   gray: {
@@ -47,7 +47,7 @@ const shadows = {
   outline: `0 0 0 2px ${palette.blue[200]}`,
 };
 
-const colors = {
+export const colors = {
   ...palette,
   text: {
     primary: palette.gray[900],
@@ -332,7 +332,7 @@ export const Fonts = () => (
 /**
  * Given a hex value and an opacity from 0-1, convert to rgba notation.
  */
-export function hexToRgba(hexCode: string, opacity: number) {
+function hexToRgba(hexCode: string, opacity: number) {
   let hex = hexCode.replace('#', '');
 
   // Handle #RGB hex
