@@ -2470,6 +2470,7 @@
 <a href="#2470" id="2470">2470</a>
 <a href="#2471" id="2471">2471</a>
 <a href="#2472" id="2472">2472</a>
+<a href="#2473" id="2473">2473</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3163,7 +3164,7 @@
         }
     }
 
-    <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key), ret)]
+    <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key))]
     </span><span class="kw">pub async fn </span>get_value&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Option</span>&lt;K::Value&gt;
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseRecord,
@@ -3572,7 +3573,7 @@
             </span>.expect(<span class="string">&quot;Unrecoverable error occurred while committing to the database.&quot;</span>);
     }
 
-    <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key), ret)]
+    <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(<span class="question-mark">?</span>key))]
     </span><span class="kw">pub async fn </span>get_value&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Option</span>&lt;K::Value&gt;
     <span class="kw">where
         </span>K: DatabaseKey + DatabaseRecord,
@@ -3919,6 +3920,7 @@
 #[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     DatabaseVersion = <span class="number">0x50</span>,
+    ClientBackup = <span class="number">0x51</span>,
 }
 
 <span class="attr">#[derive(Debug, Error)]

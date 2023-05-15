@@ -91,6 +91,17 @@
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>dbtx;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>executor;
 <span class="doccomment">/// State machine state interface
@@ -109,6 +120,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">pub use </span>notifier::{ModuleNotifier, Notifier};
+<span class="kw">use </span>rand::RngCore;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
 <span class="kw">pub use </span>state::{Context, DynContext, DynState, IState, OperationState, State, StateTransition};
 
@@ -142,6 +154,16 @@
 /// 256bit value collisions are impossible for all intents and purposes.
 </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OperationId(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
+
+<span class="kw">impl </span>OperationId {
+    <span class="doccomment">/// Generate random [`OperationId`]
+    </span><span class="kw">pub fn </span>new_random() -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
+        rng.fill_bytes(<span class="kw-2">&amp;mut </span>bytes);
+        <span class="self">Self</span>(bytes)
+    }
+}
 
 <span class="kw">impl </span>Display <span class="kw">for </span>OperationId {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {

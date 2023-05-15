@@ -271,12 +271,48 @@
 <a href="#271" id="271">271</a>
 <a href="#272" id="272">272</a>
 <a href="#273" id="273">273</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::ffi;
-<span class="kw">use </span>std::str::FromStr;
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>bitcoin_hashes::hex;
 <span class="kw">use </span>clap::Subcommand;
+<span class="kw">use </span>fedimint_client::backup::Metadata;
 <span class="kw">use </span>fedimint_client::sm::OperationId;
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
@@ -291,7 +327,7 @@
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tracing::info;
 
-<span class="kw">use </span><span class="kw">crate</span>::LnInvoiceResponse;
+<span class="kw">use crate</span>::{metadata_from_clap_cli, LnInvoiceResponse};
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub enum </span>ModuleSelector {
@@ -341,19 +377,36 @@
         </span><span class="attr">#[clap(value_parser = parse_node_pub_key)]
         </span>pubkey: secp256k1::PublicKey,
     },
-    <span class="doccomment">/// Call module-specific commands
-    </span>Mod {
-        <span class="attr">#[clap(long)]
-        </span>id: ModuleSelector,
-
-        <span class="doccomment">/// Command with arguments to call the module with
-        </span><span class="attr">#[clap(long)]
-        </span>arg: Vec&lt;ffi::OsString&gt;,
+    <span class="doccomment">/// Upload the (encrypted) snapshot of mint notes to federation
+    </span>Backup {
+        <span class="attr">#[clap(long = <span class="string">&quot;metadata&quot;</span>)]
+        </span><span class="doccomment">/// Backup metadata, encoded as `key=value` (use `--metadata=key=value`,
+        /// possibly multiple times)
+        </span><span class="comment">// TODO: Can we make it `*Map&lt;String, String&gt;` and avoid custom parsing?
+        </span>metadata: Vec&lt;String&gt;,
     },
+    <span class="doccomment">/// Wipe the state of the client (mostly for testing purposes)
+    </span><span class="attr">#[clap(hide = <span class="bool-val">true</span>)]
+    </span>Wipe {
+        <span class="attr">#[clap(long)]
+        </span>force: bool,
+    },
+    <span class="doccomment">/// Restore the previously created backup of mint notes (with `backup`
+    /// command)
+    </span>Restore {
+        <span class="attr">#[clap(value_parser = parse_secret)]
+        </span>secret: [u8; <span class="number">64</span>],
+    },
+    <span class="doccomment">/// Print the secret key of the client
+    </span>PrintSecret,
 }
 
 <span class="kw">pub fn </span>parse_node_pub_key(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
     secp256k1::PublicKey::from_str(s)
+}
+
+<span class="kw">fn </span>parse_secret(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">64</span>], hex::Error&gt; {
+    hex::FromHex::from_hex(s)
 }
 
 <span class="kw">pub async fn </span>handle_ng_command(
@@ -488,17 +541,32 @@
             gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateway_json).unwrap())
         }
-        ClientNg::Mod { id, arg } =&gt; {
-            <span class="kw">let </span>(id, <span class="kw">_</span>) = <span class="kw">match </span>id {
-                ModuleSelector::Id(id) =&gt; (id, config.get_module_cfg(id)<span class="question-mark">?</span>),
-                ModuleSelector::Kind(kind) =&gt; config.get_first_module_by_kind_cfg(kind)<span class="question-mark">?</span>,
-            };
 
-            <span class="kw">let </span>module = client
-                .get_module_client_dyn(id)
-                .expect(<span class="string">&quot;Module exists according to cfg&quot;</span>);
+        ClientNg::Backup { metadata } =&gt; {
+            <span class="kw">let </span>metadata = metadata_from_clap_cli(metadata)<span class="question-mark">?</span>;
 
-            <span class="prelude-val">Ok</span>(module.handle_cli_command(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>arg).<span class="kw">await</span><span class="question-mark">?</span>)
+            client
+                .backup_to_federation(Metadata::from_json_serialized(metadata))
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(serde_json::to_value(()).unwrap())
+        }
+        ClientNg::Restore { .. } =&gt; {
+            <span class="macro">panic!</span>(<span class="string">&quot;Has to be handled before initializing client&quot;</span>)
+        }
+        ClientNg::Wipe { force } =&gt; {
+            <span class="kw">if </span>!force {
+                <span class="macro">bail!</span>(<span class="string">&quot;This will wipe the state of the client irrecoverably. Use `--force` to proceed.&quot;</span>)
+            }
+            client.wipe_state().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(serde_json::to_value(()).unwrap())
+        }
+        ClientNg::PrintSecret =&gt; {
+            <span class="kw">let </span>secret = client.get_secret().<span class="kw">await</span>;
+            <span class="kw">let </span>hex_secret = hex::ToHex::to_hex(secret.<span class="number">0</span>.as_ref());
+
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
+                <span class="string">&quot;secret&quot;</span>: hex_secret,
+            }))
         }
     }
 }

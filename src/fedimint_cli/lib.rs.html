@@ -1107,6 +1107,34 @@
 <a href="#1107" id="1107">1107</a>
 <a href="#1108" id="1108">1108</a>
 <a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1124,7 +1152,7 @@
 <span class="kw">use </span>fedimint_aead::get_password_hash;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 <span class="kw">use </span>fedimint_client::sm::OperationId;
-<span class="kw">use </span>fedimint_client::ClientBuilder;
+<span class="kw">use </span>fedimint_client::{ClientBuilder, ClientSecret};
 <span class="kw">use </span>fedimint_client_legacy::mint::backup::Metadata;
 <span class="kw">use </span>fedimint_client_legacy::mint::SpendableNote;
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -1151,12 +1179,14 @@
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>fedimint_mint_client::MintClientGen;
+<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientGen};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
+
+<span class="kw">use </span><span class="kw">crate</span>::ng::ClientNg;
 
 <span class="doccomment">/// Type of output the cli produces
 </span><span class="attr">#[derive(Serialize)]
@@ -1518,16 +1548,24 @@
         module_gens: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
     ) -&gt; CliResult&lt;fedimint_client::Client&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+        <span class="kw">let </span>client_builder = <span class="self">self</span>.build_client_ng_builder(module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
+        client_builder.build(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>.map_err_cli_general()
+    }
+
+    <span class="kw">async fn </span>build_client_ng_builder(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_gens: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+    ) -&gt; CliResult&lt;fedimint_client::ClientBuilder&gt; {
         <span class="kw">let </span>cfg = <span class="self">self</span>.load_config()<span class="question-mark">?</span>.<span class="number">0</span>;
         <span class="kw">let </span>db = <span class="self">self</span>.load_rocks_db()<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
         client_builder.with_module_gens(module_gens.clone());
         client_builder.with_primary_module(<span class="number">1</span>);
-        client_builder.with_config(cfg.clone());
+        client_builder.with_config(cfg);
         client_builder.with_database(db);
 
-        client_builder.build(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>.map_err_cli_general()
+        <span class="prelude-val">Ok</span>(client_builder)
     }
 }
 
@@ -2150,6 +2188,24 @@
                     .force_process_epoch(SerdeEpochHistory::from(<span class="kw-2">&amp;</span>outcome))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::ForceEpoch)
+            }
+            Command::Ng(ClientNg::Restore { secret }) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+                <span class="kw">let </span>(client, metadata) = cli
+                    .build_client_ng_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?
+                    </span>.build_restoring_from_backup(<span class="kw-2">&amp;mut </span>tg, ClientSecret(secret))
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="macro">info!</span>(<span class="string">&quot;Waiting for restore to complete&quot;</span>);
+                client
+                    .await_restore_finished()
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
             }
             Command::Ng(command) =&gt; {
                 <span class="kw">let </span>config = cli.load_config()<span class="question-mark">?</span>.<span class="number">0</span>;

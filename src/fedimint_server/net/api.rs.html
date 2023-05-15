@@ -742,6 +742,64 @@
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -754,7 +812,9 @@
     ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
     WsClientConnectInfo,
 };
+<span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse};
+<span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -769,12 +829,14 @@
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>jsonrpsee::RpcModule;
+<span class="kw">use </span>secp256k1_zkp::SECP256K1;
 <span class="kw">use </span>tokio::sync::mpsc::error::SendError;
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio::sync::RwLock;
-<span class="kw">use </span>tracing::debug;
+<span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">super</span>::peers::PeerStatusChannels;
+<span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
 <span class="kw">use </span><span class="kw">crate</span>::config::api::{get_verification_hashes, ApiResult};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::interconnect::FedimintInterconnect;
@@ -1058,6 +1120,44 @@
             MAX_DURATION_FOR_RECENT_CONTRIBUTION,
         ))
     }
+
+    <span class="kw">async fn </span>handle_backup_request(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        request: SignedBackupRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
+        <span class="kw">let </span>request = request
+            .verify_valid(SECP256K1)
+            .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;invalid request&quot;</span>.into()))<span class="question-mark">?</span>;
+
+        <span class="macro">debug!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">&quot;Received client backup request&quot;</span>);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(request.id)).<span class="kw">await </span>{
+            <span class="kw">if </span>request.timestamp &lt;= prev.timestamp {
+                <span class="macro">debug!</span>(id = %request.id, len = request.payload.len(), <span class="string">&quot;Received client backup request with old timestamp - ignoring&quot;</span>);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;timestamp too small&quot;</span>.into()));
+            }
+        }
+
+        <span class="macro">info!</span>(target: LOG_NET_API, id = %request.id, len = request.payload.len(), <span class="string">&quot;Storing new client backup&quot;</span>);
+        dbtx.insert_entry(
+            <span class="kw-2">&amp;</span>ClientBackupKey(request.id),
+            <span class="kw-2">&amp;</span>ClientBackupSnapshot {
+                timestamp: request.timestamp,
+                data: request.payload.to_vec(),
+            },
+        )
+        .<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>handle_recover_request(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        id: secp256k1_zkp::XOnlyPublicKey,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
+        dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(id)).<span class="kw">await
+    </span>}
 }
 
 <span class="kw">fn </span>calculate_consensus_status(
@@ -1300,6 +1400,22 @@
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Err</span>(ApiError::unauthorized())
                 }
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;backup&quot;</span>,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, request: SignedBackupRequest| -&gt; () {
+                fedimint
+                    .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx(), request).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(())
+
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;recover&quot;</span>,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
+                <span class="prelude-val">Ok</span>(fedimint
+                    .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx(), id).<span class="kw">await</span>)
             }
         },
     ]

@@ -1178,6 +1178,45 @@
 <a href="#1178" id="1178">1178</a>
 <a href="#1179" id="1179">1179</a>
 <a href="#1180" id="1180">1180</a>
+<a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
+<a href="#1212" id="1212">1212</a>
+<a href="#1213" id="1213">1213</a>
+<a href="#1214" id="1214">1214</a>
+<a href="#1215" id="1215">1215</a>
+<a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1191,6 +1230,7 @@
 <span class="kw">use </span>anyhow::{anyhow, ensure};
 <span class="kw">use </span>bech32::Variant::Bech32m;
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
+<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -1218,13 +1258,15 @@
 <span class="kw">use </span>tracing::{debug, error, instrument, trace};
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
+<span class="kw">use </span><span class="kw">crate</span>::core::backup::SignedBackupRequest;
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::module::ApiRequestErased;
 <span class="kw">use </span><span class="kw">crate</span>::outcome::TransactionStatus;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
-    VerifiableResponse,
+    UnionResponsesSingle, VerifiableResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
 
@@ -1488,7 +1530,8 @@
 </span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; FederationApiExt <span class="kw">for </span>T <span class="kw">where </span>T: IFederationApi {}
 
 <span class="macro">dyn_newtype_define! </span>{
-    <span class="kw">pub </span>DynFederationApi(Arc&lt;IFederationApi&gt;)
+    <span class="attr">#[derive(Clone)]
+    </span><span class="kw">pub </span>DynFederationApi(Arc&lt;IFederationApi&gt;)
 }
 
 <span class="kw">impl </span>AsRef&lt;<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>&gt; <span class="kw">for </span>DynFederationApi {
@@ -1540,7 +1583,15 @@
 
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
     </span><span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
+
+    <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt;;
+
+    <span class="kw">async fn </span>download_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
+    ) -&gt; FederationResult&lt;Vec&lt;ClientBackupSnapshot&gt;&gt;;
 }
+
 <span class="kw">fn </span>map_tx_outcome_outpoint&lt;R&gt;(
     tx_outcome: TransactionStatus,
     out_point: OutPoint,
@@ -1725,6 +1776,33 @@
         <span class="self">self</span>.request_current_consensus(<span class="string">&quot;config_hash&quot;</span>.to_owned(), ApiRequestErased::default())
             .<span class="kw">await
     </span>}
+
+    <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_with_strategy(
+            CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
+            <span class="string">&quot;backup&quot;</span>.to_owned(),
+            ApiRequestErased::new(request),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>download_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        id: <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey,
+    ) -&gt; FederationResult&lt;Vec&lt;ClientBackupSnapshot&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.request_with_strategy(
+                UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;::new(
+                    <span class="self">self</span>.all_members().threshold(),
+                ),
+                <span class="string">&quot;recover&quot;</span>.to_owned(),
+                ApiRequestErased::new(id),
+            )
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .flatten()
+            .collect())
+    }
 }
 
 <span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting

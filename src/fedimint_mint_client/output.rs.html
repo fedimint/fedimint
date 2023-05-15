@@ -702,7 +702,7 @@
 </span><span class="attr">#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>MultiNoteIssuanceRequest {
     <span class="doccomment">/// Finalization data for all note outputs in this request
-    </span>notes: TieredMulti&lt;NoteIssuanceRequest&gt;,
+    </span><span class="kw">pub </span>notes: TieredMulti&lt;NoteIssuanceRequest&gt;,
 }
 
 <span class="kw">impl </span>MultiNoteIssuanceRequest {

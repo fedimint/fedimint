@@ -470,6 +470,19 @@
 <a href="#470" id="470">470</a>
 <a href="#471" id="471">471</a>
 <a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -703,6 +716,7 @@
 
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
+    <span class="kw">use </span>fedimint_core::config::ClientConfig;
     <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
@@ -727,16 +741,16 @@
         InstancelessDynClientOutput,
     };
 
-    <span class="attr">#[derive(Debug)]
+    <span class="attr">#[derive(Debug, Clone)]
     </span><span class="kw">struct </span>FakeApiClient {
-        txns: Mutex&lt;Vec&lt;TransactionId&gt;&gt;,
+        txns: Arc&lt;Mutex&lt;Vec&lt;TransactionId&gt;&gt;&gt;,
         fake_peers: BTreeSet&lt;PeerId&gt;,
     }
 
     <span class="kw">impl </span>Default <span class="kw">for </span>FakeApiClient {
         <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
             FakeApiClient {
-                txns: Mutex::new(<span class="macro">vec!</span>[]),
+                txns: Arc::new(Mutex::new(<span class="macro">vec!</span>[])),
                 fake_peers: <span class="macro">vec!</span>[PeerId::from(<span class="number">0</span>)].into_iter().collect(),
             }
         }
@@ -798,6 +812,8 @@
 
     <span class="kw">struct </span>FakeGlobalContext {
         api: FakeApiClient,
+        <span class="doccomment">/// Clone of API wrapped as dyn API (avoids a lot of casting)
+        </span>dyn_api: DynFederationApi,
         executor: Executor&lt;DynGlobalClientContext&gt;,
     }
 
@@ -838,8 +854,16 @@
 
     <span class="attr">#[async_trait]
     </span><span class="kw">impl </span>IGlobalClientContext <span class="kw">for </span>FakeGlobalContext {
-        <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>) {
-            <span class="kw-2">&amp;</span><span class="self">self</span>.api
+        <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynFederationApi {
+            <span class="kw-2">&amp;</span><span class="self">self</span>.dyn_api
+        }
+
+        <span class="kw">fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+            <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
+            <span class="macro">unimplemented!</span>()
         }
 
         <span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynFederationApi {
@@ -904,8 +928,10 @@
             .build(db.clone(), Notifier::new(db.clone()))
             .<span class="kw">await</span>;
 
+        <span class="kw">let </span>fake_api = FakeApiClient::default();
         <span class="kw">let </span>context = Arc::new(FakeGlobalContext {
-            api: Default::default(),
+            api: fake_api.clone(),
+            dyn_api: DynFederationApi::from(fake_api),
             executor: executor.clone(),
         });
         <span class="kw">let </span>dyn_context = DynGlobalClientContext::from(context.clone());
