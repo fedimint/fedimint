@@ -8,7 +8,7 @@ use bitcoincore_rpc::bitcoin::{Amount as BitcoinRpcAmount, Txid};
 use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
-use devimint::federation::{run_config_gen, Fedimintd};
+use devimint::federation::{run_config_gen, Federation, Fedimintd};
 use devimint::util::{poll, poll_value, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
@@ -19,7 +19,7 @@ use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
 use tokio::net::TcpStream;
-use tracing::info;
+use tracing::{debug, info};
 
 pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     #[allow(unused_variables)]
@@ -574,6 +574,12 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSUE_AMOUNT);
 
+    // TODO: make sure there are no in-progress operations involved
+    // This test can't tolerate "spend", but not "reissue"d coins currently,
+    // and there's a no clean way to do `ng reissue` on `ng spend` output ATM
+    // so just putting it here for time being.
+    cli_tests_backup_and_restore(&fed).await?;
+
     let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
@@ -996,6 +1002,65 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
         output.contains("1 gateway_pay_invoice"),
         "paid different number of invoices than expected"
     );
+    Ok(())
+}
+
+async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
+    let secret = cmd!(fed_cli, "ng", "print-secret").out_json().await?["secret"]
+        .as_str()
+        .map(ToOwned::to_owned)
+        .unwrap();
+
+    let pre_notes = cmd!(fed_cli, "ng", "info").out_json().await?;
+
+    let pre_balance = pre_notes["total_msat"].as_u64().unwrap();
+
+    debug!(%pre_notes, pre_balance, "State before backup");
+
+    // we need to have some funds
+    // TODO: right now we rely on previous tests to leave some balance
+    assert!(0 < pre_balance);
+
+    // without existing backup
+    {
+        let _ = cmd!(fed_cli, "ng", "wipe", "--force",).out_json().await?;
+
+        assert_eq!(
+            0,
+            cmd!(fed_cli, "ng", "info").out_json().await?["total_msat"]
+                .as_u64()
+                .unwrap()
+        );
+        let _ = cmd!(fed_cli, "ng", "restore", &secret,).out_json().await?;
+
+        let post_notes = cmd!(fed_cli, "ng", "info").out_json().await?;
+        let post_balance = post_notes["total_msat"].as_u64().unwrap();
+
+        debug!(%post_notes, post_balance, "State after backup");
+        assert_eq!(pre_balance, post_balance);
+    }
+
+    // with a backup
+    {
+        let _ = cmd!(fed_cli, "ng", "backup",).out_json().await?;
+
+        let _ = cmd!(fed_cli, "ng", "wipe", "--force",).out_json().await?;
+
+        assert_eq!(
+            0,
+            cmd!(fed_cli, "ng", "info").out_json().await?["total_msat"]
+                .as_u64()
+                .unwrap()
+        );
+        let _ = cmd!(fed_cli, "ng", "restore", &secret,).out_json().await?;
+
+        let post_notes = cmd!(fed_cli, "ng", "info").out_json().await?;
+        let post_balance = post_notes["total_msat"].as_u64().unwrap();
+
+        debug!(%post_notes, post_balance, "State after backup");
+        assert_eq!(pre_balance, post_balance);
+    }
+
     Ok(())
 }
 
