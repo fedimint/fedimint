@@ -289,6 +289,10 @@ pub trait PrimaryClientModule: ClientModule {
         amount: Amount,
     ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>;
 
+    /// Waits for the funds from an output created by
+    /// [`Self::create_exact_output`] to become available. This function
+    /// returning typically implies a change in the output of
+    /// [`Self::get_balance`].
     async fn await_primary_module_output_finalized(
         &self,
         operation_id: OperationId,
