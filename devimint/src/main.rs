@@ -654,14 +654,16 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?
         .as_u64()
         .unwrap();
+
+    let expected_diff = 3030;
     anyhow::ensure!(
-        initial_client_ng_balance - final_cln_outgoing_client_ng_balance == 3030,
-        "Client NG balance changed by {} on CLN outgoing payment, expected 1010",
+        initial_client_ng_balance - final_cln_outgoing_client_ng_balance == expected_diff,
+        "Client NG balance changed by {} on CLN outgoing payment, expected {expected_diff}",
         initial_client_ng_balance - final_cln_outgoing_client_ng_balance
     );
     anyhow::ensure!(
-        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == 3030,
-        "CLN Gateway balance changed by {} on CLN outgoing payment, expected 1010",
+        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
+        "CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}",
         final_cln_outgoing_gateway_balance - initial_cln_gateway_balance
     );
 
