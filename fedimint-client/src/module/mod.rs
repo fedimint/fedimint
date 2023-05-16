@@ -293,7 +293,7 @@ pub trait PrimaryClientModule: ClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<Amount>;
 }
 
 /// Type-erased version of [`PrimaryClientModule`]
@@ -319,7 +319,7 @@ pub trait IPrimaryClientModule: IClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<Amount>;
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -367,7 +367,7 @@ where
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Amount> {
         T::await_primary_module_output_finalized(self, operation_id, out_point).await
     }
 

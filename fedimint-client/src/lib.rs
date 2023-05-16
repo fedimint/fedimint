@@ -163,6 +163,8 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::claim_input`].
+    /// Returns transaction id of the funding transaction and an optional
+    /// `OutPoint` that represents change if change was added.
     async fn claim_input_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
@@ -171,6 +173,8 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
+    /// Returns transaction id of the funding transaction and an optional
+    /// `OutPoint` that represents change if change was added.
     async fn fund_output_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
@@ -696,11 +700,13 @@ impl Client {
         get_client_root_secret_encoding::<S>(self.db()).await
     }
 
+    /// Waits for an output from the primary module to reach its final
+    /// state.
     pub async fn await_primary_module_output_finalized(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Amount> {
         self.inner
             .await_primary_module_output_finalized(operation_id, out_point)
             .await
@@ -936,7 +942,7 @@ impl ClientInner {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Amount> {
         self.primary_module
             .await_primary_module_output_finalized(operation_id, out_point)
             .await

@@ -263,18 +263,14 @@ impl PrimaryClientModule for DummyClientModule {
         &self,
         operation_id: OperationId,
         _out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Amount> {
         let stream = self
             .notifier
             .subscribe(operation_id)
             .await
             .filter_map(|state| async move {
-                let DummyStateMachine::Done = state else { return None };
-                if let DummyStateMachine::Done = state {
-                    Some(Ok(()))
-                } else {
-                    None
-                }
+                let DummyStateMachine::Done(amount) = state else { return None };
+                Some(Ok(amount))
             });
 
         pin_mut!(stream);
