@@ -159,7 +159,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
             isDisabled={!!statePassword}
           />
           <FormHelperText>
-            {'You\'ll need this every time you visit this page.'}
+            {"You'll need this every time you visit this page."}
           </FormHelperText>
         </FormControl>
         {!isHost && (
