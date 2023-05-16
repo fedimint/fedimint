@@ -893,9 +893,9 @@ async fn run_ui(
     process_mgr: &ProcessManager,
     task_group: &TaskGroup,
     kind: &RunUiKind,
-    fed_size: usize,
 ) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
+    let fed_size = process_mgr.globals.FM_FED_SIZE;
     // don't drop fedimintds
     let _fedimintds = futures::future::try_join_all((0..fed_size).map(|peer_id| {
         let bitcoind = bitcoind.clone();
@@ -937,7 +937,7 @@ async fn run_ui(
 use std::fmt::Write;
 
 async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
-    let globals = vars::Global::new(&arg.test_dir, 4).await?;
+    let globals = vars::Global::new(&arg.test_dir, arg.fed_size).await?;
     let log_file = fs::File::create(globals.FM_LOGS_DIR.join("devimint.log"))
         .await?
         .into_std()
@@ -977,9 +977,8 @@ async fn main() -> Result<()> {
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::RunUi(kind) => {
-            let fed_size = args.common.fed_size;
             let (process_mgr, task_group) = setup(args.common).await?;
-            run_ui(&process_mgr, &task_group, &kind, fed_size).await?
+            run_ui(&process_mgr, &task_group, &kind).await?
         }
         Cmd::LatencyTests => {
             let (process_mgr, _) = setup(args.common).await?;
