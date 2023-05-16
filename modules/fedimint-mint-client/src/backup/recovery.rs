@@ -9,14 +9,14 @@ use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, NumPeers, PeerId, TransactionId};
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_logging::LOG_ECASH_RECOVERY;
+use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 use fedimint_mint_common::{MintConsensusItem, MintInput, MintOutput, Nonce};
 use futures::StreamExt;
 use tbs::{
     combine_valid_shares, verify_blind_share, AggregatePublicKey, BlindedMessage, PublicKeyShare,
 };
 use threshold_crypto::G1Affine;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use super::*;
 use crate::db::{NextECashNoteIndexKey, NoteKey};
@@ -234,12 +234,17 @@ impl MintRestoreInProgressState {
                 self.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_EPOCHS),
                 self.end_epoch,
             );
+        debug!(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            ?epoch_range,
+            "Processing epochs"
+        );
         let mut epoch_stream = Self::fetch_epochs_stream(api, epoch_pk, decoders, epoch_range);
         while let Some((epoch, epoch_history)) = epoch_stream.next().await {
             assert_eq!(epoch_history.outcome.epoch, epoch);
             self.next_epoch = epoch + 1;
 
-            info!(target: LOG_ECASH_RECOVERY, epoch, "Processing epoch");
+            info!(target: LOG_CLIENT_RECOVERY_MINT, epoch, "Processing epoch");
             let mut processed_txs = Default::default();
             for (peer_id, items) in &epoch_history.outcome.items {
                 for item in items {
@@ -277,7 +282,7 @@ impl MintRestoreInProgressState {
                     (
                         epoch,
                         loop {
-                            info!(target: LOG_ECASH_RECOVERY, epoch, "Awaiting epoch");
+                            info!(target: LOG_CLIENT_RECOVERY_MINT, epoch, "Awaiting epoch");
                             match api.fetch_epoch_history(epoch, epoch_pk, &decoders).await {
                                 Ok(o) => break o,
                                 Err(e) => {
@@ -631,21 +636,39 @@ impl MintRestoreInProgressState {
         rejected_txs: &BTreeSet<TransactionId>,
         secret: &DerivableSecret,
     ) {
-        debug!(target: LOG_ECASH_RECOVERY, ?item, "handling consensus item");
+        trace!(
+            target: LOG_CLIENT_RECOVERY_MINT,
+            ?item,
+            "handling consensus item"
+        );
         // assert_eq!(epoch, self.next_epoch);
         match item {
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();
 
+                debug!(
+                    target: LOG_CLIENT_RECOVERY_MINT,
+                    tx_hash = %tx.tx_hash(),
+                    "handling transaction"
+                );
+
                 if !processed_txs.insert(txid) {
                     // Just like server side consensus, do not attempt to process the same
                     // transaction twice.
-                    debug!(target: LOG_ECASH_RECOVERY, ?item, "was already processed");
+                    debug!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        "transaction was already processed"
+                    );
                     return;
                 }
 
                 if rejected_txs.contains(&txid) {
-                    debug!(target: LOG_ECASH_RECOVERY, ?item, "was rejected");
+                    debug!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        "transaction was rejected"
+                    );
                     // Do not process invalid transactions.
                     // Consensus history contains all data proposed by each peer, even invalid (e.g.
                     // due to double spent) transactions. Precisely to save
@@ -690,6 +713,11 @@ impl MintRestoreInProgressState {
                         .downcast_ref::<MintConsensusItem>()
                         .expect("mint key just checked");
 
+                    debug!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        out_point = %mint_item.out_point,
+                        "handlng mint consensus item"
+                    );
                     self.handle_output_confirmation(peer_id, mint_item);
                 }
             }
