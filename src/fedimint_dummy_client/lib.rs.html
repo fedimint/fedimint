@@ -303,6 +303,29 @@
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -321,6 +344,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
+<span class="kw">use </span>fedimint_core::util::NextOrPending;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 <span class="kw">pub use </span>fedimint_dummy_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_dummy_common::config::DummyClientConfig;
@@ -328,6 +352,7 @@
     fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
     DummyOutputOutcome, KIND,
 };
+<span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>secp256k1::{Secp256k1, XOnlyPublicKey};
 <span class="kw">use </span>states::DummyStateMachine;
 <span class="kw">use </span>threshold_crypto::{PublicKey, Signature};
@@ -385,12 +410,12 @@
         <span class="comment">// Build and send tx to the fed
         // Will output to our primary client module
         </span><span class="kw">let </span>tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
-        <span class="kw">let </span>outpoint = |txid| OutPoint { txid, out_idx: <span class="number">0 </span>};
+        <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>txid = <span class="self">self
             </span>.finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>((op_id, outpoint(txid)))
+        <span class="prelude-val">Ok</span>((op_id, OutPoint { txid, out_idx: <span class="number">0 </span>}))
     }
 
     <span class="kw">async fn </span>send_money(
@@ -419,7 +444,7 @@
         </span><span class="kw">let </span>tx = TransactionBuilder::new()
             .with_input(input.into_dyn(instance.id))
             .with_output(output.into_dyn(instance.id));
-        <span class="kw">let </span>outpoint = |txid| OutPoint { txid, out_idx: <span class="number">0 </span>};
+        <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>txid = <span class="self">self
             </span>.finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -427,7 +452,7 @@
         <span class="kw">let </span>tx_subscription = <span class="self">self</span>.transaction_updates(op_id).<span class="kw">await</span>;
         tx_subscription.await_tx_accepted(txid).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(outpoint(txid))
+        <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
     <span class="kw">async fn </span>receive_money(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; anyhow::Result&lt;()&gt; {
@@ -477,6 +502,7 @@
 </span><span class="kw">pub struct </span>DummyClientModule {
     cfg: DummyClientConfig,
     key: KeyPair,
+    notifier: ModuleNotifier&lt;DynGlobalClientContext, DummyStateMachine&gt;,
 }
 
 <span class="doccomment">/// Data needed by the state machine
@@ -560,6 +586,25 @@
             }),
         }
     }
+
+    <span class="kw">async fn </span>await_primary_module_output_finalized(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        _out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt; {
+        <span class="kw">let </span>stream = <span class="self">self
+            </span>.notifier
+            .subscribe(operation_id)
+            .<span class="kw">await
+            </span>.filter_map(|state| <span class="kw">async move </span>{
+                <span class="kw">let </span>DummyStateMachine::Done(amount) = state <span class="kw">else </span>{ <span class="kw">return </span><span class="prelude-val">None </span>};
+                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(amount))
+            });
+
+        <span class="macro">pin_mut!</span>(stream);
+
+        stream.next_or_pending().<span class="kw">await
+    </span>}
 }
 
 <span class="kw">async fn </span>get_funds(dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
@@ -600,11 +645,12 @@
         cfg: <span class="self">Self</span>::Config,
         _db: Database,
         module_root_secret: DerivableSecret,
-        _notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="prelude-val">Ok</span>(DummyClientModule {
             cfg,
             key: module_root_secret.to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
+            notifier,
         })
     }
 }

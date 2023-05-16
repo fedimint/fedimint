@@ -365,6 +365,27 @@
 <a href="#365" id="365">365</a>
 <a href="#366" id="366">366</a>
 <a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
@@ -377,7 +398,8 @@
 <span class="kw">use </span>fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
+    TransactionId,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, Executor, OperationId, State};
@@ -654,6 +676,12 @@
         operation_id: OperationId,
         amount: Amount,
     ) -&gt; ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;;
+
+    <span class="kw">async fn </span>await_primary_module_output_finalized(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt;;
 }
 
 <span class="doccomment">/// Type-erased version of [`PrimaryClientModule`]
@@ -674,6 +702,12 @@
         operation_id: OperationId,
         amount: Amount,
     ) -&gt; ClientOutput;
+
+    <span class="kw">async fn </span>await_primary_module_output_finalized(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt;;
 
     <span class="kw">fn </span>as_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>));
 }
@@ -716,6 +750,14 @@
         .<span class="kw">await
         </span>.into_dyn(module_instance)
     }
+
+    <span class="kw">async fn </span>await_primary_module_output_finalized(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt; {
+        T::await_primary_module_output_finalized(<span class="self">self</span>, operation_id, out_point).<span class="kw">await
+    </span>}
 
     <span class="kw">fn </span>as_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>)) {
         <span class="self">self

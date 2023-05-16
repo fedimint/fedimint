@@ -599,7 +599,7 @@
             </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
-        <span class="kw">let </span>txid = global_context.claim_input(dbtx, client_input).<span class="kw">await</span>;
+        <span class="kw">let </span>(txid, <span class="kw">_</span>) = global_context.claim_input(dbtx, client_input).<span class="kw">await</span>;
         OutPoint { txid, out_idx: <span class="number">0 </span>}
     }
 

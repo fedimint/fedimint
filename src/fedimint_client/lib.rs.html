@@ -1410,6 +1410,42 @@
 <a href="#1410" id="1410">1410</a>
 <a href="#1411" id="1411">1411</a>
 <a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1496,7 +1532,8 @@
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
+    TransactionId,
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -1574,19 +1611,23 @@
 
     <span class="doccomment">/// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::claim_input`].
+    /// Returns transaction id of the funding transaction and an optional
+    /// `OutPoint` that represents change if change was added.
     </span><span class="kw">async fn </span>claim_input_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         input: InstancelessDynClientInput,
-    ) -&gt; TransactionId;
+    ) -&gt; (TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;);
 
     <span class="doccomment">/// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
+    /// Returns transaction id of the funding transaction and an optional
+    /// `OutPoint` that represents change if change was added.
     </span><span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         output: InstancelessDynClientOutput,
-    ) -&gt; anyhow::Result&lt;TransactionId&gt;;
+    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt;;
 
     <span class="doccomment">/// Adds a state machine to the executor.
     </span><span class="kw">async fn </span>add_state_machine_dyn(
@@ -1659,7 +1700,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         input: ClientInput&lt;I, S&gt;,
-    ) -&gt; TransactionId
+    ) -&gt; (TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         S: IState&lt;DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
@@ -1687,7 +1728,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         output: ClientOutput&lt;O, S&gt;,
-    ) -&gt; anyhow::Result&lt;TransactionId&gt;
+    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt;
     <span class="kw">where
         </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         S: IState&lt;DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
@@ -1789,7 +1830,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         input: InstancelessDynClientInput,
-    ) -&gt; TransactionId {
+    ) -&gt; (TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;) {
         <span class="kw">let </span>instance_input = ClientInput {
             input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
             keys: input.keys,
@@ -1810,7 +1851,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         output: InstancelessDynClientOutput,
-    ) -&gt; anyhow::Result&lt;TransactionId&gt; {
+    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt; {
         <span class="kw">let </span>instance_output = ClientOutput {
             output: DynOutput::from_parts(<span class="self">self</span>.module_instance_id, output.output),
             state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, output.state_machines),
@@ -1909,7 +1950,7 @@
         tx_builder: TransactionBuilder,
     ) -&gt; anyhow::Result&lt;TransactionId&gt;
     <span class="kw">where
-        </span>F: Fn(TransactionId) -&gt; M + Clone + MaybeSend + MaybeSync,
+        </span>F: Fn(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;) -&gt; M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
         <span class="kw">let </span>operation_type = operation_type.to_owned();
@@ -1927,7 +1968,7 @@
                             <span class="macro">bail!</span>(<span class="string">&quot;There already exists an operation with id {operation_id:?}&quot;</span>)
                         }
 
-                        <span class="kw">let </span>txid = <span class="self">self
+                        <span class="kw">let </span>(txid, change_outpoint) = <span class="self">self
                             </span>.inner
                             .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
                             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1936,7 +1977,7 @@
                             dbtx,
                             operation_id,
                             <span class="kw-2">&amp;</span>operation_type,
-                            operation_meta(txid),
+                            operation_meta(txid, change_outpoint),
                         )
                         .<span class="kw">await</span>;
 
@@ -2106,6 +2147,18 @@
     {
         get_client_root_secret_encoding::&lt;S&gt;(<span class="self">self</span>.db()).<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Waits for an output from the primary module to reach its final
+    /// state.
+    </span><span class="kw">pub async fn </span>await_primary_module_output_finalized(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt; {
+        <span class="self">self</span>.inner
+            .await_primary_module_output_finalized(operation_id, out_point)
+            .<span class="kw">await
+    </span>}
 }
 
 <span class="doccomment">/// Resources particular to a module instance
@@ -2213,7 +2266,11 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         <span class="kw-2">mut </span>partial_transaction: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;(Transaction, Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;(
+        Transaction,
+        Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
+        <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    )&gt; {
         <span class="kw">if let </span>TransactionBuilderBalance::Underfunded(missing_amount) =
             <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
         {
@@ -2229,6 +2286,7 @@
             partial_transaction.inputs.push(input);
         }
 
+        <span class="kw">let </span><span class="kw-2">mut </span>change_idx: <span class="prelude-ty">Option</span>&lt;u64&gt; = <span class="prelude-val">None</span>;
         <span class="kw">if let </span>TransactionBuilderBalance::Overfunded(excess_amount) =
             <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
         {
@@ -2241,6 +2299,7 @@
                     excess_amount,
                 )
                 .<span class="kw">await</span>;
+            change_idx = <span class="prelude-val">Some</span>(partial_transaction.outputs.len() <span class="kw">as </span>u64);
             partial_transaction.outputs.push(output);
         }
 
@@ -2252,7 +2311,9 @@
             <span class="string">&quot;Transaction is balanced after the previous two operations&quot;
         </span>);
 
-        <span class="prelude-val">Ok</span>(partial_transaction.build(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx, thread_rng()))
+        <span class="kw">let </span>(tx, states) = partial_transaction.build(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx, thread_rng());
+
+        <span class="prelude-val">Ok</span>((tx, states, change_idx))
     }
 
     <span class="kw">async fn </span>finalize_and_submit_transaction(
@@ -2260,11 +2321,12 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;TransactionId&gt; {
-        <span class="kw">let </span>(transaction, <span class="kw-2">mut </span>states) = <span class="self">self
+    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt; {
+        <span class="kw">let </span>(transaction, <span class="kw-2">mut </span>states, change_idx) = <span class="self">self
             </span>.finalize_transaction(dbtx, operation_id, tx_builder)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>txid = transaction.tx_hash();
+        <span class="kw">let </span>change_outpoint = change_idx.map(|out_idx| OutPoint { txid, out_idx });
 
         <span class="kw">let </span>tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -2281,7 +2343,7 @@
 
         <span class="self">self</span>.executor.add_state_machines_dbtx(dbtx, states).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(txid)
+        <span class="prelude-val">Ok</span>((txid, change_outpoint))
     }
 
     <span class="kw">async fn </span>transaction_update_stream(
@@ -2323,6 +2385,16 @@
 
         active_state_exists || inactive_state_exists
     }
+
+    <span class="kw">pub async fn </span>await_primary_module_output_finalized(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt; {
+        <span class="self">self</span>.primary_module
+            .await_primary_module_output_finalized(operation_id, out_point)
+            .<span class="kw">await
+    </span>}
 }
 
 <span class="doccomment">/// See [`Client::transaction_updates`]

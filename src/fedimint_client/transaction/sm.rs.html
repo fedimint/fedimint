@@ -725,7 +725,7 @@
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
     <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
     <span class="kw">use </span>fedimint_core::util::BoxStream;
-    <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, PeerId, TransactionId};
+    <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
     <span class="kw">use </span>rand::thread_rng;
     <span class="kw">use </span>serde_json::Value;
     <span class="kw">use </span>tokio::sync::Mutex;
@@ -874,7 +874,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
             _input: InstancelessDynClientInput,
-        ) -&gt; TransactionId {
+        ) -&gt; (TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;) {
             <span class="macro">unimplemented!</span>()
         }
 
@@ -882,7 +882,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
             _output: InstancelessDynClientOutput,
-        ) -&gt; anyhow::Result&lt;TransactionId&gt; {
+        ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt; {
             <span class="macro">unimplemented!</span>()
         }
 

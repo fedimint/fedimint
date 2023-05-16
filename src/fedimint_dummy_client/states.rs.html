@@ -97,7 +97,7 @@
 </span><span class="kw">pub enum </span>DummyStateMachine {
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),
-    Done,
+    Done(Amount),
 }
 
 <span class="kw">impl </span>State <span class="kw">for </span>DummyStateMachine {
@@ -114,7 +114,7 @@
                 await_tx_accepted(global_context.clone(), id, txid),
                 <span class="kw">move </span>|dbtx, res, _state: <span class="self">Self</span>| <span class="kw">match </span>res {
                     <span class="comment">// accepted, we are done
-                    </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async </span>{ DummyStateMachine::Done }),
+                    </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::Done(amount) }),
                     <span class="comment">// tx rejected, we refund ourselves
                     </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Box::pin(add_funds(amount, dbtx.module_tx())),
                 },
@@ -123,12 +123,12 @@
                 await_tx_accepted(global_context.clone(), id, txid),
                 <span class="kw">move </span>|dbtx, res, _state: <span class="self">Self</span>| <span class="kw">match </span>res {
                     <span class="comment">// rejected, we don&#39;t get any funds
-                    </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async </span>{ DummyStateMachine::Done }),
+                    </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::Done(amount) }),
                     <span class="comment">// tx accepted, add to our funds
                     </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Box::pin(add_funds(amount, dbtx.module_tx())),
                 },
             )],
-            DummyStateMachine::Done =&gt; <span class="macro">vec!</span>[],
+            DummyStateMachine::Done(<span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
         }
     }
 
@@ -136,7 +136,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             DummyStateMachine::Input(<span class="kw">_</span>, <span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
             DummyStateMachine::Output(<span class="kw">_</span>, <span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
-            DummyStateMachine::Done =&gt; OperationId([<span class="number">0</span>; <span class="number">32</span>]),
+            DummyStateMachine::Done(<span class="kw">_</span>) =&gt; OperationId([<span class="number">0</span>; <span class="number">32</span>]),
         }
     }
 }
@@ -144,7 +144,7 @@
 <span class="kw">async fn </span>add_funds(amount: Amount, <span class="kw-2">mut </span>dbtx: ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; DummyStateMachine {
     <span class="kw">let </span>funds = get_funds(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await </span>+ amount;
     dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>funds).<span class="kw">await</span>;
-    DummyStateMachine::Done
+    DummyStateMachine::Done(amount)
 }
 
 <span class="comment">// TODO: Boiler-plate, should return OutputOutcome

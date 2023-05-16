@@ -303,9 +303,6 @@
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
@@ -321,7 +318,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, ParseAmountError, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
 <span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 <span class="kw">use </span>futures::StreamExt;
@@ -467,8 +464,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_to_ln_receive_updates(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                 <span class="kw">match </span>update {
-                    LnReceiveState::Claimed { txid } =&gt; {
-                        client.await_claim_notes(operation_id, txid).<span class="kw">await</span><span class="question-mark">?</span>;
+                    LnReceiveState::Claimed =&gt; {
                         <span class="kw">return </span>get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>;
                     }
                     LnReceiveState::Canceled { reason } =&gt; {
@@ -485,7 +481,7 @@
         ClientNg::LnPay { bolt11 } =&gt; {
             client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>(operation_id, txid) = client
+            <span class="kw">let </span>operation_id = client
                 .pay_bolt11_invoice(config.federation_id, bolt11)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -494,17 +490,15 @@
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                 <span class="kw">match </span>update {
                     LnPayState::Success { preimage } =&gt; {
-                        client
-                            .await_mint_change(operation_id, OutPoint { txid, out_idx: <span class="number">1 </span>})
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(PayInvoiceResponse {
                             operation_id,
                             preimage,
                         })
                         .unwrap());
                     }
-                    LnPayState::Refunded { refund_txid } =&gt; {
-                        client.await_claim_notes(operation_id, refund_txid).<span class="kw">await</span><span class="question-mark">?</span>;
+                    LnPayState::Refunded { gateway_error } =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;{gateway_error}&quot;</span>);
+                        <span class="kw">return </span>get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>;
                     }
                     <span class="kw">_ </span>=&gt; {}
                 }

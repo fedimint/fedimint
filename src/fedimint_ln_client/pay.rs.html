@@ -512,6 +512,21 @@
 <a href="#512" id="512">512</a>
 <a href="#513" id="513">513</a>
 <a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -706,10 +721,13 @@
     gateway: LightningGateway,
 }
 
-<span class="attr">#[derive(Error, Debug, Serialize, Deserialize)]
-</span><span class="kw">enum </span>GatewayPayError {
-    <span class="attr">#[error(<span class="string">&quot;Lightning Gateway failed to pay invoice&quot;</span>)]
-    </span>GatewayInternalError,
+<span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>GatewayPayError {
+    <span class="attr">#[error(<span class="string">&quot;Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}&quot;</span>)]
+    </span>GatewayInternalError {
+        error_code: <span class="prelude-ty">Option</span>&lt;u16&gt;,
+        error_message: String,
+    },
     <span class="attr">#[error(<span class="string">&quot;OutgoingContract was not created in the federation&quot;</span>)]
     </span>OutgoingContractError,
 }
@@ -752,16 +770,26 @@
             .json(<span class="kw-2">&amp;</span>payload)
             .send()
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| GatewayPayError::GatewayInternalError)<span class="question-mark">?</span>;
+            </span>.map_err(|e| GatewayPayError::GatewayInternalError {
+                error_code: <span class="prelude-val">None</span>,
+                error_message: e.to_string(),
+            })<span class="question-mark">?</span>;
 
         <span class="kw">if </span>!response.status().is_success() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::GatewayInternalError);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::GatewayInternalError {
+                error_code: <span class="prelude-val">Some</span>(response.status().as_u16()),
+                error_message: response.status().to_string(),
+            });
         }
 
-        <span class="kw">let </span>preimage = response
-            .text()
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| GatewayPayError::GatewayInternalError)<span class="question-mark">?</span>;
+        <span class="kw">let </span>preimage =
+            response
+                .text()
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| GatewayPayError::GatewayInternalError {
+                    error_code: <span class="prelude-val">None</span>,
+                    error_message: <span class="string">&quot;Error retrieving preimage from response&quot;</span>.to_string(),
+                })<span class="question-mark">?</span>;
         <span class="kw">let </span>length = preimage.len();
         <span class="prelude-val">Ok</span>(preimage[<span class="number">1</span>..length - <span class="number">1</span>].to_string())
     }
@@ -778,7 +806,7 @@
                 common: old_state.common,
                 state: LightningPayStates::Success(preimage),
             },
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="kw">let </span>contract = global_context
                     .module_api()
                     .get_outgoing_contract(contract_id)
@@ -800,6 +828,7 @@
                     state: LightningPayStates::Refundable(LightningPayRefundable {
                         contract_id,
                         block_timelock: timelock,
+                        error: e,
                     }),
                 }
             }
@@ -811,6 +840,7 @@
 </span><span class="kw">pub struct </span>LightningPayRefundable {
     contract_id: ContractId,
     <span class="kw">pub </span>block_timelock: u32,
+    <span class="kw">pub </span>error: GatewayPayError,
 }
 
 <span class="kw">impl </span>LightningPayRefundable {
@@ -874,7 +904,7 @@
             </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
-        <span class="kw">let </span>refund_txid = global_context.claim_input(dbtx, refund_client_input).<span class="kw">await</span>;
+        <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context.claim_input(dbtx, refund_client_input).<span class="kw">await</span>;
 
         LightningPayStateMachine {
             common: old_state.common,
@@ -906,10 +936,10 @@
         <span class="comment">// TODO: Remove polling
         </span><span class="kw">loop </span>{
             <span class="kw">let </span>consensus_block_height = global_context
-                .module_api()
+                .api()
                 .fetch_consensus_block_height()
                 .<span class="kw">await
-                </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;ApiError&quot;</span>));
+                </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;ApiError: {e:?}&quot;</span>));
 
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(current_block_height) = consensus_block_height {
                 <span class="kw">if </span>timelock <span class="kw">as </span>u64 &lt;= current_block_height {
