@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-if [[ -z "${IN_NIX_SHELL:-}" ]]; then
-  echo "It is recommended to run this command from a Nix dev shell. Use 'nix develop .#fedimint-ui' first"
-  sleep 3
+if [[ -z "${FEDIMINT_UI_SHELL:-}" ]]; then
+  echo 'It is recommended to run this script from the fedimint-ui Nix dev shell. Use "nix develop .#fedimint-ui" first.'
+  exit 1
 fi
 
 export FM_BITCOIN_NETWORK="regtest"
