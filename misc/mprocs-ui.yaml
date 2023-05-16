@@ -3,14 +3,14 @@ procs:
     shell: ./scripts/run-ui.sh new
   coordinator:
     cwd: fedimint-ui/apps/guardian-ui/
-    shell: yarn dev
+    shell: yarn && yarn dev
     env:
       PORT: "3000"
       REACT_APP_FM_CONFIG_API: ws://127.0.0.1:18174
       BROWSER: none
   follower: 
     cwd: fedimint-ui/apps/guardian-ui/
-    shell: yarn dev
+    shell: yarn && yarn dev
     env:
       PORT: "3001"
       REACT_APP_FM_CONFIG_API: ws://127.0.0.1:18184
