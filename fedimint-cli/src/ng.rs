@@ -152,7 +152,7 @@ pub async fn handle_ng_command(
             let (operation, notes) = client
                 .spend_notes(amount, Duration::from_secs(3600), ())
                 .await?;
-            info!("Spend e-cash operation: {operation:?}");
+            info!("Spend e-cash operation: {operation}");
 
             Ok(json!({
                 "notes": serialize_ecash(&notes),
