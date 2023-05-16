@@ -18,12 +18,12 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
 
     let (_, outpoint) = client1.print_money(sats(1000)).await?;
     client1.receive_money(outpoint).await?;
-    assert_eq!(client1.total_funds().await, sats(1000));
+    assert_eq!(client1.get_balance().await, sats(1000));
 
     let outpoint = client1.send_money(client2.account(), sats(250)).await?;
     client2.receive_money(outpoint).await?;
-    assert_eq!(client1.total_funds().await, sats(750));
-    assert_eq!(client2.total_funds().await, sats(250));
+    assert_eq!(client1.get_balance().await, sats(750));
+    assert_eq!(client2.get_balance().await, sats(250));
     Ok(())
 }
 

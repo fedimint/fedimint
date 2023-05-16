@@ -768,6 +768,17 @@ impl Client {
     pub async fn get_config(&self) -> &ClientConfig {
         &self.inner.config
     }
+
+    /// Balance available to the client for spending
+    pub async fn get_balance(&self) -> Amount {
+        self.inner
+            .primary_module
+            .get_balance(
+                self.inner.primary_module_instance,
+                &mut self.db().begin_transaction().await,
+            )
+            .await
+    }
 }
 
 /// Resources particular to a module instance

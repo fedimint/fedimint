@@ -125,10 +125,6 @@ pub trait MintClientExt {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, SpendOOBState>>;
 
-    /// Returns the total value of our notes
-    // TODO: Make getting total asserts part of the core client
-    async fn total_amount(&self) -> Amount;
-
     /// Awaits the backup restoration to complete
     async fn await_restore_finished(&self) -> anyhow::Result<()>;
 }
@@ -367,18 +363,6 @@ impl MintClientExt for Client {
                 }
             }
         }))
-    }
-
-    async fn total_amount(&self) -> Amount {
-        let (_mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
-        let mut dbtx = instance.db.begin_transaction().await;
-        dbtx.find_by_prefix(&NoteKeyPrefix)
-            .await
-            .fold(
-                Amount::ZERO,
-                |acc, (key, _note)| async move { acc + key.amount },
-            )
-            .await
     }
 
     /// Waits for the mint backup restoration to finish
@@ -693,6 +677,10 @@ impl PrimaryClientModule for MintClientModule {
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
         self.await_output_finalized(operation_id, out_point).await
+    }
+
+    async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
+        self.get_wallet_summary(dbtx).await.total_amount()
     }
 }
 

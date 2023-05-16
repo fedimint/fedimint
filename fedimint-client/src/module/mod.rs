@@ -298,6 +298,10 @@ pub trait PrimaryClientModule: ClientModule {
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount>;
+
+    /// Returns the balance held by this module and available for funding
+    /// transactions.
+    async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount;
 }
 
 /// Type-erased version of [`PrimaryClientModule`]
@@ -324,6 +328,12 @@ pub trait IPrimaryClientModule: IClientModule {
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount>;
+
+    async fn get_balance(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Amount;
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -373,6 +383,14 @@ where
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
         T::await_primary_module_output_finalized(self, operation_id, out_point).await
+    }
+
+    async fn get_balance(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Amount {
+        T::get_balance(self, &mut dbtx.with_module_prefix(module_instance)).await
     }
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static)) {
