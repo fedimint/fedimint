@@ -457,6 +457,9 @@
               fedimint-ui = pkgs.mkShell (shellCommonNative
                 // {
                 nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ pkgs.yarn pkgs.nodejs ];
+                shellHook = ''
+                  export FEDIMINT_UI_SHELL=1
+                '';
               });
             };
         in
