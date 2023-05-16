@@ -16,6 +16,7 @@ use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
+use fedimint_core::util::NextOrPending;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
@@ -23,6 +24,7 @@ use fedimint_dummy_common::{
     fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
     DummyOutputOutcome, KIND,
 };
+use futures::{pin_mut, StreamExt};
 use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
 use threshold_crypto::{PublicKey, Signature};
@@ -80,12 +82,12 @@ impl DummyClientExt for Client {
         // Build and send tx to the fed
         // Will output to our primary client module
         let tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
-        let outpoint = |txid| OutPoint { txid, out_idx: 0 };
+        let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let txid = self
             .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .await?;
 
-        Ok((op_id, outpoint(txid)))
+        Ok((op_id, OutPoint { txid, out_idx: 0 }))
     }
 
     async fn send_money(
@@ -114,7 +116,7 @@ impl DummyClientExt for Client {
         let tx = TransactionBuilder::new()
             .with_input(input.into_dyn(instance.id))
             .with_output(output.into_dyn(instance.id));
-        let outpoint = |txid| OutPoint { txid, out_idx: 0 };
+        let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let txid = self
             .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
             .await?;
@@ -122,7 +124,7 @@ impl DummyClientExt for Client {
         let tx_subscription = self.transaction_updates(op_id).await;
         tx_subscription.await_tx_accepted(txid).await?;
 
-        Ok(outpoint(txid))
+        Ok(OutPoint { txid, out_idx: 0 })
     }
 
     async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()> {
@@ -172,6 +174,7 @@ impl DummyClientExt for Client {
 pub struct DummyClientModule {
     cfg: DummyClientConfig,
     key: KeyPair,
+    notifier: ModuleNotifier<DynGlobalClientContext, DummyStateMachine>,
 }
 
 /// Data needed by the state machine
@@ -255,6 +258,25 @@ impl PrimaryClientModule for DummyClientModule {
             }),
         }
     }
+
+    async fn await_primary_module_output_finalized(
+        &self,
+        operation_id: OperationId,
+        _out_point: OutPoint,
+    ) -> anyhow::Result<Amount> {
+        let stream = self
+            .notifier
+            .subscribe(operation_id)
+            .await
+            .filter_map(|state| async move {
+                let DummyStateMachine::Done(amount) = state else { return None };
+                Some(Ok(amount))
+            });
+
+        pin_mut!(stream);
+
+        stream.next_or_pending().await
+    }
 }
 
 async fn get_funds(dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
@@ -295,11 +317,12 @@ impl ClientModuleGen for DummyClientGen {
         cfg: Self::Config,
         _db: Database,
         module_root_secret: DerivableSecret,
-        _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
         Ok(DummyClientModule {
             cfg,
             key: module_root_secret.to_secp_key(&Secp256k1::new()),
+            notifier,
         })
     }
 }

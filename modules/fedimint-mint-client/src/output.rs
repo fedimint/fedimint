@@ -240,7 +240,7 @@ pub struct MintOutputStatesFailed {
 /// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintOutputStatesSucceeded {
-    amount: Amount,
+    pub amount: Amount,
 }
 
 /// Single [`Note`] issuance request to the mint.f

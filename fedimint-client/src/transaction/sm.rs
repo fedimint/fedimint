@@ -240,7 +240,7 @@ mod tests {
     use fedimint_core::task::TaskGroup;
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
-    use fedimint_core::{maybe_add_send_sync, PeerId, TransactionId};
+    use fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
     use rand::thread_rng;
     use serde_json::Value;
     use tokio::sync::Mutex;
@@ -389,7 +389,7 @@ mod tests {
             &self,
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             _input: InstancelessDynClientInput,
-        ) -> TransactionId {
+        ) -> (TransactionId, Option<OutPoint>) {
             unimplemented!()
         }
 
@@ -397,7 +397,7 @@ mod tests {
             &self,
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             _output: InstancelessDynClientOutput,
-        ) -> anyhow::Result<TransactionId> {
+        ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
             unimplemented!()
         }
 

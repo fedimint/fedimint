@@ -207,5 +207,5 @@ async fn try_cancel_oob_spend(
         }),
     };
 
-    global_context.claim_input(dbtx, input).await
+    global_context.claim_input(dbtx, input).await.0
 }

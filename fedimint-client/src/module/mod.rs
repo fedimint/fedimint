@@ -10,7 +10,8 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
+    TransactionId,
 };
 
 use crate::sm::{Context, DynContext, DynState, Executor, OperationId, State};
@@ -287,6 +288,12 @@ pub trait PrimaryClientModule: ClientModule {
         operation_id: OperationId,
         amount: Amount,
     ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>;
+
+    async fn await_primary_module_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount>;
 }
 
 /// Type-erased version of [`PrimaryClientModule`]
@@ -307,6 +314,12 @@ pub trait IPrimaryClientModule: IClientModule {
         operation_id: OperationId,
         amount: Amount,
     ) -> ClientOutput;
+
+    async fn await_primary_module_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount>;
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -348,6 +361,14 @@ where
         )
         .await
         .into_dyn(module_instance)
+    }
+
+    async fn await_primary_module_output_finalized(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount> {
+        T::await_primary_module_output_finalized(self, operation_id, out_point).await
     }
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static)) {
