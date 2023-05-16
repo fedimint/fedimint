@@ -16,7 +16,7 @@ use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
@@ -270,6 +270,22 @@ impl PrimaryClientModule for DummyClientModule {
 
     async fn get_balance(&self, dbtc: &mut ModuleDatabaseTransaction<'_>) -> Amount {
         get_funds(dbtc).await
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        Box::pin(
+            self.notifier
+                .subscribe_all_operations()
+                .await
+                .filter_map(|state| async move {
+                    match state {
+                        // Since Done also happens for inputs we will fire too often, but that's ok
+                        DummyStateMachine::Done(_) => Some(()),
+                        DummyStateMachine::Input { .. } => Some(()),
+                        _ => None,
+                    }
+                }),
+        )
     }
 }
 

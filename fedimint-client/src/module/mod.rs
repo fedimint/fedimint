@@ -9,6 +9,7 @@ use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::util::BoxStream;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
@@ -302,6 +303,10 @@ pub trait PrimaryClientModule: ClientModule {
     /// Returns the balance held by this module and available for funding
     /// transactions.
     async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount;
+
+    /// Returns a stream that will output the updated module balance each time
+    /// it changes.
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
 }
 
 /// Type-erased version of [`PrimaryClientModule`]
@@ -334,6 +339,8 @@ pub trait IPrimaryClientModule: IClientModule {
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Amount;
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -391,6 +398,10 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Amount {
         T::get_balance(self, &mut dbtx.with_module_prefix(module_instance)).await
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        T::subscribe_balance_changes(self).await
     }
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static)) {

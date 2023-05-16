@@ -42,7 +42,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
     TransactionId,
@@ -681,6 +681,27 @@ impl PrimaryClientModule for MintClientModule {
 
     async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
         self.get_wallet_summary(dbtx).await.total_amount()
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        Box::pin(
+            self.notifier
+                .subscribe_all_operations()
+                .await
+                .filter_map(|state| async move {
+                    match state {
+                        MintClientStateMachines::Output(MintOutputStateMachine {
+                            state: MintOutputStates::Succeeded(_),
+                            ..
+                        }) => Some(()),
+                        MintClientStateMachines::Input(MintInputStateMachine {
+                            state: MintInputStates::Created(_),
+                            ..
+                        }) => Some(()),
+                        _ => None,
+                    }
+                }),
+        )
     }
 }
 

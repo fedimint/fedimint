@@ -779,6 +779,22 @@ impl Client {
             )
             .await
     }
+
+    /// Returns a stream that yields the current client balance every time it
+    /// changes.
+    pub async fn subscribe_balance_changes(&self) -> BoxStream<'_, Amount> {
+        let mut balance_changes = self.inner.primary_module.subscribe_balance_changes().await;
+        Box::pin(stream! {
+            while let Some(()) = balance_changes.next().await {
+                let mut dbtx = self.db().begin_transaction().await;
+                let balance = self.inner
+                    .primary_module
+                    .get_balance(self.inner.primary_module_instance, &mut dbtx)
+                    .await;
+                yield balance;
+            }
+        })
+    }
 }
 
 /// Resources particular to a module instance
