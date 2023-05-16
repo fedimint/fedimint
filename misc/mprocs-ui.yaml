@@ -1,17 +1,31 @@
 procs:
   run-ui-federation:
-    shell: ./scripts/run-ui.sh new
+    shell: ./scripts/run-ui.sh new 4
   coordinator:
     cwd: fedimint-ui/apps/guardian-ui/
-    shell: yarn && yarn dev
+    shell: yarn dev
     env:
       PORT: "3000"
       REACT_APP_FM_CONFIG_API: ws://127.0.0.1:18174
       BROWSER: none
-  follower: 
+  guardian1: 
     cwd: fedimint-ui/apps/guardian-ui/
-    shell: yarn && yarn dev
+    shell: yarn dev
     env:
       PORT: "3001"
       REACT_APP_FM_CONFIG_API: ws://127.0.0.1:18184
+      BROWSER: none
+  guardian2: 
+    cwd: fedimint-ui/apps/guardian-ui/
+    shell: yarn dev
+    env:
+      PORT: "3002"
+      REACT_APP_FM_CONFIG_API: ws://127.0.0.1:18194
+      BROWSER: none
+  guardian3: 
+    cwd: fedimint-ui/apps/guardian-ui/
+    shell: yarn dev
+    env:
+      PORT: "3003"
+      REACT_APP_FM_CONFIG_API: ws://127.0.0.1:18204
       BROWSER: none
