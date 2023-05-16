@@ -996,7 +996,6 @@ impl MintClientModule {
         debug!(?secret, %amount, %note_idx, "Deriving new mint note");
         secret
             .child_key(MINT_E_CASH_TYPE_CHILD_ID) // TODO: cache
-            .child_key(ChildId(amount.msats))
             .child_key(ChildId(note_idx.as_u64()))
             .child_key(ChildId(amount.msats))
     }
