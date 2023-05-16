@@ -48,7 +48,7 @@ use fedimint_server::config::io::SALT_FILE;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 
 use crate::ng::ClientNg;
@@ -1101,6 +1101,7 @@ impl FedimintCli {
                     .await_restore_finished()
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+                debug!("Restore complete");
 
                 Ok(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
             }

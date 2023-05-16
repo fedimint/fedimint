@@ -168,10 +168,17 @@ impl MintRestoreInProgressState {
                 let global_context = global_context_2.clone();
                 Box::pin(async move {
                     if new_state.is_done() {
+                        debug!(target: LOG_CLIENT_RECOVERY_MINT, "Finalizing restore");
                         let finalized = new_state.finalize();
 
                         {
                             let mut dbtx = dbtx.module_tx();
+
+                            debug!(
+                                target: LOG_CLIENT_RECOVERY_MINT,
+                                len = finalized.spendable_notes.len(),
+                                "Restoring spendable notes"
+                            );
                             for (amount, note) in finalized.spendable_notes {
                                 let key = NoteKey {
                                     amount,
@@ -180,6 +187,12 @@ impl MintRestoreInProgressState {
                                 dbtx.insert_new_entry(&key, &note).await;
                             }
                             for (amount, note_idx) in finalized.next_note_idx.iter() {
+                                debug!(
+                                    target: LOG_CLIENT_RECOVERY_MINT,
+                                    %amount,
+                                    %note_idx,
+                                    "Restoring NextECashNodeIndex"
+                                );
                                 dbtx.insert_entry(
                                     &NextECashNoteIndexKey(amount),
                                     &note_idx.as_u64(),
@@ -187,6 +200,12 @@ impl MintRestoreInProgressState {
                                 .await;
                             }
                         }
+
+                        debug!(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            len = finalized.unconfirmed_notes.len(),
+                            "Restoring unconfigured notes state machines"
+                        );
 
                         for (out_point, note_issuance) in finalized.unconfirmed_notes {
                             global_context
@@ -211,6 +230,10 @@ impl MintRestoreInProgressState {
                             state: MintRestoreStates::Success,
                         }
                     } else {
+                        debug!(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            "Saving restore progress checkpoint"
+                        );
                         MintRestoreStateMachine {
                             operation_id: old_state_machine.operation_id,
                             state: MintRestoreStates::InProgress(new_state),

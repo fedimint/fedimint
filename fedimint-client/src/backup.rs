@@ -213,6 +213,7 @@ impl Client {
     /// Wipe the client state (including module state)
     pub async fn wipe_state(&self) -> Result<()> {
         let mut dbtx = self.db().begin_transaction().await;
+        info!(target: LOG_CLIENT, "Wiping client state");
         for (id, kind, module) in self.inner.modules.iter_modules() {
             if !module.supports_backup() {
                 continue;
@@ -255,6 +256,9 @@ impl Client {
             }
         }
         dbtx.commit_tx().await;
+
+        debug!(target: LOG_CLIENT, "Wiping client state complete");
+
         Ok(())
     }
 
