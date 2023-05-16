@@ -119,7 +119,8 @@ pub async fn handle_ng_command(
             let mut updates = client
                 .subscribe_reissue_external_notes_updates(operation_id)
                 .await
-                .unwrap();
+                .unwrap()
+                .into_stream();
 
             while let Some(update) = updates.next().await {
                 if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
@@ -156,7 +157,10 @@ pub async fn handle_ng_command(
             .unwrap())
         }
         ClientNg::WaitInvoice { operation_id } => {
-            let mut updates = client.subscribe_to_ln_receive_updates(operation_id).await?;
+            let mut updates = client
+                .subscribe_to_ln_receive_updates(operation_id)
+                .await?
+                .into_stream();
             while let Some(update) = updates.next().await {
                 match update {
                     LnReceiveState::Claimed => {
@@ -180,7 +184,10 @@ pub async fn handle_ng_command(
                 .pay_bolt11_invoice(config.federation_id, bolt11)
                 .await?;
 
-            let mut updates = client.subscribe_ln_pay_updates(operation_id).await?;
+            let mut updates = client
+                .subscribe_ln_pay_updates(operation_id)
+                .await?
+                .into_stream();
 
             while let Some(update) = updates.next().await {
                 match update {

@@ -27,11 +27,17 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 
     // Spend from client1 to client2
     let (op, notes) = client1.spend_notes(sats(750), TIMEOUT, ()).await?;
-    let sub1 = &mut client1.subscribe_spend_notes_updates(op).await?;
+    let sub1 = &mut client1
+        .subscribe_spend_notes_updates(op)
+        .await?
+        .into_stream();
     assert_eq!(next(sub1).await, SpendOOBState::Created);
 
     let op = client2.reissue_external_notes(notes, ()).await?;
-    let sub2 = &mut client2.subscribe_reissue_external_notes_updates(op).await?;
+    let sub2 = &mut client2
+        .subscribe_reissue_external_notes_updates(op)
+        .await?
+        .into_stream();
     assert_eq!(next(sub2).await, ReissueExternalNotesState::Created);
     assert_eq!(next(sub2).await, ReissueExternalNotesState::Issuing);
     assert_eq!(next(sub2).await, ReissueExternalNotesState::Done);

@@ -48,7 +48,7 @@ impl GlobalContext for () {}
 /// submitted the transaction's ID can be used as operation ID. If there is no
 /// transaction related to it, it should be generated randomly. Since it is a
 /// 256bit value collisions are impossible for all intents and purposes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
 pub struct OperationId(pub [u8; 32]);
 
 impl OperationId {
@@ -64,6 +64,12 @@ impl OperationId {
 impl Display for OperationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         bitcoin_hashes::hex::format_hex(&self.0, f)
+    }
+}
+
+impl Debug for OperationId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OperationId({self})")
     }
 }
 

@@ -1665,9 +1665,30 @@ mod test_utils {
     pub async fn verify_insert_elements(db: Database) {
         let mut dbtx = db.begin_transaction().await;
         assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
-
         assert!(dbtx.insert_entry(&TestKey(2), &TestVal(3)).await.is_none());
+        dbtx.commit_tx().await;
 
+        // Test values were persisted
+        let mut dbtx = db.begin_transaction().await;
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(2)));
+        assert_eq!(dbtx.get_value(&TestKey(2)).await, Some(TestVal(3)));
+        dbtx.commit_tx().await;
+
+        // Test overwrites work as expected
+        let mut dbtx = db.begin_transaction().await;
+        assert_eq!(
+            dbtx.insert_entry(&TestKey(1), &TestVal(4)).await,
+            Some(TestVal(2))
+        );
+        assert_eq!(
+            dbtx.insert_entry(&TestKey(2), &TestVal(5)).await,
+            Some(TestVal(3))
+        );
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction().await;
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(4)));
+        assert_eq!(dbtx.get_value(&TestKey(2)).await, Some(TestVal(5)));
         dbtx.commit_tx().await;
     }
 

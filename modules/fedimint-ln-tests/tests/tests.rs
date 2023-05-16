@@ -84,12 +84,20 @@ async fn makes_internal_payments_within_gateway() -> anyhow::Result<()> {
     let (op, invoice) = client1
         .create_bolt11_invoice(sats(250), "description".to_string(), None)
         .await?;
-    let sub1 = &mut client1.subscribe_to_ln_receive_updates(op).await.unwrap();
+    let sub1 = &mut client1
+        .subscribe_to_ln_receive_updates(op)
+        .await
+        .unwrap()
+        .into_stream();
     assert_eq!(next(sub1).await, LnReceiveState::Created);
     assert_matches!(next(sub1).await, LnReceiveState::WaitingForPayment { .. });
 
     let op = client2.pay_bolt11_invoice(fed_id, invoice).await.unwrap();
-    let sub2 = &mut client2.subscribe_ln_pay_updates(op).await.unwrap();
+    let sub2 = &mut client2
+        .subscribe_ln_pay_updates(op)
+        .await
+        .unwrap()
+        .into_stream();
     assert_eq!(next(sub2).await, LnPayState::Created);
     // TODO: Finish after gw moves from legacy client
     // assert_eq!(next(sub2).await, LnPayState::Funded);
