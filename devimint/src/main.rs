@@ -988,6 +988,8 @@ enum RpcCmd {
 struct CommonArgs {
     #[clap(short = 'd', long, env = "FM_TEST_DIR")]
     test_dir: PathBuf,
+    #[clap(short = 'n', long, env = "FM_FED_SIZE")]
+    fed_size: usize,
 }
 
 #[derive(Parser)]
@@ -1014,8 +1016,9 @@ async fn run_ui(
     kind: &RunUiKind,
 ) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
+    let fed_size = process_mgr.globals.FM_FED_SIZE;
     // don't drop fedimintds
-    let _fedimintds = futures::future::try_join_all((0..2).map(|peer_id| {
+    let _fedimintds = futures::future::try_join_all((0..fed_size).map(|peer_id| {
         let bitcoind = bitcoind.clone();
         async move {
             let env_vars = match kind {
@@ -1055,7 +1058,7 @@ async fn run_ui(
 use std::fmt::Write;
 
 async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
-    let globals = vars::Global::new(&arg.test_dir, 4).await?;
+    let globals = vars::Global::new(&arg.test_dir, arg.fed_size).await?;
     let log_file = fs::File::create(globals.FM_LOGS_DIR.join("devimint.log"))
         .await?
         .into_std()

@@ -204,10 +204,11 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         async {
-            run_dkg(process_mgr, 4).await?;
+            let fed_size = process_mgr.globals.FM_FED_SIZE;
+            run_dkg(process_mgr, fed_size).await?;
             info!(LOG_DEVIMINT, "dkg done");
             tokio::try_join!(
-                Federation::new(process_mgr, bitcoind.clone(), 0..4),
+                Federation::new(process_mgr, bitcoind.clone(), 0..fed_size),
                 Faucet::new(process_mgr)
             )
         },

@@ -7,9 +7,11 @@ export FM_FED_NAME=${3:-"Cypherpunk Federation"}
 
 source scripts/build.sh $FM_FED_SIZE
 
-tail -n +0 -F $FM_LOGS_DIR/fedimintd-0.log &
-echo $! >> $FM_PID_FILE
-tail -n +0 -F $FM_LOGS_DIR/fedimintd-1.log &
-echo $! >> $FM_PID_FILE
+for ((i=0; i < FM_FED_SIZE; i++));
+do
+  echo $i
+  tail -n +0 -F "$FM_LOGS_DIR/fedimintd-$i.log" &
+  echo $! >> $FM_PID_FILE
+done
 
 devimint run-ui $FM_UI_KIND
