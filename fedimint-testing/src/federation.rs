@@ -6,7 +6,7 @@ use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::{
-    ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
+    ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -46,6 +46,11 @@ impl FederationTest {
             .to_client_config(&self.server_gen)
             .unwrap();
 
+        self.new_client_with_config(client_config).await
+    }
+
+    /// Create a client with a custom config
+    pub async fn new_client_with_config(&self, client_config: ClientConfig) -> Client {
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_gens(self.client_gen.clone());
         client_builder.with_primary_module(self.primary_client);

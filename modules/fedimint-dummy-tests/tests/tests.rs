@@ -1,3 +1,6 @@
+use fedimint_core::config::ClientModuleConfig;
+use fedimint_core::core::ModuleKind;
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::sats;
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -32,4 +35,21 @@ async fn can_threshold_sign_message() {
     let message = "Hello fed!";
     let sig = client.fed_signature(message).await.unwrap();
     assert!(client.fed_public_key().verify(&sig, message));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn client_ignores_unknown_module() {
+    let fed = fixtures().new_fed().await;
+    let client = fed.new_client().await;
+
+    let mut cfg = client.get_config().await.clone();
+    let extra_mod = ClientModuleConfig {
+        kind: ModuleKind::from_static_str("unknown_module"),
+        version: ModuleConsensusVersion(0),
+        config: vec![],
+    };
+    cfg.modules.insert(2142, extra_mod);
+
+    // Test that building the client worked
+    let _client = fed.new_client_with_config(cfg).await;
 }
