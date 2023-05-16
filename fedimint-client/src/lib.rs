@@ -73,6 +73,7 @@ use std::io::{Error, Read, Write};
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
+use async_stream::stream;
 use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
 use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
@@ -89,12 +90,13 @@ use fedimint_core::{
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tracing::{error, instrument, warn};
 
 use crate::backup::Metadata;
 use crate::db::{
@@ -570,12 +572,23 @@ impl Client {
         operation_type: &str,
         operation_meta: impl serde::Serialize,
     ) {
+        Client::add_operation_log_entry_inner(dbtx, operation_id, operation_type, operation_meta)
+            .await
+    }
+
+    async fn add_operation_log_entry_inner(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry {
                 operation_type: operation_type.to_string(),
                 meta: serde_json::to_value(operation_meta)
                     .expect("Can only fail if meta is not serializable"),
+                outcome: None,
             },
         )
         .await;
@@ -624,12 +637,50 @@ impl Client {
     }
 
     pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
-        self.inner
-            .db
-            .begin_transaction()
+        Client::get_operation_inner(&mut self.inner.db.begin_transaction().await, operation_id)
             .await
-            .get_value(&OperationLogKey { operation_id })
+    }
+
+    async fn get_operation_inner(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> Option<OperationLogEntry> {
+        dbtx.get_value(&OperationLogKey { operation_id }).await
+    }
+
+    /// Sets the outcome of an operation
+    #[instrument(skip(db), level = "debug")]
+    pub async fn set_operation_outcome(
+        db: &Database,
+        operation_id: OperationId,
+        outcome: &(impl Serialize + Debug),
+    ) -> anyhow::Result<()> {
+        let outcome_json = serde_json::to_value(outcome).expect("Outcome is not serializable");
+
+        let mut dbtx = db.begin_transaction().await;
+        let mut operation = Client::get_operation_inner(&mut dbtx, operation_id)
             .await
+            .expect("Operation exists");
+        operation.outcome = Some(outcome_json);
+        dbtx.insert_entry(&OperationLogKey { operation_id }, &operation)
+            .await;
+        dbtx.commit_tx_result().await?;
+
+        Ok(())
+    }
+
+    /// Tries to set the outcome of an operation, but only logs an error if it
+    /// fails and does not return it. Since the outcome can always be recomputed
+    /// from an update stream, failing to save it isn't a problem in cases where
+    /// we do this merely for caching.
+    pub async fn optimistically_set_operation_outcome(
+        db: &Database,
+        operation_id: OperationId,
+        outcome: &(impl Serialize + Debug),
+    ) {
+        if let Err(e) = Self::set_operation_outcome(db, operation_id, outcome).await {
+            warn!("Error setting operation outcome: {e}");
+        }
     }
 
     /// Returns a reference to a typed module client instance by kind
@@ -1288,6 +1339,34 @@ where
     S::to_root_secret(&encoding)
 }
 
+/// Wraps an operation update stream such that the last update before it closes
+/// is tried to be written to the operation log entry as its outcome.
+pub fn caching_operation_update_stream<'a, U, S>(
+    db: Database,
+    operation_id: OperationId,
+    stream: S,
+) -> BoxStream<'a, U>
+where
+    U: Clone + Serialize + Debug + MaybeSend + MaybeSync + 'static,
+    S: Stream<Item = U> + MaybeSend + 'a,
+{
+    let mut stream = Box::pin(stream);
+    Box::pin(stream! {
+        let mut last_update = None;
+        while let Some(update) = stream.next().await {
+            yield update.clone();
+            last_update = Some(update);
+        }
+
+        let Some(last_update) = last_update else {
+            error!("Stream ended without any updates, this should not happen!");
+            return;
+        };
+
+        Client::optimistically_set_operation_outcome(&db, operation_id, &last_update).await;
+    })
+}
+
 /// Secret input key material from which the [`DerivableSecret`] used by the
 /// client will be seeded
 pub struct ClientSecret<S: RootSecretStrategy>(S::Encoding);
@@ -1370,6 +1449,8 @@ pub fn client_decoders<'a>(
 pub struct OperationLogEntry {
     operation_type: String,
     meta: serde_json::Value,
+    // TODO: probably change all that JSON to Dyn-types
+    pub(crate) outcome: Option<serde_json::Value>,
 }
 
 impl OperationLogEntry {
@@ -1380,6 +1461,15 @@ impl OperationLogEntry {
     pub fn meta<M: DeserializeOwned>(&self) -> M {
         serde_json::from_value(self.meta.clone()).expect("JSON deserialization should not fail")
     }
+
+    /// Returns the last state update of the operation, if any was cached yet.
+    /// If this hasn't been the case yet and `None` is returned subscribe to the
+    /// appropriate update stream.
+    pub fn outcome<D: DeserializeOwned>(&self) -> Option<D> {
+        self.outcome.as_ref().map(|outcome| {
+            serde_json::from_value(outcome.clone()).expect("JSON deserialization should not fail")
+        })
+    }
 }
 
 impl Encodable for OperationLogEntry {
@@ -1389,6 +1479,14 @@ impl Encodable for OperationLogEntry {
         len += serde_json::to_string(&self.meta)
             .expect("JSON serialization should not fail")
             .consensus_encode(writer)?;
+        len += self
+            .outcome
+            .as_ref()
+            .map(|outcome| {
+                serde_json::to_string(outcome).expect("JSON serialization should not fail")
+            })
+            .consensus_encode(writer)?;
+
         Ok(len)
     }
 }
@@ -1399,27 +1497,38 @@ impl Decodable for OperationLogEntry {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let operation_type = String::consensus_decode(r, modules)?;
+
         let meta_str = String::consensus_decode(r, modules)?;
         let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
+
+        let outcome_str = Option::<String>::consensus_decode(r, modules)?;
+        let outcome = outcome_str
+            .map(|outcome_str| serde_json::from_str(&outcome_str).map_err(DecodeError::from_err))
+            .transpose()?;
 
         Ok(OperationLogEntry {
             operation_type,
             meta,
+            outcome,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::Database;
     use serde::{Deserialize, Serialize};
 
-    use crate::OperationLogEntry;
+    use crate::sm::OperationId;
+    use crate::{Client, OperationLogEntry};
 
     #[test]
     fn test_operation_log_entry_serde() {
         let op_log = OperationLogEntry {
             operation_type: "test".to_string(),
             meta: serde_json::to_value(()).unwrap(),
+            outcome: None,
         };
 
         op_log.meta::<()>();
@@ -1441,8 +1550,37 @@ mod tests {
         let op_log = OperationLogEntry {
             operation_type: "test".to_string(),
             meta: serde_json::to_value(meta.clone()).unwrap(),
+            outcome: None,
         };
 
         assert_eq!(op_log.meta::<Meta>(), meta);
+    }
+
+    #[tokio::test]
+    async fn test_operation_log_update() {
+        let op_id = OperationId([0x32; 32]);
+
+        let db = Database::new(MemDatabase::new(), Default::default());
+        let mut dbtx = db.begin_transaction().await;
+        Client::add_operation_log_entry_inner(&mut dbtx, op_id, "foo", "bar").await;
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction().await;
+        let op = Client::get_operation_inner(&mut dbtx, op_id)
+            .await
+            .expect("op exists");
+        assert_eq!(op.outcome, None);
+        drop(dbtx);
+
+        Client::set_operation_outcome(&db, op_id, &"baz")
+            .await
+            .unwrap();
+
+        let mut dbtx = db.begin_transaction().await;
+        let op = Client::get_operation_inner(&mut dbtx, op_id)
+            .await
+            .expect("op exists");
+        assert_eq!(op.outcome::<String>(), Some("baz".to_string()));
+        drop(dbtx);
     }
 }

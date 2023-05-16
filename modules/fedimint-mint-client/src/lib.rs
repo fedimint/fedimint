@@ -28,7 +28,9 @@ use fedimint_client::sm::{
     Context, DynState, Executor, ModuleNotifier, OperationId, State, StateTransition,
 };
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+use fedimint_client::{
+    caching_operation_update_stream, sm_enum_variant_translation, Client, DynGlobalClientContext,
+};
 use fedimint_core::api::{DynFederationApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{
@@ -132,7 +134,7 @@ pub trait MintClientExt {
 
 /// The high-level state of a reissue operation started with
 /// [`MintClientExt::reissue_external_notes`].
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ReissueExternalNotesState {
     /// The operation has been created and is waiting to be accepted by the
     /// federation.
@@ -148,7 +150,7 @@ pub enum ReissueExternalNotesState {
 
 /// The high-level state of a raw e-cash spend operation started with
 /// [`MintClientExt::spend_notes`].
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SpendOOBState {
     /// The e-cash has been selected and given to the caller
     Created,
@@ -228,27 +230,33 @@ impl MintClientExt for Client {
             .await_tx_accepted(out_point.txid);
         let output_finalized_future = mint.await_output_finalized(operation_id, out_point);
 
-        Ok(Box::pin(stream! {
-            yield ReissueExternalNotesState::Created;
+        let db = self.db().clone();
 
-            match tx_accepted_future.await {
-                Ok(()) => {
-                    yield ReissueExternalNotesState::Issuing;
-                },
-                Err(e) => {
-                    yield ReissueExternalNotesState::Failed(format!("Transaction not accepted {e:?}"));
+        Ok(caching_operation_update_stream(
+            db,
+            operation_id,
+            stream! {
+                yield ReissueExternalNotesState::Created;
+
+                match tx_accepted_future.await {
+                    Ok(()) => {
+                        yield ReissueExternalNotesState::Issuing;
+                    },
+                    Err(e) => {
+                        yield ReissueExternalNotesState::Failed(format!("Transaction not accepted {e:?}"));
+                    }
                 }
-            }
 
-            match output_finalized_future.await {
-                Ok(_) => {
-                    yield ReissueExternalNotesState::Done;
-                },
-                Err(e) => {
-                    yield ReissueExternalNotesState::Failed(e.to_string());
-                },
-            }
-        }))
+                match output_finalized_future.await {
+                    Ok(_) => {
+                        yield ReissueExternalNotesState::Done;
+                    },
+                    Err(e) => {
+                        yield ReissueExternalNotesState::Failed(e.to_string());
+                    },
+                }
+            },
+        ))
     }
 
     async fn spend_notes<M: Serialize + Send>(
@@ -331,31 +339,35 @@ impl MintClientExt for Client {
         let refund_future = mint.await_spend_oob_refund(operation_id);
 
         // TODO: check if operation exists and is a spend operation
-        Ok(Box::pin(stream! {
-            yield SpendOOBState::Created;
+        Ok(caching_operation_update_stream(
+            self.db().clone(),
+            operation_id,
+            stream! {
+                yield SpendOOBState::Created;
 
-            let refund = refund_future.await;
-            if refund.user_triggered {
-                yield SpendOOBState::UserCanceledProcessing;
-                match tx_subscription.await_tx_accepted(refund.transaction_id).await {
-                    Ok(()) => {
-                        yield SpendOOBState::UserCanceledSuccess;
-                    },
-                    Err(_) => {
-                        yield SpendOOBState::UserCanceledFailure;
+                let refund = refund_future.await;
+                if refund.user_triggered {
+                    yield SpendOOBState::UserCanceledProcessing;
+                    match tx_subscription.await_tx_accepted(refund.transaction_id).await {
+                        Ok(()) => {
+                            yield SpendOOBState::UserCanceledSuccess;
+                        },
+                        Err(_) => {
+                            yield SpendOOBState::UserCanceledFailure;
+                        }
+                    }
+                } else {
+                    match tx_subscription.await_tx_accepted(refund.transaction_id).await {
+                        Ok(()) => {
+                            yield SpendOOBState::Refunded;
+                        },
+                        Err(_) => {
+                            yield SpendOOBState::Success;
+                        }
                     }
                 }
-            } else {
-                match tx_subscription.await_tx_accepted(refund.transaction_id).await {
-                    Ok(()) => {
-                        yield SpendOOBState::Refunded;
-                    },
-                    Err(_) => {
-                        yield SpendOOBState::Success;
-                    }
-                }
-            }
-        }))
+            },
+        ))
     }
 
     async fn total_amount(&self) -> Amount {
