@@ -29,7 +29,8 @@ use fedimint_client::sm::{
 };
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{
-    caching_operation_update_stream, sm_enum_variant_translation, Client, DynGlobalClientContext,
+    sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
+    UpdateStreamOrOutcome,
 };
 use fedimint_core::api::{DynFederationApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
@@ -41,7 +42,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::util::NextOrPending;
 use fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
     TransactionId,
@@ -91,7 +92,7 @@ pub trait MintClientExt {
     async fn subscribe_reissue_external_notes_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<ReissueExternalNotesState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, ReissueExternalNotesState>>;
 
     /// Fetches and removes notes of *at least* amount `min_amount` from the
     /// wallet to be sent to the recipient out of band. These spends can be
@@ -122,7 +123,7 @@ pub trait MintClientExt {
     async fn subscribe_spend_notes_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<SpendOOBState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, SpendOOBState>>;
 
     /// Returns the total value of our notes
     // TODO: Make getting total asserts part of the core client
@@ -217,24 +218,23 @@ impl MintClientExt for Client {
     async fn subscribe_reissue_external_notes_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<ReissueExternalNotesState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, ReissueExternalNotesState>> {
         let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
-        let out_point = match mint_operation(self, operation_id).await?.variant {
+
+        let operation = mint_operation(self, operation_id).await?;
+        let out_point = match operation.meta::<MintMeta>().variant {
             MintMetaVariants::Reissuance { out_point } => out_point,
             _ => bail!("Operation is not a reissuance"),
         };
 
+        // TODO: move into closure
         let tx_accepted_future = self
             .transaction_updates(operation_id)
             .await
             .await_tx_accepted(out_point.txid);
         let output_finalized_future = mint.await_output_finalized(operation_id, out_point);
 
-        let db = self.db().clone();
-
-        Ok(caching_operation_update_stream(
-            db,
-            operation_id,
+        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                 yield ReissueExternalNotesState::Created;
 
@@ -255,7 +255,7 @@ impl MintClientExt for Client {
                         yield ReissueExternalNotesState::Failed(e.to_string());
                     },
                 }
-            },
+            }}
         ))
     }
 
@@ -326,10 +326,12 @@ impl MintClientExt for Client {
     async fn subscribe_spend_notes_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<SpendOOBState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, SpendOOBState>> {
         let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+
+        let operation = mint_operation(self, operation_id).await?;
         if !matches!(
-            mint_operation(self, operation_id).await?.variant,
+            operation.meta::<MintMeta>().variant,
             MintMetaVariants::SpendOOB { .. }
         ) {
             bail!("Operation is not a out-of-band spend");
@@ -338,10 +340,7 @@ impl MintClientExt for Client {
         let tx_subscription = self.transaction_updates(operation_id).await;
         let refund_future = mint.await_spend_oob_refund(operation_id);
 
-        // TODO: check if operation exists and is a spend operation
-        Ok(caching_operation_update_stream(
-            self.db().clone(),
-            operation_id,
+        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                 yield SpendOOBState::Created;
 
@@ -366,8 +365,8 @@ impl MintClientExt for Client {
                         }
                     }
                 }
-            },
-        ))
+            }
+        }))
     }
 
     async fn total_amount(&self) -> Amount {
@@ -389,7 +388,10 @@ impl MintClientExt for Client {
     }
 }
 
-async fn mint_operation(client: &Client, operation_id: OperationId) -> anyhow::Result<MintMeta> {
+async fn mint_operation(
+    client: &Client,
+    operation_id: OperationId,
+) -> anyhow::Result<OperationLogEntry> {
     let operation = client
         .get_operation(operation_id)
         .await
@@ -399,7 +401,7 @@ async fn mint_operation(client: &Client, operation_id: OperationId) -> anyhow::R
         bail!("Operation is not a mint operation");
     }
 
-    Ok(operation.meta())
+    Ok(operation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -548,7 +550,8 @@ impl ClientModule for MintClientModule {
                 let mut updates = client
                     .subscribe_reissue_external_notes_updates(operation_id)
                     .await
-                    .unwrap();
+                    .unwrap()
+                    .into_stream();
 
                 while let Some(update) = updates.next().await {
                     if let ReissueExternalNotesState::Failed(e) = update {

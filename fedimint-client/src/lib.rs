@@ -69,6 +69,7 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
+use std::future;
 use std::io::{Error, Read, Write};
 use std::sync::Arc;
 
@@ -90,7 +91,7 @@ use fedimint_core::{
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
-use futures::{Stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
 use secret::DeriveableSecretClientExt;
@@ -1470,6 +1471,30 @@ impl OperationLogEntry {
             serde_json::from_value(outcome.clone()).expect("JSON deserialization should not fail")
         })
     }
+
+    /// Returns an a [`UpdateStreamOrOutcome`] enum that can be converted into
+    /// an update stream for easier handling using
+    /// [`UpdateStreamOrOutcome::into_stream`] but can also be matched over to
+    /// shortcut the handling of final outcomes.
+    pub fn outcome_or_updates<'a, U, S>(
+        &self,
+        db: &Database,
+        operation_id: OperationId,
+        stream_gen: impl FnOnce() -> S,
+    ) -> UpdateStreamOrOutcome<'a, U>
+    where
+        U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
+        S: Stream<Item = U> + MaybeSend + 'a,
+    {
+        match self.outcome::<U>() {
+            Some(outcome) => UpdateStreamOrOutcome::Outcome(outcome),
+            None => UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
+                db.clone(),
+                operation_id,
+                stream_gen(),
+            )),
+        }
+    }
 }
 
 impl Encodable for OperationLogEntry {
@@ -1514,14 +1539,39 @@ impl Decodable for OperationLogEntry {
     }
 }
 
+/// Either a stream of operation updates if the operation hasn't finished yet or
+/// its outcome otherwise.
+pub enum UpdateStreamOrOutcome<'a, U> {
+    UpdateStream(BoxStream<'a, U>),
+    Outcome(U),
+}
+
+impl<'a, U> UpdateStreamOrOutcome<'a, U>
+where
+    U: MaybeSend + MaybeSync + 'static,
+{
+    /// Returns a stream no matter if the operation is finished. If there
+    /// already is a cached outcome the stream will only return that, otherwise
+    /// all updates will be returned until the operation finishes.
+    pub fn into_stream(self) -> BoxStream<'a, U> {
+        match self {
+            UpdateStreamOrOutcome::UpdateStream(stream) => stream,
+            UpdateStreamOrOutcome::Outcome(outcome) => {
+                Box::pin(stream::once(future::ready(outcome)))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
+    use futures::stream::StreamExt;
     use serde::{Deserialize, Serialize};
 
     use crate::sm::OperationId;
-    use crate::{Client, OperationLogEntry};
+    use crate::{Client, OperationLogEntry, UpdateStreamOrOutcome};
 
     #[test]
     fn test_operation_log_entry_serde() {
@@ -1582,5 +1632,19 @@ mod tests {
             .expect("op exists");
         assert_eq!(op.outcome::<String>(), Some("baz".to_string()));
         drop(dbtx);
+
+        let update_stream_or_outcome =
+            op.outcome_or_updates::<String, _>(&db, op_id, futures::stream::empty);
+
+        assert!(matches!(
+            &update_stream_or_outcome,
+            UpdateStreamOrOutcome::Outcome(s) if s == "baz"
+        ));
+
+        let updates = update_stream_or_outcome
+            .into_stream()
+            .collect::<Vec<_>>()
+            .await;
+        assert_eq!(updates, vec!["baz"]);
     }
 }

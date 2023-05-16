@@ -21,7 +21,8 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{
-    caching_operation_update_stream, sm_enum_variant_translation, Client, DynGlobalClientContext,
+    sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
+    UpdateStreamOrOutcome,
 };
 use fedimint_core::api::IFederationApi;
 use fedimint_core::config::FederationId;
@@ -33,7 +34,6 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::util::BoxStream;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -86,7 +86,7 @@ pub trait LightningClientExt {
     async fn subscribe_ln_pay_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<LnPayState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnPayState>>;
 
     /// Receive over LN with a new invoice
     async fn create_bolt11_invoice(
@@ -99,7 +99,7 @@ pub trait LightningClientExt {
     async fn subscribe_to_ln_receive_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<LnReceiveState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnReceiveState>>;
 }
 
 /// The high-level state of a reissue operation started with
@@ -267,9 +267,11 @@ impl LightningClientExt for Client {
     async fn subscribe_to_ln_receive_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<LnReceiveState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnReceiveState>> {
         let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
-        let (out_point, invoice) = match ln_operation(self, operation_id).await? {
+
+        let operation = ln_operation(self, operation_id).await?;
+        let (out_point, invoice) = match operation.meta::<LightningMeta>() {
             LightningMeta::Receive { out_point, invoice } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
@@ -282,9 +284,7 @@ impl LightningClientExt for Client {
         let receive_success = lightning.await_receive_success(operation_id);
         let claim_acceptance = lightning.await_claim_acceptance(operation_id);
 
-        Ok(caching_operation_update_stream(
-            self.db().clone(),
-            operation_id,
+        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                     yield LnReceiveState::Created;
 
@@ -313,16 +313,18 @@ impl LightningClientExt for Client {
                         yield LnReceiveState::Canceled { reason: e };
                     }
                 }
-            },
+            }}
         ))
     }
 
     async fn subscribe_ln_pay_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<LnPayState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnPayState>> {
         let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
-        let (out_point, _, change_outpoint) = match ln_operation(self, operation_id).await? {
+
+        let operation = ln_operation(self, operation_id).await?;
+        let (out_point, _, change_outpoint) = match operation.meta::<LightningMeta>() {
             LightningMeta::Pay {
                 out_point,
                 invoice,
@@ -339,9 +341,7 @@ impl LightningClientExt for Client {
 
         let refund_success = lightning.await_refund(operation_id);
 
-        Ok(caching_operation_update_stream(
-            self.db().clone(),
-            operation_id,
+        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                     yield LnPayState::Created;
 
@@ -382,12 +382,15 @@ impl LightningClientExt for Client {
                 }
 
                 yield LnPayState::Failed;
-            },
-        ))
+            }
+        }))
     }
 }
 
-async fn ln_operation(client: &Client, operation_id: OperationId) -> anyhow::Result<LightningMeta> {
+async fn ln_operation(
+    client: &Client,
+    operation_id: OperationId,
+) -> anyhow::Result<OperationLogEntry> {
     let operation = client
         .get_operation(operation_id)
         .await
@@ -397,7 +400,7 @@ async fn ln_operation(client: &Client, operation_id: OperationId) -> anyhow::Res
         bail!("Operation is not a lightning operation");
     }
 
-    Ok(operation.meta())
+    Ok(operation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
