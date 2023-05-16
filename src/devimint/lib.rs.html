@@ -234,6 +234,7 @@
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::future::Future;
@@ -440,10 +441,11 @@
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
         <span class="kw">async </span>{
-            run_dkg(process_mgr, <span class="number">4</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
+            run_dkg(process_mgr, fed_size).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;dkg done&quot;</span>);
             <span class="macro">tokio::try_join!</span>(
-                Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..<span class="number">4</span>),
+                Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..fed_size),
                 Faucet::new(process_mgr)
             )
         },
