@@ -6,9 +6,7 @@ use std::{env, fs};
 
 use anyhow::{bail, format_err};
 use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
-use fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
-};
+use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
@@ -248,7 +246,7 @@ impl ServerConfig {
             tls_certs: params.tls_certs(),
             modules: Default::default(),
             modules_json: Default::default(),
-            meta: params.consensus.requested.meta,
+            meta: params.consensus.meta,
         };
         let mut cfg = Self {
             consensus,
@@ -405,7 +403,7 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
-        let modules = peer0.consensus.requested.modules.iter_modules();
+        let modules = peer0.consensus.modules.iter_modules();
         let module_configs: BTreeMap<_, _> = modules
             .map(|(module_id, kind, module_params)| {
                 (
@@ -488,7 +486,7 @@ impl ServerConfig {
         let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
-        let modules = params.consensus.requested.modules.iter_modules();
+        let modules = params.consensus.modules.iter_modules();
         let modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
             let registry = registry.clone();
@@ -743,10 +741,8 @@ impl ConfigGenParams {
             },
             consensus: ConfigGenParamsConsensus {
                 peers,
-                requested: ConfigGenParamsRequest {
-                    meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
-                    modules,
-                },
+                meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
+                modules,
             },
         }
     }

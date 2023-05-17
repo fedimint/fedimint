@@ -248,33 +248,55 @@ impl<M> Default for ModuleGenRegistry<M> {
     }
 }
 
-/// Module **generation** (so passed to dkg, not to the module itself) config
-/// parameters
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub struct ConfigGenModuleParams(serde_json::Value);
+/// Type erased `ModuleGenParams` used to generate the `ServerModuleConfig`
+/// during config gen
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ConfigGenModuleParams {
+    local: Option<serde_json::Value>,
+    consensus: Option<serde_json::Value>,
+}
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
 impl ConfigGenModuleParams {
-    /// Null value, used as a config gen parameters for module gens that don't
-    /// need any parameters
-    pub fn null() -> Self {
-        Self(jsonrpsee_core::JsonValue::Null)
+    /// Converts the JSON into typed version, errors unless both `local` and
+    /// `consensus` values are defined
+    pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
+        Ok(P::from_parts(
+            Self::parse("local", self.local.clone())?,
+            Self::parse("consensus", self.consensus.clone())?,
+        ))
     }
 
-    pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
-        serde_json::from_value(self.0.clone())
+    fn parse<P: DeserializeOwned>(
+        name: &str,
+        json: Option<serde_json::Value>,
+    ) -> anyhow::Result<P> {
+        let json = json.ok_or(format_err!("{name} config gen params missing"))?;
+        serde_json::from_value(json)
             .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
     }
 
+    /// Copies these params with local params from another module
+    pub fn with_local(&self, other: &ConfigGenModuleParams) -> Self {
+        ConfigGenModuleParams {
+            local: other.local.clone(),
+            consensus: self.consensus.clone(),
+        }
+    }
+
     pub fn from_typed<P: ModuleGenParams>(p: P) -> anyhow::Result<Self> {
-        Ok(Self(serde_json::to_value(p)?))
+        let (local, consensus) = p.to_parts();
+        Ok(Self {
+            local: Some(serde_json::to_value(local)?),
+            consensus: Some(serde_json::to_value(consensus)?),
+        })
     }
 }
 
 pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
 
-/// Configs for each module's DKG
+/// Registry that contains the config gen params for all modules
 pub type ServerModuleGenParamsRegistry = ModuleRegistry<ConfigGenModuleParams>;
 
 impl Eq for ServerModuleGenParamsRegistry {}
@@ -291,7 +313,7 @@ impl Serialize for ServerModuleGenParamsRegistry {
         let mut serializer = serializer.serialize_map(Some(modules.len()))?;
         for (id, kind, params) in modules.into_iter() {
             serializer.serialize_key(&id)?;
-            serializer.serialize_value(&(kind.clone(), params.0.clone()))?;
+            serializer.serialize_value(&(kind.clone(), params.clone()))?;
         }
         serializer.end()
     }
@@ -302,12 +324,12 @@ impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
     where
         D: Deserializer<'de>,
     {
-        let json: BTreeMap<ModuleInstanceId, (ModuleKind, serde_json::Value)> =
+        let json: BTreeMap<ModuleInstanceId, (ModuleKind, ConfigGenModuleParams)> =
             Deserialize::deserialize(deserializer)?;
         let mut params = BTreeMap::new();
 
-        for (id, (kind, value)) in json {
-            params.insert(id, (kind, ConfigGenModuleParams(value)));
+        for (id, (kind, module)) in json {
+            params.insert(id, (kind, module));
         }
         Ok(ModuleRegistry::from(params))
     }
@@ -419,15 +441,6 @@ pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
 
     /// Split the config into its distinct parts
     fn to_parts(self) -> (Self::Local, Self::Consensus);
-
-    fn from_json<P: ModuleGenParams>(value: serde_json::Value) -> anyhow::Result<Self> {
-        serde_json::from_value(value)
-            .map_err(|e| anyhow::Error::new(e).context("Invalid module gen params"))
-    }
-
-    fn to_json(p: Self) -> anyhow::Result<serde_json::Value> {
-        Ok(serde_json::to_value(p)?)
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]

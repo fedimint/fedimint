@@ -1537,6 +1537,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "bitcoin",
+ "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",

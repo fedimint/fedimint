@@ -11,12 +11,13 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_bitcoind::{create_bitcoind, BitcoinRpcConfig, DynBitcoindRpc};
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
 use fedimint_core::admin_client::PeerServerParams;
 use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::{
@@ -50,7 +51,7 @@ use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
 use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
 use fedimint_server::{consensus, FedimintApiHandler, FedimintServer};
-use fedimint_testing::btc::mock::FakeBitcoinTest;
+use fedimint_testing::btc::mock::FakeBitcoinFactory;
 use fedimint_testing::btc::real::RealBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::mock::{FakeLightningTest, LnRpcAdapter};
@@ -61,7 +62,6 @@ use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
 use fedimint_wallet_server::common::SpendableUTXO;
 use fedimint_wallet_server::{Wallet, WalletGen};
-use fedimint_wallet_tests::FakeWalletGen;
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
@@ -212,13 +212,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let mut module_gens_params = ServerModuleGenParamsRegistry::default();
-    fedimintd::attach_default_module_gen_params(
-        &mut module_gens_params,
-        msats(MAX_MSAT_DENOMINATION),
-        bitcoin::network::constants::Network::Regtest,
-        10,
-    );
-    let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
     let client_module_inits = ClientModuleGenRegistry::from(vec![
         DynClientModuleGen::from(WalletClientGen),
@@ -228,13 +221,22 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
     let decoders = module_decode_stubs();
 
+    let server_module_inits = ServerModuleGenRegistry::from(vec![
+        DynServerModuleGen::from(WalletGen),
+        DynServerModuleGen::from(MintGen),
+        DynServerModuleGen::from(LightningGen),
+    ]);
+
     let fixtures = match env::var("FM_TEST_USE_REAL_DAEMONS") {
         Ok(s) if s == "1" => {
-            let server_module_inits = ServerModuleGenRegistry::from(vec![
-                DynServerModuleGen::from(WalletGen),
-                DynServerModuleGen::from(MintGen),
-                DynServerModuleGen::from(LightningGen),
-            ]);
+            fedimintd::attach_default_module_gen_params(
+                BitcoinRpcConfig::from_env_vars()?,
+                &mut module_gens_params,
+                msats(MAX_MSAT_DENOMINATION),
+                bitcoin::network::constants::Network::Regtest,
+                10,
+            );
+            let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
@@ -319,14 +321,16 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let bitcoin = FakeBitcoinTest::new();
-            let bitcoin_rpc = || bitcoin.clone().into();
-
-            let server_module_inits = ServerModuleGenRegistry::from(vec![
-                DynServerModuleGen::from(FakeWalletGen::with_rpc(bitcoin.clone().into())),
-                DynServerModuleGen::from(MintGen),
-                DynServerModuleGen::from(LightningGen),
-            ]);
+            let factory = FakeBitcoinFactory::register_new();
+            fedimintd::attach_default_module_gen_params(
+                factory.config.clone(),
+                &mut module_gens_params,
+                msats(MAX_MSAT_DENOMINATION),
+                bitcoin::network::constants::Network::Regtest,
+                10,
+            );
+            let bitcoin_rpc = || factory.bitcoin.clone().into();
+            let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
             let server_config =
                 ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
@@ -382,12 +386,12 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
             .await;
 
             // Always be prepared to fund bitcoin wallet
-            bitcoin.prepare_funding_wallet().await;
+            factory.bitcoin.prepare_funding_wallet().await;
 
             Fixtures {
                 fed,
                 user,
-                bitcoin: Box::new(bitcoin),
+                bitcoin: Box::new(factory.bitcoin),
                 gateway,
                 lightning: Box::new(lightning),
                 task_group,

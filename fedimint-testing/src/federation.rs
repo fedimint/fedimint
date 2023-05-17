@@ -3,9 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::{Client, ClientBuilder};
-use fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
-};
+use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::config::{
     ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
@@ -176,13 +174,11 @@ fn local_config_gen_params(
                 },
                 consensus: ConfigGenParamsConsensus {
                     peers: connections.clone(),
-                    requested: ConfigGenParamsRequest {
-                        meta: BTreeMap::from([(
-                            META_FEDERATION_NAME_KEY.to_owned(),
-                            "federation_name".to_string(),
-                        )]),
-                        modules: server_config_gen.clone(),
-                    },
+                    meta: BTreeMap::from([(
+                        META_FEDERATION_NAME_KEY.to_owned(),
+                        "federation_name".to_string(),
+                    )]),
+                    modules: server_config_gen.clone(),
                 },
             };
             Ok((*peer, params))

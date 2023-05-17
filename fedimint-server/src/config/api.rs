@@ -12,7 +12,7 @@ use fedimint_core::admin_client::{
     ConfigGenParamsResponse, PeerServerParams, WsAdminClient,
 };
 use fedimint_core::api::{ServerStatus, StatusResponse};
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
@@ -152,17 +152,19 @@ impl ConfigGenApi {
                 .get_consensus_config_gen_params()
                 .await
                 .map_err(|_| ApiError::not_found("Unable to get params from leader".to_string()))?;
-            let params = state.get_config_gen_params(response.consensus)?;
+            let params = state.get_config_gen_params(response.consensus.clone())?;
             return Ok(ConfigGenParamsResponse {
-                consensus: params.consensus,
+                consensus: response.consensus,
                 our_current_id: params.local.our_id,
             });
         }
 
         let state = self.state.lock().expect("lock poisoned");
+        let requested = state.get_requested_params()?;
         let consensus = ConfigGenParamsConsensus {
             peers: state.get_peer_info(),
-            requested: state.get_requested_params()?,
+            meta: requested.meta,
+            modules: requested.modules,
         };
         let params = state.get_config_gen_params(consensus)?;
         Ok(ConfigGenParamsResponse {
@@ -430,9 +432,10 @@ impl ConfigGenState {
 
     fn get_config_gen_params(
         &self,
-        consensus: ConfigGenParamsConsensus,
+        mut consensus: ConfigGenParamsConsensus,
     ) -> ApiResult<ConfigGenParams> {
         let local_connection = self.local_connection()?;
+        let requested_params = self.get_requested_params()?;
 
         let (our_id, _) = consensus
             .peers
@@ -441,6 +444,17 @@ impl ConfigGenState {
             .ok_or(ApiError::bad_request(
                 "Our TLS cert not found among peers".to_string(),
             ))?;
+
+        let modules = ServerModuleGenParamsRegistry::from_iter(
+            consensus
+                .modules
+                .iter_modules()
+                .zip(requested_params.modules.iter_modules())
+                .map(|((id1, kind1, consensus), (_id2, _kind2, local))| {
+                    (id1, kind1.clone(), consensus.with_local(local))
+                }),
+        );
+        consensus.modules = modules;
 
         let local = ConfigGenParamsLocal {
             our_id: *our_id,
@@ -607,21 +621,29 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use fedimint_core::admin_client::WsAdminClient;
+    use fedimint_core::admin_client::{ConfigGenParamsRequest, WsAdminClient};
     use fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
+    use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::task::{sleep, TaskGroup};
-    use fedimint_core::PeerId;
+    use fedimint_core::{Amount, PeerId};
+    use fedimint_dummy_common::config::{
+        DummyConfig, DummyGenParams, DummyGenParamsConsensus, DummyGenParamsLocal,
+    };
+    use fedimint_dummy_server::DummyGen;
+    use fedimint_logging::TracingSetup;
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
     use url::Url;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    use crate::config::DEFAULT_MAX_CLIENT_CONNECTIONS;
+    use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
+    use crate::config::{DynServerModuleGen, DEFAULT_MAX_CLIENT_CONNECTIONS};
+    use crate::fedimint_core::module::ServerModuleGen;
     use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
@@ -629,6 +651,8 @@ mod tests {
         client: WsAdminClient,
         name: String,
         settings: ConfigGenSettings,
+        amount: Amount,
+        dir: PathBuf,
     }
 
     impl TestConfigApi {
@@ -656,13 +680,13 @@ mod tests {
                 api_url: api_url.clone(),
                 default_params: Default::default(),
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-                registry: Default::default(),
+                registry: ServerModuleGenRegistry::from(vec![DynServerModuleGen::from(DummyGen)]),
             };
             let dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
 
             let api = FedimintServer {
-                data_dir: dir,
+                data_dir: dir.clone(),
                 settings: settings.clone(),
                 db,
             };
@@ -676,6 +700,8 @@ mod tests {
                     client,
                     name,
                     settings,
+                    amount: Amount::from_sats(port as u64),
+                    dir,
                 },
                 api,
             )
@@ -736,10 +762,39 @@ mod tests {
                 sleep(Duration::from_millis(10)).await;
             }
         }
+
+        /// Sets local param to name and unique consensus amount for testing
+        async fn set_config_gen_params(&self) {
+            let mut modules = ServerModuleGenParamsRegistry::default();
+            modules.attach_config_gen_params(
+                0,
+                DummyGen::kind(),
+                DummyGenParams {
+                    local: DummyGenParamsLocal(self.name.clone()),
+                    consensus: DummyGenParamsConsensus {
+                        tx_fee: self.amount,
+                    },
+                },
+            );
+            let request = ConfigGenParamsRequest {
+                meta: Default::default(),
+                modules,
+            };
+
+            self.client.set_config_gen_params(request).await.unwrap();
+        }
+
+        /// reads the dummy module config from the filesystem
+        fn read_config(&self) -> DummyConfig {
+            let auth = fs::read_to_string(self.dir.join(PLAINTEXT_PASSWORD));
+            let cfg = read_server_config(&auth.unwrap(), self.dir.clone()).unwrap();
+            cfg.get_module_config_typed(0).unwrap()
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_api() {
+        let _ = TracingSetup::default().init();
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-config-api");
 
         // TODO: Choose port in common way with `fedimint_env`
@@ -771,8 +826,8 @@ mod tests {
             leader.set_connections(&None).await.unwrap();
 
             // Leader sets the config
-            let defaults = leader.client.get_default_config_gen_params().await.unwrap();
-            leader.client.set_config_gen_params(defaults).await.unwrap();
+            let _ = leader.client.get_default_config_gen_params().await.unwrap();
+            leader.set_config_gen_params().await;
 
             // Setup followers and send connection info
             for follower in &mut followers {
@@ -785,6 +840,7 @@ mod tests {
                 follower.set_connections(&leader_url).await.unwrap();
                 follower.name = format!("{}_", follower.name);
                 follower.set_connections(&leader_url).await.unwrap();
+                follower.set_config_gen_params().await;
             }
 
             // Confirm we can get peer servers if we are the leader
@@ -810,6 +866,7 @@ mod tests {
             assert_eq!(ids.len(), followers.len());
 
             // all peers run DKG
+            let leader_amount = leader.amount;
             followers.push(leader);
             let followers = Arc::new(followers);
             let (results, _) = tokio::join!(
@@ -827,6 +884,13 @@ mod tests {
                 hashes.insert(peer.client.get_verify_config_hash().await.unwrap());
             }
             assert_eq!(hashes.len(), 1);
+
+            // verify the local and consensus values for peers
+            for peer in followers.iter() {
+                let cfg = peer.read_config();
+                assert_eq!(cfg.consensus.tx_fee, leader_amount);
+                assert_eq!(cfg.local.example, peer.name);
+            }
 
             // start consensus
             for peer in followers.iter() {

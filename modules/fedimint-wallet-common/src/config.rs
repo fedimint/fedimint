@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use bitcoin::Network;
-use fedimint_core::config::EmptyGenParams;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
@@ -14,26 +14,31 @@ use crate::{PegInDescriptor, WalletCommonGen};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
-    pub local: EmptyGenParams,
+    pub local: WalletGenParamsLocal,
     pub consensus: WalletGenParamsConsensus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletGenParamsConsensus {
-    pub network: bitcoin::network::constants::Network,
-    pub finality_delay: u32,
-}
-
-impl Default for WalletGenParams {
-    fn default() -> Self {
-        Self {
-            local: EmptyGenParams,
+impl WalletGenParams {
+    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> WalletGenParams {
+        WalletGenParams {
+            local: WalletGenParamsLocal { bitcoin_rpc },
             consensus: WalletGenParamsConsensus {
                 network: Network::Regtest,
                 finality_delay: 10,
             },
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletGenParamsLocal {
+    pub bitcoin_rpc: BitcoinRpcConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletGenParamsConsensus {
+    pub network: Network,
+    pub finality_delay: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -44,7 +49,10 @@ pub struct WalletConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct WalletConfigLocal;
+pub struct WalletConfigLocal {
+    /// Configures which bitcoin RPC to use
+    pub bitcoin_rpc: BitcoinRpcConfig,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigPrivate {
@@ -103,13 +111,14 @@ impl WalletConfig {
         threshold: usize,
         network: Network,
         finality_delay: u32,
+        bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
         );
 
         Self {
-            local: WalletConfigLocal,
+            local: WalletConfigLocal { bitcoin_rpc },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -141,7 +150,7 @@ impl WalletClientConfig {
 plugin_types_trait_impl_config!(
     WalletCommonGen,
     WalletGenParams,
-    EmptyGenParams,
+    WalletGenParamsLocal,
     WalletGenParamsConsensus,
     WalletConfig,
     WalletConfigLocal,

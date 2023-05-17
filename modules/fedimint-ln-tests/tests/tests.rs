@@ -15,11 +15,11 @@ use fedimint_testing::fixtures::{next, Fixtures};
 use fedimint_testing::gateway::GatewayTest;
 use fedimint_wallet_client::WalletClientGen;
 use fedimint_wallet_common::config::WalletGenParams;
-use fedimint_wallet_tests::FakeWalletGen;
+use fedimint_wallet_server::WalletGen;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new();
-    let wallet_gen = FakeWalletGen::new(&fixtures);
+    let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_rpc());
     fixtures
         .with_module(3, DummyClientGen, DummyGen, DummyGenParams::default())
         .with_module(
@@ -31,7 +31,7 @@ fn fixtures() -> Fixtures {
         // TODO: Remove dependency on mint (legacy gw client)
         .with_primary(1, MintClientGen, MintGen, MintGenParams::default())
         // TODO: Remove dependency on wallet interconnect
-        .with_module(2, WalletClientGen, wallet_gen, WalletGenParams::default())
+        .with_module(2, WalletClientGen, WalletGen, wallet_params)
 }
 
 /// Setup a gateway connected to the fed and client

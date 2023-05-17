@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::Duration;
 use std::{env, fs};
 
-use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{
     ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
 };
@@ -15,7 +15,7 @@ use fedimint_core::util::BoxStream;
 use futures::StreamExt;
 use tempfile::TempDir;
 
-use crate::btc::mock::FakeBitcoinTest;
+use crate::btc::mock::FakeBitcoinFactory;
 use crate::federation::FederationTest;
 use crate::gateway::GatewayTest;
 use crate::ln::mock::FakeLightningTest;
@@ -115,9 +115,9 @@ impl Fixtures {
         gateway
     }
 
-    /// Get a test bitcoin RPC client
-    pub fn bitcoin_rpc(&self) -> DynBitcoindRpc {
-        FakeBitcoinTest::new().into()
+    /// Get a test bitcoin RPC config
+    pub fn bitcoin_rpc(&self) -> BitcoinRpcConfig {
+        FakeBitcoinFactory::register_new().config
     }
 }
 

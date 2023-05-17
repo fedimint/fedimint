@@ -23,7 +23,7 @@ use common::{
     WalletError, WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome,
     CONFIRMATION_TARGET,
 };
-use fedimint_bitcoind::{create_bitcoind, BitcoinRpcConfig, DynBitcoindRpc};
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -121,6 +121,7 @@ impl ServerModuleGen for WalletGen {
                     peers.threshold(),
                     params.consensus.network,
                     params.consensus.finality_delay,
+                    params.local.bitcoin_rpc.clone(),
                 );
                 (*id, cfg)
             })
@@ -157,6 +158,7 @@ impl ServerModuleGen for WalletGen {
             peers.peer_ids().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
+            params.local.bitcoin_rpc.clone(),
         );
 
         Ok(wallet_cfg.to_erased())
@@ -651,9 +653,7 @@ impl Wallet {
         db: Database,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
-        // TODO: should come from wallet config gen params
-        let rpc_config = BitcoinRpcConfig::from_env_vars()?;
-        let btc_rpc = create_bitcoind(&rpc_config, task_group.make_handle())?;
+        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
         Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group).await?)
     }
 
