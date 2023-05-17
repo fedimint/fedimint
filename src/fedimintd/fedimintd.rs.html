@@ -308,6 +308,7 @@
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -558,6 +559,7 @@
                 .<span class="kw">await</span>;
             })
             .<span class="kw">await</span>;
+        <span class="macro">info!</span>(target: <span class="string">&quot;old-ui&quot;</span>, <span class="string">&quot;Started ui on http://{listen_ui}&quot;</span>);
 
         <span class="comment">// If federation configs (e.g. local.json) missing, wait for admin UI to report
         // DKG completion

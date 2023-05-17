@@ -290,6 +290,7 @@
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -489,6 +490,7 @@
             .expect(<span class="string">&quot;Could not start API server&quot;</span>)
             .start(module)
             .expect(<span class="string">&quot;Could not start API server&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_NET_API, <span class="string">&quot;Starting api on ws://{api_bind}&quot;</span>);
 
         FedimintApiHandler { handle, runtime }
     }
