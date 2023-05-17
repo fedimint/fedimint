@@ -1648,6 +1648,19 @@
 <a href="#1648" id="1648">1648</a>
 <a href="#1649" id="1649">1649</a>
 <a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
+<a href="#1659" id="1659">1659</a>
+<a href="#1660" id="1660">1660</a>
+<a href="#1661" id="1661">1661</a>
+<a href="#1662" id="1662">1662</a>
+<a href="#1663" id="1663">1663</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1747,7 +1760,7 @@
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tracing::{error, instrument, warn};
+<span class="kw">use </span>tracing::{error, info, instrument, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
@@ -2413,6 +2426,11 @@
             .await_primary_module_output_finalized(operation_id, out_point)
             .<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Returns the config with which the client was initialized.
+    </span><span class="kw">pub async fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.inner.config
+    }
 }
 
 <span class="doccomment">/// Resources particular to a module instance
@@ -2865,7 +2883,9 @@
                     <span class="kw">let </span>module = <span class="self">self
                         </span>.module_gens
                         .get(<span class="kw-2">&amp;</span>kind)
-                        .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Unknown module kind in config&quot;</span>))<span class="question-mark">?
+                        .ok_or(<span class="macro">anyhow!</span>(
+                            <span class="string">&quot;Unknown primary module kind, cannot skip primary module&quot;
+                        </span>))<span class="question-mark">?
                         </span>.init_primary(
                             module_config,
                             db.clone(),
@@ -2877,11 +2897,16 @@
                     <span class="kw">let </span>not_replaced = primary_module.replace((kind, module)).is_none();
                     <span class="macro">assert!</span>(not_replaced, <span class="string">&quot;Each module instance can only occur once in config, so no replacement can take place here.&quot;</span>)
                 } <span class="kw">else </span>{
-                    <span class="kw">let </span>module = <span class="self">self
-                        </span>.module_gens
-                        .get(<span class="kw-2">&amp;</span>kind)
-                        .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Unknown module kind in config&quot;</span>))<span class="question-mark">?
-                        </span>.init(
+                    <span class="kw">let </span>module_gen = <span class="kw">match </span><span class="self">self</span>.module_gens.get(<span class="kw-2">&amp;</span>kind) {
+                        <span class="prelude-val">Some</span>(module_gen) =&gt; module_gen,
+                        <span class="prelude-val">None </span>=&gt; {
+                            <span class="macro">info!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance} not found in module gens, skipping&quot;</span>);
+                            <span class="kw">continue</span>;
+                        }
+                    };
+
+                    <span class="kw">let </span>module = module_gen
+                        .init(
                             module_config,
                             db.clone(),
                             module_instance,
@@ -3082,8 +3107,9 @@
     <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
     <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
         <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
-                <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>)
-            };
+            <span class="macro">info!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>);
+            <span class="kw">continue
+        </span>};
 
         modules.insert(
             id,
