@@ -72,17 +72,17 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
     const rows = [
       {
         label: 'Federation name',
-        value: configGenParams.meta.federation_name,
+        value: configGenParams.meta?.federation_name,
       },
       {
         label: 'Network',
         value: getModuleParamsFromConfig(configGenParams, 'wallet')?.consensus
-          .network,
+          ?.network,
       },
       {
         label: 'Block confirmations',
         value: getModuleParamsFromConfig(configGenParams, 'wallet')?.consensus
-          .finality_delay,
+          ?.finality_delay,
       },
     ];
 

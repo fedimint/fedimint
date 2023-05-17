@@ -57,22 +57,22 @@ export type PeerHashMap = Record<string, string>;
 export type LnFedimintModule = [
   'ln',
   {
-    consensus: object;
-    local: object;
+    consensus?: object;
+    local?: object;
   }
 ];
 export type MintFedimintModule = [
   'mint',
   {
-    consensus: { mint_amounts: number[] };
-    local: object;
+    consensus?: { mint_amounts: number[] };
+    local?: object;
   }
 ];
 export type WalletFedimintModule = [
   'wallet',
   {
-    consensus: { finality_delay: number; network: Network };
-    local: {
+    consensus?: { finality_delay: number; network: Network };
+    local?: {
       bitcoin_rpc: BitcoinRpc;
     };
   }
@@ -84,7 +84,7 @@ export type AnyFedimintModule =
   | WalletFedimintModule
   | OtherFedimintModule;
 
-type Meta = { federation_name: string };
+type Meta = { federation_name?: string };
 
 type Modules = Record<number, AnyFedimintModule>;
 
@@ -93,9 +93,7 @@ export type ConfigGenParams = {
   modules: Modules;
 };
 
-type ConsensusParams = {
-  meta: Meta;
-  modules: Modules;
+type ConsensusParams = ConfigGenParams & {
   peers: Record<string, Peer>;
 };
 

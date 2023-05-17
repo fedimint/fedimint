@@ -33,8 +33,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
       numPeers: stateNumPeers,
     },
     api,
-    submitFollowerConfiguration,
-    submitHostConfiguration,
+    submitConfiguration,
   } = useGuardianContext();
   const theme = useTheme();
   const isHost = role === GuardianRole.Host;
@@ -56,20 +55,22 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
 
   useEffect(() => {
     const initStateFromParams = (params: ConfigGenParams) => {
-      setFederationName(params.meta.federation_name);
+      setFederationName(params.meta?.federation_name || '');
 
       setMintAmounts(
-        getModuleParamsFromConfig(params, 'mint')?.consensus.mint_amounts || []
+        getModuleParamsFromConfig(params, 'mint')?.consensus?.mint_amounts ||
+          mintAmounts
       );
 
       const walletModule = getModuleParamsFromConfig(params, 'wallet');
 
       if (walletModule) {
         setBlockConfirmations(
-          walletModule.consensus.finality_delay?.toString()
+          walletModule.consensus?.finality_delay?.toString() ||
+            blockConfirmations
         );
-        setNetwork(walletModule.consensus?.network.toString());
-        setBitcoinRpc(walletModule.local?.bitcoin_rpc);
+        setNetwork(walletModule.consensus?.network.toString() || network);
+        setBitcoinRpc(walletModule.local?.bitcoin_rpc || bitcoinRpc);
       }
     };
 
@@ -110,11 +111,13 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
     setError(undefined);
     try {
       if (isHost) {
-        await submitHostConfiguration({
+        // Hosts set their own connection name
+        // - They should submit both their local and the consensus config gen params.
+        await submitConfiguration({
           myName,
           password,
-          numPeers: parseInt(numPeers, 10),
-          config: {
+          configs: {
+            numPeers: parseInt(numPeers, 10),
             meta: { federation_name: federationName },
             modules: {
               // TODO: figure out way to not hard-code modules here
@@ -139,10 +142,28 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
           },
         });
       } else {
-        await submitFollowerConfiguration({
+        // Followers set their own connection name, and hosts server URL to connect to.
+        // - They should submit ONLY their local config gen params
+        await submitConfiguration({
           myName,
           password,
-          hostServerUrl,
+          configs: {
+            hostServerUrl,
+            meta: {},
+            modules: {
+              // TODO: figure out way to not hard-code modules here
+              0: ['ln', {}],
+              1: ['mint', {}],
+              2: [
+                'wallet',
+                {
+                  local: {
+                    bitcoin_rpc: bitcoinRpc,
+                  },
+                },
+              ],
+            },
+          },
         });
       }
       next();
