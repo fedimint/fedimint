@@ -1,3 +1,4 @@
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -7,10 +8,24 @@ use threshold_crypto::serde_impl::SerdeSecret;
 
 use crate::LightningCommonGen;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParams {
-    pub local: EmptyGenParams,
+    pub local: LightningGenParamsLocal,
     pub consensus: EmptyGenParams,
+}
+
+impl LightningGenParams {
+    pub fn new(bitcoin_rpc: BitcoinRpcConfig) -> Self {
+        Self {
+            local: LightningGenParamsLocal { bitcoin_rpc },
+            consensus: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningGenParamsLocal {
+    pub bitcoin_rpc: BitcoinRpcConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,7 +36,10 @@ pub struct LightningConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct LightningConfigLocal;
+pub struct LightningConfigLocal {
+    /// Configures which bitcoin RPC to use
+    pub bitcoin_rpc: BitcoinRpcConfig,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningConfigConsensus {
@@ -55,7 +73,7 @@ pub struct LightningClientConfig {
 plugin_types_trait_impl_config!(
     LightningCommonGen,
     LightningGenParams,
-    EmptyGenParams,
+    LightningGenParamsLocal,
     EmptyGenParams,
     LightningConfig,
     LightningConfigLocal,

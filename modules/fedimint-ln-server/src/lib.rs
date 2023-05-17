@@ -1,25 +1,25 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Sub;
+use std::time::Duration;
 
 use anyhow::bail;
 use bitcoin_hashes::Hash as BitcoinHash;
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal,
-    CoreConsensusVersion, ExtendsCommonModuleGen, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, SupportedModuleApiVersions,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
+    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
+    PeerHandle, ServerModuleGen, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
@@ -35,10 +35,10 @@ use fedimint_ln_common::contracts::{
     IdentifiableContract, Preimage, PreimageDecryptionShare,
 };
 use fedimint_ln_common::db::{
-    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
-    ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix, LightningGatewayKey,
-    LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
-    ProposeDecryptionShareKeyPrefix,
+    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockHeightKey, ContractKey,
+    ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
+    LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
+    ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 use fedimint_ln_common::{
     ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError, LightningGateway,
@@ -72,16 +72,17 @@ impl ServerModuleGen for LightningGen {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
-        _task_group: &mut TaskGroup,
+        task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(cfg.to_typed()?).into())
+        Ok(Lightning::new(cfg.to_typed()?, task_group)?.into())
     }
 
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        _params: &ConfigGenModuleParams,
+        params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
+        let params = self.parse_params(params).unwrap();
         let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);
         let pks = sks.public_keys();
 
@@ -93,7 +94,9 @@ impl ServerModuleGen for LightningGen {
                 (
                     peer,
                     LightningConfig {
-                        local: LightningConfigLocal,
+                        local: LightningConfigLocal {
+                            bitcoin_rpc: params.local.bitcoin_rpc.clone(),
+                        },
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
@@ -113,14 +116,17 @@ impl ServerModuleGen for LightningGen {
     async fn distributed_gen(
         &self,
         peers: &PeerHandle,
-        _params: &ConfigGenModuleParams,
+        params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
+        let params = self.parse_params(params).unwrap();
         let g1 = peers.run_dkg_g1(()).await?;
 
         let keys = g1[&()].threshold_crypto();
 
         let server = LightningConfig {
-            local: LightningConfigLocal,
+            local: LightningConfigLocal {
+                bitcoin_rpc: params.local.bitcoin_rpc.clone(),
+            },
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: Default::default(),
@@ -234,6 +240,12 @@ impl ServerModuleGen for LightningGen {
                         "Proposed Decryption Shares"
                     );
                 }
+                DbKeyPrefix::BlockHeight => {
+                    let heights = dbtx.get_value(&BlockHeightKey).await;
+                    if let Some(heights) = heights {
+                        lightning.insert("BlockHeight".to_string(), Box::new(heights));
+                    }
+                }
             }
         }
 
@@ -264,6 +276,7 @@ impl ServerModuleGen for LightningGen {
 #[derive(Debug)]
 pub struct Lightning {
     cfg: LightningConfig,
+    btc_rpc: DynBitcoindRpc,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -277,8 +290,8 @@ impl ServerModule for Lightning {
     }
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
-        if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            std::future::pending().await
+        while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
+            sleep(Duration::from_millis(1000)).await;
         }
     }
 
@@ -286,18 +299,26 @@ impl ServerModule for Lightning {
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<LightningConsensusItem> {
-        ConsensusProposal::new_auto_trigger(
-            dbtx.find_by_prefix(&ProposeDecryptionShareKeyPrefix)
-                .await
-                .map(
-                    |(ProposeDecryptionShareKey(contract_id), share)| LightningConsensusItem {
-                        contract_id,
-                        share,
-                    },
-                )
-                .collect::<Vec<LightningConsensusItem>>()
-                .await,
-        )
+        let mut items: Vec<LightningConsensusItem> = dbtx
+            .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
+            .await
+            .map(|(ProposeDecryptionShareKey(contract_id), share)| {
+                LightningConsensusItem::DecryptPreimage(contract_id, share)
+            })
+            .collect()
+            .await;
+
+        let consensus_height = self.consensus_height(dbtx).await.unwrap_or_default();
+        let height = self
+            .btc_rpc
+            .get_block_height()
+            .await
+            .expect("always retries");
+        if consensus_height < height {
+            items.push(LightningConsensusItem::BlockHeight(height));
+        }
+
+        ConsensusProposal::new_auto_trigger(items)
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
@@ -306,16 +327,24 @@ impl ServerModule for Lightning {
         consensus_items: Vec<(PeerId, LightningConsensusItem)>,
         _consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
-        for (peer, decryption_share) in consensus_items.into_iter() {
+        let mut peer_heights = dbtx.get_value(&BlockHeightKey).await.unwrap_or_default();
+
+        for (peer, item) in consensus_items.into_iter() {
             let span = info_span!("process decryption share", %peer);
             let _guard = span.enter();
 
-            dbtx.insert_new_entry(
-                &AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                &decryption_share.share,
-            )
-            .await;
+            match item {
+                LightningConsensusItem::DecryptPreimage(contract_id, share) => {
+                    dbtx.insert_new_entry(&AgreedDecryptionShareKey(contract_id, peer), &share)
+                        .await;
+                }
+                LightningConsensusItem::BlockHeight(height) => {
+                    peer_heights.insert(peer, height);
+                }
+            }
         }
+
+        dbtx.insert_entry(&BlockHeightKey, &peer_heights).await;
         vec![]
     }
 
@@ -328,7 +357,7 @@ impl ServerModule for Lightning {
 
     async fn validate_input<'a, 'b>(
         &self,
-        interconnect: &dyn ModuleInterconect,
+        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a LightningInput,
@@ -347,9 +376,10 @@ impl ServerModule for Lightning {
             .into_module_error_other();
         }
 
+        let consensus_height = self.consensus_height(dbtx).await.unwrap_or_default();
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
-                if outgoing.timelock > block_height(interconnect).await && !outgoing.cancelled {
+                if outgoing.timelock as u64 > consensus_height && !outgoing.cancelled {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         &input
@@ -806,9 +836,23 @@ impl ServerModule for Lightning {
         ]
     }
 }
+
 impl Lightning {
-    pub fn new(cfg: LightningConfig) -> Self {
-        Lightning { cfg }
+    pub fn new(cfg: LightningConfig, task_group: &mut TaskGroup) -> anyhow::Result<Self> {
+        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
+        Ok(Lightning { cfg, btc_rpc })
+    }
+
+    /// Returns the median block height if enough peers have contributed
+    pub async fn consensus_height(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Option<u64> {
+        let peer_heights = dbtx.get_value(&BlockHeightKey).await.unwrap_or_default();
+        if peer_heights.len() < self.cfg.consensus.threshold() {
+            return None;
+        }
+
+        let mut heights: Vec<_> = peer_heights.values().collect();
+        heights.sort_unstable();
+        Some(**heights.get(heights.len() / 2).expect("items is non-empty"))
     }
 
     fn validate_decryption_share(
@@ -901,22 +945,6 @@ impl Lightning {
 pub struct LightningVerificationCache;
 
 impl fedimint_core::server::VerificationCache for LightningVerificationCache {}
-
-async fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
-    // This is a future because we are normally reading from a network socket. But
-    // for internal calls the data is available instantly in one go, so we can
-    // just block on it.
-    let body = interconnect
-        .call(
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            "block_height".to_owned(),
-            ApiRequestErased::default(),
-        )
-        .await
-        .expect("Wallet module not present or malfunctioning!");
-
-    serde_json::from_value(body).expect("Malformed block height response from wallet module!")
-}
 
 #[cfg(test)]
 mod fedimint_migration_tests {
@@ -1167,6 +1195,7 @@ mod fedimint_migration_tests {
                             "validate_migrations was not able to read any ProposeDecryptionShares"
                         );
                         }
+                        DbKeyPrefix::BlockHeight => {}
                     }
                 }
             },

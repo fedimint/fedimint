@@ -1507,6 +1507,7 @@ dependencies = [
  "bincode",
  "bitcoin_hashes",
  "erased-serde",
+ "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-server",

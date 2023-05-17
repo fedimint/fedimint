@@ -19,15 +19,12 @@ use fedimint_wallet_server::WalletGen;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new();
-    let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_rpc());
+    let bitcoin_rpc = fixtures.bitcoin_rpc();
+    let wallet_params = WalletGenParams::regtest(bitcoin_rpc.clone());
+    let ln_params = LightningGenParams::new(bitcoin_rpc);
     fixtures
         .with_module(3, DummyClientGen, DummyGen, DummyGenParams::default())
-        .with_module(
-            0,
-            LightningClientGen,
-            LightningGen,
-            LightningGenParams::default(),
-        )
+        .with_module(0, LightningClientGen, LightningGen, ln_params)
         // TODO: Remove dependency on mint (legacy gw client)
         .with_primary(1, MintClientGen, MintGen, MintGenParams::default())
         // TODO: Remove dependency on wallet interconnect

@@ -28,14 +28,12 @@ async fn fixtures() -> (
     GatewayRpcClient,
 ) {
     // TODO: use new client modules without legacy instances
-    let fixtures = Fixtures::new()
+    let mut fixtures = Fixtures::new();
+    let ln_params = LightningGenParams::new(fixtures.bitcoin_rpc());
+
+    fixtures = fixtures
         .with_primary(1, DummyClientGen, DummyGen, DummyGenParams::default())
-        .with_module(
-            0,
-            LightningClientGen,
-            LightningGen,
-            LightningGenParams::default(),
-        );
+        .with_module(0, LightningClientGen, LightningGen, ln_params);
 
     let fed1 = fixtures.new_fed().await;
     let fed2 = fixtures.new_fed().await;

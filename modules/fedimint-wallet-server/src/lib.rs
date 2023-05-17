@@ -283,8 +283,6 @@ impl ServerModule for Wallet {
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            // FIXME: remove after modularization finishes
-            #[cfg(not(target_family = "wasm"))]
             sleep(Duration::from_millis(1000)).await;
         }
     }
@@ -293,7 +291,6 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<WalletConsensusItem> {
-        // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
         // In case the wallet just got created the height is not committed to the DB yet
@@ -925,7 +922,7 @@ impl Wallet {
         let old_height = self
             .consensus_height(dbtx)
             .await
-            .unwrap_or_else(|| new_height.saturating_sub(10));
+            .unwrap_or_else(|| new_height.saturating_sub(self.cfg.consensus.finality_delay));
         if new_height < old_height {
             info!(
                 new_height,
