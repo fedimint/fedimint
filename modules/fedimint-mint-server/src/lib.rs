@@ -9,7 +9,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
@@ -404,7 +403,6 @@ impl ServerModule for Mint {
 
     async fn validate_input<'a, 'b>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a MintInput,
@@ -439,14 +437,11 @@ impl ServerModule for Mint {
 
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b MintInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self
-            .validate_input(interconnect, dbtx, cache, input)
-            .await?;
+        let meta = self.validate_input(dbtx, cache, input).await?;
 
         for (amount, note) in input.iter_items() {
             let key = NonceKey(note.0);

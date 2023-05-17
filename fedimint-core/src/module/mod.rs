@@ -1,5 +1,4 @@
 pub mod audit;
-pub mod interconnect;
 pub mod registry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
@@ -28,7 +27,6 @@ use crate::db::{
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
-use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::{DynServerModule, VerificationCache};
 use crate::task::{MaybeSend, TaskGroup};
@@ -916,7 +914,6 @@ pub trait ServerModule: Debug + Sized {
     /// them and merely generate a warning.
     async fn validate_input<'a, 'b>(
         &self,
-        interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a <Self::Common as ModuleCommon>::Input,
@@ -932,7 +929,6 @@ pub trait ServerModule: Debug + Sized {
     /// once all transactions have been processed.
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
         verification_cache: &Self::VerificationCache,

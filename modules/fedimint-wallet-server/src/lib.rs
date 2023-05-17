@@ -33,7 +33,6 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
@@ -386,7 +385,6 @@ impl ServerModule for Wallet {
 
     async fn validate_input<'a, 'b>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a WalletInput,
@@ -415,14 +413,11 @@ impl ServerModule for Wallet {
 
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b WalletInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self
-            .validate_input(interconnect, dbtx, cache, input)
-            .await?;
+        let meta = self.validate_input(dbtx, cache, input).await?;
         debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
         dbtx.insert_new_entry(

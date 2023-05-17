@@ -12,7 +12,6 @@ use fedimint_core::config::{
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
@@ -357,7 +356,6 @@ impl ServerModule for Lightning {
 
     async fn validate_input<'a, 'b>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a LightningInput,
@@ -430,14 +428,11 @@ impl ServerModule for Lightning {
 
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b LightningInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self
-            .validate_input(interconnect, dbtx, cache, input)
-            .await?;
+        let meta = self.validate_input(dbtx, cache, input).await?;
 
         let account_db_key = ContractKey(input.contract_id);
         let mut contract_account = dbtx

@@ -8,7 +8,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
 use super::*;
@@ -95,7 +94,6 @@ pub trait IServerModule: Debug {
     /// them and merely generate a warning.
     async fn validate_input<'a>(
         &self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
         input: &DynInput,
@@ -111,7 +109,6 @@ pub trait IServerModule: Debug {
     /// once all transactions have been processed
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DynInput,
         verification_cache: &DynVerificationCache,
@@ -281,14 +278,12 @@ where
     /// them and merely generate a warning.
     async fn validate_input<'a>(
         &self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         verification_cache: &DynVerificationCache,
         input: &DynInput,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModule>::validate_input(
             self,
-            interconnect,
             dbtx,
             verification_cache
                 .as_any()
@@ -313,14 +308,12 @@ where
     /// once all transactions have been processed
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DynInput,
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModule>::apply_input(
             self,
-            interconnect,
             dbtx,
             input
                 .as_any()
