@@ -146,30 +146,18 @@ impl Global {
 
 const BASE_PORT: usize = 8173 + 10000;
 
-#[derive(PartialEq, Eq)]
-pub enum UiKind {
-    Old,
-    New,
-}
-
 // We allow ranges of 10 ports for each fedimintd / dkg instance starting from
 // 18173. Each port needed is incremented by 1 within this range.
 //
 // * `id` - ID of the server. Used to calculate port numbers.
 declare_vars! {
-    Fedimintd = (globals: &Global, id: usize, ui_kind: UiKind) => {
+    Fedimintd = (globals: &Global, id: usize, password: bool) => {
         FM_BIND_P2P: String = format!("127.0.0.1:{p2p}", p2p = BASE_PORT + id * 10);
         FM_P2P_URL: String = format!("fedimint://{FM_BIND_P2P}");
         FM_BIND_API: String = format!("127.0.0.1:{api}", api = BASE_PORT + id * 10 + 1);
         FM_API_URL: String = format!("ws://{FM_BIND_API}");
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{id}"))).await?;
-        // For new UI, don't set password or run the old UI
-        FM_LISTEN_UI: Option<String> = if ui_kind == UiKind::Old {
-            Some(format!("127.0.0.1:{ui}", ui = BASE_PORT + id * 10 + 2))
-        } else {
-            None
-        };
-        FM_PASSWORD: Option<String> = if ui_kind == UiKind::Old {
+        FM_PASSWORD: Option<String> = if password {
             Some(format!("pass{id}"))
         } else {
             None

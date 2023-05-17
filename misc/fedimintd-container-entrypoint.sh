@@ -22,9 +22,5 @@ fi
 
 mkdir -p "$FM_DATA_DIR"
 
-if [ -z "$FM_LISTEN_UI" ]; then
-  export FM_LISTEN_UI=0.0.0.0:8176
-fi
-
 1>&2 echo 'Starting fedimintd'
 fedimintd --data-dir "$FM_DATA_DIR/"

@@ -958,18 +958,11 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     Ok(())
 }
 
-#[derive(Subcommand, PartialEq, Eq)]
-enum RunUiKind {
-    Old,
-    New,
-}
-
 #[derive(Subcommand)]
 enum Cmd {
     ExternalDaemons,
     DevFed,
-    #[clap(subcommand)]
-    RunUi(RunUiKind),
+    RunUi,
     LatencyTests,
     ReconnectTest,
     CliTests,
@@ -1010,36 +1003,16 @@ async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result
     result
 }
 
-async fn run_ui(
-    process_mgr: &ProcessManager,
-    task_group: &TaskGroup,
-    kind: &RunUiKind,
-) -> Result<()> {
+async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let fed_size = process_mgr.globals.FM_FED_SIZE;
     // don't drop fedimintds
     let _fedimintds = futures::future::try_join_all((0..fed_size).map(|peer_id| {
         let bitcoind = bitcoind.clone();
         async move {
-            let env_vars = match kind {
-                RunUiKind::Old => {
-                    vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?
-                }
-                RunUiKind::New => {
-                    vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::New).await?
-                }
-            };
-
+            let env_vars = vars::Fedimintd::init(&process_mgr.globals, peer_id, false).await?;
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, &env_vars).await?;
-
-            // For old UI, wait for UI server. For running new UI, wait for config API.
-            let server_addr = match kind {
-                RunUiKind::Old => env_vars
-                    .FM_LISTEN_UI
-                    .as_ref()
-                    .expect("FM_LISTEN_UI must be set for old ui"),
-                RunUiKind::New => &env_vars.FM_BIND_API,
-            };
+            let server_addr = &env_vars.FM_BIND_API;
 
             poll("waiting for ui/api startup", || async {
                 Ok(TcpStream::connect(server_addr).await.is_ok())
@@ -1097,9 +1070,9 @@ async fn main() -> Result<()> {
                 write_ready_file(&process_mgr.globals, dev_fed(&process_mgr).await).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
-        Cmd::RunUi(kind) => {
+        Cmd::RunUi => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            run_ui(&process_mgr, &task_group, &kind).await?
+            run_ui(&process_mgr, &task_group).await?
         }
         Cmd::LatencyTests => {
             let (process_mgr, _) = setup(args.common).await?;

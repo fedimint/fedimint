@@ -1,6 +1,6 @@
 procs:
   run-ui-federation:
-    shell: ./scripts/run-ui.sh new 4
+    shell: ./scripts/run-ui.sh 4
   coordinator:
     cwd: fedimint-ui/apps/guardian-ui/
     shell: yarn dev

@@ -160,7 +160,6 @@ Arguments:
   [PASSWORD]  Password to encrypt sensitive config files [env: FM_PASSWORD=]
 
 Options:
-      --listen-ui <LISTEN_UI>  Port to run admin UI on
   -h, --help                   Print help information
 ```
 
