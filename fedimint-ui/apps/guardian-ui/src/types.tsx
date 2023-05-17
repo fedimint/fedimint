@@ -47,27 +47,34 @@ export interface Peer {
   status: ServerStatus;
 }
 
+export interface BitcoinRpc {
+  kind: string;
+  url: string;
+}
+
 export type PeerHashMap = Record<string, string>;
 
 export type LnFedimintModule = [
   'ln',
   {
-    consensus: null;
-    local: null;
+    consensus: object;
+    local: object;
   }
 ];
 export type MintFedimintModule = [
   'mint',
   {
     consensus: { mint_amounts: number[] };
-    local: null;
+    local: object;
   }
 ];
 export type WalletFedimintModule = [
   'wallet',
   {
     consensus: { finality_delay: number; network: Network };
-    local: null;
+    local: {
+      bitcoin_rpc: BitcoinRpc;
+    };
   }
 ];
 export type OtherFedimintModule = [string, object];
