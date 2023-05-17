@@ -13,6 +13,7 @@ use crate::Sha256Hash;
 
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
+    async fn fetch_consensus_block_height(&self) -> FederationResult<Option<u64>>;
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
     async fn fetch_offer(
         &self,
@@ -38,6 +39,11 @@ impl<T: ?Sized> LnFederationApi for T
 where
     T: IFederationApi + MaybeSend + MaybeSync + 'static,
 {
+    async fn fetch_consensus_block_height(&self) -> FederationResult<Option<u64>> {
+        self.request_current_consensus("block_height".to_string(), ApiRequestErased::default())
+            .await
+    }
+
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
         self.request_current_consensus("wait_account".to_string(), ApiRequestErased::new(contract))
             .await

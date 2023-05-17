@@ -63,6 +63,6 @@ pub fn attach_default_module_gen_params(
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_LN,
             LightningGen::kind(),
-            LightningGenParams::new(bitcoin_rpc),
+            LightningGenParams::regtest(bitcoin_rpc),
         );
 }

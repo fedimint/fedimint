@@ -99,6 +99,7 @@ impl ServerModuleGen for LightningGen {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
+                            network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -129,6 +130,7 @@ impl ServerModuleGen for LightningGen {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: Default::default(),
+                network: params.consensus.network,
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: keys.secret_key_share,
@@ -162,6 +164,7 @@ impl ServerModuleGen for LightningGen {
             &LightningClientConfig {
                 threshold_pub_key: config.threshold_pub_keys.public_key(),
                 fee_consensus: config.fee_consensus,
+                network: config.network,
             },
         )
         .expect("Serialization can't fail"))
@@ -307,13 +310,13 @@ impl ServerModule for Lightning {
             .collect()
             .await;
 
-        let consensus_height = self.consensus_height(dbtx).await.unwrap_or_default();
+        let consensus_height = self.consensus_height(dbtx).await;
         let height = self
             .btc_rpc
             .get_block_height()
             .await
             .expect("always retries");
-        if consensus_height < height {
+        if consensus_height.is_none() || consensus_height.unwrap_or_default() < height {
             items.push(LightningConsensusItem::BlockHeight(height));
         }
 
@@ -783,6 +786,14 @@ impl ServerModule for Lightning {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
+            api_endpoint! {
+                "block_height",
+                async |module: &Lightning, context, _v: ()| -> Option<u64> {
+                    let future = context.wait_key_exists(BlockHeightKey);
+                    future.await;
+                    Ok(module.consensus_height(&mut context.dbtx()).await)
+                }
+            },
             api_endpoint! {
                 "account",
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {

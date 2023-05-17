@@ -131,4 +131,5 @@ impl_db_record!(
     key = BlockHeightKey,
     value = BTreeMap<PeerId, u64>,
     db_prefix = DbKeyPrefix::BlockHeight,
+    notify_on_modify = true
 );

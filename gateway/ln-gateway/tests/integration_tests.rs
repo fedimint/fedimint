@@ -29,7 +29,7 @@ async fn fixtures() -> (
 ) {
     // TODO: use new client modules without legacy instances
     let mut fixtures = Fixtures::new();
-    let ln_params = LightningGenParams::new(fixtures.bitcoin_rpc());
+    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_rpc());
 
     fixtures = fixtures
         .with_primary(1, DummyClientGen, DummyGen, DummyGenParams::default())

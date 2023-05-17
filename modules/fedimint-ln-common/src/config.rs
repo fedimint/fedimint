@@ -1,5 +1,5 @@
+use bitcoin::Network;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::plugin_types_trait_impl_config;
@@ -11,16 +11,23 @@ use crate::LightningCommonGen;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParams {
     pub local: LightningGenParamsLocal,
-    pub consensus: EmptyGenParams,
+    pub consensus: LightningGenParamsConsensus,
 }
 
 impl LightningGenParams {
-    pub fn new(bitcoin_rpc: BitcoinRpcConfig) -> Self {
+    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
         Self {
             local: LightningGenParamsLocal { bitcoin_rpc },
-            consensus: Default::default(),
+            consensus: LightningGenParamsConsensus {
+                network: Network::Regtest,
+            },
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningGenParamsConsensus {
+    pub network: Network,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +54,7 @@ pub struct LightningConfigConsensus {
     pub threshold_pub_keys: threshold_crypto::PublicKeySet,
     /// Fees charged for LN transactions
     pub fee_consensus: FeeConsensus,
+    pub network: Network,
 }
 
 impl LightningConfigConsensus {
@@ -67,6 +75,7 @@ pub struct LightningConfigPrivate {
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
+    pub network: Network,
 }
 
 // Wire together the configs for this module
@@ -74,7 +83,7 @@ plugin_types_trait_impl_config!(
     LightningCommonGen,
     LightningGenParams,
     LightningGenParamsLocal,
-    EmptyGenParams,
+    LightningGenParamsConsensus,
     LightningConfig,
     LightningConfigLocal,
     LightningConfigPrivate,
