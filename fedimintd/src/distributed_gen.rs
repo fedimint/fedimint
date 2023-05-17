@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::{DkgError, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{self, TaskGroup};
 use fedimint_core::Amount;
@@ -208,18 +208,13 @@ impl DistributedGen {
                     &password,
                     module_gens_params,
                 )?;
-                let server = match ServerConfig::distributed_gen(
+                let server = ServerConfig::distributed_gen(
                     &params,
                     self.module_gens.clone(),
                     DelayCalculator::PROD_DEFAULT,
                     &mut task_group,
                 )
-                .await
-                {
-                    Ok(server) => server,
-                    Err(DkgError::Cancelled(_)) => return Ok(info!("DKG cancelled")),
-                    Err(DkgError::Failed(err)) => return Err(err),
-                };
+                .await?;
 
                 write_server_config(&server, dir_out_path, &password, &self.module_gens)
             }
