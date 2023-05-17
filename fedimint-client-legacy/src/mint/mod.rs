@@ -18,6 +18,8 @@ use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TieredSummary, Transa
 use fedimint_mint_client::{select_notes_from_stream, MintModuleTypes};
 use futures::executor::block_on;
 use futures::{Future, StreamExt};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
@@ -521,14 +523,28 @@ impl MintClient {
     }
 
     pub async fn fetch_all_notes(&self) -> Vec<Result<OutPoint>> {
-        let active_issuances = &self.list_active_issuances().await;
+        let mut active_issuances = self.list_active_issuances().await;
         let mut results = vec![];
+
+        // Prevent trying to fetch way too many notes at the same time at the time.
+        // In normal cricumstances we should never hit this limit, but when using
+        // huge sums or hitting bugs, it is possible.
+        const LIMIT_NOTES_TO_CHECK: usize = 200;
+
+        // Shuffle issuances so we don't always retry the same ones, if there's a lot of
+        // them.
+        if LIMIT_NOTES_TO_CHECK < active_issuances.len() {
+            active_issuances.shuffle(&mut thread_rng());
+        }
+
+        let active_issuances = &active_issuances;
 
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _>>>>::new();
-        for (outpoint, _) in active_issuances {
+        // Try only limited number of issuances at the time
+        for (outpoint, _) in active_issuances.iter().take(LIMIT_NOTES_TO_CHECK) {
             futures.push(Box::pin(async {
                 let mut dbtx = self.context.db.begin_transaction().await;
                 let res = self.await_fetch_notes(&mut dbtx, outpoint).await;
