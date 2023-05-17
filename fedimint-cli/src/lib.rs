@@ -29,7 +29,7 @@ use fedimint_client_legacy::{Client, UserClientConfig};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
-    IFederationApi, WsClientConnectInfo, WsFederationApi,
+    IFederationApi, IGlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::db::{Database, DatabaseValue};
@@ -661,7 +661,7 @@ impl FedimintCli {
                 let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid connect info")?;
                 let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]))
-                    as Arc<dyn IFederationApi + Send + Sync + 'static>;
+                    as Arc<dyn IGlobalFederationApi + Send + Sync + 'static>;
                 let cfg: ClientConfig = api
                     .download_client_config(&connect_obj)
                     .await

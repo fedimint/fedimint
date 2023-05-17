@@ -4,7 +4,7 @@ use std::str::FromStr;
 use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex::FromHex;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
-use fedimint_core::api::DynFederationApi;
+use fedimint_core::api::DynGlobalApi;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -70,7 +70,7 @@ pub struct ClientContext {
     pub decoders: ModuleDecoderRegistry,
     pub module_gens: ClientModuleGenRegistry,
     pub db: Database,
-    pub api: DynFederationApi,
+    pub api: DynGlobalApi,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
 }
 

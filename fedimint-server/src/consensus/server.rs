@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 use fedimint_core::api::{
-    ConsensusContribution, DynFederationApi, GlobalFederationApi, WsFederationApi,
+    ConsensusContribution, DynGlobalApi, GlobalFederationApi, WsFederationApi,
 };
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::ServerModuleGenRegistry;
@@ -88,7 +88,7 @@ pub struct ConsensusServer {
     /// Runs the HBBFT consensus algorithm
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     /// Used to make API calls to our peers
-    pub api: DynFederationApi,
+    pub api: DynGlobalApi,
     /// The list of all other peers
     pub other_peers: BTreeSet<PeerId>,
     /// If `Some` then we restarted and look for the epoch to rejoin at

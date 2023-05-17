@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
+use fedimint_core::api::{DynModuleApi, IFederationApi, IGlobalFederationApi, JsonRpcResult};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::ApiRequest;
 use fedimint_core::PeerId;
@@ -94,6 +94,8 @@ where
     }
 }
 
+impl<S: fmt::Debug + Send + Sync> IGlobalFederationApi for FederationApiFaker<S> {}
+
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<State> IFederationApi for FederationApiFaker<State>
@@ -104,7 +106,7 @@ where
         &self.members
     }
 
-    fn with_module(&self, _id: ModuleInstanceId) -> DynFederationApi {
+    fn with_module(&self, _id: ModuleInstanceId) -> DynModuleApi {
         unimplemented!()
     }
 

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use bitcoin::{secp256k1, KeyPair};
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClient, GatewayClientConfig};
-use fedimint_core::api::{DynFederationApi, WsClientConnectInfo};
+use fedimint_core::api::{DynGlobalApi, WsClientConnectInfo};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -46,10 +46,9 @@ impl IGatewayClientBuilder for TestGatewayClientBuilder {
         // Ignore `config`s, hardcode one peer.
         let members = BTreeSet::from([PeerId::from(0)]);
 
-        let api: DynFederationApi =
-            MockApi::make_test_fed(LEGACY_HARDCODED_INSTANCE_ID_LN, members)
-                .await
-                .into();
+        let api: DynGlobalApi = MockApi::make_test_fed(LEGACY_HARDCODED_INSTANCE_ID_LN, members)
+            .await
+            .into();
         let db = self.db_factory.create_database(
             federation_id,
             PathBuf::new(),

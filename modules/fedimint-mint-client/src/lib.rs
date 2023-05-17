@@ -32,7 +32,7 @@ use fedimint_client::{
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-use fedimint_core::api::{DynFederationApi, GlobalFederationApi};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
@@ -577,7 +577,7 @@ impl ClientModule for MintClientModule {
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         executor: Executor<DynGlobalClientContext>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<Vec<u8>> {
         let backup = self
@@ -593,7 +593,7 @@ impl ClientModule for MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         snapshot: Option<&[u8]>,
     ) -> anyhow::Result<()> {
         if !Self::get_all_spendable_notes(&mut dbtx.with_module_prefix(module_instance_id))

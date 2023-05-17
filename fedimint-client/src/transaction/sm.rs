@@ -230,7 +230,9 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use async_trait::async_trait;
-    use fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
+    use fedimint_core::api::{
+        DynGlobalApi, DynModuleApi, IFederationApi, IGlobalFederationApi, JsonRpcResult,
+    };
     use fedimint_core::config::ClientConfig;
     use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
@@ -271,13 +273,15 @@ mod tests {
         }
     }
 
+    impl IGlobalFederationApi for FakeApiClient {}
+
     #[async_trait]
     impl IFederationApi for FakeApiClient {
         fn all_members(&self) -> &BTreeSet<PeerId> {
             &self.fake_peers
         }
 
-        fn with_module(&self, _id: ModuleInstanceId) -> DynFederationApi {
+        fn with_module(&self, _id: ModuleInstanceId) -> DynModuleApi {
             unimplemented!()
         }
 
@@ -328,7 +332,7 @@ mod tests {
     struct FakeGlobalContext {
         api: FakeApiClient,
         /// Clone of API wrapped as dyn API (avoids a lot of casting)
-        dyn_api: DynFederationApi,
+        dyn_api: DynGlobalApi,
         executor: Executor<DynGlobalClientContext>,
     }
 
@@ -369,7 +373,7 @@ mod tests {
 
     #[async_trait]
     impl IGlobalClientContext for FakeGlobalContext {
-        fn api(&self) -> &DynFederationApi {
+        fn api(&self) -> &DynGlobalApi {
             &self.dyn_api
         }
 
@@ -381,7 +385,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn module_api(&self) -> DynFederationApi {
+        fn module_api(&self) -> DynModuleApi {
             unimplemented!()
         }
 
@@ -446,7 +450,7 @@ mod tests {
         let fake_api = FakeApiClient::default();
         let context = Arc::new(FakeGlobalContext {
             api: fake_api.clone(),
-            dyn_api: DynFederationApi::from(fake_api),
+            dyn_api: DynGlobalApi::from(fake_api),
             executor: executor.clone(),
         });
         let dyn_context = DynGlobalClientContext::from(context.clone());
