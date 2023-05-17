@@ -407,9 +407,10 @@ impl Esplora {
             "--daemon-rpc-addr=127.0.0.1:18443",
             "--http-addr=127.0.0.1:50002",
             "--monitoring-addr=127.0.0.1:50003",
+            "--jsonrpc-import", // Workaround for incompatible on-disk format
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
-        info!(LOG_DEVIMINT, "esplora started");
+        info!(target: LOG_DEVIMINT, "esplora started");
 
         Ok(Self {
             _bitcoind: bitcoind,
