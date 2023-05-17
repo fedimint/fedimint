@@ -1345,6 +1345,21 @@
 <a href="#1345" id="1345">1345</a>
 <a href="#1346" id="1346">1346</a>
 <a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
 </pre><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1375,7 +1390,10 @@
     Context, DynState, Executor, ModuleNotifier, OperationId, State, StateTransition,
 };
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{
+    sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
+    UpdateStreamOrOutcome,
+};
 <span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -1386,7 +1404,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
+<span class="kw">use </span>fedimint_core::util::NextOrPending;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
     TransactionId,
@@ -1436,7 +1454,7 @@
     </span><span class="kw">async fn </span>subscribe_reissue_external_notes_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;ReissueExternalNotesState&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, ReissueExternalNotesState&gt;&gt;;
 
     <span class="doccomment">/// Fetches and removes notes of *at least* amount `min_amount` from the
     /// wallet to be sent to the recipient out of band. These spends can be
@@ -1467,7 +1485,7 @@
     </span><span class="kw">async fn </span>subscribe_spend_notes_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;SpendOOBState&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, SpendOOBState&gt;&gt;;
 
     <span class="doccomment">/// Returns the total value of our notes
     </span><span class="comment">// TODO: Make getting total asserts part of the core client
@@ -1479,7 +1497,7 @@
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`MintClientExt::reissue_external_notes`].
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>ReissueExternalNotesState {
     <span class="doccomment">/// The operation has been created and is waiting to be accepted by the
     /// federation.
@@ -1495,7 +1513,7 @@
 
 <span class="doccomment">/// The high-level state of a raw e-cash spend operation started with
 /// [`MintClientExt::spend_notes`].
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>SpendOOBState {
     <span class="doccomment">/// The e-cash has been selected and given to the caller
     </span>Created,
@@ -1562,40 +1580,45 @@
     <span class="kw">async fn </span>subscribe_reissue_external_notes_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;ReissueExternalNotesState&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, ReissueExternalNotesState&gt;&gt; {
         <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span>out_point = <span class="kw">match </span>mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>.variant {
+
+        <span class="kw">let </span>operation = mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>out_point = <span class="kw">match </span>operation.meta::&lt;MintMeta&gt;().variant {
             MintMetaVariants::Reissuance { out_point } =&gt; out_point,
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a reissuance&quot;</span>),
         };
 
-        <span class="kw">let </span>tx_accepted_future = <span class="self">self
+        <span class="comment">// TODO: move into closure
+        </span><span class="kw">let </span>tx_accepted_future = <span class="self">self
             </span>.transaction_updates(operation_id)
             .<span class="kw">await
             </span>.await_tx_accepted(out_point.txid);
         <span class="kw">let </span>output_finalized_future = mint.await_output_finalized(operation_id, out_point);
 
-        <span class="prelude-val">Ok</span>(Box::pin(<span class="macro">stream! </span>{
-            <span class="kw">yield </span>ReissueExternalNotesState::Created;
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
+            <span class="macro">stream! </span>{
+                <span class="kw">yield </span>ReissueExternalNotesState::Created;
 
-            <span class="kw">match </span>tx_accepted_future.<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(()) =&gt; {
-                    <span class="kw">yield </span>ReissueExternalNotesState::Issuing;
-                },
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="kw">yield </span>ReissueExternalNotesState::Failed(<span class="macro">format!</span>(<span class="string">&quot;Transaction not accepted {e:?}&quot;</span>));
+                <span class="kw">match </span>tx_accepted_future.<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(()) =&gt; {
+                        <span class="kw">yield </span>ReissueExternalNotesState::Issuing;
+                    },
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="kw">yield </span>ReissueExternalNotesState::Failed(<span class="macro">format!</span>(<span class="string">&quot;Transaction not accepted {e:?}&quot;</span>));
+                    }
                 }
-            }
 
-            <span class="kw">match </span>output_finalized_future.<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">yield </span>ReissueExternalNotesState::Done;
-                },
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="kw">yield </span>ReissueExternalNotesState::Failed(e.to_string());
-                },
-            }
-        }))
+                <span class="kw">match </span>output_finalized_future.<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                        <span class="kw">yield </span>ReissueExternalNotesState::Done;
+                    },
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="kw">yield </span>ReissueExternalNotesState::Failed(e.to_string());
+                    },
+                }
+            }}
+        ))
     }
 
     <span class="kw">async fn </span>spend_notes&lt;M: Serialize + Send&gt;(
@@ -1665,10 +1688,12 @@
     <span class="kw">async fn </span>subscribe_spend_notes_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;SpendOOBState&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, SpendOOBState&gt;&gt; {
         <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+
+        <span class="kw">let </span>operation = mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!<span class="macro">matches!</span>(
-            mint_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>.variant,
+            operation.meta::&lt;MintMeta&gt;().variant,
             MintMetaVariants::SpendOOB { .. }
         ) {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a out-of-band spend&quot;</span>);
@@ -1677,28 +1702,29 @@
         <span class="kw">let </span>tx_subscription = <span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>refund_future = mint.await_spend_oob_refund(operation_id);
 
-        <span class="comment">// TODO: check if operation exists and is a spend operation
-        </span><span class="prelude-val">Ok</span>(Box::pin(<span class="macro">stream! </span>{
-            <span class="kw">yield </span>SpendOOBState::Created;
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
+            <span class="macro">stream! </span>{
+                <span class="kw">yield </span>SpendOOBState::Created;
 
-            <span class="kw">let </span>refund = refund_future.<span class="kw">await</span>;
-            <span class="kw">if </span>refund.user_triggered {
-                <span class="kw">yield </span>SpendOOBState::UserCanceledProcessing;
-                <span class="kw">match </span>tx_subscription.await_tx_accepted(refund.transaction_id).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(()) =&gt; {
-                        <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
-                    },
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
+                <span class="kw">let </span>refund = refund_future.<span class="kw">await</span>;
+                <span class="kw">if </span>refund.user_triggered {
+                    <span class="kw">yield </span>SpendOOBState::UserCanceledProcessing;
+                    <span class="kw">match </span>tx_subscription.await_tx_accepted(refund.transaction_id).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(()) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
+                        },
+                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
+                        }
                     }
-                }
-            } <span class="kw">else </span>{
-                <span class="kw">match </span>tx_subscription.await_tx_accepted(refund.transaction_id).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(()) =&gt; {
-                        <span class="kw">yield </span>SpendOOBState::Refunded;
-                    },
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="kw">yield </span>SpendOOBState::Success;
+                } <span class="kw">else </span>{
+                    <span class="kw">match </span>tx_subscription.await_tx_accepted(refund.transaction_id).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(()) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::Refunded;
+                        },
+                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::Success;
+                        }
                     }
                 }
             }
@@ -1724,7 +1750,10 @@
     </span>}
 }
 
-<span class="kw">async fn </span>mint_operation(client: <span class="kw-2">&amp;</span>Client, operation_id: OperationId) -&gt; anyhow::Result&lt;MintMeta&gt; {
+<span class="kw">async fn </span>mint_operation(
+    client: <span class="kw-2">&amp;</span>Client,
+    operation_id: OperationId,
+) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
     <span class="kw">let </span>operation = client
         .get_operation(operation_id)
         .<span class="kw">await
@@ -1734,7 +1763,7 @@
         <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a mint operation&quot;</span>);
     }
 
-    <span class="prelude-val">Ok</span>(operation.meta())
+    <span class="prelude-val">Ok</span>(operation)
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1883,7 +1912,8 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>updates = client
                     .subscribe_reissue_external_notes_updates(operation_id)
                     .<span class="kw">await
-                    </span>.unwrap();
+                    </span>.unwrap()
+                    .into_stream();
 
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                     <span class="kw">if let </span>ReissueExternalNotesState::Failed(e) = update {

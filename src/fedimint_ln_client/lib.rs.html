@@ -833,6 +833,13 @@
 <a href="#833" id="833">833</a>
 <a href="#834" id="834">834</a>
 <a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
@@ -855,7 +862,10 @@
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{
+    sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
+    UpdateStreamOrOutcome,
+};
 <span class="kw">use </span>fedimint_core::api::IFederationApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
@@ -866,7 +876,6 @@
 <span class="kw">use </span>fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -919,7 +928,7 @@
     <span class="kw">async fn </span>subscribe_ln_pay_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;LnPayState&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnPayState&gt;&gt;;
 
     <span class="doccomment">/// Receive over LN with a new invoice
     </span><span class="kw">async fn </span>create_bolt11_invoice(
@@ -932,12 +941,12 @@
     <span class="kw">async fn </span>subscribe_to_ln_receive_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;LnReceiveState&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnReceiveState&gt;&gt;;
 }
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`LightningClientExt::pay_bolt11_invoice`].
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>LnPayState {
     Created,
     Canceled,
@@ -958,7 +967,7 @@
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`LightningClientExt::create_bolt11_invoice`].
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>LnReceiveState {
     Created,
     WaitingForPayment { invoice: String, timeout: Duration },
@@ -1100,9 +1109,11 @@
     <span class="kw">async fn </span>subscribe_to_ln_receive_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;LnReceiveState&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnReceiveState&gt;&gt; {
         <span class="kw">let </span>(lightning, _instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">? </span>{
+
+        <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningMeta&gt;() {
             LightningMeta::Receive { out_point, invoice } =&gt; (out_point, invoice),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
@@ -1115,46 +1126,47 @@
         <span class="kw">let </span>receive_success = lightning.await_receive_success(operation_id);
         <span class="kw">let </span>claim_acceptance = lightning.await_claim_acceptance(operation_id);
 
-        <span class="kw">let </span>stream = <span class="macro">stream! </span>{
-            <span class="kw">yield </span>LnReceiveState::Created;
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
+            <span class="macro">stream! </span>{
+                    <span class="kw">yield </span>LnReceiveState::Created;
 
-            <span class="kw">if </span>tx_accepted_future.<span class="kw">await</span>.is_err() {
-                <span class="kw">yield </span>LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
-                <span class="kw">return</span>;
-            }
-
-            <span class="kw">yield </span>LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
-
-            <span class="kw">match </span>receive_success.<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(()) =&gt; {
-                    <span class="kw">yield </span>LnReceiveState::Funded;
-
-                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(txid) = claim_acceptance.<span class="kw">await </span>{
-                        <span class="kw">yield </span>LnReceiveState::AwaitingFunds;
-
-                        <span class="kw">if </span><span class="self">self</span>.await_primary_module_output_finalized(operation_id, OutPoint{ txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
-                            <span class="kw">yield </span>LnReceiveState::Claimed;
-                            <span class="kw">return</span>;
-                        }
-                    }
-
+                    <span class="kw">if </span>tx_accepted_future.<span class="kw">await</span>.is_err() {
                     <span class="kw">yield </span>LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
+                        <span class="kw">return</span>;
                 }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="kw">yield </span>LnReceiveState::Canceled { reason: e };
-                }
-            }
-        };
+                            <span class="kw">yield </span>LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
 
-        <span class="prelude-val">Ok</span>(Box::pin(stream))
+                            <span class="kw">match </span>receive_success.<span class="kw">await </span>{
+                                <span class="prelude-val">Ok</span>(()) =&gt; {
+                                    <span class="kw">yield </span>LnReceiveState::Funded;
+
+                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(txid) = claim_acceptance.<span class="kw">await </span>{
+                            <span class="kw">yield </span>LnReceiveState::AwaitingFunds;
+
+                            <span class="kw">if </span><span class="self">self</span>.await_primary_module_output_finalized(operation_id, OutPoint{ txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
+                                <span class="kw">yield </span>LnReceiveState::Claimed;
+                                <span class="kw">return</span>;
+                            }
+                        }
+
+                        <span class="kw">yield </span>LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="kw">yield </span>LnReceiveState::Canceled { reason: e };
+                    }
+                }
+            }}
+        ))
     }
 
     <span class="kw">async fn </span>subscribe_ln_pay_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;BoxStream&lt;LnPayState&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnPayState&gt;&gt; {
         <span class="kw">let </span>(lightning, _instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span>(out_point, <span class="kw">_</span>, change_outpoint) = <span class="kw">match </span>ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">? </span>{
+
+        <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(out_point, <span class="kw">_</span>, change_outpoint) = <span class="kw">match </span>operation.meta::&lt;LightningMeta&gt;() {
             LightningMeta::Pay {
                 out_point,
                 invoice,
@@ -1171,54 +1183,56 @@
 
         <span class="kw">let </span>refund_success = lightning.await_refund(operation_id);
 
-        <span class="kw">let </span>stream = <span class="macro">stream! </span>{
-            <span class="kw">yield </span>LnPayState::Created;
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
+            <span class="macro">stream! </span>{
+                    <span class="kw">yield </span>LnPayState::Created;
 
-            <span class="kw">if </span>tx_accepted_future.<span class="kw">await</span>.is_err() {
-                <span class="kw">yield </span>LnPayState::Canceled;
-                <span class="kw">return</span>;
-            }
+                    <span class="kw">if </span>tx_accepted_future.<span class="kw">await</span>.is_err() {
+                    <span class="kw">yield </span>LnPayState::Canceled;
+                        <span class="kw">return</span>;
+                }
+                            <span class="kw">yield </span>LnPayState::Funded;
 
-            <span class="kw">yield </span>LnPayState::Funded;
+                <span class="kw">match </span>payment_success.<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(preimage) =&gt; {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(change) = change_outpoint {
+                            <span class="kw">yield </span>LnPayState::AwaitingChange;
+                            <span class="kw">match </span><span class="self">self</span>.await_primary_module_output_finalized(operation_id, change).<span class="kw">await </span>{
+                                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
+                                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                                    <span class="kw">yield </span>LnPayState::Failed;
+                                    <span class="kw">return</span>;
+                                }
+                            }
+                        }
 
-            <span class="kw">match </span>payment_success.<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(preimage) =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(change) = change_outpoint {
-                        <span class="kw">yield </span>LnPayState::AwaitingChange;
-                        <span class="kw">match </span><span class="self">self</span>.await_primary_module_output_finalized(operation_id, change).<span class="kw">await </span>{
-                            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
-                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">yield </span>LnPayState::Failed;
+                        <span class="kw">yield </span>LnPayState::Success {preimage};
+                        <span class="kw">return</span>;
+                    }
+                    <span class="prelude-val">Err</span>(LightningPayError::Refundable(block_height, error)) =&gt; {
+                        <span class="kw">yield </span>LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
+
+                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(refund_txid) = refund_success.<span class="kw">await </span>{
+                            <span class="comment">// need to await primary module to get refund
+                            </span><span class="kw">if </span><span class="self">self</span>.await_primary_module_output_finalized(operation_id, OutPoint{ txid: refund_txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
+                                <span class="kw">yield </span>LnPayState::Refunded { gateway_error: error };
                                 <span class="kw">return</span>;
                             }
                         }
                     }
-
-                    <span class="kw">yield </span>LnPayState::Success {preimage};
-                    <span class="kw">return</span>;
+                    <span class="kw">_ </span>=&gt; {}
                 }
-                <span class="prelude-val">Err</span>(LightningPayError::Refundable(block_height, error)) =&gt; {
-                    <span class="kw">yield </span>LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
 
-                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(refund_txid) = refund_success.<span class="kw">await </span>{
-                        <span class="comment">// need to await primary module to get refund
-                        </span><span class="kw">if </span><span class="self">self</span>.await_primary_module_output_finalized(operation_id, OutPoint{ txid: refund_txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
-                            <span class="kw">yield </span>LnPayState::Refunded { gateway_error: error };
-                            <span class="kw">return</span>;
-                        }
-                    }
-                }
-                <span class="kw">_ </span>=&gt; {}
+                <span class="kw">yield </span>LnPayState::Failed;
             }
-
-            <span class="kw">yield </span>LnPayState::Failed;
-        };
-
-        <span class="prelude-val">Ok</span>(Box::pin(stream))
+        }))
     }
 }
 
-<span class="kw">async fn </span>ln_operation(client: <span class="kw-2">&amp;</span>Client, operation_id: OperationId) -&gt; anyhow::Result&lt;LightningMeta&gt; {
+<span class="kw">async fn </span>ln_operation(
+    client: <span class="kw-2">&amp;</span>Client,
+    operation_id: OperationId,
+) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
     <span class="kw">let </span>operation = client
         .get_operation(operation_id)
         .<span class="kw">await
@@ -1228,7 +1242,7 @@
         <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning operation&quot;</span>);
     }
 
-    <span class="prelude-val">Ok</span>(operation.meta())
+    <span class="prelude-val">Ok</span>(operation)
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
