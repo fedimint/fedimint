@@ -97,7 +97,7 @@ use secp256k1_zkp::Secp256k1;
 use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tracing::{error, instrument, warn};
+use tracing::{error, info, instrument, warn};
 
 use crate::backup::Metadata;
 use crate::db::{
@@ -763,6 +763,11 @@ impl Client {
             .await_primary_module_output_finalized(operation_id, out_point)
             .await
     }
+
+    /// Returns the config with which the client was initialized.
+    pub async fn get_config(&self) -> &ClientConfig {
+        &self.inner.config
+    }
 }
 
 /// Resources particular to a module instance
@@ -1215,7 +1220,9 @@ impl ClientBuilder {
                     let module = self
                         .module_gens
                         .get(&kind)
-                        .ok_or(anyhow!("Unknown module kind in config"))?
+                        .ok_or(anyhow!(
+                            "Unknown primary module kind, cannot skip primary module"
+                        ))?
                         .init_primary(
                             module_config,
                             db.clone(),
@@ -1227,10 +1234,15 @@ impl ClientBuilder {
                     let not_replaced = primary_module.replace((kind, module)).is_none();
                     assert!(not_replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
                 } else {
-                    let module = self
-                        .module_gens
-                        .get(&kind)
-                        .ok_or(anyhow!("Unknown module kind in config"))?
+                    let module_gen = match self.module_gens.get(&kind) {
+                        Some(module_gen) => module_gen,
+                        None => {
+                            info!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
+                            continue;
+                        }
+                    };
+
+                    let module = module_gen
                         .init(
                             module_config,
                             db.clone(),
@@ -1432,8 +1444,9 @@ pub fn client_decoders<'a>(
     let mut modules = BTreeMap::new();
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
-            };
+            info!("Detected configuration for unsupported module kind: {kind}");
+            continue
+        };
 
         modules.insert(
             id,
