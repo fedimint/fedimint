@@ -19,7 +19,8 @@
       flake = false;
     };
     android-nixpkgs = {
-      url = "github:tadfisher/android-nixpkgs?rev=39538bf26d9064555c2a77b5bd6eb88049285905"; # stable
+      # url = "github:tadfisher/android-nixpkgs?rev=39538bf26d9064555c2a77b5bd6eb88049285905"; # stable
+      url = "github:dpc/android-nixpkgs?rev=ffce46832f161877b7c197bfc7def734e8b9caa4"; # stable channel + workaround https://github.com/tadfisher/android-nixpkgs/issues/59
     };
   };
 
