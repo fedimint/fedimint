@@ -76,12 +76,13 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
       },
       {
         label: 'Network',
-        value: getModuleParamsFromConfig(configGenParams, 'wallet')?.network,
+        value: getModuleParamsFromConfig(configGenParams, 'wallet')?.consensus
+          .network,
       },
       {
         label: 'Block confirmations',
-        value: getModuleParamsFromConfig(configGenParams, 'wallet')
-          ?.finality_delay,
+        value: getModuleParamsFromConfig(configGenParams, 'wallet')?.consensus
+          .finality_delay,
       },
     ];
 

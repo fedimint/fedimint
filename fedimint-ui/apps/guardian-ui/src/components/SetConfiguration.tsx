@@ -57,13 +57,16 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
         getModuleParamsFromConfig(
           params,
           'wallet'
-        )?.finality_delay.toString() || ''
+        )?.consensus.finality_delay.toString() || ''
       );
       setNetwork(
-        getModuleParamsFromConfig(params, 'wallet')?.network.toString() || ''
+        getModuleParamsFromConfig(
+          params,
+          'wallet'
+        )?.consensus.network.toString() || ''
       );
       setMintAmounts(
-        getModuleParamsFromConfig(params, 'mint')?.mint_amounts || []
+        getModuleParamsFromConfig(params, 'mint')?.consensus.mint_amounts || []
       );
     };
 
@@ -112,13 +115,19 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
             meta: { federation_name: federationName },
             modules: {
               // TODO: figure out way to not hard-code modules here
-              0: ['ln', null],
-              1: ['mint', { mint_amounts: mintAmounts }],
+              0: ['ln', { consensus: null, local: null }],
+              1: [
+                'mint',
+                { consensus: { mint_amounts: mintAmounts }, local: null },
+              ],
               2: [
                 'wallet',
                 {
-                  finality_delay: parseInt(blockConfirmations, 10),
-                  network: network as Network,
+                  consensus: {
+                    finality_delay: parseInt(blockConfirmations, 10),
+                    network: network as Network,
+                  },
+                  local: null,
                 },
               ],
             },

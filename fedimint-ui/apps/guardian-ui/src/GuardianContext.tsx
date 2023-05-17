@@ -240,7 +240,7 @@ export const GuardianProvider: React.FC<GuardianProviderProps> = ({
     });
     dispatch({
       type: SETUP_ACTION_TYPE.SET_CONFIG_GEN_PARAMS,
-      payload: consensusState.consensus.requested,
+      payload: consensusState.consensus,
     });
     return consensusState;
   }, []);
