@@ -16,6 +16,7 @@
     "@chakra-ui/react": "^2.4.5",
     "@emotion/react": "^11",
     "@emotion/styled": "^11",
+    "@fedimint/ui": "*",
     "framer-motion": "^6",
     "jsonrpc-client-websocket": "^1.5.2",
     "node": "^20.1.0",

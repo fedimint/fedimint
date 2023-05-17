@@ -1,21 +1,24 @@
+import React from 'react';
 import {
   InputGroup,
   Input,
   Button,
-  Icon,
   InputRightElement,
   useTheme,
   useClipboard,
 } from '@chakra-ui/react';
-import React from 'react';
-import { ReactComponent as CopyIcon } from '../../assets/svgs/copy.svg';
 
 export interface CopyInputProps {
   value: string;
   size?: 'md' | 'lg';
+  buttonLeftIcon?: React.ReactElement;
 }
 
-export const CopyInput: React.FC<CopyInputProps> = ({ value, size = 'md' }) => {
+export const CopyInput: React.FC<CopyInputProps> = ({
+  value,
+  size = 'md',
+  buttonLeftIcon,
+}) => {
   const { onCopy, hasCopied } = useClipboard(value);
   const theme = useTheme();
 
@@ -29,7 +32,7 @@ export const CopyInput: React.FC<CopyInputProps> = ({ value, size = 'md' }) => {
       >
         <Button
           variant='ghost'
-          leftIcon={<Icon as={CopyIcon} />}
+          leftIcon={buttonLeftIcon}
           onClick={onCopy}
           borderTopLeftRadius={0}
           borderBottomLeftRadius={0}

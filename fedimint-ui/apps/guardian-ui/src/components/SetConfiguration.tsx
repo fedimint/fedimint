@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from 'react';
 import {
   VStack,
   FormControl,
@@ -10,14 +11,12 @@ import {
   Text,
   useTheme,
 } from '@chakra-ui/react';
-import React, { useEffect, useState } from 'react';
+import { FormGroup, FormGroupHeading } from '@fedimint/ui';
 import { useGuardianContext } from '../hooks';
 import { ConfigGenParams, GuardianRole, Network } from '../types';
 import { ReactComponent as FedimintLogo } from '../assets/svgs/fedimint.svg';
 import { ReactComponent as BitcoinLogo } from '../assets/svgs/bitcoin.svg';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
-import { FormGroup } from './ui/FormGroup';
-import { FormGroupHeading } from './ui/FormGroupHeading';
 import { formatApiErrorMessage, getModuleParamsFromConfig } from '../utils/api';
 
 interface Props {
@@ -160,7 +159,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
             isDisabled={!!statePassword}
           />
           <FormHelperText>
-            {'You\'ll need this every time you visit this page.'}
+            {"You'll need this every time you visit this page."}
           </FormHelperText>
         </FormControl>
         {!isHost && (

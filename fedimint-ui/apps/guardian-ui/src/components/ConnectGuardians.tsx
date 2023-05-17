@@ -1,3 +1,4 @@
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   FormControl,
   FormLabel,
@@ -11,13 +12,13 @@ import {
   Tr,
   Td,
   Tag,
+  Icon,
 } from '@chakra-ui/react';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import { CopyInput, Table, TableRow } from '@fedimint/ui';
 import { useConsensusPolling, useGuardianContext } from '../hooks';
 import { GuardianRole, ServerStatus } from '../types';
-import { CopyInput } from './ui/CopyInput';
-import { Table, TableRow } from './ui/Table';
 import { getModuleParamsFromConfig } from '../utils/api';
+import { ReactComponent as CopyIcon } from '../assets/svgs/copy.svg';
 
 interface Props {
   next(): void;
@@ -59,6 +60,7 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
         <CopyInput
           value={process.env.REACT_APP_FM_CONFIG_API || ''}
           size='lg'
+          buttonLeftIcon={<Icon as={CopyIcon} />}
         />
         <FormHelperText>
           Share this link with the other Guardians

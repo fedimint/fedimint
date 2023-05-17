@@ -1,14 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ChakraProvider,
-  Box,
-  VStack,
-  Spinner,
-  Heading,
-  Text,
-  Center,
-} from '@chakra-ui/react';
-import { theme, Fonts } from './theme';
+import { Box, VStack, Spinner, Heading, Text, Center } from '@chakra-ui/react';
+import { theme, Fonts, SharedChakraProvider } from '@fedimint/ui';
 import { GuardianApi } from './GuardianApi';
 import { GuardianProvider } from './GuardianContext';
 import { Setup } from './components/Setup';
@@ -33,7 +25,7 @@ export const App = React.memo(function App() {
   return (
     <React.StrictMode>
       <Fonts />
-      <ChakraProvider theme={theme}>
+      <SharedChakraProvider theme={theme}>
         <GuardianProvider api={api}>
           <Center>
             <Box
@@ -64,7 +56,7 @@ export const App = React.memo(function App() {
             </Box>
           </Center>
         </GuardianProvider>
-      </ChakraProvider>
+      </SharedChakraProvider>
     </React.StrictMode>
   );
 });
