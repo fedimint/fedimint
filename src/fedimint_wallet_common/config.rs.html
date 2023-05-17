@@ -149,10 +149,19 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_core::config::EmptyGenParams;
+<span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
@@ -165,26 +174,31 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletGenParams {
-    <span class="kw">pub </span>local: EmptyGenParams,
+    <span class="kw">pub </span>local: WalletGenParamsLocal,
     <span class="kw">pub </span>consensus: WalletGenParamsConsensus,
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>WalletGenParamsConsensus {
-    <span class="kw">pub </span>network: bitcoin::network::constants::Network,
-    <span class="kw">pub </span>finality_delay: u32,
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>WalletGenParams {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            local: EmptyGenParams,
+<span class="kw">impl </span>WalletGenParams {
+    <span class="kw">pub fn </span>regtest(bitcoin_rpc: BitcoinRpcConfig) -&gt; WalletGenParams {
+        WalletGenParams {
+            local: WalletGenParamsLocal { bitcoin_rpc },
             consensus: WalletGenParamsConsensus {
                 network: Network::Regtest,
                 finality_delay: <span class="number">10</span>,
             },
         }
     }
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletGenParamsLocal {
+    <span class="kw">pub </span>bitcoin_rpc: BitcoinRpcConfig,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletGenParamsConsensus {
+    <span class="kw">pub </span>network: Network,
+    <span class="kw">pub </span>finality_delay: u32,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
@@ -195,7 +209,10 @@
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>WalletConfigLocal;
+</span><span class="kw">pub struct </span>WalletConfigLocal {
+    <span class="doccomment">/// Configures which bitcoin RPC to use
+    </span><span class="kw">pub </span>bitcoin_rpc: BitcoinRpcConfig,
+}
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletConfigPrivate {
@@ -254,13 +271,14 @@
         threshold: usize,
         network: Network,
         finality_delay: u32,
+        bitcoin_rpc: BitcoinRpcConfig,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
         );
 
         <span class="self">Self </span>{
-            local: WalletConfigLocal,
+            local: WalletConfigLocal { bitcoin_rpc },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -292,7 +310,7 @@
 <span class="macro">plugin_types_trait_impl_config!</span>(
     WalletCommonGen,
     WalletGenParams,
-    EmptyGenParams,
+    WalletGenParamsLocal,
     WalletGenParamsConsensus,
     WalletConfig,
     WalletConfigLocal,

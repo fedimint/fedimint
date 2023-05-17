@@ -422,6 +422,7 @@
 <a href="#422" id="422">422</a>
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -435,7 +436,7 @@
 <span class="kw">use </span>axum::Router;
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_bitcoind::{FM_BITCOIN_RPC_KIND, FM_BITCOIN_RPC_URL};
+<span class="kw">use </span>fedimint_core::bitcoinrpc::{BitcoinRpcConfig, FM_BITCOIN_RPC_KIND, FM_BITCOIN_RPC_URL};
 <span class="kw">use </span>fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::Amount;
@@ -579,6 +580,7 @@
     <span class="kw">let </span>module_gens = state.module_gens.clone();
     <span class="kw">let </span><span class="kw-2">mut </span>module_gens_params = state.module_gens_params.clone();
     attach_default_module_gen_params(
+        BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
         <span class="kw-2">&amp;mut </span>module_gens_params,
         max_denomination,
         params.network,

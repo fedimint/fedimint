@@ -446,6 +446,10 @@
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::string::ToString;
 
@@ -543,7 +547,9 @@
             .map(|<span class="kw-2">&amp;</span>peer| {
                 <span class="kw">let </span>private_key_share = SerdeSecret(sks.secret_key_share(peer.to_usize()));
                 <span class="kw">let </span>config = DummyConfig {
-                    local: DummyConfigLocal,
+                    local: DummyConfigLocal {
+                        example: params.local.<span class="number">0</span>.clone(),
+                    },
                     private: DummyConfigPrivate { private_key_share },
                     consensus: DummyConfigConsensus {
                         public_key_set: pks.clone(),
@@ -569,7 +575,9 @@
         <span class="kw">let </span>keys = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
 
         <span class="prelude-val">Ok</span>(DummyConfig {
-            local: DummyConfigLocal,
+            local: DummyConfigLocal {
+                example: params.local.<span class="number">0</span>.clone(),
+            },
             private: DummyConfigPrivate {
                 private_key_share: keys.secret_key_share,
             },

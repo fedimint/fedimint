@@ -150,8 +150,8 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{env, fs};
 
-<span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
+<span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::{
     ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
 };
@@ -162,7 +162,7 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>tempfile::TempDir;
 
-<span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinTest;
+<span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinFactory;
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway::GatewayTest;
 <span class="kw">use </span><span class="kw">crate</span>::ln::mock::FakeLightningTest;
@@ -262,9 +262,9 @@
         gateway
     }
 
-    <span class="doccomment">/// Get a test bitcoin RPC client
-    </span><span class="kw">pub fn </span>bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynBitcoindRpc {
-        FakeBitcoinTest::new().into()
+    <span class="doccomment">/// Get a test bitcoin RPC config
+    </span><span class="kw">pub fn </span>bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+        FakeBitcoinFactory::register_new().config
     }
 }
 

@@ -80,8 +80,12 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::config::EmptyGenParams;
-<span class="kw">use </span>fedimint_core::core::ModuleKind;
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Amount};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -93,9 +97,13 @@
 <span class="doccomment">/// Parameters necessary to generate this module&#39;s configuration
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DummyGenParams {
-    <span class="kw">pub </span>local: EmptyGenParams,
+    <span class="kw">pub </span>local: DummyGenParamsLocal,
     <span class="kw">pub </span>consensus: DummyGenParamsConsensus,
 }
+
+<span class="doccomment">/// Local parameters for config generation
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>DummyGenParamsLocal(<span class="kw">pub </span>String);
 
 <span class="doccomment">/// Consensus parameters for config generation
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,7 +114,7 @@
 <span class="kw">impl </span>Default <span class="kw">for </span>DummyGenParams {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            local: EmptyGenParams,
+            local: DummyGenParamsLocal(<span class="string">&quot;example&quot;</span>.to_string()),
             consensus: DummyGenParamsConsensus {
                 tx_fee: Amount::ZERO,
             },
@@ -132,7 +140,9 @@
 
 <span class="doccomment">/// Locally unencrypted config unique to each member
 </span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>DummyConfigLocal;
+</span><span class="kw">pub struct </span>DummyConfigLocal {
+    <span class="kw">pub </span>example: String,
+}
 
 <span class="doccomment">/// Will be the same for every federation member
 </span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
@@ -154,7 +164,7 @@
 </span><span class="macro">plugin_types_trait_impl_config!</span>(
     DummyCommonGen,
     DummyGenParams,
-    EmptyGenParams,
+    DummyGenParamsLocal,
     DummyGenParamsConsensus,
     DummyConfig,
     DummyConfigLocal,

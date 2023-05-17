@@ -376,8 +376,9 @@
             .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Used by the leader to set the config gen params, after which
-    /// `ConfigGenParams` can be created
+    <span class="doccomment">/// Leader sets the consensus params, everyone sets the local params
+    ///
+    /// After calling this `ConfigGenParams` can be created for DKG
     </span><span class="kw">pub async fn </span>set_config_gen_params(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         requested: ConfigGenParamsRequest,
@@ -485,8 +486,10 @@
 </span><span class="kw">pub struct </span>ConfigGenParamsConsensus {
     <span class="doccomment">/// Endpoints of all servers
     </span><span class="kw">pub </span>peers: BTreeMap&lt;PeerId, PeerServerParams&gt;,
-    <span class="doccomment">/// Params that were configured by the leader
-    </span><span class="kw">pub </span>requested: ConfigGenParamsRequest,
+    <span class="doccomment">/// Guardian-defined key-value pairs that will be passed to the client
+    </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
+    <span class="doccomment">/// Config gen params (also contains local params from us)
+    </span><span class="kw">pub </span>modules: ServerModuleGenParamsRegistry,
 }
 
 <span class="doccomment">/// The config gen params response which includes our peer id
@@ -498,15 +501,12 @@
     </span><span class="kw">pub </span>our_current_id: PeerId,
 }
 
-<span class="doccomment">/// Config gen values that can be configured by the config gen leader
+<span class="doccomment">/// Config gen params that can be configured from the UI
 </span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>ConfigGenParamsRequest {
-    <span class="doccomment">/// Guardian-defined key-value pairs that will be passed to the client.
-    /// These should be the same for all guardians since they become part of
-    /// the consensus config.
+    <span class="doccomment">/// Guardian-defined key-value pairs that will be passed to the client
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
-    <span class="doccomment">/// Params for the modules we wish to configure, can contain custom
-    /// parameters
+    <span class="doccomment">/// Set the params (if leader) or just the local params (if follower)
     </span><span class="kw">pub </span>modules: ServerModuleGenParamsRegistry,
 }
 

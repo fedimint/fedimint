@@ -862,10 +862,6 @@
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
 <a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
@@ -874,9 +870,7 @@
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
-<span class="kw">use </span>fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
-};
+<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 <span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
@@ -1116,7 +1110,7 @@
             tls_certs: params.tls_certs(),
             modules: Default::default(),
             modules_json: Default::default(),
-            meta: params.consensus.requested.meta,
+            meta: params.consensus.meta,
         };
         <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
             consensus,
@@ -1273,7 +1267,7 @@
         <span class="kw">let </span>authinfo = NetworkInfo::generate_map(peer0.peer_ids(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
-        <span class="kw">let </span>modules = peer0.consensus.requested.modules.iter_modules();
+        <span class="kw">let </span>modules = peer0.consensus.modules.iter_modules();
         <span class="kw">let </span>module_configs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = modules
             .map(|(module_id, kind, module_params)| {
                 (
@@ -1356,7 +1350,7 @@
         <span class="kw">let </span>epoch_keys = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
 
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = Default::default();
-        <span class="kw">let </span>modules = params.consensus.requested.modules.iter_modules();
+        <span class="kw">let </span>modules = params.consensus.modules.iter_modules();
         <span class="kw">let </span>modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
             <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());
             <span class="kw">let </span>registry = registry.clone();
@@ -1611,10 +1605,8 @@
             },
             consensus: ConfigGenParamsConsensus {
                 peers,
-                requested: ConfigGenParamsRequest {
-                    meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
-                    modules,
-                },
+                meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
+                modules,
             },
         }
     }

@@ -267,6 +267,8 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::{Read, Write};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -274,6 +276,7 @@
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+<span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::{DkgError, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, TaskGroup};
@@ -461,6 +464,7 @@
             } =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>module_gens_params = ServerModuleGenParamsRegistry::default();
                 attach_default_module_gen_params(
+                    BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
                     <span class="kw-2">&amp;mut </span>module_gens_params,
                     max_denomination,
                     network,

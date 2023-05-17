@@ -61,7 +61,11 @@
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -73,7 +77,9 @@
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 <span class="kw">use </span>fedimint_mint_server::MintGen;
-<span class="kw">use </span>fedimint_wallet_server::common::config::{WalletGenParams, WalletGenParamsConsensus};
+<span class="kw">use </span>fedimint_wallet_server::common::config::{
+    WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
+};
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
 
 <span class="kw">mod </span>ui;
@@ -85,6 +91,7 @@
 
 <span class="doccomment">/// Generates the configuration for the modules configured in the server binary
 </span><span class="kw">pub fn </span>attach_default_module_gen_params(
+    bitcoin_rpc: BitcoinRpcConfig,
     module_gen_params: <span class="kw-2">&amp;mut </span>ServerModuleGenParamsRegistry,
     max_denomination: Amount,
     network: Network,
@@ -95,7 +102,7 @@
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),
             WalletGenParams {
-                local: Default::default(),
+                local: WalletGenParamsLocal { bitcoin_rpc },
                 consensus: WalletGenParamsConsensus {
                     network,
                     <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next
@@ -109,7 +116,6 @@
             MintGen::kind(),
             MintGenParams {
                 local: Default::default(),
-
                 consensus: MintGenParamsConsensus {
                     mint_amounts: Tiered::gen_denominations(max_denomination)
                         .tiers()

@@ -185,18 +185,12 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
-<span class="kw">use </span>fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
-};
+<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::config::{
     ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
@@ -367,13 +361,11 @@
                 },
                 consensus: ConfigGenParamsConsensus {
                     peers: connections.clone(),
-                    requested: ConfigGenParamsRequest {
-                        meta: BTreeMap::from([(
-                            META_FEDERATION_NAME_KEY.to_owned(),
-                            <span class="string">&quot;federation_name&quot;</span>.to_string(),
-                        )]),
-                        modules: server_config_gen.clone(),
-                    },
+                    meta: BTreeMap::from([(
+                        META_FEDERATION_NAME_KEY.to_owned(),
+                        <span class="string">&quot;federation_name&quot;</span>.to_string(),
+                    )]),
+                    modules: server_config_gen.clone(),
                 },
             };
             <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))

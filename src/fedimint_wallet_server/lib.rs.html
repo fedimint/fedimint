@@ -2028,7 +2028,7 @@
     WalletError, WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome,
     CONFIRMATION_TARGET,
 };
-<span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, BitcoinRpcConfig, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -2126,6 +2126,7 @@
                     peers.threshold(),
                     params.consensus.network,
                     params.consensus.finality_delay,
+                    params.local.bitcoin_rpc.clone(),
                 );
                 (<span class="kw-2">*</span>id, cfg)
             })
@@ -2162,6 +2163,7 @@
             peers.peer_ids().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
+            params.local.bitcoin_rpc.clone(),
         );
 
         <span class="prelude-val">Ok</span>(wallet_cfg.to_erased())
@@ -2656,9 +2658,7 @@
         db: Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;Wallet&gt; {
-        <span class="comment">// TODO: should come from wallet config gen params
-        </span><span class="kw">let </span>rpc_config = BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>;
-        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, task_group.make_handle())<span class="question-mark">?</span>;
+        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(cfg, db, btc_rpc, task_group).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
