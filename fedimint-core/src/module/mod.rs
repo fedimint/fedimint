@@ -15,7 +15,7 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
     ServerModuleConsensusConfig,
 };
 use crate::core::{
@@ -452,6 +452,8 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
     /// indexed on the from version.
     fn get_database_migrations(&self) -> MigrationMap;
 
+    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
+
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
@@ -625,6 +627,8 @@ pub trait CommonModuleGen: Debug + Sized {
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
+    type Params: ModuleGenParams;
+
     /// This represents the module's database version that the current code is
     /// compatible with. It is important to increment this value whenever a
     /// key or a value that is persisted to the database within the module
@@ -664,6 +668,10 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     /// indexed on the from version.
     fn get_database_migrations(&self) -> MigrationMap {
         MigrationMap::new()
+    }
+
+    fn parse_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<Self::Params> {
+        params.to_typed::<Self::Params>()
     }
 
     fn trusted_dealer_gen(
@@ -717,6 +725,11 @@ where
 
     fn get_database_migrations(&self) -> MigrationMap {
         <Self as ServerModuleGen>::get_database_migrations(self)
+    }
+
+    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()> {
+        <Self as ServerModuleGen>::parse_params(self, params)?;
+        Ok(())
     }
 
     fn trusted_dealer_gen(

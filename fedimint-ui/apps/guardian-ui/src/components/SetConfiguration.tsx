@@ -121,7 +121,6 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
             meta: { federation_name: federationName },
             modules: {
               // TODO: figure out way to not hard-code modules here
-              0: ['ln', { consensus: {}, local: {} }],
               1: [
                 'mint',
                 { consensus: { mint_amounts: mintAmounts }, local: {} },
@@ -152,18 +151,6 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
             meta: {},
             modules: {
               // TODO: figure out way to not hard-code modules here
-              0: [
-                'ln',
-                {
-                  local: {},
-                },
-              ],
-              1: [
-                'mint',
-                {
-                  local: {},
-                },
-              ],
               2: [
                 'wallet',
                 {

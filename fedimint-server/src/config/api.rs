@@ -12,7 +12,9 @@ use fedimint_core::admin_client::{
     ConfigGenParamsResponse, PeerServerParams, WsAdminClient,
 };
 use fedimint_core::api::{ServerStatus, StatusResponse};
-use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{
+    ConfigGenModuleParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
@@ -133,42 +135,49 @@ impl ConfigGenApi {
         Ok(state.settings.default_params.clone())
     }
 
-    /// Sets the config gen params, should only be called by the leader
-    pub async fn set_config_gen_params(&self, requested: ConfigGenParamsRequest) -> ApiResult<()> {
+    /// Sets and validates the config gen params
+    ///
+    /// The leader passes consensus params, everyone passes local params
+    pub async fn set_config_gen_params(&self, request: ConfigGenParamsRequest) -> ApiResult<()> {
+        self.get_consensus_config_gen_params(&request).await?;
         let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
-        state.requested_params = Some(requested);
+        state.requested_params = Some(request);
         Ok(())
     }
 
-    /// Gets the consensus config gen params,
-    pub async fn get_consensus_config_gen_params(&self) -> ApiResult<ConfigGenParamsResponse> {
+    fn get_requested_params(&self) -> ApiResult<ConfigGenParamsRequest> {
+        let state = self.state.lock().expect("lock poisoned").clone();
+        state.requested_params.ok_or(ApiError::bad_request(
+            "Config params were not set on this guardian".to_string(),
+        ))
+    }
+
+    /// Gets the consensus config gen params
+    pub async fn get_consensus_config_gen_params(
+        &self,
+        request: &ConfigGenParamsRequest,
+    ) -> ApiResult<ConfigGenParamsResponse> {
         let state = self.state.lock().expect("lock poisoned").clone();
         let local = state.local.clone();
 
-        // if we have a leader get it from the leader instead
-        if let Some(url) = local.and_then(|local| local.leader_api_url) {
-            let client = WsAdminClient::new(url.clone(), PeerId::from(0), state.auth()?);
-            let response = client
-                .get_consensus_config_gen_params()
-                .await
-                .map_err(|_| ApiError::not_found("Unable to get params from leader".to_string()))?;
-            let params = state.get_config_gen_params(response.consensus.clone())?;
-            return Ok(ConfigGenParamsResponse {
-                consensus: response.consensus,
-                our_current_id: params.local.our_id,
-            });
-        }
-
-        let state = self.state.lock().expect("lock poisoned");
-        let requested = state.get_requested_params()?;
-        let consensus = ConfigGenParamsConsensus {
-            peers: state.get_peer_info(),
-            meta: requested.meta,
-            modules: requested.modules,
+        let consensus = match local.and_then(|local| local.leader_api_url) {
+            Some(leader_url) => {
+                let client = WsAdminClient::new(leader_url.clone(), PeerId::from(0), state.auth()?);
+                let response = client.get_consensus_config_gen_params().await;
+                response
+                    .map_err(|_| ApiError::not_found("Cannot get leader params".to_string()))?
+                    .consensus
+            }
+            None => ConfigGenParamsConsensus {
+                peers: state.get_peer_info(),
+                meta: request.meta.clone(),
+                modules: request.modules.clone(),
+            },
         };
-        let params = state.get_config_gen_params(consensus)?;
+
+        let params = state.get_config_gen_params(request, consensus.clone())?;
         Ok(ConfigGenParamsResponse {
-            consensus: params.consensus,
+            consensus,
             our_current_id: params.local.our_id,
         })
     }
@@ -177,12 +186,13 @@ impl ConfigGenApi {
     /// completion, calling a second time will return an error
     pub async fn run_dkg(&self) -> ApiResult<()> {
         // Update our state to running DKG
-        let response = self.get_consensus_config_gen_params().await?;
+        let request = self.get_requested_params()?;
+        let response = self.get_consensus_config_gen_params(&request).await?;
         let (params, registry) = {
             let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
             state.status = ServerStatus::ReadyForConfigGen;
             (
-                state.get_config_gen_params(response.consensus)?,
+                state.get_config_gen_params(&request, response.consensus)?,
                 state.settings.registry.clone(),
             )
         };
@@ -424,18 +434,14 @@ impl ConfigGenState {
             .collect()
     }
 
-    fn get_requested_params(&self) -> ApiResult<ConfigGenParamsRequest> {
-        self.requested_params.clone().ok_or(ApiError::bad_request(
-            "Config params were not set".to_string(),
-        ))
-    }
-
+    /// Validates and returns the params using our `request` and `consensus`
+    /// which comes from the leader
     fn get_config_gen_params(
         &self,
+        request: &ConfigGenParamsRequest,
         mut consensus: ConfigGenParamsConsensus,
     ) -> ApiResult<ConfigGenParams> {
         let local_connection = self.local_connection()?;
-        let requested_params = self.get_requested_params()?;
 
         let (our_id, _) = consensus
             .peers
@@ -445,16 +451,23 @@ impl ConfigGenState {
                 "Our TLS cert not found among peers".to_string(),
             ))?;
 
-        let modules = ServerModuleGenParamsRegistry::from_iter(
-            consensus
-                .modules
-                .iter_modules()
-                .zip(requested_params.modules.iter_modules())
-                .map(|((id1, kind1, consensus), (_id2, _kind2, local))| {
-                    (id1, kind1.clone(), consensus.with_local(local))
-                }),
-        );
-        consensus.modules = modules;
+        let mut combined_params = vec![];
+        let default_params = self.settings.default_params.modules.clone();
+        let local_params = request.modules.clone();
+        let consensus_params = consensus.modules.clone();
+        // Use defaults in case local or consensus params are missing
+        for (id, kind, default) in default_params.iter_modules() {
+            let consensus = &consensus_params.get(id).unwrap_or(default).consensus;
+            let local = &local_params.get(id).unwrap_or(default).local;
+            let combined = ConfigGenModuleParams::new(local.clone(), consensus.clone());
+            // Check that the params are parseable
+            let module = self.settings.registry.get(kind).expect("Module exists");
+            module
+                .validate_params(&combined)
+                .map_err(|e| ApiError::bad_request(format!("Module params invalid {e}")))?;
+            combined_params.push((id, kind.clone(), combined));
+        }
+        consensus.modules = ServerModuleGenParamsRegistry::from_iter(combined_params.into_iter());
 
         let local = ConfigGenParamsLocal {
             our_id: *our_id,
@@ -563,7 +576,8 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         api_endpoint! {
             "get_consensus_config_gen_params",
             async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsResponse {
-                config.get_consensus_config_gen_params().await
+                let request = config.get_requested_params()?;
+                config.get_consensus_config_gen_params(&request).await
             }
         },
         api_endpoint! {
@@ -615,7 +629,7 @@ fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
 #[cfg(test)]
 mod tests {
 
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -642,7 +656,7 @@ mod tests {
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
-    use crate::config::{DynServerModuleGen, DEFAULT_MAX_CLIENT_CONNECTIONS};
+    use crate::config::{DynServerModuleGen, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     use crate::fedimint_core::module::ServerModuleGen;
     use crate::FedimintServer;
 
@@ -672,13 +686,19 @@ mod tests {
             let p2p_url = format!("fedimint://127.0.0.1:{}", port + 1)
                 .parse()
                 .expect("parses");
+            let mut modules = ServerModuleGenParamsRegistry::default();
+            modules.attach_config_gen_params(0, DummyGen::kind(), DummyGenParams::default());
+            let default_params = ConfigGenParamsRequest {
+                meta: Default::default(),
+                modules,
+            };
             let settings = ConfigGenSettings {
                 download_token_limit: None,
                 p2p_bind,
                 api_bind,
                 p2p_url,
                 api_url: api_url.clone(),
-                default_params: Default::default(),
+                default_params,
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
                 registry: ServerModuleGenRegistry::from(vec![DynServerModuleGen::from(DummyGen)]),
             };
@@ -777,7 +797,7 @@ mod tests {
                 },
             );
             let request = ConfigGenParamsRequest {
-                meta: Default::default(),
+                meta: BTreeMap::from([("test".to_string(), self.name.clone())]),
                 modules,
             };
 
@@ -785,10 +805,9 @@ mod tests {
         }
 
         /// reads the dummy module config from the filesystem
-        fn read_config(&self) -> DummyConfig {
+        fn read_config(&self) -> ServerConfig {
             let auth = fs::read_to_string(self.dir.join(PLAINTEXT_PASSWORD));
-            let cfg = read_server_config(&auth.unwrap(), self.dir.clone()).unwrap();
-            cfg.get_module_config_typed(0).unwrap()
+            read_server_config(&auth.unwrap(), self.dir.clone()).unwrap()
         }
     }
 
@@ -867,6 +886,7 @@ mod tests {
 
             // all peers run DKG
             let leader_amount = leader.amount;
+            let leader_name = leader.name.clone();
             followers.push(leader);
             let followers = Arc::new(followers);
             let (results, _) = tokio::join!(
@@ -888,8 +908,10 @@ mod tests {
             // verify the local and consensus values for peers
             for peer in followers.iter() {
                 let cfg = peer.read_config();
-                assert_eq!(cfg.consensus.tx_fee, leader_amount);
-                assert_eq!(cfg.local.example, peer.name);
+                let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
+                assert_eq!(dummy.consensus.tx_fee, leader_amount);
+                assert_eq!(dummy.local.example, peer.name);
+                assert_eq!(cfg.consensus.meta["test"], leader_name);
             }
 
             // start consensus

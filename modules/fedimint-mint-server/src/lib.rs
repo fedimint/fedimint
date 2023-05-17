@@ -63,6 +63,7 @@ impl ExtendsCommonModuleGen for MintGen {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for MintGen {
+    type Params = MintGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -83,9 +84,7 @@ impl ServerModuleGen for MintGen {
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = params
-            .to_typed::<MintGenParams>()
-            .expect("Invalid mint params");
+        let params = self.parse_params(params).unwrap();
 
         let tbs_keys = params
             .consensus
@@ -144,9 +143,7 @@ impl ServerModuleGen for MintGen {
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
-        let params = params
-            .to_typed::<MintGenParams>()
-            .expect("Invalid mint gen params");
+        let params = self.parse_params(params).unwrap();
 
         let g2 = peers
             .run_dkg_multi_g2(params.consensus.mint_amounts.to_vec())

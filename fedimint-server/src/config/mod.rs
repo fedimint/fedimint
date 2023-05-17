@@ -41,7 +41,7 @@ use crate::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TL
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeers;
 use crate::multiplexed::PeerConnectionMultiplexer;
-use crate::net::connect::{Connector, TlsConfig};
+use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
@@ -776,15 +776,14 @@ pub fn gen_cert_and_key(
 ) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
     let keypair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
     let keypair_ser = keypair.serialize_der();
-    let sanitized_name = name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
-    let mut params = rcgen::CertificateParams::new(vec![sanitized_name.to_owned()]);
+    let mut params = rcgen::CertificateParams::new(vec![dns_sanitize(name)]);
 
     params.key_pair = Some(keypair);
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
     params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
-        .push(rcgen::DnType::CommonName, sanitized_name);
+        .push(rcgen::DnType::CommonName, dns_sanitize(name));
 
     let cert = rcgen::Certificate::from_params(params)?;
 

@@ -78,6 +78,7 @@ impl ExtendsCommonModuleGen for WalletGen {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for WalletGen {
+    type Params = WalletGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -98,10 +99,7 @@ impl ServerModuleGen for WalletGen {
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = params
-            .to_typed::<WalletGenParams>()
-            .expect("Invalid wallet gen params");
-
+        let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
 
         let btc_pegin_keys = peers
@@ -138,10 +136,7 @@ impl ServerModuleGen for WalletGen {
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
-        let params = params
-            .to_typed::<WalletGenParams>()
-            .expect("Invalid wallet params");
-
+        let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
@@ -875,7 +870,7 @@ impl Wallet {
             return Err(banned_peers);
         }
 
-        let items: Vec<_> = dedup.values().into_iter().collect();
+        let items: Vec<_> = dedup.values().collect();
 
         let mut fees: Vec<_> = items.iter().map(|item| item.fee_rate).collect();
         fees.sort_unstable();
