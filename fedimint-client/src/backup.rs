@@ -427,3 +427,6 @@ impl Client {
         get_client_root_secret_encoding::<S>(self.db()).await
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -771,3 +771,6 @@ pub(crate) enum MintRestoreStates {
     /// Something went wrong, and restore failed
     Failed(MintRestoreFailedState),
 }
+
+#[cfg(test)]
+mod tests;
