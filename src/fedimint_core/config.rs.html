@@ -1221,7 +1221,7 @@
 
 <span class="doccomment">/// Empty struct for if there are no params
 </span><span class="attr">#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>EmptyGenParams;
+</span><span class="kw">pub struct </span>EmptyGenParams {}
 
 <span class="kw">pub trait </span>ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
     <span class="doccomment">/// Locally configurable parameters for config generation
