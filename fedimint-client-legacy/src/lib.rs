@@ -983,9 +983,8 @@ impl Client<UserClientConfig> {
         expiry_time: Option<u64>,
     ) -> Result<(Invoice, Output)> {
         let gateway = self.fetch_active_gateway().await?;
-        let raw_payment_secret: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
-        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
-        let payment_secret = PaymentSecret(raw_payment_secret);
+        let preimage: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
+        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&preimage);
 
         // Temporary lightning node pubkey
         let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
@@ -1036,7 +1035,7 @@ impl Client<UserClientConfig> {
         .amount_milli_satoshis(amount.msats)
         .description(description)
         .payment_hash(payment_hash)
-        .payment_secret(payment_secret)
+        .payment_secret(PaymentSecret(rng.gen()))
         .duration_since_epoch(duration_since_epoch)
         .min_final_cltv_expiry(18)
         .payee_pub_key(node_public_key)
@@ -1057,7 +1056,7 @@ impl Client<UserClientConfig> {
         let offer_output = self.ln_client().create_offer_output(
             amount,
             payment_hash,
-            Preimage(raw_payment_secret),
+            Preimage(preimage),
             expiry_time,
         );
         let ln_output = Output::LN(offer_output);

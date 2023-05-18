@@ -51,7 +51,7 @@ use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use pay::{
     GatewayPayError, LightningPayStateMachine, OutgoingContractAccount, OutgoingContractData,
 };
-use rand::{CryptoRng, RngCore};
+use rand::{CryptoRng, Rng, RngCore};
 use receive::{LightningReceiveError, LightningReceiveStateMachine};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -686,9 +686,8 @@ impl LightningClientModule {
         ClientOutput<LightningOutput, LightningClientStateMachines>,
     )> {
         let payment_keypair = KeyPair::new(&self.secp, &mut rng);
-        let raw_payment_secret: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
-        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
-        let payment_secret = PaymentSecret(raw_payment_secret);
+        let preimage: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
+        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&preimage);
 
         // Temporary lightning node pubkey
         let (node_secret_key, node_public_key) = self.secp.generate_keypair(&mut rng);
@@ -732,7 +731,7 @@ impl LightningClientModule {
             .amount_milli_satoshis(amount.msats)
             .description(description)
             .payment_hash(payment_hash)
-            .payment_secret(payment_secret)
+            .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
             .min_final_cltv_expiry(18)
             .payee_pub_key(node_public_key)
@@ -767,7 +766,7 @@ impl LightningClientModule {
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
-                Preimage(raw_payment_secret),
+                Preimage(preimage),
                 &self.cfg.threshold_pub_key,
             ),
             expiry_time,
