@@ -839,7 +839,6 @@
 <a href="#839" id="839">839</a>
 <a href="#840" id="840">840</a>
 <a href="#841" id="841">841</a>
-<a href="#842" id="842">842</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
@@ -893,7 +892,7 @@
 <span class="kw">use </span>pay::{
     GatewayPayError, LightningPayStateMachine, OutgoingContractAccount, OutgoingContractData,
 };
-<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>receive::{LightningReceiveError, LightningReceiveStateMachine};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1528,9 +1527,8 @@
         ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
     )&gt; {
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
-        <span class="kw">let </span>raw_payment_secret: [u8; <span class="number">32</span>] = payment_keypair.x_only_public_key().<span class="number">0</span>.serialize();
-        <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>raw_payment_secret);
-        <span class="kw">let </span>payment_secret = PaymentSecret(raw_payment_secret);
+        <span class="kw">let </span>preimage: [u8; <span class="number">32</span>] = payment_keypair.x_only_public_key().<span class="number">0</span>.serialize();
+        <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage);
 
         <span class="comment">// Temporary lightning node pubkey
         </span><span class="kw">let </span>(node_secret_key, node_public_key) = <span class="self">self</span>.secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
@@ -1574,7 +1572,7 @@
             .amount_milli_satoshis(amount.msats)
             .description(description)
             .payment_hash(payment_hash)
-            .payment_secret(payment_secret)
+            .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
             .min_final_cltv_expiry(<span class="number">18</span>)
             .payee_pub_key(node_public_key)
@@ -1609,7 +1607,7 @@
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
-                Preimage(raw_payment_secret),
+                Preimage(preimage),
                 <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.threshold_pub_key,
             ),
             expiry_time,
