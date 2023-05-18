@@ -861,7 +861,6 @@
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
@@ -905,7 +904,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::NumPeers;
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsConfig};
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::{dns_sanitize, Connector, TlsConfig};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, NetworkConfig};
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
 
@@ -1640,15 +1639,14 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(rustls::Certificate, rustls::PrivateKey), anyhow::Error&gt; {
     <span class="kw">let </span>keypair = rcgen::KeyPair::generate(<span class="kw-2">&amp;</span>rcgen::PKCS_ECDSA_P256_SHA256)<span class="question-mark">?</span>;
     <span class="kw">let </span>keypair_ser = keypair.serialize_der();
-    <span class="kw">let </span>sanitized_name = name.replace(|c: char| !c.is_ascii_alphanumeric(), <span class="string">&quot;_&quot;</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>params = rcgen::CertificateParams::new(<span class="macro">vec!</span>[sanitized_name.to_owned()]);
+    <span class="kw">let </span><span class="kw-2">mut </span>params = rcgen::CertificateParams::new(<span class="macro">vec!</span>[dns_sanitize(name)]);
 
     params.key_pair = <span class="prelude-val">Some</span>(keypair);
     params.alg = <span class="kw-2">&amp;</span>rcgen::PKCS_ECDSA_P256_SHA256;
     params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
-        .push(rcgen::DnType::CommonName, sanitized_name);
+        .push(rcgen::DnType::CommonName, dns_sanitize(name));
 
     <span class="kw">let </span>cert = rcgen::Certificate::from_params(params)<span class="question-mark">?</span>;
 

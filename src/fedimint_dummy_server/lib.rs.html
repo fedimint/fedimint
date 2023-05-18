@@ -449,7 +449,6 @@
 <a href="#449" id="449">449</a>
 <a href="#450" id="450">450</a>
 <a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::string::ToString;
 
@@ -506,6 +505,7 @@
 <span class="doccomment">/// Implementation of server module non-consensus functions
 </span><span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ServerModuleGen <span class="kw">for </span>DummyGen {
+    <span class="kw">type </span>Params = DummyGenParams;
     <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 
     <span class="doccomment">/// Returns the version of this module
@@ -536,8 +536,7 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
-        <span class="comment">// Coerce config gen params into type
-        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyGenParams&gt;().unwrap();
+        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
         <span class="comment">// Create trusted set of threshold keys
         </span><span class="kw">let </span>sks = SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>pks: PublicKeySet = sks.public_keys();
@@ -567,8 +566,7 @@
         peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
-        <span class="comment">// Coerce config gen params into type
-        </span><span class="kw">let </span>params = params.to_typed::&lt;DummyGenParams&gt;().unwrap();
+        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
         <span class="comment">// Runs distributed key generation
         // Could create multiple keys, here we use &#39;()&#39; to create one
         </span><span class="kw">let </span>g1 = peers.run_dkg_g1(()).<span class="kw">await</span><span class="question-mark">?</span>;

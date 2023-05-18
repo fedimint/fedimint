@@ -787,10 +787,6 @@
 <a href="#787" id="787">787</a>
 <a href="#788" id="788">788</a>
 <a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1045,13 +1041,17 @@
 /// during config gen
 </span><span class="attr">#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ConfigGenModuleParams {
-    local: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
-    consensus: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
+    <span class="kw">pub </span>local: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
+    <span class="kw">pub </span>consensus: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
 }
 
 <span class="kw">pub type </span>ServerModuleGenRegistry = ModuleGenRegistry&lt;DynServerModuleGen&gt;;
 
 <span class="kw">impl </span>ConfigGenModuleParams {
+    <span class="kw">pub fn </span>new(local: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;, consensus: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ local, consensus }
+    }
+
     <span class="doccomment">/// Converts the JSON into typed version, errors unless both `local` and
     /// `consensus` values are defined
     </span><span class="kw">pub fn </span>to_typed&lt;P: ModuleGenParams&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;P&gt; {
@@ -1068,14 +1068,6 @@
         <span class="kw">let </span>json = json.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;{name} config gen params missing&quot;</span>))<span class="question-mark">?</span>;
         serde_json::from_value(json)
             .map_err(|e| anyhow::Error::new(e).context(<span class="string">&quot;Invalid module params&quot;</span>))
-    }
-
-    <span class="doccomment">/// Copies these params with local params from another module
-    </span><span class="kw">pub fn </span>with_local(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ConfigGenModuleParams) -&gt; <span class="self">Self </span>{
-        ConfigGenModuleParams {
-            local: other.local.clone(),
-            consensus: <span class="self">self</span>.consensus.clone(),
-        }
     }
 
     <span class="kw">pub fn </span>from_typed&lt;P: ModuleGenParams&gt;(p: P) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {

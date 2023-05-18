@@ -1998,11 +1998,6 @@
 <a href="#1998" id="1998">1998</a>
 <a href="#1999" id="1999">1999</a>
 <a href="#2000" id="2000">2000</a>
-<a href="#2001" id="2001">2001</a>
-<a href="#2002" id="2002">2002</a>
-<a href="#2003" id="2003">2003</a>
-<a href="#2004" id="2004">2004</a>
-<a href="#2005" id="2005">2005</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ops::Sub;
@@ -2083,6 +2078,7 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ServerModuleGen <span class="kw">for </span>WalletGen {
+    <span class="kw">type </span>Params = WalletGenParams;
     <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
     <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
@@ -2103,10 +2099,7 @@
         peers: <span class="kw-2">&amp;</span>[PeerId],
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
-        <span class="kw">let </span>params = params
-            .to_typed::&lt;WalletGenParams&gt;()
-            .expect(<span class="string">&quot;Invalid wallet gen params&quot;</span>);
-
+        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
 
         <span class="kw">let </span>btc_pegin_keys = peers
@@ -2143,10 +2136,7 @@
         peers: <span class="kw-2">&amp;</span>PeerHandle,
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
-        <span class="kw">let </span>params = params
-            .to_typed::&lt;WalletGenParams&gt;()
-            .expect(<span class="string">&quot;Invalid wallet params&quot;</span>);
-
+        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
@@ -2880,7 +2870,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(banned_peers);
         }
 
-        <span class="kw">let </span>items: Vec&lt;<span class="kw">_</span>&gt; = dedup.values().into_iter().collect();
+        <span class="kw">let </span>items: Vec&lt;<span class="kw">_</span>&gt; = dedup.values().collect();
 
         <span class="kw">let </span><span class="kw-2">mut </span>fees: Vec&lt;<span class="kw">_</span>&gt; = items.iter().map(|item| item.fee_rate).collect();
         fees.sort_unstable();
