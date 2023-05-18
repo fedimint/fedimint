@@ -118,7 +118,7 @@ impl MicroMintClient {
 /// Minimal mint-only federation
 ///
 /// This is just bunch of functions to make it more convenient to
-/// simulate what a w real federation would do w.r.t. handling
+/// simulate what a real federation would do w.r.t. handling
 /// mint notes.
 struct MicroMintFed {
     pub tbs_pks: Tiered<AggregatePublicKey>,
