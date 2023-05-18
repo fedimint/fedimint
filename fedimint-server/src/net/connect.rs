@@ -170,10 +170,9 @@ where
             )
             .expect("Failed to create TLS config");
 
-        let sanitized_name =
-            self.peer_names[&peer].replace(|c: char| !c.is_ascii_alphanumeric(), "_");
         let fake_domain =
-            rustls::ServerName::try_from(sanitized_name.as_str()).expect("Always a valid DNS name");
+            rustls::ServerName::try_from(dns_sanitize(&self.peer_names[&peer]).as_str())
+                .expect("Always a valid DNS name");
 
         let connector = TlsConnector::from(Arc::new(cfg));
         let tls_conn = connector
@@ -225,6 +224,12 @@ where
         });
         Ok(Box::pin(stream))
     }
+}
+
+/// Sanitizes name as valid domain name
+pub fn dns_sanitize(name: &str) -> String {
+    let sanitized = name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+    format!("peer{sanitized}")
 }
 
 /// Parses the host and port from a url

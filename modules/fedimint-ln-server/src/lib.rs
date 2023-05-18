@@ -27,7 +27,7 @@ use fedimint_core::{
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigLocal, LightningConfigPrivate,
+    LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{
@@ -61,6 +61,7 @@ impl ExtendsCommonModuleGen for LightningGen {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for LightningGen {
+    type Params = LightningGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {

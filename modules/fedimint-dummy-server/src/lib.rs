@@ -54,6 +54,7 @@ impl ExtendsCommonModuleGen for DummyGen {
 /// Implementation of server module non-consensus functions
 #[async_trait]
 impl ServerModuleGen for DummyGen {
+    type Params = DummyGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     /// Returns the version of this module
@@ -84,8 +85,7 @@ impl ServerModuleGen for DummyGen {
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        // Coerce config gen params into type
-        let params = params.to_typed::<DummyGenParams>().unwrap();
+        let params = self.parse_params(params).unwrap();
         // Create trusted set of threshold keys
         let sks = SecretKeySet::random(peers.degree(), &mut OsRng);
         let pks: PublicKeySet = sks.public_keys();
@@ -115,8 +115,7 @@ impl ServerModuleGen for DummyGen {
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
-        // Coerce config gen params into type
-        let params = params.to_typed::<DummyGenParams>().unwrap();
+        let params = self.parse_params(params).unwrap();
         // Runs distributed key generation
         // Could create multiple keys, here we use '()' to create one
         let g1 = peers.run_dkg_g1(()).await?;

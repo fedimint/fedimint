@@ -245,9 +245,7 @@ impl FedimintServer {
                         let (state, context) =
                             rpc_context.context(&request, module_instance_id).await;
 
-                        let res = (handler)(state, context, request).await;
-
-                        res
+                        (handler)(state, context, request).await
                     }))
                     .catch_unwind()
                     .await

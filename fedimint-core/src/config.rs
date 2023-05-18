@@ -252,13 +252,17 @@ impl<M> Default for ModuleGenRegistry<M> {
 /// during config gen
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ConfigGenModuleParams {
-    local: Option<serde_json::Value>,
-    consensus: Option<serde_json::Value>,
+    pub local: Option<serde_json::Value>,
+    pub consensus: Option<serde_json::Value>,
 }
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
 impl ConfigGenModuleParams {
+    pub fn new(local: Option<serde_json::Value>, consensus: Option<serde_json::Value>) -> Self {
+        Self { local, consensus }
+    }
+
     /// Converts the JSON into typed version, errors unless both `local` and
     /// `consensus` values are defined
     pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
@@ -275,14 +279,6 @@ impl ConfigGenModuleParams {
         let json = json.ok_or(format_err!("{name} config gen params missing"))?;
         serde_json::from_value(json)
             .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
-    }
-
-    /// Copies these params with local params from another module
-    pub fn with_local(&self, other: &ConfigGenModuleParams) -> Self {
-        ConfigGenModuleParams {
-            local: other.local.clone(),
-            consensus: self.consensus.clone(),
-        }
     }
 
     pub fn from_typed<P: ModuleGenParams>(p: P) -> anyhow::Result<Self> {
