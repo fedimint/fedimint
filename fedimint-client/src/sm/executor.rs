@@ -16,7 +16,7 @@ use futures::future::select_all;
 use futures::stream::StreamExt;
 use tokio::select;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::sm::notifier::Notifier;
 use crate::sm::state::{DynContext, DynState};
@@ -99,6 +99,8 @@ where
                 } => last_error.context(format!("Failed to commit after {attempts} attempts")),
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
+
+        // TODO: notify subscribers to state changes?
 
         Ok(())
     }
@@ -289,12 +291,25 @@ where
     ) -> anyhow::Result<()> {
         let active_states = self.get_active_states().await;
 
+        // TODO: use DB prefix subscription instead of polling
+        let active_state_count = active_states.len();
+        let new_state_added = async move {
+            loop {
+                let new_active_states_count = self.get_active_states().await.len();
+                if new_active_states_count > active_state_count {
+                    return;
+                }
+                fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).await;
+            }
+        };
+
         if active_states.is_empty() {
             // FIXME: what to do in this case? Probably best to subscribe to DB eventually
             debug!("No state transitions available, waiting before re-trying");
             fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).await;
             return Ok(());
         }
+        trace!("Active states: {:?}", active_states);
 
         let transitions = active_states
             .iter()
@@ -329,8 +344,15 @@ where
             num_transitions, "Awaiting any state transition to become ready"
         );
 
-        let ((transition_outcome, state, transition_fn, meta), _, _) =
-            select_all(transitions).await;
+        let ((transition_outcome, state, transition_fn, meta), _, _) = select! {
+            res = select_all(transitions) => res,
+            () = new_state_added => {
+                debug!("New state added, re-starting state transitions");
+                return Ok(());
+            }
+        };
+
+        debug!(?state, ?transition_outcome, "Executing state transition");
 
         let new_state = self
             .db
