@@ -428,7 +428,7 @@ where
 
 /// Empty struct for if there are no params
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct EmptyGenParams;
+pub struct EmptyGenParams {}
 
 pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
     /// Locally configurable parameters for config generation

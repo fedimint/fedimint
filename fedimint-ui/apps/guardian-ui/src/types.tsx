@@ -47,31 +47,58 @@ export interface Peer {
   status: ServerStatus;
 }
 
+export interface BitcoinRpc {
+  kind: string;
+  url: string;
+}
+
 export type PeerHashMap = Record<string, string>;
 
-export type LnFedimintModule = ['ln', null];
-export type MintFedimintModule = ['mint', { mint_amounts: number[] }];
+export type LnFedimintModule = [
+  'ln',
+  {
+    consensus?: object;
+    local?: object;
+  }
+];
+export type MintFedimintModule = [
+  'mint',
+  {
+    consensus?: { mint_amounts: number[] };
+    local?: object;
+  }
+];
 export type WalletFedimintModule = [
   'wallet',
-  { finality_delay: number; network: Network }
+  {
+    consensus?: { finality_delay: number; network: Network };
+    local?: {
+      bitcoin_rpc: BitcoinRpc;
+    };
+  }
 ];
-export type OtherFedimintModule = [string, object | null];
+export type OtherFedimintModule = [string, object];
 export type AnyFedimintModule =
   | LnFedimintModule
   | MintFedimintModule
   | WalletFedimintModule
   | OtherFedimintModule;
 
+type Meta = { federation_name?: string };
+
+type Modules = Record<number, AnyFedimintModule>;
+
 export type ConfigGenParams = {
-  meta: { federation_name: string };
-  modules: Record<number, AnyFedimintModule>;
+  meta: Meta;
+  modules: Modules;
+};
+
+type ConsensusParams = ConfigGenParams & {
+  peers: Record<string, Peer>;
 };
 
 export interface ConsensusState {
-  consensus: {
-    requested: ConfigGenParams;
-    peers: Record<string, Peer>;
-  };
+  consensus: ConsensusParams;
   our_current_id: number;
 }
 

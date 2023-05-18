@@ -13,7 +13,7 @@ import {
 } from '@chakra-ui/react';
 import { FormGroup, FormGroupHeading } from '@fedimint/ui';
 import { useGuardianContext } from '../hooks';
-import { ConfigGenParams, GuardianRole, Network } from '../types';
+import { BitcoinRpc, ConfigGenParams, GuardianRole, Network } from '../types';
 import { ReactComponent as FedimintLogo } from '../assets/svgs/fedimint.svg';
 import { ReactComponent as BitcoinLogo } from '../assets/svgs/bitcoin.svg';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
@@ -33,8 +33,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
       numPeers: stateNumPeers,
     },
     api,
-    submitFollowerConfiguration,
-    submitHostConfiguration,
+    submitConfiguration,
   } = useGuardianContext();
   const theme = useTheme();
   const isHost = role === GuardianRole.Host;
@@ -47,24 +46,32 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
   const [federationName, setFederationName] = useState('');
   const [blockConfirmations, setBlockConfirmations] = useState('');
   const [network, setNetwork] = useState('');
+  const [bitcoinRpc, setBitcoinRpc] = useState<BitcoinRpc>({
+    kind: '',
+    url: '',
+  });
   const [mintAmounts, setMintAmounts] = useState<number[]>([]);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     const initStateFromParams = (params: ConfigGenParams) => {
-      setFederationName(params.meta.federation_name);
-      setBlockConfirmations(
-        getModuleParamsFromConfig(
-          params,
-          'wallet'
-        )?.finality_delay.toString() || ''
-      );
-      setNetwork(
-        getModuleParamsFromConfig(params, 'wallet')?.network.toString() || ''
-      );
+      setFederationName(params.meta?.federation_name || '');
+
       setMintAmounts(
-        getModuleParamsFromConfig(params, 'mint')?.mint_amounts || []
+        getModuleParamsFromConfig(params, 'mint')?.consensus?.mint_amounts ||
+          mintAmounts
       );
+
+      const walletModule = getModuleParamsFromConfig(params, 'wallet');
+
+      if (walletModule) {
+        setBlockConfirmations(
+          walletModule.consensus?.finality_delay?.toString() ||
+            blockConfirmations
+        );
+        setNetwork(walletModule.consensus?.network.toString() || network);
+        setBitcoinRpc(walletModule.local?.bitcoin_rpc || bitcoinRpc);
+      }
     };
 
     if (configGenParams === null) {
@@ -104,31 +111,69 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
     setError(undefined);
     try {
       if (isHost) {
-        await submitHostConfiguration({
+        // Hosts set their own connection name
+        // - They should submit both their local and the consensus config gen params.
+        await submitConfiguration({
           myName,
           password,
-          numPeers: parseInt(numPeers, 10),
-          config: {
+          configs: {
+            numPeers: parseInt(numPeers, 10),
             meta: { federation_name: federationName },
             modules: {
               // TODO: figure out way to not hard-code modules here
-              0: ['ln', null],
-              1: ['mint', { mint_amounts: mintAmounts }],
+              0: ['ln', { consensus: {}, local: {} }],
+              1: [
+                'mint',
+                { consensus: { mint_amounts: mintAmounts }, local: {} },
+              ],
               2: [
                 'wallet',
                 {
-                  finality_delay: parseInt(blockConfirmations, 10),
-                  network: network as Network,
+                  consensus: {
+                    finality_delay: parseInt(blockConfirmations, 10),
+                    network: network as Network,
+                  },
+                  local: {
+                    bitcoin_rpc: bitcoinRpc,
+                  },
                 },
               ],
             },
           },
         });
       } else {
-        await submitFollowerConfiguration({
+        // Followers set their own connection name, and hosts server URL to connect to.
+        // - They should submit ONLY their local config gen params
+        await submitConfiguration({
           myName,
           password,
-          hostServerUrl,
+          configs: {
+            hostServerUrl,
+            meta: {},
+            modules: {
+              // TODO: figure out way to not hard-code modules here
+              0: [
+                'ln',
+                {
+                  local: {},
+                },
+              ],
+              1: [
+                'mint',
+                {
+                  local: {},
+                },
+              ],
+              2: [
+                'wallet',
+                {
+                  local: {
+                    bitcoin_rpc: bitcoinRpc,
+                  },
+                },
+              ],
+            },
+          },
         });
       }
       next();
@@ -177,8 +222,8 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
           </FormControl>
         )}
       </FormGroup>
-      {isHost && (
-        <>
+      <>
+        {isHost && (
           <FormGroup>
             <FormGroupHeading icon={FedimintLogo} title='Federation settings' />
             <FormControl>
@@ -199,44 +244,59 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
               <FormHelperText>This cannot be changed later.</FormHelperText>
             </FormControl>
           </FormGroup>
-
-          <FormGroup>
-            <FormGroupHeading icon={BitcoinLogo} title='Bitcoin settings' />
-            <FormControl>
-              <FormLabel>Block confirmations</FormLabel>
-              <Input
-                type='number'
-                min={1}
-                value={blockConfirmations}
-                onChange={(ev) => {
-                  const value = ev.currentTarget.value;
-                  isValidNumber(value) && setBlockConfirmations(value);
-                }}
-              />
-              <FormHelperText>
-                How many block confirmations needed before confirming?
-              </FormHelperText>
-            </FormControl>
-            <FormControl>
-              <FormLabel>Bitcoin network</FormLabel>
-              <Select
-                placeholder='Select a network'
-                value={network !== null ? network : ''}
-                onChange={(ev) => {
-                  const value = ev.currentTarget.value;
-                  setNetwork(value as unknown as Network);
-                }}
-              >
-                {Object.entries(Network).map(([label, value]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            </FormControl>
-          </FormGroup>
-        </>
-      )}
+        )}
+        <FormGroup>
+          <FormGroupHeading icon={BitcoinLogo} title='Bitcoin settings' />
+          {isHost && (
+            <>
+              <FormControl>
+                <FormLabel>Block confirmations</FormLabel>
+                <Input
+                  type='number'
+                  min={1}
+                  value={blockConfirmations}
+                  onChange={(ev) => {
+                    const value = ev.currentTarget.value;
+                    isValidNumber(value) && setBlockConfirmations(value);
+                  }}
+                />
+                <FormHelperText>
+                  How many block confirmations needed before confirming?
+                </FormHelperText>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Bitcoin network</FormLabel>
+                <Select
+                  placeholder='Select a network'
+                  value={network !== null ? network : ''}
+                  onChange={(ev) => {
+                    const value = ev.currentTarget.value;
+                    setNetwork(value as unknown as Network);
+                  }}
+                >
+                  {Object.entries(Network).map(([label, value]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+            </>
+          )}
+          <FormControl>
+            <FormLabel>Bitcoin RPC</FormLabel>
+            <Input
+              value={bitcoinRpc.url}
+              onChange={(ev) => {
+                setBitcoinRpc({ ...bitcoinRpc, url: ev.currentTarget.value });
+              }}
+            />
+            <FormHelperText>
+              Locally configured Bitcoin RPC address
+            </FormHelperText>
+          </FormControl>
+        </FormGroup>
+      </>
       {error && (
         <Text color={theme.colors.red[500]} mt={4}>
           {error}

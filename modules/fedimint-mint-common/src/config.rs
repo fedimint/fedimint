@@ -31,7 +31,7 @@ impl Default for MintGenParams {
                     .cloned()
                     .collect(),
             },
-            local: EmptyGenParams,
+            local: EmptyGenParams {},
         }
     }
 }
