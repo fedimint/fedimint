@@ -1082,12 +1082,7 @@
 <a href="#1082" id="1082">1082</a>
 <a href="#1083" id="1083">1083</a>
 <a href="#1084" id="1084">1084</a>
-<a href="#1085" id="1085">1085</a>
-<a href="#1086" id="1086">1086</a>
-<a href="#1087" id="1087">1087</a>
-<a href="#1088" id="1088">1088</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
-<span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>registry;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
@@ -1116,7 +1111,6 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
-<span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::MuxPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::server::{DynServerModule, VerificationCache};
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, TaskGroup};
@@ -2004,7 +1998,6 @@
     /// them and merely generate a warning.
     </span><span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
@@ -2020,7 +2013,6 @@
     /// once all transactions have been processed.
     </span><span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,

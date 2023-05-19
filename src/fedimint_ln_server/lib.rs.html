@@ -1179,28 +1179,67 @@
 <a href="#1179" id="1179">1179</a>
 <a href="#1180" id="1180">1180</a>
 <a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
+<a href="#1212" id="1212">1212</a>
+<a href="#1213" id="1213">1213</a>
+<a href="#1214" id="1214">1214</a>
+<a href="#1215" id="1215">1215</a>
+<a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ops::Sub;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
+<span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
-<span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal,
-    CoreConsensusVersion, ExtendsCommonModuleGen, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen, SupportedModuleApiVersions,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
+    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
+    PeerHandle, ServerModuleGen, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
@@ -1216,10 +1255,10 @@
     IdentifiableContract, Preimage, PreimageDecryptionShare,
 };
 <span class="kw">use </span>fedimint_ln_common::db::{
-    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
-    ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix, LightningGatewayKey,
-    LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
-    ProposeDecryptionShareKeyPrefix,
+    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockHeightKey, ContractKey,
+    ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
+    LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
+    ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 <span class="kw">use </span>fedimint_ln_common::{
     ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError, LightningGateway,
@@ -1253,16 +1292,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
         _db: Database,
-        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>).into())
+        <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>, task_group)<span class="question-mark">?</span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
+        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
         <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>pks = sks.public_keys();
 
@@ -1274,10 +1314,13 @@
                 (
                     peer,
                     LightningConfig {
-                        local: LightningConfigLocal,
+                        local: LightningConfigLocal {
+                            bitcoin_rpc: params.local.bitcoin_rpc.clone(),
+                        },
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
+                            network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -1294,17 +1337,21 @@
     <span class="kw">async fn </span>distributed_gen(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peers: <span class="kw-2">&amp;</span>PeerHandle,
-        _params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
+        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; DkgResult&lt;ServerModuleConfig&gt; {
+        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
         <span class="kw">let </span>g1 = peers.run_dkg_g1(()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>keys = g1[<span class="kw-2">&amp;</span>()].threshold_crypto();
 
         <span class="kw">let </span>server = LightningConfig {
-            local: LightningConfigLocal,
+            local: LightningConfigLocal {
+                bitcoin_rpc: params.local.bitcoin_rpc.clone(),
+            },
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: Default::default(),
+                network: params.consensus.network,
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: keys.secret_key_share,
@@ -1338,6 +1385,7 @@
             <span class="kw-2">&amp;</span>LightningClientConfig {
                 threshold_pub_key: config.threshold_pub_keys.public_key(),
                 fee_consensus: config.fee_consensus,
+                network: config.network,
             },
         )
         .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>))
@@ -1415,6 +1463,12 @@
                         <span class="string">&quot;Proposed Decryption Shares&quot;
                     </span>);
                 }
+                DbKeyPrefix::BlockHeight =&gt; {
+                    <span class="kw">let </span>heights = dbtx.get_value(<span class="kw-2">&amp;</span>BlockHeightKey).<span class="kw">await</span>;
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(heights) = heights {
+                        lightning.insert(<span class="string">&quot;BlockHeight&quot;</span>.to_string(), Box::new(heights));
+                    }
+                }
             }
         }
 
@@ -1445,6 +1499,7 @@
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Lightning {
     cfg: LightningConfig,
+    btc_rpc: DynBitcoindRpc,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1458,27 +1513,35 @@
     }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="kw">if </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
-            std::future::pending().<span class="kw">await
-        </span>}
+        <span class="kw">while </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
+            sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
+        }
     }
 
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConsensusProposal&lt;LightningConsensusItem&gt; {
-        ConsensusProposal::new_auto_trigger(
-            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
-                .<span class="kw">await
-                </span>.map(
-                    |(ProposeDecryptionShareKey(contract_id), share)| LightningConsensusItem {
-                        contract_id,
-                        share,
-                    },
-                )
-                .collect::&lt;Vec&lt;LightningConsensusItem&gt;&gt;()
-                .<span class="kw">await</span>,
-        )
+        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;LightningConsensusItem&gt; = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(ProposeDecryptionShareKey(contract_id), share)| {
+                LightningConsensusItem::DecryptPreimage(contract_id, share)
+            })
+            .collect()
+            .<span class="kw">await</span>;
+
+        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>height = <span class="self">self
+            </span>.btc_rpc
+            .get_block_height()
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;always retries&quot;</span>);
+        <span class="kw">if </span>consensus_height.is_none() || consensus_height.unwrap_or_default() &lt; height {
+            items.push(LightningConsensusItem::BlockHeight(height));
+        }
+
+        ConsensusProposal::new_auto_trigger(items)
     }
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
@@ -1487,16 +1550,24 @@
         consensus_items: Vec&lt;(PeerId, LightningConsensusItem)&gt;,
         _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
-        <span class="kw">for </span>(peer, decryption_share) <span class="kw">in </span>consensus_items.into_iter() {
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_heights = dbtx.get_value(<span class="kw-2">&amp;</span>BlockHeightKey).<span class="kw">await</span>.unwrap_or_default();
+
+        <span class="kw">for </span>(peer, item) <span class="kw">in </span>consensus_items.into_iter() {
             <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer);
             <span class="kw">let </span>_guard = span.enter();
 
-            dbtx.insert_new_entry(
-                <span class="kw-2">&amp;</span>AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                <span class="kw-2">&amp;</span>decryption_share.share,
-            )
-            .<span class="kw">await</span>;
+            <span class="kw">match </span>item {
+                LightningConsensusItem::DecryptPreimage(contract_id, share) =&gt; {
+                    dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer), <span class="kw-2">&amp;</span>share)
+                        .<span class="kw">await</span>;
+                }
+                LightningConsensusItem::BlockHeight(height) =&gt; {
+                    peer_heights.insert(peer, height);
+                }
+            }
         }
+
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightKey, <span class="kw-2">&amp;</span>peer_heights).<span class="kw">await</span>;
         <span class="macro">vec!</span>[]
     }
 
@@ -1509,7 +1580,6 @@
 
     <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>LightningInput,
@@ -1528,9 +1598,10 @@
             .into_module_error_other();
         }
 
+        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or_default();
         <span class="kw">let </span>pub_key = <span class="kw">match </span>account.contract {
             FundedContract::Outgoing(outgoing) =&gt; {
-                <span class="kw">if </span>outgoing.timelock &gt; block_height(interconnect).<span class="kw">await </span>&amp;&amp; !outgoing.cancelled {
+                <span class="kw">if </span>outgoing.timelock <span class="kw">as </span>u64 &gt; consensus_height &amp;&amp; !outgoing.cancelled {
                     <span class="comment">// If the timelock hasn&#39;t expired yet …
                     </span><span class="kw">let </span>preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         <span class="kw-2">&amp;</span>input
@@ -1581,14 +1652,11 @@
 
     <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>LightningInput,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">let </span>meta = <span class="self">self
-            </span>.validate_input(interconnect, dbtx, cache, input)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(dbtx, cache, input).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>account_db_key = ContractKey(input.contract_id);
         <span class="kw">let </span><span class="kw-2">mut </span>contract_account = dbtx
@@ -1940,6 +2008,14 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
+                <span class="string">&quot;block_height&quot;</span>,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+                    <span class="kw">let </span>future = context.wait_key_exists(BlockHeightKey);
+                    future.<span class="kw">await</span>;
+                    <span class="prelude-val">Ok</span>(module.consensus_height(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
+                }
+            },
+            <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;account&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
                     <span class="prelude-val">Ok</span>(module
@@ -1987,9 +2063,23 @@
         ]
     }
 }
+
 <span class="kw">impl </span>Lightning {
-    <span class="kw">pub fn </span>new(cfg: LightningConfig) -&gt; <span class="self">Self </span>{
-        Lightning { cfg }
+    <span class="kw">pub fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })
+    }
+
+    <span class="doccomment">/// Returns the median block height if enough peers have contributed
+    </span><span class="kw">pub async fn </span>consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+        <span class="kw">let </span>peer_heights = dbtx.get_value(<span class="kw-2">&amp;</span>BlockHeightKey).<span class="kw">await</span>.unwrap_or_default();
+        <span class="kw">if </span>peer_heights.len() &lt; <span class="self">self</span>.cfg.consensus.threshold() {
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>heights: Vec&lt;<span class="kw">_</span>&gt; = peer_heights.values().collect();
+        heights.sort_unstable();
+        <span class="prelude-val">Some</span>(<span class="kw-2">**</span>heights.get(heights.len() / <span class="number">2</span>).expect(<span class="string">&quot;items is non-empty&quot;</span>))
     }
 
     <span class="kw">fn </span>validate_decryption_share(
@@ -2083,22 +2173,6 @@
 
 <span class="kw">impl </span>fedimint_core::server::VerificationCache <span class="kw">for </span>LightningVerificationCache {}
 
-<span class="kw">async fn </span>block_height(interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect) -&gt; u32 {
-    <span class="comment">// This is a future because we are normally reading from a network socket. But
-    // for internal calls the data is available instantly in one go, so we can
-    // just block on it.
-    </span><span class="kw">let </span>body = interconnect
-        .call(
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            <span class="string">&quot;block_height&quot;</span>.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await
-        </span>.expect(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);
-
-    serde_json::from_value(body).expect(<span class="string">&quot;Malformed block height response from wallet module!&quot;</span>)
-}
-
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_migration_tests {
     <span class="kw">use </span>std::str::FromStr;
@@ -2126,6 +2200,7 @@
     <span class="kw">use </span>fedimint_ln_common::LightningCommonGen;
     <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
     <span class="kw">use </span>futures::StreamExt;
+    <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
     <span class="kw">use </span>lightning_invoice::Invoice;
     <span class="kw">use </span>rand::distributions::Standard;
     <span class="kw">use </span>rand::prelude::Distribution;
@@ -2229,6 +2304,10 @@
                 .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
             route_hints: <span class="macro">vec!</span>[],
             valid_until: SystemTime::now(),
+            fees: RoutingFees {
+                base_msat: <span class="number">0</span>,
+                proportional_millionths: <span class="number">0</span>,
+            },
         };
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(pk), <span class="kw-2">&amp;</span>gateway)
             .<span class="kw">await</span>;
@@ -2348,6 +2427,7 @@
                             <span class="string">&quot;validate_migrations was not able to read any ProposeDecryptionShares&quot;
                         </span>);
                         }
+                        DbKeyPrefix::BlockHeight =&gt; {}
                     }
                 }
             },

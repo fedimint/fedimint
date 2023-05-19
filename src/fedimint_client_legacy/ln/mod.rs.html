@@ -324,6 +324,22 @@
 <a href="#324" id="324">324</a>
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -342,6 +358,7 @@
 <span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -415,15 +432,7 @@
         timelock: u32,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;LightningOutput&gt; {
-        <span class="kw">let </span>contract_amount = {
-            <span class="kw">let </span>invoice_amount_msat = invoice
-                .amount_milli_satoshis()
-                .ok_or(LnClientError::MissingInvoiceAmount)<span class="question-mark">?</span>;
-            <span class="comment">// TODO: better define fee handling
-            // Add 1% fee margin
-            </span><span class="kw">let </span>contract_amount_msat = invoice_amount_msat + (invoice_amount_msat / <span class="number">100</span>);
-            Amount::from_msats(contract_amount_msat)
-        };
+        <span class="kw">let </span>contract_amount = <span class="self">self</span>.compute_outgoing_contract_amount(<span class="kw-2">&amp;</span>invoice, gateway.fees)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>user_sk = bitcoin::KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
 
@@ -617,6 +626,29 @@
             contract: contract_id,
             gateway_signature: signature,
         }
+    }
+
+    <span class="kw">pub fn </span>compute_outgoing_contract_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: <span class="kw-2">&amp;</span>Invoice,
+        fees: RoutingFees,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
+        <span class="kw">let </span>invoice_amount_msat = invoice
+            .amount_milli_satoshis()
+            .ok_or(LnClientError::MissingInvoiceAmount)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>base_fee = fees.base_msat <span class="kw">as </span>u64;
+        <span class="kw">let </span>margin_fee: u64 = <span class="kw">if </span>fees.proportional_millionths &gt; <span class="number">0 </span>{
+            <span class="kw">let </span>fee_percent = <span class="number">1000000 </span>/ fees.proportional_millionths <span class="kw">as </span>u64;
+            invoice_amount_msat / fee_percent
+        } <span class="kw">else </span>{
+            <span class="number">0
+        </span>};
+
+        <span class="comment">// Add base and margin routing fees
+        </span><span class="kw">let </span>contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
+
+        <span class="prelude-val">Ok</span>(Amount::from_msats(contract_amount_msat))
     }
 }
 

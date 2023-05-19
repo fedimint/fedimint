@@ -838,7 +838,6 @@
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
 <a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
@@ -848,7 +847,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
-<span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>api::LnFederationApi;
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
@@ -865,11 +864,9 @@
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-<span class="kw">use </span>fedimint_core::api::IFederationApi;
+<span class="kw">use </span>fedimint_core::api::DynFederationApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{
-    Decoder, IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
@@ -881,8 +878,6 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContract;
 <span class="kw">use </span>fedimint_ln_common::contracts::{Contract, EncryptedPreimage, IdentifiableContract, Preimage};
 <span class="kw">pub use </span>fedimint_ln_common::<span class="kw-2">*</span>;
-<span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
-<span class="kw">use </span>fedimint_wallet_client::WalletClientExt;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
@@ -1031,7 +1026,7 @@
         <span class="kw">let </span>output = lightning
             .create_outgoing_output(
                 operation_id,
-                <span class="self">self</span>.api(),
+                instance.api,
                 invoice.clone(),
                 active_gateway,
                 fed_id,
@@ -1066,10 +1061,6 @@
         <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>active_gateway = <span class="self">self</span>.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// TODO: This gets the `bitcoin::Network` from the wallet module. Ideally
-        // modules should not be dependent on each other. This should be moved
-        // to the global config.
-        </span><span class="kw">let </span>network = <span class="self">self</span>.get_network();
         <span class="kw">let </span>(operation_id, invoice, output) = lightning
             .create_lightning_receive_output(
                 amount,
@@ -1077,7 +1068,7 @@
                 rand::rngs::OsRng,
                 expiry_time,
                 active_gateway,
-                network,
+                lightning.cfg.network,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
@@ -1353,27 +1344,34 @@
     </span><span class="kw">pub async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         operation_id: OperationId,
-        api: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>),
+        api: DynFederationApi,
         invoice: Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) -&gt; anyhow::Result&lt;ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;&gt; {
         <span class="kw">let </span>consensus_height = api
-            .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .fetch_consensus_block_height()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;Cannot get consensus block height&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
 
-        <span class="kw">let </span>contract_amount = {
-            <span class="kw">let </span>invoice_amount_msat = invoice
-                .amount_milli_satoshis()
-                .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;MissingInvoiceAmount&quot;</span>))<span class="question-mark">?</span>;
-            <span class="comment">// TODO: better define fee handling
-            // Add 1% fee margin
-            </span><span class="kw">let </span>contract_amount_msat = invoice_amount_msat + (invoice_amount_msat / <span class="number">100</span>);
-            Amount::from_msats(contract_amount_msat)
-        };
+        <span class="comment">// Compute amount to lock in the outgoing contract
+        </span><span class="kw">let </span>invoice_amount_msat = invoice
+            .amount_milli_satoshis()
+            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;MissingInvoiceAmount&quot;</span>))<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>fees = gateway.fees;
+        <span class="kw">let </span>base_fee = fees.base_msat <span class="kw">as </span>u64;
+        <span class="kw">let </span>margin_fee: u64 = <span class="kw">if </span>fees.proportional_millionths &gt; <span class="number">0 </span>{
+            <span class="kw">let </span>fee_percent = <span class="number">1000000 </span>/ fees.proportional_millionths <span class="kw">as </span>u64;
+            invoice_amount_msat / fee_percent
+        } <span class="kw">else </span>{
+            <span class="number">0
+        </span>};
+
+        <span class="kw">let </span>contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
+        <span class="kw">let </span>contract_amount = Amount::from_msats(contract_amount_msat);
 
         <span class="kw">let </span>user_sk = bitcoin::KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
 

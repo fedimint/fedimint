@@ -1990,14 +1990,6 @@
 <a href="#1990" id="1990">1990</a>
 <a href="#1991" id="1991">1991</a>
 <a href="#1992" id="1992">1992</a>
-<a href="#1993" id="1993">1993</a>
-<a href="#1994" id="1994">1994</a>
-<a href="#1995" id="1995">1995</a>
-<a href="#1996" id="1996">1996</a>
-<a href="#1997" id="1997">1997</a>
-<a href="#1998" id="1998">1998</a>
-<a href="#1999" id="1999">1999</a>
-<a href="#2000" id="2000">2000</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ops::Sub;
@@ -2033,7 +2025,6 @@
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
-<span class="kw">use </span>fedimint_core::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
@@ -2283,9 +2274,7 @@
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">while </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
-            <span class="comment">// FIXME: remove after modularization finishes
-            </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-            </span>sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
+            sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
         }
     }
 
@@ -2293,8 +2282,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ConsensusProposal&lt;WalletConsensusItem&gt; {
-        <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable
-        </span><span class="kw">let </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
+        <span class="kw">let </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
 
         <span class="comment">// In case the wallet just got created the height is not committed to the DB yet
         // but will be set to 0 first, so we can assume that here.
@@ -2389,7 +2377,6 @@
 
     <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>WalletInput,
@@ -2418,14 +2405,11 @@
 
     <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>WalletInput,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">let </span>meta = <span class="self">self
-            </span>.validate_input(interconnect, dbtx, cache, input)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(dbtx, cache, input).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(outpoint = %input.outpoint(), amount = %meta.amount.amount, <span class="string">&quot;Claiming peg-in&quot;</span>);
 
         dbtx.insert_new_entry(
@@ -2925,7 +2909,7 @@
         <span class="kw">let </span>old_height = <span class="self">self
             </span>.consensus_height(dbtx)
             .<span class="kw">await
-            </span>.unwrap_or_else(|| new_height.saturating_sub(<span class="number">10</span>));
+            </span>.unwrap_or_else(|| new_height.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay));
         <span class="kw">if </span>new_height &lt; old_height {
             <span class="macro">info!</span>(
                 new_height,

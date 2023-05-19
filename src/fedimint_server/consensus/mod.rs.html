@@ -672,15 +672,9 @@
 <a href="#672" id="672">672</a>
 <a href="#673" id="673">673</a>
 <a href="#674" id="674">674</a>
-<a href="#675" id="675">675</a>
-<a href="#676" id="676">676</a>
-<a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
-<span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>server;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -705,7 +699,6 @@
 <span class="kw">use </span>tracing::{error, info_span, instrument, trace, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::interconnect::FedimintInterconnect;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::TransactionSubmissionError::TransactionReplayError;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     AcceptedTransactionKey, ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey,
@@ -1240,9 +1233,6 @@
                 </span>.modules
                 .get_expect(input.module_instance_id())
                 .apply_input(
-                    <span class="kw-2">&amp;</span>FedimintInterconnect {
-                        fedimint: <span class="kw-2">&amp;</span><span class="self">self</span>.api,
-                    },
                     <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(input.module_instance_id()),
                     input,
                     caches.get_cache(input.module_instance_id()),

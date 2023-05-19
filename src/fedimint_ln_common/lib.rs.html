@@ -298,6 +298,60 @@
 <a href="#298" id="298">298</a>
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -318,6 +372,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Amount};
+<span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
@@ -471,6 +526,9 @@
     </span><span class="kw">pub </span>route_hints: Vec&lt;route_hints::RouteHint&gt;,
     <span class="doccomment">/// Limits the validity of the announcement to allow updates
     </span><span class="kw">pub </span>valid_until: SystemTime,
+    <span class="doccomment">/// Gateway configured routing fees
+    </span><span class="attr">#[serde(with = <span class="string">&quot;serde_routing_fees&quot;</span>)]
+    </span><span class="kw">pub </span>fees: RoutingFees,
 }
 
 <span class="kw">impl </span>LightningGateway {
@@ -486,14 +544,19 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>LightningConsensusItem {
-    <span class="kw">pub </span>contract_id: ContractId,
-    <span class="kw">pub </span>share: PreimageDecryptionShare,
+</span><span class="kw">pub enum </span>LightningConsensusItem {
+    DecryptPreimage(ContractId, PreimageDecryptionShare),
+    BlockHeight(u64),
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningConsensusItem {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;LN Decryption Share for contract {}&quot;</span>, <span class="self">self</span>.contract_id)
+        <span class="kw">match </span><span class="self">self </span>{
+            LightningConsensusItem::DecryptPreimage(contract_id, <span class="kw">_</span>) =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">&quot;LN Decryption Share for contract {contract_id}&quot;</span>)
+            }
+            LightningConsensusItem::BlockHeight(height) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;LN block height {height}&quot;</span>),
+        }
     }
 }
 
@@ -522,6 +585,7 @@
 </span><span class="doccomment">/// Hack to get a route hint that implements `serde` traits.
 </span><span class="kw">pub mod </span>route_hints {
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+    <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
     <span class="kw">use </span>secp256k1::PublicKey;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -557,7 +621,7 @@
                     .map(|hop| lightning::routing::router::RouteHintHop {
                         src_node_id: hop.src_node_id,
                         short_channel_id: hop.short_channel_id,
-                        fees: lightning::routing::gossip::RoutingFees {
+                        fees: RoutingFees {
                             base_msat: hop.base_msat,
                             proportional_millionths: hop.proportional_millionths,
                         },
@@ -568,6 +632,50 @@
                     .collect(),
             )
         }
+    }
+}
+
+<span class="comment">// TODO: Upstream serde serialization for
+// lightning::routing::gossip::RoutingFees
+// See https://github.com/lightningdevkit/rust-lightning/blob/b8ed4d2608e32128dd5a1dee92911638a4301138/lightning/src/routing/gossip.rs#L1057-L1065
+</span><span class="kw">pub mod </span>serde_routing_fees {
+    <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
+    <span class="kw">use </span>serde::ser::SerializeStruct;
+    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
+
+    <span class="attr">#[allow(missing_docs)]
+    </span><span class="kw">pub fn </span>serialize&lt;S&gt;(fees: <span class="kw-2">&amp;</span>RoutingFees, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>state = serializer.serialize_struct(<span class="string">&quot;RoutingFees&quot;</span>, <span class="number">2</span>)<span class="question-mark">?</span>;
+        state.serialize_field(<span class="string">&quot;base_msat&quot;</span>, <span class="kw-2">&amp;</span>fees.base_msat)<span class="question-mark">?</span>;
+        state.serialize_field(<span class="string">&quot;proportional_millionths&quot;</span>, <span class="kw-2">&amp;</span>fees.proportional_millionths)<span class="question-mark">?</span>;
+        state.end()
+    }
+
+    <span class="attr">#[allow(missing_docs)]
+    </span><span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;RoutingFees, D::Error&gt;
+    <span class="kw">where
+        </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
+    {
+        <span class="kw">let </span>fees = serde_json::Value::deserialize(deserializer)<span class="question-mark">?</span>;
+        <span class="comment">// While we deserialize fields as u64, RoutingFees expects u32 for the fields
+        </span><span class="kw">let </span>base_msat = fees[<span class="string">&quot;base_msat&quot;</span>]
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom(<span class="string">&quot;base_msat is not a u64&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>proportional_millionths = fees[<span class="string">&quot;proportional_millionths&quot;</span>]
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom(<span class="string">&quot;proportional_millionths is not a u64&quot;</span>))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(RoutingFees {
+            base_msat: base_msat
+                .try_into()
+                .map_err(|<span class="kw">_</span>| serde::de::Error::custom(<span class="string">&quot;base_msat is greater than u32::MAX&quot;</span>))<span class="question-mark">?</span>,
+            proportional_millionths: proportional_millionths.try_into().map_err(|<span class="kw">_</span>| {
+                serde::de::Error::custom(<span class="string">&quot;proportional_millionths is greater than u32::MAX&quot;</span>)
+            })<span class="question-mark">?</span>,
+        })
     }
 }
 

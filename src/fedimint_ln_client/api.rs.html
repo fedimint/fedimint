@@ -109,6 +109,12 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::{CurrentConsensus, UnionResponses};
@@ -124,6 +130,7 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>LnFederationApi {
+    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;;
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt;;
     <span class="kw">async fn </span>fetch_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -149,6 +156,11 @@
 <span class="kw">where
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
+    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;block_height&quot;</span>.to_string(), ApiRequestErased::default())
+            .<span class="kw">await
+    </span>}
+
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
         <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_account&quot;</span>.to_string(), ApiRequestErased::new(contract))
             .<span class="kw">await

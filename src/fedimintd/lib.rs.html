@@ -64,6 +64,8 @@
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
@@ -102,7 +104,9 @@
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),
             WalletGenParams {
-                local: WalletGenParamsLocal { bitcoin_rpc },
+                local: WalletGenParamsLocal {
+                    bitcoin_rpc: bitcoin_rpc.clone(),
+                },
                 consensus: WalletGenParamsConsensus {
                     network,
                     <span class="comment">// TODO this is not very elegant, but I&#39;m planning to get rid of it in a next
@@ -127,7 +131,7 @@
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_LN,
             LightningGen::kind(),
-            LightningGenParams::default(),
+            LightningGenParams::regtest(bitcoin_rpc),
         );
 }
 </code></pre></div>
