@@ -485,6 +485,7 @@ impl ServerConfig {
         let hbbft_keys = keys[&KeyType::Hbbft].threshold_crypto();
         let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
+        let mut registered_modules = registry.kinds();
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
         let modules = params.consensus.modules.iter_modules();
         let modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
@@ -492,16 +493,20 @@ impl ServerConfig {
             let registry = registry.clone();
 
             async move {
-                let result = registry
-                    .get(kind)
-                    .expect("Module not registered")
-                    .distributed_gen(&dkg, module_params)
-                    .await;
+                let result = match registry.get(kind) {
+                    None => Err(DkgError::ModuleNotFound(kind.clone())),
+                    Some(gen) => gen.distributed_gen(&dkg, module_params).await,
+                };
                 (module_instance_id, result)
             }
         });
         for (module_instance_id, config) in join_all(modules_runner).await {
-            module_cfgs.insert(module_instance_id, config?);
+            let config = config?;
+            registered_modules.remove(config.consensus_json.kind());
+            module_cfgs.insert(module_instance_id, config);
+        }
+        if !registered_modules.is_empty() {
+            return Err(DkgError::ParamsNotFound(registered_modules));
         }
 
         info!(

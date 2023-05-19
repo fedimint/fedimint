@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::ops::Mul;
@@ -370,6 +370,10 @@ impl<M> ModuleGenRegistry<M> {
         }
     }
 
+    pub fn kinds(&self) -> BTreeSet<ModuleKind> {
+        self.0.keys().cloned().collect()
+    }
+
     pub fn get(&self, k: &ModuleKind) -> Option<&M> {
         self.0.get(k)
     }
@@ -629,6 +633,10 @@ pub enum DkgError {
     /// Error running DKG
     #[error("Running DKG failed due to {0}")]
     Failed(#[from] anyhow::Error),
+    #[error("The module was not found {0}")]
+    ModuleNotFound(ModuleKind),
+    #[error("Params for modules were not found {0:?}")]
+    ParamsNotFound(BTreeSet<ModuleKind>),
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types
