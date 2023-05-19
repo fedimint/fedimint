@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
+use std::str::FromStr;
 use std::time::Duration;
 
 use clap::Parser;
@@ -20,8 +21,9 @@ use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningCommonGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintCommonGen;
+use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::{Gateway, LightningMode};
+use ln_gateway::{Gateway, LightningMode, DEFAULT_FEES};
 use tracing::{error, info};
 use url::Url;
 
@@ -47,6 +49,11 @@ pub struct GatewayOpts {
     /// Gateway webserver authentication password
     #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
     pub password: String,
+
+    /// Configured gateway routing fees
+    /// Format: <base_msat>,<proportional_millionths>
+    #[arg(long = "fees", env = "FM_GATEWAY_FEES")]
+    pub fees: Option<GatewayFee>,
 }
 
 /// Fedimint Gateway Binary
@@ -74,6 +81,7 @@ async fn main() -> Result<(), anyhow::Error> {
         listen,
         api_addr,
         password,
+        fees,
     } = GatewayOpts::parse();
 
     info!(
@@ -121,6 +129,7 @@ async fn main() -> Result<(), anyhow::Error> {
         decoders,
         module_gens,
         task_group.make_subgroup().await,
+        fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
     )
     .await
     .unwrap_or_else(|e| {
@@ -137,4 +146,32 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
+}
+
+/// Gateway routing fees
+#[derive(Debug, Clone)]
+pub struct GatewayFee(RoutingFees);
+
+impl FromStr for GatewayFee {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(',');
+        let base_msat = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing base fee in millisatoshis"))?
+            .parse()?;
+        let proportional_millionths = parts
+            .next()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "missing liquidity based fee as proportional millionths of routed amount"
+                )
+            })?
+            .parse()?;
+        Ok(GatewayFee(RoutingFees {
+            base_msat,
+            proportional_millionths,
+        }))
+    }
 }

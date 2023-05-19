@@ -524,15 +524,22 @@ impl LightningClientModule {
             .await?;
         let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
 
-        let contract_amount = {
-            let invoice_amount_msat = invoice
-                .amount_milli_satoshis()
-                .ok_or(anyhow::anyhow!("MissingInvoiceAmount"))?;
-            // TODO: better define fee handling
-            // Add 1% fee margin
-            let contract_amount_msat = invoice_amount_msat + (invoice_amount_msat / 100);
-            Amount::from_msats(contract_amount_msat)
+        // Compute amount to lock in the outgoing contract
+        let invoice_amount_msat = invoice
+            .amount_milli_satoshis()
+            .ok_or(anyhow::anyhow!("MissingInvoiceAmount"))?;
+
+        let fees = gateway.fees;
+        let base_fee = fees.base_msat as u64;
+        let margin_fee: u64 = if fees.proportional_millionths > 0 {
+            let fee_percent = 1000000 / fees.proportional_millionths as u64;
+            invoice_amount_msat / fee_percent
+        } else {
+            0
         };
+
+        let contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
+        let contract_amount = Amount::from_msats(contract_amount_msat);
 
         let user_sk = bitcoin::KeyPair::new(&self.secp, &mut rng);
 

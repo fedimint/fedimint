@@ -8,7 +8,7 @@ use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayC
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
-use ln_gateway::Gateway;
+use ln_gateway::{Gateway, DEFAULT_FEES};
 use tempfile::TempDir;
 use tokio::sync::RwLock;
 use tracing::log::warn;
@@ -70,6 +70,7 @@ impl GatewayTest {
             decoders.clone(),
             module_gens.clone(),
             task.make_subgroup().await,
+            DEFAULT_FEES,
         )
         .await
         .unwrap();

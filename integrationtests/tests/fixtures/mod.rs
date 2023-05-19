@@ -67,11 +67,12 @@ use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
+use lightning::routing::gossip::RoutingFees;
 use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
-use ln_gateway::Gateway;
+use ln_gateway::{Gateway, DEFAULT_FEES};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use tokio::sync::Mutex;
@@ -306,6 +307,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
                 gateway_node,
+                DEFAULT_FEES,
             )
             .await;
 
@@ -382,6 +384,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
                 gateway_node.clone(),
+                DEFAULT_FEES,
             )
             .await;
 
@@ -565,9 +568,11 @@ pub struct GatewayTest {
     pub user: Box<dyn ILegacyTestClient>,
     pub client: Box<dyn IGatewayClient>,
     pub node: GatewayNode,
+    pub fees: RoutingFees,
 }
 
 impl GatewayTest {
+    #[allow(clippy::too_many_arguments)]
     async fn new(
         adapter: LnRpcAdapter,
         client_config: ClientConfig,
@@ -576,6 +581,7 @@ impl GatewayTest {
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
         node: GatewayNode,
+        fees: RoutingFees,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -591,6 +597,7 @@ impl GatewayTest {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
             valid_until: fedimint_core::time::now(),
+            fees,
         };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();
@@ -604,6 +611,7 @@ impl GatewayTest {
             timelock_delta: 10,
             api: announce_addr.clone(),
             node_pub_key,
+            fees,
         };
 
         // Create federation client builder for the gateway
@@ -620,6 +628,7 @@ impl GatewayTest {
             decoders.clone(),
             module_gens.clone(),
             TaskGroup::new(),
+            fees,
         )
         .await
         .unwrap();
@@ -655,6 +664,7 @@ impl GatewayTest {
             user,
             client,
             node,
+            fees,
         }
     }
 }
