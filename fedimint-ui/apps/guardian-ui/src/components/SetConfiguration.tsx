@@ -137,6 +137,13 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
                   },
                 },
               ],
+              3: [
+                'ln',
+                {
+                  consensus: { network: network as Network },
+                  local: { bitcoin_rpc: bitcoinRpc }
+                },
+              ],
             },
           },
         });
@@ -158,6 +165,10 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
                     bitcoin_rpc: bitcoinRpc,
                   },
                 },
+              ],
+              3: [
+                'ln',
+                { local: { bitcoin_rpc: bitcoinRpc } },
               ],
             },
           },

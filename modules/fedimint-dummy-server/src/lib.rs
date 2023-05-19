@@ -10,7 +10,6 @@ use fedimint_core::config::{
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{combine_sigs, SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
@@ -297,7 +296,6 @@ impl ServerModule for Dummy {
 
     async fn validate_input<'a, 'b>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a DummyInput,
@@ -322,15 +320,12 @@ impl ServerModule for Dummy {
 
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DummyInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         // TODO: Boiler-plate code
-        let meta = self
-            .validate_input(interconnect, dbtx, cache, input)
-            .await?;
+        let meta = self.validate_input(dbtx, cache, input).await?;
 
         let current_funds = dbtx.get_value(&DummyFundsKeyV1(input.account)).await;
         // Subtract funds from normal user, or print funds for the fed

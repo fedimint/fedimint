@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 use secp256k1::PublicKey;
@@ -17,6 +19,7 @@ pub enum DbKeyPrefix {
     AgreedDecryptionShare = 0x43,
     ContractUpdate = 0x44,
     LightningGateway = 0x45,
+    BlockHeight = 0x46,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -119,4 +122,14 @@ impl_db_record!(
 impl_db_lookup!(
     key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
+);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct BlockHeightKey;
+
+impl_db_record!(
+    key = BlockHeightKey,
+    value = BTreeMap<PeerId, u64>,
+    db_prefix = DbKeyPrefix::BlockHeight,
+    notify_on_modify = true
 );

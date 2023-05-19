@@ -13,7 +13,6 @@ use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::outgoing::OutgoingContract;
 use fedimint_ln_common::contracts::{ContractId, IdentifiableContract, Preimage};
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome};
-use fedimint_wallet_client::api::WalletFederationApi;
 use futures::future;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -412,7 +411,7 @@ impl LightningPayRefundable {
                 .await
                 .map_err(|e| anyhow::anyhow!("ApiError: {e:?}"));
 
-            if let Ok(current_block_height) = consensus_block_height {
+            if let Ok(Some(current_block_height)) = consensus_block_height {
                 if timelock as u64 <= current_block_height {
                     return;
                 }

@@ -1,7 +1,6 @@
 #![allow(clippy::let_unit_value)]
 
 pub mod debug;
-pub mod interconnect;
 pub mod server;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -26,7 +25,6 @@ use thiserror::Error;
 use tracing::{error, info_span, instrument, trace, warn, Instrument};
 
 use crate::config::ServerConfig;
-use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
     AcceptedTransactionKey, ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey,
@@ -561,9 +559,6 @@ impl FedimintConsensus {
                 .modules
                 .get_expect(input.module_instance_id())
                 .apply_input(
-                    &FedimintInterconnect {
-                        fedimint: &self.api,
-                    },
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
                     input,
                     caches.get_cache(input.module_instance_id()),

@@ -190,14 +190,19 @@ impl LightningGateway {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct LightningConsensusItem {
-    pub contract_id: ContractId,
-    pub share: PreimageDecryptionShare,
+pub enum LightningConsensusItem {
+    DecryptPreimage(ContractId, PreimageDecryptionShare),
+    BlockHeight(u64),
 }
 
 impl std::fmt::Display for LightningConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LN Decryption Share for contract {}", self.contract_id)
+        match self {
+            LightningConsensusItem::DecryptPreimage(contract_id, _) => {
+                write!(f, "LN Decryption Share for contract {contract_id}")
+            }
+            LightningConsensusItem::BlockHeight(height) => write!(f, "LN block height {height}"),
+        }
     }
 }
 

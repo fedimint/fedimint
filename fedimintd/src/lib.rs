@@ -36,7 +36,9 @@ pub fn attach_default_module_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),
             WalletGenParams {
-                local: WalletGenParamsLocal { bitcoin_rpc },
+                local: WalletGenParamsLocal {
+                    bitcoin_rpc: bitcoin_rpc.clone(),
+                },
                 consensus: WalletGenParamsConsensus {
                     network,
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next
@@ -61,6 +63,6 @@ pub fn attach_default_module_gen_params(
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_LN,
             LightningGen::kind(),
-            LightningGenParams::default(),
+            LightningGenParams::regtest(bitcoin_rpc),
         );
 }

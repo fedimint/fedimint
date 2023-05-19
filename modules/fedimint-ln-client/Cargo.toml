@@ -28,8 +28,6 @@ lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-ln-common ={ path = "../fedimint-ln-common" }
-fedimint-wallet-common ={ path = "../fedimint-wallet-common" }
-fedimint-wallet-client ={ path = "../fedimint-wallet-client" }
 secp256k1 = { version="0.24.2", default-features=false }
 secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = {version = "1.0.149", features = [ "derive" ] }

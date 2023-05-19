@@ -441,10 +441,10 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
             .override_proposal(vec![ConsensusItem::Module(
                 fedimint_core::core::DynModuleConsensusItem::from_typed(
                     fed.ln_id,
-                    LightningConsensusItem {
+                    LightningConsensusItem::DecryptPreimage(
                         contract_id,
-                        share: PreimageDecryptionShare(share),
-                    },
+                        PreimageDecryptionShare(share),
+                    ),
                 ),
             )])
             .await;
@@ -867,6 +867,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
     lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
+        let bitcoin = bitcoin.lock_exclusive().await;
         let invoice = lightning.invoice(sats(1000), None).await.unwrap();
 
         fed.mine_and_mint(&*user, &*bitcoin, sats(1010)).await; // 1% LN fee

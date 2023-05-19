@@ -7,7 +7,7 @@ use std::iter::once;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::bail;
+use anyhow::{bail, format_err};
 use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
@@ -24,11 +24,9 @@ use fedimint_client::{
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-use fedimint_core::api::IFederationApi;
+use fedimint_core::api::DynFederationApi;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{
-    Decoder, IntoDynInstance, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -40,8 +38,6 @@ use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContract;
 use fedimint_ln_common::contracts::{Contract, EncryptedPreimage, IdentifiableContract, Preimage};
 pub use fedimint_ln_common::*;
-use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::WalletClientExt;
 use futures::StreamExt;
 use itertools::Itertools;
 use lightning::ln::PaymentSecret;
@@ -190,7 +186,7 @@ impl LightningClientExt for Client {
         let output = lightning
             .create_outgoing_output(
                 operation_id,
-                self.api(),
+                instance.api,
                 invoice.clone(),
                 active_gateway,
                 fed_id,
@@ -225,10 +221,6 @@ impl LightningClientExt for Client {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let active_gateway = self.select_active_gateway().await?;
 
-        // TODO: This gets the `bitcoin::Network` from the wallet module. Ideally
-        // modules should not be dependent on each other. This should be moved
-        // to the global config.
-        let network = self.get_network();
         let (operation_id, invoice, output) = lightning
             .create_lightning_receive_output(
                 amount,
@@ -236,7 +228,7 @@ impl LightningClientExt for Client {
                 rand::rngs::OsRng,
                 expiry_time,
                 active_gateway,
-                network,
+                lightning.cfg.network,
             )
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
@@ -512,16 +504,16 @@ impl LightningClientModule {
     pub async fn create_outgoing_output<'a, 'b>(
         &'a self,
         operation_id: OperationId,
-        api: &(dyn IFederationApi + 'static),
+        api: DynFederationApi,
         invoice: Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
     ) -> anyhow::Result<ClientOutput<LightningOutput, LightningClientStateMachines>> {
         let consensus_height = api
-            .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .fetch_consensus_block_height()
-            .await?;
+            .await?
+            .ok_or(format_err!("Cannot get consensus block height"))?;
         let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
 
         // Compute amount to lock in the outgoing contract

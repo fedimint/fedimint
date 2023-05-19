@@ -37,7 +37,6 @@ use super::peers::PeerStatusChannels;
 use crate::backup::ClientBackupSnapshot;
 use crate::config::api::{get_verification_hashes, ApiResult};
 use crate::config::ServerConfig;
-use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::{
     AcceptedTransaction, ApiEvent, FundingVerifier, TransactionSubmissionError,
@@ -122,7 +121,6 @@ impl ConsensusApi {
             let cache = module.build_verification_cache(&[input.clone()]);
             let meta = module
                 .validate_input(
-                    &FedimintInterconnect { fedimint: self },
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
                     &cache,
                     input,
