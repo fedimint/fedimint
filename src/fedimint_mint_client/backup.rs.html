@@ -94,7 +94,7 @@
 <a href="#94" id="94">94</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::Executor;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::ModuleDatabaseTransaction;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -136,7 +136,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         executor: Executor&lt;DynGlobalClientContext&gt;,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;EcashBackup&gt; {
         <span class="comment">// fetch consensus height first - so we dont miss anything when scanning

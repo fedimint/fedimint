@@ -864,7 +864,7 @@
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-<span class="kw">use </span>fedimint_core::api::DynFederationApi;
+<span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -1344,7 +1344,7 @@
     </span><span class="kw">pub async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         operation_id: OperationId,
-        api: DynFederationApi,
+        api: DynModuleApi,
         invoice: Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,

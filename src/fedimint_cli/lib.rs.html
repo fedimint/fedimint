@@ -1173,7 +1173,7 @@
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
-    IFederationApi, WsClientConnectInfo, WsFederationApi,
+    IFederationApi, IGlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
@@ -1805,7 +1805,7 @@
                 <span class="kw">let </span>connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>connect)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid connect info&quot;</span>)<span class="question-mark">?</span>;
                 <span class="kw">let </span>api = Arc::new(WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect_obj.clone()]))
-                    <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
+                    <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IGlobalFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
                 <span class="kw">let </span>cfg: ClientConfig = api
                     .download_client_config(<span class="kw-2">&amp;</span>connect_obj)
                     .<span class="kw">await

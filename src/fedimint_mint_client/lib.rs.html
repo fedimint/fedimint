@@ -1393,7 +1393,7 @@
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-<span class="kw">use </span>fedimint_core::api::{DynFederationApi, GlobalFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
@@ -1938,7 +1938,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         executor: Executor&lt;DynGlobalClientContext&gt;,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;Vec&lt;u8&gt;&gt; {
         <span class="kw">let </span>backup = <span class="self">self
@@ -1954,7 +1954,7 @@
         </span>dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
         executor: Executor&lt;DynGlobalClientContext&gt;,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">if </span>!<span class="self">Self</span>::get_all_spendable_notes(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id))

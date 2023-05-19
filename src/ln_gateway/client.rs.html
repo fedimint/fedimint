@@ -225,8 +225,6 @@
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -235,9 +233,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
-<span class="kw">use </span>fedimint_core::api::{
-    DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
-};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::{load_from_file, FederationId};
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -377,7 +373,7 @@
         </span>_module_gens: ClientModuleGenRegistry,
         fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
-        <span class="kw">let </span>api: DynFederationApi = WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect.clone()]).into();
+        <span class="kw">let </span>api: DynGlobalApi = WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect.clone()]).into();
 
         <span class="kw">let </span>client_config = api.download_client_config(<span class="kw-2">&amp;</span>connect).<span class="kw">await</span><span class="question-mark">?</span>;
 

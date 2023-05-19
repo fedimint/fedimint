@@ -674,7 +674,7 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::api::{
-    ConsensusContribution, DynFederationApi, GlobalFederationApi, WsFederationApi,
+    ConsensusContribution, DynGlobalApi, GlobalFederationApi, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::cancellable::Cancellable;
 <span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
@@ -757,7 +757,7 @@
     <span class="doccomment">/// Runs the HBBFT consensus algorithm
     </span><span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;,
     <span class="doccomment">/// Used to make API calls to our peers
-    </span><span class="kw">pub </span>api: DynFederationApi,
+    </span><span class="kw">pub </span>api: DynGlobalApi,
     <span class="doccomment">/// The list of all other peers
     </span><span class="kw">pub </span>other_peers: BTreeSet&lt;PeerId&gt;,
     <span class="doccomment">/// If `Some` then we restarted and look for the epoch to rejoin at

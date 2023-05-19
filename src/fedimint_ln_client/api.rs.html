@@ -115,7 +115,7 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::{CurrentConsensus, UnionResponses};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -154,7 +154,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; LnFederationApi <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+    </span>T: IModuleFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
         <span class="self">self</span>.request_current_consensus(<span class="string">&quot;block_height&quot;</span>.to_string(), ApiRequestErased::default())

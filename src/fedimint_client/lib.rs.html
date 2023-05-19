@@ -1738,7 +1738,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_stream::stream;
-<span class="kw">use </span>fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi, IGlobalFederationApi, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
@@ -1814,16 +1814,16 @@
 </span><span class="kw">pub trait </span>IGlobalClientContext: Debug + MaybeSend + MaybeSync + <span class="lifetime">&#39;static </span>{
     <span class="doccomment">/// Returned a reference client&#39;s module API client, so that module-specific
     /// calls can be made
-    </span><span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynFederationApi;
+    </span><span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynModuleApi;
 
     <span class="kw">fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig;
 
     <span class="doccomment">/// Returns a reference to the client&#39;s federation API client. The provided
-    /// interface [`IFederationApi`] typically does not provide the necessary
-    /// functionality, for this extension traits like
+    /// interface [`IGlobalFederationApi`] typically does not provide the
+    /// necessary functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
     </span><span class="comment">// TODO: Could be removed in favor of client() except for testing
-    </span><span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynFederationApi;
+    </span><span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynGlobalApi;
 
     <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry;
 
@@ -2028,11 +2028,11 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>IGlobalClientContext <span class="kw">for </span>ModuleGlobalClientContext {
-    <span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynFederationApi {
+    <span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynModuleApi {
         <span class="self">self</span>.api().with_module(<span class="self">self</span>.module_instance_id)
     }
 
-    <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynFederationApi {
+    <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynGlobalApi {
         <span class="kw-2">&amp;</span><span class="self">self</span>.client.api
     }
 
@@ -2142,7 +2142,7 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IFederationApi + <span class="lifetime">&#39;static</span>) {
+    <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
         <span class="self">self</span>.inner.api.as_ref()
     }
 
@@ -2440,7 +2440,7 @@
     <span class="doccomment">/// Module-specific DB
     </span><span class="kw">pub </span>db: Database,
     <span class="doccomment">/// Module-specific API
-    </span><span class="kw">pub </span>api: DynFederationApi,
+    </span><span class="kw">pub </span>api: DynModuleApi,
 }
 
 <span class="kw">struct </span>ClientInner {
@@ -2454,7 +2454,7 @@
     primary_module_kind: ModuleKind,
     modules: ClientModuleRegistry,
     executor: Executor&lt;DynGlobalClientContext&gt;,
-    api: DynFederationApi,
+    api: DynGlobalApi,
     root_secret: DerivableSecret,
     secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
 }
@@ -2870,7 +2870,7 @@
 
         <span class="kw">let </span>notifier = Notifier::new(db.clone());
 
-        <span class="kw">let </span>api = DynFederationApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span>config));
+        <span class="kw">let </span>api = DynGlobalApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span>config));
 
         <span class="kw">let </span>root_secret = get_client_root_secret::&lt;S&gt;(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 

@@ -934,7 +934,7 @@
         <span class="comment">// TODO: Remove polling
         </span><span class="kw">loop </span>{
             <span class="kw">let </span>consensus_block_height = global_context
-                .api()
+                .module_api()
                 .fetch_consensus_block_height()
                 .<span class="kw">await
                 </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;ApiError: {e:?}&quot;</span>));

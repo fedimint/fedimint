@@ -991,7 +991,7 @@
 
     <span class="kw">async fn </span>make_progress&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         decoders: ModuleDecoderRegistry,
         epoch_pk: threshold_crypto::PublicKey,
         secret: DerivableSecret,
@@ -1028,7 +1028,7 @@
     ///
     /// TODO: could be internal to recovery_loop?
     </span><span class="kw">fn </span>fetch_epochs_stream&lt;<span class="lifetime">&#39;a</span>&gt;(
-        api: DynFederationApi,
+        api: DynGlobalApi,
         epoch_pk: threshold_crypto::PublicKey,
         decoders: ModuleDecoderRegistry,
         epoch_range: Range&lt;u64&gt;,

@@ -1715,7 +1715,7 @@
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_core::api::{
-    DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
+    DynGlobalApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
     WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
@@ -1977,7 +1977,7 @@
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         db: Database,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; Client&lt;T&gt; {
         <span class="kw">let </span>root_secret = <span class="self">Self</span>::get_secret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
