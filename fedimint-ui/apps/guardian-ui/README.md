@@ -19,7 +19,7 @@ Do the following in separate terminals:
 - **First terminal**
 
 1. Confirm you are in the root of fedimint repository
-1. Start fedimintd servers by running `./scripts/run-ui.sh new`
+1. Start fedimintd servers by running `./scripts/run-ui.sh`
 
 - **Second Terminal**
 

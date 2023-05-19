@@ -8,9 +8,8 @@ if [[ -z "${FEDIMINT_UI_SHELL:-}" ]]; then
 fi
 
 export FM_BITCOIN_NETWORK="regtest"
-export FM_UI_KIND=${1:-"old"}
-export FM_FED_SIZE=${2:-2}
-export FM_FED_NAME=${3:-"Cypherpunk Federation"}
+export FM_FED_SIZE=${1:-2}
+export FM_FED_NAME=${2:-"Cypherpunk Federation"}
 
 source scripts/build.sh $FM_FED_SIZE
 
@@ -21,4 +20,4 @@ do
   echo $! >> $FM_PID_FILE
 done
 
-devimint run-ui $FM_UI_KIND
+devimint run-ui

@@ -31,8 +31,7 @@ impl Federation {
                     process_mgr,
                     bitcoind.clone(),
                     peer_id,
-                    &vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old)
-                        .await?,
+                    &vars::Fedimintd::init(&process_mgr.globals, peer_id, true).await?,
                 )
                 .await?,
             );
@@ -70,7 +69,7 @@ impl Federation {
                 process_mgr,
                 self.bitcoind.clone(),
                 peer_id,
-                &vars::Fedimintd::init(&process_mgr.globals, peer_id, vars::UiKind::Old).await?,
+                &vars::Fedimintd::init(&process_mgr.globals, peer_id, true).await?,
             )
             .await?,
         );
@@ -302,7 +301,7 @@ pub async fn run_dkg(process_mgr: &ProcessManager, servers: usize) -> anyhow::Re
 
     info!("Generated TLS certs");
     let fedimintd_envs = future::try_join_all(
-        (0..servers).map(|id| vars::Fedimintd::init(&process_mgr.globals, id, vars::UiKind::Old)),
+        (0..servers).map(|id| vars::Fedimintd::init(&process_mgr.globals, id, true)),
     )
     .await?;
     let certs = future::try_join_all(

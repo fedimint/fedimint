@@ -16,9 +16,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::api::ConfigGenSettings;
-use fedimint_server::config::io::{
-    CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG, PLAINTEXT_PASSWORD,
-};
+use fedimint_server::config::io::{CODE_VERSION, DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
@@ -27,7 +25,6 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 
 use crate::attach_default_module_gen_params;
-use crate::ui::{run_ui, UiMessage};
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -42,9 +39,6 @@ pub struct ServerOpts {
     // the API
     #[arg(long, env = "FM_PASSWORD")]
     pub password: Option<String>,
-    /// Port to run admin UI on
-    #[arg(long, env = "FM_LISTEN_UI")]
-    pub listen_ui: Option<SocketAddr>,
     /// Enable tokio console logging
     #[arg(long, env = "FM_TOKIO_CONSOLE_BIND")]
     pub tokio_console_bind: Option<SocketAddr>,
@@ -219,53 +213,10 @@ impl Fedimintd {
 
 async fn run(
     opts: ServerOpts,
-    mut task_group: TaskGroup,
+    task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
     mut module_gens_params: ServerModuleGenParamsRegistry,
 ) -> anyhow::Result<()> {
-    let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
-
-    info!("Starting pre-check");
-
-    // Run admin UI if a socket address was given for it
-    let module_gens_params_clone = module_gens_params.clone();
-    if let (Some(listen_ui), Some(password)) = (opts.listen_ui, opts.password.clone()) {
-        let module_gens = module_gens.clone();
-        // Spawn admin UI
-        let data_dir = opts.data_dir.clone();
-        let ui_task_group = task_group.make_subgroup().await;
-        task_group
-            .spawn("admin-ui", move |_| async move {
-                run_ui(
-                    data_dir,
-                    ui_sender,
-                    listen_ui,
-                    password,
-                    ui_task_group,
-                    module_gens,
-                    module_gens_params_clone,
-                )
-                .await;
-            })
-            .await;
-        info!(target: "old-ui", "Started ui on http://{listen_ui}");
-
-        // If federation configs (e.g. local.json) missing, wait for admin UI to report
-        // DKG completion
-        let local_cfg_path = opts.data_dir.join(LOCAL_CONFIG).with_extension(JSON_EXT);
-        if !std::path::Path::new(&local_cfg_path).exists() {
-            loop {
-                if let UiMessage::DkgSuccess = ui_receiver
-                    .recv()
-                    .await
-                    .expect("failed to receive setup message")
-                {
-                    break;
-                }
-            }
-        }
-    }
-
     attach_default_module_gen_params(
         BitcoinRpcConfig::from_env_vars()?,
         &mut module_gens_params,
