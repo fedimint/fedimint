@@ -787,7 +787,15 @@
 <a href="#787" id="787">787</a>
 <a href="#788" id="788">788</a>
 <a href="#789" id="789">789</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::ops::Mul;
@@ -1159,6 +1167,10 @@
         }
     }
 
+    <span class="kw">pub fn </span>kinds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;ModuleKind&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.keys().cloned().collect()
+    }
+
     <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, k: <span class="kw-2">&amp;</span>ModuleKind) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>M&gt; {
         <span class="self">self</span>.<span class="number">0</span>.get(k)
     }
@@ -1418,6 +1430,10 @@
     <span class="doccomment">/// Error running DKG
     </span><span class="attr">#[error(<span class="string">&quot;Running DKG failed due to {0}&quot;</span>)]
     </span>Failed(<span class="attr">#[from] </span>anyhow::Error),
+    <span class="attr">#[error(<span class="string">&quot;The module was not found {0}&quot;</span>)]
+    </span>ModuleNotFound(ModuleKind),
+    <span class="attr">#[error(<span class="string">&quot;Params for modules were not found {0:?}&quot;</span>)]
+    </span>ParamsNotFound(BTreeSet&lt;ModuleKind&gt;),
 }
 
 <span class="doccomment">/// Supported (by Fedimint&#39;s code) `DkgMessage&lt;T&gt;` types

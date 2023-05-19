@@ -861,6 +861,11 @@
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::Path;
@@ -1348,6 +1353,7 @@
         <span class="kw">let </span>hbbft_keys = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
         <span class="kw">let </span>epoch_keys = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
 
+        <span class="kw">let </span><span class="kw-2">mut </span>registered_modules = registry.kinds();
         <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = Default::default();
         <span class="kw">let </span>modules = params.consensus.modules.iter_modules();
         <span class="kw">let </span>modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
@@ -1355,16 +1361,20 @@
             <span class="kw">let </span>registry = registry.clone();
 
             <span class="kw">async move </span>{
-                <span class="kw">let </span>result = registry
-                    .get(kind)
-                    .expect(<span class="string">&quot;Module not registered&quot;</span>)
-                    .distributed_gen(<span class="kw-2">&amp;</span>dkg, module_params)
-                    .<span class="kw">await</span>;
+                <span class="kw">let </span>result = <span class="kw">match </span>registry.get(kind) {
+                    <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(DkgError::ModuleNotFound(kind.clone())),
+                    <span class="prelude-val">Some</span>(gen) =&gt; gen.distributed_gen(<span class="kw-2">&amp;</span>dkg, module_params).<span class="kw">await</span>,
+                };
                 (module_instance_id, result)
             }
         });
         <span class="kw">for </span>(module_instance_id, config) <span class="kw">in </span>join_all(modules_runner).<span class="kw">await </span>{
-            module_cfgs.insert(module_instance_id, config<span class="question-mark">?</span>);
+            <span class="kw">let </span>config = config<span class="question-mark">?</span>;
+            registered_modules.remove(config.consensus_json.kind());
+            module_cfgs.insert(module_instance_id, config);
+        }
+        <span class="kw">if </span>!registered_modules.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(DkgError::ParamsNotFound(registered_modules));
         }
 
         <span class="macro">info!</span>(
