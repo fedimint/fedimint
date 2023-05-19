@@ -26,7 +26,7 @@ use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::api::{
-    DynFederationApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
+    DynGlobalApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
     WsFederationApi,
 };
 use fedimint_core::config::ClientConfig;
@@ -288,7 +288,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
         db: Database,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         secp: Secp256k1<All>,
     ) -> Client<T> {
         let root_secret = Self::get_secret(&db).await;

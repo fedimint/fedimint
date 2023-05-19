@@ -1,4 +1,4 @@
-use fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
+use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -14,7 +14,7 @@ pub trait DummyFederationApi {
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> DummyFederationApi for T
 where
-    T: IFederationApi + MaybeSend + MaybeSync + 'static,
+    T: IModuleFederationApi + MaybeSend + MaybeSync + 'static,
 {
     async fn sign_message(&self, message: String) -> FederationResult<()> {
         self.request_current_consensus("sign_message".to_string(), ApiRequestErased::new(message))

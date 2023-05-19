@@ -129,6 +129,7 @@ pub enum OutputOutcomeError {
     Timeout(Duration),
 }
 
+/// An API (module or global) that can query a federation
 #[apply(async_trait_maybe_send!)]
 pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     /// List of all federation members for the purpose of iterating each member
@@ -140,7 +141,7 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     /// API call to the federation would be inconvenient.
     fn all_members(&self) -> &BTreeSet<PeerId>;
 
-    fn with_module(&self, id: ModuleInstanceId) -> DynFederationApi;
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi;
 
     /// Make request to a specific federation member by `peer_id`
     async fn request_raw(
@@ -310,17 +311,29 @@ pub trait FederationApiExt: IFederationApi {
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> FederationApiExt for T where T: IFederationApi {}
 
+/// Trait marker for the module (non-global) endpoints
+pub trait IModuleFederationApi: IFederationApi {}
+
 dyn_newtype_define! {
     #[derive(Clone)]
-    pub DynFederationApi(Arc<IFederationApi>)
+    pub DynModuleApi(Arc<IModuleFederationApi>)
 }
 
-impl AsRef<dyn IFederationApi + 'static> for DynFederationApi {
-    fn as_ref(&self) -> &(dyn IFederationApi + 'static) {
+/// Trait marker for the global (non-module) endpoints
+pub trait IGlobalFederationApi: IFederationApi {}
+
+dyn_newtype_define! {
+    #[derive(Clone)]
+    pub DynGlobalApi(Arc<IGlobalFederationApi>)
+}
+
+impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
+    fn as_ref(&self) -> &(dyn IGlobalFederationApi + 'static) {
         self.0.as_ref()
     }
 }
 
+/// The API for the global (non-module) endpoints
 #[apply(async_trait_maybe_send!)]
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
@@ -412,7 +425,7 @@ where
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> GlobalFederationApi for T
 where
-    T: IFederationApi + MaybeSend + MaybeSync + 'static,
+    T: IGlobalFederationApi + MaybeSend + MaybeSync + 'static,
 {
     /// Submit a transaction for inclusion
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
@@ -699,15 +712,20 @@ impl<'de> Deserialize<'de> for WsClientConnectInfo {
     }
 }
 
+impl<C: JsonRpcClient + Debug + 'static> IGlobalFederationApi for WsFederationApi<C> {}
+
+impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
+
+/// Implementation of API calls over websockets
+///
+/// Can function as either the global or module API
 #[apply(async_trait_maybe_send!)]
-impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync + 'static> IFederationApi
-    for WsFederationApi<C>
-{
+impl<C: JsonRpcClient + Debug + 'static> IFederationApi for WsFederationApi<C> {
     fn all_members(&self) -> &BTreeSet<PeerId> {
         &self.peers
     }
 
-    fn with_module(&self, id: ModuleInstanceId) -> DynFederationApi {
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         WsFederationApi {
             peers: self.peers.clone(),
             members: self.members.clone(),
@@ -737,7 +755,7 @@ impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync + 'static> IFederationApi
 }
 
 #[apply(async_trait_maybe_send!)]
-pub trait JsonRpcClient: ClientT + Sized {
+pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
     async fn connect(url: &Url) -> result::Result<Self, JsonRpcError>;
     fn is_connected(&self) -> bool;
 }

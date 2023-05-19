@@ -6,9 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
-use fedimint_core::api::{
-    DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
-};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
 use fedimint_core::config::{load_from_file, FederationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
@@ -148,7 +146,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         _module_gens: ClientModuleGenRegistry,
         fees: RoutingFees,
     ) -> Result<GatewayClientConfig> {
-        let api: DynFederationApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
+        let api: DynGlobalApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
 
         let client_config = api.download_client_config(&connect).await?;
 

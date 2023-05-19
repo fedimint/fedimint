@@ -406,7 +406,7 @@ impl LightningPayRefundable {
         // TODO: Remove polling
         loop {
             let consensus_block_height = global_context
-                .api()
+                .module_api()
                 .fetch_consensus_block_height()
                 .await
                 .map_err(|e| anyhow::anyhow!("ApiError: {e:?}"));

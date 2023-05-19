@@ -75,7 +75,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
 use async_stream::stream;
-use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
+use fedimint_core::api::{DynGlobalApi, DynModuleApi, IGlobalFederationApi, WsFederationApi};
 use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
@@ -151,16 +151,16 @@ pub type InstancelessDynClientOutput = ClientOutput<
 pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// Returned a reference client's module API client, so that module-specific
     /// calls can be made
-    fn module_api(&self) -> DynFederationApi;
+    fn module_api(&self) -> DynModuleApi;
 
     fn client_config(&self) -> &ClientConfig;
 
     /// Returns a reference to the client's federation API client. The provided
-    /// interface [`IFederationApi`] typically does not provide the necessary
-    /// functionality, for this extension traits like
+    /// interface [`IGlobalFederationApi`] typically does not provide the
+    /// necessary functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
     // TODO: Could be removed in favor of client() except for testing
-    fn api(&self) -> &DynFederationApi;
+    fn api(&self) -> &DynGlobalApi;
 
     fn decoders(&self) -> &ModuleDecoderRegistry;
 
@@ -365,11 +365,11 @@ struct ModuleGlobalClientContext {
 
 #[apply(async_trait_maybe_send!)]
 impl IGlobalClientContext for ModuleGlobalClientContext {
-    fn module_api(&self) -> DynFederationApi {
+    fn module_api(&self) -> DynModuleApi {
         self.api().with_module(self.module_instance_id)
     }
 
-    fn api(&self) -> &DynFederationApi {
+    fn api(&self) -> &DynGlobalApi {
         &self.client.api
     }
 
@@ -479,7 +479,7 @@ impl Client {
             .await
     }
 
-    pub fn api(&self) -> &(dyn IFederationApi + 'static) {
+    pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
         self.inner.api.as_ref()
     }
 
@@ -777,7 +777,7 @@ pub struct ClientModuleInstance {
     /// Module-specific DB
     pub db: Database,
     /// Module-specific API
-    pub api: DynFederationApi,
+    pub api: DynModuleApi,
 }
 
 struct ClientInner {
@@ -791,7 +791,7 @@ struct ClientInner {
     primary_module_kind: ModuleKind,
     modules: ClientModuleRegistry,
     executor: Executor<DynGlobalClientContext>,
-    api: DynFederationApi,
+    api: DynGlobalApi,
     root_secret: DerivableSecret,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 }
@@ -1207,7 +1207,7 @@ impl ClientBuilder {
 
         let notifier = Notifier::new(db.clone());
 
-        let api = DynFederationApi::from(WsFederationApi::from_config(&config));
+        let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
         let root_secret = get_client_root_secret::<S>(&db).await;
 

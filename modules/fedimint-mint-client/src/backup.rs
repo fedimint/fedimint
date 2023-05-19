@@ -1,6 +1,6 @@
 use fedimint_client::sm::Executor;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{DynFederationApi, GlobalFederationApi};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -42,7 +42,7 @@ impl MintClientModule {
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         executor: Executor<DynGlobalClientContext>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<EcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning

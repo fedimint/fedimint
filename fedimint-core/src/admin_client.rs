@@ -9,7 +9,7 @@ use tokio_rustls::rustls;
 use url::Url;
 
 use crate::api::{
-    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
+    DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
     StatusResponse, WsFederationApi,
 };
 use crate::config::ServerModuleGenParamsRegistry;
@@ -21,7 +21,7 @@ use crate::PeerId;
 /// For a guardian to communicate with their server
 // TODO: Maybe should have it's own CLI client so it doesn't need to be in core
 pub struct WsAdminClient {
-    inner: DynFederationApi,
+    inner: DynGlobalApi,
     auth: ApiAuth,
 }
 

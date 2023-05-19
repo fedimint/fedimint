@@ -3,7 +3,7 @@ use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use fedimint_core::api::DynFederationApi;
+use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
@@ -75,7 +75,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _executor: Executor<DynGlobalClientContext>,
-        _api: DynFederationApi,
+        _api: DynGlobalApi,
         _module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<Vec<u8>> {
         anyhow::bail!("Backup not supported");
@@ -87,7 +87,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _dbtx: &mut DatabaseTransaction<'_>,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor<DynGlobalClientContext>,
-        _api: DynFederationApi,
+        _api: DynGlobalApi,
         _snapshot: Option<&[u8]>,
     ) -> anyhow::Result<()> {
         anyhow::bail!("Backup not supported");
@@ -128,7 +128,7 @@ pub trait IClientModule: Debug {
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         executor: Executor<DynGlobalClientContext>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<Vec<u8>>;
 
@@ -138,7 +138,7 @@ pub trait IClientModule: Debug {
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         snapshot: Option<&[u8]>,
     ) -> anyhow::Result<()>;
 
@@ -203,7 +203,7 @@ where
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         executor: Executor<DynGlobalClientContext>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<Vec<u8>> {
         <T as ClientModule>::backup(self, dbtx, executor, api, module_instance_id).await
@@ -215,7 +215,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         snapshot: Option<&[u8]>,
     ) -> anyhow::Result<()> {
         <T as ClientModule>::restore(self, dbtx, module_instance_id, executor, api, snapshot).await

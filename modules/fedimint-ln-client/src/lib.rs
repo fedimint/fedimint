@@ -24,7 +24,7 @@ use fedimint_client::{
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-use fedimint_core::api::DynFederationApi;
+use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
@@ -504,7 +504,7 @@ impl LightningClientModule {
     pub async fn create_outgoing_output<'a, 'b>(
         &'a self,
         operation_id: OperationId,
-        api: DynFederationApi,
+        api: DynModuleApi,
         invoice: Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,

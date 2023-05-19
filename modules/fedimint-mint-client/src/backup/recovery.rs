@@ -215,7 +215,7 @@ impl MintRestoreInProgressState {
 
     async fn make_progress<'a>(
         mut self,
-        api: DynFederationApi,
+        api: DynGlobalApi,
         decoders: ModuleDecoderRegistry,
         epoch_pk: threshold_crypto::PublicKey,
         secret: DerivableSecret,
@@ -252,7 +252,7 @@ impl MintRestoreInProgressState {
     ///
     /// TODO: could be internal to recovery_loop?
     fn fetch_epochs_stream<'a>(
-        api: DynFederationApi,
+        api: DynGlobalApi,
         epoch_pk: threshold_crypto::PublicKey,
         decoders: ModuleDecoderRegistry,
         epoch_range: Range<u64>,
