@@ -698,6 +698,19 @@ impl PrimaryClientModule for MintClientModule {
                             state: MintInputStates::Created(_),
                             ..
                         }) => Some(()),
+                        // We only trigger on created since refunds are already covered under the
+                        // output state
+                        MintClientStateMachines::OOB(MintOOBStateMachine {
+                            state: MintOOBStates::Created(_),
+                            ..
+                        }) => Some(()),
+                        // We don't want to scare users, so we only trigger on success instead of
+                        // showing incremental progress. Ideally the balance isn't shown to them
+                        // during recovery anyway.
+                        MintClientStateMachines::Restore(MintRestoreStateMachine {
+                            state: MintRestoreStates::Success,
+                            ..
+                        }) => Some(()),
                         _ => None,
                     }
                 }),
