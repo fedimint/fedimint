@@ -446,7 +446,7 @@
         }
         ClientNg::Spend { amount } =&gt; {
             <span class="kw">let </span>(operation, notes) = client
-                .spend_notes(amount, Duration::from_secs(<span class="number">30</span>), ())
+                .spend_notes(amount, Duration::from_secs(<span class="number">3600</span>), ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation:?}&quot;</span>);
 

@@ -1661,6 +1661,33 @@
 <a href="#1661" id="1661">1661</a>
 <a href="#1662" id="1662">1662</a>
 <a href="#1663" id="1663">1663</a>
+<a href="#1664" id="1664">1664</a>
+<a href="#1665" id="1665">1665</a>
+<a href="#1666" id="1666">1666</a>
+<a href="#1667" id="1667">1667</a>
+<a href="#1668" id="1668">1668</a>
+<a href="#1669" id="1669">1669</a>
+<a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2430,6 +2457,33 @@
     <span class="doccomment">/// Returns the config with which the client was initialized.
     </span><span class="kw">pub async fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
         <span class="kw-2">&amp;</span><span class="self">self</span>.inner.config
+    }
+
+    <span class="doccomment">/// Balance available to the client for spending
+    </span><span class="kw">pub async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+        <span class="self">self</span>.inner
+            .primary_module
+            .get_balance(
+                <span class="self">self</span>.inner.primary_module_instance,
+                <span class="kw-2">&amp;mut </span><span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>,
+            )
+            .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Returns a stream that yields the current client balance every time it
+    /// changes.
+    </span><span class="kw">pub async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;_</span>, Amount&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>balance_changes = <span class="self">self</span>.inner.primary_module.subscribe_balance_changes().<span class="kw">await</span>;
+        Box::pin(<span class="macro">stream! </span>{
+            <span class="kw">while let </span><span class="prelude-val">Some</span>(()) = balance_changes.next().<span class="kw">await </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
+                <span class="kw">let </span>balance = <span class="self">self</span>.inner
+                    .primary_module
+                    .get_balance(<span class="self">self</span>.inner.primary_module_instance, <span class="kw-2">&amp;mut </span>dbtx)
+                    .<span class="kw">await</span>;
+                <span class="kw">yield </span>balance;
+            }
+        })
     }
 }
 

@@ -326,6 +326,16 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -344,7 +354,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::util::NextOrPending;
+<span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 <span class="kw">pub use </span>fedimint_dummy_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_dummy_common::config::DummyClientConfig;
@@ -379,9 +389,6 @@
 
     <span class="doccomment">/// Request the federation signs a message for us
     </span><span class="kw">async fn </span>fed_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;Signature&gt;;
-
-    <span class="doccomment">/// The amount of funds we have
-    </span><span class="kw">async fn </span>total_funds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount;
 
     <span class="doccomment">/// Return our account
     </span><span class="kw">fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; XOnlyPublicKey;
@@ -467,7 +474,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Wrong account id&quot;</span>));
         }
 
-        <span class="kw">let </span>funds = <span class="self">self</span>.total_funds().<span class="kw">await </span>+ amount;
+        <span class="kw">let </span>funds = <span class="self">self</span>.get_balance().<span class="kw">await </span>+ amount;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>funds).<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(())
@@ -478,13 +485,6 @@
         instance.api.sign_message(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>sig = instance.api.wait_signed(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(sig.<span class="number">0</span>)
-    }
-
-    <span class="kw">async fn </span>total_funds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        <span class="kw">let </span>(_dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>funds = get_funds(<span class="kw-2">&amp;mut </span>dbtx.get_isolated()).<span class="kw">await</span>;
-        funds
     }
 
     <span class="kw">fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; XOnlyPublicKey {
@@ -605,6 +605,26 @@
 
         stream.next_or_pending().<span class="kw">await
     </span>}
+
+    <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtc: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
+        get_funds(dbtc).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
+        Box::pin(
+            <span class="self">self</span>.notifier
+                .subscribe_all_operations()
+                .<span class="kw">await
+                </span>.filter_map(|state| <span class="kw">async move </span>{
+                    <span class="kw">match </span>state {
+                        <span class="comment">// Since Done also happens for inputs we will fire too often, but that&#39;s ok
+                        </span>DummyStateMachine::Done(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(()),
+                        DummyStateMachine::Input { .. } =&gt; <span class="prelude-val">Some</span>(()),
+                        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+                    }
+                }),
+        )
+    }
 }
 
 <span class="kw">async fn </span>get_funds(dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
