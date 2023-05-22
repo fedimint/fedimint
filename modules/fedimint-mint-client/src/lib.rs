@@ -698,6 +698,12 @@ impl PrimaryClientModule for MintClientModule {
                             state: MintInputStates::Created(_),
                             ..
                         }) => Some(()),
+                        // We only trigger on created since refunds are already covered under the
+                        // output state
+                        MintClientStateMachines::OOB(MintOOBStateMachine {
+                            state: MintOOBStates::Created(_),
+                            ..
+                        }) => Some(()),
                         _ => None,
                     }
                 }),
