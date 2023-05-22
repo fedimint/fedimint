@@ -166,6 +166,17 @@
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
 
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -179,7 +190,7 @@
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
     InactiveStateKey,
 };
-<span class="kw">use </span><span class="kw">crate</span>::sm::{DynState, GlobalContext, OperationId, State};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{ActiveState, DynState, GlobalContext, InactiveState, OperationId, State};
 
 <span class="doccomment">/// State transition notifier owned by the modularized client used to inform
 /// modules of state transitions.
@@ -280,8 +291,10 @@
                     _pd: Default::default(),
                 })
                 .<span class="kw">await
-                </span>.map(|(key, <span class="kw">_</span>): (ActiveStateKey&lt;GC&gt;, <span class="kw">_</span>)| to_typed_state(key.state))
-                .collect::&lt;Vec&lt;S&gt;&gt;()
+                </span>.map(|(key, val): (ActiveStateKey&lt;GC&gt;, ActiveState)| {
+                    (to_typed_state(key.state), val.created_at)
+                })
+                .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;()
                 .<span class="kw">await</span>;
 
             <span class="kw">let </span>inactive_states = dbtx
@@ -291,13 +304,22 @@
                     _pd: Default::default(),
                 })
                 .<span class="kw">await
-                </span>.map(|(key, <span class="kw">_</span>): (InactiveStateKey&lt;GC&gt;, <span class="kw">_</span>)| to_typed_state(key.state))
-                .collect::&lt;Vec&lt;S&gt;&gt;()
+                </span>.map(|(key, val): (InactiveStateKey&lt;GC&gt;, InactiveState)| {
+                    (to_typed_state(key.state), val.created_at)
+                })
+                .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;()
                 .<span class="kw">await</span>;
 
-            active_states
+            <span class="comment">// FIXME: don&#39;t rely on SystemTime for ordering and introduce a state transition
+            // index instead (dpc was right again xD)
+            </span><span class="kw">let </span><span class="kw-2">mut </span>all_states_timed = active_states
                 .into_iter()
                 .chain(inactive_states)
+                .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;();
+            all_states_timed.sort_by(|(<span class="kw">_</span>, t1), (<span class="kw">_</span>, t2)| t1.cmp(t2));
+            all_states_timed
+                .into_iter()
+                .map(|(s, <span class="kw">_</span>)| s)
                 .collect::&lt;Vec&lt;S&gt;&gt;()
         };
 

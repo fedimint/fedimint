@@ -1573,7 +1573,7 @@
 
 <span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ActiveState {
-    created_at: SystemTime,
+    <span class="kw">pub </span>created_at: SystemTime,
 }
 
 <span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseRecord <span class="kw">for </span>ActiveStateKey&lt;GC&gt;
@@ -1716,8 +1716,8 @@
 
 <span class="attr">#[derive(Debug, Copy, Clone, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>InactiveState {
-    created_at: SystemTime,
-    exited_at: SystemTime,
+    <span class="kw">pub </span>created_at: SystemTime,
+    <span class="kw">pub </span>exited_at: SystemTime,
 }
 
 <span class="kw">impl</span>&lt;GC&gt; ::fedimint_core::db::DatabaseRecord <span class="kw">for </span>InactiveStateKey&lt;GC&gt;

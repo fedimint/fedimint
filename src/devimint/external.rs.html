@@ -450,6 +450,7 @@
 <a href="#450" id="450">450</a>
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::path::Path;
@@ -859,9 +860,10 @@
             <span class="string">&quot;--daemon-rpc-addr=127.0.0.1:18443&quot;</span>,
             <span class="string">&quot;--http-addr=127.0.0.1:50002&quot;</span>,
             <span class="string">&quot;--monitoring-addr=127.0.0.1:50003&quot;</span>,
-        );
+            <span class="string">&quot;--jsonrpc-import&quot;</span>, <span class="comment">// Workaround for incompatible on-disk format
+        </span>);
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;esplora&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;esplora started&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;esplora started&quot;</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
