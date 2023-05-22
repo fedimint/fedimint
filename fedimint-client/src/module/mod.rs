@@ -9,6 +9,7 @@ use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::util::BoxStream;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
@@ -289,11 +290,23 @@ pub trait PrimaryClientModule: ClientModule {
         amount: Amount,
     ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>;
 
+    /// Waits for the funds from an output created by
+    /// [`Self::create_exact_output`] to become available. This function
+    /// returning typically implies a change in the output of
+    /// [`Self::get_balance`].
     async fn await_primary_module_output_finalized(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount>;
+
+    /// Returns the balance held by this module and available for funding
+    /// transactions.
+    async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount;
+
+    /// Returns a stream that will output the updated module balance each time
+    /// it changes.
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
 }
 
 /// Type-erased version of [`PrimaryClientModule`]
@@ -320,6 +333,14 @@ pub trait IPrimaryClientModule: IClientModule {
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount>;
+
+    async fn get_balance(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Amount;
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -369,6 +390,18 @@ where
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
         T::await_primary_module_output_finalized(self, operation_id, out_point).await
+    }
+
+    async fn get_balance(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Amount {
+        T::get_balance(self, &mut dbtx.with_module_prefix(module_instance)).await
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        T::subscribe_balance_changes(self).await
     }
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static)) {

@@ -134,7 +134,7 @@ pub async fn handle_ng_command(
         }
         ClientNg::Spend { amount } => {
             let (operation, notes) = client
-                .spend_notes(amount, Duration::from_secs(30), ())
+                .spend_notes(amount, Duration::from_secs(3600), ())
                 .await?;
             info!("Spend e-cash operation: {operation:?}");
 

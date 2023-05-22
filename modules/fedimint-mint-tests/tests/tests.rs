@@ -43,7 +43,7 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     assert_eq!(next(sub2).await, ReissueExternalNotesState::Done);
     assert_eq!(next(sub1).await, SpendOOBState::Success);
 
-    assert_eq!(client1.total_amount().await, sats(250));
-    assert_eq!(client2.total_amount().await, sats(750));
+    assert_eq!(client1.get_balance().await, sats(250));
+    assert_eq!(client2.get_balance().await, sats(750));
     Ok(())
 }

@@ -16,7 +16,7 @@ use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
@@ -51,9 +51,6 @@ pub trait DummyClientExt {
 
     /// Request the federation signs a message for us
     async fn fed_signature(&self, message: &str) -> anyhow::Result<Signature>;
-
-    /// The amount of funds we have
-    async fn total_funds(&self) -> Amount;
 
     /// Return our account
     fn account(&self) -> XOnlyPublicKey;
@@ -139,7 +136,7 @@ impl DummyClientExt for Client {
             return Err(format_err!("Wrong account id"));
         }
 
-        let funds = self.total_funds().await + amount;
+        let funds = self.get_balance().await + amount;
         dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
         dbtx.commit_tx().await;
         Ok(())
@@ -150,13 +147,6 @@ impl DummyClientExt for Client {
         instance.api.sign_message(message.to_string()).await?;
         let sig = instance.api.wait_signed(message.to_string()).await?;
         Ok(sig.0)
-    }
-
-    async fn total_funds(&self) -> Amount {
-        let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
-        let mut dbtx = instance.db.begin_transaction().await;
-        let funds = get_funds(&mut dbtx.get_isolated()).await;
-        funds
     }
 
     fn account(&self) -> XOnlyPublicKey {
@@ -276,6 +266,26 @@ impl PrimaryClientModule for DummyClientModule {
         pin_mut!(stream);
 
         stream.next_or_pending().await
+    }
+
+    async fn get_balance(&self, dbtc: &mut ModuleDatabaseTransaction<'_>) -> Amount {
+        get_funds(dbtc).await
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        Box::pin(
+            self.notifier
+                .subscribe_all_operations()
+                .await
+                .filter_map(|state| async move {
+                    match state {
+                        // Since Done also happens for inputs we will fire too often, but that's ok
+                        DummyStateMachine::Done(_) => Some(()),
+                        DummyStateMachine::Input { .. } => Some(()),
+                        _ => None,
+                    }
+                }),
+        )
     }
 }
 

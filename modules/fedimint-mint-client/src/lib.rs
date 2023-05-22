@@ -42,7 +42,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
     TransactionId,
@@ -124,10 +124,6 @@ pub trait MintClientExt {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, SpendOOBState>>;
-
-    /// Returns the total value of our notes
-    // TODO: Make getting total asserts part of the core client
-    async fn total_amount(&self) -> Amount;
 
     /// Awaits the backup restoration to complete
     async fn await_restore_finished(&self) -> anyhow::Result<()>;
@@ -367,18 +363,6 @@ impl MintClientExt for Client {
                 }
             }
         }))
-    }
-
-    async fn total_amount(&self) -> Amount {
-        let (_mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
-        let mut dbtx = instance.db.begin_transaction().await;
-        dbtx.find_by_prefix(&NoteKeyPrefix)
-            .await
-            .fold(
-                Amount::ZERO,
-                |acc, (key, _note)| async move { acc + key.amount },
-            )
-            .await
     }
 
     /// Waits for the mint backup restoration to finish
@@ -693,6 +677,31 @@ impl PrimaryClientModule for MintClientModule {
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
         self.await_output_finalized(operation_id, out_point).await
+    }
+
+    async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
+        self.get_wallet_summary(dbtx).await.total_amount()
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        Box::pin(
+            self.notifier
+                .subscribe_all_operations()
+                .await
+                .filter_map(|state| async move {
+                    match state {
+                        MintClientStateMachines::Output(MintOutputStateMachine {
+                            state: MintOutputStates::Succeeded(_),
+                            ..
+                        }) => Some(()),
+                        MintClientStateMachines::Input(MintInputStateMachine {
+                            state: MintInputStates::Created(_),
+                            ..
+                        }) => Some(()),
+                        _ => None,
+                    }
+                }),
+        )
     }
 }
 
