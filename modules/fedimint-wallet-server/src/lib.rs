@@ -48,7 +48,9 @@ use fedimint_core::{
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
+use fedimint_wallet_common::config::{
+    default_esplora_server, WalletClientConfig, WalletConfig, WalletGenParams,
+};
 use fedimint_wallet_common::db::{
     BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
     PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
@@ -119,6 +121,8 @@ impl ServerModuleGen for WalletGen {
                     params.consensus.network,
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
+                    // TODO: make configurable
+                    default_esplora_server(params.consensus.network),
                 );
                 (*id, cfg)
             })
@@ -153,6 +157,7 @@ impl ServerModuleGen for WalletGen {
             params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
+            default_esplora_server(params.consensus.network),
         );
 
         Ok(wallet_cfg.to_erased())
@@ -188,6 +193,7 @@ impl ServerModuleGen for WalletGen {
                 network: config.network,
                 fee_consensus: config.fee_consensus.clone(),
                 finality_delay: config.finality_delay,
+                default_esplora_server: config.default_esplora_server,
             },
         )
         .expect("Serialization can't fail"))

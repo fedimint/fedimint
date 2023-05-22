@@ -12,11 +12,14 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.66"
+aquamarine = "0.3.1"
+async-stream = "0.3.5"
 async-trait = "0.1"
 bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
 erased-serde = "0.3"
+esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client.git", rev = "54de8118c40c6a2cf80591d8991cf578bdfb51c4", default-features = false, features = ["async", "async-https-rustls"] }
 fedimint-client = { path = "../../fedimint-client" }
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-core = { path = "../../fedimint-core" }
 fedimint-wallet-common ={ path = "../fedimint-wallet-common" }
 futures = "0.3"
 miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92", features = [ "compiler", "serde" ] }
@@ -27,7 +30,7 @@ serde = { version = "1.0.149", features = [ "derive" ] }
 strum = "0.24"
 strum_macros = "0.24"
 thiserror = "1.0.39"
-tokio = { version = "1.26.0", features = ["sync"], optional = true }
+tokio = { version = "1.26.0", features = ["sync", "rt"] }
 tracing ="0.1.37"
 url = "2.3.1"
 validator = { version = "0.16", features = ["derive"] }

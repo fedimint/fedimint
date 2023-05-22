@@ -13,9 +13,11 @@ use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
 use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
 use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
+use fedimint_wallet_client::WalletClientExt;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -70,6 +72,10 @@ pub enum ClientNg {
         /// node public key for a gateway
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
+    },
+    DepositAddress,
+    AwaitDeposit {
+        operation_id: OperationId,
     },
     /// Upload the (encrypted) snapshot of mint notes to federation
     Backup {
@@ -238,6 +244,26 @@ pub async fn handle_ng_command(
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
+        }
+        ClientNg::DepositAddress => {
+            let (operation_id, address) = client
+                .get_deposit_address(now() + Duration::from_secs(600))
+                .await?;
+            Ok(serde_json::json! {
+                {
+                    "address": address,
+                    "operation_id": operation_id,
+                }
+            })
+        }
+        ClientNg::AwaitDeposit { operation_id } => {
+            let mut updates = client.subscribe_deposit_updates(operation_id).await?;
+
+            while let Some(update) = updates.next().await {
+                info!("Update: {update:?}");
+            }
+
+            Ok(serde_json::to_value(()).unwrap())
         }
 
         ClientNg::Backup { metadata } => {

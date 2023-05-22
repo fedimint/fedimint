@@ -176,6 +176,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .await?;
 
     // Test load last epoch with admin client
+    info!("Testing load last epoch with admin client");
     let epoch_json = cmd!(fed, "last-epoch")
         .env("FM_SALT_PATH", format!("{data_dir}/server-0/private.salt"))
         .env("FM_PASSWORD", "pass0")
@@ -232,6 +233,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // reissue
+    info!("Old client: Testing reissuing e-cash notes");
     let notes = cmd!(fed, "spend", "42000msat").out_json().await?["note"]
         .as_str()
         .unwrap()
@@ -247,6 +249,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cmd!(fed, "fetch").run().await?;
 
     // peg out
+    info!("Old client: Testing pegging out");
     let pegout_addr = bitcoind.client().get_new_address(None, None)?;
     cmd!(fed, "peg-out", "--address={pegout_addr}", "--amount=500sat")
         .run()
@@ -271,12 +274,15 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // lightning tests
+    info!("Old client: Testing lightning");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
 
     // CLN gateway tests
+    info!("Old client: Testing CLN gateway");
     fed.use_gateway(&gw_cln).await?;
 
     // OUTGOING: fedimint-cli pays LND via CLN gateway
+    info!("Old client: Testing outgoing LN payment");
     let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_u64()
         .unwrap();
@@ -331,6 +337,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // INCOMING: fedimint-cli receives from LND via CLN gateway
+    info!("Old client: Testing incoming LN payment");
     let invoice = cmd!(
         fed,
         "ln-invoice",
@@ -368,9 +375,11 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
 
     // LND gateway tests
+    info!("Old client: Testing LND gateway");
     fed.use_gateway(&gw_lnd).await?;
 
     // OUTGOING: fedimint-cli pays CLN via LND gateaway
+    info!("Old client: Testing outgoing LN payment");
     let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_u64()
         .unwrap();
@@ -430,6 +439,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // INCOMING: fedimint-cli receives from CLN via LND gateway
+    info!("Old client: Testing incoming LN payment");
     let invoice = cmd!(
         fed,
         "ln-invoice",
@@ -466,6 +476,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Test that LND and CLN can still send directly to each other
 
     // LND can pay CLN directly
+    info!("Testing LND can pay CLN directly");
     let invoice = cln
         .request(cln_rpc::model::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(42_000)),
@@ -501,6 +512,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ));
 
     // CLN can pay LND directly
+    info!("Testing CLN can pay LND directly");
     let add_invoice = lnd
         .client_lock()
         .await?
@@ -540,8 +552,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
     // # Clinet-NG tests
+    info!("Testing Client-NG");
     // ## reissue e-cash
-
+    info!("Testing reissuing e-cash");
     const CLIENT_NG_REISSUE_AMOUNT: u64 = 420;
     const CLIENT_NG_SPEND_AMOUNT: u64 = 42;
 
@@ -569,6 +582,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     assert_eq!(initial_clientng_balance, CLIENT_NG_REISSUE_AMOUNT);
 
     // # Spend from client ng
+    info!("Testing spending from client ng");
     let reissue_notes_denominations = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
         .out_json()
         .await?
@@ -597,6 +611,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let reissue_amount: u64 = 4096;
 
     // Ensure that client ng can reissue after spending
+    info!("Testing reissuing e-cash after spending");
     let reissue_notes = cmd!(fed, "spend", reissue_amount).out_json().await?["note"]
         .as_str()
         .map(|s| s.to_owned())
@@ -609,6 +624,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     assert_eq!(client_ng_reissue_amt, reissue_amount);
 
     // OUTGOING: fedimint-cli NG pays LND via CLN gateway
+    info!("Testing fedimint-cli NG pays LND via CLN gateway");
     fed.use_gateway(&gw_cln).await?;
 
     let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
@@ -703,6 +719,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
 
     // Receive the ecash notes
+    info!("Testing receiving e-cash notes");
     let operation_id = ln_invoice_response.operation_id;
     cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
 
@@ -728,9 +745,11 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // LND gateway tests
+    info!("Testing LND gateway");
     fed.use_gateway(&gw_lnd).await?;
 
     // OUTGOING: fedimint-cli NG pays CLN via LND gateaway
+    info!("Testing outgoing payment from client NG to CLN via LND gateway");
     let initial_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -788,6 +807,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // INCOMING: fedimint-cli NG receives from CLN via LND gateway
+    info!("Testing incoming payment from CLN to client NG via LND gateway");
     let ln_response_val = cmd!(
         fed,
         "ng",
@@ -822,6 +842,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ));
 
     // Receive the ecash notes
+    info!("Testing receiving ecash notes");
     let operation_id = ln_invoice_response.operation_id;
     cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
 
@@ -847,6 +868,35 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // TODO: test cancel/timeout
+
+    // # Wallet NG tests
+    // ## Deposit
+    info!("Testing client ng deposit");
+    let initial_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+
+    let deposit = cmd!(fed, "ng", "deposit-address").out_json().await?;
+    let deposit_address = deposit["address"].as_str().unwrap();
+    let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
+
+    bitcoind
+        .send_to(deposit_address.to_owned(), 100_000) // deposit in sats
+        .await?;
+    bitcoind.mine_blocks(100).await?;
+
+    cmd!(fed, "ng", "await-deposit", deposit_operation_id)
+        .run()
+        .await?;
+
+    let post_deposit_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+
+    assert_eq!(
+        post_deposit_walletng_balance,
+        initial_walletng_balance + 100_000_000 // deposit in msats
+    );
 
     Ok(())
 }

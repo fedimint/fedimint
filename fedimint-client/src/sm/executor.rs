@@ -604,7 +604,7 @@ impl<GC> Encodable for ActiveStateKeyPrefix<GC> {
 
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
 pub struct ActiveState {
-    created_at: SystemTime,
+    pub created_at: SystemTime,
 }
 
 impl<GC> ::fedimint_core::db::DatabaseRecord for ActiveStateKey<GC>
@@ -747,8 +747,8 @@ impl<GC> Encodable for InactiveStateKeyPrefix<GC> {
 
 #[derive(Debug, Copy, Clone, Decodable, Encodable)]
 pub struct InactiveState {
-    created_at: SystemTime,
-    exited_at: SystemTime,
+    pub created_at: SystemTime,
+    pub exited_at: SystemTime,
 }
 
 impl<GC> ::fedimint_core::db::DatabaseRecord for InactiveStateKey<GC>

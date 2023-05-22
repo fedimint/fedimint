@@ -1848,9 +1848,12 @@ name = "fedimint-wallet-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aquamarine",
+ "async-stream",
  "async-trait",
  "bitcoin",
  "erased-serde",
+ "esplora-client",
  "fedimint-client",
  "fedimint-core",
  "fedimint-wallet-common",
