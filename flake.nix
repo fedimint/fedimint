@@ -328,7 +328,17 @@
                     (hiPrio pkgs.bashInteractive)
                     tmux
                     tmuxinator
-                    mprocs
+                    xclip
+                    wl-clipboard
+                    (mprocs.overrideAttrs (final: prev: {
+                      patches = prev.patches ++ [
+                        (fetchurl {
+                          url = "https://github.com/pvolok/mprocs/pull/88.patch";
+                          name = "clipboard-fix.patch";
+                          sha256 = "sha256-9dx1vaEQ6kD66M+vsJLIq1FK+nEObuXSi3cmpSZuQWk=";
+                        })
+                      ];
+                    }))
                     docker-compose
                     pkgs.tokio-console
                     moreutils-ts
