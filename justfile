@@ -99,4 +99,5 @@ exit-tmuxinator:
 
 # starts a 2 guardian federation with setup UI
 run-ui:
+  (cd fedimint-ui && yarn install)
   mprocs -c misc/mprocs-ui.yaml
