@@ -10,6 +10,7 @@ use std::pin::Pin;
 use std::{fs, io};
 
 use futures::StreamExt;
+use tokio::io::AsyncWriteExt;
 use tracing::debug;
 use url::Url;
 
@@ -102,6 +103,7 @@ impl<'a> Debug for SanitizedUrl<'a> {
 
 /// Write out a new file (like [`std::fs::write`] but fails if file already
 /// exists)
+#[cfg(not(target_family = "wasm"))]
 pub fn write_new<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
     fs::File::options()
         .write(true)
@@ -110,12 +112,41 @@ pub fn write_new<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Re
         .write_all(contents.as_ref())
 }
 
+#[cfg(not(target_family = "wasm"))]
 pub fn write_overwrite<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
     fs::File::options()
         .write(true)
         .create(true)
         .open(path)?
         .write_all(contents.as_ref())
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub async fn write_overwrite_async<P: AsRef<Path>, C: AsRef<[u8]>>(
+    path: P,
+    contents: C,
+) -> io::Result<()> {
+    tokio::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(path)
+        .await?
+        .write_all(contents.as_ref())
+        .await
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub async fn write_new_async<P: AsRef<Path>, C: AsRef<[u8]>>(
+    path: P,
+    contents: C,
+) -> io::Result<()> {
+    tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .await?
+        .write_all(contents.as_ref())
+        .await
 }
 
 #[cfg(test)]

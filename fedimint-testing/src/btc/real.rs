@@ -9,9 +9,8 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::Amount;
+use fedimint_core::{task, Amount};
 use lazy_static::lazy_static;
-use tokio::time::sleep;
 use url::Url;
 
 use crate::btc::BitcoinTest;
@@ -93,7 +92,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     Err(e) => {
                         if e.to_string().contains("not yet in block") {
                             // mostly to yield, as we no other yield points
-                            sleep(Duration::from_millis(1)).await;
+                            task::sleep(Duration::from_millis(1)).await;
                             continue;
                         }
                         panic!("Could not get txoutproof: {e}");

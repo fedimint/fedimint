@@ -256,7 +256,7 @@ pub mod mock {
     use std::time::Duration;
 
     use anyhow::Error;
-    use fedimint_core::PeerId;
+    use fedimint_core::{task, PeerId};
     use futures::{FutureExt, SinkExt, Stream, StreamExt};
     use rand::Rng;
     use tokio::io::{
@@ -346,6 +346,7 @@ pub mod mock {
             &mut self,
             cx: &mut std::task::Context<'_>,
         ) -> std::task::Poll<std::io::Result<()>> {
+            // nosemgrep: ban-tokio-sleep
             let sleep = self
                 .sleep_future
                 .get_or_insert_with(|| Box::pin(tokio::time::sleep(self.latency.random())));

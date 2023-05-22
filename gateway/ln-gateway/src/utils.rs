@@ -2,7 +2,7 @@ use std::future::Future;
 use std::result::Result;
 use std::time::Duration;
 
-use tokio::time::sleep;
+use fedimint_core::task;
 use tracing::info;
 
 /// Run the supplied closure `op_fn` up to `max_attempts` times. Wait for the
@@ -37,7 +37,7 @@ where
                     err,
                     interval.as_secs()
                 );
-                sleep(interval).await;
+                task::sleep(interval).await;
             }
             Err(err) => return Err(err),
         }

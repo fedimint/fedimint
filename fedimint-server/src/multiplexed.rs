@@ -192,12 +192,11 @@ pub mod test {
 
     use fedimint_core::net::peers::fake::make_fake_peer_connection;
     use fedimint_core::net::peers::IMuxPeerConnections;
-    use fedimint_core::task::TaskGroup;
+    use fedimint_core::task::{self, TaskGroup};
     use fedimint_core::PeerId;
     use rand::rngs::OsRng;
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng};
-    use tokio::time::sleep;
 
     use crate::multiplexed::PeerConnectionMultiplexer;
 
@@ -241,7 +240,7 @@ pub mod test {
                                 // Note that randomized sleep in sender is larger than
                                 // in receiver, to avoid just running with always full
                                 // queues.
-                                sleep(Duration::from_millis(2)).await;
+                                task::sleep(Duration::from_millis(2)).await;
                             }
                             if task_handle.is_shutting_down() {
                                 break;
@@ -260,7 +259,7 @@ pub mod test {
                         for msg_i in 0..NUM_MSGS_PER_MODULE {
                             // add some random jitter
                             if OsRng.gen() {
-                                sleep(Duration::from_millis(1)).await;
+                                task::sleep(Duration::from_millis(1)).await;
                             }
                             assert_eq!(conn2.receive(mux_key).await.unwrap(), (peer1, msg_i));
                         }

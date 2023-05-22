@@ -18,7 +18,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
@@ -49,6 +49,7 @@ use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
     UnionResponsesSingle, VerifiableResponse,
 };
+use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction};
 
 pub type MemberResult<T> = result::Result<T, MemberError>;
@@ -223,7 +224,7 @@ pub trait FederationApiExt: IFederationApi {
                                     async move {
                                         // Note: we need to sleep inside the retrying future,
                                         // so that `futures` is being polled continuously
-                                        sleep(Duration::from_millis(delay_ms)).await;
+                                        task::sleep(Duration::from_millis(delay_ms)).await;
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: self
@@ -1137,7 +1138,7 @@ mod tests {
                 error!(target: LOG_NET_API, "connect");
                 let id = CONNECTION_COUNT.fetch_add(1, Ordering::SeqCst);
                 // slow down
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                task::sleep(Duration::from_millis(100)).await;
                 if FAIL.lock().unwrap().contains(&id) {
                     Err(jsonrpsee_core::Error::Transport(anyhow!(
                         "intentional error"

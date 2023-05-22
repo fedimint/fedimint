@@ -8,7 +8,7 @@ use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_client_legacy::modules::ln::route_hints::RouteHint;
 use fedimint_client_legacy::{GatewayClient, PaymentParameters};
-use fedimint_core::task::{RwLock, TaskGroup};
+use fedimint_core::task::{self, RwLock, TaskGroup};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::LightningGateway;
@@ -182,11 +182,11 @@ impl GatewayActor {
                         Ok(_) => {
                             info!("Connected with federation");
                             notfiy_sent.notify_one();
-                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
+                            task::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
                         }
                         Err(e) => {
                             warn!("Failed to connect with federation: {}", e);
-                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
+                            task::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
                         }
                     }
                 }

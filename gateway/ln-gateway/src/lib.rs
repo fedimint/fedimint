@@ -31,7 +31,7 @@ use fedimint_client_legacy::{ClientError, GatewayClient};
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{RwLock, TaskGroup, TaskHandle};
+use fedimint_core::task::{self, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_client::contracts::Preimage;
 use gatewaylnrpc::GetNodeInfoResponse;
@@ -263,7 +263,7 @@ impl Gateway {
                 ROUTE_HINT_RETRY_SLEEP.as_secs()
             );
             num_retries += 1;
-            tokio::time::sleep(ROUTE_HINT_RETRY_SLEEP).await;
+            task::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
         if let Ok(configs) = self.client_builder.load_configs() {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
