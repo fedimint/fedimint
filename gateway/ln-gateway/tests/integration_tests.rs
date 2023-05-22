@@ -1,45 +1,8 @@
 //! Gateway integration test suite
 //!
-//! This crate contains integration tests for the gateway business logic.
-//!
-//! The tests run instances of gatewayd with the following mocks:
-//!
-//! * `ILnRpcClient` - fake implementation of `ILnRpcClient` that simulates
-//!   gateway lightning dependency.
-//!
-//! * `IFederationApi` - fake implementation of `IFederationApi` that simulates
-//!   gateway federation client dependency.
-
-use fedimint_dummy_client::DummyClientGen;
-use fedimint_dummy_common::config::DummyGenParams;
-use fedimint_dummy_server::DummyGen;
-use fedimint_ln_client::LightningClientGen;
-use fedimint_ln_common::config::LightningGenParams;
-use fedimint_ln_server::LightningGen;
-use fedimint_testing::federation::FederationTest;
-use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::GatewayTest;
-use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-
-async fn fixtures() -> (
-    FederationTest,
-    FederationTest,
-    GatewayTest,
-    GatewayRpcClient,
-) {
-    // TODO: use new client modules without legacy instances
-    let mut fixtures =
-        Fixtures::new_primary(1, DummyClientGen, DummyGen, DummyGenParams::default());
-    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_rpc());
-    fixtures = fixtures.with_module(0, LightningClientGen, LightningGen, ln_params);
-
-    let fed1 = fixtures.new_fed().await;
-    let fed2 = fixtures.new_fed().await;
-    let mut gateway = fixtures.new_gateway(&fed1).await;
-    gateway.connect_fed(&fed2).await;
-    let client = gateway.get_rpc().await;
-    (fed1, fed2, gateway, client)
-}
+//! This crate contains integration tests for the gateway API
+//! and business logic.
+mod fixtures;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
@@ -50,8 +13,9 @@ async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_shows_info_about_all_connected_federations() {
-    let (_, _, _, client) = fixtures().await;
-    let info = client.get_info().await.unwrap();
+    let (_, rpc, _, _, _) = fixtures::fixtures().await;
+
+    let info = rpc.get_info().await.unwrap();
     assert_eq!(info.federations.len(), 2);
 }
 
