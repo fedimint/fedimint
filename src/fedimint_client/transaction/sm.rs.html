@@ -497,7 +497,7 @@
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
-<span class="kw">use </span>fedimint_core::TransactionId;
+<span class="kw">use </span>fedimint_core::{task, TransactionId};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::warn;
@@ -701,7 +701,7 @@
                 }
             }
         }
-        tokio::time::sleep(FETCH_INTERVAL).<span class="kw">await</span>;
+        task::sleep(FETCH_INTERVAL).<span class="kw">await</span>;
     }
 }
 
@@ -728,14 +728,14 @@
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-    <span class="kw">use </span>fedimint_core::task::TaskGroup;
+    <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
     <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
     <span class="kw">use </span>fedimint_core::util::BoxStream;
     <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
     <span class="kw">use </span>rand::thread_rng;
     <span class="kw">use </span>serde_json::Value;
     <span class="kw">use </span>tokio::sync::Mutex;
-    <span class="kw">use </span>tokio::time::{sleep, timeout};
+    <span class="kw">use </span>tokio::time::timeout;
 
     <span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationId, OperationState};
     <span class="kw">use </span><span class="kw">crate</span>::transaction::{

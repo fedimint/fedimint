@@ -295,9 +295,11 @@
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>fedimint_core::task;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::process::Child;
@@ -561,7 +563,7 @@
             );
             last_time = now;
         }
-        tokio::time::sleep(POLL_INTERVAL).<span class="kw">await</span>;
+        task::sleep(POLL_INTERVAL).<span class="kw">await</span>;
     }
 }
 

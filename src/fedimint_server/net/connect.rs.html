@@ -957,6 +957,7 @@
 <a href="#957" id="957">957</a>
 <a href="#958" id="958">958</a>
 <a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
@@ -1215,7 +1216,7 @@
     <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>anyhow::Error;
-    <span class="kw">use </span>fedimint_core::PeerId;
+    <span class="kw">use </span>fedimint_core::{task, PeerId};
     <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
     <span class="kw">use </span>rand::Rng;
     <span class="kw">use </span>tokio::io::{
@@ -1305,7 +1306,8 @@
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
             cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
         ) -&gt; std::task::Poll&lt;std::io::Result&lt;()&gt;&gt; {
-            <span class="kw">let </span>sleep = <span class="self">self
+            <span class="comment">// nosemgrep: ban-tokio-sleep
+            </span><span class="kw">let </span>sleep = <span class="self">self
                 </span>.sleep_future
                 .get_or_insert_with(|| Box::pin(tokio::time::sleep(<span class="self">self</span>.latency.random())));
             <span class="kw">match </span>sleep.poll_unpin(cx) {

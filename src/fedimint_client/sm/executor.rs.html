@@ -978,9 +978,9 @@
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>fedimint_core::maybe_add_send_sync;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::{maybe_add_send_sync, task};
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>tokio::select;
@@ -1275,7 +1275,7 @@
         <span class="kw">if </span>active_states.is_empty() {
             <span class="comment">// FIXME: what to do in this case? Probably best to subscribe to DB eventually
             </span><span class="macro">debug!</span>(<span class="string">&quot;No state transitions available, waiting before re-trying&quot;</span>);
-            fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).<span class="kw">await</span>;
+            task::sleep(EXECUTOR_POLL_INTERVAL).<span class="kw">await</span>;
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
         <span class="macro">trace!</span>(<span class="string">&quot;Active states: {:?}&quot;</span>, active_states);
@@ -1750,7 +1750,7 @@
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_core::task::TaskGroup;
+    <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, TaskGroup};
     <span class="kw">use </span>tokio::sync::broadcast::Sender;
     <span class="kw">use </span>tracing::{info, trace};
 
@@ -1924,9 +1924,9 @@
         </span>);
 
         <span class="comment">// TODO build await fn+timeout or allow manual driving of executor
-        </span>tokio::time::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+        </span>task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         sender.send(<span class="number">0</span>).unwrap();
-        tokio::time::sleep(Duration::from_secs(<span class="number">2</span>)).<span class="kw">await</span>;
+        task::sleep(Duration::from_secs(<span class="number">2</span>)).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(
             executor

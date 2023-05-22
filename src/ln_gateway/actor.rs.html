@@ -668,7 +668,7 @@
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_client_legacy::{GatewayClient, PaymentParameters};
-<span class="kw">use </span>fedimint_core::task::{RwLock, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, RwLock, TaskGroup};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::LightningGateway;
@@ -842,11 +842,11 @@
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                             <span class="macro">info!</span>(<span class="string">&quot;Connected with federation&quot;</span>);
                             notfiy_sent.notify_one();
-                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">2</span>).<span class="kw">await</span>;
+                            task::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">2</span>).<span class="kw">await</span>;
                         }
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">warn!</span>(<span class="string">&quot;Failed to connect with federation: {}&quot;</span>, e);
-                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">4</span>).<span class="kw">await</span>;
+                            task::sleep(GW_ANNOUNCEMENT_TTL / <span class="number">4</span>).<span class="kw">await</span>;
                         }
                     }
                 }

@@ -1235,6 +1235,7 @@
 <a href="#1235" id="1235">1235</a>
 <a href="#1236" id="1236">1236</a>
 <a href="#1237" id="1237">1237</a>
+<a href="#1238" id="1238">1238</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1255,7 +1256,7 @@
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
@@ -1286,6 +1287,7 @@
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
     UnionResponsesSingle, VerifiableResponse,
 };
+<span class="kw">use </span><span class="kw">crate</span>::task;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
 
 <span class="kw">pub type </span>MemberResult&lt;T&gt; = result::Result&lt;T, MemberError&gt;;
@@ -1460,7 +1462,7 @@
                                     <span class="kw">async move </span>{
                                         <span class="comment">// Note: we need to sleep inside the retrying future,
                                         // so that `futures` is being polled continuously
-                                        </span>sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
+                                        </span>task::sleep(Duration::from_millis(delay_ms)).<span class="kw">await</span>;
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: <span class="self">self
@@ -2374,7 +2376,7 @@
                 <span class="macro">error!</span>(target: LOG_NET_API, <span class="string">&quot;connect&quot;</span>);
                 <span class="kw">let </span>id = CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
                 <span class="comment">// slow down
-                </span>tokio::time::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                </span>task::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
                 <span class="kw">if </span>FAIL.lock().unwrap().contains(<span class="kw-2">&amp;</span>id) {
                     <span class="prelude-val">Err</span>(jsonrpsee_core::Error::Transport(<span class="macro">anyhow!</span>(
                         <span class="string">&quot;intentional error&quot;

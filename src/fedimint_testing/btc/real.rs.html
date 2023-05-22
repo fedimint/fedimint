@@ -237,7 +237,6 @@
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -249,9 +248,8 @@
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_core::{task, Amount};
 <span class="kw">use </span>lazy_static::lazy_static;
-<span class="kw">use </span>tokio::time::sleep;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::BitcoinTest;
@@ -333,7 +331,7 @@
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="kw">if </span>e.to_string().contains(<span class="string">&quot;not yet in block&quot;</span>) {
                             <span class="comment">// mostly to yield, as we no other yield points
-                            </span>sleep(Duration::from_millis(<span class="number">1</span>)).<span class="kw">await</span>;
+                            </span>task::sleep(Duration::from_millis(<span class="number">1</span>)).<span class="kw">await</span>;
                             <span class="kw">continue</span>;
                         }
                         <span class="macro">panic!</span>(<span class="string">&quot;Could not get txoutproof: {e}&quot;</span>);
