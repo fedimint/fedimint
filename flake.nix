@@ -399,7 +399,7 @@
               # the settings and tools necessary to build and work with the codebase.
               default = pkgs.mkShell (shellCommonNative
                 // {
-                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ toolchain.fenixToolchain ];
+                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ toolchain.fenixToolchain pkgs.yarn pkgs.nodejs ];
               });
 
               nightly = pkgs.mkShell (shellCommonNative
@@ -454,14 +454,6 @@
                   cachix
                 ];
               };
-
-              fedimint-ui = pkgs.mkShell (shellCommonNative
-                // {
-                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ pkgs.yarn pkgs.nodejs ];
-                shellHook = ''
-                  export FEDIMINT_UI_SHELL=1
-                '';
-              });
             };
         in
         {
