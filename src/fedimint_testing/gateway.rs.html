@@ -91,17 +91,17 @@
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::LightningGateway;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 <span class="kw">use </span>ln_gateway::lnrpc_client::ILnRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
+<span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
 <span class="kw">use </span>ln_gateway::{Gateway, DEFAULT_FEES};
 <span class="kw">use </span>tempfile::TempDir;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -112,7 +112,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::fixtures::test_dir;
 
 <span class="kw">pub struct </span>GatewayTest {
-    feds: Vec&lt;FederationInfo&gt;,
     api: Url,
     password: String,
     _config_dir: <span class="prelude-ty">Option</span>&lt;TempDir&gt;,
@@ -129,17 +128,17 @@
     </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) {
         <span class="kw">let </span>connect = fed.connection_code().to_string();
         <span class="kw">let </span>client = <span class="self">self</span>.get_rpc().<span class="kw">await</span>;
-        <span class="self">self</span>.feds.push(
-            client
-                .connect_federation(ConnectFedPayload { connect })
-                .<span class="kw">await
-                </span>.unwrap(),
-        );
+        client
+            .connect_federation(ConnectFedPayload { connect })
+            .<span class="kw">await
+            </span>.unwrap();
     }
 
     <span class="doccomment">/// Returns the last registration we sent to a fed
-    </span><span class="kw">pub fn </span>last_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationInfo {
-        <span class="self">self</span>.feds.last().unwrap().clone()
+    </span><span class="kw">pub async fn </span>last_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningGateway {
+        <span class="kw">let </span>info = <span class="self">self</span>.get_rpc().<span class="kw">await</span>.get_info().<span class="kw">await</span>;
+        <span class="kw">let </span>fed = info.expect(<span class="string">&quot;Failed to get_info&quot;</span>).federations;
+        fed.last().expect(<span class="string">&quot;No feds registered&quot;</span>).registration.clone()
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
@@ -178,7 +177,6 @@
         .<span class="kw">await</span>;
 
         <span class="self">Self </span>{
-            feds: <span class="macro">vec!</span>[],
             password,
             api: address,
             _config_dir,

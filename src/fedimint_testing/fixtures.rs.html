@@ -145,8 +145,11 @@
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{env, fs};
 
@@ -158,11 +161,10 @@
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::util::BoxStream;
-<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>tempfile::TempDir;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinFactory;
+<span class="kw">use </span><span class="kw">crate</span>::btc::BitcoinTest;
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway::GatewayTest;
 <span class="kw">use </span><span class="kw">crate</span>::ln::mock::FakeLightningTest;
@@ -174,38 +176,46 @@
 </span><span class="kw">static </span>BASE_PORT: AtomicU16 = AtomicU16::new(<span class="number">38173</span>);
 
 <span class="doccomment">/// A tool for easily writing fedimint integration tests
-</span><span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>Fixtures {
-    real_testing: bool,
+    num_peers: u16,
     ids: Vec&lt;ModuleInstanceId&gt;,
     clients: Vec&lt;DynClientModuleGen&gt;,
     servers: Vec&lt;DynServerModuleGen&gt;,
     params: ServerModuleGenParamsRegistry,
     primary_client: ModuleInstanceId,
+    bitcoin_rpc: BitcoinRpcConfig,
+    bitcoin: Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt;,
 }
 
 <span class="kw">impl </span>Fixtures {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            real_testing: env::var(<span class="string">&quot;FM_TEST_USE_REAL_DAEMONS&quot;</span>) == <span class="prelude-val">Ok</span>(<span class="string">&quot;1&quot;</span>.to_string()),
-            ..Default::default()
-        }
-    }
-
-    <span class="doccomment">/// Add primary client module to the fed
-    </span><span class="comment">// TODO: Auto-assign instance ids after removing legacy id order
-    </span><span class="kw">pub fn </span>with_primary(
-        <span class="kw-2">mut </span><span class="self">self</span>,
+    <span class="kw">pub fn </span>new_primary(
         id: ModuleInstanceId,
         client: <span class="kw">impl </span>IClientModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         server: <span class="kw">impl </span>IServerModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         params: <span class="kw">impl </span>ModuleGenParams,
     ) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.primary_client = id;
-        <span class="self">self</span>.with_module(id, client, server, params)
+        <span class="kw">let </span>real_testing = env::var(<span class="string">&quot;FM_TEST_USE_REAL_DAEMONS&quot;</span>) == <span class="prelude-val">Ok</span>(<span class="string">&quot;1&quot;</span>.to_string());
+        <span class="kw">let </span>num_peers = <span class="kw">match </span>real_testing {
+            <span class="bool-val">true </span>=&gt; <span class="number">2</span>,
+            <span class="bool-val">false </span>=&gt; <span class="number">1</span>,
+        };
+        <span class="kw">let </span>FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
+
+        <span class="self">Self </span>{
+            num_peers,
+            ids: <span class="macro">vec!</span>[],
+            clients: <span class="macro">vec!</span>[],
+            servers: <span class="macro">vec!</span>[],
+            params: Default::default(),
+            primary_client: id,
+            bitcoin_rpc: config,
+            bitcoin: Arc::new(bitcoin),
+        }
+        .with_module(id, client, server, params)
     }
 
-    <span class="doccomment">/// Add a module to the fed
+    <span class="comment">// TODO: Auto-assign instance ids after removing legacy id order
+    </span><span class="doccomment">/// Add a module to the fed
     </span><span class="kw">pub fn </span>with_module(
         <span class="kw-2">mut </span><span class="self">self</span>,
         id: ModuleInstanceId,
@@ -224,11 +234,7 @@
 
     <span class="doccomment">/// Starts a new federation with default number of peers for testing
     </span><span class="kw">pub async fn </span>new_fed(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTest {
-        <span class="kw">let </span>num_peers = <span class="kw">match </span><span class="self">self</span>.real_testing {
-            <span class="bool-val">true </span>=&gt; <span class="number">2</span>,
-            <span class="bool-val">false </span>=&gt; <span class="number">1</span>,
-        };
-        <span class="self">self</span>.new_fed_with_peers(num_peers).<span class="kw">await
+        <span class="self">self</span>.new_fed_with_peers(<span class="self">self</span>.num_peers).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Starts a new federation with number of peers
@@ -264,7 +270,12 @@
 
     <span class="doccomment">/// Get a test bitcoin RPC config
     </span><span class="kw">pub fn </span>bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
-        FakeBitcoinFactory::register_new().config
+        <span class="self">self</span>.bitcoin_rpc.clone()
+    }
+
+    <span class="doccomment">/// Get a test bitcoin fixture
+    </span><span class="kw">pub fn </span>bitcoin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt; {
+        <span class="self">self</span>.bitcoin.clone()
     }
 }
 
@@ -284,13 +295,6 @@
     <span class="kw">let </span>fullpath = PathBuf::from(parent).join(pathname);
     fs::create_dir_all(fullpath.clone()).expect(<span class="string">&quot;Can make dirs&quot;</span>);
     (fullpath, maybe_tmp_dir_guard)
-}
-
-<span class="doccomment">/// Awaits the next value from the BoxStream
-///
-/// Useful for testing the client state machines
-</span><span class="kw">pub async fn </span>next&lt;T&gt;(stream: <span class="kw-2">&amp;mut </span>BoxStream&lt;<span class="lifetime">&#39;_</span>, T&gt;) -&gt; T {
-    stream.next().<span class="kw">await</span>.expect(<span class="string">&quot;No next value found&quot;</span>)
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

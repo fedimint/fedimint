@@ -715,7 +715,7 @@
     /// [`Self::create_exact_output`] to become available. This function
     /// returning typically implies a change in the output of
     /// [`Self::get_balance`].
-    </span><span class="kw">async fn </span>await_primary_module_output_finalized(
+    </span><span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
@@ -749,7 +749,7 @@
         amount: Amount,
     ) -&gt; ClientOutput;
 
-    <span class="kw">async fn </span>await_primary_module_output_finalized(
+    <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
@@ -805,12 +805,12 @@
         </span>.into_dyn(module_instance)
     }
 
-    <span class="kw">async fn </span>await_primary_module_output_finalized(
+    <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
     ) -&gt; anyhow::Result&lt;Amount&gt; {
-        T::await_primary_module_output_finalized(<span class="self">self</span>, operation_id, out_point).<span class="kw">await
+        T::await_primary_module_output(<span class="self">self</span>, operation_id, out_point).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>get_balance(

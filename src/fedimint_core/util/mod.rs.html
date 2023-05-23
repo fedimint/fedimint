@@ -199,6 +199,18 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 
@@ -210,6 +222,7 @@
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::{fs, io};
 
+<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>tokio::io::AsyncWriteExt;
 <span class="kw">use </span>tracing::debug;
@@ -229,6 +242,8 @@
     <span class="kw">type </span>Output;
 
     <span class="kw">async fn </span>next_or_pending(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Output;
+
+    <span class="kw">async fn </span>ok(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Output&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -238,6 +253,15 @@
     S::Item: MaybeSend,
 {
     <span class="kw">type </span>Output = S::Item;
+
+    <span class="doccomment">/// Waits for the next item in a stream. If the stream is closed while
+    /// waiting, returns an error.  Useful when expecting a stream to progress.
+    </span><span class="kw">async fn </span>ok(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Output&gt; {
+        <span class="kw">match </span><span class="self">self</span>.next().<span class="kw">await </span>{
+            <span class="prelude-val">Some</span>(item) =&gt; <span class="prelude-val">Ok</span>(item),
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Stream was unexpectedly closed&quot;</span>)),
+        }
+    }
 
     <span class="doccomment">/// Waits for the next item in a stream. If the stream is closed while
     /// waiting the future will be pending forever. This is useful in cases

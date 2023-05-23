@@ -340,18 +340,6 @@
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -529,18 +517,6 @@
     <span class="doccomment">/// Gateway configured routing fees
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_routing_fees&quot;</span>)]
     </span><span class="kw">pub </span>fees: RoutingFees,
-}
-
-<span class="kw">impl </span>LightningGateway {
-    <span class="doccomment">/// Check if two gateway registrations are the same except for the expiry
-    /// time
-    </span><span class="kw">pub fn </span>is_same_gateway_registration(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>LightningGateway) -&gt; bool {
-        <span class="self">self</span>.mint_channel_id == other.mint_channel_id
-            &amp;&amp; <span class="self">self</span>.mint_pub_key == other.mint_pub_key
-            &amp;&amp; <span class="self">self</span>.node_pub_key == other.node_pub_key
-            &amp;&amp; <span class="self">self</span>.api == other.api
-            &amp;&amp; <span class="self">self</span>.route_hints == other.route_hints
-    }
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

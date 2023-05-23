@@ -331,15 +331,6 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>deposit;
@@ -376,10 +367,6 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>WalletClientExt {
-    <span class="comment">// TODO: remove, the network should be in the LN config
-    </span><span class="doccomment">/// Returns the bitcoin network the federation is using
-    </span><span class="kw">fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network;
-
     <span class="kw">async fn </span>get_deposit_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         valid_until: SystemTime,
@@ -391,7 +378,7 @@
     ) -&gt; anyhow::Result&lt;BoxStream&lt;DepositState&gt;&gt;;
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>DepositState {
     WaitingForTransaction,
     WaitingForConfirmation,
@@ -403,11 +390,6 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>WalletClientExt <span class="kw">for </span>Client {
-    <span class="kw">fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
-        <span class="kw">let </span>(wallet, _instance) = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        wallet.get_network()
-    }
-
     <span class="kw">async fn </span>get_deposit_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         valid_until: SystemTime,
@@ -518,7 +500,7 @@
             }
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(out_point) = claiming.change.as_ref() {
-                <span class="self">self</span>.await_primary_module_output_finalized(operation_id, <span class="kw-2">*</span>out_point)
+                <span class="self">self</span>.await_primary_module_output(operation_id, <span class="kw-2">*</span>out_point)
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;Cannot fail if tx was accepted and federation is honest&quot;</span>);
             }

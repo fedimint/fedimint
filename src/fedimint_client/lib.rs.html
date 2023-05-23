@@ -2444,13 +2444,13 @@
 
     <span class="doccomment">/// Waits for an output from the primary module to reach its final
     /// state.
-    </span><span class="kw">pub async fn </span>await_primary_module_output_finalized(
+    </span><span class="kw">pub async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
     ) -&gt; anyhow::Result&lt;Amount&gt; {
         <span class="self">self</span>.inner
-            .await_primary_module_output_finalized(operation_id, out_point)
+            .await_primary_module_output(operation_id, out_point)
             .<span class="kw">await
     </span>}
 
@@ -2712,13 +2712,13 @@
         active_state_exists || inactive_state_exists
     }
 
-    <span class="kw">pub async fn </span>await_primary_module_output_finalized(
+    <span class="kw">pub async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,
     ) -&gt; anyhow::Result&lt;Amount&gt; {
         <span class="self">self</span>.primary_module
-            .await_primary_module_output_finalized(operation_id, out_point)
+            .await_primary_module_output(operation_id, out_point)
             .<span class="kw">await
     </span>}
 }

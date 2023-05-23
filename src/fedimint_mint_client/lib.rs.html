@@ -1463,7 +1463,7 @@
 </span><span class="kw">pub trait </span>MintClientExt {
     <span class="doccomment">/// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
-    /// [`MintClientExt::subscribe_reissue_external_notes_updates`].
+    /// [`MintClientExt::subscribe_reissue_external_notes`].
     </span><span class="kw">async fn </span>reissue_external_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         notes: TieredMulti&lt;SpendableNote&gt;,
@@ -1472,7 +1472,7 @@
 
     <span class="doccomment">/// Subscribe to updates on the progress of a reissue operation started with
     /// [`MintClientExt::reissue_external_notes`].
-    </span><span class="kw">async fn </span>subscribe_reissue_external_notes_updates(
+    </span><span class="kw">async fn </span>subscribe_reissue_external_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, ReissueExternalNotesState&gt;&gt;;
@@ -1498,12 +1498,12 @@
     <span class="doccomment">/// Try to cancel a spend operation started with
     /// [`MintClientExt::spend_notes`]. If the e-cash notes have already been
     /// spent this operation will fail which can be observed using
-    /// [`MintClientExt::subscribe_spend_notes_updates`].
+    /// [`MintClientExt::subscribe_spend_notes`].
     </span><span class="kw">async fn </span>try_cancel_spend_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId);
 
     <span class="doccomment">/// Subscribe to updates on the progress of a raw e-cash spend operation
     /// started with [`MintClientExt::spend_notes`].
-    </span><span class="kw">async fn </span>subscribe_spend_notes_updates(
+    </span><span class="kw">async fn </span>subscribe_spend_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, SpendOOBState&gt;&gt;;
@@ -1594,7 +1594,7 @@
         <span class="prelude-val">Ok</span>(operation_id)
     }
 
-    <span class="kw">async fn </span>subscribe_reissue_external_notes_updates(
+    <span class="kw">async fn </span>subscribe_reissue_external_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, ReissueExternalNotesState&gt;&gt; {
@@ -1702,7 +1702,7 @@
         </span><span class="kw">let _ </span>= mint.cancel_oob_payment_bc.send(operation_id);
     }
 
-    <span class="kw">async fn </span>subscribe_spend_notes_updates(
+    <span class="kw">async fn </span>subscribe_spend_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, SpendOOBState&gt;&gt; {
@@ -1915,7 +1915,7 @@
 
                 <span class="kw">let </span>operation_id = client.reissue_external_notes(notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>updates = client
-                    .subscribe_reissue_external_notes_updates(operation_id)
+                    .subscribe_reissue_external_notes(operation_id)
                     .<span class="kw">await
                     </span>.unwrap()
                     .into_stream();
@@ -2054,7 +2054,7 @@
         </span><span class="self">self</span>.create_output(dbtx, operation_id, <span class="number">2</span>, amount).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>await_primary_module_output_finalized(
+    <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         out_point: OutPoint,

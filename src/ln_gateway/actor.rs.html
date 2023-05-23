@@ -658,8 +658,13 @@
 <a href="#658" id="658">658</a>
 <a href="#659" id="659">659</a>
 <a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::AtomicBool;
-<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::{Address, Transaction};
@@ -700,7 +705,7 @@
     task_group: TaskGroup,
     gw_rpc: GatewayRpcSender,
     <span class="kw">pub </span>sender: Sender&lt;Arc&lt;AtomicBool&gt;&gt;,
-    registration: LightningGateway,
+    registration: Arc&lt;Mutex&lt;LightningGateway&gt;&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -812,11 +817,14 @@
         gw_rpc: GatewayRpcSender,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>register_client = client.clone();
-        <span class="kw">let </span>registration = register_client
-            .config()
-            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
+        <span class="kw">let </span>registration = Arc::new(Mutex::new(
+            register_client
+                .config()
+                .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL),
+        ));
         <span class="kw">let </span>notify = Arc::new(Notify::new());
         <span class="kw">let </span>notfiy_sent = notify.clone();
+        <span class="kw">let </span>registration_sent = registration.clone();
         task_group
             .spawn(<span class="string">&quot;Register with federation&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
                 <span class="kw">loop </span>{
@@ -830,9 +838,11 @@
                                     route_hints.clone(),
                                     GW_ANNOUNCEMENT_TTL,
                                 );
-                            <span class="prelude-val">Ok</span>(register_client
-                                .register_with_federation(registration)
-                                .<span class="kw">await</span><span class="question-mark">?</span>)
+                            register_client
+                                .register_with_federation(registration.clone())
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="kw-2">*</span>registration_sent.lock().expect(<span class="string">&quot;poisoned&quot;</span>) = registration;
+                            <span class="prelude-val">Ok</span>(())
                         },
                         Duration::from_secs(<span class="number">1</span>),
                         <span class="number">5</span>,
@@ -1314,7 +1324,7 @@
         <span class="kw">let </span>cfg = <span class="self">self</span>.client.config();
         <span class="prelude-val">Ok</span>(FederationInfo {
             federation_id: cfg.client_config.federation_id,
-            registration: <span class="self">self</span>.registration.clone(),
+            registration: <span class="self">self</span>.registration.lock().expect(<span class="string">&quot;poisoned&quot;</span>).clone(),
         })
     }
 }
