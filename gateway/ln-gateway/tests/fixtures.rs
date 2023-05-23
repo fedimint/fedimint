@@ -11,7 +11,9 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::GatewayTest;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 
-pub async fn fixtures() -> (
+pub async fn fixtures(
+    password: Option<String>,
+) -> (
     GatewayTest,
     GatewayRpcClient,
     FederationTest,
@@ -24,11 +26,11 @@ pub async fn fixtures() -> (
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_rpc());
     fixtures = fixtures.with_module(0, LightningClientGen, LightningGen, ln_params);
 
+    let gateway = fixtures.new_gateway(password).await;
+    let client = gateway.get_rpc().await;
+
     let fed1 = fixtures.new_fed().await;
     let fed2 = fixtures.new_fed().await;
-    let mut gateway = fixtures.new_gateway(&fed1).await;
-    gateway.connect_fed(&fed2).await;
-    let client = gateway.get_rpc().await;
 
     // TODO: Source this from the Fixtures, based on test environment
     let bitcoin = Box::new(FakeBitcoinTest::new());

@@ -13,10 +13,9 @@ async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_shows_info_about_all_connected_federations() {
-    let (_, rpc, _, _, _) = fixtures::fixtures().await;
+    let (_, rpc, _, _, _) = fixtures::fixtures(None).await;
 
-    let info = rpc.get_info().await.unwrap();
-    assert_eq!(info.federations.len(), 2);
+    assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]

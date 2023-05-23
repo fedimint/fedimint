@@ -13,36 +13,28 @@ mod fixtures;
 
 use std::future::Future;
 
-use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
-use fedimint_core::config::FederationId;
 use ln_gateway::rpc::rpc_client::{GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
-use rand::rngs::OsRng;
-use rand::Rng;
 use reqwest::StatusCode;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_api_authentication() -> anyhow::Result<()> {
-    let (_, rpc, _, _, bitcoin) = fixtures::fixtures().await;
     let gw_password = "password".to_string();
+    let (_, rpc, fed1, _, bitcoin) = fixtures::fixtures(Some(gw_password.clone())).await;
 
     // Create an RPC client reference
     let client1 = &rpc.with_password(gw_password);
     let client2 = &rpc.with_password("bad password".to_string());
 
     // Create a test federation ID
-    let federation_id = FederationId::dummy();
+    let connection_code = fed1.connection_code();
+    let federation_id = fed1.connection_code().id;
 
     // Test gateway authentication on `connect_federation` function
     let payload = ConnectFedPayload {
-        connect: serde_json::to_string(&WsClientConnectInfo {
-            url: "ws://dummy".parse().unwrap(),
-            download_token: ClientConfigDownloadToken(OsRng::default().gen()),
-            id: federation_id,
-        })
-        .unwrap(),
+        connect: connection_code.to_string(),
     };
     auth_success(|| client1.connect_federation(payload.clone())).await;
     auth_fails(|| client2.connect_federation(payload.clone())).await;
