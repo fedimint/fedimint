@@ -10,6 +10,12 @@ import {
   Button,
   Text,
   useTheme,
+  FormErrorMessage,
+  NumberInput,
+  NumberInputField,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
+  NumberInputStepper,
 } from '@chakra-ui/react';
 import { FormGroup, FormGroupHeading } from '@fedimint/ui';
 import { useGuardianContext } from '../hooks';
@@ -141,7 +147,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
                 'ln',
                 {
                   consensus: { network: network as Network },
-                  local: { bitcoin_rpc: bitcoinRpc }
+                  local: { bitcoin_rpc: bitcoinRpc },
                 },
               ],
             },
@@ -166,10 +172,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
                   },
                 },
               ],
-              3: [
-                'ln',
-                { local: { bitcoin_rpc: bitcoinRpc } },
-              ],
+              3: ['ln', { local: { bitcoin_rpc: bitcoinRpc } }],
             },
           },
         });
@@ -231,14 +234,24 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
                 onChange={(ev) => setFederationName(ev.currentTarget.value)}
               />
             </FormControl>
-            <FormControl>
+            <FormControl isInvalid={!isValidNumber(numPeers)}>
               <FormLabel>Number of guardians</FormLabel>
-              <Input
-                type='number'
+              <NumberInput
                 min={1}
                 value={numPeers}
-                onChange={(ev) => setNumPeers(ev.currentTarget.value)}
-              />
+                onChange={(value) => {
+                  setNumPeers(value);
+                }}
+              >
+                <NumberInputField />
+                <NumberInputStepper>
+                  <NumberIncrementStepper />
+                  <NumberDecrementStepper />
+                </NumberInputStepper>
+              </NumberInput>
+              <FormErrorMessage>
+                Please input a number of 1 or more.
+              </FormErrorMessage>
               <FormHelperText>This cannot be changed later.</FormHelperText>
             </FormControl>
           </FormGroup>
@@ -247,17 +260,25 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
           <FormGroupHeading icon={BitcoinLogo} title='Bitcoin settings' />
           {isHost && (
             <>
-              <FormControl>
+              <FormControl isInvalid={!isValidNumber(blockConfirmations)}>
                 <FormLabel>Block confirmations</FormLabel>
-                <Input
-                  type='number'
+                <NumberInput
                   min={1}
+                  max={200}
                   value={blockConfirmations}
-                  onChange={(ev) => {
-                    const value = ev.currentTarget.value;
-                    isValidNumber(value) && setBlockConfirmations(value);
+                  onChange={(value) => {
+                    setBlockConfirmations(value);
                   }}
-                />
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+                <FormErrorMessage>
+                  Please input a number of 1 or more.
+                </FormErrorMessage>
                 <FormHelperText>
                   How many block confirmations needed before confirming?
                 </FormHelperText>
