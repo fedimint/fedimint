@@ -6,7 +6,7 @@ mod fixtures;
 
 use fedimint_testing::federation::FederationTest;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{BalancePayload, ConnectFedPayload};
+use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_supports_connecting_multiple_federations() {
@@ -86,10 +86,38 @@ async fn gatewayd_shows_balance_for_any_connected_federation() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn gatewayd_allows_deposit_to_any_connected_federation() -> anyhow::Result<()> {
-    // todo: implement test case
+#[ignore] // deposit needs wallet module,
+          // balance query needs mint module,
+          // both are not configured in fixtures
+async fn gatewayd_allows_deposit_to_any_connected_federation() {
+    let (_, rpc, fed, _, bitcoin) = fixtures::fixtures(None).await;
 
-    Ok(())
+    let id = fed.connection_code().id;
+
+    connect_federations(&rpc, &[fed]).await.unwrap();
+
+    let addr = rpc
+        .get_deposit_address(DepositAddressPayload { federation_id: id })
+        .await
+        .unwrap();
+    let amt_btc = bitcoin::Amount::from_btc(1.0).unwrap();
+    let (proof, tx) = bitcoin.send_and_mine_block(&addr, amt_btc).await;
+
+    let _ = rpc
+        .deposit(DepositPayload {
+            federation_id: id,
+            txout_proof: proof,
+            transaction: tx,
+        })
+        .await
+        .unwrap();
+
+    let bal = rpc
+        .get_balance(BalancePayload { federation_id: id })
+        .await
+        .unwrap();
+
+    assert_eq!(bal.msats, amt_btc.to_sat() * 1000);
 }
 
 #[tokio::test(flavor = "multi_thread")]
