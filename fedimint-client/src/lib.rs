@@ -754,13 +754,13 @@ impl Client {
 
     /// Waits for an output from the primary module to reach its final
     /// state.
-    pub async fn await_primary_module_output_finalized(
+    pub async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
         self.inner
-            .await_primary_module_output_finalized(operation_id, out_point)
+            .await_primary_module_output(operation_id, out_point)
             .await
     }
 
@@ -1022,13 +1022,13 @@ impl ClientInner {
         active_state_exists || inactive_state_exists
     }
 
-    pub async fn await_primary_module_output_finalized(
+    pub async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
         self.primary_module
-            .await_primary_module_output_finalized(operation_id, out_point)
+            .await_primary_module_output(operation_id, out_point)
             .await
     }
 }

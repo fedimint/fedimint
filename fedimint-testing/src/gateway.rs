@@ -2,12 +2,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client_legacy::modules::ln::LightningGateway;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
+use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::{Gateway, DEFAULT_FEES};
 use tempfile::TempDir;
 use tokio::sync::RwLock;
@@ -18,7 +19,6 @@ use crate::federation::FederationTest;
 use crate::fixtures::test_dir;
 
 pub struct GatewayTest {
-    feds: Vec<FederationInfo>,
     api: Url,
     password: String,
     _config_dir: Option<TempDir>,
@@ -35,17 +35,17 @@ impl GatewayTest {
     pub async fn connect_fed(&mut self, fed: &FederationTest) {
         let connect = fed.connection_code().to_string();
         let client = self.get_rpc().await;
-        self.feds.push(
-            client
-                .connect_federation(ConnectFedPayload { connect })
-                .await
-                .unwrap(),
-        );
+        client
+            .connect_federation(ConnectFedPayload { connect })
+            .await
+            .unwrap();
     }
 
     /// Returns the last registration we sent to a fed
-    pub fn last_info(&self) -> FederationInfo {
-        self.feds.last().unwrap().clone()
+    pub async fn last_registered(&self) -> LightningGateway {
+        let info = self.get_rpc().await.get_info().await;
+        let fed = info.expect("Failed to get_info").federations;
+        fed.last().expect("No feds registered").registration.clone()
     }
 
     pub(crate) async fn new(
@@ -84,7 +84,6 @@ impl GatewayTest {
         .await;
 
         Self {
-            feds: vec![],
             password,
             api: address,
             _config_dir,

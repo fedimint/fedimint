@@ -9,6 +9,7 @@ use std::path::Path;
 use std::pin::Pin;
 use std::{fs, io};
 
+use anyhow::format_err;
 use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tracing::debug;
@@ -28,6 +29,8 @@ pub trait NextOrPending {
     type Output;
 
     async fn next_or_pending(&mut self) -> Self::Output;
+
+    async fn ok(&mut self) -> anyhow::Result<Self::Output>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -37,6 +40,15 @@ where
     S::Item: MaybeSend,
 {
     type Output = S::Item;
+
+    /// Waits for the next item in a stream. If the stream is closed while
+    /// waiting, returns an error.  Useful when expecting a stream to progress.
+    async fn ok(&mut self) -> anyhow::Result<Self::Output> {
+        match self.next().await {
+            Some(item) => Ok(item),
+            None => Err(format_err!("Stream was unexpectedly closed")),
+        }
+    }
 
     /// Waits for the next item in a stream. If the stream is closed while
     /// waiting the future will be pending forever. This is useful in cases

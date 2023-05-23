@@ -73,13 +73,9 @@ pub trait LightningClientExt {
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
 
     /// Pays a LN invoice with our available funds
-    async fn pay_bolt11_invoice(
-        &self,
-        fed_id: FederationId,
-        invoice: Invoice,
-    ) -> anyhow::Result<OperationId>;
+    async fn pay_bolt11_invoice(&self, invoice: Invoice) -> anyhow::Result<OperationId>;
 
-    async fn subscribe_ln_pay_updates(
+    async fn subscribe_ln_pay(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnPayState>>;
@@ -92,7 +88,7 @@ pub trait LightningClientExt {
         expiry_time: Option<u64>,
     ) -> anyhow::Result<(OperationId, Invoice)>;
 
-    async fn subscribe_to_ln_receive_updates(
+    async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnReceiveState>>;
@@ -174,11 +170,7 @@ impl LightningClientExt for Client {
         Ok(instance.api.fetch_gateways().await?)
     }
 
-    async fn pay_bolt11_invoice(
-        &self,
-        fed_id: FederationId,
-        invoice: Invoice,
-    ) -> anyhow::Result<OperationId> {
+    async fn pay_bolt11_invoice(&self, invoice: Invoice) -> anyhow::Result<OperationId> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let operation_id = OperationId(invoice.payment_hash().into_inner());
         let active_gateway = self.select_active_gateway().await?;
@@ -189,7 +181,7 @@ impl LightningClientExt for Client {
                 instance.api,
                 invoice.clone(),
                 active_gateway,
-                fed_id,
+                self.get_config().await.federation_id,
                 rand::rngs::OsRng,
             )
             .await?;
@@ -256,7 +248,7 @@ impl LightningClientExt for Client {
         Ok((operation_id, invoice))
     }
 
-    async fn subscribe_to_ln_receive_updates(
+    async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnReceiveState>> {
@@ -293,7 +285,7 @@ impl LightningClientExt for Client {
                         if let Ok(txid) = claim_acceptance.await {
                             yield LnReceiveState::AwaitingFunds;
 
-                            if self.await_primary_module_output_finalized(operation_id, OutPoint{ txid, out_idx: 0}).await.is_ok() {
+                            if self.await_primary_module_output(operation_id, OutPoint{ txid, out_idx: 0}).await.is_ok() {
                                 yield LnReceiveState::Claimed;
                                 return;
                             }
@@ -309,7 +301,7 @@ impl LightningClientExt for Client {
         ))
     }
 
-    async fn subscribe_ln_pay_updates(
+    async fn subscribe_ln_pay(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnPayState>> {
@@ -347,7 +339,7 @@ impl LightningClientExt for Client {
                     Ok(preimage) => {
                         if let Some(change) = change_outpoint {
                             yield LnPayState::AwaitingChange;
-                            match self.await_primary_module_output_finalized(operation_id, change).await {
+                            match self.await_primary_module_output(operation_id, change).await {
                                 Ok(_) => {}
                                 Err(_) => {
                                     yield LnPayState::Failed;
@@ -364,7 +356,7 @@ impl LightningClientExt for Client {
 
                         if let Ok(refund_txid) = refund_success.await {
                             // need to await primary module to get refund
-                            if self.await_primary_module_output_finalized(operation_id, OutPoint{ txid: refund_txid, out_idx: 0}).await.is_ok() {
+                            if self.await_primary_module_output(operation_id, OutPoint{ txid: refund_txid, out_idx: 0}).await.is_ok() {
                                 yield LnPayState::Refunded { gateway_error: error };
                                 return;
                             }

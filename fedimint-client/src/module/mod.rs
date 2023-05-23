@@ -294,7 +294,7 @@ pub trait PrimaryClientModule: ClientModule {
     /// [`Self::create_exact_output`] to become available. This function
     /// returning typically implies a change in the output of
     /// [`Self::get_balance`].
-    async fn await_primary_module_output_finalized(
+    async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
@@ -328,7 +328,7 @@ pub trait IPrimaryClientModule: IClientModule {
         amount: Amount,
     ) -> ClientOutput;
 
-    async fn await_primary_module_output_finalized(
+    async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
@@ -384,12 +384,12 @@ where
         .into_dyn(module_instance)
     }
 
-    async fn await_primary_module_output_finalized(
+    async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
-        T::await_primary_module_output_finalized(self, operation_id, out_point).await
+        T::await_primary_module_output(self, operation_id, out_point).await
     }
 
     async fn get_balance(

@@ -1936,6 +1936,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bitcoin",
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-client",

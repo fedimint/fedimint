@@ -34,10 +34,6 @@ use crate::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletClientExt {
-    // TODO: remove, the network should be in the LN config
-    /// Returns the bitcoin network the federation is using
-    fn get_network(&self) -> Network;
-
     async fn get_deposit_address(
         &self,
         valid_until: SystemTime,
@@ -49,7 +45,7 @@ pub trait WalletClientExt {
     ) -> anyhow::Result<BoxStream<DepositState>>;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum DepositState {
     WaitingForTransaction,
     WaitingForConfirmation,
@@ -61,11 +57,6 @@ pub enum DepositState {
 
 #[apply(async_trait_maybe_send!)]
 impl WalletClientExt for Client {
-    fn get_network(&self) -> Network {
-        let (wallet, _instance) = self.get_first_module::<WalletClientModule>(&KIND);
-        wallet.get_network()
-    }
-
     async fn get_deposit_address(
         &self,
         valid_until: SystemTime,
@@ -176,7 +167,7 @@ impl WalletClientExt for Client {
             }
 
             if let Some(out_point) = claiming.change.as_ref() {
-                self.await_primary_module_output_finalized(operation_id, *out_point)
+                self.await_primary_module_output(operation_id, *out_point)
                     .await
                     .expect("Cannot fail if tx was accepted and federation is honest");
             }

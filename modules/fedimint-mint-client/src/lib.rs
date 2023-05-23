@@ -80,7 +80,7 @@ pub const LOG_TARGET: &str = "client::module::mint";
 pub trait MintClientExt {
     /// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
-    /// [`MintClientExt::subscribe_reissue_external_notes_updates`].
+    /// [`MintClientExt::subscribe_reissue_external_notes`].
     async fn reissue_external_notes<M: Serialize + Send>(
         &self,
         notes: TieredMulti<SpendableNote>,
@@ -89,7 +89,7 @@ pub trait MintClientExt {
 
     /// Subscribe to updates on the progress of a reissue operation started with
     /// [`MintClientExt::reissue_external_notes`].
-    async fn subscribe_reissue_external_notes_updates(
+    async fn subscribe_reissue_external_notes(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, ReissueExternalNotesState>>;
@@ -115,12 +115,12 @@ pub trait MintClientExt {
     /// Try to cancel a spend operation started with
     /// [`MintClientExt::spend_notes`]. If the e-cash notes have already been
     /// spent this operation will fail which can be observed using
-    /// [`MintClientExt::subscribe_spend_notes_updates`].
+    /// [`MintClientExt::subscribe_spend_notes`].
     async fn try_cancel_spend_notes(&self, operation_id: OperationId);
 
     /// Subscribe to updates on the progress of a raw e-cash spend operation
     /// started with [`MintClientExt::spend_notes`].
-    async fn subscribe_spend_notes_updates(
+    async fn subscribe_spend_notes(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, SpendOOBState>>;
@@ -211,7 +211,7 @@ impl MintClientExt for Client {
         Ok(operation_id)
     }
 
-    async fn subscribe_reissue_external_notes_updates(
+    async fn subscribe_reissue_external_notes(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, ReissueExternalNotesState>> {
@@ -319,7 +319,7 @@ impl MintClientExt for Client {
         let _ = mint.cancel_oob_payment_bc.send(operation_id);
     }
 
-    async fn subscribe_spend_notes_updates(
+    async fn subscribe_spend_notes(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, SpendOOBState>> {
@@ -532,7 +532,7 @@ impl ClientModule for MintClientModule {
 
                 let operation_id = client.reissue_external_notes(notes, ()).await?;
                 let mut updates = client
-                    .subscribe_reissue_external_notes_updates(operation_id)
+                    .subscribe_reissue_external_notes(operation_id)
                     .await
                     .unwrap()
                     .into_stream();
@@ -671,7 +671,7 @@ impl PrimaryClientModule for MintClientModule {
         self.create_output(dbtx, operation_id, 2, amount).await
     }
 
-    async fn await_primary_module_output_finalized(
+    async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,

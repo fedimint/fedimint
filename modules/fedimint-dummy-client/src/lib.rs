@@ -249,7 +249,7 @@ impl PrimaryClientModule for DummyClientModule {
         }
     }
 
-    async fn await_primary_module_output_finalized(
+    async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         _out_point: OutPoint,

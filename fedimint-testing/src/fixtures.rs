@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
 
@@ -11,11 +12,10 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::BoxStream;
-use futures::StreamExt;
 use tempfile::TempDir;
 
 use crate::btc::mock::FakeBitcoinFactory;
+use crate::btc::BitcoinTest;
 use crate::federation::FederationTest;
 use crate::gateway::GatewayTest;
 use crate::ln::mock::FakeLightningTest;
@@ -27,37 +27,45 @@ pub const TIMEOUT: Duration = Duration::from_secs(10);
 static BASE_PORT: AtomicU16 = AtomicU16::new(38173);
 
 /// A tool for easily writing fedimint integration tests
-#[derive(Default)]
 pub struct Fixtures {
-    real_testing: bool,
+    num_peers: u16,
     ids: Vec<ModuleInstanceId>,
     clients: Vec<DynClientModuleGen>,
     servers: Vec<DynServerModuleGen>,
     params: ServerModuleGenParamsRegistry,
     primary_client: ModuleInstanceId,
+    bitcoin_rpc: BitcoinRpcConfig,
+    bitcoin: Arc<dyn BitcoinTest>,
 }
 
 impl Fixtures {
-    pub fn new() -> Self {
-        Self {
-            real_testing: env::var("FM_TEST_USE_REAL_DAEMONS") == Ok("1".to_string()),
-            ..Default::default()
-        }
-    }
-
-    /// Add primary client module to the fed
-    // TODO: Auto-assign instance ids after removing legacy id order
-    pub fn with_primary(
-        mut self,
+    pub fn new_primary(
         id: ModuleInstanceId,
         client: impl IClientModuleGen + MaybeSend + MaybeSync + 'static,
         server: impl IServerModuleGen + MaybeSend + MaybeSync + 'static,
         params: impl ModuleGenParams,
     ) -> Self {
-        self.primary_client = id;
-        self.with_module(id, client, server, params)
+        let real_testing = env::var("FM_TEST_USE_REAL_DAEMONS") == Ok("1".to_string());
+        let num_peers = match real_testing {
+            true => 2,
+            false => 1,
+        };
+        let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
+
+        Self {
+            num_peers,
+            ids: vec![],
+            clients: vec![],
+            servers: vec![],
+            params: Default::default(),
+            primary_client: id,
+            bitcoin_rpc: config,
+            bitcoin: Arc::new(bitcoin),
+        }
+        .with_module(id, client, server, params)
     }
 
+    // TODO: Auto-assign instance ids after removing legacy id order
     /// Add a module to the fed
     pub fn with_module(
         mut self,
@@ -77,11 +85,7 @@ impl Fixtures {
 
     /// Starts a new federation with default number of peers for testing
     pub async fn new_fed(&self) -> FederationTest {
-        let num_peers = match self.real_testing {
-            true => 2,
-            false => 1,
-        };
-        self.new_fed_with_peers(num_peers).await
+        self.new_fed_with_peers(self.num_peers).await
     }
 
     /// Starts a new federation with number of peers
@@ -117,7 +121,12 @@ impl Fixtures {
 
     /// Get a test bitcoin RPC config
     pub fn bitcoin_rpc(&self) -> BitcoinRpcConfig {
-        FakeBitcoinFactory::register_new().config
+        self.bitcoin_rpc.clone()
+    }
+
+    /// Get a test bitcoin fixture
+    pub fn bitcoin(&self) -> Arc<dyn BitcoinTest> {
+        self.bitcoin.clone()
     }
 }
 
@@ -137,11 +146,4 @@ pub fn test_dir(pathname: &str) -> (PathBuf, Option<TempDir>) {
     let fullpath = PathBuf::from(parent).join(pathname);
     fs::create_dir_all(fullpath.clone()).expect("Can make dirs");
     (fullpath, maybe_tmp_dir_guard)
-}
-
-/// Awaits the next value from the BoxStream
-///
-/// Useful for testing the client state machines
-pub async fn next<T>(stream: &mut BoxStream<'_, T>) -> T {
-    stream.next().await.expect("No next value found")
 }
