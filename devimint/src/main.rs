@@ -147,7 +147,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     } = dev_fed;
 
     cmd!(
-        "distributedgen",
+        fed,
         "config-decrypt",
         "--in-file={data_dir}/server-0/private.encrypt",
         "--out-file={data_dir}/server-0/config-plaintext.json"
@@ -157,7 +157,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .await?;
 
     cmd!(
-        "distributedgen",
+        fed,
         "config-encrypt",
         "--in-file={data_dir}/server-0/config-plaintext.json",
         "--out-file={data_dir}/server-0/config-2"
@@ -167,7 +167,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .await?;
 
     cmd!(
-        "distributedgen",
+        fed,
         "config-decrypt",
         "--in-file={data_dir}/server-0/config-2",
         "--out-file={data_dir}/server-0/config-plaintext-2.json"
@@ -179,14 +179,12 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Test load last epoch with admin client
     info!("Testing load last epoch with admin client");
     let epoch_json = cmd!(fed, "last-epoch")
-        .env("FM_SALT_PATH", format!("{data_dir}/server-0/private.salt"))
         .env("FM_PASSWORD", "pass0")
         .env("FM_OUR_ID", "0")
         .out_json()
         .await?;
     let epoch_hex = epoch_json["hex_outcome"].as_str().unwrap();
     let _force_epoch = cmd!(fed, "force-epoch", epoch_hex)
-        .env("FM_SALT_PATH", format!("{data_dir}/server-0/private.salt"))
         .env("FM_PASSWORD", "pass0")
         .env("FM_OUR_ID", "0")
         .out_json()

@@ -16,8 +16,6 @@ use fedimint_wallet_server::common::config::{
 };
 use fedimint_wallet_server::WalletGen;
 
-/// Module for creating `distributetgen` binary with custom modules
-pub mod distributed_gen;
 /// Module for creating `fedimintd` binary with custom modules
 pub mod fedimintd;
 

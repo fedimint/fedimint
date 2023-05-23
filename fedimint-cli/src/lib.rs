@@ -3,8 +3,8 @@ mod ng;
 use core::fmt;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,6 +12,7 @@ use std::{fs, result};
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
+use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
@@ -43,6 +44,7 @@ use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::{MintClientExt, MintClientGen};
+use fedimint_server::config::io::SALT_FILE;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -158,6 +160,10 @@ enum CliOutput {
     },
 
     ForceEpoch,
+
+    ConfigDecrypt,
+
+    ConfigEncrypt,
 
     Raw(serde_json::Value),
 }
@@ -577,6 +583,38 @@ enum Command {
 
     /// Show the status according to the `status` endpoint
     Status,
+
+    ConfigDecrypt {
+        /// Encrypted config file
+        #[arg(long = "in-file")]
+        in_file: PathBuf,
+        /// Plaintext config file output
+        #[arg(long = "out-file")]
+        out_file: PathBuf,
+        /// Encryption salt file, otherwise defaults to the salt file from the
+        /// in_file directory
+        #[arg(long = "salt-file")]
+        salt_file: Option<PathBuf>,
+        /// The password that encrypts the configs
+        #[arg(env = "FM_PASSWORD")]
+        password: String,
+    },
+
+    ConfigEncrypt {
+        /// Plaintext config file
+        #[arg(long = "in-file")]
+        in_file: PathBuf,
+        /// Encrypted config file output
+        #[arg(long = "out-file")]
+        out_file: PathBuf,
+        /// Encryption salt file, otherwise defaults to the salt file from the
+        /// out_file directory
+        #[arg(long = "salt-file")]
+        salt_file: Option<PathBuf>,
+        /// The password that encrypts the configs
+        #[arg(env = "FM_PASSWORD")]
+        password: String,
+    },
 
     #[clap(subcommand)]
     Ng(ng::ClientNg),
@@ -1066,6 +1104,44 @@ impl FedimintCli {
 
                 Ok(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
             }
+            Command::ConfigDecrypt {
+                in_file,
+                out_file,
+                salt_file,
+                password,
+            } => {
+                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
+                let salt = fs::read_to_string(salt_file).map_err_cli_general()?;
+                let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
+                let decrypted_bytes = encrypted_read(&key, in_file).map_err_cli_general()?;
+
+                let mut out_file_handle = fs::File::options()
+                    .create_new(true)
+                    .write(true)
+                    .open(out_file)
+                    .expect("Could not create output cfg file");
+                out_file_handle
+                    .write_all(&decrypted_bytes)
+                    .map_err_cli_general()?;
+                Ok(CliOutput::ConfigDecrypt)
+            }
+            Command::ConfigEncrypt {
+                in_file,
+                out_file,
+                salt_file,
+                password,
+            } => {
+                let mut in_file_handle =
+                    fs::File::open(in_file).expect("Could not create output cfg file");
+                let mut plaintext_bytes = vec![];
+                in_file_handle.read_to_end(&mut plaintext_bytes).unwrap();
+
+                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&out_file));
+                let salt = fs::read_to_string(salt_file).map_err_cli_general()?;
+                let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
+                encrypted_write(plaintext_bytes, &key, out_file).map_err_cli_general()?;
+                Ok(CliOutput::ConfigEncrypt)
+            }
             Command::Ng(command) => {
                 let config = cli.load_config()?.0;
                 let client = cli
@@ -1087,6 +1163,13 @@ impl FedimintCli {
             }
         }
     }
+}
+
+fn salt_from_file_path(file_path: &Path) -> PathBuf {
+    file_path
+        .parent()
+        .expect("File has no parent?!")
+        .join(SALT_FILE)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -118,7 +118,6 @@ declare_vars! {
         FM_GWCLI_CLN: String = f!("gateway-cli --rpcpassword=theresnosecondbest");
         FM_GWCLI_LND: String = f!("gateway-cli --rpcpassword=theresnosecondbest -a http://127.0.0.1:28175/");
         FM_DB_TOOL: String = f!("dbtool");
-        FM_DISTRIBUTEDGEN: String = f!("distributedgen");
 
         // fedimint config variables
         FM_TEST_BITCOIND_RPC: String = "http://bitcoin:bitcoin@127.0.0.1:18443";

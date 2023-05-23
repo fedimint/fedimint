@@ -18,10 +18,6 @@ path = "src/bin/main.rs"
 name = "fedimintd"
 path = "src/lib.rs"
 
-[[bin]]
-name = "distributedgen"
-path  = "src/bin/distributedgen.rs"
-
 [dependencies]
 fedimint-aead = { path = "../crypto/aead" }
 ring = "0.16.20"
