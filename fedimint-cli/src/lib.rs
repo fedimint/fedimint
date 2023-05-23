@@ -12,7 +12,6 @@ use std::{fs, result};
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_aead::get_password_hash;
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
@@ -303,10 +302,6 @@ struct Opts {
     #[arg(long = "data-dir", alias = "workdir", env = "FM_DATA_DIR")]
     workdir: Option<PathBuf>,
 
-    /// Location of the salt file
-    #[arg(env = "FM_SALT_PATH")]
-    salt_path: Option<PathBuf>,
-
     /// Peer id of the guardian
     #[arg(env = "FM_OUR_ID", value_parser = parse_peer_id)]
     our_id: Option<PeerId>,
@@ -327,10 +322,6 @@ impl Opts {
     }
 
     async fn admin_client(&self) -> CliResult<WsAdminClient> {
-        let salt_path = self.salt_path.clone().ok_or_cli_msg(
-            CliErrorKind::MissingAuth,
-            "Admin client needs salt-path set",
-        )?;
         let password = self
             .password
             .clone()
@@ -338,9 +329,7 @@ impl Opts {
         let our_id = &self
             .our_id
             .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
-        let salt = fs::read_to_string(salt_path)
-            .map_err_cli_msg(CliErrorKind::IOError, "Unable to open salt file")?;
-        let auth = ApiAuth(get_password_hash(&password, &salt).map_err_cli_io()?);
+        let auth = ApiAuth(password);
         let url = self
             .load_config()?
             .0

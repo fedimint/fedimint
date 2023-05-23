@@ -70,8 +70,10 @@ async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
+use fedimint_server::config::ServerConfig;
 use format as f;
 use tokio::fs;
+
 pub fn utf8(path: &Path) -> &str {
     path.as_os_str().to_str().expect("must be valid utf8")
 }
@@ -144,23 +146,16 @@ impl Global {
     }
 }
 
-const BASE_PORT: usize = 8173 + 10000;
-
 // We allow ranges of 10 ports for each fedimintd / dkg instance starting from
 // 18173. Each port needed is incremented by 1 within this range.
 //
 // * `id` - ID of the server. Used to calculate port numbers.
 declare_vars! {
-    Fedimintd = (globals: &Global, id: usize, password: bool) => {
-        FM_BIND_P2P: String = format!("127.0.0.1:{p2p}", p2p = BASE_PORT + id * 10);
-        FM_P2P_URL: String = format!("fedimint://{FM_BIND_P2P}");
-        FM_BIND_API: String = format!("127.0.0.1:{api}", api = BASE_PORT + id * 10 + 1);
-        FM_API_URL: String = format!("ws://{FM_BIND_API}");
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{id}"))).await?;
-        FM_PASSWORD: Option<String> = if password {
-            Some(format!("pass{id}"))
-        } else {
-            None
-        };
+    Fedimintd = (globals: &Global, cfg: &ServerConfig) => {
+        FM_BIND_P2P: String = cfg.local.fed_bind.to_string();
+        FM_P2P_URL: String = cfg.local.p2p_endpoints[&cfg.local.identity].url.to_string();
+        FM_BIND_API: String = cfg.local.api_bind.to_string();
+        FM_API_URL: String = cfg.consensus.api_endpoints[&cfg.local.identity].url.to_string();
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{}", cfg.local.identity.to_usize()))).await?;
     }
 }

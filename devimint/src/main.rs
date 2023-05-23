@@ -9,7 +9,7 @@ use bitcoincore_rpc::bitcoin::Amount as BitcoinRpcAmount;
 use bitcoincore_rpc::RpcApi;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
-use devimint::federation::Fedimintd;
+use devimint::federation::{run_config_gen, Fedimintd};
 use devimint::util::{poll, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
@@ -1057,13 +1057,13 @@ async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result
 async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let fed_size = process_mgr.globals.FM_FED_SIZE;
+    let members = run_config_gen(process_mgr, fed_size, false).await?;
     // don't drop fedimintds
-    let _fedimintds = futures::future::try_join_all((0..fed_size).map(|peer_id| {
+    let _fedimintds = futures::future::try_join_all(members.into_iter().map(|(peer, vars)| {
         let bitcoind = bitcoind.clone();
         async move {
-            let env_vars = vars::Fedimintd::init(&process_mgr.globals, peer_id, false).await?;
-            let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer_id, &env_vars).await?;
-            let server_addr = &env_vars.FM_BIND_API;
+            let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
+            let server_addr = &vars.FM_BIND_API;
 
             poll("waiting for ui/api startup", || async {
                 Ok(TcpStream::connect(server_addr).await.is_ok())
@@ -1102,6 +1102,7 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         std::env::set_var(var, value);
     }
     write_overwrite_async(globals.FM_TEST_DIR.join("env"), env_string).await?;
+    info!("Test setup in {:?}", globals.FM_DATA_DIR);
     let process_mgr = ProcessManager::new(globals);
     let task_group = TaskGroup::new();
     task_group.install_kill_handler();
