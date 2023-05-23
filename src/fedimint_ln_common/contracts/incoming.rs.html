@@ -112,16 +112,34 @@
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::{hash_newtype, Hash <span class="kw">as </span>BitcoinHash};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::OutPoint;
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract};
+<span class="kw">use </span><span class="kw">crate</span>::LightningInput;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>IncomingContractOffer {
@@ -224,6 +242,22 @@
         <span class="prelude-val">Ok</span>(OfferId::from_inner(Decodable::consensus_decode(
             d, modules,
         )<span class="question-mark">?</span>))
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>IncomingContractAccount {
+    <span class="kw">pub </span>amount: Amount,
+    <span class="kw">pub </span>contract: IncomingContract,
+}
+
+<span class="kw">impl </span>IncomingContractAccount {
+    <span class="kw">pub fn </span>claim(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningInput {
+        LightningInput {
+            contract_id: <span class="self">self</span>.contract.contract_id(),
+            amount: <span class="self">self</span>.amount,
+            witness: <span class="prelude-val">None</span>,
+        }
     }
 }
 </code></pre></div>

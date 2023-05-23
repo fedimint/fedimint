@@ -828,10 +828,7 @@
 <a href="#828" id="828">828</a>
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
-</pre><pre class="rust"><code><span class="kw">mod </span>api;
-<span class="kw">mod </span>db;
+</pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
 
@@ -840,10 +837,8 @@
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>anyhow::{bail, format_err};
-<span class="kw">use </span>api::LnFederationApi;
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
-<span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>db::LightningGatewayKey;
 <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
@@ -865,9 +860,12 @@
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractOffer;
-<span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContract;
+<span class="kw">use </span>fedimint_ln_common::contracts::outgoing::{
+    OutgoingContract, OutgoingContractAccount, OutgoingContractData,
+};
 <span class="kw">use </span>fedimint_ln_common::contracts::{Contract, EncryptedPreimage, IdentifiableContract, Preimage};
 <span class="kw">pub use </span>fedimint_ln_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::StreamExt;
@@ -876,9 +874,7 @@
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
 <span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-<span class="kw">use </span>pay::{
-    GatewayPayError, LightningPayStateMachine, OutgoingContractAccount, OutgoingContractData,
-};
+<span class="kw">use </span>pay::{GatewayPayError, LightningPayStateMachine};
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>receive::{LightningReceiveError, LightningReceiveStateMachine};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
