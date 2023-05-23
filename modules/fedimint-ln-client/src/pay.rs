@@ -9,9 +9,9 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::Decoder;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, OutPoint, TransactionId};
-use fedimint_ln_common::contracts::outgoing::OutgoingContract;
-use fedimint_ln_common::contracts::{ContractId, IdentifiableContract, Preimage};
+use fedimint_core::{OutPoint, TransactionId};
+use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
+use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome};
 use futures::future;
 use serde::{Deserialize, Serialize};
@@ -493,36 +493,6 @@ impl PayInvoicePayload {
         Self {
             contract_id,
             federation_id,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize)]
-pub struct OutgoingContractData {
-    pub recovery_key: bitcoin::KeyPair,
-    pub contract_account: OutgoingContractAccount,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize)]
-pub struct OutgoingContractAccount {
-    pub amount: Amount,
-    pub contract: OutgoingContract,
-}
-
-impl OutgoingContractAccount {
-    pub fn claim(&self, preimage: Preimage) -> LightningInput {
-        LightningInput {
-            contract_id: self.contract.contract_id(),
-            amount: self.amount,
-            witness: Some(preimage),
-        }
-    }
-
-    pub fn refund(&self) -> LightningInput {
-        LightningInput {
-            contract_id: self.contract.contract_id(),
-            amount: self.amount,
-            witness: None,
         }
     }
 }
