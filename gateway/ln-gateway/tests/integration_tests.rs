@@ -4,11 +4,34 @@
 //! and business logic.
 mod fixtures;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
-    // todo: implement test case
+use fedimint_testing::federation::FederationTest;
+use ln_gateway::rpc::rpc_client::GatewayRpcClient;
+use ln_gateway::rpc::ConnectFedPayload;
 
-    Ok(())
+#[tokio::test(flavor = "multi_thread")]
+async fn gatewayd_supports_connecting_multiple_federations() {
+    let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
+
+    assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+
+    let connection1 = fed1.connection_code();
+    let info = rpc
+        .connect_federation(ConnectFedPayload {
+            connect: connection1.to_string(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(info.federation_id, connection1.id);
+
+    let connection2 = fed2.connection_code();
+    let info = rpc
+        .connect_federation(ConnectFedPayload {
+            connect: connection2.to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(info.federation_id, connection2.id);
 }
 
 #[tokio::test(flavor = "multi_thread")]
