@@ -417,8 +417,6 @@ impl IBitcoindRpc for EsploraClient {
             .get_tx_status(&transaction.txid())
             .await
             .map_err(anyhow::Error::from)?;
-        Ok(status
-            .map(|status| status.block_height == Some(height as u32))
-            .unwrap_or(false))
+        Ok(status.block_height == Some(height as u32))
     }
 }

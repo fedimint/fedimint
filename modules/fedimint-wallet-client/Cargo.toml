@@ -17,7 +17,7 @@ async-stream = "0.3.5"
 async-trait = "0.1"
 bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
 erased-serde = "0.3"
-esplora-client = { git = "https://github.com/bitcoindevkit/rust-esplora-client.git", rev = "54de8118c40c6a2cf80591d8991cf578bdfb51c4", default-features = false, features = ["async", "async-https-rustls"] }
+esplora-client = { version = "0.5.0", default-features = false, features = ["async", "async-https-rustls"] }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-wallet-common ={ path = "../fedimint-wallet-common" }
