@@ -328,8 +328,6 @@
                     (hiPrio pkgs.bashInteractive)
                     tmux
                     tmuxinator
-                    xclip
-                    wl-clipboard
                     (mprocs.overrideAttrs (final: prev: {
                       patches = prev.patches ++ [
                         (fetchurl {
@@ -352,6 +350,9 @@
                     pkgs.nodePackages.bash-language-server
                   ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                     pkgs.semgrep
+                  ] ++ lib.optionals (!stdenv.isAarch64) [
+                    xclip
+                    wl-clipboard
                   ];
 
                   RUST_SRC_PATH = "${toolchain.fenixChannel.rust-src}/lib/rustlib/src/rust/library";
