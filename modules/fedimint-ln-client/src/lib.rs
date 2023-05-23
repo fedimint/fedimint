@@ -21,7 +21,7 @@ use fedimint_client::{
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-use fedimint_core::api::DynModuleApi;
+use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
@@ -416,6 +416,8 @@ impl ClientModuleGen for LightningClientGen {
         _db: Database,
         _module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
         Ok(LightningClientModule {
             cfg,
