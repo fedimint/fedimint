@@ -1256,6 +1256,7 @@ impl ClientBuilder {
                             module_instance,
                             root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
+                            api.clone(),
                         )
                         .await?;
                     let not_replaced = primary_module.replace((kind, module)).is_none();
@@ -1280,6 +1281,7 @@ impl ClientBuilder {
                             // the same kind we have to use the instance id instead.
                             root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
+                            api.clone(),
                         )
                         .await?;
                     modules.register_module(module_instance, kind, module);

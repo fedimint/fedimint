@@ -13,6 +13,7 @@ use fedimint_client::module::ClientModule;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -203,6 +204,8 @@ impl ClientModuleGen for WalletClientGen {
         _db: Database,
         _module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
         Ok(WalletClientModule { cfg, notifier })
     }
