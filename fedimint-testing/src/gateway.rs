@@ -50,6 +50,7 @@ impl GatewayTest {
 
     pub(crate) async fn new(
         base_port: u16,
+        password: String,
         lightning: impl ILnRpcClient + 'static,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
@@ -57,7 +58,6 @@ impl GatewayTest {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: Url = format!("http://{listen}").parse().unwrap();
         let mut task = TaskGroup::new();
-        let password = rand::random::<u64>().to_string();
         let (path, _config_dir) = test_dir("gateway-cfg");
 
         // Create federation client builder for the gateway

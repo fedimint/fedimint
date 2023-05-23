@@ -1,58 +1,61 @@
 //! Gateway integration test suite
 //!
-//! This crate contains integration tests for the gateway business logic.
-//!
-//! The tests run instances of gatewayd with the following mocks:
-//!
-//! * `ILnRpcClient` - fake implementation of `ILnRpcClient` that simulates
-//!   gateway lightning dependency.
-//!
-//! * `IFederationApi` - fake implementation of `IFederationApi` that simulates
-//!   gateway federation client dependency.
+//! This crate contains integration tests for the gateway API
+//! and business logic.
+mod fixtures;
 
-use fedimint_dummy_client::DummyClientGen;
-use fedimint_dummy_common::config::DummyGenParams;
-use fedimint_dummy_server::DummyGen;
-use fedimint_ln_client::LightningClientGen;
-use fedimint_ln_common::config::LightningGenParams;
-use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
-use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::GatewayTest;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-
-async fn fixtures() -> (
-    FederationTest,
-    FederationTest,
-    GatewayTest,
-    GatewayRpcClient,
-) {
-    // TODO: use new client modules without legacy instances
-    let mut fixtures =
-        Fixtures::new_primary(1, DummyClientGen, DummyGen, DummyGenParams::default());
-    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_rpc());
-    fixtures = fixtures.with_module(0, LightningClientGen, LightningGen, ln_params);
-
-    let fed1 = fixtures.new_fed().await;
-    let fed2 = fixtures.new_fed().await;
-    let mut gateway = fixtures.new_gateway(&fed1).await;
-    gateway.connect_fed(&fed2).await;
-    let client = gateway.get_rpc().await;
-    (fed1, fed2, gateway, client)
-}
+use ln_gateway::rpc::ConnectFedPayload;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn gatewayd_supports_multiple_federations() -> anyhow::Result<()> {
-    // todo: implement test case
+async fn gatewayd_supports_connecting_multiple_federations() {
+    let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
 
-    Ok(())
+    assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+
+    let connection1 = fed1.connection_code();
+    let info = rpc
+        .connect_federation(ConnectFedPayload {
+            connect: connection1.to_string(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(info.federation_id, connection1.id);
+
+    let connection2 = fed2.connection_code();
+    let info = rpc
+        .connect_federation(ConnectFedPayload {
+            connect: connection2.to_string(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(info.federation_id, connection2.id);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_shows_info_about_all_connected_federations() {
-    let (_, _, _, client) = fixtures().await;
-    let info = client.get_info().await.unwrap();
+    let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
+
+    assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+
+    let id1 = fed1.connection_code().id;
+    let id2 = fed2.connection_code().id;
+
+    connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+
+    let info = rpc.get_info().await.unwrap();
+
     assert_eq!(info.federations.len(), 2);
+    assert!(info
+        .federations
+        .iter()
+        .any(|info| info.federation_id == id1));
+    assert!(info
+        .federations
+        .iter()
+        .any(|info| info.federation_id == id2));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -117,5 +120,17 @@ async fn gatewayd_pays_outgoing_invoice_between_federations_connected() -> anyho
 async fn gatewayd_intercepts_htlc_and_settles_to_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
+    Ok(())
+}
+
+pub async fn connect_federations(
+    rpc: &GatewayRpcClient,
+    feds: &[FederationTest],
+) -> anyhow::Result<()> {
+    for fed in feds {
+        let connect = fed.connection_code().to_string();
+        rpc.connect_federation(ConnectFedPayload { connect })
+            .await?;
+    }
     Ok(())
 }
