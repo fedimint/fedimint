@@ -147,6 +147,15 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -250,20 +259,29 @@
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Starts a new gateway connected to a fed
-    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; GatewayTest {
+    <span class="doccomment">/// Starts a new gateway
+    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, password: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier
         </span><span class="kw">let </span>server_gens = ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone());
         <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
         <span class="kw">let </span>decoders = server_gens.decoders(module_kinds).unwrap();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>gateway = GatewayTest::new(
+        <span class="kw">let </span>password = password.unwrap_or_else(|| rand::random::&lt;u64&gt;().to_string());
+
+        GatewayTest::new(
             BASE_PORT.fetch_add(<span class="number">1</span>, Ordering::Relaxed),
+            password,
             FakeLightningTest::new(),
             decoders,
             ClientModuleGenRegistry::from(<span class="self">self</span>.clients.clone()),
         )
-        .<span class="kw">await</span>;
+        .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Starts a new gateway connected to a fed
+    </span><span class="kw">pub async fn </span>new_connected_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; GatewayTest {
+        <span class="kw">let </span><span class="kw-2">mut </span>gateway = <span class="self">self</span>.new_gateway(<span class="prelude-val">None</span>).<span class="kw">await</span>;
+
         gateway.connect_fed(fed).<span class="kw">await</span>;
         gateway
     }

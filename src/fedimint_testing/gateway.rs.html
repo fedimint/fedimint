@@ -143,6 +143,7 @@
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
         base_port: u16,
+        password: String,
         lightning: <span class="kw">impl </span>ILnRpcClient + <span class="lifetime">&#39;static</span>,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
@@ -150,7 +151,6 @@
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>address: Url = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
         <span class="kw">let </span><span class="kw-2">mut </span>task = TaskGroup::new();
-        <span class="kw">let </span>password = rand::random::&lt;u64&gt;().to_string();
         <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="string">&quot;gateway-cfg&quot;</span>);
 
         <span class="comment">// Create federation client builder for the gateway
