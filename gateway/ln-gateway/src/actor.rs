@@ -1,5 +1,5 @@
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
@@ -40,7 +40,7 @@ pub struct GatewayActor {
     task_group: TaskGroup,
     gw_rpc: GatewayRpcSender,
     pub sender: Sender<Arc<AtomicBool>>,
-    registration: LightningGateway,
+    registration: Arc<Mutex<LightningGateway>>,
 }
 
 #[derive(Debug, Clone)]
@@ -152,11 +152,14 @@ impl GatewayActor {
         gw_rpc: GatewayRpcSender,
     ) -> Result<Self> {
         let register_client = client.clone();
-        let registration = register_client
-            .config()
-            .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL);
+        let registration = Arc::new(Mutex::new(
+            register_client
+                .config()
+                .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL),
+        ));
         let notify = Arc::new(Notify::new());
         let notfiy_sent = notify.clone();
+        let registration_sent = registration.clone();
         task_group
             .spawn("Register with federation", |_| async move {
                 loop {
@@ -170,9 +173,11 @@ impl GatewayActor {
                                     route_hints.clone(),
                                     GW_ANNOUNCEMENT_TTL,
                                 );
-                            Ok(register_client
-                                .register_with_federation(registration)
-                                .await?)
+                            register_client
+                                .register_with_federation(registration.clone())
+                                .await?;
+                            *registration_sent.lock().expect("poisoned") = registration;
+                            Ok(())
                         },
                         Duration::from_secs(1),
                         5,
@@ -654,7 +659,7 @@ impl GatewayActor {
         let cfg = self.client.config();
         Ok(FederationInfo {
             federation_id: cfg.client_config.federation_id,
-            registration: self.registration.clone(),
+            registration: self.registration.lock().expect("poisoned").clone(),
         })
     }
 }

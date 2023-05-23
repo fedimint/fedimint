@@ -111,7 +111,7 @@ fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
 
 pub async fn handle_ng_command(
     command: ClientNg,
-    config: ClientConfig,
+    _config: ClientConfig,
     client: Client,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
@@ -123,7 +123,7 @@ pub async fn handle_ng_command(
 
             let operation_id = client.reissue_external_notes(notes, ()).await?;
             let mut updates = client
-                .subscribe_reissue_external_notes_updates(operation_id)
+                .subscribe_reissue_external_notes(operation_id)
                 .await
                 .unwrap()
                 .into_stream();
@@ -164,7 +164,7 @@ pub async fn handle_ng_command(
         }
         ClientNg::WaitInvoice { operation_id } => {
             let mut updates = client
-                .subscribe_to_ln_receive_updates(operation_id)
+                .subscribe_ln_receive(operation_id)
                 .await?
                 .into_stream();
             while let Some(update) = updates.next().await {
@@ -186,14 +186,9 @@ pub async fn handle_ng_command(
         ClientNg::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
 
-            let operation_id = client
-                .pay_bolt11_invoice(config.federation_id, bolt11)
-                .await?;
+            let operation_id = client.pay_bolt11_invoice(bolt11).await?;
 
-            let mut updates = client
-                .subscribe_ln_pay_updates(operation_id)
-                .await?
-                .into_stream();
+            let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
 
             while let Some(update) = updates.next().await {
                 match update {
