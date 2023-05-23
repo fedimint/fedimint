@@ -1,15 +1,14 @@
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::{CurrentConsensus, UnionResponses};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
-use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
-use fedimint_ln_common::contracts::{ContractId, FundedContract};
-use fedimint_ln_common::{ContractAccount, LightningGateway};
 
-use crate::pay::OutgoingContractAccount;
-use crate::receive::IncomingContractAccount;
-use crate::Sha256Hash;
+use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
+use crate::contracts::outgoing::OutgoingContractAccount;
+use crate::contracts::{ContractId, FundedContract};
+use crate::{ContractAccount, LightningGateway};
 
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {

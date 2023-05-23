@@ -8,9 +8,9 @@ use fedimint_client::transaction::{ClientInput, TxSubmissionError};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, OutPoint, TransactionId};
-use fedimint_ln_common::contracts::incoming::IncomingContract;
-use fedimint_ln_common::contracts::{DecryptedPreimage, IdentifiableContract};
+use fedimint_core::{OutPoint, TransactionId};
+use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
+use fedimint_ln_common::contracts::DecryptedPreimage;
 use fedimint_ln_common::LightningInput;
 use lightning_invoice::Invoice;
 use serde::{Deserialize, Serialize};
@@ -324,22 +324,6 @@ impl LightningReceiveFunded {
                     state: LightningReceiveStates::Canceled(LightningReceiveError::ClaimRejected),
                 }
             }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-pub struct IncomingContractAccount {
-    pub amount: Amount,
-    pub contract: IncomingContract,
-}
-
-impl IncomingContractAccount {
-    pub fn claim(&self) -> LightningInput {
-        LightningInput {
-            contract_id: self.contract.contract_id(),
-            amount: self.amount,
-            witness: None,
         }
     }
 }

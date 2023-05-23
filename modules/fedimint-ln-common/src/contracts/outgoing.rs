@@ -1,8 +1,11 @@
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
 
+use super::Preimage;
 use crate::contracts::{ContractId, IdentifiableContract};
+use crate::LightningInput;
 
 const CANCELLATION_TAG: &str = "outgoing contract cancellation";
 
@@ -51,5 +54,35 @@ impl OutgoingContract {
             .expect("Hashing never fails");
         Encodable::consensus_encode(&self.contract_id(), &mut engine).expect("Hashing never fails");
         bitcoin_hashes::sha256::Hash::from_engine(engine)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct OutgoingContractData {
+    pub recovery_key: bitcoin::KeyPair,
+    pub contract_account: OutgoingContractAccount,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct OutgoingContractAccount {
+    pub amount: Amount,
+    pub contract: OutgoingContract,
+}
+
+impl OutgoingContractAccount {
+    pub fn claim(&self, preimage: Preimage) -> LightningInput {
+        LightningInput {
+            contract_id: self.contract.contract_id(),
+            amount: self.amount,
+            witness: Some(preimage),
+        }
+    }
+
+    pub fn refund(&self) -> LightningInput {
+        LightningInput {
+            contract_id: self.contract.contract_id(),
+            amount: self.amount,
+            witness: None,
+        }
     }
 }
