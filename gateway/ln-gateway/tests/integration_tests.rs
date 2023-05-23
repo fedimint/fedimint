@@ -36,9 +36,26 @@ async fn gatewayd_supports_connecting_multiple_federations() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_shows_info_about_all_connected_federations() {
-    let (_, rpc, _, _, _) = fixtures::fixtures(None).await;
+    let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
 
     assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+
+    let id1 = fed1.connection_code().id;
+    let id2 = fed2.connection_code().id;
+
+    connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+
+    let info = rpc.get_info().await.unwrap();
+
+    assert_eq!(info.federations.len(), 2);
+    assert!(info
+        .federations
+        .iter()
+        .any(|info| info.federation_id == id1));
+    assert!(info
+        .federations
+        .iter()
+        .any(|info| info.federation_id == id2));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -103,5 +120,17 @@ async fn gatewayd_pays_outgoing_invoice_between_federations_connected() -> anyho
 async fn gatewayd_intercepts_htlc_and_settles_to_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
+    Ok(())
+}
+
+pub async fn connect_federations(
+    rpc: &GatewayRpcClient,
+    feds: &[FederationTest],
+) -> anyhow::Result<()> {
+    for fed in feds {
+        let connect = fed.connection_code().to_string();
+        rpc.connect_federation(ConnectFedPayload { connect })
+            .await?;
+    }
     Ok(())
 }
