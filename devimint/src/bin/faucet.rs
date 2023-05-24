@@ -15,7 +15,7 @@ use tower_http::cors::CorsLayer;
 struct Cmd {
     #[clap(long, env = "FM_FAUCET_BIND_ADDR")]
     bind_addr: String,
-    #[clap(long, env = "FM_BITCOIND_RPC")]
+    #[clap(long, env = "FM_BITCOIN_RPC_URL")]
     bitcoind_rpc: String,
     #[clap(long, env = "FM_CLN_SOCKET")]
     cln_socket: String,
