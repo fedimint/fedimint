@@ -1,0 +1,50 @@
+[package]
+name = "fedimint-wasm-tests"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.69"
+futures = "0.3.26"
+fedimint-client = { path = "../fedimint-client" }
+fedimint-core = { path = "../fedimint-core" }
+fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
+fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
+fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
+fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
+js-sys = "0.3.61"
+wasm-bindgen = "0.2.84"
+wasm-bindgen-futures = "0.4.34"
+wasm-bindgen-test = "0.3.34"
+gloo-net = "0.2.6"
+
+
+[profile.dev]
+split-debuginfo = "packed"
+
+# in dev mode optimize crates that are perf-critical (usually just crypto crates)
+[profile.dev.package]
+secp256k1 = { opt-level = 3 }
+secp256k1-zkp = { opt-level = 3 }
+secp256k1-sys = { opt-level = 3 }
+secp256k1-zkp-sys = { opt-level = 3 }
+bitcoin_hashes = { opt-level = 3 }
+ff = { opt-level = 3 }
+group = { opt-level = 3 }
+pairing = { opt-level = 3 }
+rand_core = { opt-level = 3 }
+byteorder = { opt-level = 3 }
+zeroize = { opt-level = 3 }
+bls12_381 = { opt-level = 3 }
+subtle = { opt-level = 3 }
+ring = { opt-level = 3 }
+threshold_crypto = { opt-level = 3 }
+
+[profile.ci]
+inherits = "dev"
+split-debuginfo = "packed"
+debug = 1
+
+[patch.crates-io]
+secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
+ring = { git = "https://github.com/briansmith/ring", rev = "ef36b9371e0ec5d465db024bb15930c5dc499dbd" }

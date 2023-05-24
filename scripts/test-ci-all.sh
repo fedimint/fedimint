@@ -95,6 +95,16 @@ function cli_test_rust_tests_esplora() {
   unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=esplora ./scripts/rust-tests.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
 }
+
+function cli_test_wasm() {
+  set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
+
+  echo "## START: ${FUNCNAME[0]}"
+  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=esplora ./scripts/wasm-tests.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
+}
+
 export -f cli_test_rust_tests_esplora
 
 function cli_test_always_success() {
