@@ -72,6 +72,7 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
+use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, info, instrument, trace};
 use url::Url;
 
@@ -159,7 +160,11 @@ impl GatewayClientConfig {
     }
 }
 
+/// Use [`Client::concurrency_lock`] to obtain
+pub struct ConcurrencyLock;
+
 pub struct Client<C> {
+    concurrency_lock: tokio::sync::Mutex<ConcurrencyLock>,
     config: C,
     context: Arc<ClientContext>,
     #[allow(unused)]
@@ -167,6 +172,10 @@ pub struct Client<C> {
 }
 
 impl<C> Client<C> {
+    pub async fn concurrency_lock(&self) -> MutexGuard<'_, ConcurrencyLock> {
+        self.concurrency_lock.lock().await
+    }
+
     pub fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.context.decoders
     }
@@ -293,6 +302,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     ) -> Client<T> {
         let root_secret = Self::get_secret(&db).await;
         Self {
+            concurrency_lock: Mutex::new(ConcurrencyLock),
             config,
             context: Arc::new(ClientContext {
                 decoders,
@@ -331,6 +341,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         btc_transaction: BitcoinTransaction,
         mut rng: R,
     ) -> Result<TransactionId> {
+        let guard = self.concurrency_lock().await;
         let mut tx = TransactionBuilder::default();
 
         let (peg_in_key, peg_in_proof) = self
@@ -343,7 +354,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             Input::Wallet(WalletInput(Box::new(peg_in_proof))),
         );
 
-        self.submit_tx_with_change(tx, &mut rng).await
+        self.submit_tx_with_change(guard, tx, &mut rng).await
     }
 
     /// Submits a transaction to the fed, making change using our change module
@@ -353,12 +364,16 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     /// always the same.
     pub async fn submit_tx_with_change<R: RngCore + CryptoRng>(
         &self,
+        // when using this command, the code calling it should be protected by the guard
+        guard: MutexGuard<'_, ConcurrencyLock>,
         tx: TransactionBuilder,
         rng: R,
     ) -> Result<TransactionId> {
         let mut dbtx = self.context.db.begin_transaction().await;
         let final_tx = tx.build(self, &mut dbtx, rng).await;
         dbtx.commit_tx().await;
+
+        drop(guard);
         let result = self
             .context
             .api
@@ -383,6 +398,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         notes: TieredMulti<SpendableNote>,
         mut rng: R,
     ) -> Result<OutPoint> {
+        let guard = self.concurrency_lock().await;
         // Ensure we have the notes in the DB (in case we received them from another
         // user)
         let mut dbtx = self.context.db.begin_transaction().await;
@@ -398,7 +414,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         let mut tx = TransactionBuilder::default();
         let (mut keys, input) = MintClient::ecash_input(notes)?;
         tx.input(&mut keys, input);
-        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+        let txid = self.submit_tx_with_change(guard, tx, &mut rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
     }
@@ -437,6 +453,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         blind_nonces: TieredMulti<BlindNonce>,
         mut rng: R,
     ) -> Result<OutPoint> {
+        let guard = self.concurrency_lock().await;
         let mut tx = TransactionBuilder::default();
 
         let (mut keys, input) = self
@@ -446,7 +463,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         tx.input(&mut keys, input);
 
         tx.output(Output::Mint(MintOutput(blind_nonces)));
-        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+        let txid = self.submit_tx_with_change(guard, tx, &mut rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
     }
@@ -484,6 +501,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     }
 
     pub async fn rbf_tx(&self, rbf: Rbf) -> Result<OutPoint> {
+        let guard = self.concurrency_lock().await;
         let mut tx = TransactionBuilder::default();
 
         let amount = rbf.fees.amount().into();
@@ -491,7 +509,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         tx.input(&mut keys, input);
         let peg_out_idx = tx.output(Output::Wallet(WalletOutput::Rbf(rbf)));
 
-        let fedimint_tx_id = self.submit_tx_with_change(tx, &mut OsRng).await?;
+        let fedimint_tx_id = self.submit_tx_with_change(guard, tx, &mut OsRng).await?;
 
         Ok(OutPoint {
             txid: fedimint_tx_id,
@@ -504,8 +522,6 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         peg_out: PegOut,
         mut rng: R,
     ) -> Result<OutPoint> {
-        let mut tx = TransactionBuilder::default();
-
         let funding_amount = self
             .config
             .as_ref()
@@ -515,11 +531,15 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
             .fee_consensus
             .peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
+
+        let guard = self.concurrency_lock().await;
+        let mut tx = TransactionBuilder::default();
+
         let (mut keys, input) = self.mint_client().select_input(funding_amount).await?;
         tx.input(&mut keys, input);
         let peg_out_idx = tx.output(Output::Wallet(WalletOutput::PegOut(peg_out)));
 
-        let fedimint_tx_id = self.submit_tx_with_change(tx, &mut rng).await?;
+        let fedimint_tx_id = self.submit_tx_with_change(guard, tx, &mut rng).await?;
 
         Ok(OutPoint {
             txid: fedimint_tx_id,
@@ -556,6 +576,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
         amount: Amount,
         rng: R,
     ) -> Result<TieredMulti<SpendableNote>> {
+        let guard = self.concurrency_lock().await;
         let notes = self.mint_client().select_notes(amount).await?;
         let mut dbtx = self.context.db.begin_transaction().await;
 
@@ -566,7 +587,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
 
             let (mut keys, input) = MintClient::ecash_input(notes)?;
             tx.input(&mut keys, input);
-            let txid = self.submit_tx_with_change(tx, rng).await?;
+            let txid = self.submit_tx_with_change(guard, tx, rng).await?;
             let outpoint = OutPoint { txid, out_idx: 0 };
 
             self.mint_client()
@@ -614,13 +635,14 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     /// TODO: Like `spend_ecash`, I think this function works in tests mostly
     /// by accident.
     pub async fn remint_ecash<R: RngCore + CryptoRng>(&self, amount: Amount, rng: R) -> Result<()> {
+        let guard = self.concurrency_lock().await;
         let notes = self.mint_client().select_notes(amount).await?;
 
         let mut tx = TransactionBuilder::default();
 
         let (mut keys, input) = MintClient::ecash_input(notes)?;
         tx.input(&mut keys, input);
-        self.submit_tx_with_change(tx, rng).await?;
+        self.submit_tx_with_change(guard, tx, rng).await?;
 
         Ok(())
     }
@@ -716,9 +738,10 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
     }
 
     pub async fn fetch_all_notes<'a>(&self) -> Result<Vec<OutPoint>> {
+        let mut guard = self.concurrency_lock().await;
         let (errors, outpoints): (Vec<_>, Vec<_>) = self
             .mint_client()
-            .fetch_all_notes()
+            .fetch_all_notes(&mut guard)
             .await
             .into_iter()
             .partition_map(|result| match result {
@@ -852,10 +875,11 @@ impl Client<UserClientConfig> {
             } // FIXME: impl TryFrom
         };
 
+        let guard = self.concurrency_lock().await;
         let (mut keys, input) = self.mint_client().select_input(amount).await?;
         tx.input(&mut keys, input);
         tx.output(Output::LN(contract));
-        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+        let txid = self.submit_tx_with_change(guard, tx, &mut rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
 
         debug!("Funded outgoing contract {} in {}", contract_id, outpoint);
@@ -881,12 +905,13 @@ impl Client<UserClientConfig> {
             .await
             .ok_or(ClientError::RefundUnknownOutgoingContract)?;
 
+        let guard = self.concurrency_lock().await;
         let mut tx = TransactionBuilder::default();
         let (refund_key, refund_input) = self
             .ln_client()
             .create_refund_outgoing_contract_input(&contract_data);
         tx.input(&mut vec![*refund_key], Input::LN(refund_input));
-        let txid = self.submit_tx_with_change(tx, rng).await?;
+        let txid = self.submit_tx_with_change(guard, tx, rng).await?;
 
         let mut dbtx = self.context.db.begin_transaction().await;
         dbtx.remove_entry(&OutgoingPaymentKey(contract_id))
@@ -972,9 +997,10 @@ impl Client<UserClientConfig> {
             .await?;
 
         // There is no input here because this is just an announcement
+        let guard = self.concurrency_lock().await;
         let mut tx = TransactionBuilder::default();
         tx.output(ln_output);
-        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+        let txid = self.submit_tx_with_change(guard, tx, &mut rng).await?;
 
         Ok((txid, invoice, payment_keypair))
     }
@@ -1104,9 +1130,11 @@ impl Client<UserClientConfig> {
         let ci = self.ln_client().get_confirmed_invoice(contract_id).await?;
 
         // Input claims this contract
+
+        let guard = self.concurrency_lock().await;
         let mut tx = TransactionBuilder::default();
         tx.input(&mut vec![ci.keypair], Input::LN(contract.claim()));
-        let txid = self.submit_tx_with_change(tx, &mut rng).await?;
+        let txid = self.submit_tx_with_change(guard, tx, &mut rng).await?;
 
         // TODO: Update database if invoice is paid or expired
 
@@ -1317,6 +1345,7 @@ impl Client<GatewayClientConfig> {
         preimage: Preimage,
         rng: impl RngCore + CryptoRng,
     ) -> Result<OutPoint> {
+        let guard = self.concurrency_lock().await;
         let mut dbtx = self.context.db.begin_transaction().await;
         let mut tx = TransactionBuilder::default();
 
@@ -1330,7 +1359,7 @@ impl Client<GatewayClientConfig> {
         dbtx.commit_tx().await;
 
         tx.input(&mut vec![self.config.redeem_key], input);
-        let txid = self.submit_tx_with_change(tx, rng).await?;
+        let txid = self.submit_tx_with_change(guard, tx, rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
     }
@@ -1365,6 +1394,7 @@ impl Client<GatewayClientConfig> {
         }
 
         // Inputs
+        let guard = self.concurrency_lock().await;
         let mut builder = TransactionBuilder::default();
         let (mut keys, input) = self.mint_client().select_input(offer.amount).await?;
         builder.input(&mut keys, input);
@@ -1384,7 +1414,7 @@ impl Client<GatewayClientConfig> {
 
         // Submit transaction
         builder.output(incoming_output);
-        let txid = self.submit_tx_with_change(builder, rng).await?;
+        let txid = self.submit_tx_with_change(guard, builder, rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
 
         // FIXME: Save this contract in DB
@@ -1400,6 +1430,7 @@ impl Client<GatewayClientConfig> {
     ) -> Result<TransactionId> {
         let contract_account = self.ln_client().get_incoming_contract(contract_id).await?;
 
+        let guard = self.concurrency_lock().await;
         let mut builder = TransactionBuilder::default();
 
         // Input claims this contract
@@ -1407,7 +1438,7 @@ impl Client<GatewayClientConfig> {
             &mut vec![self.config.redeem_key],
             Input::LN(contract_account.claim()),
         );
-        let mint_tx_id = self.submit_tx_with_change(builder, rng).await?;
+        let mint_tx_id = self.submit_tx_with_change(guard, builder, rng).await?;
         Ok(mint_tx_id)
     }
 
