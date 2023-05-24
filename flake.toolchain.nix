@@ -5,7 +5,7 @@ let
   # Env vars we need for wasm32 cross compilation
   wasm32CrossEnvVars = ''
     export CC_wasm32_unknown_unknown="${pkgs.llvmPackages_14.clang-unwrapped}/bin/clang-14"
-    export CFLAGS_wasm32_unknown_unknown="-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.6/include/"
+    export CFLAGS_wasm32_unknown_unknown="-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.6/include/ -Wno-macro-redefined"
   '' + (if isArch64Darwin then
     ''
       export AR_wasm32_unknown_unknown="${pkgs.llvmPackages_14.llvm}/bin/llvm-ar"
