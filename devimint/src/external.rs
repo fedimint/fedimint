@@ -106,6 +106,11 @@ impl Bitcoind {
         let bytes = tx.consensus_encode_to_vec()?;
         Ok(bytes.to_hex())
     }
+
+    pub async fn get_new_address(&self) -> Result<String> {
+        let addr = self.client().get_new_address(None, None)?;
+        Ok(addr.to_string())
+    }
 }
 
 #[derive(Clone)]

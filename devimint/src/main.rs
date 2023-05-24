@@ -5,12 +5,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
-use bitcoincore_rpc::bitcoin::Amount as BitcoinRpcAmount;
-use bitcoincore_rpc::RpcApi;
+use bitcoincore_rpc::bitcoin::{Amount as BitcoinRpcAmount, Txid};
+use bitcoincore_rpc::{bitcoin, RpcApi};
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{run_config_gen, Fedimintd};
-use devimint::util::{poll, ProcessManager};
+use devimint::util::{poll, poll_value, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
 };
@@ -897,6 +897,50 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         initial_walletng_balance + 100_000_000 // deposit in msats
     );
 
+    // ## Withdraw
+    info!("Testing client ng withdraw");
+
+    let initial_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+
+    let address = bitcoind.get_new_address().await?;
+    let withdraw_res = cmd!(
+        fed,
+        "ng",
+        "withdraw",
+        "--address",
+        &address,
+        "--amount",
+        "5000 sat"
+    )
+    .out_json()
+    .await?;
+
+    let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
+    let fees_sat = withdraw_res["fees_sat"].as_u64().unwrap();
+
+    let tx_hex = poll_value("Waiting for transaction in mempool", || async {
+        // TODO: distinguish errors from not found
+        Ok(bitcoind.get_raw_transaction(&txid).await.ok())
+    })
+    .await
+    .expect("cannot fail, gets stuck");
+
+    let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
+    let address = bitcoin::Address::from_str(&address).unwrap();
+    assert!(tx
+        .output
+        .iter()
+        .any(|o| o.script_pubkey == address.script_pubkey() && o.value == 5000));
+
+    let post_withdraw_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    let expected_wallet_balance = initial_walletng_balance - 5_000_000 - (fees_sat * 1000);
+
+    assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
+
     Ok(())
 }
 
@@ -1078,6 +1122,9 @@ async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<
 }
 
 use std::fmt::Write;
+use std::str::FromStr;
+
+use fedimint_core::encoding::Decodable;
 
 async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     let globals = vars::Global::new(&arg.test_dir, arg.fed_size).await?;

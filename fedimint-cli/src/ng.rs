@@ -1,9 +1,10 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex;
+use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::secret::PlainRootSecretStrategy;
@@ -17,7 +18,7 @@ use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
 use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
 use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
-use fedimint_wallet_client::WalletClientExt;
+use fedimint_wallet_client::{WalletClientExt, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -76,6 +77,12 @@ pub enum ClientNg {
     DepositAddress,
     AwaitDeposit {
         operation_id: OperationId,
+    },
+    Withdraw {
+        #[clap(long)]
+        amount: bitcoin::Amount,
+        #[clap(long)]
+        address: bitcoin::Address,
     },
     /// Upload the (encrypted) snapshot of mint notes to federation
     Backup {
@@ -286,6 +293,38 @@ pub async fn handle_ng_command(
             Ok(json!({
                 "secret": hex_secret,
             }))
+        }
+        ClientNg::Withdraw { amount, address } => {
+            let fees = client.get_withdraw_fee(address.clone(), amount).await?;
+            let absolute_fees = fees.amount();
+
+            info!("Attempting withdraw with fees: {fees:?}");
+
+            let operation_id = client.withdraw(address, amount, fees).await?;
+
+            let mut updates = client
+                .subscribe_withdraw_updates(operation_id)
+                .await?
+                .into_stream();
+
+            while let Some(update) = updates.next().await {
+                info!("Update: {update:?}");
+
+                match update {
+                    WithdrawState::Succeeded(txid) => {
+                        return Ok(json!({
+                            "txid": txid.to_hex(),
+                            "fees_sat": absolute_fees.to_sat(),
+                        }));
+                    }
+                    WithdrawState::Failed(e) => {
+                        return Err(anyhow!("Withdraw failed: {e}"));
+                    }
+                    _ => {}
+                }
+            }
+
+            unreachable!("Update stream ended without outcome");
         }
     }
 }
