@@ -25,7 +25,6 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
-use fedimint_core::util::BoxStream;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 use fedimint_wallet_common::config::WalletClientConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -50,7 +49,7 @@ pub trait WalletClientExt {
     async fn subscribe_deposit_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<DepositState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositState>>;
 
     /// Fetches the fees that would need to be paid to make the withdraw request
     /// using [`WalletClientExt::withdraw`] work *right now*.
@@ -151,7 +150,7 @@ impl WalletClientExt for Client {
     async fn subscribe_deposit_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<BoxStream<DepositState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositState>> {
         let (wallet_client, _) =
             self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
 
@@ -173,52 +172,56 @@ impl WalletClientExt for Client {
         let mut operation_stream = wallet_client.notifier.subscribe(operation_id).await;
         let tx_subscriber = self.transaction_updates(operation_id).await;
 
-        Ok(Box::pin(stream! {
-            match next_deposit_state(&mut operation_stream).await {
-                Some(DepositStates::Created(_)) => {
-                    yield DepositState::WaitingForTransaction;
-                },
-                Some(DepositStates::TimedOut(_)) => {
-                    yield DepositState::Failed("Deposit timed out".to_string());
-                    return;
+        Ok(
+            operation_log_entry.outcome_or_updates(self.db(), operation_id, || {
+                stream! {
+                    match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::Created(_)) => {
+                            yield DepositState::WaitingForTransaction;
+                        },
+                        Some(DepositStates::TimedOut(_)) => {
+                            yield DepositState::Failed("Deposit timed out".to_string());
+                            return;
+                        }
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => return,
+                    }
+
+                    match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::WaitingForConfirmations(_)) => {
+                            yield DepositState::WaitingForConfirmation;
+                        },
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => return,
+                    }
+
+                    let claiming = match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::Claiming(claiming)) => claiming,
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => return,
+                    };
+                    yield DepositState::Confirmed;
+
+                    if let Err(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).await {
+                        yield DepositState::Failed(format!("Failed to claim: {e:?}"));
+                        return;
+                    }
+
+                    if let Some(out_point) = claiming.change.as_ref() {
+                        self.await_primary_module_output(operation_id, *out_point)
+                            .await
+                            .expect("Cannot fail if tx was accepted and federation is honest");
+                    }
+                    yield DepositState::Claimed;
                 }
-                Some(s) => {
-                    panic!("Unexpected state {s:?}")
-                },
-                None => return,
-            }
-
-            match next_deposit_state(&mut operation_stream).await {
-                Some(DepositStates::WaitingForConfirmations(_)) => {
-                    yield DepositState::WaitingForConfirmation;
-                },
-                Some(s) => {
-                    panic!("Unexpected state {s:?}")
-                },
-                None => return,
-            }
-
-            let claiming = match next_deposit_state(&mut operation_stream).await {
-                Some(DepositStates::Claiming(claiming)) => claiming,
-                Some(s) => {
-                    panic!("Unexpected state {s:?}")
-                },
-                None => return,
-            };
-            yield DepositState::Confirmed;
-
-            if let Err(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).await {
-                yield DepositState::Failed(format!("Failed to claim: {e:?}"));
-                return;
-            }
-
-            if let Some(out_point) = claiming.change.as_ref() {
-                self.await_primary_module_output(operation_id, *out_point)
-                    .await
-                    .expect("Cannot fail if tx was accepted and federation is honest");
-            }
-            yield DepositState::Claimed;
-        }))
+            }),
+        )
     }
 
     async fn get_withdraw_fee(

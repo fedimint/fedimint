@@ -259,7 +259,10 @@ pub async fn handle_ng_command(
             })
         }
         ClientNg::AwaitDeposit { operation_id } => {
-            let mut updates = client.subscribe_deposit_updates(operation_id).await?;
+            let mut updates = client
+                .subscribe_deposit_updates(operation_id)
+                .await?
+                .into_stream();
 
             while let Some(update) = updates.next().await {
                 info!("Update: {update:?}");
