@@ -675,6 +675,11 @@
 <a href="#675" id="675">675</a>
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::fmt;
@@ -699,6 +704,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 <span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tokio::sync::MutexGuard;
 <span class="kw">use </span>tracing::{debug, error, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
@@ -708,7 +714,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::legacy::{Input, Output, Transaction};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use crate</span>::{ChildId, DerivableSecret, FuturesUnordered};
+<span class="kw">use crate</span>::{ChildId, ConcurrencyLock, DerivableSecret, FuturesUnordered};
 
 <span class="kw">pub mod </span>backup;
 
@@ -1197,7 +1203,11 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>fetch_all_notes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="prelude-ty">Result</span>&lt;OutPoint&gt;&gt; {
+    <span class="kw">pub async fn </span>fetch_all_notes(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="comment">// this operation should be always protected by a concurrency lock
+        </span>_guard: <span class="kw-2">&amp;mut </span>MutexGuard&lt;<span class="lifetime">&#39;_</span>, ConcurrencyLock&gt;,
+    ) -&gt; Vec&lt;<span class="prelude-ty">Result</span>&lt;OutPoint&gt;&gt; {
         <span class="kw">let </span>active_issuances = <span class="kw-2">&amp;</span><span class="self">self</span>.list_active_issuances().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
 
