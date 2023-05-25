@@ -644,7 +644,7 @@
     <span class="kw">let </span>confirmation_height = esplora_client
         .get_tx_status(<span class="kw-2">&amp;</span>txid)
         .<span class="kw">await</span><span class="question-mark">?
-        </span>.and_then(|status| status.block_height)
+        </span>.block_height
         .map(|height| height <span class="kw">as </span>u64);
 
     <span class="prelude-val">Ok</span>(confirmation_height)
