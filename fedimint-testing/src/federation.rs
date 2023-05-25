@@ -126,7 +126,7 @@ impl FederationTest {
 /// Creates the config gen params for each peer
 ///
 /// Uses peers * 2 ports offset from `base_port`
-fn local_config_gen_params(
+pub fn local_config_gen_params(
     peers: &[PeerId],
     base_port: u16,
     server_config_gen: ServerModuleGenParamsRegistry,
@@ -147,7 +147,7 @@ fn local_config_gen_params(
         .iter()
         .map(|peer| {
             let peer_port = base_port + u16::from(*peer) * 2;
-            let p2p_url = format!("ws://127.0.0.1:{peer_port}");
+            let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
             let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
             let params: PeerServerParams = PeerServerParams {
@@ -171,7 +171,7 @@ fn local_config_gen_params(
                 local: ConfigGenParamsLocal {
                     our_id: *peer,
                     our_private_key: tls_keys[peer].1.clone(),
-                    api_auth: ApiAuth("unused".to_string()),
+                    api_auth: ApiAuth(format!("pass{}", peer.to_usize())),
                     p2p_bind: p2p_bind.parse().expect("Valid address"),
                     api_bind: api_bind.parse().expect("Valid address"),
                     download_token_limit: None,

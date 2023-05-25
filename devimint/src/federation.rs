@@ -1,11 +1,19 @@
 use std::collections::BTreeMap;
-use std::ops::Range;
 
 use anyhow::{anyhow, Context};
+use bitcoincore_rpc::bitcoin::Network;
+use fedimint_aead::random_salt;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::util::write_new;
+use fedimint_core::{Amount, PeerId};
+use fedimint_server::config::io::{write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
+use fedimint_server::config::ServerConfig;
+use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
-use futures::future;
+use fedimintd::attach_default_module_gen_params;
+use fedimintd::fedimintd::Fedimintd as FedimintBuilder;
 use tokio::fs;
 
 use super::*; // TODO: remove this
@@ -14,6 +22,7 @@ pub struct Federation {
     // client is only for internal use, use cli commands instead
     client: Arc<UserClient>,
     members: BTreeMap<usize, Fedimintd>,
+    vars: BTreeMap<usize, vars::Fedimintd>,
     bitcoind: Bitcoind,
 }
 
@@ -21,19 +30,13 @@ impl Federation {
     pub async fn new(
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
-        peer_ids: Range<usize>,
+        vars: BTreeMap<usize, vars::Fedimintd>,
     ) -> Result<Self> {
         let mut members = BTreeMap::new();
-        for peer_id in peer_ids {
+        for (peer, var) in &vars {
             members.insert(
-                peer_id,
-                Fedimintd::new(
-                    process_mgr,
-                    bitcoind.clone(),
-                    peer_id,
-                    &vars::Fedimintd::init(&process_mgr.globals, peer_id, true).await?,
-                )
-                .await?,
+                *peer,
+                Fedimintd::new(process_mgr, bitcoind.clone(), *peer, var).await?,
             );
         }
 
@@ -50,28 +53,19 @@ impl Federation {
         let client = UserClient::new(cfg, decoders, module_gens, db, Default::default()).await;
         Ok(Self {
             members,
+            vars,
             bitcoind,
             client: Arc::new(client),
         })
     }
 
-    pub async fn start_server(
-        &mut self,
-        process_mgr: &ProcessManager,
-        peer_id: usize,
-    ) -> Result<()> {
-        if self.members.contains_key(&peer_id) {
-            return Err(anyhow!("fedimintd-{} already running", peer_id));
+    pub async fn start_server(&mut self, process_mgr: &ProcessManager, peer: usize) -> Result<()> {
+        if self.members.contains_key(&peer) {
+            return Err(anyhow!("fedimintd-{} already running", peer));
         }
         self.members.insert(
-            peer_id,
-            Fedimintd::new(
-                process_mgr,
-                self.bitcoind.clone(),
-                peer_id,
-                &vars::Fedimintd::init(&process_mgr.globals, peer_id, true).await?,
-            )
-            .await?,
+            peer,
+            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer, &self.vars[&peer]).await?,
         );
         Ok(())
     }
@@ -82,10 +76,6 @@ impl Federation {
         };
         fedimintd.kill().await?;
         Ok(())
-    }
-
-    pub fn members(&self) -> &BTreeMap<usize, Fedimintd> {
-        &self.members
     }
 
     pub async fn cmd(&self) -> Command {
@@ -242,95 +232,41 @@ impl Fedimintd {
     }
 }
 
-pub async fn run_dkg(process_mgr: &ProcessManager, servers: usize) -> anyhow::Result<()> {
-    async fn create_tls(id: usize, env: &vars::Fedimintd) -> anyhow::Result<String> {
-        let server_name = format!("Server {id}!");
+/// Base port for devimint
+const BASE_PORT: u16 = 8173 + 10000;
 
-        cmd!(
-            "distributedgen",
-            "create-cert",
-            "--p2p-url",
-            &env.FM_P2P_URL,
-            "--api-url",
-            &env.FM_API_URL,
-            "--out-dir",
-            utf8(&env.FM_DATA_DIR),
-            "--name={server_name}",
-        )
-        .envs(env.vars())
-        .run_with_logging(format!("fedimintd-{id}"))
-        .await?;
-
-        info!("TLS certs created for started {server_name}");
-
-        let cert = fs::read_to_string(env.FM_DATA_DIR.join("tls-cert"))
-            .await
-            .context("could not read TLS cert from disk")?;
-
-        Ok(cert)
-    }
-
-    async fn run_distributedgen(
-        id: usize,
-        env: &vars::Fedimintd,
-        certs: Vec<String>,
-    ) -> anyhow::Result<()> {
-        let certs = certs.join(",");
-        let server_name = format!("Server-{id}");
-
-        cmd!(
-            "distributedgen",
-            "run",
-            "--bind-p2p",
-            &env.FM_BIND_P2P,
-            "--bind-api",
-            &env.FM_BIND_API,
-            "--out-dir",
-            utf8(&env.FM_DATA_DIR),
-            "--certs={certs}",
-        )
-        .envs(env.vars())
-        .run_with_logging(format!("fedimintd-{id}"))
-        .await
-        .with_context(|| format!("dkg run for {server_name}"))?;
-
-        info!("DKG created for started {server_name}");
-
-        Ok(())
-    }
-
-    info!("Generated TLS certs");
-    let fedimintd_envs = future::try_join_all(
-        (0..servers).map(|id| vars::Fedimintd::init(&process_mgr.globals, id, true)),
-    )
-    .await?;
-    let certs = future::try_join_all(
-        fedimintd_envs
-            .iter()
-            .enumerate()
-            .map(|(id, env)| create_tls(id, env)),
-    )
-    .await?;
-
-    info!(
-        "Collected TLS certs: {certs_string}",
-        certs_string = certs.join(",")
+pub async fn run_config_gen(
+    process_mgr: &ProcessManager,
+    servers: usize,
+    write_password: bool,
+) -> Result<BTreeMap<usize, vars::Fedimintd>> {
+    // TODO: Use proper builder
+    let mut fed = FedimintBuilder::new()?.with_default_modules();
+    attach_default_module_gen_params(
+        BitcoinRpcConfig::from_env_vars()?,
+        &mut fed.server_gen_params,
+        Amount::from_sats(100_000_000),
+        Network::Regtest,
+        10,
     );
 
-    info!("running distributedgen");
+    let peers: Vec<_> = (0..servers).map(|id| PeerId::from(id as u16)).collect();
+    let params = local_config_gen_params(&peers, BASE_PORT, fed.server_gen_params.clone())?;
+    let configs = ServerConfig::trusted_dealer_gen(&params, fed.server_gens.clone());
+    let mut fedimintd_envs = BTreeMap::new();
+    for (peer, cfg) in configs {
+        let envs = vars::Fedimintd::init(&process_mgr.globals, &cfg).await?;
+        let password = cfg.private.api_auth.0.clone();
+        let data_dir = envs.FM_DATA_DIR.clone();
+        fedimintd_envs.insert(peer.to_usize(), envs);
+        write_new(data_dir.join(SALT_FILE), random_salt())?;
+        write_server_config(&cfg, data_dir.clone(), &password, &fed.server_gens)?;
+        if write_password {
+            write_new(data_dir.join(PLAINTEXT_PASSWORD), &password)?;
+        }
+    }
 
-    future::try_join_all(
-        fedimintd_envs
-            .iter()
-            .enumerate()
-            .map(|(id, env)| run_distributedgen(id, env, certs.clone())),
-    )
-    .await?;
-
-    let out_dir = &fedimintd_envs
-        .first()
-        .context("must run dkg with at least one peer")?
-        .FM_DATA_DIR;
+    let out_dir = &fedimintd_envs[&0].FM_DATA_DIR;
     let cfg_dir = &process_mgr.globals.FM_DATA_DIR;
     let out_dir = utf8(out_dir);
     let cfg_dir = utf8(cfg_dir);
@@ -349,5 +285,5 @@ pub async fn run_dkg(process_mgr: &ProcessManager, servers: usize) -> anyhow::Re
 
     info!("DKG complete");
 
-    Ok(())
+    Ok(fedimintd_envs)
 }

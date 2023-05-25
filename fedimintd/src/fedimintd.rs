@@ -101,9 +101,8 @@ pub struct ServerOpts {
 /// }
 /// ```
 pub struct Fedimintd {
-    module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
-    opts: ServerOpts,
+    pub server_gens: ServerModuleGenRegistry,
+    pub server_gen_params: ServerModuleGenParamsRegistry,
 }
 
 impl Fedimintd {
@@ -118,16 +117,9 @@ impl Fedimintd {
 
         info!("Starting fedimintd (version: {CODE_VERSION})");
 
-        let opts: ServerOpts = ServerOpts::parse();
-        TracingSetup::default()
-            .tokio_console_bind(opts.tokio_console_bind)
-            .with_jaeger(opts.with_telemetry)
-            .init()?;
-
         Ok(Self {
-            module_gens: ServerModuleGenRegistry::new(),
-            module_gens_params: ServerModuleGenParamsRegistry::default(),
-            opts,
+            server_gens: ServerModuleGenRegistry::new(),
+            server_gen_params: ServerModuleGenParamsRegistry::default(),
         })
     }
 
@@ -135,7 +127,7 @@ impl Fedimintd {
     where
         T: ServerModuleGen + 'static + Send + Sync,
     {
-        self.module_gens.attach(gen);
+        self.server_gens.attach(gen);
         self
     }
 
@@ -146,6 +138,13 @@ impl Fedimintd {
     }
 
     pub async fn run(self) -> ! {
+        let opts: ServerOpts = ServerOpts::parse();
+        TracingSetup::default()
+            .tokio_console_bind(opts.tokio_console_bind)
+            .with_jaeger(opts.with_telemetry)
+            .init()
+            .unwrap();
+
         let mut root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -159,10 +158,10 @@ impl Fedimintd {
         root_task_group
             .spawn_local("main", move |_task_handle| async move {
                 match run(
-                    self.opts,
+                    opts,
                     task_group.clone(),
-                    self.module_gens,
-                    self.module_gens_params,
+                    self.server_gens,
+                    self.server_gen_params,
                 )
                 .await
                 {

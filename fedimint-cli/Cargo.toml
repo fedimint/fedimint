@@ -33,6 +33,7 @@ fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-logging = { path = "../fedimint-logging" }
+fedimint-server = { path = "../fedimint-server" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 thiserror = "1.0.39"

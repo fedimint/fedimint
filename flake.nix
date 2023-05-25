@@ -186,11 +186,6 @@
                 pkg = rustPackageOutputsFinal.fedimint-pkgs;
                 bin = "fedimint-cli";
               };
-            distributedgen = pickBinary
-              {
-                pkg = rustPackageOutputsFinal.fedimint-pkgs;
-                bin = "distributedgen";
-              };
             gatewayd = pickBinary
               {
                 pkg = rustPackageOutputsFinal.gateway-pkgs;

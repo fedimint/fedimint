@@ -1,12 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::env;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::time::Duration;
-use std::{env, fs};
 
 use anyhow::{bail, format_err};
-use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
-use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
+use fedimint_core::admin_client::ConfigGenParamsConsensus;
 use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
@@ -27,7 +25,6 @@ use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
-use itertools::Itertools;
 use rand::rngs::OsRng;
 use rand::Rng;
 use serde::de::DeserializeOwned;
@@ -37,7 +34,7 @@ use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
-use crate::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TLS_PK};
+use crate::config::io::CODE_VERSION;
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeers;
 use crate::multiplexed::PeerConnectionMultiplexer;
@@ -677,79 +674,6 @@ impl ConfigGenParams {
                 )
             })
             .collect::<BTreeMap<_, _>>()
-    }
-
-    /// Parses from the connect strings and TLS info on the filesystem
-    pub fn parse_from_connect_strings(
-        bind_p2p: SocketAddr,
-        bind_api: SocketAddr,
-        dir_out_path: &Path,
-        federation_name: String,
-        certs: Vec<String>,
-        password: &str,
-        module_params: ServerModuleGenParamsRegistry,
-    ) -> anyhow::Result<Self> {
-        let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
-        for (idx, cert) in certs.into_iter().sorted().enumerate() {
-            peers.insert(PeerId::from(idx as u16), parse_peer_params(cert)?);
-        }
-
-        let salt = fs::read_to_string(dir_out_path.join(SALT_FILE))?;
-        let api_auth = get_password_hash(password, &salt)?;
-        let key = get_encryption_key(password, &salt)?;
-        let tls_pk = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
-        let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))?;
-
-        let our_params = parse_peer_params(cert_string)?;
-        let our_id = peers
-            .iter()
-            .find(|(_peer, params)| params.cert == our_params.cert)
-            .map(|(peer, _)| *peer)
-            .ok_or_else(|| anyhow::Error::msg("Our id not found"))?;
-
-        Ok(ConfigGenParams::new(
-            ApiAuth(api_auth),
-            bind_p2p,
-            bind_api,
-            rustls::PrivateKey(tls_pk),
-            our_id,
-            peers,
-            federation_name,
-            None,
-            module_params,
-        ))
-    }
-
-    /// Generates the parameters necessary for running server config generation
-    // TODO: Move into testing once new config gen UI is written
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        api_auth: ApiAuth,
-        p2p_bind: SocketAddr,
-        api_bind: SocketAddr,
-        our_private_key: rustls::PrivateKey,
-        our_id: PeerId,
-        peers: BTreeMap<PeerId, PeerServerParams>,
-        federation_name: String,
-        download_token_limit: Option<u64>,
-        modules: ServerModuleGenParamsRegistry,
-    ) -> ConfigGenParams {
-        ConfigGenParams {
-            local: ConfigGenParamsLocal {
-                our_id,
-                our_private_key,
-                api_auth,
-                p2p_bind,
-                api_bind,
-                download_token_limit,
-                max_connections: max_connections(),
-            },
-            consensus: ConfigGenParamsConsensus {
-                peers,
-                meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
-                modules,
-            },
-        }
     }
 }
 

@@ -15,11 +15,13 @@ use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
-use fedimint_core::admin_client::PeerServerParams;
+use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{
+    ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
+};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -41,8 +43,8 @@ use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
 use fedimint_mint_server::MintGen;
-use fedimint_server::config::api::ConfigGenSettings;
-use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+use fedimint_server::config::api::{ConfigGenParamsLocal, ConfigGenSettings};
+use fedimint_server::config::{gen_cert_and_key, max_connections, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::{ConsensusServer, EpochMessage};
 use fedimint_server::consensus::{
     ConsensusProposal, HbbftConsensusOutcome, TransactionSubmissionError,
@@ -451,17 +453,25 @@ pub fn gen_local(
             let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url)?;
             let bind_api = parse_host_port(peer_params[peer].clone().api_url)?;
 
-            let params: ConfigGenParams = ConfigGenParams::new(
-                ApiAuth("dummy_password".to_string()),
-                bind_p2p.parse().context("when parsing bind_p2p")?,
-                bind_api.parse().context("when parsing bind_api")?,
-                keys[peer].1.clone(),
-                *peer,
-                peer_params.clone(),
-                federation_name.to_string(),
-                Some(1),
-                modules.clone(),
-            );
+            let params: ConfigGenParams = ConfigGenParams {
+                local: ConfigGenParamsLocal {
+                    our_id: *peer,
+                    our_private_key: keys[peer].1.clone(),
+                    api_auth: ApiAuth("dummy_password".to_string()),
+                    p2p_bind: bind_p2p.parse().context("when parsing bind_p2p")?,
+                    api_bind: bind_api.parse().context("when parsing bind_api")?,
+                    download_token_limit: Some(1),
+                    max_connections: max_connections(),
+                },
+                consensus: ConfigGenParamsConsensus {
+                    peers: peer_params.clone(),
+                    meta: BTreeMap::from([(
+                        META_FEDERATION_NAME_KEY.to_owned(),
+                        federation_name.to_string(),
+                    )]),
+                    modules: modules.clone(),
+                },
+            };
             Ok((*peer, params))
         })
         .collect::<anyhow::Result<HashMap<_, _>>>()
