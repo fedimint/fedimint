@@ -8,14 +8,17 @@ pub mod util;
 /// Helper to notify modules about state transitions
 mod notifier;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
 
 pub use dbtx::ClientSMDatabaseTransaction;
 pub use executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 pub use notifier::{ModuleNotifier, Notifier};
-pub(crate) use state::IState;
-pub use state::{Context, DynContext, DynState, OperationState, State, StateTransition};
+use rand::RngCore;
+use serde::{Deserialize, Deserializer, Serialize};
+pub use state::{Context, DynContext, DynState, IState, OperationState, State, StateTransition};
 
 /// Context given to all state machines
 pub trait GlobalContext: Debug + Clone + MaybeSync + MaybeSend + 'static {}
@@ -45,4 +48,63 @@ impl GlobalContext for () {}
 /// submitted the transaction's ID can be used as operation ID. If there is no
 /// transaction related to it, it should be generated randomly. Since it is a
 /// 256bit value collisions are impossible for all intents and purposes.
-pub type OperationId = [u8; 32];
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+pub struct OperationId(pub [u8; 32]);
+
+impl OperationId {
+    /// Generate random [`OperationId`]
+    pub fn new_random() -> Self {
+        let mut rng = rand::thread_rng();
+        let mut bytes = [0u8; 32];
+        rng.fill_bytes(&mut bytes);
+        Self(bytes)
+    }
+}
+
+impl Display for OperationId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        bitcoin_hashes::hex::format_hex(&self.0, f)
+    }
+}
+
+impl Debug for OperationId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OperationId({self})")
+    }
+}
+
+impl FromStr for OperationId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes: [u8; 32] = bitcoin_hashes::hex::FromHex::from_hex(s)?;
+        Ok(OperationId(bytes))
+    }
+}
+
+impl Serialize for OperationId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_string())
+        } else {
+            serializer.serialize_bytes(&self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for OperationId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            let operation_id = OperationId::from_str(&s)
+                .map_err(|e| serde::de::Error::custom(format!("invalid operation id: {e}")))?;
+            Ok(operation_id)
+        } else {
+            let bytes: [u8; 32] = <[u8; 32]>::deserialize(deserializer)?;
+            Ok(OperationId(bytes))
+        }
+    }
+}

@@ -1,14 +1,82 @@
-//! Client library for fedimintd
+//! # Client library for fedimintd
+//!
+//! This library provides a client interface to build module clients that can be
+//! plugged together into a fedimint client that exposes a high-level interface
+//! for application authors to integrate with.
+//!
+//! ## Module Clients
+//! Module clients have to at least implement the [`module::ClientModule`] trait
+//! and a factory struct implementing [`module::gen::ClientModuleGen`]. The
+//! `ClientModule` trait defines the module types (tx inputs, outputs, etc.) as
+//! well as the module's [state machines](sm::State).
+//!
+//! ### State machines
+//! State machines are spawned when starting operations and drive them
+//! forward in the background. All module state machines are run by a central
+//! [`sm::Executor`]. This means typically starting an operation shall return
+//! instantly.
+//!
+//! For example when doing a deposit the function starting it would immediately
+//! return a deposit address and a [`OperationId`] (important concept, highly
+//! recommended to read the docs) while spawning a state machine checking the
+//! blockchain for incoming bitcoin transactions. The progress of these state
+//! machines can then be *observed* using the operation id, but no further user
+//! interaction is required to drive them forward.
+//!
+//! ### State Machine Contexts
+//! State machines have access to both a [global context](sm::GlobalContext) as
+//! well as to a [module-specific context](module::ClientModule::context).
+//!
+//! The global context provides access to the federation API and allows to claim
+//! module outputs (and transferring the value into the client's wallet), which
+//! can be used for refunds.
+//!
+//! The client-specific context can be used for other purposes, such as
+//! supplying config to the state transitions or giving access to other APIs
+//! (e.g. LN gateway in case of the lightning module).
+//!
+//! ### Extension traits
+//! The modules themselves can only create inputs and outputs that then have to
+//! be combined into transactions by the user and submitted via
+//! [`Client::finalize_and_submit_transaction`]. To make this easier most module
+//! client implementations contain an extension trait which is implemented for
+//! [`Client`] and allows to create the most typical fedimint transactions with
+//! a single function call.
+//!
+//! To observe the progress each high level operation function should be
+//! accompanied by one returning a stream of high-level operation updates.
+//! Internally that stream queries the state machines belonging to the
+//! operation to determine the high-level operation state.
+//!
+//! ### Primary Modules
+//! Not all modules have the ability to hold money for long. E.g. the lightning
+//! module and its smart contracts are only used to incentivize LN payments, not
+//! to hold money. The mint module on the other hand holds e-cash note and can
+//! thus be used to fund transactions and to absorb change. Module clients with
+//! this ability should implement the [`module::PrimaryClientModule`] trait so
+//! they can be chosen as the primary module for a [`Client`].
+//!
+//! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
+//!
+//! ## Client
+//! The [`Client`] struct is the main entry point for application authors. It is
+//! constructed using its builder which can be obtained via [`Client::builder`].
+//! The supported module clients have to be chosen at compile time while the
+//! actually available ones will be determined by the config loaded at runtime.
+//!
+//! For a hacky instantiation of a complete client see the [`ng` subcommand of `fedimint-cli`](https://github.com/fedimint/fedimint/blob/55f9d88e17d914b92a7018de677d16e57ed42bf6/fedimint-cli/src/ng.rs#L56-L73).
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
+use std::future;
 use std::io::{Error, Read, Write};
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
-use fedimint_core::api::{DynFederationApi, IFederationApi, WsFederationApi};
-use fedimint_core::config::{ClientConfig, ModuleGenRegistry};
+use async_stream::stream;
+use fedimint_core::api::{DynGlobalApi, DynModuleApi, IGlobalFederationApi, WsFederationApi};
+use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -18,17 +86,20 @@ use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
+    TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
-use fedimint_derive_secret::{ChildId, DerivableSecret};
-use futures::StreamExt;
-use rand::distributions::{Distribution, Standard};
-use rand::{thread_rng, Rng};
+use fedimint_derive_secret::DerivableSecret;
+use futures::{stream, Stream, StreamExt};
+use rand::thread_rng;
 use secp256k1_zkp::Secp256k1;
+use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tracing::{error, info, instrument, warn};
 
+use crate::backup::Metadata;
 use crate::db::{
     ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, ClientSecretKey,
     OperationLogKey,
@@ -39,23 +110,28 @@ use crate::module::gen::{
 use crate::module::{
     ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule, StateGenerator,
 };
+use crate::secret::RootSecretStrategy;
 use crate::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
 use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
-    OperationState,
+    OperationState, State,
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
+    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
+/// Client backup
+pub mod backup;
 /// Database keys used by the client
-mod db;
+pub mod db;
 /// Module client interface definitions
 pub mod module;
+/// Secret handling & derivation
+pub mod secret;
 /// Client state machine interfaces and executor implementation
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
@@ -73,27 +149,47 @@ pub type InstancelessDynClientOutput = ClientOutput<
 
 #[apply(async_trait_maybe_send!)]
 pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
+    /// Returned a reference client's module API client, so that module-specific
+    /// calls can be made
+    fn module_api(&self) -> DynModuleApi;
+
+    fn client_config(&self) -> &ClientConfig;
+
     /// Returns a reference to the client's federation API client. The provided
-    /// interface [`IFederationApi`] typically does not provide the necessary
-    /// functionality, for this extension traits like
+    /// interface [`IGlobalFederationApi`] typically does not provide the
+    /// necessary functionality, for this extension traits like
     /// [`fedimint_core::api::GlobalFederationApi`] have to be used.
-    fn api(&self) -> &(dyn IFederationApi + 'static);
+    // TODO: Could be removed in favor of client() except for testing
+    fn api(&self) -> &DynGlobalApi;
+
+    fn decoders(&self) -> &ModuleDecoderRegistry;
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::claim_input`].
+    /// Returns transaction id of the funding transaction and an optional
+    /// `OutPoint` that represents change if change was added.
     async fn claim_input_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> TransactionId;
+    ) -> (TransactionId, Option<OutPoint>);
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
+    /// Returns transaction id of the funding transaction and an optional
+    /// `OutPoint` that represents change if change was added.
     async fn fund_output_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: InstancelessDynClientOutput,
-    ) -> anyhow::Result<TransactionId>;
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)>;
+
+    /// Adds a state machine to the executor.
+    async fn add_state_machine_dyn(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+    ) -> anyhow::Result<()>;
 
     async fn transaction_update_stream(
         &self,
@@ -109,6 +205,7 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
+    // TODO: Remove in favor of `await_tx_accepted`
     pub async fn await_tx_rejected(&self, operation_id: OperationId, txid: TransactionId) {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
@@ -128,22 +225,16 @@ impl DynGlobalClientContext {
         &self,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
         let query_txid = txid;
         update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid: event_txid }
-                        if event_txid == query_txid =>
-                    {
-                        Some(Ok(()))
-                    }
-                    TxSubmissionStates::Rejected { txid: event_txid }
-                        if event_txid == query_txid =>
-                    {
-                        Some(Err(()))
+                    TxSubmissionStates::Accepted { txid } if txid == query_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected { txid, error } if txid == query_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })
@@ -164,7 +255,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: ClientInput<I, S>,
-    ) -> TransactionId
+    ) -> (TransactionId, Option<OutPoint>)
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
@@ -192,7 +283,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: ClientOutput<O, S>,
-    ) -> anyhow::Result<TransactionId>
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)>
     where
         O: IOutput + MaybeSend + MaybeSync + 'static,
         S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
@@ -205,6 +296,20 @@ impl DynGlobalClientContext {
             },
         )
         .await
+    }
+
+    /// Allows adding state machines from inside a transition to the executor.
+    /// The added state machine belongs to the same module instance as the state
+    /// machine from inside which it was spawned.
+    pub async fn add_state_machine<S>(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        sm: S,
+    ) -> anyhow::Result<()>
+    where
+        S: State<GlobalContext = DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
+    {
+        self.add_state_machine_dyn(dbtx, box_up_state(sm)).await
     }
 }
 
@@ -260,15 +365,27 @@ struct ModuleGlobalClientContext {
 
 #[apply(async_trait_maybe_send!)]
 impl IGlobalClientContext for ModuleGlobalClientContext {
-    fn api(&self) -> &(dyn IFederationApi + 'static) {
-        self.client.api.as_ref()
+    fn module_api(&self) -> DynModuleApi {
+        self.api().with_module(self.module_instance_id)
+    }
+
+    fn api(&self) -> &DynGlobalApi {
+        &self.client.api
+    }
+
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        self.client.decoders()
+    }
+
+    fn client_config(&self) -> &ClientConfig {
+        self.client.config()
     }
 
     async fn claim_input_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> TransactionId {
+    ) -> (TransactionId, Option<OutPoint>) {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
@@ -289,7 +406,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: InstancelessDynClientOutput,
-    ) -> anyhow::Result<TransactionId> {
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
         let instance_output = ClientOutput {
             output: DynOutput::from_parts(self.module_instance_id, output.output),
             state_machines: states_add_instance(self.module_instance_id, output.state_machines),
@@ -301,6 +418,19 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
                 self.operation,
                 TransactionBuilder::new().with_output(instance_output),
             )
+            .await
+    }
+
+    async fn add_state_machine_dyn(
+        &self,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+    ) -> anyhow::Result<()> {
+        let state = DynState::from_parts(self.module_instance_id, sm);
+
+        self.client
+            .executor
+            .add_state_machines_dbtx(dbtx.global_tx(), vec![state])
             .await
     }
 
@@ -328,6 +458,7 @@ fn states_add_instance(
     })
 }
 
+#[derive(Clone)]
 pub struct Client {
     inner: Arc<ClientInner>,
 }
@@ -348,12 +479,20 @@ impl Client {
             .await
     }
 
-    pub fn api(&self) -> &(dyn IFederationApi + 'static) {
+    pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
         self.inner.api.as_ref()
+    }
+
+    pub fn federation_id(&self) -> FederationId {
+        self.inner.federation_id
     }
 
     pub fn get_meta(&self, key: &str) -> Option<String> {
         self.inner.federation_meta.get(key).cloned()
+    }
+
+    fn root_secret(&self) -> DerivableSecret {
+        self.inner.root_secret.clone()
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
@@ -366,7 +505,7 @@ impl Client {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<TransactionId>
     where
-        F: Fn(TransactionId) -> M + Clone + MaybeSend + MaybeSync,
+        F: Fn(TransactionId, Option<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
         let operation_type = operation_type.to_owned();
@@ -384,7 +523,7 @@ impl Client {
                             bail!("There already exists an operation with id {operation_id:?}")
                         }
 
-                        let txid = self
+                        let (txid, change_outpoint) = self
                             .inner
                             .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
                             .await?;
@@ -393,7 +532,7 @@ impl Client {
                             dbtx,
                             operation_id,
                             &operation_type,
-                            operation_meta(txid),
+                            operation_meta(txid, change_outpoint),
                         )
                         .await;
 
@@ -434,16 +573,27 @@ impl Client {
         operation_type: &str,
         operation_meta: impl serde::Serialize,
     ) {
-        dbtx.insert_entry(
+        Client::add_operation_log_entry_inner(dbtx, operation_id, operation_type, operation_meta)
+            .await
+    }
+
+    async fn add_operation_log_entry_inner(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
+        dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry {
                 operation_type: operation_type.to_string(),
                 meta: serde_json::to_value(operation_meta)
                     .expect("Can only fail if meta is not serializable"),
+                outcome: None,
             },
         )
         .await;
-        dbtx.insert_entry(
+        dbtx.insert_new_entry(
             &ChronologicalOperationLogKey {
                 creation_time: now(),
                 operation_id,
@@ -483,29 +633,87 @@ impl Client {
         operation_entries
     }
 
+    pub async fn get_active_operations(&self) -> HashSet<OperationId> {
+        self.inner.executor.get_active_operations().await
+    }
+
     pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
-        self.inner
-            .db
-            .begin_transaction()
-            .await
-            .get_value(&OperationLogKey { operation_id })
+        Client::get_operation_inner(&mut self.inner.db.begin_transaction().await, operation_id)
             .await
     }
 
-    /// Returns a reference to a typed module client instance. Returns an error
-    /// if the instance isn't registered or the module kind doesn't match.
-    pub fn get_module_client<M: ClientModule>(
+    async fn get_operation_inner(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> Option<OperationLogEntry> {
+        dbtx.get_value(&OperationLogKey { operation_id }).await
+    }
+
+    /// Sets the outcome of an operation
+    #[instrument(skip(db), level = "debug")]
+    pub async fn set_operation_outcome(
+        db: &Database,
+        operation_id: OperationId,
+        outcome: &(impl Serialize + Debug),
+    ) -> anyhow::Result<()> {
+        let outcome_json = serde_json::to_value(outcome).expect("Outcome is not serializable");
+
+        let mut dbtx = db.begin_transaction().await;
+        let mut operation = Client::get_operation_inner(&mut dbtx, operation_id)
+            .await
+            .expect("Operation exists");
+        operation.outcome = Some(outcome_json);
+        dbtx.insert_entry(&OperationLogKey { operation_id }, &operation)
+            .await;
+        dbtx.commit_tx_result().await?;
+
+        Ok(())
+    }
+
+    /// Tries to set the outcome of an operation, but only logs an error if it
+    /// fails and does not return it. Since the outcome can always be recomputed
+    /// from an update stream, failing to save it isn't a problem in cases where
+    /// we do this merely for caching.
+    pub async fn optimistically_set_operation_outcome(
+        db: &Database,
+        operation_id: OperationId,
+        outcome: &(impl Serialize + Debug),
+    ) {
+        if let Err(e) = Self::set_operation_outcome(db, operation_id, outcome).await {
+            warn!("Error setting operation outcome: {e}");
+        }
+    }
+
+    /// Returns a reference to a typed module client instance by kind
+    pub fn get_first_module<M: ClientModule>(
         &self,
-        instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<&M> {
-        let module = self
+        module_kind: &ModuleKind,
+    ) -> (&M, ClientModuleInstance) {
+        let id = self
+            .get_first_instance(module_kind)
+            .unwrap_or_else(|| panic!("No modules found of kind {module_kind}"));
+        let module: &M = self
             .inner
-            .try_get_module(instance_id)
-            .ok_or(anyhow!("Unknown module instance {}", instance_id))?;
-        module
+            .try_get_module(id)
+            .unwrap_or_else(|| panic!("Unknown module instance {id}"))
             .as_any()
             .downcast_ref::<M>()
-            .ok_or_else(|| anyhow::anyhow!("Module is not of type {}", std::any::type_name::<M>()))
+            .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
+        let instance = ClientModuleInstance {
+            id,
+            db: self.db().new_isolated(id),
+            api: self.api().with_module(id),
+        };
+        (module, instance)
+    }
+
+    pub fn get_module_client_dyn(
+        &self,
+        instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
+        self.inner
+            .try_get_module(instance_id)
+            .ok_or(anyhow!("Unknown module instance {}", instance_id))
     }
 
     pub fn db(&self) -> &Database {
@@ -534,17 +742,84 @@ impl Client {
             .find(|(_, kind, _module)| *kind == module_kind)
             .map(|(instance_id, _, _)| instance_id)
     }
+
+    /// Returns the data from which the client's root secret is derived (e.g.
+    /// BIP39 seed phrase struct).
+    pub async fn root_secret_encoding<S>(&self) -> S::Encoding
+    where
+        S: RootSecretStrategy,
+    {
+        get_client_root_secret_encoding::<S>(self.db()).await
+    }
+
+    /// Waits for an output from the primary module to reach its final
+    /// state.
+    pub async fn await_primary_module_output(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount> {
+        self.inner
+            .await_primary_module_output(operation_id, out_point)
+            .await
+    }
+
+    /// Returns the config with which the client was initialized.
+    pub async fn get_config(&self) -> &ClientConfig {
+        &self.inner.config
+    }
+
+    /// Balance available to the client for spending
+    pub async fn get_balance(&self) -> Amount {
+        self.inner
+            .primary_module
+            .get_balance(
+                self.inner.primary_module_instance,
+                &mut self.db().begin_transaction().await,
+            )
+            .await
+    }
+
+    /// Returns a stream that yields the current client balance every time it
+    /// changes.
+    pub async fn subscribe_balance_changes(&self) -> BoxStream<'_, Amount> {
+        let mut balance_changes = self.inner.primary_module.subscribe_balance_changes().await;
+        Box::pin(stream! {
+            while let Some(()) = balance_changes.next().await {
+                let mut dbtx = self.db().begin_transaction().await;
+                let balance = self.inner
+                    .primary_module
+                    .get_balance(self.inner.primary_module_instance, &mut dbtx)
+                    .await;
+                yield balance;
+            }
+        })
+    }
+}
+
+/// Resources particular to a module instance
+pub struct ClientModuleInstance {
+    /// Instance id of the module
+    pub id: ModuleInstanceId,
+    /// Module-specific DB
+    pub db: Database,
+    /// Module-specific API
+    pub api: DynModuleApi,
 }
 
 struct ClientInner {
+    config: ClientConfig,
+    decoders: ModuleDecoderRegistry,
     db: Database,
+    federation_id: FederationId,
     federation_meta: BTreeMap<String, String>,
     primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
     primary_module_kind: ModuleKind,
     modules: ClientModuleRegistry,
     executor: Executor<DynGlobalClientContext>,
-    api: DynFederationApi,
+    api: DynGlobalApi,
+    root_secret: DerivableSecret,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
 }
 
@@ -559,6 +834,14 @@ impl ClientInner {
             }
             .into()
         })
+    }
+
+    fn config(&self) -> &ClientConfig {
+        &self.config
+    }
+
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.decoders
     }
 
     /// Returns a reference to the module, panics if not found
@@ -619,7 +902,11 @@ impl ClientInner {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<(Transaction, Vec<DynState<DynGlobalClientContext>>)> {
+    ) -> anyhow::Result<(
+        Transaction,
+        Vec<DynState<DynGlobalClientContext>>,
+        Option<u64>,
+    )> {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
@@ -635,6 +922,7 @@ impl ClientInner {
             partial_transaction.inputs.push(input);
         }
 
+        let mut change_idx: Option<u64> = None;
         if let TransactionBuilderBalance::Overfunded(excess_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
@@ -647,6 +935,7 @@ impl ClientInner {
                     excess_amount,
                 )
                 .await;
+            change_idx = Some(partial_transaction.outputs.len() as u64);
             partial_transaction.outputs.push(output);
         }
 
@@ -658,7 +947,9 @@ impl ClientInner {
             "Transaction is balanced after the previous two operations"
         );
 
-        Ok(partial_transaction.build(&self.secp_ctx, thread_rng()))
+        let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
+
+        Ok((tx, states, change_idx))
     }
 
     async fn finalize_and_submit_transaction(
@@ -666,11 +957,12 @@ impl ClientInner {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<TransactionId> {
-        let (transaction, mut states) = self
+    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
+        let (transaction, mut states, change_idx) = self
             .finalize_transaction(dbtx, operation_id, tx_builder)
             .await?;
         let txid = transaction.tx_hash();
+        let change_outpoint = change_idx.map(|out_idx| OutPoint { txid, out_idx });
 
         let tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -687,7 +979,7 @@ impl ClientInner {
 
         self.executor.add_state_machines_dbtx(dbtx, states).await?;
 
-        Ok(txid)
+        Ok((txid, change_outpoint))
     }
 
     async fn transaction_update_stream(
@@ -729,6 +1021,16 @@ impl ClientInner {
 
         active_state_exists || inactive_state_exists
     }
+
+    pub async fn await_primary_module_output(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount> {
+        self.primary_module
+            .await_primary_module_output(operation_id, out_point)
+            .await
+    }
 }
 
 /// See [`Client::transaction_updates`]
@@ -739,15 +1041,16 @@ pub struct TransactionUpdates {
 impl TransactionUpdates {
     /// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
-    pub async fn await_tx_accepted(self, txid: TransactionId) -> Result<(), ()> {
+    pub async fn await_tx_accepted(
+        self,
+        await_txid: TransactionId,
+    ) -> Result<(), TxSubmissionError> {
         self.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid: event_txid } if event_txid == txid => {
-                        Some(Ok(()))
-                    }
-                    TxSubmissionStates::Rejected { txid: event_txid } if event_txid == txid => {
-                        Some(Err(()))
+                    TxSubmissionStates::Accepted { txid } if txid == await_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected { txid, error } if txid == await_txid => {
+                        Some(Err(error))
                     }
                     _ => None,
                 })
@@ -762,10 +1065,16 @@ pub struct ClientBuilder {
     module_gens: ClientModuleGenRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     config: Option<ClientConfig>,
-    db: Option<Box<dyn IDatabase>>,
+    db: Option<DatabaseSource>,
+}
+
+pub enum DatabaseSource {
+    Fresh(Box<dyn IDatabase>),
+    Reuse(Client),
 }
 
 impl ClientBuilder {
+    /// Replace module generator registry entirely
     pub fn with_module_gens(&mut self, module_gens: ClientModuleGenRegistry) {
         self.module_gens = module_gens;
     }
@@ -814,27 +1123,90 @@ impl ClientBuilder {
     /// Uses this database to store the client state, allowing for flexibility
     /// on the caller side by accepting a type-erased trait object.
     pub fn with_dyn_database(&mut self, db: Box<dyn IDatabase>) {
-        let was_replaced = self.db.replace(db).is_some();
+        let was_replaced = self.db.replace(DatabaseSource::Fresh(db)).is_some();
         assert!(
             !was_replaced,
             "Only one database can be given to the builder."
         );
     }
 
+    /// Re-uses the database of an old client. Useful for restarting the client
+    /// on recovery without fully shutting down the DB and not being able to
+    /// re-open it.
+    ///
+    /// ## Panics
+    /// If the old and new client use different config since that might make the
+    /// DB incompatible.
+    pub fn with_old_client_database(&mut self, client: Client) {
+        let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
+        assert!(
+            !was_replaced,
+            "Only one database can be given to the builder."
+        );
+    }
+
+    pub async fn build_restoring_from_backup<S>(
+        self,
+        tg: &mut TaskGroup,
+        secret: ClientSecret<S>,
+    ) -> anyhow::Result<(Client, Metadata)>
+    where
+        S: RootSecretStrategy,
+    {
+        let fake_notifications = Default::default();
+        let mut dbtx = match self.db.as_ref().expect("No database provided") {
+            DatabaseSource::Fresh(db) => DatabaseTransaction::new(
+                db.begin_transaction().await,
+                Default::default(),
+                &fake_notifications,
+            ),
+            DatabaseSource::Reuse(db) => db.db().begin_transaction().await,
+        };
+
+        // TODO: assert DB is empty (what does that mean? maybe needs a method that
+        // checks if "wipe" was called on modules?)
+
+        // let db_is_empty = raw_dbtx
+        //     .raw_find_by_prefix(&[])
+        //     .await
+        //     .expect("DB read failed")
+        //     .next()
+        //     .await
+        //     .is_none();
+        // assert!(
+        //     db_is_empty,
+        //     "Database is not empty, cannot restore from backup"
+        // );
+
+        // Write new root secret to DB before starting client
+        set_client_root_secret(&mut dbtx, &secret).await;
+        dbtx.commit_tx().await;
+
+        let client = self.build::<S>(tg).await?;
+        let metadata = client.restore_from_backup().await?;
+
+        Ok((client, metadata))
+    }
+
     /// Build a [`Client`] and start its executor
-    pub async fn build(self, tg: &mut TaskGroup) -> anyhow::Result<Client> {
-        let client = self.build_stopped().await?;
+    pub async fn build<S>(self, tg: &mut TaskGroup) -> anyhow::Result<Client>
+    where
+        S: RootSecretStrategy,
+    {
+        let client = self.build_stopped::<S>().await?;
         client.start_executor(tg).await;
         Ok(client)
     }
 
     /// Build a [`Client`] but do not start the executor
-    pub async fn build_stopped(self) -> anyhow::Result<Client> {
+    pub async fn build_stopped<S>(self) -> anyhow::Result<Client>
+    where
+        S: RootSecretStrategy,
+    {
         let config = self.config.ok_or(anyhow!("No config was provided"))?;
         let primary_module_instance = self
             .primary_module_instance
             .ok_or(anyhow!("No primary module instance id was provided"))?;
-        let db = self.db.ok_or(anyhow!("No database was provided"))?;
 
         let mut decoders = client_decoders(
             &self.module_gens,
@@ -849,39 +1221,55 @@ impl ClientBuilder {
             tx_submission_sm_decoder(),
         );
 
-        let db = Database::new_from_box(db, decoders);
+        let db = match self.db.ok_or(anyhow!("No database was provided"))? {
+            DatabaseSource::Fresh(db) => Database::new_from_box(db, decoders.clone()),
+            DatabaseSource::Reuse(client) => {
+                assert_eq!(
+                    client.inner.config, config,
+                    "Can only reuse DB for clients started with the same config"
+                );
+                client.inner.db.clone()
+            }
+        };
 
         let notifier = Notifier::new(db.clone());
 
-        let api = DynFederationApi::from(WsFederationApi::from_config(&config));
+        let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
-        let root_secret = get_client_root_secret(&db).await;
+        let root_secret = get_client_root_secret::<S>(&db).await;
 
         let (modules, (primary_module_kind, primary_module)) = {
             let mut modules = ClientModuleRegistry::default();
             let mut primary_module = None;
-            for (module_instance, module_config) in config.modules {
+            for (module_instance, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
                 if module_instance == primary_module_instance {
                     let module = self
                         .module_gens
                         .get(&kind)
-                        .ok_or(anyhow!("Unknown module kind in config"))?
+                        .ok_or(anyhow!(
+                            "Unknown primary module kind, cannot skip primary module"
+                        ))?
                         .init_primary(
                             module_config,
                             db.clone(),
                             module_instance,
-                            root_secret.child_key(ChildId(module_instance as u64)),
+                            root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
                         )
                         .await?;
                     let not_replaced = primary_module.replace((kind, module)).is_none();
                     assert!(not_replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
                 } else {
-                    let module = self
-                        .module_gens
-                        .get(&kind)
-                        .ok_or(anyhow!("Unknown module kind in config"))?
+                    let module_gen = match self.module_gens.get(&kind) {
+                        Some(module_gen) => module_gen,
+                        None => {
+                            info!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
+                            continue;
+                        }
+                    };
+
+                    let module = module_gen
                         .init(
                             module_config,
                             db.clone(),
@@ -890,7 +1278,7 @@ impl ClientBuilder {
                             // keys were derived using *module kind*-specific derivation paths.
                             // Since the new client has to support multiple, segregated modules of
                             // the same kind we have to use the instance id instead.
-                            root_secret.child_key(ChildId(module_instance as u64)),
+                            root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
                         )
                         .await?;
@@ -917,7 +1305,10 @@ impl ClientBuilder {
         };
 
         let client_inner = Arc::new(ClientInner {
+            config: config.clone(),
+            decoders,
             db,
+            federation_id: config.federation_id,
             federation_meta: config.meta,
             primary_module,
             primary_module_instance,
@@ -926,6 +1317,7 @@ impl ClientBuilder {
             executor,
             api,
             secp_ctx: Secp256k1::new(),
+            root_secret,
         });
 
         Ok(Client {
@@ -934,16 +1326,25 @@ impl ClientBuilder {
     }
 }
 
-/// Fetches the client secret from the database or generates a new one if
-/// none is present
-pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
+/// Fetches the client secret encoding from the database or generates a new one
+/// if none is present
+pub async fn get_client_root_secret_encoding<S>(db: &Database) -> S::Encoding
+where
+    S: RootSecretStrategy,
+{
     let mut tx = db.begin_transaction().await;
-    let client_secret = tx.get_value(&ClientSecretKey).await;
+    let client_secret = tx.get_value(&ClientSecretKey::<S>::default()).await;
     let secret = if let Some(client_secret) = client_secret {
-        client_secret
+        client_secret.0
     } else {
-        let secret: ClientSecret = thread_rng().gen();
-        let no_replacement = tx.insert_entry(&ClientSecretKey, &secret).await.is_none();
+        let secret = S::random(&mut thread_rng());
+        let no_replacement = tx
+            .insert_entry(
+                &ClientSecretKey::<S>::default(),
+                &ClientSecret(secret.clone()),
+            )
+            .await
+            .is_none();
         assert!(
             no_replacement,
             "We would have overwritten our secret key, aborting!"
@@ -951,41 +1352,115 @@ pub async fn get_client_root_secret(db: &Database) -> DerivableSecret {
         secret
     };
     tx.commit_tx().await;
-    secret.into_root_secret()
+    secret
+}
+
+/// Sets the client secret in the database, returns if an old secret was
+/// overwritten
+async fn set_client_root_secret<S>(
+    dbtx: &mut DatabaseTransaction<'_>,
+    secret: &ClientSecret<S>,
+) -> bool
+where
+    S: RootSecretStrategy,
+{
+    dbtx.insert_entry(&ClientSecretKey::<S>::default(), secret)
+        .await
+        .is_some()
+}
+
+/// Fetches the client secret from the database or generates a new one if
+/// none is present
+pub async fn get_client_root_secret<S>(db: &Database) -> DerivableSecret
+where
+    S: RootSecretStrategy,
+{
+    let encoding = get_client_root_secret_encoding::<S>(db).await;
+    S::to_root_secret(&encoding)
+}
+
+/// Wraps an operation update stream such that the last update before it closes
+/// is tried to be written to the operation log entry as its outcome.
+pub fn caching_operation_update_stream<'a, U, S>(
+    db: Database,
+    operation_id: OperationId,
+    stream: S,
+) -> BoxStream<'a, U>
+where
+    U: Clone + Serialize + Debug + MaybeSend + MaybeSync + 'static,
+    S: Stream<Item = U> + MaybeSend + 'a,
+{
+    let mut stream = Box::pin(stream);
+    Box::pin(stream! {
+        let mut last_update = None;
+        while let Some(update) = stream.next().await {
+            yield update.clone();
+            last_update = Some(update);
+        }
+
+        let Some(last_update) = last_update else {
+            error!("Stream ended without any updates, this should not happen!");
+            return;
+        };
+
+        Client::optimistically_set_operation_outcome(&db, operation_id, &last_update).await;
+    })
 }
 
 /// Secret input key material from which the [`DerivableSecret`] used by the
 /// client will be seeded
-#[derive(Encodable, Decodable)]
-pub struct ClientSecret([u8; 64]);
+pub struct ClientSecret<S: RootSecretStrategy>(S::Encoding);
 
-impl ClientSecret {
-    fn into_root_secret(self) -> DerivableSecret {
-        const FEDIMINT_CLIENT_NONCE: &[u8] = b"Fedimint Client Salt";
-        DerivableSecret::new_root(&self.0, FEDIMINT_CLIENT_NONCE)
+impl<S> ClientSecret<S>
+where
+    S: RootSecretStrategy,
+{
+    pub fn new(key: S::Encoding) -> Self {
+        Self(key)
     }
 }
 
-impl Distribution<ClientSecret> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ClientSecret {
-        let mut secret = [0u8; 64];
-        rng.fill(&mut secret);
-        ClientSecret(secret)
-    }
-}
-
-impl Debug for ClientSecret {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClientSecret([redacted])")
-    }
-}
-
-impl Serialize for ClientSecret {
+impl<ES> Serialize for ClientSecret<ES>
+where
+    ES: RootSecretStrategy,
+{
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serializer.serialize_bytes(&self.0)
+        let mut bytes = Vec::new();
+        ES::consensus_encode(&self.0, &mut bytes).expect("Writing to vec can't fail");
+        serializer.serialize_bytes(&bytes)
+    }
+}
+
+impl<S> Encodable for ClientSecret<S>
+where
+    S: RootSecretStrategy,
+{
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> std::result::Result<usize, Error> {
+        S::consensus_encode(&self.0, writer)
+    }
+}
+
+impl<S> Decodable for ClientSecret<S>
+where
+    S: RootSecretStrategy,
+{
+    fn consensus_decode<R: Read>(
+        reader: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> std::result::Result<Self, DecodeError> {
+        Ok(ClientSecret(S::consensus_decode(reader)?))
+    }
+}
+
+impl<S> Debug for ClientSecret<S>
+where
+    S: RootSecretStrategy,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ClientSecret([redacted])")
     }
 }
 
@@ -996,8 +1471,9 @@ pub fn client_decoders<'a>(
     let mut modules = BTreeMap::new();
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
-            };
+            info!("Detected configuration for unsupported module kind: {kind}");
+            continue
+        };
 
         modules.insert(
             id,
@@ -1014,6 +1490,8 @@ pub fn client_decoders<'a>(
 pub struct OperationLogEntry {
     operation_type: String,
     meta: serde_json::Value,
+    // TODO: probably change all that JSON to Dyn-types
+    pub(crate) outcome: Option<serde_json::Value>,
 }
 
 impl OperationLogEntry {
@@ -1024,6 +1502,39 @@ impl OperationLogEntry {
     pub fn meta<M: DeserializeOwned>(&self) -> M {
         serde_json::from_value(self.meta.clone()).expect("JSON deserialization should not fail")
     }
+
+    /// Returns the last state update of the operation, if any was cached yet.
+    /// If this hasn't been the case yet and `None` is returned subscribe to the
+    /// appropriate update stream.
+    pub fn outcome<D: DeserializeOwned>(&self) -> Option<D> {
+        self.outcome.as_ref().map(|outcome| {
+            serde_json::from_value(outcome.clone()).expect("JSON deserialization should not fail")
+        })
+    }
+
+    /// Returns an a [`UpdateStreamOrOutcome`] enum that can be converted into
+    /// an update stream for easier handling using
+    /// [`UpdateStreamOrOutcome::into_stream`] but can also be matched over to
+    /// shortcut the handling of final outcomes.
+    pub fn outcome_or_updates<'a, U, S>(
+        &self,
+        db: &Database,
+        operation_id: OperationId,
+        stream_gen: impl FnOnce() -> S,
+    ) -> UpdateStreamOrOutcome<'a, U>
+    where
+        U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
+        S: Stream<Item = U> + MaybeSend + 'a,
+    {
+        match self.outcome::<U>() {
+            Some(outcome) => UpdateStreamOrOutcome::Outcome(outcome),
+            None => UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
+                db.clone(),
+                operation_id,
+                stream_gen(),
+            )),
+        }
+    }
 }
 
 impl Encodable for OperationLogEntry {
@@ -1033,6 +1544,14 @@ impl Encodable for OperationLogEntry {
         len += serde_json::to_string(&self.meta)
             .expect("JSON serialization should not fail")
             .consensus_encode(writer)?;
+        len += self
+            .outcome
+            .as_ref()
+            .map(|outcome| {
+                serde_json::to_string(outcome).expect("JSON serialization should not fail")
+            })
+            .consensus_encode(writer)?;
+
         Ok(len)
     }
 }
@@ -1043,12 +1562,129 @@ impl Decodable for OperationLogEntry {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let operation_type = String::consensus_decode(r, modules)?;
+
         let meta_str = String::consensus_decode(r, modules)?;
         let meta = serde_json::from_str(&meta_str).map_err(DecodeError::from_err)?;
+
+        let outcome_str = Option::<String>::consensus_decode(r, modules)?;
+        let outcome = outcome_str
+            .map(|outcome_str| serde_json::from_str(&outcome_str).map_err(DecodeError::from_err))
+            .transpose()?;
 
         Ok(OperationLogEntry {
             operation_type,
             meta,
+            outcome,
         })
+    }
+}
+
+/// Either a stream of operation updates if the operation hasn't finished yet or
+/// its outcome otherwise.
+pub enum UpdateStreamOrOutcome<'a, U> {
+    UpdateStream(BoxStream<'a, U>),
+    Outcome(U),
+}
+
+impl<'a, U> UpdateStreamOrOutcome<'a, U>
+where
+    U: MaybeSend + MaybeSync + 'static,
+{
+    /// Returns a stream no matter if the operation is finished. If there
+    /// already is a cached outcome the stream will only return that, otherwise
+    /// all updates will be returned until the operation finishes.
+    pub fn into_stream(self) -> BoxStream<'a, U> {
+        match self {
+            UpdateStreamOrOutcome::UpdateStream(stream) => stream,
+            UpdateStreamOrOutcome::Outcome(outcome) => {
+                Box::pin(stream::once(future::ready(outcome)))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::Database;
+    use futures::stream::StreamExt;
+    use serde::{Deserialize, Serialize};
+
+    use crate::sm::OperationId;
+    use crate::{Client, OperationLogEntry, UpdateStreamOrOutcome};
+
+    #[test]
+    fn test_operation_log_entry_serde() {
+        let op_log = OperationLogEntry {
+            operation_type: "test".to_string(),
+            meta: serde_json::to_value(()).unwrap(),
+            outcome: None,
+        };
+
+        op_log.meta::<()>();
+    }
+
+    #[test]
+    fn test_operation_log_entry_serde_extra_meta() {
+        #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+        struct Meta {
+            foo: String,
+            extra_meta: serde_json::Value,
+        }
+
+        let meta = Meta {
+            foo: "bar".to_string(),
+            extra_meta: serde_json::to_value(()).unwrap(),
+        };
+
+        let op_log = OperationLogEntry {
+            operation_type: "test".to_string(),
+            meta: serde_json::to_value(meta.clone()).unwrap(),
+            outcome: None,
+        };
+
+        assert_eq!(op_log.meta::<Meta>(), meta);
+    }
+
+    #[tokio::test]
+    async fn test_operation_log_update() {
+        let op_id = OperationId([0x32; 32]);
+
+        let db = Database::new(MemDatabase::new(), Default::default());
+        let mut dbtx = db.begin_transaction().await;
+        Client::add_operation_log_entry_inner(&mut dbtx, op_id, "foo", "bar").await;
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction().await;
+        let op = Client::get_operation_inner(&mut dbtx, op_id)
+            .await
+            .expect("op exists");
+        assert_eq!(op.outcome, None);
+        drop(dbtx);
+
+        Client::set_operation_outcome(&db, op_id, &"baz")
+            .await
+            .unwrap();
+
+        let mut dbtx = db.begin_transaction().await;
+        let op = Client::get_operation_inner(&mut dbtx, op_id)
+            .await
+            .expect("op exists");
+        assert_eq!(op.outcome::<String>(), Some("baz".to_string()));
+        drop(dbtx);
+
+        let update_stream_or_outcome =
+            op.outcome_or_updates::<String, _>(&db, op_id, futures::stream::empty);
+
+        assert!(matches!(
+            &update_stream_or_outcome,
+            UpdateStreamOrOutcome::Outcome(s) if s == "baz"
+        ));
+
+        let updates = update_stream_or_outcome
+            .into_stream()
+            .collect::<Vec<_>>()
+            .await;
+        assert_eq!(updates, vec!["baz"]);
     }
 }

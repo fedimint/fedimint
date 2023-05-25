@@ -71,7 +71,7 @@ function check_nix() {
   set -eo pipefail
 
   # shellcheck disable=SC2046
-  nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$') 2> >(grep -v "0 / 7 would have been reformatted")
+  nixpkgs-fmt --check $(echo "$git_ls_nonbinary_files" | grep -E '.*\.nix$') 2> >(grep -v "0 / 7 would have been reformatted")
 }
 export -f check_nix
 
@@ -91,7 +91,7 @@ function check_dbg() {
   set -eo pipefail
 
   errors=""
-  for path in $(echo "$git_ls_files" | grep  '.*\.rs'); do
+  for path in $(echo "$git_ls_nonbinary_files" | grep  '.*\.rs'); do
     if grep 'dbg!(' "$path"  > /dev/null; then
       >&2 echo "$path contains dbg! macro"
       errors="true"
@@ -105,7 +105,7 @@ function check_dbg() {
 }
 export -f check_dbg
 
-function check_semgrep() {
+function check_semgrep_log() {
   set -eo pipefail
 
   if ! command -v semgrep > /dev/null ; then
@@ -113,16 +113,28 @@ function check_semgrep() {
     return 0
   fi
 
-  semgrep -q --error --config .semgrep.log.yaml fedimint-server/ fedimint-core/
-  semgrep -q --error --config .semgrep.all.yaml
+  env SEMGREP_ENABLE_VERSION_CHECK=0 \
+    semgrep -q --error --config .semgrep.log.yaml fedimint-server/ fedimint-core/
 }
-export -f check_semgrep
+export -f check_semgrep_log
 
+function check_semgrep_all() {
+  set -eo pipefail
+
+  if ! command -v semgrep > /dev/null ; then
+    >&2 echo "Skipping semgrep check"
+    return 0
+  fi
+
+  env SEMGREP_ENABLE_VERSION_CHECK=0 \
+    semgrep -q --error --config .semgrep.all.yaml
+}
+export -f check_semgrep_all
 
 function check_shellcheck() {
   set -eo pipefail
 
-  for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
+  for path in $(echo "$git_ls_nonbinary_files" | grep -E '.*\.sh$')  ; do
     shellcheck --severity=warning "$path"
   done
 }
@@ -133,7 +145,7 @@ function check_eof() {
   set -eo pipefail
 
   errors=""
-  for path in $(echo "$git_ls_files" | grep -v -E '.*\.(ods|jpg|png|log)' | grep -v -E '^db/'); do
+  for path in $(echo "$git_ls_nonbinary_files" | grep -v -E '.*\.(ods|jpg|png|log)' | grep -v -E '^db/'); do
 
     # extra branches for clarity
     if [ ! -s "$path" ]; then
@@ -185,15 +197,19 @@ function check_ui_lint() {
     return 0
   fi
 
-  npx lint-staged
+  # Disable lint-staged for now then revisit how to set it up for the whole workspace
+  # Issue #2488: Enable lint-stage for the whole Fedimint UI workspace
+
+  # npx lint-staged
 }
 export -f check_ui_lint
 
 parallel ::: \
+  check_semgrep_all \
+  check_semgrep_log \
   check_nix \
   check_cargo_fmt \
   check_dbg \
-  check_semgrep \
   check_shellcheck \
   check_eof \
   check_forbidden_dependencies \

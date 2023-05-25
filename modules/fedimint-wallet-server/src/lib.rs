@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{Infallible, TryInto};
-use std::ffi::{OsStr, OsString};
 use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
@@ -24,11 +23,7 @@ use common::{
     WalletError, WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome,
     CONFIRMATION_TARGET,
 };
-use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_core::bitcoin_rpc::{
-    select_bitcoin_backend_from_envs, BitcoinRpcBackendType, FM_BITCOIND_RPC_ENV,
-    FM_ELECTRUM_RPC_ENV, FM_ESPLORA_RPC_ENV,
-};
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -38,7 +33,6 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
@@ -54,7 +48,9 @@ use fedimint_core::{
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
+use fedimint_wallet_common::config::{
+    default_esplora_server, WalletClientConfig, WalletConfig, WalletGenParams,
+};
 use fedimint_wallet_common::db::{
     BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
     PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
@@ -83,6 +79,7 @@ impl ExtendsCommonModuleGen for WalletGen {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for WalletGen {
+    type Params = WalletGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -93,12 +90,9 @@ impl ServerModuleGen for WalletGen {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        Ok(Wallet::new(cfg.to_typed()?, db, env, task_group)
-            .await?
-            .into())
+        Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
     }
 
     fn trusted_dealer_gen(
@@ -106,10 +100,7 @@ impl ServerModuleGen for WalletGen {
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = params
-            .to_typed::<WalletGenParams>()
-            .expect("Invalid wallet gen params");
-
+        let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
 
         let btc_pegin_keys = peers
@@ -127,8 +118,11 @@ impl ServerModuleGen for WalletGen {
                         .collect(),
                     *sk,
                     peers.threshold(),
-                    params.network,
-                    params.finality_delay,
+                    params.consensus.network,
+                    params.consensus.finality_delay,
+                    params.local.bitcoin_rpc.clone(),
+                    // TODO: make configurable
+                    default_esplora_server(params.consensus.network),
                 );
                 (*id, cfg)
             })
@@ -145,15 +139,12 @@ impl ServerModuleGen for WalletGen {
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
-        let params = params
-            .to_typed::<WalletGenParams>()
-            .expect("Invalid wallet params");
-
+        let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
         let peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey> = peers
-            .exchange_pubkeys(our_key.key)
+            .exchange_pubkeys("wallet".to_string(), our_key.key)
             .await?
             .into_iter()
             .map(|(k, key)| (k, CompressedPublicKey { key }))
@@ -163,8 +154,10 @@ impl ServerModuleGen for WalletGen {
             peer_peg_in_keys,
             sk,
             peers.peer_ids().threshold(),
-            params.network,
-            params.finality_delay,
+            params.consensus.network,
+            params.consensus.finality_delay,
+            params.local.bitcoin_rpc.clone(),
+            default_esplora_server(params.consensus.network),
         );
 
         Ok(wallet_cfg.to_erased())
@@ -200,6 +193,7 @@ impl ServerModuleGen for WalletGen {
                 network: config.network,
                 fee_consensus: config.fee_consensus.clone(),
                 finality_delay: config.finality_delay,
+                default_esplora_server: config.default_esplora_server,
             },
         )
         .expect("Serialization can't fail"))
@@ -294,8 +288,6 @@ impl ServerModule for Wallet {
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            // FIXME: remove after modularization finishes
-            #[cfg(not(target_family = "wasm"))]
             sleep(Duration::from_millis(1000)).await;
         }
     }
@@ -304,7 +296,6 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<WalletConsensusItem> {
-        // TODO: implement retry logic in case bitcoind is temporarily unreachable
         let our_target_height = self.target_height().await;
 
         // In case the wallet just got created the height is not committed to the DB yet
@@ -400,7 +391,6 @@ impl ServerModule for Wallet {
 
     async fn validate_input<'a, 'b>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a WalletInput,
@@ -429,14 +419,11 @@ impl ServerModule for Wallet {
 
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b WalletInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self
-            .validate_input(interconnect, dbtx, cache, input)
-            .await?;
+        let meta = self.validate_input(dbtx, cache, input).await?;
         debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
         dbtx.insert_new_entry(
@@ -654,38 +641,13 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    #[cfg(feature = "native")]
     pub async fn new(
         cfg: WalletConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Wallet> {
-        let bitcoin_backend = select_bitcoin_backend_from_envs(
-            env.get(OsStr::new(FM_BITCOIND_RPC_ENV))
-                .map(OsString::as_os_str),
-            env.get(OsStr::new(FM_ELECTRUM_RPC_ENV))
-                .map(OsString::as_os_str),
-            env.get(OsStr::new(FM_ESPLORA_RPC_ENV))
-                .map(OsString::as_os_str),
-        )?;
-
-        let btc_rpc = fedimint_bitcoind::bitcoincore_rpc::make_bitcoin_rpc_backend(
-            &bitcoin_backend,
-            task_group.make_handle(),
-        )?;
-
+        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
         Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group).await?)
-    }
-
-    #[cfg(not(feature = "native"))]
-    pub async fn new(
-        cfg: WalletConfig,
-        db: Database,
-        env: &BTreeMap<OsString, OsString>,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Wallet> {
-        panic!("Native cargo feature not enabled, can't initialize modules")
     }
 
     pub async fn new_with_bitcoind(
@@ -906,7 +868,7 @@ impl Wallet {
             return Err(banned_peers);
         }
 
-        let items: Vec<_> = dedup.values().into_iter().collect();
+        let items: Vec<_> = dedup.values().collect();
 
         let mut fees: Vec<_> = items.iter().map(|item| item.fee_rate).collect();
         fees.sort_unstable();
@@ -961,7 +923,7 @@ impl Wallet {
         let old_height = self
             .consensus_height(dbtx)
             .await
-            .unwrap_or_else(|| new_height.saturating_sub(10));
+            .unwrap_or_else(|| new_height.saturating_sub(self.cfg.consensus.finality_delay));
         if new_height < old_height {
             info!(
                 new_height,
@@ -1001,33 +963,14 @@ impl Wallet {
                 .collect::<HashMap<_, _>>()
                 .await;
 
-            match self.btc_rpc.backend_type() {
-                BitcoinRpcBackendType::Bitcoind | BitcoinRpcBackendType::Esplora => {
-                    if !pending_transactions.is_empty() {
-                        let block = self
-                            .btc_rpc
-                            .get_block(&block_hash)
-                            .await
-                            .expect("bitcoin rpc failed");
-                        for transaction in block.txdata {
-                            if let Some(pending_tx) = pending_transactions.get(&transaction.txid())
-                            {
-                                self.recognize_change_utxo(dbtx, pending_tx).await;
-                            }
-                        }
-                    }
-                }
-                BitcoinRpcBackendType::Electrum => {
-                    for transaction in &pending_transactions {
-                        if self
-                            .btc_rpc
-                            .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
-                            .await
-                            .expect("bitcoin electrum rpc backend failed")
-                        {
-                            self.recognize_change_utxo(dbtx, transaction.1).await;
-                        }
-                    }
+            for transaction in &pending_transactions {
+                if self
+                    .btc_rpc
+                    .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
+                    .await
+                    .expect("bitcoin rpc backend failed")
+                {
+                    self.recognize_change_utxo(dbtx, transaction.1).await;
                 }
             }
 

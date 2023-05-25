@@ -1,29 +1,58 @@
 use std::collections::BTreeMap;
 
 use bitcoin::Network;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonGen};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
-    pub network: bitcoin::network::constants::Network,
+    pub local: WalletGenParamsLocal,
+    pub consensus: WalletGenParamsConsensus,
+}
+
+impl WalletGenParams {
+    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> WalletGenParams {
+        WalletGenParams {
+            local: WalletGenParamsLocal { bitcoin_rpc },
+            consensus: WalletGenParamsConsensus {
+                network: Network::Regtest,
+                finality_delay: 10,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletGenParamsLocal {
+    pub bitcoin_rpc: BitcoinRpcConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletGenParamsConsensus {
+    pub network: Network,
     pub finality_delay: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {
-    /// Contains all configuration that will be encrypted such as private key
-    /// material
+    pub local: WalletConfigLocal,
     pub private: WalletConfigPrivate,
-    /// Contains all configuration that needs to be the same for every server
     pub consensus: WalletConfigConsensus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct WalletConfigLocal {
+    /// Configures which bitcoin RPC to use
+    pub bitcoin_rpc: BitcoinRpcConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -48,6 +77,9 @@ pub struct WalletConfigConsensus {
     pub default_fee: Feerate,
     /// Fees for bitcoin transactions
     pub fee_consensus: FeeConsensus,
+    // TODO: move elsewhere, not really consensus
+    /// The default electrs server for clients to connect to
+    pub default_esplora_server: Url,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -59,6 +91,8 @@ pub struct WalletClientConfig {
     /// Confirmations required for a peg in to be accepted by federation
     pub finality_delay: u32,
     pub fee_consensus: FeeConsensus,
+    /// Default electrs server for clients to connect to
+    pub default_esplora_server: Url,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -83,12 +117,15 @@ impl WalletConfig {
         threshold: usize,
         network: Network,
         finality_delay: u32,
+        bitcoin_rpc: BitcoinRpcConfig,
+        default_esplora_server: Url,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
         );
 
         Self {
+            local: WalletConfigLocal { bitcoin_rpc },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
@@ -97,7 +134,23 @@ impl WalletConfig {
                 finality_delay,
                 default_fee: Feerate { sats_per_kvb: 1000 },
                 fee_consensus: Default::default(),
+                default_esplora_server,
             },
+        }
+    }
+}
+
+pub fn default_esplora_server(network: Network) -> Url {
+    match network {
+        Network::Bitcoin => Url::parse("https://blockstream.info/api/")
+            .expect("Failed to parse default esplora server"),
+        Network::Testnet => Url::parse("https://blockstream.info/testnet/api/")
+            .expect("Failed to parse default esplora server"),
+        Network::Regtest => {
+            Url::parse("http://127.0.0.1:50002/").expect("Failed to parse default esplora server")
+        }
+        network => {
+            panic!("Don't know an electrs server for network: {network}");
         }
     }
 }
@@ -107,12 +160,14 @@ impl WalletClientConfig {
         peg_in_descriptor: PegInDescriptor,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
+        default_esplora_server: Url,
     ) -> Self {
         Self {
             peg_in_descriptor,
             network,
             finality_delay,
             fee_consensus: Default::default(),
+            default_esplora_server,
         }
     }
 }
@@ -120,7 +175,10 @@ impl WalletClientConfig {
 plugin_types_trait_impl_config!(
     WalletCommonGen,
     WalletGenParams,
+    WalletGenParamsLocal,
+    WalletGenParamsConsensus,
     WalletConfig,
+    WalletConfigLocal,
     WalletConfigPrivate,
     WalletConfigConsensus,
     WalletClientConfig

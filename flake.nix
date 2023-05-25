@@ -19,7 +19,8 @@
       flake = false;
     };
     android-nixpkgs = {
-      url = "github:tadfisher/android-nixpkgs?rev=39538bf26d9064555c2a77b5bd6eb88049285905"; # stable
+      # url = "github:tadfisher/android-nixpkgs?rev=39538bf26d9064555c2a77b5bd6eb88049285905"; # stable
+      url = "github:dpc/android-nixpkgs?rev=ffce46832f161877b7c197bfc7def734e8b9caa4"; # stable channel + workaround https://github.com/tadfisher/android-nixpkgs/issues/59
     };
   };
 
@@ -76,6 +77,9 @@
             };
 
           craneLibNative = craneExtendBuild (craneExtendCommon craneLibNative');
+          craneLibDevShell = craneLibNative.overrideScope' (self: prev: {
+            commonProfile = null;
+          });
           craneLibCross = target: craneExtendBuild (craneExtendCommon craneLibCross'.${target});
 
           # Replace placeholder git hash in a binary
@@ -181,11 +185,6 @@
               {
                 pkg = rustPackageOutputsFinal.fedimint-pkgs;
                 bin = "fedimint-cli";
-              };
-            distributedgen = pickBinary
-              {
-                pkg = rustPackageOutputsFinal.fedimint-pkgs;
-                bin = "distributedgen";
               };
             gatewayd = pickBinary
               {
@@ -302,7 +301,7 @@
             let
               shellCommon = craneLib:
                 let
-                  build = craneLibNative;
+                  build = craneLibDevShell;
                   commonArgs = build.commonArgs;
                   commonEnvs = build.commonEnvs;
                 in
@@ -324,7 +323,15 @@
                     (hiPrio pkgs.bashInteractive)
                     tmux
                     tmuxinator
-                    mprocs
+                    (mprocs.overrideAttrs (final: prev: {
+                      patches = prev.patches ++ [
+                        (fetchurl {
+                          url = "https://github.com/pvolok/mprocs/pull/88.patch";
+                          name = "clipboard-fix.patch";
+                          sha256 = "sha256-9dx1vaEQ6kD66M+vsJLIq1FK+nEObuXSi3cmpSZuQWk=";
+                        })
+                      ];
+                    }))
                     docker-compose
                     pkgs.tokio-console
                     moreutils-ts
@@ -338,6 +345,9 @@
                     pkgs.nodePackages.bash-language-server
                   ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                     pkgs.semgrep
+                  ] ++ lib.optionals (!stdenv.isAarch64) [
+                    xclip
+                    wl-clipboard
                   ];
 
                   RUST_SRC_PATH = "${toolchain.fenixChannel.rust-src}/lib/rustlib/src/rust/library";
@@ -453,7 +463,10 @@
 
               fedimint-ui = pkgs.mkShell (shellCommonNative
                 // {
-                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ pkgs.yarn ];
+                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ pkgs.yarn pkgs.nodejs ];
+                shellHook = ''
+                  export FEDIMINT_UI_SHELL=1
+                '';
               });
             };
         in

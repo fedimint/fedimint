@@ -3,20 +3,20 @@ mod ng;
 use core::fmt;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{ffi, fs, result};
+use std::{fs, result};
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_aead::get_password_hash;
-use fedimint_client::derivable_secret::ChildId;
-use fedimint_client::get_client_root_secret;
+use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
-use fedimint_client::sm::Notifier;
+use fedimint_client::secret::PlainRootSecretStrategy;
+use fedimint_client::sm::OperationId;
+use fedimint_client::{ClientBuilder, ClientSecret};
 use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
@@ -29,10 +29,9 @@ use fedimint_client_legacy::{Client, UserClientConfig};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
-    IFederationApi, WsClientConnectInfo, WsFederationApi,
+    IFederationApi, IGlobalFederationApi, WsClientConnectInfo, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -44,12 +43,15 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_client::MintClientGen;
+use fedimint_mint_client::{MintClientExt, MintClientGen};
+use fedimint_server::config::io::SALT_FILE;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tracing::info;
 use url::Url;
+
+use crate::ng::ClientNg;
 
 /// Type of output the cli produces
 #[derive(Serialize)]
@@ -158,6 +160,10 @@ enum CliOutput {
     },
 
     ForceEpoch,
+
+    ConfigDecrypt,
+
+    ConfigEncrypt,
 
     Raw(serde_json::Value),
 }
@@ -302,10 +308,6 @@ struct Opts {
     #[arg(long = "data-dir", alias = "workdir", env = "FM_DATA_DIR")]
     workdir: Option<PathBuf>,
 
-    /// Location of the salt file
-    #[arg(env = "FM_SALT_PATH")]
-    salt_path: Option<PathBuf>,
-
     /// Peer id of the guardian
     #[arg(env = "FM_OUR_ID", value_parser = parse_peer_id)]
     our_id: Option<PeerId>,
@@ -326,10 +328,6 @@ impl Opts {
     }
 
     async fn admin_client(&self) -> CliResult<WsAdminClient> {
-        let salt_path = self.salt_path.clone().ok_or_cli_msg(
-            CliErrorKind::MissingAuth,
-            "Admin client needs salt-path set",
-        )?;
         let password = self
             .password
             .clone()
@@ -337,9 +335,7 @@ impl Opts {
         let our_id = &self
             .our_id
             .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
-        let salt = fs::read_to_string(salt_path)
-            .map_err_cli_msg(CliErrorKind::IOError, "Unable to open salt file")?;
-        let auth = ApiAuth(get_password_hash(&password, &salt).map_err_cli_io()?);
+        let auth = ApiAuth(password);
         let url = self
             .load_config()?
             .0
@@ -404,6 +400,34 @@ impl Opts {
             Default::default(),
         )
         .await)
+    }
+
+    async fn build_client_ng(
+        &self,
+        module_gens: &ClientModuleGenRegistry,
+    ) -> CliResult<fedimint_client::Client> {
+        let mut tg = TaskGroup::new();
+        let client_builder = self.build_client_ng_builder(module_gens).await?;
+        client_builder
+            .build::<PlainRootSecretStrategy>(&mut tg)
+            .await
+            .map_err_cli_general()
+    }
+
+    async fn build_client_ng_builder(
+        &self,
+        module_gens: &ClientModuleGenRegistry,
+    ) -> CliResult<fedimint_client::ClientBuilder> {
+        let cfg = self.load_config()?.0;
+        let db = self.load_rocks_db()?;
+
+        let mut client_builder = ClientBuilder::default();
+        client_builder.with_module_gens(module_gens.clone());
+        client_builder.with_primary_module(1);
+        client_builder.with_config(cfg);
+        client_builder.with_database(db);
+
+        Ok(client_builder)
     }
 }
 
@@ -557,36 +581,43 @@ enum Command {
     /// Force processing an epoch
     ForceEpoch { hex_outcome: String },
 
-    /// Call module-specific commands
-    Module {
-        #[clap(long)]
-        id: ModuleSelector,
+    /// Show the status according to the `status` endpoint
+    Status,
 
-        /// Command with arguments to call the module with
-        #[clap(long)]
-        arg: Vec<ffi::OsString>,
+    ConfigDecrypt {
+        /// Encrypted config file
+        #[arg(long = "in-file")]
+        in_file: PathBuf,
+        /// Plaintext config file output
+        #[arg(long = "out-file")]
+        out_file: PathBuf,
+        /// Encryption salt file, otherwise defaults to the salt file from the
+        /// in_file directory
+        #[arg(long = "salt-file")]
+        salt_file: Option<PathBuf>,
+        /// The password that encrypts the configs
+        #[arg(env = "FM_PASSWORD")]
+        password: String,
+    },
+
+    ConfigEncrypt {
+        /// Plaintext config file
+        #[arg(long = "in-file")]
+        in_file: PathBuf,
+        /// Encrypted config file output
+        #[arg(long = "out-file")]
+        out_file: PathBuf,
+        /// Encryption salt file, otherwise defaults to the salt file from the
+        /// out_file directory
+        #[arg(long = "salt-file")]
+        salt_file: Option<PathBuf>,
+        /// The password that encrypts the configs
+        #[arg(env = "FM_PASSWORD")]
+        password: String,
     },
 
     #[clap(subcommand)]
     Ng(ng::ClientNg),
-}
-
-#[derive(Clone)]
-pub enum ModuleSelector {
-    Id(ModuleInstanceId),
-    Kind(ModuleKind),
-}
-
-impl FromStr for ModuleSelector {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(if s.chars().all(|ch| ch.is_ascii_digit()) {
-            Self::Id(s.parse()?)
-        } else {
-            Self::Kind(ModuleKind::clone_from_str(s))
-        })
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -657,7 +688,7 @@ impl FedimintCli {
                 let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid connect info")?;
                 let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]))
-                    as Arc<dyn IFederationApi + Send + Sync + 'static>;
+                    as Arc<dyn IGlobalFederationApi + Send + Sync + 'static>;
                 let cfg: ClientConfig = api
                     .download_client_config(&connect_obj)
                     .await
@@ -1052,56 +1083,99 @@ impl FedimintCli {
                     .await?;
                 Ok(CliOutput::ForceEpoch)
             }
-            Command::Module { id, arg } => {
-                let cfg = cli.load_config()?;
-                let decoders = cli.load_decoders(&cfg, &self.module_gens);
-                let db = cli.load_db(&decoders)?;
-                let root_secret = get_client_root_secret(&db).await;
-
-                let (id, module_cfg) = match id {
-                    ModuleSelector::Id(id) => (
-                        id,
-                        cfg.as_ref()
-                            .get_module_cfg(id)
-                            .map_err_cli_msg(CliErrorKind::IOError, "Can't load module")?,
-                    ),
-                    ModuleSelector::Kind(kind) => {
-                        cfg.as_ref()
-                            .get_first_module_by_kind_cfg(kind)
-                            .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid kind")?
-                    }
-                };
-                let module_gen =
-                    self.module_gens.get(module_cfg.kind()).unwrap(/* already checked */);
-
-                let module = module_gen
-                    .init(
-                        module_cfg,
-                        db.clone(),
-                        id,
-                        root_secret.child_key(ChildId(id as u64)),
-                        Notifier::new(db),
+            Command::Ng(ClientNg::Restore { secret }) => {
+                let mut tg = TaskGroup::new();
+                let (client, metadata) = cli
+                    .build_client_ng_builder(&self.module_gens)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
+                    .build_restoring_from_backup(
+                        &mut tg,
+                        ClientSecret::<PlainRootSecretStrategy>::new(secret),
                     )
                     .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "Loading module failed")?;
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
 
+                info!("Waiting for restore to complete");
+                client
+                    .await_restore_finished()
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+
+                Ok(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
+            }
+            Command::ConfigDecrypt {
+                in_file,
+                out_file,
+                salt_file,
+                password,
+            } => {
+                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
+                let salt = fs::read_to_string(salt_file).map_err_cli_general()?;
+                let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
+                let decrypted_bytes = encrypted_read(&key, in_file).map_err_cli_general()?;
+
+                let mut out_file_handle = fs::File::options()
+                    .create_new(true)
+                    .write(true)
+                    .open(out_file)
+                    .expect("Could not create output cfg file");
+                out_file_handle
+                    .write_all(&decrypted_bytes)
+                    .map_err_cli_general()?;
+                Ok(CliOutput::ConfigDecrypt)
+            }
+            Command::ConfigEncrypt {
+                in_file,
+                out_file,
+                salt_file,
+                password,
+            } => {
+                let mut in_file_handle =
+                    fs::File::open(in_file).expect("Could not create output cfg file");
+                let mut plaintext_bytes = vec![];
+                in_file_handle.read_to_end(&mut plaintext_bytes).unwrap();
+
+                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&out_file));
+                let salt = fs::read_to_string(salt_file).map_err_cli_general()?;
+                let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
+                encrypted_write(plaintext_bytes, &key, out_file).map_err_cli_general()?;
+                Ok(CliOutput::ConfigEncrypt)
+            }
+            Command::Ng(command) => {
+                let config = cli.load_config()?.0;
+                let client = cli
+                    .build_client_ng(&self.module_gens)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 Ok(CliOutput::Raw(
-                    module
-                        .handle_cli_command(&arg)
+                    ng::handle_ng_command(command, config, client)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))
             }
-            Command::Ng(command) => {
-                let cfg = cli.load_config()?;
+            Command::Status => {
+                let status = cli.admin_client().await?.status().await?;
                 Ok(CliOutput::Raw(
-                    ng::handle_ng_command(command, cfg.0, cli.load_rocks_db().unwrap())
-                        .await
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                    serde_json::to_value(status)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
             }
         }
     }
+}
+
+fn salt_from_file_path(file_path: &Path) -> PathBuf {
+    file_path
+        .parent()
+        .expect("File has no parent?!")
+        .join(SALT_FILE)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LnInvoiceResponse {
+    pub operation_id: OperationId,
+    pub invoice: String,
 }
 
 /// Convert clap arguments to backup metadata

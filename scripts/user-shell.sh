@@ -1,7 +1,6 @@
 # shellcheck shell=bash
 
-source .tmpenv
-
+eval "$(devimint env)"
 source ./scripts/aliases.sh
 
 function show_verbose_output()
@@ -28,8 +27,7 @@ function use_lnd_gw() {
 
 echo Waiting for fedimint start
 
-# waits for rust to write to this pipe
-STATUS=$(cat $FM_READY_FILE)
+STATUS="$(devimint wait)"
 if [ "$STATUS" = "ERROR" ]
 then
     echo "fedimint didn't start correctly"
@@ -37,7 +35,7 @@ then
     exit 1
 fi
 
-scripts/pegin.sh 10000.0 | show_verbose_output
+scripts/pegin.sh 20000.0 | show_verbose_output
 
 use_cln_gw
 
@@ -45,6 +43,10 @@ echo Funding CLN gateway e-cash wallet ...
 scripts/pegin.sh 20000.0 1 | show_verbose_output
 echo Funding LND gateway e-cash wallet ...
 scripts/pegin.sh 20000.0 1 "LND" | show_verbose_output
+
+echo Funding ClientNG
+ECASH=$($FM_MINT_CLIENT spend 10000000 | jq -e -r '.note')
+fedimint-cli ng reissue $ECASH
 
 echo Done!
 echo

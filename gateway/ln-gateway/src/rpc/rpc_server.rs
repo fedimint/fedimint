@@ -48,8 +48,8 @@ pub async fn run_webserver(
         .layer(CorsLayer::permissive());
 
     let (tx, rx) = oneshot::channel::<()>();
+    let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
     tg.spawn("Gateway Webserver", move |_| async move {
-        let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
         let graceful = server.with_graceful_shutdown(async {
             rx.await.ok();
         });
@@ -82,7 +82,7 @@ async fn balance(
     Json(payload): Json<BalancePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let amount = rpc.send(payload).await?;
-    Ok(Json(json!({ "balance_msat": amount.msats })))
+    Ok(Json(json!(amount)))
 }
 
 /// Generate deposit address
@@ -93,7 +93,7 @@ async fn address(
     Json(payload): Json<DepositAddressPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let address = rpc.send(payload).await?;
-    Ok(Json(json!({ "address": address })))
+    Ok(Json(json!(address)))
 }
 
 /// Deposit into a gateway federation.
@@ -104,7 +104,7 @@ async fn deposit(
     Json(payload): Json<DepositPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let txid = rpc.send(payload).await?;
-    Ok(Json(json!({ "fedimint_txid": txid.to_string() })))
+    Ok(Json(json!(txid)))
 }
 
 /// Withdraw from a gateway federation.
@@ -115,7 +115,7 @@ async fn withdraw(
     Json(payload): Json<WithdrawPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let txid = rpc.send(payload).await?;
-    Ok(Json(json!({ "fedimint_txid": txid.to_string() })))
+    Ok(Json(json!(txid)))
 }
 
 #[instrument(skip_all, err)]

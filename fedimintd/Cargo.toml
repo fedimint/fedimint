@@ -18,10 +18,6 @@ path = "src/bin/main.rs"
 name = "fedimintd"
 path = "src/lib.rs"
 
-[[bin]]
-name = "distributedgen"
-path  = "src/bin/distributedgen.rs"
-
 [dependencies]
 fedimint-aead = { path = "../crypto/aead" }
 ring = "0.16.20"
@@ -35,11 +31,12 @@ clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error
 futures = "0.3.24"
 itertools = "0.10.5"
 jsonrpsee = { version = "0.16.2", features = ["server"] }
+fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-core ={ path = "../fedimint-core" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-logging = { path = "../fedimint-logging", features = ["telemetry"] }
-fedimint-wallet-server = { path = "../modules/fedimint-wallet-server", features = ["native"] }
+fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 rand = "0.8"

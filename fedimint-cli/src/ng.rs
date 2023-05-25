@@ -1,24 +1,47 @@
 use std::str::FromStr;
 use std::time::Duration;
 
+use anyhow::bail;
 use bitcoin::secp256k1;
-use bitcoin_hashes::hex::ToHex;
+use bitcoin_hashes::hex;
 use clap::Subcommand;
-use fedimint_client::{Client, ClientBuilder};
+use fedimint_client::backup::Metadata;
+use fedimint_client::secret::PlainRootSecretStrategy;
+use fedimint_client::sm::OperationId;
+use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-use fedimint_core::db::IDatabase;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
-use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState, LnReceiveState};
-use fedimint_mint_client::{MintClientExt, MintClientGen, MintClientModule, SpendableNote};
-use fedimint_wallet_client::WalletClientGen;
+use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
+use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
+use fedimint_wallet_client::WalletClientExt;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
+
+use crate::{metadata_from_clap_cli, LnInvoiceResponse};
+
+#[derive(Debug, Clone)]
+pub enum ModuleSelector {
+    Id(ModuleInstanceId),
+    Kind(ModuleKind),
+}
+
+impl FromStr for ModuleSelector {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(if s.chars().all(|ch| ch.is_ascii_digit()) {
+            Self::Id(s.parse()?)
+        } else {
+            Self::Kind(ModuleKind::clone_from_str(s))
+        })
+    }
+}
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum ClientNg {
@@ -38,6 +61,9 @@ pub enum ClientNg {
         #[clap(long)]
         expiry_time: Option<u64>,
     },
+    WaitInvoice {
+        operation_id: OperationId,
+    },
     LnPay {
         bolt11: lightning_invoice::Invoice,
     },
@@ -47,29 +73,47 @@ pub enum ClientNg {
         #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
+    DepositAddress,
+    AwaitDeposit {
+        operation_id: OperationId,
+    },
+    /// Upload the (encrypted) snapshot of mint notes to federation
+    Backup {
+        #[clap(long = "metadata")]
+        /// Backup metadata, encoded as `key=value` (use `--metadata=key=value`,
+        /// possibly multiple times)
+        // TODO: Can we make it `*Map<String, String>` and avoid custom parsing?
+        metadata: Vec<String>,
+    },
+    /// Wipe the state of the client (mostly for testing purposes)
+    #[clap(hide = true)]
+    Wipe {
+        #[clap(long)]
+        force: bool,
+    },
+    /// Restore the previously created backup of mint notes (with `backup`
+    /// command)
+    Restore {
+        #[clap(value_parser = parse_secret)]
+        secret: [u8; 64],
+    },
+    /// Print the secret key of the client
+    PrintSecret,
 }
 
 pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
 }
 
-pub async fn handle_ng_command<D: IDatabase>(
+fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
+    hex::FromHex::from_hex(s)
+}
+
+pub async fn handle_ng_command(
     command: ClientNg,
-    cfg: ClientConfig,
-    db: D,
+    _config: ClientConfig,
+    client: Client,
 ) -> anyhow::Result<serde_json::Value> {
-    let mut tg = TaskGroup::new();
-
-    let fed_id = cfg.federation_id;
-    let mut client_builder = ClientBuilder::default();
-    client_builder.with_module(MintClientGen);
-    client_builder.with_module(LightningClientGen);
-    client_builder.with_module(WalletClientGen);
-    client_builder.with_primary_module(1);
-    client_builder.with_config(cfg);
-    client_builder.with_database(db);
-    let client = client_builder.build(&mut tg).await?;
-
     match command {
         ClientNg::Info => {
             return get_note_summary(&client).await;
@@ -77,11 +121,12 @@ pub async fn handle_ng_command<D: IDatabase>(
         ClientNg::Reissue { notes } => {
             let amount = notes.total_amount();
 
-            let operation_id = client.reissue_external_notes(notes).await?;
+            let operation_id = client.reissue_external_notes(notes, ()).await?;
             let mut updates = client
-                .subscribe_reissue_external_notes_updates(operation_id)
+                .subscribe_reissue_external_notes(operation_id)
                 .await
-                .unwrap();
+                .unwrap()
+                .into_stream();
 
             while let Some(update) = updates.next().await {
                 if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
@@ -94,7 +139,9 @@ pub async fn handle_ng_command<D: IDatabase>(
             Ok(serde_json::to_value(amount).unwrap())
         }
         ClientNg::Spend { amount } => {
-            let (operation, notes) = client.spend_notes(amount, Duration::from_secs(30)).await?;
+            let (operation, notes) = client
+                .spend_notes(amount, Duration::from_secs(3600), ())
+                .await?;
             info!("Spend e-cash operation: {operation:?}");
 
             Ok(serde_json::to_value(notes).unwrap())
@@ -104,16 +151,25 @@ pub async fn handle_ng_command<D: IDatabase>(
             description,
             expiry_time,
         } => {
-            let active_gateway = client.fetch_active_gateway().await?;
+            client.select_active_gateway().await?;
 
-            let (operation_id, _) = client
-                .create_bolt11_invoice_and_receive(amount, description, expiry_time, active_gateway)
+            let (operation_id, invoice) = client
+                .create_bolt11_invoice(amount, description, expiry_time)
                 .await?;
-            let mut updates = client.subscribe_to_ln_receive_updates(operation_id).await?;
+            Ok(serde_json::to_value(LnInvoiceResponse {
+                operation_id,
+                invoice: invoice.to_string(),
+            })
+            .unwrap())
+        }
+        ClientNg::WaitInvoice { operation_id } => {
+            let mut updates = client
+                .subscribe_ln_receive(operation_id)
+                .await?
+                .into_stream();
             while let Some(update) = updates.next().await {
                 match update {
-                    LnReceiveState::Claimed { txid } => {
-                        client.await_claim_notes(operation_id, txid).await?;
+                    LnReceiveState::Claimed => {
                         return get_note_summary(&client).await;
                     }
                     LnReceiveState::Canceled { reason } => {
@@ -125,28 +181,27 @@ pub async fn handle_ng_command<D: IDatabase>(
                 info!("Update: {:?}", update);
             }
 
-            return Err(anyhow::anyhow!("Unknown Lightning receive state"));
+            return Err(anyhow::anyhow!("Lightning receive failed"));
         }
         ClientNg::LnPay { bolt11 } => {
-            let active_gateway = client.fetch_active_gateway().await?;
+            client.select_active_gateway().await?;
 
-            let operation_id = client
-                .pay_bolt11_invoice(fed_id, bolt11, active_gateway)
-                .await?;
+            let operation_id = client.pay_bolt11_invoice(bolt11).await?;
 
-            let mut updates = client.subscribe_ln_pay_updates(operation_id).await?;
+            let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
 
             while let Some(update) = updates.next().await {
                 match update {
                     LnPayState::Success { preimage } => {
                         return Ok(serde_json::to_value(PayInvoiceResponse {
-                            operation_id: operation_id.to_hex(),
+                            operation_id,
                             preimage,
                         })
                         .unwrap());
                     }
-                    LnPayState::Refunded { refund_txid } => {
-                        client.await_claim_notes(operation_id, refund_txid).await?;
+                    LnPayState::Refunded { gateway_error } => {
+                        info!("{gateway_error}");
+                        return get_note_summary(&client).await;
                     }
                     _ => {}
                 }
@@ -163,7 +218,7 @@ pub async fn handle_ng_command<D: IDatabase>(
             }
 
             let mut gateways_json = json!(&gateways);
-            let active_gateway = client.fetch_active_gateway().await?;
+            let active_gateway = client.select_active_gateway().await?;
 
             gateways_json
                 .as_array_mut()
@@ -179,19 +234,64 @@ pub async fn handle_ng_command<D: IDatabase>(
             Ok(serde_json::to_value(gateways_json).unwrap())
         }
         ClientNg::SwitchGateway { pubkey } => {
-            let dbtx = client.db().begin_transaction().await;
-            let gateway = client.switch_active_gateway(Some(pubkey), dbtx).await?;
+            client.set_active_gateway(&pubkey).await?;
+            let gateway = client.select_active_gateway().await?;
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
+        }
+        ClientNg::DepositAddress => {
+            let (operation_id, address) = client
+                .get_deposit_address(now() + Duration::from_secs(600))
+                .await?;
+            Ok(serde_json::json! {
+                {
+                    "address": address,
+                    "operation_id": operation_id,
+                }
+            })
+        }
+        ClientNg::AwaitDeposit { operation_id } => {
+            let mut updates = client.subscribe_deposit_updates(operation_id).await?;
+
+            while let Some(update) = updates.next().await {
+                info!("Update: {update:?}");
+            }
+
+            Ok(serde_json::to_value(()).unwrap())
+        }
+
+        ClientNg::Backup { metadata } => {
+            let metadata = metadata_from_clap_cli(metadata)?;
+
+            client
+                .backup_to_federation(Metadata::from_json_serialized(metadata))
+                .await?;
+            Ok(serde_json::to_value(()).unwrap())
+        }
+        ClientNg::Restore { .. } => {
+            panic!("Has to be handled before initializing client")
+        }
+        ClientNg::Wipe { force } => {
+            if !force {
+                bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
+            }
+            client.wipe_state().await?;
+            Ok(serde_json::to_value(()).unwrap())
+        }
+        ClientNg::PrintSecret => {
+            let secret = client.get_secret::<PlainRootSecretStrategy>().await;
+            let hex_secret = hex::ToHex::to_hex(&secret[..]);
+
+            Ok(json!({
+                "secret": hex_secret,
+            }))
         }
     }
 }
 
 async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> {
-    let mint_client = client
-        .get_module_client::<MintClientModule>(LEGACY_HARDCODED_INSTANCE_ID_MINT)
-        .unwrap();
+    let (mint_client, _) = client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
     let summary = mint_client
         .get_wallet_summary(&mut client.db().begin_transaction().await.with_module_prefix(1))
         .await;
@@ -228,6 +328,6 @@ pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PayInvoiceResponse {
-    operation_id: String,
+    operation_id: OperationId,
     preimage: String,
 }

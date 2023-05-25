@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, TxSubmissionError};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{TieredMulti, TransactionId};
@@ -101,14 +101,14 @@ impl MintInputStateCreated {
     async fn await_success(
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         global_context
             .await_tx_accepted(common.operation_id, common.txid)
             .await
     }
 
     async fn transition_success(
-        result: Result<(), ()>,
+        result: Result<(), TxSubmissionError>,
         old_state: MintInputStateMachine,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
@@ -153,7 +153,7 @@ impl MintInputStateCreated {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let refund_txid = global_context.claim_input(dbtx, refund_input).await;
+        let (refund_txid, _) = global_context.claim_input(dbtx, refund_input).await;
 
         MintInputStateMachine {
             common: old_state.common,
@@ -183,14 +183,14 @@ impl MintInputStateRefund {
         common: MintInputCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         global_context
             .await_tx_accepted(common.operation_id, refund_txid)
             .await
     }
 
     async fn transition_refund_success(
-        result: Result<(), ()>,
+        result: Result<(), TxSubmissionError>,
         old_state: MintInputStateMachine,
     ) -> MintInputStateMachine {
         let refund_txid = match old_state.state {

@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
+use config::io::PLAINTEXT_PASSWORD;
 use config::ServerConfig;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
@@ -28,7 +29,6 @@ use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
-use crate::config::io::PLAINTEXT_PASSWORD;
 use crate::consensus::server::ConsensusServer;
 use crate::consensus::HbbftConsensusOutcome;
 use crate::net::api::RpcHandlerCtx;
@@ -95,7 +95,7 @@ impl FedimintServer {
         .unwrap();
 
         info!(target: LOG_CONSENSUS, "Starting consensus API");
-        let handler = Self::spawn_consensus_api(&server).await;
+        let handler = Self::spawn_consensus_api(&server, true).await;
 
         server.run_consensus(task_group.make_handle()).await?;
         handler.stop().await;
@@ -137,7 +137,7 @@ impl FedimintServer {
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
-        let handler = Self::spawn_api(&self.settings.api_bind, rpc_module, 10).await;
+        let handler = Self::spawn_api(&self.settings.api_bind, rpc_module, 10, true).await;
 
         let cfg = config_generated_rx.recv().await.expect("should not close");
         handler.stop().await;
@@ -145,8 +145,11 @@ impl FedimintServer {
     }
 
     /// Runs the `ConsensusApi` which serves endpoints while consensus is
-    /// running
-    pub async fn spawn_consensus_api(server: &ConsensusServer) -> FedimintApiHandler {
+    /// running.
+    pub async fn spawn_consensus_api(
+        server: &ConsensusServer,
+        force_shutdown: bool,
+    ) -> FedimintApiHandler {
         let api = &server.consensus.api;
         let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
@@ -155,26 +158,46 @@ impl FedimintServer {
             Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
         }
 
-        Self::spawn_api(&cfg.api_bind, rpc_module, cfg.max_connections).await
+        Self::spawn_api(
+            &cfg.api_bind,
+            rpc_module,
+            cfg.max_connections,
+            force_shutdown,
+        )
+        .await
     }
 
     /// Spawns an API server
+    ///
+    /// `force_shutdown` runs the API in a new runtime that the
+    /// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
+    /// easily be killed.
     async fn spawn_api<T>(
         api_bind: &SocketAddr,
         module: RpcModule<RpcHandlerCtx<T>>,
         max_connections: u32,
+        force_shutdown: bool,
     ) -> FedimintApiHandler {
-        let runtime = Runtime::new().expect("Creates runtime");
-        let handle = ServerBuilder::new()
+        let mut builder = ServerBuilder::new()
             .max_connections(max_connections)
-            .ping_interval(Duration::from_secs(10))
-            .custom_tokio_runtime(runtime.handle().clone())
+            .ping_interval(Duration::from_secs(10));
+
+        let runtime = if force_shutdown {
+            let runtime = Runtime::new().expect("Creates runtime");
+            builder = builder.custom_tokio_runtime(runtime.handle().clone());
+            Some(runtime)
+        } else {
+            None
+        };
+
+        let handle = builder
             .build(&api_bind.to_string())
             .await
             .context(format!("Bind address: {api_bind}"))
             .expect("Could not start API server")
             .start(module)
             .expect("Could not start API server");
+        info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
 
         FedimintApiHandler { handle, runtime }
     }
@@ -222,9 +245,7 @@ impl FedimintServer {
                         let (state, context) =
                             rpc_context.context(&request, module_instance_id).await;
 
-                        let res = (handler)(state, context, request).await;
-
-                        res
+                        (handler)(state, context, request).await
                     }))
                     .catch_unwind()
                     .await
@@ -254,7 +275,7 @@ impl FedimintServer {
 }
 
 pub struct FedimintApiHandler {
-    runtime: Runtime,
+    runtime: Option<Runtime>,
     handle: ServerHandle,
 }
 
@@ -262,7 +283,9 @@ impl FedimintApiHandler {
     /// Attempts to stop the API
     pub async fn stop(self) {
         let _ = self.handle.stop();
-        self.runtime.shutdown_background();
+        if let Some(runtime) = self.runtime {
+            runtime.shutdown_background();
+        }
         self.handle.stopped().await;
     }
 }

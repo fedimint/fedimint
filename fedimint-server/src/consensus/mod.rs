@@ -1,7 +1,6 @@
 #![allow(clippy::let_unit_value)]
 
 pub mod debug;
-pub mod interconnect;
 pub mod server;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -26,7 +25,6 @@ use thiserror::Error;
 use tracing::{error, info_span, instrument, trace, warn, Instrument};
 
 use crate::config::ServerConfig;
-use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
     AcceptedTransactionKey, ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey,
@@ -333,13 +331,14 @@ impl FedimintConsensus {
         outcome: &HbbftConsensusOutcome,
         drop_peers: &mut Vec<PeerId>,
     ) {
-        let config = self.api.get_config_with_sig(&mut dbtx.get_isolated()).await;
+        let sig = dbtx
+            .get_isolated()
+            .get_value(&ClientConfigSignatureKey)
+            .await;
 
-        if config.signature.is_none() {
-            let maybe_client_hash = config.client_config.consensus_hash();
-            let client_hash = maybe_client_hash;
+        if sig.is_none() {
+            let client_hash = self.api.client_cfg.consensus_hash();
             let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
-            let mut contributing_peers = HashSet::new();
             let pks = self.cfg.consensus.auth_pk_set.clone();
 
             let shares: BTreeMap<_, _> = outcome
@@ -347,36 +346,27 @@ impl FedimintConsensus {
                 .iter()
                 .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
                 .filter_map(|(peer, item)| match item {
-                    ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig)) => {
-                        Some((peer, sig))
-                    }
+                    ConsensusItem::ClientConfigSignatureShare(sig) => Some((peer, sig.clone())),
                     _ => None,
-                })
-                .filter(|(peer, sig)| {
-                    let pub_key = pks.public_key_share(peer.to_usize());
-                    pub_key.verify(sig, client_hash)
-                })
-                .map(|(peer, sig)| {
-                    contributing_peers.insert(peer);
-                    (peer.to_usize(), sig)
                 })
                 .collect();
 
-            if let Ok(final_sig) = pks.combine_signatures(shares) {
-                assert!(pks.public_key().verify(&final_sig, client_hash));
-                let serde_sig = SerdeSignature(final_sig);
-                dbtx.insert_entry(&ClientConfigSignatureKey, &serde_sig)
-                    .await;
-            } else {
-                warn!(
-                    target: LOG_CONSENSUS,
-                    "Did not receive enough valid client config sig shares"
-                )
-            }
-
-            for peer in peers {
-                if !contributing_peers.contains(&peer) {
-                    drop_peers.push(peer);
+            match combine_sigs(&pks, &shares, &client_hash) {
+                Ok(final_sig) => {
+                    assert!(pks.public_key().verify(&final_sig.0, client_hash));
+                    dbtx.insert_entry(&ClientConfigSignatureKey, &final_sig)
+                        .await;
+                }
+                Err(contributing_peers) => {
+                    warn!(
+                        target: LOG_CONSENSUS,
+                        "Did not receive enough valid client config sig shares"
+                    );
+                    for peer in peers {
+                        if !contributing_peers.contains(&peer) {
+                            drop_peers.push(peer);
+                        }
+                    }
                 }
             }
         }
@@ -527,15 +517,14 @@ impl FedimintConsensus {
 
         // Add a signature share for the client config hash if we don't have it signed
         // yet
-        let client = self.api.get_config_with_sig(&mut dbtx.get_isolated()).await;
-        if client.signature.is_none() {
-            let sig = self
-                .cfg
-                .private
-                .auth_sks
-                .0
-                .sign(client.client_config.consensus_hash());
-            let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig));
+        let sig = dbtx
+            .get_isolated()
+            .get_value(&ClientConfigSignatureKey)
+            .await;
+        if sig.is_none() {
+            let hash = self.api.client_cfg.consensus_hash();
+            let share = self.cfg.private.auth_sks.0.sign(hash);
+            let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
             items.push(item);
         }
 
@@ -570,9 +559,6 @@ impl FedimintConsensus {
                 .modules
                 .get_expect(input.module_instance_id())
                 .apply_input(
-                    &FedimintInterconnect {
-                        fedimint: &self.api,
-                    },
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
                     input,
                     caches.get_cache(input.module_instance_id()),

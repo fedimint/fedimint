@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::env;
-use std::time::Instant;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
@@ -8,10 +9,14 @@ use bitcoincore_rpc::bitcoin::Amount as BitcoinRpcAmount;
 use bitcoincore_rpc::RpcApi;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
-use devimint::federation::{fedimint_env, Fedimintd};
+use devimint::federation::{run_config_gen, Fedimintd};
 use devimint::util::{poll, ProcessManager};
-use devimint::{cmd, dev_fed, external_daemons, Bitcoind, DevFed};
+use devimint::{
+    cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
+};
+use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
 use tokio::net::TcpStream;
@@ -28,6 +33,7 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
+        faucet,
     } = dev_fed;
 
     fed.pegin(10_000_000).await?;
@@ -137,10 +143,11 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
+        faucet,
     } = dev_fed;
 
     cmd!(
-        "distributedgen",
+        fed,
         "config-decrypt",
         "--in-file={data_dir}/server-0/private.encrypt",
         "--out-file={data_dir}/server-0/config-plaintext.json"
@@ -150,7 +157,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .await?;
 
     cmd!(
-        "distributedgen",
+        fed,
         "config-encrypt",
         "--in-file={data_dir}/server-0/config-plaintext.json",
         "--out-file={data_dir}/server-0/config-2"
@@ -160,7 +167,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .await?;
 
     cmd!(
-        "distributedgen",
+        fed,
         "config-decrypt",
         "--in-file={data_dir}/server-0/config-2",
         "--out-file={data_dir}/server-0/config-plaintext-2.json"
@@ -170,15 +177,14 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .await?;
 
     // Test load last epoch with admin client
+    info!("Testing load last epoch with admin client");
     let epoch_json = cmd!(fed, "last-epoch")
-        .env("FM_SALT_PATH", format!("{data_dir}/server-0/private.salt"))
         .env("FM_PASSWORD", "pass0")
         .env("FM_OUR_ID", "0")
         .out_json()
         .await?;
     let epoch_hex = epoch_json["hex_outcome"].as_str().unwrap();
     let _force_epoch = cmd!(fed, "force-epoch", epoch_hex)
-        .env("FM_SALT_PATH", format!("{data_dir}/server-0/private.salt"))
         .env("FM_PASSWORD", "pass0")
         .env("FM_OUR_ID", "0")
         .out_json()
@@ -226,6 +232,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // reissue
+    info!("Old client: Testing reissuing e-cash notes");
     let notes = cmd!(fed, "spend", "42000msat").out_json().await?["note"]
         .as_str()
         .unwrap()
@@ -241,6 +248,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cmd!(fed, "fetch").run().await?;
 
     // peg out
+    info!("Old client: Testing pegging out");
     let pegout_addr = bitcoind.client().get_new_address(None, None)?;
     cmd!(fed, "peg-out", "--address={pegout_addr}", "--amount=500sat")
         .run()
@@ -250,7 +258,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         let received_by_addr = bitcoind
             .client()
             .get_received_by_address(&pegout_addr.clone(), Some(0))?;
-        Ok(received_by_addr != amount)
+        Ok(received_by_addr == amount)
     })
     .await?;
     bitcoind.mine_blocks(10).await?;
@@ -258,25 +266,28 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .client()
         .get_received_by_address(&pegout_addr, Some(0))?;
     anyhow::ensure!(
-        received != amount,
+        received == amount,
         "Peg-out address received {}, expected {}",
         received,
         amount
     );
 
     // lightning tests
+    info!("Old client: Testing lightning");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
 
     // CLN gateway tests
+    info!("Old client: Testing CLN gateway");
     fed.use_gateway(&gw_cln).await?;
 
     // OUTGOING: fedimint-cli pays LND via CLN gateway
+    info!("Old client: Testing outgoing LN payment");
     let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_u64()
         .unwrap();
     let initial_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     let add_invoice = lnd
@@ -310,12 +321,12 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     let final_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
         initial_client_balance - final_client_balance == 101_000,
-        "Client balance changed by {}, expected 101000",
+        "Legacy Client balance changed by {}, expected 101000",
         initial_client_balance - final_client_balance
     );
     anyhow::ensure!(
@@ -325,6 +336,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // INCOMING: fedimint-cli receives from LND via CLN gateway
+    info!("Old client: Testing incoming LN payment");
     let invoice = cmd!(
         fed,
         "ln-invoice",
@@ -362,15 +374,17 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
 
     // LND gateway tests
+    info!("Old client: Testing LND gateway");
     fed.use_gateway(&gw_lnd).await?;
 
     // OUTGOING: fedimint-cli pays CLN via LND gateaway
+    info!("Old client: Testing outgoing LN payment");
     let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
         .as_u64()
         .unwrap();
     let initial_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     let invoice = cln
@@ -409,12 +423,12 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     let final_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
-        .await?["balance_msat"]
+        .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
         initial_client_balance - final_client_balance == 101_000,
-        "Client balance changed by {}, expected 101000",
+        "Legacy Client balance changed by {}, expected 101000",
         initial_client_balance - final_client_balance
     );
     anyhow::ensure!(
@@ -424,6 +438,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     );
 
     // INCOMING: fedimint-cli receives from CLN via LND gateway
+    info!("Old client: Testing incoming LN payment");
     let invoice = cmd!(
         fed,
         "ln-invoice",
@@ -460,6 +475,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Test that LND and CLN can still send directly to each other
 
     // LND can pay CLN directly
+    info!("Testing LND can pay CLN directly");
     let invoice = cln
         .request(cln_rpc::model::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(42_000)),
@@ -495,6 +511,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ));
 
     // CLN can pay LND directly
+    info!("Testing CLN can pay LND directly");
     let add_invoice = lnd
         .client_lock()
         .await?
@@ -534,9 +551,10 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
     // # Clinet-NG tests
+    info!("Testing Client-NG");
     // ## reissue e-cash
-
-    const CLIENT_NG_REISSE_AMOUNT: u64 = 420;
+    info!("Testing reissuing e-cash");
+    const CLIENT_NG_REISSUE_AMOUNT: u64 = 420;
     const CLIENT_NG_SPEND_AMOUNT: u64 = 42;
 
     let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
@@ -544,7 +562,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     assert_eq!(initial_clientng_balance, 0);
 
-    let reissue_notes = cmd!(fed, "spend", CLIENT_NG_REISSE_AMOUNT)
+    let reissue_notes = cmd!(fed, "spend", CLIENT_NG_REISSUE_AMOUNT)
         .out_json()
         .await?["note"]
         .as_str()
@@ -555,14 +573,15 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?
         .as_u64()
         .unwrap();
-    assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSE_AMOUNT);
+    assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSUE_AMOUNT);
 
     let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
-    assert_eq!(initial_clientng_balance, CLIENT_NG_REISSE_AMOUNT);
+    assert_eq!(initial_clientng_balance, CLIENT_NG_REISSUE_AMOUNT);
 
     // # Spend from client ng
+    info!("Testing spending from client ng");
     let reissue_notes_denominations = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
         .out_json()
         .await?
@@ -579,16 +598,369 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     assert_eq!(reissue_notes_denominations, expected_denominations);
 
+    info!("{}", cmd!(fed, "info").out_string().await?);
     let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
     assert_eq!(
         clientng_post_spend_balance,
-        CLIENT_NG_REISSE_AMOUNT - CLIENT_NG_SPEND_AMOUNT
+        CLIENT_NG_REISSUE_AMOUNT - CLIENT_NG_SPEND_AMOUNT
+    );
+
+    let reissue_amount: u64 = 4096;
+
+    // Ensure that client ng can reissue after spending
+    info!("Testing reissuing e-cash after spending");
+    let reissue_notes = cmd!(fed, "spend", reissue_amount).out_json().await?["note"]
+        .as_str()
+        .map(|s| s.to_owned())
+        .unwrap();
+    let client_ng_reissue_amt = cmd!(fed, "ng", "reissue", reissue_notes)
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    assert_eq!(client_ng_reissue_amt, reissue_amount);
+
+    // OUTGOING: fedimint-cli NG pays LND via CLN gateway
+    info!("Testing fedimint-cli NG pays LND via CLN gateway");
+    fed.use_gateway(&gw_cln).await?;
+
+    let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    let initial_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    let add_invoice = lnd
+        .client_lock()
+        .await?
+        .add_invoice(tonic_lnd::lnrpc::Invoice {
+            value_msat: 3000,
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    let invoice = add_invoice.payment_request;
+    let payment_hash = add_invoice.r_hash;
+    cmd!(fed, "ng", "ln-pay", invoice).run().await?;
+
+    let invoice_status = lnd
+        .client_lock()
+        .await?
+        .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
+            r_hash: payment_hash,
+            ..Default::default()
+        })
+        .await?
+        .into_inner()
+        .state();
+    anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+
+    // Assert balances changed by 3000 msat (amount sent) + 30 msat (fee)
+    let final_cln_outgoing_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_cln_outgoing_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+
+    let expected_diff = 3030;
+    anyhow::ensure!(
+        initial_client_ng_balance - final_cln_outgoing_client_ng_balance == expected_diff,
+        "Client NG balance changed by {} on CLN outgoing payment, expected {expected_diff}",
+        initial_client_ng_balance - final_cln_outgoing_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
+        "CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}",
+        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance
+    );
+
+    let ln_response_val = cmd!(
+        fed,
+        "ng",
+        "ln-invoice",
+        "--amount=1000msat",
+        "--description='incoming-ng-over-cln-gw'"
+    )
+    .out_json()
+    .await?;
+    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
+    let invoice = ln_invoice_response.invoice;
+    let payment = lnd
+        .client_lock()
+        .await?
+        .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+            payment_request: invoice.clone(),
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    lnd.client_lock()
+        .await?
+        .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
+            include_incomplete: true,
+            ..Default::default()
+        })
+        .await?
+        .into_inner()
+        .payments
+        .into_iter()
+        .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+        .context("payment not in list")?
+        .status();
+    anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
+
+    // Receive the ecash notes
+    info!("Testing receiving e-cash notes");
+    let operation_id = ln_invoice_response.operation_id;
+    cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
+
+    // Assert balances changed by 1000 msat
+    let final_cln_incoming_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_cln_incoming_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    anyhow::ensure!(
+        final_cln_incoming_client_ng_balance - final_cln_outgoing_client_ng_balance == 1000,
+        "Client NG balance changed by {} on CLN incoming payment, expected 1000",
+        final_cln_incoming_client_ng_balance - final_cln_outgoing_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1000,
+        "CLN Gateway balance changed by {} on CLN incoming payment, expected 1000",
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
+    );
+
+    // LND gateway tests
+    info!("Testing LND gateway");
+    fed.use_gateway(&gw_lnd).await?;
+
+    // OUTGOING: fedimint-cli NG pays CLN via LND gateaway
+    info!("Testing outgoing payment from client NG to CLN via LND gateway");
+    let initial_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    let invoice = cln
+        .request(cln_rpc::model::InvoiceRequest {
+            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(1000)),
+            description: "lnd-gw-to-cln".to_string(),
+            label: "test-client-ng".to_string(),
+            expiry: Some(60),
+            fallbacks: None,
+            preimage: None,
+            exposeprivatechannels: None,
+            cltv: None,
+            deschashonly: None,
+        })
+        .await?
+        .bolt11;
+    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+    cmd!(fed, "ng", "ln-pay", invoice.clone()).run().await?;
+    let fed_id = fed.federation_id().await;
+
+    let invoice_status = cln
+        .request(cln_rpc::model::WaitanyinvoiceRequest {
+            lastpay_index: None,
+            timeout: None,
+        })
+        .await?
+        .status;
+    anyhow::ensure!(matches!(
+        invoice_status,
+        cln_rpc::model::WaitanyinvoiceStatus::PAID
+    ));
+
+    // Assert balances changed by 1000 msat (amount sent) + 10 msat (fee)
+    let final_lnd_outgoing_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_lnd_outgoing_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    anyhow::ensure!(
+        final_cln_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance == 1010,
+        "Client NG balance changed by {} on LND outgoing payment, expected 1010",
+        final_cln_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 1010,
+        "LND Gateway balance changed by {} on LND outgoing payment, expected 1010",
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance
+    );
+
+    // INCOMING: fedimint-cli NG receives from CLN via LND gateway
+    info!("Testing incoming payment from CLN to client NG via LND gateway");
+    let ln_response_val = cmd!(
+        fed,
+        "ng",
+        "ln-invoice",
+        "--amount=1000msat",
+        "--description='incoming-ng-over-lnd-gw'"
+    )
+    .out_json()
+    .await?;
+    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
+    let invoice = ln_invoice_response.invoice;
+    let invoice_status = cln
+        .request(cln_rpc::model::PayRequest {
+            bolt11: invoice,
+            amount_msat: None,
+            label: None,
+            riskfactor: None,
+            maxfeepercent: None,
+            retry_for: None,
+            maxdelay: None,
+            exemptfee: None,
+            localinvreqid: None,
+            exclude: None,
+            maxfee: None,
+            description: None,
+        })
+        .await?
+        .status;
+    anyhow::ensure!(matches!(
+        invoice_status,
+        cln_rpc::model::PayStatus::COMPLETE
+    ));
+
+    // Receive the ecash notes
+    info!("Testing receiving ecash notes");
+    let operation_id = ln_invoice_response.operation_id;
+    cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
+
+    // Assert balances changed by 1000 msat
+    let final_lnd_incoming_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
+        ["total_msat"]
+        .as_u64()
+        .unwrap();
+    let final_lnd_incoming_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    anyhow::ensure!(
+        final_lnd_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance == 1000,
+        "Client NG balance changed by {} on LND incoming payment, expected 1000",
+        final_lnd_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance
+    );
+    anyhow::ensure!(
+        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1000,
+        "LND Gateway balance changed by {} on LND incoming payment, expected 1000",
+        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance
     );
 
     // TODO: test cancel/timeout
 
+    // # Wallet NG tests
+    // ## Deposit
+    info!("Testing client ng deposit");
+    let initial_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+
+    let deposit = cmd!(fed, "ng", "deposit-address").out_json().await?;
+    let deposit_address = deposit["address"].as_str().unwrap();
+    let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
+
+    bitcoind
+        .send_to(deposit_address.to_owned(), 100_000) // deposit in sats
+        .await?;
+    bitcoind.mine_blocks(100).await?;
+
+    cmd!(fed, "ng", "await-deposit", deposit_operation_id)
+        .run()
+        .await?;
+
+    let post_deposit_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+
+    assert_eq!(
+        post_deposit_walletng_balance,
+        initial_walletng_balance + 100_000_000 // deposit in msats
+    );
+
+    Ok(())
+}
+
+async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+        faucet,
+    } = dev_fed;
+
+    // Drop other references to CLN and LND so that the test can kill them
+    drop(cln);
+    drop(lnd);
+
+    let gateways = vec![gw_cln, gw_lnd];
+
+    for mut gw in gateways {
+        // Verify that the gateway can query the lightning node for the pubkey and alias
+        let mut info_cmd = cmd!(gw, "info");
+        assert!(info_cmd.run().await.is_ok());
+
+        let ln_node = gw.lightning_name();
+
+        // Verify that after stopping the lightning node, info no longer returns since
+        // the lightning node is unreachable.
+        gw.stop_lightning_node().await?;
+        let info_fut = info_cmd.run();
+
+        // CLN will timeout when trying to retrieve the info, LND will return an
+        // explicit error
+        let expected_timeout_or_failure = tokio::time::timeout(Duration::from_secs(3), info_fut)
+            .await
+            .map_err(Into::into)
+            .and_then(|result| result);
+        assert!(expected_timeout_or_failure.is_err());
+
+        // Restart the Lightning Node
+        match ln_node.as_str() {
+            "cln" => {
+                let new_cln = Lightningd::new(process_mgr, bitcoind.clone()).await?;
+                gw.set_lightning_node(LightningNode::Cln(new_cln));
+            }
+            "lnd" => {
+                let new_lnd = Lnd::new(process_mgr, bitcoind.clone()).await?;
+                gw.set_lightning_node(LightningNode::Lnd(new_lnd));
+            }
+            _ => {
+                unreachable!()
+            }
+        }
+
+        // Verify that after the lightning node has restarted, the gateway automatically
+        // reconnects and can query the lightning node info again.
+        assert!(info_cmd.run().await.is_ok());
+    }
+
+    info!(LOG_DEVIMINT, "lightning_reconnect_test: success");
     Ok(())
 }
 
@@ -603,6 +975,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
         gw_lnd,
         electrs,
         esplora,
+        faucet,
     } = dev_fed;
 
     bitcoind.mine_blocks(110).await?;
@@ -642,6 +1015,23 @@ enum Cmd {
     LatencyTests,
     ReconnectTest,
     CliTests,
+    LightningReconnectTest,
+    #[clap(flatten)]
+    Rpc(RpcCmd),
+}
+
+#[derive(Subcommand)]
+enum RpcCmd {
+    Wait,
+    Env,
+}
+
+#[derive(Parser)]
+struct CommonArgs {
+    #[clap(short = 'd', long, env = "FM_TEST_DIR")]
+    test_dir: PathBuf,
+    #[clap(short = 'n', long, env = "FM_FED_SIZE")]
+    fed_size: usize,
 }
 
 #[derive(Parser)]
@@ -649,64 +1039,142 @@ enum Cmd {
 struct Args {
     #[clap(subcommand)]
     command: Cmd,
+    #[clap(flatten)]
+    common: CommonArgs,
 }
 
-async fn write_ready_file<T>(result: Result<T>) -> Result<T> {
-    let ready_file = env::var("FM_READY_FILE")?;
+async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result<T> {
+    let ready_file = &global.FM_READY_FILE;
     match result {
-        Ok(_) => fs::write(ready_file, "READY").await?,
-        Err(_) => fs::write(ready_file, "ERROR").await?,
+        Ok(_) => write_overwrite_async(ready_file, "READY").await?,
+        Err(_) => write_overwrite_async(ready_file, "ERROR").await?,
     }
     result
 }
 
 async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let mut fedimints = Vec::new();
-    for id in 0..2 {
-        fedimints.push(Fedimintd::new(process_mgr, bitcoind.clone(), id).await?);
-    }
-    for id in 0..2 {
-        let ui_addr = &fedimint_env(id)?["FM_LISTEN_UI"];
-        poll("waiting for ui startup", || async {
-            Ok(TcpStream::connect(ui_addr).await.is_ok())
-        })
-        .await?;
-        info!(LOG_DEVIMINT, "Started UI on http://{ui_addr}");
-    }
+    let fed_size = process_mgr.globals.FM_FED_SIZE;
+    let members = run_config_gen(process_mgr, fed_size, false).await?;
+    // don't drop fedimintds
+    let _fedimintds = futures::future::try_join_all(members.into_iter().map(|(peer, vars)| {
+        let bitcoind = bitcoind.clone();
+        async move {
+            let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
+            let server_addr = &vars.FM_BIND_API;
+
+            poll("waiting for ui/api startup", || async {
+                Ok(TcpStream::connect(server_addr).await.is_ok())
+            })
+            .await?;
+
+            anyhow::Ok(fm)
+        }
+    }))
+    .await?;
+
     task_group.make_handle().make_shutdown_rx().await.await?;
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    fedimint_logging::TracingSetup::default().init()?;
-    let process_mgr = ProcessManager::new();
+use std::fmt::Write;
+
+async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
+    let globals = vars::Global::new(&arg.test_dir, arg.fed_size).await?;
+    let log_file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(globals.FM_LOGS_DIR.join("devimint.log"))
+        .await?
+        .into_std()
+        .await;
+
+    fedimint_logging::TracingSetup::default()
+        .with_file(Some(log_file))
+        .init()?;
+
+    let mut env_string = String::new();
+    for (var, value) in globals.vars() {
+        writeln!(env_string, r#"export {var}="{value}""#)?; // hope that value doesn't contain a "
+        std::env::set_var(var, value);
+    }
+    write_overwrite_async(globals.FM_TEST_DIR.join("env"), env_string).await?;
+    info!("Test setup in {:?}", globals.FM_DATA_DIR);
+    let process_mgr = ProcessManager::new(globals);
     let task_group = TaskGroup::new();
     task_group.install_kill_handler();
+    Ok((process_mgr, task_group))
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
         Cmd::ExternalDaemons => {
-            let _daemons = write_ready_file(external_daemons(&process_mgr).await).await?;
+            let (process_mgr, task_group) = setup(args.common).await?;
+            let _daemons =
+                write_ready_file(&process_mgr.globals, external_daemons(&process_mgr).await)
+                    .await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::DevFed => {
-            let _daemons = write_ready_file(dev_fed(&task_group, &process_mgr).await).await?;
+            let (process_mgr, task_group) = setup(args.common).await?;
+            let _daemons =
+                write_ready_file(&process_mgr.globals, dev_fed(&process_mgr).await).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
-        Cmd::RunUi => run_ui(&process_mgr, &task_group).await?,
+        Cmd::RunUi => {
+            let (process_mgr, task_group) = setup(args.common).await?;
+            run_ui(&process_mgr, &task_group).await?
+        }
         Cmd::LatencyTests => {
-            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
             latency_tests(dev_fed).await?;
         }
         Cmd::ReconnectTest => {
-            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
         }
         Cmd::CliTests => {
-            let dev_fed = dev_fed(&task_group, &process_mgr).await?;
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
             cli_tests(dev_fed).await?;
         }
+        Cmd::LightningReconnectTest => {
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
+        }
+        Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,
     }
     Ok(())
+}
+
+async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
+    fedimint_logging::TracingSetup::default().init()?;
+    match rpc {
+        RpcCmd::Env => {
+            let env_file = common.test_dir.join("env");
+            poll("env file", || async {
+                Ok(fs::try_exists(&env_file).await?)
+            })
+            .await?;
+            let env = fs::read_to_string(&env_file).await?;
+            print!("{env}");
+            Ok(())
+        }
+        RpcCmd::Wait => {
+            let ready_file = common.test_dir.join("ready");
+            poll("ready file", || async {
+                Ok(fs::try_exists(&ready_file).await?)
+            })
+            .await?;
+            let env = fs::read_to_string(&ready_file).await?;
+            print!("{env}");
+            Ok(())
+        }
+    }
 }

@@ -4,10 +4,11 @@ use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::{hash_newtype, Hash as BitcoinHash};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::OutPoint;
+use fedimint_core::{Amount, OutPoint};
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract};
+use crate::LightningInput;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContractOffer {
@@ -110,5 +111,21 @@ impl Decodable for OfferId {
         Ok(OfferId::from_inner(Decodable::consensus_decode(
             d, modules,
         )?))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct IncomingContractAccount {
+    pub amount: Amount,
+    pub contract: IncomingContract,
+}
+
+impl IncomingContractAccount {
+    pub fn claim(&self) -> LightningInput {
+        LightningInput {
+            contract_id: self.contract.contract_id(),
+            amount: self.amount,
+            witness: None,
+        }
     }
 }

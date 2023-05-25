@@ -1,124 +1,122 @@
 use std::result::Result;
 
+use bitcoin::Address;
+use fedimint_core::{Amount, TransactionId};
+use reqwest::StatusCode;
 pub use reqwest::{Error, Response};
+use serde::de::DeserializeOwned;
 use serde::Serialize;
+use thiserror::Error;
 use url::Url;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
     LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
+use crate::rpc::{FederationInfo, GatewayInfo};
 
-pub struct RpcClient {
+pub struct GatewayRpcClient {
     // Base URL to gateway web server
     base_url: Url,
     // A request client
     client: reqwest::Client,
+    // Password
+    password: String,
 }
 
-impl RpcClient {
-    pub fn new(base_url: Url) -> Self {
+impl GatewayRpcClient {
+    pub fn new(base_url: Url, password: String) -> Self {
         Self {
             base_url,
             client: reqwest::Client::new(),
+            password,
         }
     }
 
-    pub async fn get_info(&self, password: String) -> Result<Response, Error> {
-        let url = self.base_url.join("/info").expect("invalid base url");
-        self.call(url, password, ()).await
+    pub fn with_password(&self, password: String) -> Self {
+        GatewayRpcClient::new(self.base_url.clone(), password)
     }
 
-    pub async fn get_balance(
-        &self,
-        password: String,
-        payload: BalancePayload,
-    ) -> Result<Response, Error> {
+    pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
+        let url = self.base_url.join("/info").expect("invalid base url");
+        self.call(url, ()).await
+    }
+
+    pub async fn get_balance(&self, payload: BalancePayload) -> GatewayRpcResult<Amount> {
         let url = self.base_url.join("/balance").expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
     pub async fn get_deposit_address(
         &self,
-        password: String,
         payload: DepositAddressPayload,
-    ) -> Result<Response, Error> {
+    ) -> GatewayRpcResult<Address> {
         let url = self.base_url.join("/address").expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
-    pub async fn deposit(
-        &self,
-        password: String,
-        payload: DepositPayload,
-    ) -> Result<Response, Error> {
+    pub async fn deposit(&self, payload: DepositPayload) -> GatewayRpcResult<TransactionId> {
         let url = self.base_url.join("/deposit").expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
-    pub async fn withdraw(
-        &self,
-        password: String,
-        payload: WithdrawPayload,
-    ) -> Result<Response, Error> {
+    pub async fn withdraw(&self, payload: WithdrawPayload) -> GatewayRpcResult<TransactionId> {
         let url = self.base_url.join("/withdraw").expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
     pub async fn connect_federation(
         &self,
-        password: String,
         payload: ConnectFedPayload,
-    ) -> Result<Response, Error> {
+    ) -> GatewayRpcResult<FederationInfo> {
         let url = self
             .base_url
             .join("/connect-fed")
             .expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
-    pub async fn backup(
-        &self,
-        password: String,
-        payload: BackupPayload,
-    ) -> Result<Response, Error> {
+    pub async fn backup(&self, payload: BackupPayload) -> GatewayRpcResult<()> {
         let url = self.base_url.join("/backup").expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
-    pub async fn restore(
-        &self,
-        password: String,
-        payload: RestorePayload,
-    ) -> Result<Response, Error> {
+    pub async fn restore(&self, payload: RestorePayload) -> GatewayRpcResult<()> {
         let url = self.base_url.join("/restore").expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
-    pub async fn reconnect(
-        &self,
-        password: String,
-        payload: LightningReconnectPayload,
-    ) -> Result<Response, Error> {
+    pub async fn reconnect(&self, payload: LightningReconnectPayload) -> GatewayRpcResult<()> {
         let url = self.base_url.join("/connect-ln").expect("invalid base url");
-        self.call(url, password, payload).await
+        self.call(url, payload).await
     }
 
-    async fn call<P>(
-        &self,
-        url: Url,
-        password: String,
-        payload: P,
-    ) -> Result<Response, reqwest::Error>
+    async fn call<P, T: DeserializeOwned>(&self, url: Url, payload: P) -> Result<T, GatewayRpcError>
     where
         P: Serialize,
     {
-        self.client
+        let response = self
+            .client
             .post(url)
-            .bearer_auth(password)
+            .bearer_auth(self.password.clone())
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()
-            .await
+            .await?;
+
+        match response.status() {
+            StatusCode::OK => Ok(response.json().await?),
+            status => Err(GatewayRpcError::BadStatus(status)),
+        }
     }
+}
+
+pub type GatewayRpcResult<T> = Result<T, GatewayRpcError>;
+
+#[derive(Error, Debug)]
+pub enum GatewayRpcError {
+    #[error("Bad status returned {0}")]
+    BadStatus(StatusCode),
+    #[error(transparent)]
+    RequestError(#[from] reqwest::Error),
 }

@@ -372,7 +372,7 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
 
     /// Returns an stream of key-value pairs with keys that start with
     /// `key_prefix`. No particular ordering is guaranteed.
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> PrefixStream<'_>;
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
 
     /// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
     async fn raw_find_by_prefix_sorted_descending(
@@ -385,7 +385,7 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
         let keys = self
             .raw_find_by_prefix(key_prefix)
-            .await
+            .await?
             .map(|kv| kv.0)
             .collect::<Vec<_>>()
             .await;
@@ -487,12 +487,11 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        Ok(self
-            .0
+        self.0
             .as_mut()
             .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_prefix(key_prefix)
-            .await)
+            .await
     }
 
     async fn raw_find_by_prefix_sorted_descending(
@@ -692,7 +691,7 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         }
     }
 
-    #[instrument(level = "debug", skip_all, fields(?key), ret)]
+    #[instrument(level = "debug", skip_all, fields(?key))]
     pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
@@ -983,8 +982,10 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
         .await
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        self.inner_tx.raw_remove_by_prefix(key_prefix).await
+    async fn raw_remove_by_prefix(&mut self, key: &[u8]) -> Result<()> {
+        let mut key_with_prefix = self.prefix.clone();
+        key_with_prefix.extend_from_slice(key);
+        self.inner_tx.raw_remove_by_prefix(&key_with_prefix).await
     }
 
     async fn commit_tx(&mut self) -> Result<()> {
@@ -1099,7 +1100,7 @@ impl<'parent> DatabaseTransaction<'parent> {
             .expect("Unrecoverable error occurred while committing to the database.");
     }
 
-    #[instrument(level = "debug", skip_all, fields(?key), ret)]
+    #[instrument(level = "debug", skip_all, fields(?key))]
     pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord,
@@ -1446,6 +1447,7 @@ impl std::fmt::Display for DbKeyPrefix {
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     DatabaseVersion = 0x50,
+    ClientBackup = 0x51,
 }
 
 #[derive(Debug, Error)]
@@ -1663,9 +1665,30 @@ mod test_utils {
     pub async fn verify_insert_elements(db: Database) {
         let mut dbtx = db.begin_transaction().await;
         assert!(dbtx.insert_entry(&TestKey(1), &TestVal(2)).await.is_none());
-
         assert!(dbtx.insert_entry(&TestKey(2), &TestVal(3)).await.is_none());
+        dbtx.commit_tx().await;
 
+        // Test values were persisted
+        let mut dbtx = db.begin_transaction().await;
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(2)));
+        assert_eq!(dbtx.get_value(&TestKey(2)).await, Some(TestVal(3)));
+        dbtx.commit_tx().await;
+
+        // Test overwrites work as expected
+        let mut dbtx = db.begin_transaction().await;
+        assert_eq!(
+            dbtx.insert_entry(&TestKey(1), &TestVal(4)).await,
+            Some(TestVal(2))
+        );
+        assert_eq!(
+            dbtx.insert_entry(&TestKey(2), &TestVal(5)).await,
+            Some(TestVal(3))
+        );
+        dbtx.commit_tx().await;
+
+        let mut dbtx = db.begin_transaction().await;
+        assert_eq!(dbtx.get_value(&TestKey(1)).await, Some(TestVal(4)));
+        assert_eq!(dbtx.get_value(&TestKey(2)).await, Some(TestVal(5)));
         dbtx.commit_tx().await;
     }
 
@@ -2247,7 +2270,7 @@ mod test_utils {
             async fn raw_find_by_prefix(
                 &mut self,
                 _key_prefix: &[u8],
-            ) -> crate::db::PrefixStream<'_> {
+            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
 

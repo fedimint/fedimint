@@ -5,14 +5,16 @@ use std::borrow::Cow;
 use std::io::Cursor;
 
 use anyhow::{anyhow, Error};
-use bitcoin::{Address, Transaction, XOnlyPublicKey};
+use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_client_legacy::ln::PayInvoicePayload;
 use fedimint_core::config::FederationId;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_client::contracts::Preimage;
+use fedimint_ln_common::{serde_routing_fees, LightningGateway};
 use futures::Future;
+use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
@@ -111,10 +113,13 @@ pub struct WithdrawPayload {
     pub address: Address,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Information about one of the feds we are connected to
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederationInfo {
+    /// Unique identifier of the fed
     pub federation_id: FederationId,
-    pub mint_pubkey: XOnlyPublicKey,
+    /// Information we registered with the fed
+    pub registration: LightningGateway,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -123,6 +128,8 @@ pub struct GatewayInfo {
     pub federations: Vec<FederationInfo>,
     pub lightning_pub_key: String,
     pub lightning_alias: String,
+    #[serde(with = "serde_routing_fees")]
+    pub fees: RoutingFees,
 }
 
 #[derive(Debug)]

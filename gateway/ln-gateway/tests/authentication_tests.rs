@@ -12,161 +12,90 @@
 mod fixtures;
 
 use std::future::Future;
-use std::net::SocketAddr;
-use std::time::Duration;
 
-use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
-use fedimint_core::config::FederationId;
-use fedimint_logging::TracingSetup;
-use ln_gateway::rpc::rpc_client::{Error, Response};
+use ln_gateway::rpc::rpc_client::{GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
-use ln_gateway::utils::retry;
-use rand::rngs::OsRng;
-use rand::Rng;
-use url::Url;
-
-use crate::fixtures::test;
+use reqwest::StatusCode;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_api_authentication() -> anyhow::Result<()> {
-    TracingSetup::default().init()?;
-
-    let gw_port = portpicker::pick_unused_port().expect("Failed to pick port");
-    let gw_listen = SocketAddr::from(([127, 0, 0, 1], gw_port));
-    let gw_api_addr = Url::parse(&format!("http://{gw_listen}")).expect("Invalid gateway address");
     let gw_password = "password".to_string();
+    let (_, rpc, fed1, _, bitcoin) = fixtures::fixtures(Some(gw_password.clone())).await;
 
-    test(
-        gw_api_addr.clone(),
-        Some(gw_listen),
-        Some(gw_password.clone()),
-        |bitcoin, _, _, rpc| async move {
-            // Create an RPC client reference
-            let client_ref = &rpc;
+    // Create an RPC client reference
+    let client1 = &rpc.with_password(gw_password);
+    let client2 = &rpc.with_password("bad password".to_string());
 
-            // Create a test federation ID
-            let federation_id = FederationId::dummy();
+    // Create a test federation ID
+    let connection_code = fed1.connection_code();
+    let federation_id = fed1.connection_code().id;
 
-            // Test gateway authentication on `connect_federation` function
-            // * `connect_federation` with correct password succeeds
-            // * `connect_federation` with incorrect password fails
-            let payload = ConnectFedPayload {
-                connect: serde_json::to_string(&WsClientConnectInfo {
-                    url: "ws://dummy".parse().unwrap(),
-                    download_token: ClientConfigDownloadToken(OsRng::default().gen()),
-                    id: federation_id,
-                })
-                .unwrap(),
-            };
-            test_auth(&gw_password, move |pw| {
-                client_ref.connect_federation(pw, payload.clone())
-            })
-            .await
-            .unwrap();
+    // Test gateway authentication on `connect_federation` function
+    let payload = ConnectFedPayload {
+        connect: connection_code.to_string(),
+    };
+    auth_success(|| client1.connect_federation(payload.clone())).await;
+    auth_fails(|| client2.connect_federation(payload.clone())).await;
 
-            // Test gateway authentication on `get_info` function
-            // * `get_info` with correct password succeeds
-            // * `get_info` with incorrect password fails
-            test_auth(&gw_password, |pw| client_ref.get_info(pw))
-                .await
-                .unwrap();
+    // Test gateway authentication on `get_info` function
+    auth_success(|| client1.get_info()).await;
+    auth_fails(|| client2.get_info()).await;
 
-            // Test gateway authentication on `get_balance` function
-            // * `get_balance` with correct password succeeds
-            // * `get_balance` with incorrect password fails
-            let payload = BalancePayload { federation_id };
-            test_auth(&gw_password, move |pw| {
-                client_ref.get_balance(pw, payload.clone())
-            })
-            .await
-            .unwrap();
+    // Test gateway authentication on `get_balance` function
+    let payload = BalancePayload { federation_id };
+    auth_success(|| client1.get_balance(payload.clone())).await;
+    auth_fails(|| client2.get_balance(payload.clone())).await;
 
-            // Test gateway authentication on `get_deposit_address` function
-            // * `get_deposit_address` with correct password succeeds
-            // * `get_deposit_address` with incorrect password fails
-            let payload = DepositAddressPayload { federation_id };
-            test_auth(&gw_password, move |pw| {
-                client_ref.get_deposit_address(pw, payload.clone())
-            })
-            .await
-            .unwrap();
+    // Test gateway authentication on `get_deposit_address` function
+    let payload = DepositAddressPayload { federation_id };
+    auth_success(|| client1.get_deposit_address(payload.clone())).await;
+    auth_fails(|| client2.get_deposit_address(payload.clone())).await;
 
-            // Test gateway authentication on `deposit` function
-            // * `deposit` with correct password succeeds
-            // * `deposit` with incorrect password fails
-            let (proof, tx) = bitcoin
-                .send_and_mine_block(
-                    &bitcoin.get_new_address().await,
-                    bitcoin::Amount::from_btc(1.0).unwrap(),
-                )
-                .await;
-            let payload = DepositPayload {
-                federation_id,
-                txout_proof: proof,
-                transaction: tx,
-            };
-            test_auth(&gw_password, move |pw| {
-                client_ref.deposit(pw, payload.clone())
-            })
-            .await
-            .unwrap();
+    // Test gateway authentication on `deposit` function
+    let (proof, tx) = bitcoin
+        .send_and_mine_block(
+            &bitcoin.get_new_address().await,
+            bitcoin::Amount::from_btc(1.0).unwrap(),
+        )
+        .await;
+    let payload = DepositPayload {
+        federation_id,
+        txout_proof: proof,
+        transaction: tx,
+    };
+    auth_success(|| client1.deposit(payload.clone())).await;
+    auth_fails(|| client2.deposit(payload.clone())).await;
 
-            // Test gateway authentication on `withdraw` function
-            // * `withdraw` with correct password succeeds
-            // * `withdraw` with incorrect password fails
-            let payload = WithdrawPayload {
-                federation_id,
-                amount: bitcoin::Amount::from_sat(100),
-                address: bitcoin.get_new_address().await,
-            };
-            test_auth(&gw_password, |pw| client_ref.withdraw(pw, payload.clone()))
-                .await
-                .unwrap();
-        },
-    )
-    .await?;
+    // Test gateway authentication on `withdraw` function
+    let payload = WithdrawPayload {
+        federation_id,
+        amount: bitcoin::Amount::from_sat(100),
+        address: bitcoin.get_new_address().await,
+    };
+    auth_success(|| client1.withdraw(payload.clone())).await;
+    auth_fails(|| client2.withdraw(payload.clone())).await;
 
     Ok(())
 }
 
 /// Test that a given endpoint/functionality of func fails with the wrong
 /// password but works with the correct one
-async fn test_auth<Fut>(gw_password: &str, func: impl Fn(String) -> Fut) -> anyhow::Result<()>
+async fn auth_success<Fut, T>(func: impl Fn() -> Fut)
 where
-    Fut: Future<Output = Result<Response, Error>>,
+    Fut: Future<Output = GatewayRpcResult<T>>,
 {
-    assert_eq!(
-        retry(
-            "fn".to_string(),
-            || async {
-                func(format!("foobar{gw_password}"))
-                    .await
-                    .map_err(|e| anyhow::anyhow!(e))
-            },
-            Duration::from_secs(1),
-            3,
-        )
-        .await?
-        .status(),
-        401
-    );
-    assert_ne!(
-        retry(
-            "fn".to_string(),
-            || async {
-                func(gw_password.to_string())
-                    .await
-                    .map_err(|e| anyhow::anyhow!(e))
-            },
-            Duration::from_secs(1),
-            3,
-        )
-        .await?
-        .status(),
-        401
-    );
+    if let Err(GatewayRpcError::BadStatus(status)) = func().await {
+        assert_ne!(status, StatusCode::UNAUTHORIZED)
+    }
+}
 
-    Ok(())
+async fn auth_fails<Fut, T>(func: impl Fn() -> Fut)
+where
+    Fut: Future<Output = GatewayRpcResult<T>>,
+{
+    if let Err(GatewayRpcError::BadStatus(status)) = func().await {
+        assert_eq!(status, StatusCode::UNAUTHORIZED)
+    }
 }

@@ -1,8 +1,6 @@
 pub mod audit;
-pub mod interconnect;
 pub mod registry;
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsString;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -16,7 +14,7 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
     ServerModuleConsensusConfig,
 };
 use crate::core::{
@@ -29,7 +27,6 @@ use crate::db::{
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
-use crate::module::interconnect::ModuleInterconect;
 use crate::net::peers::MuxPeerConnections;
 use crate::server::{DynServerModule, VerificationCache};
 use crate::task::{MaybeSend, TaskGroup};
@@ -445,7 +442,6 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
 
@@ -453,6 +449,8 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
     /// database before the module is initialized. The `MigrationMap` is
     /// indexed on the from version.
     fn get_database_migrations(&self) -> MigrationMap;
+
+    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
 
     fn trusted_dealer_gen(
         &self,
@@ -627,6 +625,8 @@ pub trait CommonModuleGen: Debug + Sized {
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
+    type Params: ModuleGenParams;
+
     /// This represents the module's database version that the current code is
     /// compatible with. It is important to increment this value whenever a
     /// key or a value that is persisted to the database within the module
@@ -658,7 +658,6 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule>;
 
@@ -667,6 +666,10 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     /// indexed on the from version.
     fn get_database_migrations(&self) -> MigrationMap {
         MigrationMap::new()
+    }
+
+    fn parse_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<Self::Params> {
+        params.to_typed::<Self::Params>()
     }
 
     fn trusted_dealer_gen(
@@ -713,14 +716,18 @@ where
         &self,
         cfg: ServerModuleConfig,
         db: Database,
-        env: &BTreeMap<OsString, OsString>,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        <Self as ServerModuleGen>::init(self, cfg, db, env, task_group).await
+        <Self as ServerModuleGen>::init(self, cfg, db, task_group).await
     }
 
     fn get_database_migrations(&self) -> MigrationMap {
         <Self as ServerModuleGen>::get_database_migrations(self)
+    }
+
+    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()> {
+        <Self as ServerModuleGen>::parse_params(self, params)?;
+        Ok(())
     }
 
     fn trusted_dealer_gen(
@@ -907,7 +914,6 @@ pub trait ServerModule: Debug + Sized {
     /// them and merely generate a warning.
     async fn validate_input<'a, 'b>(
         &self,
-        interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a <Self::Common as ModuleCommon>::Input,
@@ -923,7 +929,6 @@ pub trait ServerModule: Debug + Sized {
     /// once all transactions have been processed.
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
         verification_cache: &Self::VerificationCache,
@@ -1049,7 +1054,7 @@ pub struct PeerHandle<'a> {
     // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
     // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
     #[doc(hidden)]
-    pub connections: &'a MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+    pub connections: &'a MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
     #[doc(hidden)]
     pub module_instance_id: ModuleInstanceId,
     #[doc(hidden)]
@@ -1060,7 +1065,7 @@ pub struct PeerHandle<'a> {
 
 impl<'a> PeerHandle<'a> {
     pub fn new(
-        connections: &'a MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
+        connections: &'a MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
         module_instance_id: ModuleInstanceId,
         our_id: PeerId,
         peers: Vec<PeerId>,

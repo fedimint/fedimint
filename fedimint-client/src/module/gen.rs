@@ -2,9 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::bail;
-use fedimint_core::config::{
-    ClientModuleConfig, CommonModuleGenRegistry, ModuleGenRegistry, TypedClientModuleConfig,
-};
+use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientModuleConfig};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen};
@@ -17,18 +15,6 @@ use crate::sm::{ModuleNotifier, Notifier};
 use crate::DynGlobalClientContext;
 
 pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
-
-pub trait ClientModuleGenRegistryExt {
-    fn to_common(&self) -> CommonModuleGenRegistry;
-}
-
-impl ClientModuleGenRegistryExt for ClientModuleGenRegistry {
-    fn to_common(&self) -> CommonModuleGenRegistry {
-        self.legacy_init_order_iter()
-            .map(|(_k, v)| v.to_dyn_common())
-            .collect()
-    }
-}
 
 #[apply(async_trait_maybe_send!)]
 pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {

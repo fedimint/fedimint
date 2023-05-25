@@ -9,6 +9,7 @@
 
 extern crate core;
 
+pub mod api;
 pub mod config;
 pub mod contracts;
 pub mod db;
@@ -18,6 +19,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
+use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -26,7 +28,7 @@ use url::Url;
 use crate::contracts::incoming::OfferId;
 use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
 
-const KIND: ModuleKind = ModuleKind::from_static_str("ln");
+pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -152,6 +154,7 @@ impl std::fmt::Display for LightningOutputOutcome {
     }
 }
 
+/// Information a gateway registers with a fed
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
     /// Channel identifier assigned to the mint by the gateway.
@@ -159,6 +162,7 @@ pub struct LightningGateway {
     /// `short_channel_id` when creating invoices to be settled by this
     /// gateway.
     pub mint_channel_id: u64,
+    /// Key used to pay the gateway
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub api: Url,
@@ -169,17 +173,25 @@ pub struct LightningGateway {
     pub route_hints: Vec<route_hints::RouteHint>,
     /// Limits the validity of the announcement to allow updates
     pub valid_until: SystemTime,
+    /// Gateway configured routing fees
+    #[serde(with = "serde_routing_fees")]
+    pub fees: RoutingFees,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct LightningConsensusItem {
-    pub contract_id: ContractId,
-    pub share: PreimageDecryptionShare,
+pub enum LightningConsensusItem {
+    DecryptPreimage(ContractId, PreimageDecryptionShare),
+    BlockHeight(u64),
 }
 
 impl std::fmt::Display for LightningConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LN Decryption Share for contract {}", self.contract_id)
+        match self {
+            LightningConsensusItem::DecryptPreimage(contract_id, _) => {
+                write!(f, "LN Decryption Share for contract {contract_id}")
+            }
+            LightningConsensusItem::BlockHeight(height) => write!(f, "LN block height {height}"),
+        }
     }
 }
 
@@ -208,6 +220,7 @@ plugin_types_trait_impl_common!(
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
     use fedimint_core::encoding::{Decodable, Encodable};
+    use lightning::routing::gossip::RoutingFees;
     use secp256k1::PublicKey;
     use serde::{Deserialize, Serialize};
 
@@ -243,7 +256,7 @@ pub mod route_hints {
                     .map(|hop| lightning::routing::router::RouteHintHop {
                         src_node_id: hop.src_node_id,
                         short_channel_id: hop.short_channel_id,
-                        fees: lightning::routing::gossip::RoutingFees {
+                        fees: RoutingFees {
                             base_msat: hop.base_msat,
                             proportional_millionths: hop.proportional_millionths,
                         },
@@ -254,6 +267,50 @@ pub mod route_hints {
                     .collect(),
             )
         }
+    }
+}
+
+// TODO: Upstream serde serialization for
+// lightning::routing::gossip::RoutingFees
+// See https://github.com/lightningdevkit/rust-lightning/blob/b8ed4d2608e32128dd5a1dee92911638a4301138/lightning/src/routing/gossip.rs#L1057-L1065
+pub mod serde_routing_fees {
+    use lightning::routing::gossip::RoutingFees;
+    use serde::ser::SerializeStruct;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    #[allow(missing_docs)]
+    pub fn serialize<S>(fees: &RoutingFees, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("RoutingFees", 2)?;
+        state.serialize_field("base_msat", &fees.base_msat)?;
+        state.serialize_field("proportional_millionths", &fees.proportional_millionths)?;
+        state.end()
+    }
+
+    #[allow(missing_docs)]
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<RoutingFees, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let fees = serde_json::Value::deserialize(deserializer)?;
+        // While we deserialize fields as u64, RoutingFees expects u32 for the fields
+        let base_msat = fees["base_msat"]
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom("base_msat is not a u64"))?;
+        let proportional_millionths = fees["proportional_millionths"]
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom("proportional_millionths is not a u64"))?;
+
+        Ok(RoutingFees {
+            base_msat: base_msat
+                .try_into()
+                .map_err(|_| serde::de::Error::custom("base_msat is greater than u32::MAX"))?,
+            proportional_millionths: proportional_millionths.try_into().map_err(|_| {
+                serde::de::Error::custom("proportional_millionths is greater than u32::MAX")
+            })?,
+        })
     }
 }
 

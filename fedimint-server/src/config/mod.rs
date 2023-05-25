@@ -1,24 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::env;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::time::Duration;
-use std::{env, fs};
 
 use anyhow::{bail, format_err};
-use fedimint_aead::{encrypted_read, get_encryption_key, get_password_hash};
-use fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, ConfigGenParamsRequest, PeerServerParams,
-};
+use fedimint_core::admin_client::ConfigGenParamsConsensus;
 use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
-    ClientConfig, ClientConfigResponse, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl,
-    ServerModuleConfig, ServerModuleGenRegistry, TypedServerModuleConfig,
+    ClientConfig, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl, ServerModuleConfig,
+    ServerModuleGenRegistry, TypedServerModuleConfig,
 };
-use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_DKG_DONE, MODULE_INSTANCE_ID_GLOBAL,
-};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, PeerHandle,
@@ -28,9 +22,9 @@ use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConne
 use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
+use futures::future::join_all;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use hbbft::NetworkInfo;
-use itertools::Itertools;
 use rand::rngs::OsRng;
 use rand::Rng;
 use serde::de::DeserializeOwned;
@@ -40,11 +34,11 @@ use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
 use crate::config::distributedgen::{DkgRunner, ThresholdKeys};
-use crate::config::io::{parse_peer_params, CODE_VERSION, SALT_FILE, TLS_CERT, TLS_PK};
+use crate::config::io::CODE_VERSION;
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeers;
 use crate::multiplexed::PeerConnectionMultiplexer;
-use crate::net::connect::{Connector, TlsConfig};
+use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
@@ -57,9 +51,6 @@ const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 
 /// The env var for maximum open connections the API can handle
 const ENV_MAX_CLIENT_CONNECTIONS: &str = "FM_MAX_CLIENT_CONNECTIONS";
-
-/// How many times a config download token can be used by a client
-const DEFAULT_CONFIG_DOWNLOAD_LIMIT: u64 = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
@@ -136,6 +127,7 @@ pub struct ServerConfigConsensus {
     /// All configuration that needs to be the same for modules
     pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
     #[encodable_ignore]
+    // FIXME: Make modules encodable or we will not check module keys
     /// Human readable representation of [`Self::modules`]
     pub modules_json: BTreeMap<ModuleInstanceId, JsonWithKind>,
     /// Additional config the federation wants to transmit to the clients
@@ -179,18 +171,7 @@ impl ServerConfigConsensus {
         self.modules.iter().map(|(k, v)| (*k, &v.kind))
     }
 
-    pub fn try_to_config_response(
-        &self,
-        // TODO: remove
-        module_config_gens: &ServerModuleGenRegistry,
-    ) -> anyhow::Result<ClientConfigResponse> {
-        Ok(ClientConfigResponse {
-            client_config: self.to_client_config(module_config_gens)?,
-            signature: None,
-        })
-    }
-
-    fn to_client_config(
+    pub fn to_client_config(
         &self,
         module_config_gens: &ModuleGenRegistry<DynServerModuleGen>,
     ) -> Result<ClientConfig, anyhow::Error> {
@@ -211,14 +192,6 @@ impl ServerConfigConsensus {
             meta: self.meta.clone(),
         };
         Ok(client)
-    }
-
-    pub fn to_config_response(
-        &self,
-        module_config_gens: &ServerModuleGenRegistry,
-    ) -> ClientConfigResponse {
-        self.try_to_config_response(module_config_gens)
-            .expect("configuration mismatch")
     }
 }
 
@@ -270,7 +243,7 @@ impl ServerConfig {
             tls_certs: params.tls_certs(),
             modules: Default::default(),
             modules_json: Default::default(),
-            meta: params.consensus.requested.meta,
+            meta: params.consensus.meta,
         };
         let mut cfg = Self {
             consensus,
@@ -427,7 +400,7 @@ impl ServerConfig {
         let authinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
-        let modules = peer0.consensus.requested.modules.iter_modules();
+        let modules = peer0.consensus.modules.iter_modules();
         let module_configs: BTreeMap<_, _> = modules
             .map(|(module_id, kind, module_params)| {
                 (
@@ -484,7 +457,6 @@ impl ServerConfig {
         )
         .await;
         let connections = PeerConnectionMultiplexer::new(server_conn).into_dyn();
-        let mut rng = OsRng;
 
         let peers = &params.peer_ids();
         let our_id = &params.local.our_id;
@@ -505,25 +477,33 @@ impl ServerConfig {
         dkg.add(KeyType::Epoch, peers.threshold());
 
         // run DKG for epoch and hbbft keys
-        let keys = dkg
-            .run_g1(MODULE_INSTANCE_ID_GLOBAL, &connections, &mut rng)
-            .await?;
+        let keys = dkg.run_g1(MODULE_INSTANCE_ID_GLOBAL, &connections).await?;
         let auth_keys = keys[&KeyType::Auth].threshold_crypto();
         let hbbft_keys = keys[&KeyType::Hbbft].threshold_crypto();
         let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
+        let mut registered_modules = registry.kinds();
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
-        let modules = params.consensus.requested.modules.iter_modules();
-        for (module_instance_id, kind, module_params) in modules {
+        let modules = params.consensus.modules.iter_modules();
+        let modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
             let dkg = PeerHandle::new(&connections, module_instance_id, *our_id, peers.clone());
-            module_cfgs.insert(
-                module_instance_id,
-                registry
-                    .get(kind)
-                    .expect("Module not registered")
-                    .distributed_gen(&dkg, module_params)
-                    .await?,
-            );
+            let registry = registry.clone();
+
+            async move {
+                let result = match registry.get(kind) {
+                    None => Err(DkgError::ModuleNotFound(kind.clone())),
+                    Some(gen) => gen.distributed_gen(&dkg, module_params).await,
+                };
+                (module_instance_id, result)
+            }
+        });
+        for (module_instance_id, config) in join_all(modules_runner).await {
+            let config = config?;
+            registered_modules.remove(config.consensus_json.kind());
+            module_cfgs.insert(module_instance_id, config);
+        }
+        if !registered_modules.is_empty() {
+            return Err(DkgError::ParamsNotFound(registered_modules));
         }
 
         info!(
@@ -533,8 +513,13 @@ impl ServerConfig {
         // Note: Since our outgoing buffers are asynchronous, we don't actually know
         // if other peers received our message, just because we received theirs.
         // That's why we need to do a one last best effort sync.
+        let dkg_done = "DKG DONE".to_string();
         connections
-            .send(peers, MODULE_INSTANCE_ID_DKG_DONE, DkgPeerMsg::Done)
+            .send(
+                peers,
+                (MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone()),
+                DkgPeerMsg::Done,
+            )
             .await?;
 
         info!(
@@ -545,7 +530,7 @@ impl ServerConfig {
             let mut done_peers = BTreeSet::from([*our_id]);
 
             while done_peers.len() < peers.len() {
-                match connections.receive(MODULE_INSTANCE_ID_DKG_DONE).await {
+                match connections.receive((MODULE_INSTANCE_ID_GLOBAL, dkg_done.clone())).await {
                     Ok((peer_id, DkgPeerMsg::Done)) => {
                         info!(
                             target: LOG_NET_PEER_DKG,
@@ -690,81 +675,6 @@ impl ConfigGenParams {
             })
             .collect::<BTreeMap<_, _>>()
     }
-
-    /// Parses from the connect strings and TLS info on the filesystem
-    pub fn parse_from_connect_strings(
-        bind_p2p: SocketAddr,
-        bind_api: SocketAddr,
-        dir_out_path: &Path,
-        federation_name: String,
-        certs: Vec<String>,
-        password: &str,
-        module_params: ServerModuleGenParamsRegistry,
-    ) -> anyhow::Result<Self> {
-        let mut peers = BTreeMap::<PeerId, PeerServerParams>::new();
-        for (idx, cert) in certs.into_iter().sorted().enumerate() {
-            peers.insert(PeerId::from(idx as u16), parse_peer_params(cert)?);
-        }
-
-        let salt = fs::read_to_string(dir_out_path.join(SALT_FILE))?;
-        let api_auth = get_password_hash(password, &salt)?;
-        let key = get_encryption_key(password, &salt)?;
-        let tls_pk = encrypted_read(&key, dir_out_path.join(TLS_PK))?;
-        let cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT))?;
-
-        let our_params = parse_peer_params(cert_string)?;
-        let our_id = peers
-            .iter()
-            .find(|(_peer, params)| params.cert == our_params.cert)
-            .map(|(peer, _)| *peer)
-            .ok_or_else(|| anyhow::Error::msg("Our id not found"))?;
-
-        Ok(ConfigGenParams::new(
-            ApiAuth(api_auth),
-            bind_p2p,
-            bind_api,
-            rustls::PrivateKey(tls_pk),
-            our_id,
-            peers,
-            federation_name,
-            Some(DEFAULT_CONFIG_DOWNLOAD_LIMIT),
-            module_params,
-        ))
-    }
-
-    /// Generates the parameters necessary for running server config generation
-    // TODO: Move into testing once new config gen UI is written
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        api_auth: ApiAuth,
-        p2p_bind: SocketAddr,
-        api_bind: SocketAddr,
-        our_private_key: rustls::PrivateKey,
-        our_id: PeerId,
-        peers: BTreeMap<PeerId, PeerServerParams>,
-        federation_name: String,
-        download_token_limit: Option<u64>,
-        modules: ServerModuleGenParamsRegistry,
-    ) -> ConfigGenParams {
-        ConfigGenParams {
-            local: ConfigGenParamsLocal {
-                our_id,
-                our_private_key,
-                api_auth,
-                p2p_bind,
-                api_bind,
-                download_token_limit,
-                max_connections: max_connections(),
-            },
-            consensus: ConfigGenParamsConsensus {
-                peers,
-                requested: ConfigGenParamsRequest {
-                    meta: BTreeMap::from([(META_FEDERATION_NAME_KEY.to_owned(), federation_name)]),
-                    modules,
-                },
-            },
-        }
-    }
 }
 
 // TODO: Remove once new config gen UI is written
@@ -795,15 +705,14 @@ pub fn gen_cert_and_key(
 ) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
     let keypair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
     let keypair_ser = keypair.serialize_der();
-    let sanitized_name = name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
-    let mut params = rcgen::CertificateParams::new(vec![sanitized_name.to_owned()]);
+    let mut params = rcgen::CertificateParams::new(vec![dns_sanitize(name)]);
 
     params.key_pair = Some(keypair);
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
     params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
-        .push(rcgen::DnType::CommonName, sanitized_name);
+        .push(rcgen::DnType::CommonName, dns_sanitize(name));
 
     let cert = rcgen::Certificate::from_params(params)?;
 

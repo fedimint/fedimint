@@ -14,7 +14,6 @@ use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::{BitcoinHash, PeerId};
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
-use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tbs::hash::hash_bytes_to_curve;
@@ -273,10 +272,9 @@ where
     pub async fn run_g2(
         &mut self,
         module_id: ModuleInstanceId,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        rng: &mut (impl RngCore + CryptoRng),
+        connections: &MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>> {
-        self.run(module_id, G2Projective::generator(), connections, rng)
+        self.run(module_id, G2Projective::generator(), connections)
             .await
     }
 
@@ -284,84 +282,98 @@ where
     pub async fn run_g1(
         &mut self,
         module_id: ModuleInstanceId,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        rng: &mut (impl RngCore + CryptoRng),
+        connections: &MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G1Projective>>> {
-        self.run(module_id, G1Projective::generator(), connections, rng)
+        self.run(module_id, G1Projective::generator(), connections)
             .await
     }
 
     /// Runs the DKG algorithms with our peers
+    ///
+    /// WARNING: Currently we do not handle any unexpected messages, all peers
+    /// are expected to be cooperative
     pub async fn run<G: DkgGroup>(
         &mut self,
         module_id: ModuleInstanceId,
         group: G,
-        connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        rng: &mut (impl RngCore + CryptoRng),
+        connections: &MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
     ) -> DkgResult<HashMap<T, DkgKeys<G>>>
     where
         DkgMessage<G>: ISupportedDkgMessage,
     {
-        let mut dkgs: HashMap<T, Dkg<G>> = HashMap::new();
-        let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
+        // Use tokio channel to await on `recv` or we might block
+        let (send, mut receive) = tokio::sync::mpsc::channel(10_000);
 
-        // create the dkgs and send our initial messages
-        for (key, threshold) in self.dkg_config.iter() {
-            let our_id = self.our_id;
-            let peers = self.peers.clone();
-            let (dkg, step) = Dkg::new(group, our_id, peers, *threshold, rng);
-            if let DkgStep::Messages(messages) = step {
-                for (peer, msg) in messages {
-                    connections
-                        .send(
-                            &[peer],
-                            module_id,
-                            DkgPeerMsg::DistributedGen((
-                                serde_json::to_string(key).expect("serialization can't fail"),
-                                msg.to_msg(),
-                            )),
-                        )
-                        .await?;
-                }
+        // For every `key` we run DKG in a new tokio task
+        self.dkg_config
+            .clone()
+            .into_iter()
+            .for_each(|(key, threshold)| {
+                let our_id = self.our_id;
+                let peers = self.peers.clone();
+                let connections = connections.clone();
+                let key = serde_json::to_string(&key).expect("serialization can't fail");
+                let send = send.clone();
+
+                tokio::spawn(async move {
+                    let (dkg, step) = Dkg::new(group, our_id, peers, threshold, &mut OsRng);
+                    let result =
+                        Self::run_dkg_key((module_id, key.clone()), connections, dkg, step).await;
+                    send.send((key, result)).await.expect("channel open");
+                });
+            });
+
+        // Collect every key, returning an error if any fails
+        let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
+        while results.len() < self.dkg_config.len() {
+            let (key, result) = receive.recv().await.expect("channel open");
+            let key = serde_json::from_str(&key).expect("serialization can't fail");
+            results.insert(key, result?);
+        }
+        Ok(results)
+    }
+
+    /// Runs the DKG algorithms for a given key and module id
+    async fn run_dkg_key<G: DkgGroup>(
+        key_id: (ModuleInstanceId, String),
+        connections: MuxPeerConnections<(ModuleInstanceId, String), DkgPeerMsg>,
+        mut dkg: Dkg<G>,
+        initial_step: DkgStep<G>,
+    ) -> DkgResult<DkgKeys<G>>
+    where
+        DkgMessage<G>: ISupportedDkgMessage,
+    {
+        if let DkgStep::Messages(messages) = initial_step {
+            for (peer, msg) in messages {
+                let send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
+                connections.send(&[peer], key_id.clone(), send_msg).await?;
             }
-            dkgs.insert(key.clone(), dkg);
         }
 
         // process steps for each key
-        // TODO: fix error handling here; what do we do on a malfunctining peer when
-        // building the federation?
         loop {
-            let (peer, msg) = connections.receive(module_id).await?;
+            let (peer, msg) = connections.receive(key_id.clone()).await?;
 
-            let parsed_msg = match msg {
+            let message = match msg {
                 DkgPeerMsg::DistributedGen(v) => Ok(v),
                 _ => Err(format_err!(
-                    "Module {module_id} wrong message received: {msg:?}"
+                    "Key {key_id:?} wrong message received: {msg:?}"
                 )),
-            };
+            }?;
 
-            let (key_string, message) = parsed_msg?;
-            let key = serde_json::from_str(&key_string)
-                .map_err(|e| format_err!("Failed to parse {}", e))?;
             let message = ISupportedDkgMessage::from_msg(message)?;
-            let step = dkgs.get_mut(&key).expect("exists").step(peer, message)?;
+            let step = dkg.step(peer, message)?;
 
             match step {
                 DkgStep::Messages(messages) => {
                     for (peer, msg) in messages {
-                        let send_msg =
-                            DkgPeerMsg::DistributedGen((key_string.clone(), msg.to_msg()));
-
-                        connections.send(&[peer], module_id, send_msg).await?;
+                        let send_msg = DkgPeerMsg::DistributedGen(msg.to_msg());
+                        connections.send(&[peer], key_id.clone(), send_msg).await?;
                     }
                 }
                 DkgStep::Result(result) => {
-                    results.insert(key, result);
+                    return Ok(result);
                 }
-            }
-
-            if results.len() == dkgs.len() {
-                return Ok(results);
             }
         }
     }
@@ -491,6 +503,7 @@ pub trait PeerHandleOps {
 
     async fn exchange_pubkeys(
         &self,
+        dkg_key: String,
         key: secp256k1::PublicKey,
     ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>>;
 }
@@ -502,8 +515,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
     {
         let mut dkg = DkgRunner::new(v, self.peers.threshold(), &self.our_id, &self.peers);
-        dkg.run_g1(self.module_instance_id, self.connections, &mut OsRng)
-            .await
+        dkg.run_g1(self.module_instance_id, self.connections).await
     }
 
     async fn run_dkg_multi_g2<T>(&self, v: Vec<T>) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>>
@@ -512,12 +524,12 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
     {
         let mut dkg = DkgRunner::multi(v, self.peers.threshold(), &self.our_id, &self.peers);
 
-        dkg.run_g2(self.module_instance_id, self.connections, &mut OsRng)
-            .await
+        dkg.run_g2(self.module_instance_id, self.connections).await
     }
 
     async fn exchange_pubkeys(
         &self,
+        dkg_key: String,
         key: secp256k1::PublicKey,
     ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>> {
         let mut peer_peg_in_keys: BTreeMap<PeerId, secp256k1::PublicKey> = BTreeMap::new();
@@ -525,14 +537,18 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         self.connections
             .send(
                 &self.peers,
-                self.module_instance_id,
+                (self.module_instance_id, dkg_key.clone()),
                 DkgPeerMsg::PublicKey(key),
             )
             .await?;
 
         peer_peg_in_keys.insert(self.our_id, key);
         while peer_peg_in_keys.len() < self.peers.len() {
-            match self.connections.receive(self.module_instance_id).await? {
+            match self
+                .connections
+                .receive((self.module_instance_id, dkg_key.clone()))
+                .await?
+            {
                 (peer, DkgPeerMsg::PublicKey(key)) => {
                     peer_peg_in_keys.insert(peer, key);
                 }

@@ -1,4 +1,5 @@
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
+use fedimint_client::transaction::TxSubmissionError;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::ModuleDatabaseTransaction;
@@ -13,7 +14,7 @@ use crate::{get_funds, DummyClientContext};
 pub enum DummyStateMachine {
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),
-    Done,
+    Done(Amount),
 }
 
 impl State for DummyStateMachine {
@@ -30,7 +31,7 @@ impl State for DummyStateMachine {
                 await_tx_accepted(global_context.clone(), id, txid),
                 move |dbtx, res, _state: Self| match res {
                     // accepted, we are done
-                    Ok(_) => Box::pin(async { DummyStateMachine::Done }),
+                    Ok(_) => Box::pin(async move { DummyStateMachine::Done(amount) }),
                     // tx rejected, we refund ourselves
                     Err(_) => Box::pin(add_funds(amount, dbtx.module_tx())),
                 },
@@ -39,12 +40,12 @@ impl State for DummyStateMachine {
                 await_tx_accepted(global_context.clone(), id, txid),
                 move |dbtx, res, _state: Self| match res {
                     // rejected, we don't get any funds
-                    Ok(_) => Box::pin(async { DummyStateMachine::Done }),
+                    Ok(_) => Box::pin(async move { DummyStateMachine::Done(amount) }),
                     // tx accepted, add to our funds
                     Err(_) => Box::pin(add_funds(amount, dbtx.module_tx())),
                 },
             )],
-            DummyStateMachine::Done => vec![],
+            DummyStateMachine::Done(_) => vec![],
         }
     }
 
@@ -52,7 +53,7 @@ impl State for DummyStateMachine {
         match self {
             DummyStateMachine::Input(_, _, id) => *id,
             DummyStateMachine::Output(_, _, id) => *id,
-            DummyStateMachine::Done => [0; 32],
+            DummyStateMachine::Done(_) => OperationId([0; 32]),
         }
     }
 }
@@ -60,7 +61,7 @@ impl State for DummyStateMachine {
 async fn add_funds(amount: Amount, mut dbtx: ModuleDatabaseTransaction<'_>) -> DummyStateMachine {
     let funds = get_funds(&mut dbtx).await + amount;
     dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
-    DummyStateMachine::Done
+    DummyStateMachine::Done(amount)
 }
 
 // TODO: Boiler-plate, should return OutputOutcome
@@ -68,7 +69,7 @@ async fn await_tx_accepted(
     context: DynGlobalClientContext,
     id: OperationId,
     txid: TransactionId,
-) -> Result<(), ()> {
+) -> Result<(), TxSubmissionError> {
     context.await_tx_accepted(id, txid).await
 }
 

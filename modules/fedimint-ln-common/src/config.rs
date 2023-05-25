@@ -1,3 +1,5 @@
+use bitcoin::Network;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::plugin_types_trait_impl_config;
@@ -7,15 +9,43 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use crate::LightningCommonGen;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParams;
+pub struct LightningGenParams {
+    pub local: LightningGenParamsLocal,
+    pub consensus: LightningGenParamsConsensus,
+}
+
+impl LightningGenParams {
+    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
+        Self {
+            local: LightningGenParamsLocal { bitcoin_rpc },
+            consensus: LightningGenParamsConsensus {
+                network: Network::Regtest,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningGenParamsConsensus {
+    pub network: Network,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningGenParamsLocal {
+    pub bitcoin_rpc: BitcoinRpcConfig,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
-    /// Contains all configuration that will be encrypted such as private key
-    /// material
+    pub local: LightningConfigLocal,
     pub private: LightningConfigPrivate,
-    /// Contains all configuration that needs to be the same for every server
     pub consensus: LightningConfigConsensus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+pub struct LightningConfigLocal {
+    /// Configures which bitcoin RPC to use
+    pub bitcoin_rpc: BitcoinRpcConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
@@ -24,6 +54,7 @@ pub struct LightningConfigConsensus {
     pub threshold_pub_keys: threshold_crypto::PublicKeySet,
     /// Fees charged for LN transactions
     pub fee_consensus: FeeConsensus,
+    pub network: Network,
 }
 
 impl LightningConfigConsensus {
@@ -44,13 +75,17 @@ pub struct LightningConfigPrivate {
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
+    pub network: Network,
 }
 
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     LightningCommonGen,
     LightningGenParams,
+    LightningGenParamsLocal,
+    LightningGenParamsConsensus,
     LightningConfig,
+    LightningConfigLocal,
     LightningConfigPrivate,
     LightningConfigConsensus,
     LightningClientConfig

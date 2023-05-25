@@ -11,16 +11,17 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, KeyPair};
-use fedimint_bitcoind::bitcoincore_rpc::{make_bitcoind_rpc, make_electrum_rpc, make_esplora_rpc};
-use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
-use fedimint_core::admin_client::PeerServerParams;
+use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::WsClientConnectInfo;
-use fedimint_core::bitcoin_rpc::read_bitcoin_backend_from_global_env;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::{ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+use fedimint_core::config::{
+    ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
+};
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -42,8 +43,8 @@ use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
 use fedimint_mint_server::MintGen;
-use fedimint_server::config::api::ConfigGenSettings;
-use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+use fedimint_server::config::api::{ConfigGenParamsLocal, ConfigGenSettings};
+use fedimint_server::config::{gen_cert_and_key, max_connections, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::{ConsensusServer, EpochMessage};
 use fedimint_server::consensus::{
     ConsensusProposal, HbbftConsensusOutcome, TransactionSubmissionError,
@@ -52,7 +53,7 @@ use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
 use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
 use fedimint_server::{consensus, FedimintApiHandler, FedimintServer};
-use fedimint_testing::btc::mock::FakeBitcoinTest;
+use fedimint_testing::btc::mock::FakeBitcoinFactory;
 use fedimint_testing::btc::real::RealBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::ln::mock::{FakeLightningTest, LnRpcAdapter};
@@ -66,14 +67,14 @@ use fedimint_wallet_server::{Wallet, WalletGen};
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
-use gen::FakeWalletGen;
 use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
+use lightning::routing::gossip::RoutingFees;
 use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient};
-use ln_gateway::Gateway;
+use ln_gateway::{Gateway, DEFAULT_FEES};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use tokio::sync::Mutex;
@@ -84,7 +85,6 @@ use url::Url;
 use crate::fixtures::user::{IGatewayClient, ILegacyTestClient};
 use crate::ConsensusItem;
 
-mod gen;
 mod legacy;
 pub mod user;
 
@@ -215,13 +215,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let mut module_gens_params = ServerModuleGenParamsRegistry::default();
-    fedimintd::attach_default_module_gen_params(
-        &mut module_gens_params,
-        msats(MAX_MSAT_DENOMINATION),
-        bitcoin::network::constants::Network::Regtest,
-        10,
-    );
-    let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
     let client_module_inits = ClientModuleGenRegistry::from(vec![
         DynClientModuleGen::from(WalletClientGen),
@@ -231,13 +224,22 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
 
     let decoders = module_decode_stubs();
 
+    let server_module_inits = ServerModuleGenRegistry::from(vec![
+        DynServerModuleGen::from(WalletGen),
+        DynServerModuleGen::from(MintGen),
+        DynServerModuleGen::from(LightningGen),
+    ]);
+
     let fixtures = match env::var("FM_TEST_USE_REAL_DAEMONS") {
         Ok(s) if s == "1" => {
-            let server_module_inits = ServerModuleGenRegistry::from(vec![
-                DynServerModuleGen::from(WalletGen),
-                DynServerModuleGen::from(MintGen),
-                DynServerModuleGen::from(LightningGen),
-            ]);
+            fedimintd::attach_default_module_gen_params(
+                BitcoinRpcConfig::from_env_vars()?,
+                &mut module_gens_params,
+                msats(MAX_MSAT_DENOMINATION),
+                bitcoin::network::constants::Network::Regtest,
+                10,
+            );
+            let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
@@ -260,24 +262,8 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 .expect("Must have bitcoind RPC defined for real tests")
                 .parse()
                 .expect("Invalid bitcoind RPC URL");
-            let bitcoin_rpc =
-                match read_bitcoin_backend_from_global_env().expect("invalid bitcoin rpc url") {
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Bitcoind(url) => {
-                        info!("Running tests with Bitcoin rpc");
-                        make_bitcoind_rpc(&url, task_group.make_handle())
-                            .expect("Could not create Bitcoin rpc")
-                    }
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Electrum(url) => {
-                        info!("Running tests with Electrum rpc");
-                        make_electrum_rpc(&url, task_group.make_handle())
-                            .expect("Could not create Electrum rpc")
-                    }
-                    fedimint_core::bitcoin_rpc::BitcoindRpcBackend::Esplora(url) => {
-                        info!("Running tests with Esplora rpc");
-                        make_esplora_rpc(&url, task_group.make_handle())
-                            .expect("Could not create Esplora rpc")
-                    }
-                };
+            let rpc_config = BitcoinRpcConfig::from_env_vars()?;
+            let bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle())?;
             let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
             let lightning = RealLightningTest::new(&dir, &gateway_node).await;
 
@@ -323,6 +309,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
                 gateway_node,
+                DEFAULT_FEES,
             )
             .await;
 
@@ -338,21 +325,23 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let bitcoin = FakeBitcoinTest::new();
-            let bitcoin_rpc = || bitcoin.clone().into();
-
-            let server_module_inits = ServerModuleGenRegistry::from(vec![
-                DynServerModuleGen::from(FakeWalletGen::new(bitcoin.clone().into())),
-                DynServerModuleGen::from(MintGen),
-                DynServerModuleGen::from(LightningGen),
-            ]);
+            let factory = FakeBitcoinFactory::register_new();
+            fedimintd::attach_default_module_gen_params(
+                factory.config.clone(),
+                &mut module_gens_params,
+                msats(MAX_MSAT_DENOMINATION),
+                bitcoin::network::constants::Network::Regtest,
+                10,
+            );
+            let bitcoin_rpc = || factory.bitcoin.clone().into();
+            let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
 
             let server_config =
                 ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
             let client_config = server_config[&PeerId::from(0)]
                 .consensus
-                .to_config_response(&server_module_inits)
-                .client_config;
+                .to_client_config(&server_module_inits)
+                .unwrap();
 
             let lightning = FakeLightningTest::new();
             let ln_arc = Arc::new(RwLock::new(lightning.clone()));
@@ -397,16 +386,17 @@ pub async fn fixtures(num_peers: u16, gateway_node: GatewayNode) -> anyhow::Resu
                 lightning.gateway_node_pub_key,
                 base_port + (2 * num_peers) + 1,
                 gateway_node.clone(),
+                DEFAULT_FEES,
             )
             .await;
 
             // Always be prepared to fund bitcoin wallet
-            bitcoin.prepare_funding_wallet().await;
+            factory.bitcoin.prepare_funding_wallet().await;
 
             Fixtures {
                 fed,
                 user,
-                bitcoin: Box::new(bitcoin),
+                bitcoin: Box::new(factory.bitcoin),
                 gateway,
                 lightning: Box::new(lightning),
                 task_group,
@@ -463,17 +453,25 @@ pub fn gen_local(
             let bind_p2p = parse_host_port(peer_params[peer].clone().p2p_url)?;
             let bind_api = parse_host_port(peer_params[peer].clone().api_url)?;
 
-            let params: ConfigGenParams = ConfigGenParams::new(
-                ApiAuth("dummy_password".to_string()),
-                bind_p2p.parse().context("when parsing bind_p2p")?,
-                bind_api.parse().context("when parsing bind_api")?,
-                keys[peer].1.clone(),
-                *peer,
-                peer_params.clone(),
-                federation_name.to_string(),
-                Some(1),
-                modules.clone(),
-            );
+            let params: ConfigGenParams = ConfigGenParams {
+                local: ConfigGenParamsLocal {
+                    our_id: *peer,
+                    our_private_key: keys[peer].1.clone(),
+                    api_auth: ApiAuth("dummy_password".to_string()),
+                    p2p_bind: bind_p2p.parse().context("when parsing bind_p2p")?,
+                    api_bind: bind_api.parse().context("when parsing bind_api")?,
+                    download_token_limit: Some(1),
+                    max_connections: max_connections(),
+                },
+                consensus: ConfigGenParamsConsensus {
+                    peers: peer_params.clone(),
+                    meta: BTreeMap::from([(
+                        META_FEDERATION_NAME_KEY.to_owned(),
+                        federation_name.to_string(),
+                    )]),
+                    modules: modules.clone(),
+                },
+            };
             Ok((*peer, params))
         })
         .collect::<anyhow::Result<HashMap<_, _>>>()
@@ -557,7 +555,7 @@ async fn distributed_config(
 
     Ok((
         configs.into_iter().collect(),
-        config.consensus.to_config_response(&registry).client_config,
+        config.consensus.to_client_config(&registry).unwrap(),
     ))
 }
 
@@ -580,9 +578,11 @@ pub struct GatewayTest {
     pub user: Box<dyn ILegacyTestClient>,
     pub client: Box<dyn IGatewayClient>,
     pub node: GatewayNode,
+    pub fees: RoutingFees,
 }
 
 impl GatewayTest {
+    #[allow(clippy::too_many_arguments)]
     async fn new(
         adapter: LnRpcAdapter,
         client_config: ClientConfig,
@@ -591,6 +591,7 @@ impl GatewayTest {
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
         node: GatewayNode,
+        fees: RoutingFees,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -606,6 +607,7 @@ impl GatewayTest {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
             valid_until: fedimint_core::time::now(),
+            fees,
         };
 
         let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();
@@ -619,6 +621,7 @@ impl GatewayTest {
             timelock_delta: 10,
             api: announce_addr.clone(),
             node_pub_key,
+            fees,
         };
 
         // Create federation client builder for the gateway
@@ -635,6 +638,7 @@ impl GatewayTest {
             decoders.clone(),
             module_gens.clone(),
             TaskGroup::new(),
+            fees,
         )
         .await
         .unwrap();
@@ -670,6 +674,7 @@ impl GatewayTest {
             user,
             client,
             node,
+            fees,
         }
     }
 }
@@ -1165,7 +1170,7 @@ impl FederationTest {
         let mut handles = vec![];
         for server in &self.servers {
             let s = server.lock().await;
-            handles.push(FedimintServer::spawn_consensus_api(&s.fedimint).await);
+            handles.push(FedimintServer::spawn_consensus_api(&s.fedimint, true).await);
         }
         handles
     }

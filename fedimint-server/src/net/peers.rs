@@ -210,39 +210,31 @@ where
         task_group: &mut TaskGroup,
     ) -> (Self, PeerStatusChannels) {
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
+        let mut connection_senders = HashMap::new();
+        let mut status_query_senders = HashMap::new();
+        let mut connections = HashMap::new();
 
-        let (connection_senders, (status_query_senders, connections)): (
-            _,
-            (HashMap<PeerId, PeerStatusChannelSender>, _),
-        ) = cfg
-            .peers
-            .iter()
-            .filter(|(&peer, _)| peer != cfg.identity)
-            .map(|(&peer, peer_address)| {
-                let (connection_sender, connection_receiver) =
-                    tokio::sync::mpsc::channel::<AnyFramedTransport<PeerMessage<T>>>(4);
-                let (status_query_sender, status_query_receiver) =
-                    tokio::sync::mpsc::channel::<PeerStatusQuery>(1); // better block the sender than flood the receiver
-                (
-                    (peer, connection_sender),
-                    (
-                        (peer, status_query_sender),
-                        (
-                            peer,
-                            PeerConnection::new(
-                                peer,
-                                peer_address.clone(),
-                                delay_calculator,
-                                shared_connector.clone(),
-                                connection_receiver,
-                                status_query_receiver,
-                                task_group,
-                            ),
-                        ),
-                    ),
-                )
-            })
-            .unzip();
+        for (peer, peer_address) in cfg.peers.iter().filter(|(&peer, _)| peer != cfg.identity) {
+            let (connection_sender, connection_receiver) =
+                tokio::sync::mpsc::channel::<AnyFramedTransport<PeerMessage<T>>>(4);
+            let (status_query_sender, status_query_receiver) =
+                tokio::sync::mpsc::channel::<PeerStatusQuery>(1); // better block the sender than flood the receiver
+
+            let connection = PeerConnection::new(
+                *peer,
+                peer_address.clone(),
+                delay_calculator,
+                shared_connector.clone(),
+                connection_receiver,
+                status_query_receiver,
+                task_group,
+            )
+            .await;
+
+            connection_senders.insert(*peer, connection_sender);
+            status_query_senders.insert(*peer, status_query_sender);
+            connections.insert(*peer, connection);
+        }
         task_group
             .spawn("listen task", move |handle| {
                 Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
@@ -683,7 +675,7 @@ impl<M> PeerConnection<M>
 where
     M: Debug + Clone + Send + Sync + 'static,
 {
-    fn new(
+    async fn new(
         id: PeerId,
         peer_address: Url,
         delay_calculator: DelayCalculator,
@@ -695,9 +687,8 @@ where
         let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
 
-        futures::executor::block_on(task_group.spawn(
-            format!("io-thread-peer-{id}"),
-            move |handle| async move {
+        task_group
+            .spawn(format!("io-thread-peer-{id}"), move |handle| async move {
                 Self::run_io_thread(
                     incoming_sender,
                     outgoing_receiver,
@@ -710,8 +701,8 @@ where
                     &handle,
                 )
                 .await
-            },
-        ));
+            })
+            .await;
 
         PeerConnection {
             outgoing: outgoing_sender,

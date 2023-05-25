@@ -1,12 +1,11 @@
 use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::os::unix::ffi::OsStrExt;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
 use fedimint_core::api::{
-    ConsensusContribution, DynFederationApi, GlobalFederationApi, WsFederationApi,
+    ConsensusContribution, DynGlobalApi, GlobalFederationApi, WsFederationApi,
 };
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::ServerModuleGenRegistry;
@@ -89,7 +88,7 @@ pub struct ConsensusServer {
     /// Runs the HBBFT consensus algorithm
     pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     /// Used to make API calls to our peers
-    pub api: DynFederationApi,
+    pub api: DynGlobalApi,
     /// The list of all other peers
     pub other_peers: BTreeSet<PeerId>,
     /// If `Some` then we restarted and look for the epoch to rejoin at
@@ -140,12 +139,6 @@ impl ConsensusServer {
     ) -> anyhow::Result<Self> {
         // Apply database migrations and build `ServerModuleRegistry`
         let mut modules = BTreeMap::new();
-        let env = std::env::vars_os()
-            // We currently have no way to enforce that modules are not reading
-            // global environment variables manually, but to set a good example
-            // and expectations we filter them here and pass explicitly.
-            .filter(|(var, _val)| var.as_os_str().as_bytes().starts_with(b"FM_"))
-            .collect();
 
         apply_migrations(
             &db,
@@ -173,12 +166,7 @@ impl ConsensusServer {
             .await?;
 
             let module = init
-                .init(
-                    cfg.get_module_config(*module_id)?,
-                    isolated_db,
-                    &env,
-                    task_group,
-                )
+                .init(cfg.get_module_config(*module_id)?, isolated_db, task_group)
                 .await?;
             modules.insert(*module_id, (kind, module));
         }
@@ -218,7 +206,7 @@ impl ConsensusServer {
 
         // Build API that can handle requests
         let (api_sender, api_receiver) = mpsc::channel(TRANSACTION_BUFFER_SIZE);
-        let client_cfg = cfg.consensus.to_config_response(&module_inits);
+        let client_cfg = cfg.consensus.to_client_config(&module_inits)?;
         let modules = ModuleRegistry::from(modules);
 
         let latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>> = Default::default();
@@ -265,12 +253,7 @@ impl ConsensusServer {
 
     /// Loop `run_conensus_epoch` until shut down
     pub async fn run_consensus(mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        let our_hash = self
-            .cfg
-            .consensus
-            .to_config_response(&self.consensus.module_inits)
-            .client_config
-            .consensus_hash();
+        let our_hash = self.cfg.consensus.consensus_hash();
 
         // Confirm our hash matches with peers
         loop {
@@ -444,9 +427,11 @@ impl ConsensusServer {
     ) -> anyhow::Result<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
         if self.cfg.local.p2p_endpoints.len() == 1 {
-            tokio::select! {
-              _ = Pin::new(&mut self.api_receiver).peek() => (),
-              () = self.consensus.await_consensus_proposal() => (),
+            if self.hbbft.next_epoch() > 0 {
+                tokio::select! {
+                    _ = Pin::new(&mut self.api_receiver).peek() => (),
+                    () = self.consensus.await_consensus_proposal() => (),
+                }
             }
             let proposal = self.process_events_then_propose(override_proposal).await;
             let epoch = self.hbbft.epoch();

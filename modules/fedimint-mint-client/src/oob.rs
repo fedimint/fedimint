@@ -5,13 +5,13 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, State
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{TieredMulti, TransactionId};
+use fedimint_core::{task, TieredMulti, TransactionId};
 use fedimint_mint_common::MintInput;
 
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
-use crate::{MintClientContext, SpendableNote};
+use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
 #[aquamarine::aquamarine]
 /// State machine managing e-cash that has been taken out of the wallet for
@@ -152,7 +152,7 @@ async fn transition_user_cancel(
 
 async fn await_timeout_cancel(deadline: SystemTime) {
     if let Ok(time_until_deadline) = deadline.duration_since(fedimint_core::time::now()) {
-        tokio::time::sleep(time_until_deadline).await;
+        task::sleep(time_until_deadline).await;
     }
 }
 
@@ -194,7 +194,7 @@ async fn try_cancel_oob_spend(
         input: MintInput(notes),
         keys,
         state_machines: Arc::new(move |txid, input_idx| {
-            vec![MintInputStateMachine {
+            vec![MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
                     operation_id,
                     txid,
@@ -203,9 +203,9 @@ async fn try_cancel_oob_spend(
                 state: MintInputStates::Created(MintInputStateCreated {
                     notes: spendable_notes.clone(),
                 }),
-            }]
+            })]
         }),
     };
 
-    global_context.claim_input(dbtx, input).await
+    global_context.claim_input(dbtx, input).await.0
 }

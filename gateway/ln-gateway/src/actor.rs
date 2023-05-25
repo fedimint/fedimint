@@ -1,5 +1,5 @@
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bitcoin::{Address, Transaction};
@@ -8,12 +8,14 @@ use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_client_legacy::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_client_legacy::modules::ln::route_hints::RouteHint;
 use fedimint_client_legacy::{GatewayClient, PaymentParameters};
-use fedimint_core::task::{RwLock, TaskGroup};
+use fedimint_core::task::{self, RwLock, TaskGroup};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, TransactionId};
+use fedimint_ln_common::LightningGateway;
 use futures::stream::{BoxStream, StreamExt};
 use rand::{CryptoRng, RngCore};
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::Notify;
 use tonic::Status;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -38,6 +40,7 @@ pub struct GatewayActor {
     task_group: TaskGroup,
     gw_rpc: GatewayRpcSender,
     pub sender: Sender<Arc<AtomicBool>>,
+    registration: Arc<Mutex<LightningGateway>>,
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +152,14 @@ impl GatewayActor {
         gw_rpc: GatewayRpcSender,
     ) -> Result<Self> {
         let register_client = client.clone();
+        let registration = Arc::new(Mutex::new(
+            register_client
+                .config()
+                .to_gateway_registration_info(route_hints.clone(), GW_ANNOUNCEMENT_TTL),
+        ));
+        let notify = Arc::new(Notify::new());
+        let notfiy_sent = notify.clone();
+        let registration_sent = registration.clone();
         task_group
             .spawn("Register with federation", |_| async move {
                 loop {
@@ -157,14 +168,16 @@ impl GatewayActor {
                         String::from("Register With Federation"),
                         #[allow(clippy::unit_arg)]
                         || async {
-                            let gateway_registration =
+                            let registration =
                                 register_client.config().to_gateway_registration_info(
                                     route_hints.clone(),
                                     GW_ANNOUNCEMENT_TTL,
                                 );
-                            Ok(register_client
-                                .register_with_federation(gateway_registration.clone())
-                                .await?)
+                            register_client
+                                .register_with_federation(registration.clone())
+                                .await?;
+                            *registration_sent.lock().expect("poisoned") = registration;
+                            Ok(())
                         },
                         Duration::from_secs(1),
                         5,
@@ -173,16 +186,19 @@ impl GatewayActor {
                     {
                         Ok(_) => {
                             info!("Connected with federation");
-                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
+                            notfiy_sent.notify_one();
+                            task::sleep(GW_ANNOUNCEMENT_TTL / 2).await;
                         }
                         Err(e) => {
                             warn!("Failed to connect with federation: {}", e);
-                            tokio::time::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
+                            task::sleep(GW_ANNOUNCEMENT_TTL / 4).await;
                         }
                     }
                 }
             })
             .await;
+        // Block until we have registered to return
+        notify.notified().await;
 
         // Create a channel that will be used to shutdown the HTLC thread
         let (sender, receiver) = mpsc::channel::<Arc<AtomicBool>>(100);
@@ -193,6 +209,7 @@ impl GatewayActor {
             task_group,
             gw_rpc,
             sender,
+            registration,
         };
 
         actor.route_htlcs(receiver).await?;
@@ -642,7 +659,7 @@ impl GatewayActor {
         let cfg = self.client.config();
         Ok(FederationInfo {
             federation_id: cfg.client_config.federation_id,
-            mint_pubkey: cfg.redeem_key.x_only_public_key().0,
+            registration: self.registration.lock().expect("poisoned").clone(),
         })
     }
 }

@@ -22,6 +22,7 @@ use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 use thiserror::Error;
+use tokio::sync::MutexGuard;
 use tracing::{debug, error, trace, warn};
 
 use crate::mint::db::{NextECashNoteIndexKey, NotesPerDenominationKey, PendingNotesKey};
@@ -31,7 +32,7 @@ use crate::modules::mint::{
 };
 use crate::transaction::legacy::{Input, Output, Transaction};
 use crate::utils::ClientContext;
-use crate::{ChildId, DerivableSecret, FuturesUnordered};
+use crate::{ChildId, ConcurrencyLock, DerivableSecret, FuturesUnordered};
 
 pub mod backup;
 
@@ -520,7 +521,11 @@ impl MintClient {
             .await
     }
 
-    pub async fn fetch_all_notes(&self) -> Vec<Result<OutPoint>> {
+    pub async fn fetch_all_notes(
+        &self,
+        // this operation should be always protected by a concurrency lock
+        _guard: &mut MutexGuard<'_, ConcurrencyLock>,
+    ) -> Vec<Result<OutPoint>> {
         let active_issuances = &self.list_active_issuances().await;
         let mut results = vec![];
 

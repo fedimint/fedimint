@@ -11,18 +11,20 @@ use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::core::{IntoDynInstance, KeyPair, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, KeyPair};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
+use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
     fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
-    DummyOutputOutcome,
+    DummyOutputOutcome, KIND,
 };
+use futures::{pin_mut, StreamExt};
 use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
 use threshold_crypto::{PublicKey, Signature};
@@ -38,7 +40,7 @@ mod states;
 #[apply(async_trait_maybe_send!)]
 pub trait DummyClientExt {
     /// Request the federation prints money for us
-    async fn print_money(&self, amount: Amount) -> anyhow::Result<()>;
+    async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)>;
 
     /// Send money to another user
     async fn send_money(&self, account: XOnlyPublicKey, amount: Amount)
@@ -50,9 +52,6 @@ pub trait DummyClientExt {
     /// Request the federation signs a message for us
     async fn fed_signature(&self, message: &str) -> anyhow::Result<Signature>;
 
-    /// The amount of funds we have
-    async fn total_funds(&self) -> Amount;
-
     /// Return our account
     fn account(&self) -> XOnlyPublicKey;
 
@@ -62,9 +61,9 @@ pub trait DummyClientExt {
 
 #[apply(async_trait_maybe_send!)]
 impl DummyClientExt for Client {
-    async fn print_money(&self, amount: Amount) -> anyhow::Result<()> {
-        let (id, _) = dummy_client(self);
-        let op_id = rand::random();
+    async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
+        let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        let op_id = OperationId(rand::random());
 
         // TODO: Building a tx could be easier
         // Create input using the fed's account
@@ -79,13 +78,13 @@ impl DummyClientExt for Client {
 
         // Build and send tx to the fed
         // Will output to our primary client module
-        let tx = TransactionBuilder::new().with_input(input.into_dyn(id));
-        let outpoint = |txid| OutPoint { txid, out_idx: 0 };
+        let tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
+        let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let txid = self
-            .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .await?;
 
-        self.receive_money(outpoint(txid)).await
+        Ok((op_id, OutPoint { txid, out_idx: 0 }))
     }
 
     async fn send_money(
@@ -93,14 +92,14 @@ impl DummyClientExt for Client {
         account: XOnlyPublicKey,
         amount: Amount,
     ) -> anyhow::Result<OutPoint> {
-        let (id, dummy) = dummy_client(self);
-        let mut dbtx = self.db().begin_transaction().await;
-        let op_id = rand::random();
+        let (dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
+        let op_id = OperationId(rand::random());
 
         // TODO: Building a tx could be easier
         // Create input using our own account
         let input = dummy
-            .create_sufficient_input(&mut dbtx.with_module_prefix(id), op_id, amount)
+            .create_sufficient_input(&mut dbtx.get_isolated(), op_id, amount)
             .await?;
         dbtx.commit_tx().await;
 
@@ -112,26 +111,22 @@ impl DummyClientExt for Client {
 
         // Build and send tx to the fed
         let tx = TransactionBuilder::new()
-            .with_input(input.into_dyn(id))
-            .with_output(output.into_dyn(id));
-        let outpoint = |txid| OutPoint { txid, out_idx: 0 };
+            .with_input(input.into_dyn(instance.id))
+            .with_output(output.into_dyn(instance.id));
+        let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let txid = self
             .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
             .await?;
 
         let tx_subscription = self.transaction_updates(op_id).await;
-        // TODO: Return actual API error if any
-        tx_subscription
-            .await_tx_accepted(txid)
-            .await
-            .expect("Tx failed");
+        tx_subscription.await_tx_accepted(txid).await?;
 
-        Ok(outpoint(txid))
+        Ok(OutPoint { txid, out_idx: 0 })
     }
 
     async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()> {
-        let (id, dummy) = dummy_client(self);
-
+        let (dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        let mut dbtx = instance.db.begin_transaction().await;
         let DummyOutputOutcome(amount, account) = self
             .api()
             .await_output_outcome(outpoint, Duration::from_secs(10), &dummy.decoder())
@@ -141,58 +136,35 @@ impl DummyClientExt for Client {
             return Err(format_err!("Wrong account id"));
         }
 
-        let mod_db = self.db().new_isolated(id);
-        let mut dbtx = mod_db.begin_transaction().await;
-        let funds = self.total_funds().await + amount;
+        let funds = self.get_balance().await + amount;
         dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
         dbtx.commit_tx().await;
         Ok(())
     }
 
     async fn fed_signature(&self, message: &str) -> anyhow::Result<Signature> {
-        let (id, _) = dummy_client(self);
-        let api = self.api().with_module(id);
-        api.sign_message(message.to_string()).await?;
-        let sig = api.wait_signed(message.to_string()).await?;
+        let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        instance.api.sign_message(message.to_string()).await?;
+        let sig = instance.api.wait_signed(message.to_string()).await?;
         Ok(sig.0)
     }
 
-    async fn total_funds(&self) -> Amount {
-        // TODO: Not very nice to get to the module db
-        let (id, _) = dummy_client(self);
-        let mut dbtx = self.db().begin_transaction().await;
-        let mut mod_dbtx = dbtx.with_module_prefix(id);
-        get_funds(&mut mod_dbtx).await
-    }
-
     fn account(&self) -> XOnlyPublicKey {
-        let (_, client) = dummy_client(self);
-        client.key.x_only_public_key().0
+        let (dummy, _instance) = self.get_first_module::<DummyClientModule>(&KIND);
+        dummy.key.x_only_public_key().0
     }
 
     fn fed_public_key(&self) -> PublicKey {
-        let (_, dummy) = dummy_client(self);
+        let (dummy, _instance) = self.get_first_module::<DummyClientModule>(&KIND);
         dummy.cfg.fed_public_key
     }
-}
-
-// TODO: Boiler-plate
-fn dummy_client(client: &Client) -> (ModuleInstanceId, &DummyClientModule) {
-    let id = client
-        .get_first_instance(&DummyCommonGen::KIND)
-        .expect("No mint module attached to client");
-
-    let client = client
-        .get_module_client::<DummyClientModule>(id)
-        .expect("Instance ID exists, we just fetched it");
-
-    (id, client)
 }
 
 #[derive(Debug)]
 pub struct DummyClientModule {
     cfg: DummyClientConfig,
     key: KeyPair,
+    notifier: ModuleNotifier<DynGlobalClientContext, DummyStateMachine>,
 }
 
 /// Data needed by the state machine
@@ -276,6 +248,45 @@ impl PrimaryClientModule for DummyClientModule {
             }),
         }
     }
+
+    async fn await_primary_module_output(
+        &self,
+        operation_id: OperationId,
+        _out_point: OutPoint,
+    ) -> anyhow::Result<Amount> {
+        let stream = self
+            .notifier
+            .subscribe(operation_id)
+            .await
+            .filter_map(|state| async move {
+                let DummyStateMachine::Done(amount) = state else { return None };
+                Some(Ok(amount))
+            });
+
+        pin_mut!(stream);
+
+        stream.next_or_pending().await
+    }
+
+    async fn get_balance(&self, dbtc: &mut ModuleDatabaseTransaction<'_>) -> Amount {
+        get_funds(dbtc).await
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        Box::pin(
+            self.notifier
+                .subscribe_all_operations()
+                .await
+                .filter_map(|state| async move {
+                    match state {
+                        // Since Done also happens for inputs we will fire too often, but that's ok
+                        DummyStateMachine::Done(_) => Some(()),
+                        DummyStateMachine::Input { .. } => Some(()),
+                        _ => None,
+                    }
+                }),
+        )
+    }
 }
 
 async fn get_funds(dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
@@ -316,11 +327,12 @@ impl ClientModuleGen for DummyClientGen {
         cfg: Self::Config,
         _db: Database,
         module_root_secret: DerivableSecret,
-        _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
     ) -> anyhow::Result<Self::Module> {
         Ok(DummyClientModule {
             cfg,
             key: module_root_secret.to_secp_key(&Secp256k1::new()),
+            notifier,
         })
     }
 }

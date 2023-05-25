@@ -11,13 +11,14 @@ use std::{cmp, result};
 use anyhow::{anyhow, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
+use bitcoin::secp256k1;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{sleep, MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
@@ -38,14 +39,17 @@ use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace};
 use url::Url;
 
+use crate::backup::ClientBackupSnapshot;
+use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::ApiRequestErased;
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
-    VerifiableResponse,
+    UnionResponsesSingle, VerifiableResponse,
 };
+use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction};
 
 pub type MemberResult<T> = result::Result<T, MemberError>;
@@ -126,6 +130,7 @@ pub enum OutputOutcomeError {
     Timeout(Duration),
 }
 
+/// An API (module or global) that can query a federation
 #[apply(async_trait_maybe_send!)]
 pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     /// List of all federation members for the purpose of iterating each member
@@ -137,7 +142,7 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     /// API call to the federation would be inconvenient.
     fn all_members(&self) -> &BTreeSet<PeerId>;
 
-    fn with_module(&self, id: ModuleInstanceId) -> DynFederationApi;
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi;
 
     /// Make request to a specific federation member by `peer_id`
     async fn request_raw(
@@ -219,7 +224,7 @@ pub trait FederationApiExt: IFederationApi {
                                     async move {
                                         // Note: we need to sleep inside the retrying future,
                                         // so that `futures` is being polled continuously
-                                        sleep(Duration::from_millis(delay_ms)).await;
+                                        task::sleep(Duration::from_millis(delay_ms)).await;
                                         PeerResponse {
                                             peer: retry_peer,
                                             result: self
@@ -307,16 +312,29 @@ pub trait FederationApiExt: IFederationApi {
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> FederationApiExt for T where T: IFederationApi {}
 
+/// Trait marker for the module (non-global) endpoints
+pub trait IModuleFederationApi: IFederationApi {}
+
 dyn_newtype_define! {
-    pub DynFederationApi(Arc<IFederationApi>)
+    #[derive(Clone)]
+    pub DynModuleApi(Arc<IModuleFederationApi>)
 }
 
-impl AsRef<dyn IFederationApi + 'static> for DynFederationApi {
-    fn as_ref(&self) -> &(dyn IFederationApi + 'static) {
+/// Trait marker for the global (non-module) endpoints
+pub trait IGlobalFederationApi: IFederationApi {}
+
+dyn_newtype_define! {
+    #[derive(Clone)]
+    pub DynGlobalApi(Arc<IGlobalFederationApi>)
+}
+
+impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
+    fn as_ref(&self) -> &(dyn IGlobalFederationApi + 'static) {
         self.0.as_ref()
     }
 }
 
+/// The API for the global (non-module) endpoints
 #[apply(async_trait_maybe_send!)]
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
@@ -360,7 +378,15 @@ pub trait GlobalFederationApi {
 
     /// Fetches the server consensus hash if enough peers agree on it
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
+
+    async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()>;
+
+    async fn download_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> FederationResult<Vec<ClientBackupSnapshot>>;
 }
+
 fn map_tx_outcome_outpoint<R>(
     tx_outcome: TransactionStatus,
     out_point: OutPoint,
@@ -400,7 +426,7 @@ where
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> GlobalFederationApi for T
 where
-    T: IFederationApi + MaybeSend + MaybeSync + 'static,
+    T: IGlobalFederationApi + MaybeSend + MaybeSync + 'static,
 {
     /// Submit a transaction for inclusion
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
@@ -528,23 +554,49 @@ where
             false,
             move |config: &ClientConfigResponse| {
                 let hash = config.client_config.consensus_hash();
-
-                if let Some(sig) = &config.signature {
-                    id.0.verify(sig, hash)
-                } else {
-                    false
-                }
+                id.0.verify(&config.signature.0, hash)
             },
         );
 
-        self.request_with_strategy(qs, "config".to_owned(), ApiRequestErased::new(info.clone()))
-            .await
-            .map(|cfg: ClientConfigResponse| cfg.client_config)
+        self.request_with_strategy(
+            qs,
+            "config".to_owned(),
+            ApiRequestErased::new(info.to_string()),
+        )
+        .await
+        .map(|cfg: ClientConfigResponse| cfg.client_config)
     }
 
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
         self.request_current_consensus("config_hash".to_owned(), ApiRequestErased::default())
             .await
+    }
+
+    async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
+        self.request_with_strategy(
+            CurrentConsensus::new(self.all_members().threshold()),
+            "backup".to_owned(),
+            ApiRequestErased::new(request),
+        )
+        .await
+    }
+
+    async fn download_backup(
+        &self,
+        id: &secp256k1::XOnlyPublicKey,
+    ) -> FederationResult<Vec<ClientBackupSnapshot>> {
+        Ok(self
+            .request_with_strategy(
+                UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(
+                    self.all_members().threshold(),
+                ),
+                "recover".to_owned(),
+                ApiRequestErased::new(id),
+            )
+            .await?
+            .into_iter()
+            .flatten()
+            .collect())
     }
 }
 
@@ -661,15 +713,20 @@ impl<'de> Deserialize<'de> for WsClientConnectInfo {
     }
 }
 
+impl<C: JsonRpcClient + Debug + 'static> IGlobalFederationApi for WsFederationApi<C> {}
+
+impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
+
+/// Implementation of API calls over websockets
+///
+/// Can function as either the global or module API
 #[apply(async_trait_maybe_send!)]
-impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync + 'static> IFederationApi
-    for WsFederationApi<C>
-{
+impl<C: JsonRpcClient + Debug + 'static> IFederationApi for WsFederationApi<C> {
     fn all_members(&self) -> &BTreeSet<PeerId> {
         &self.peers
     }
 
-    fn with_module(&self, id: ModuleInstanceId) -> DynFederationApi {
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         WsFederationApi {
             peers: self.peers.clone(),
             members: self.members.clone(),
@@ -699,7 +756,7 @@ impl<C: JsonRpcClient + Debug + MaybeSend + MaybeSync + 'static> IFederationApi
 }
 
 #[apply(async_trait_maybe_send!)]
-pub trait JsonRpcClient: ClientT + Sized {
+pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
     async fn connect(url: &Url) -> result::Result<Self, JsonRpcError>;
     fn is_connected(&self) -> bool;
 }
@@ -863,7 +920,7 @@ fn url_to_string_with_default_port(url: &Url) -> String {
 impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 /// The status of a server, including how it views its peers
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConsensusStatus {
     /// The last contribution that this server has made to the consensus, it's
     /// equivalent to [`PeerConsensusStatus::last_contribution`] and
@@ -903,6 +960,32 @@ pub struct ConsensusContribution {
     pub value: u64,
     /// When the contribution was received
     pub time: SystemTime,
+}
+
+/// The state of the server returned via APIs
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
+pub enum ServerStatus {
+    /// Server needs a password to read configs
+    #[default]
+    AwaitingPassword,
+    /// Waiting for peers to share the config gen params
+    SharingConfigGenParams,
+    /// Ready to run config gen once all peers are ready
+    ReadyForConfigGen,
+    /// We failed running config gen
+    ConfigGenFailed,
+    /// Config is generated, peers should verify the config
+    VerifyingConfigs,
+    /// Restarted from a planned upgrade (requires action to start)
+    Upgrading,
+    /// Consensus is running
+    ConsensusRunning,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct StatusResponse {
+    pub server: ServerStatus,
+    pub consensus: Option<ConsensusStatus>,
 }
 
 #[cfg(test)]
@@ -1055,7 +1138,7 @@ mod tests {
                 error!(target: LOG_NET_API, "connect");
                 let id = CONNECTION_COUNT.fetch_add(1, Ordering::SeqCst);
                 // slow down
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                task::sleep(Duration::from_millis(100)).await;
                 if FAIL.lock().unwrap().contains(&id) {
                     Err(jsonrpsee_core::Error::Transport(anyhow!(
                         "intentional error"

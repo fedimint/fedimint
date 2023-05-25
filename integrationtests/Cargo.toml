@@ -36,6 +36,7 @@ fedimint-sqlite = { path = "../fedimint-sqlite" }
 fedimint-testing = { path = "../fedimint-testing" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
+fedimint-wallet-tests = { path = "../modules/fedimint-wallet-tests" }
 fedimintd = { path = "../fedimintd" }
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 rand = "0.8"

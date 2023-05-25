@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::ops::Sub;
 
@@ -10,7 +9,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
@@ -25,8 +23,8 @@ use fedimint_core::{
 };
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
-    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
-    MintGenParams,
+    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal,
+    MintConfigPrivate, MintGenParams,
 };
 use fedimint_mint_common::db::{
     DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
@@ -64,6 +62,7 @@ impl ExtendsCommonModuleGen for MintGen {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleGen for MintGen {
+    type Params = MintGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -74,7 +73,6 @@ impl ServerModuleGen for MintGen {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(Mint::new(cfg.to_typed()?).into())
@@ -85,11 +83,10 @@ impl ServerModuleGen for MintGen {
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = params
-            .to_typed::<MintGenParams>()
-            .expect("Invalid mint params");
+        let params = self.parse_params(params).unwrap();
 
         let tbs_keys = params
+            .consensus
             .mint_amounts
             .iter()
             .map(|&amount| {
@@ -102,11 +99,13 @@ impl ServerModuleGen for MintGen {
             .iter()
             .map(|&peer| {
                 let config = MintConfig {
+                    local: MintConfigLocal,
                     consensus: MintConfigConsensus {
                         peer_tbs_pks: peers
                             .iter()
                             .map(|&key_peer| {
                                 let keys = params
+                                    .consensus
                                     .mint_amounts
                                     .iter()
                                     .map(|amount| {
@@ -121,6 +120,7 @@ impl ServerModuleGen for MintGen {
                     },
                     private: MintConfigPrivate {
                         tbs_sks: params
+                            .consensus
                             .mint_amounts
                             .iter()
                             .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
@@ -142,11 +142,11 @@ impl ServerModuleGen for MintGen {
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
-        let params = params
-            .to_typed::<MintGenParams>()
-            .expect("Invalid mint gen params");
+        let params = self.parse_params(params).unwrap();
 
-        let g2 = peers.run_dkg_multi_g2(params.mint_amounts.to_vec()).await?;
+        let g2 = peers
+            .run_dkg_multi_g2(params.consensus.mint_amounts.to_vec())
+            .await?;
 
         let amounts_keys = g2
             .into_iter()
@@ -154,6 +154,7 @@ impl ServerModuleGen for MintGen {
             .collect::<HashMap<_, _>>();
 
         let server = MintConfig {
+            local: MintConfigLocal,
             private: MintConfigPrivate {
                 tbs_sks: amounts_keys
                     .iter()
@@ -402,7 +403,6 @@ impl ServerModule for Mint {
 
     async fn validate_input<'a, 'b>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         verification_cache: &Self::VerificationCache,
         input: &'a MintInput,
@@ -437,14 +437,11 @@ impl ServerModule for Mint {
 
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b MintInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let meta = self
-            .validate_input(interconnect, dbtx, cache, input)
-            .await?;
+        let meta = self.validate_input(dbtx, cache, input).await?;
 
         for (amount, note) in input.iter_items() {
             let key = NonceKey(note.0);
@@ -987,9 +984,10 @@ mod test {
     use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, BlindingKey, Message};
 
+    use crate::common::config::MintGenParamsConsensus;
     use crate::{
-        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigPrivate,
-        MintGen, MintGenParams, PeerErrorType,
+        BlindNonce, CombineError, Mint, MintConfig, MintConfigConsensus, MintConfigLocal,
+        MintConfigPrivate, MintGen, MintGenParams, PeerErrorType,
     };
 
     const THRESHOLD: usize = 1;
@@ -1000,7 +998,10 @@ mod test {
         let mint_cfg = MintGen.trusted_dealer_gen(
             &peers,
             &ConfigGenModuleParams::from_typed(MintGenParams {
-                mint_amounts: vec![Amount::from_sats(1)],
+                local: Default::default(),
+                consensus: MintGenParamsConsensus {
+                    mint_amounts: vec![Amount::from_sats(1)],
+                },
             })
             .unwrap(),
         );
@@ -1178,6 +1179,7 @@ mod test {
         let (mint_server_cfg2, _) = build_configs();
 
         Mint::new(MintConfig {
+            local: MintConfigLocal,
             consensus: MintConfigConsensus {
                 peer_tbs_pks: mint_server_cfg2[0]
                     .to_typed::<MintConfig>()

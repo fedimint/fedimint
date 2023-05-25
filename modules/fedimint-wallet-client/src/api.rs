@@ -1,5 +1,5 @@
 use bitcoin::Address;
-use fedimint_core::api::{FederationApiExt, FederationResult, IFederationApi};
+use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::EventuallyConsistent;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -19,7 +19,7 @@ pub trait WalletFederationApi {
 #[apply(async_trait_maybe_send!)]
 impl<T: ?Sized> WalletFederationApi for T
 where
-    T: IFederationApi + MaybeSend + MaybeSync + 'static,
+    T: IModuleFederationApi + MaybeSend + MaybeSync + 'static,
 {
     async fn fetch_consensus_block_height(&self) -> FederationResult<u64> {
         self.request_with_strategy(

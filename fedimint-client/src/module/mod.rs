@@ -3,18 +3,21 @@ use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::util::BoxStream;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
+    TransactionId,
 };
 
-use crate::sm::{Context, DynContext, DynState, OperationId, State};
+use crate::sm::{Context, DynContext, DynState, Executor, OperationId, State};
 use crate::transaction::{ClientInput, ClientOutput};
-use crate::DynGlobalClientContext;
+use crate::{Client, DynGlobalClientContext};
 
 pub mod gen;
 
@@ -46,6 +49,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     async fn handle_cli_command(
         &self,
+        _client: &Client,
         _args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         Err(anyhow::format_err!(
@@ -63,6 +67,41 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> TransactionItemAmount;
+
+    fn supports_backup(&self) -> bool {
+        false
+    }
+
+    async fn backup(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _executor: Executor<DynGlobalClientContext>,
+        _api: DynGlobalApi,
+        _module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>> {
+        anyhow::bail!("Backup not supported");
+    }
+
+    async fn restore(
+        &self,
+        // _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor<DynGlobalClientContext>,
+        _api: DynGlobalApi,
+        _snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("Backup not supported");
+    }
+
+    async fn wipe(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("Wiping not supported");
+    }
 }
 
 /// Type-erased version of [`ClientModule`]
@@ -76,12 +115,40 @@ pub trait IClientModule: Debug {
 
     async fn handle_cli_command(
         &self,
-        _args: &[ffi::OsString],
+        client: &Client,
+        args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value>;
 
     fn input_amount(&self, input: &DynInput) -> TransactionItemAmount;
 
     fn output_amount(&self, output: &DynOutput) -> TransactionItemAmount;
+
+    fn supports_backup(&self) -> bool;
+
+    async fn backup(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynGlobalApi,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>>;
+
+    async fn restore(
+        &self,
+        // dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynGlobalApi,
+        snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()>;
+
+    async fn wipe(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -103,9 +170,10 @@ where
 
     async fn handle_cli_command(
         &self,
+        client: &Client,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
-        <T as ClientModule>::handle_cli_command(self, args).await
+        <T as ClientModule>::handle_cli_command(self, client, args).await
     }
 
     fn input_amount(&self, input: &DynInput) -> TransactionItemAmount {
@@ -126,6 +194,41 @@ where
                 .downcast_ref()
                 .expect("Dispatched to correct module"),
         )
+    }
+
+    fn supports_backup(&self) -> bool {
+        <T as ClientModule>::supports_backup(self)
+    }
+
+    async fn backup(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynGlobalApi,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>> {
+        <T as ClientModule>::backup(self, dbtx, executor, api, module_instance_id).await
+    }
+
+    async fn restore(
+        &self,
+        // dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynGlobalApi,
+        snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        <T as ClientModule>::restore(self, dbtx, module_instance_id, executor, api, snapshot).await
+    }
+
+    async fn wipe(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()> {
+        <T as ClientModule>::wipe(self, dbtx, module_instance_id, executor).await
     }
 }
 
@@ -186,6 +289,24 @@ pub trait PrimaryClientModule: ClientModule {
         operation_id: OperationId,
         amount: Amount,
     ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>;
+
+    /// Waits for the funds from an output created by
+    /// [`Self::create_exact_output`] to become available. This function
+    /// returning typically implies a change in the output of
+    /// [`Self::get_balance`].
+    async fn await_primary_module_output(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount>;
+
+    /// Returns the balance held by this module and available for funding
+    /// transactions.
+    async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount;
+
+    /// Returns a stream that will output the updated module balance each time
+    /// it changes.
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
 }
 
 /// Type-erased version of [`PrimaryClientModule`]
@@ -206,6 +327,20 @@ pub trait IPrimaryClientModule: IClientModule {
         operation_id: OperationId,
         amount: Amount,
     ) -> ClientOutput;
+
+    async fn await_primary_module_output(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount>;
+
+    async fn get_balance(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Amount;
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
 }
@@ -247,6 +382,26 @@ where
         )
         .await
         .into_dyn(module_instance)
+    }
+
+    async fn await_primary_module_output(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount> {
+        T::await_primary_module_output(self, operation_id, out_point).await
+    }
+
+    async fn get_balance(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Amount {
+        T::get_balance(self, &mut dbtx.with_module_prefix(module_instance)).await
+    }
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        T::subscribe_balance_changes(self).await
     }
 
     fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static)) {

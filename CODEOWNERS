@@ -36,6 +36,7 @@ fedimint-server/src/config    @fedimint/consensus
 
 gateway/ui/         @fedimint/lightning @fedimint/ui
 fedimintd/src/ui.rs @fedimint/ui
+guardian-ui/        @fedimint/ui
 
 
 crypto/             @fedimint/crypto

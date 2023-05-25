@@ -3,20 +3,12 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{ensure, Context};
-use bitcoin_hashes::hex::{FromHex, ToHex};
-use fedimint_aead::{
-    encrypted_read, encrypted_write, get_encryption_key, random_salt, LessSafeKey,
-};
-use fedimint_core::admin_client::PeerServerParams;
+use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key, LessSafeKey};
 use fedimint_core::config::ServerModuleGenRegistry;
-use fedimint_core::util::write_new;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tokio_rustls::rustls;
-use url::Url;
 
-use crate::config::{gen_cert_and_key, ServerConfig};
+use crate::config::ServerConfig;
 
 /// Version of the server code (should be the same among peers)
 pub const CODE_VERSION: &str = env!("CODE_VERSION");
@@ -46,64 +38,9 @@ pub const PLAINTEXT_PASSWORD: &str = "password.private";
 /// Database file name
 pub const DB_FILE: &str = "database";
 
-/// Encrypted TLS private keys
-pub const TLS_PK: &str = "tls-pk";
-
-/// TLS public cert
-pub const TLS_CERT: &str = "tls-cert";
-
 pub const JSON_EXT: &str = "json";
 
 const ENCRYPTED_EXT: &str = "encrypt";
-
-pub fn create_cert(
-    dir_out_path: PathBuf,
-    p2p_url: Url,
-    api_url: Url,
-    guardian_name: String,
-    password: &str,
-) -> anyhow::Result<String> {
-    let salt = random_salt();
-    write_new(dir_out_path.join(SALT_FILE), &salt)?;
-
-    let key = get_encryption_key(password, &salt)?;
-    gen_tls(&dir_out_path, p2p_url, api_url, guardian_name, &key)
-}
-
-pub fn parse_peer_params(url: String) -> anyhow::Result<PeerServerParams> {
-    let split: Vec<&str> = url.split('@').collect();
-
-    ensure!(split.len() == 4, "Cert string has wrong number of fields");
-    let p2p_url = split[0].parse()?;
-    let api_url = split[1].parse()?;
-    let hex_cert = Vec::from_hex(split[3])?;
-    Ok(PeerServerParams {
-        cert: rustls::Certificate(hex_cert),
-        p2p_url,
-        api_url,
-        name: split[2].to_string(),
-        status: None,
-    })
-}
-
-fn gen_tls(
-    dir_out_path: &Path,
-    p2p_url: Url,
-    api_url: Url,
-    name: String,
-    key: &LessSafeKey,
-) -> anyhow::Result<String> {
-    let (cert, pk) = gen_cert_and_key(&name)?;
-    encrypted_write(pk.0, key, dir_out_path.join(TLS_PK))
-        .context("Failed to write tls private key")?;
-
-    // TODO Base64 encode name, hash fingerprint cert_string
-    let cert_url = format!("{}@{}@{}@{}", p2p_url, api_url, name, cert.0.to_hex());
-
-    let cert_path = dir_out_path.join(TLS_CERT);
-    write_new(cert_path, &cert_url)?;
-    Ok(cert_url)
-}
 
 /// Reads the server from the local, private, and consensus cfg files
 pub fn read_server_config(password: &str, path: PathBuf) -> anyhow::Result<ServerConfig> {
@@ -143,10 +80,7 @@ pub fn write_server_config(
     let salt = fs::read_to_string(path.join(SALT_FILE))?;
     let key = get_encryption_key(password, &salt)?;
 
-    let client_config = server
-        .consensus
-        .to_config_response(module_config_gens)
-        .client_config;
+    let client_config = server.consensus.to_client_config(module_config_gens)?;
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
     plaintext_display_write(&server.get_connect_info(), &path.join(CLIENT_CONNECT_FILE))?;

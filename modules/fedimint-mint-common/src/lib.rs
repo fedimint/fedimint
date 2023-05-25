@@ -16,7 +16,7 @@ pub mod config;
 pub mod common;
 pub mod db;
 
-const KIND: ModuleKind = ModuleKind::from_static_str("mint");
+pub const KIND: ModuleKind = ModuleKind::from_static_str("mint");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 /// By default, the maximum notes per denomination when change-making for users
@@ -72,7 +72,20 @@ pub struct Note(pub Nonce, pub tbs::Signature);
 ///
 /// Internally a MuSig pub key so that transactions can be signed when being
 /// spent.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deserialize,
+    Serialize,
+    Encodable,
+    Decodable,
+)]
 pub struct Nonce(pub secp256k1_zkp::XOnlyPublicKey);
 
 /// [`Nonce`] but blinded by the user key

@@ -1,0 +1,5 @@
+{
+  "extends": "@fedimint/tsconfig/react-app.json",
+  "exclude": ["dist", "node_modules"],
+  "include": ["src"]
+}

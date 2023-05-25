@@ -23,3 +23,5 @@ procs:
     shell: tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
   devimint:
     shell: tail -n +0 -F $FM_LOGS_DIR/devimint.log
+  faucet:
+    shell: tail -n +0 -F $FM_LOGS_DIR/faucet.log

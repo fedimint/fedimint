@@ -11,7 +11,7 @@ use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
     InactiveStateKey,
 };
-use crate::sm::{DynState, GlobalContext, OperationId, State};
+use crate::sm::{ActiveState, DynState, GlobalContext, InactiveState, OperationId, State};
 
 /// State transition notifier owned by the modularized client used to inform
 /// modules of state transitions.
@@ -82,8 +82,6 @@ where
     /// loaded from the database are not returned in a specific order. There may
     /// also be duplications.
     pub async fn subscribe(&self, operation_id: OperationId) -> BoxStream<'static, S> {
-        let module_instance_id = self.module_instance;
-
         let to_typed_state = |state: DynState<GC>| {
             state
                 .as_any()
@@ -94,27 +92,16 @@ where
 
         // It's important to start the subscription first and then query the database to
         // not lose any transitions in the meantime.
-        let new_transitions = BroadcastStream::new(self.broadcast.subscribe())
-            .take_while(|res| {
-                let cont = if let Err(err) = res {
-                    error!(?err, "ModuleNotifier stream stopped on error");
-                    false
-                } else {
-                    true
-                };
-                std::future::ready(cont)
-            })
-            .filter_map(move |res| async move {
-                let state: DynState<GC> = res.expect("Stream is stopped on error");
-
-                if state.operation_id() == operation_id
-                    && state.module_instance_id() == module_instance_id
-                {
-                    Some(to_typed_state(state))
-                } else {
-                    None
-                }
-            });
+        let new_transitions =
+            self.subscribe_all_operations()
+                .await
+                .filter_map(move |state: S| async move {
+                    if state.operation_id() == operation_id {
+                        Some(state)
+                    } else {
+                        None
+                    }
+                });
 
         let db_states = {
             let mut dbtx = self.db.begin_transaction().await;
@@ -125,8 +112,10 @@ where
                     _pd: Default::default(),
                 })
                 .await
-                .map(|(key, _): (ActiveStateKey<GC>, _)| to_typed_state(key.state))
-                .collect::<Vec<S>>()
+                .map(|(key, val): (ActiveStateKey<GC>, ActiveState)| {
+                    (to_typed_state(key.state), val.created_at)
+                })
+                .collect::<Vec<(S, _)>>()
                 .await;
 
             let inactive_states = dbtx
@@ -136,16 +125,55 @@ where
                     _pd: Default::default(),
                 })
                 .await
-                .map(|(key, _): (InactiveStateKey<GC>, _)| to_typed_state(key.state))
-                .collect::<Vec<S>>()
+                .map(|(key, val): (InactiveStateKey<GC>, InactiveState)| {
+                    (to_typed_state(key.state), val.created_at)
+                })
+                .collect::<Vec<(S, _)>>()
                 .await;
 
-            active_states
+            // FIXME: don't rely on SystemTime for ordering and introduce a state transition
+            // index instead (dpc was right again xD)
+            let mut all_states_timed = active_states
                 .into_iter()
                 .chain(inactive_states)
+                .collect::<Vec<(S, _)>>();
+            all_states_timed.sort_by(|(_, t1), (_, t2)| t1.cmp(t2));
+            all_states_timed
+                .into_iter()
+                .map(|(s, _)| s)
                 .collect::<Vec<S>>()
         };
 
         Box::pin(futures::stream::iter(db_states).chain(new_transitions))
+    }
+
+    /// Subscribe to all state transitions belonging to the module instance.
+    pub async fn subscribe_all_operations(&self) -> BoxStream<'static, S> {
+        let module_instance_id = self.module_instance;
+        Box::pin(
+            BroadcastStream::new(self.broadcast.subscribe())
+                .take_while(|res| {
+                    let cont = if let Err(err) = res {
+                        error!(?err, "ModuleNotifier stream stopped on error");
+                        false
+                    } else {
+                        true
+                    };
+                    std::future::ready(cont)
+                })
+                .filter_map(move |res| async move {
+                    let s = res.expect("We filtered out errors above");
+                    if s.module_instance_id() == module_instance_id {
+                        Some(
+                            s.as_any()
+                                .downcast_ref::<S>()
+                                .expect("Tried to subscribe to wrong state type")
+                                .clone(),
+                        )
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
 }

@@ -9,7 +9,8 @@ use tokio_rustls::rustls;
 use url::Url;
 
 use crate::api::{
-    DynFederationApi, FederationApiExt, FederationResult, GlobalFederationApi, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
+    StatusResponse, WsFederationApi,
 };
 use crate::config::ServerModuleGenParamsRegistry;
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -20,7 +21,7 @@ use crate::PeerId;
 /// For a guardian to communicate with their server
 // TODO: Maybe should have it's own CLI client so it doesn't need to be in core
 pub struct WsAdminClient {
-    inner: DynFederationApi,
+    inner: DynGlobalApi,
     auth: ApiAuth,
 }
 
@@ -106,8 +107,9 @@ impl WsAdminClient {
             .await
     }
 
-    /// Used by the leader to set the config gen params, after which
-    /// `ConfigGenParams` can be created
+    /// Leader sets the consensus params, everyone sets the local params
+    ///
+    /// After calling this `ConfigGenParams` can be created for DKG
     pub async fn set_config_gen_params(
         &self,
         requested: ConfigGenParamsRequest,
@@ -121,7 +123,7 @@ impl WsAdminClient {
     /// DKG.
     pub async fn get_consensus_config_gen_params(
         &self,
-    ) -> FederationResult<ConfigGenParamsConsensus> {
+    ) -> FederationResult<ConfigGenParamsResponse> {
         self.request(
             "get_consensus_config_gen_params",
             ApiRequestErased::default(),
@@ -155,7 +157,7 @@ impl WsAdminClient {
     }
 
     /// Returns the status of the server
-    pub async fn status(&self) -> FederationResult<ServerStatus> {
+    pub async fn status(&self) -> FederationResult<StatusResponse> {
         self.request_auth("status", ApiRequestErased::default())
             .await
     }
@@ -181,26 +183,6 @@ impl WsAdminClient {
             .request_current_consensus(method.to_owned(), params)
             .await
     }
-}
-
-/// The state of the server returned via APIs
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
-pub enum ServerStatus {
-    /// Server needs a password to read configs
-    #[default]
-    AwaitingPassword,
-    /// Waiting for peers to share the config gen params
-    SharingConfigGenParams,
-    /// Ready to run config gen once all peers are ready
-    ReadyForConfigGen,
-    /// We failed running config gen
-    ConfigGenFailed,
-    /// Config is generated, peers should verify the config
-    VerifyingConfigs,
-    /// Restarted from a planned upgrade (requires action to start)
-    Upgrading,
-    /// Consensus is running
-    ConsensusRunning,
 }
 
 /// Sent by admin user to the API
@@ -235,19 +217,27 @@ pub struct PeerServerParams {
 pub struct ConfigGenParamsConsensus {
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerServerParams>,
-    /// Params that were configured by the leader
-    pub requested: ConfigGenParamsRequest,
+    /// Guardian-defined key-value pairs that will be passed to the client
+    pub meta: BTreeMap<String, String>,
+    /// Config gen params (also contains local params from us)
+    pub modules: ServerModuleGenParamsRegistry,
 }
 
-/// Config gen values that can be configured by the config gen leader
+/// The config gen params response which includes our peer id
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ConfigGenParamsResponse {
+    /// The same for all peers
+    pub consensus: ConfigGenParamsConsensus,
+    /// Our id (might change if new peers join)
+    pub our_current_id: PeerId,
+}
+
+/// Config gen params that can be configured from the UI
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConfigGenParamsRequest {
-    /// Guardian-defined key-value pairs that will be passed to the client.
-    /// These should be the same for all guardians since they become part of
-    /// the consensus config.
+    /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
-    /// Params for the modules we wish to configure, can contain custom
-    /// parameters
+    /// Set the params (if leader) or just the local params (if follower)
     pub modules: ServerModuleGenParamsRegistry,
 }
 

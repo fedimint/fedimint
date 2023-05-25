@@ -1,0 +1,30 @@
+[package]
+name = "fedimint-wallet-tests"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-wallet-tests contains integration tests for the lightning module"
+license = "MIT"
+
+[[test]]
+name = "fedimint_wallet_tests"
+path = "tests/tests.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+async-trait = "0.1.64"
+bitcoin = "0.29.2"
+erased-serde = "0.3"
+fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
+fedimint-wallet-common = { path = "../fedimint-wallet-common" }
+fedimint-wallet-client = { path = "../fedimint-wallet-client" }
+fedimint-wallet-server = { path = "../fedimint-wallet-server" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-client = { path = "../../fedimint-client" }
+fedimint-core ={ path = "../../fedimint-core" }
+fedimint-testing ={ path = "../../fedimint-testing" }
+fedimint-server = { path = "../../fedimint-server" }
+fedimint-logging = { path = "../../fedimint-logging" }
+tokio = { version = "1.26.0", features = ["sync"] }

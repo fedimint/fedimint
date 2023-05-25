@@ -6,14 +6,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
-use fedimint_core::api::{
-    DynFederationApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi,
-};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
 use fedimint_core::config::{load_from_file, FederationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::dyn_newtype_define;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use lightning::routing::gossip::RoutingFees;
 use secp256k1::{KeyPair, PublicKey};
 use tracing::{debug, warn};
 use url::Url;
@@ -85,6 +84,7 @@ pub trait IGatewayClientBuilder: Debug {
         mint_channel_id: u64,
         node_pubkey: PublicKey,
         module_gens: ClientModuleGenRegistry,
+        fees: RoutingFees,
     ) -> Result<GatewayClientConfig>;
 
     /// Save and persist the configuration of the gateway federation client
@@ -144,8 +144,9 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         node_pubkey: PublicKey,
         // TODO: delme
         _module_gens: ClientModuleGenRegistry,
+        fees: RoutingFees,
     ) -> Result<GatewayClientConfig> {
-        let api: DynFederationApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
+        let api: DynGlobalApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
 
         let client_config = api.download_client_config(&connect).await?;
 
@@ -160,6 +161,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
             timelock_delta: 10,
             node_pub_key: node_pubkey,
             api: self.gateway_api.clone(),
+            fees,
         })
     }
 
@@ -186,8 +188,8 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
             .create_new(true)
             .write(true)
             .open(path)
-            .expect("Could not create gateway cfg file");
-        serde_json::to_writer_pretty(file, &config).expect("Could not write gateway cfg");
+            .map_err(anyhow::Error::from)?;
+        serde_json::to_writer_pretty(file, &config).map_err(anyhow::Error::from)?;
 
         Ok(())
     }

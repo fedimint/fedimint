@@ -1,28 +1,30 @@
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use fedimint_core::admin_client::ConfigGenParamsRequest;
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::timing;
 use fedimint_core::util::write_overwrite;
+use fedimint_core::{timing, Amount};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
 use fedimint_server::config::api::ConfigGenSettings;
-use fedimint_server::config::io::{
-    read_server_config, CODE_VERSION, DB_FILE, JSON_EXT, LOCAL_CONFIG, PLAINTEXT_PASSWORD,
-};
+use fedimint_server::config::io::{CODE_VERSION, DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
+use url::Url;
 
-use crate::ui::{run_ui, UiMessage};
+use crate::attach_default_module_gen_params;
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -36,16 +38,36 @@ pub struct ServerOpts {
     // TODO: should probably never send password to the server directly, rather send the hash via
     // the API
     #[arg(long, env = "FM_PASSWORD")]
-    pub password: String,
-    /// Port to run admin UI on
-    #[arg(long, env = "FM_LISTEN_UI")]
-    pub listen_ui: Option<SocketAddr>,
+    pub password: Option<String>,
     /// Enable tokio console logging
     #[arg(long, env = "FM_TOKIO_CONSOLE_BIND")]
     pub tokio_console_bind: Option<SocketAddr>,
     /// Enable telemetry logging
     #[arg(long, default_value = "false")]
     pub with_telemetry: bool,
+
+    /// Address we bind to for federation communication
+    #[arg(long, env = "FM_BIND_P2P", default_value = "127.0.0.1:8173")]
+    bind_p2p: SocketAddr,
+    /// Our external address for communicating with our peers
+    #[arg(long, env = "FM_P2P_URL", default_value = "fedimint://127.0.0.1:8173")]
+    p2p_url: Url,
+    /// Address we bind to for exposing the API
+    #[arg(long, env = "FM_BIND_API", default_value = "127.0.0.1:8174")]
+    bind_api: SocketAddr,
+    /// Our API address for clients to connect to us
+    #[arg(long, env = "FM_API_URL", default_value = "ws://127.0.0.1:8174")]
+    api_url: Url,
+    /// Max denomination of notes issued by the federation (in millisats)
+    /// default = 10 BTC
+    #[arg(long, env = "FM_MAX_DENOMINATION", default_value = "1000000000000")]
+    max_denomination: Amount,
+    /// The bitcoin network that fedimint will be running on
+    #[arg(long, env = "FM_BITCOIN_NETWORK", default_value = "regtest")]
+    network: bitcoin::network::constants::Network,
+    /// The bitcoin network that fedimint will be running on
+    #[arg(long, env = "FM_FINALITY_DELAY", default_value = "10")]
+    finality_delay: u32,
 }
 
 /// `fedimintd` builder
@@ -79,9 +101,8 @@ pub struct ServerOpts {
 /// }
 /// ```
 pub struct Fedimintd {
-    module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
-    opts: ServerOpts,
+    pub server_gens: ServerModuleGenRegistry,
+    pub server_gen_params: ServerModuleGenParamsRegistry,
 }
 
 impl Fedimintd {
@@ -96,16 +117,9 @@ impl Fedimintd {
 
         info!("Starting fedimintd (version: {CODE_VERSION})");
 
-        let opts: ServerOpts = ServerOpts::parse();
-        TracingSetup::default()
-            .tokio_console_bind(opts.tokio_console_bind)
-            .with_jaeger(opts.with_telemetry)
-            .init()?;
-
         Ok(Self {
-            module_gens: ServerModuleGenRegistry::new(),
-            module_gens_params: ServerModuleGenParamsRegistry::default(),
-            opts,
+            server_gens: ServerModuleGenRegistry::new(),
+            server_gen_params: ServerModuleGenParamsRegistry::default(),
         })
     }
 
@@ -113,7 +127,7 @@ impl Fedimintd {
     where
         T: ServerModuleGen + 'static + Send + Sync,
     {
-        self.module_gens.attach(gen);
+        self.server_gens.attach(gen);
         self
     }
 
@@ -124,6 +138,13 @@ impl Fedimintd {
     }
 
     pub async fn run(self) -> ! {
+        let opts: ServerOpts = ServerOpts::parse();
+        TracingSetup::default()
+            .tokio_console_bind(opts.tokio_console_bind)
+            .with_jaeger(opts.with_telemetry)
+            .init()
+            .unwrap();
+
         let mut root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -137,10 +158,10 @@ impl Fedimintd {
         root_task_group
             .spawn_local("main", move |_task_handle| async move {
                 match run(
-                    self.opts,
+                    opts,
                     task_group.clone(),
-                    self.module_gens,
-                    self.module_gens_params,
+                    self.server_gens,
+                    self.server_gen_params,
                 )
                 .await
                 {
@@ -191,56 +212,22 @@ impl Fedimintd {
 
 async fn run(
     opts: ServerOpts,
-    mut task_group: TaskGroup,
+    task_group: TaskGroup,
     module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
+    mut module_gens_params: ServerModuleGenParamsRegistry,
 ) -> anyhow::Result<()> {
-    let (ui_sender, mut ui_receiver) = tokio::sync::mpsc::channel(1);
+    attach_default_module_gen_params(
+        BitcoinRpcConfig::from_env_vars()?,
+        &mut module_gens_params,
+        opts.max_denomination,
+        opts.network,
+        opts.finality_delay,
+    );
 
-    info!("Starting pre-check");
-
-    // Run admin UI if a socket address was given for it
-    if let Some(listen_ui) = opts.listen_ui {
-        let module_gens = module_gens.clone();
-        // Spawn admin UI
-        let data_dir = opts.data_dir.clone();
-        let ui_task_group = task_group.make_subgroup().await;
-        let password = opts.password.clone();
-        task_group
-            .spawn("admin-ui", move |_| async move {
-                run_ui(
-                    data_dir,
-                    ui_sender,
-                    listen_ui,
-                    password,
-                    ui_task_group,
-                    module_gens,
-                    module_gens_params,
-                )
-                .await;
-            })
-            .await;
-
-        // If federation configs (e.g. local.json) missing, wait for admin UI to report
-        // DKG completion
-        let local_cfg_path = opts.data_dir.join(LOCAL_CONFIG).with_extension(JSON_EXT);
-        if !std::path::Path::new(&local_cfg_path).exists() {
-            loop {
-                if let UiMessage::DkgSuccess = ui_receiver
-                    .recv()
-                    .await
-                    .expect("failed to receive setup message")
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    info!("Starting consensus");
-
-    let cfg = read_server_config(&opts.password, opts.data_dir.clone())?;
-    let decoders = module_gens.decoders(cfg.iter_module_instances())?;
+    let module_kinds = module_gens_params
+        .iter_modules()
+        .map(|(id, kind, _)| (id, kind));
+    let decoders = module_gens.decoders(module_kinds.into_iter())?;
     let db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
         decoders.clone(),
@@ -249,16 +236,22 @@ async fn run(
     // TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed passsword, so we need to
     // overwrite
-    write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), opts.password)?;
+    if let Some(password) = opts.password {
+        write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), password)?;
+    };
+    let default_params = ConfigGenParamsRequest {
+        meta: BTreeMap::new(),
+        modules: module_gens_params,
+    };
     let mut api = FedimintServer {
         data_dir: opts.data_dir,
         settings: ConfigGenSettings {
-            download_token_limit: cfg.local.download_token_limit,
-            p2p_bind: cfg.local.fed_bind,
-            api_bind: cfg.local.api_bind,
-            p2p_url: cfg.local.p2p_endpoints[&cfg.local.identity].url.clone(),
-            api_url: cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
-            default_params: Default::default(),
+            download_token_limit: None,
+            p2p_bind: opts.bind_p2p,
+            api_bind: opts.bind_api,
+            p2p_url: opts.p2p_url,
+            api_url: opts.api_url,
+            default_params,
             max_connections: fedimint_server::config::max_connections(),
             registry: module_gens,
         },

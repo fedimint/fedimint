@@ -4,14 +4,13 @@ use std::time::Duration;
 
 use bitcoin::util::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, TxSubmissionError};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, OutPoint, TransactionId};
-use fedimint_ln_common::contracts::incoming::IncomingContract;
-use fedimint_ln_common::contracts::{DecryptedPreimage, IdentifiableContract};
+use fedimint_core::{OutPoint, TransactionId};
+use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
+use fedimint_ln_common::contracts::DecryptedPreimage;
 use fedimint_ln_common::LightningInput;
 use lightning_invoice::Invoice;
 use serde::{Deserialize, Serialize};
@@ -128,12 +127,12 @@ impl LightningReceiveSubmittedOffer {
         global_context: DynGlobalClientContext,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         global_context.await_tx_accepted(operation_id, txid).await
     }
 
     async fn transition_confirmed_invoice(
-        result: Result<(), ()>,
+        result: Result<(), TxSubmissionError>,
         old_state: LightningReceiveStateMachine,
         invoice: Invoice,
         keypair: KeyPair,
@@ -197,8 +196,7 @@ impl LightningReceiveConfirmedInvoice {
         loop {
             let contract_id = (*invoice.payment_hash()).into();
             let contract = global_context
-                .api()
-                .with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
+                .module_api()
                 .get_incoming_contract(contract_id)
                 .await;
 
@@ -256,7 +254,7 @@ impl LightningReceiveConfirmedInvoice {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let txid = global_context.claim_input(dbtx, client_input).await;
+        let (txid, _) = global_context.claim_input(dbtx, client_input).await;
         OutPoint { txid, out_idx: 0 }
     }
 
@@ -302,12 +300,12 @@ impl LightningReceiveFunded {
         operation_id: OperationId,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
-    ) -> Result<(), ()> {
+    ) -> Result<(), TxSubmissionError> {
         global_context.await_tx_accepted(operation_id, txid).await
     }
 
     async fn transition_claim_success(
-        result: Result<(), ()>,
+        result: Result<(), TxSubmissionError>,
         old_state: LightningReceiveStateMachine,
         txid: TransactionId,
     ) -> LightningReceiveStateMachine {
@@ -326,22 +324,6 @@ impl LightningReceiveFunded {
                     state: LightningReceiveStates::Canceled(LightningReceiveError::ClaimRejected),
                 }
             }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-pub struct IncomingContractAccount {
-    pub amount: Amount,
-    pub contract: IncomingContract,
-}
-
-impl IncomingContractAccount {
-    pub fn claim(&self) -> LightningInput {
-        LightningInput {
-            contract_id: self.contract.contract_id(),
-            amount: self.amount,
-            witness: None,
         }
     }
 }

@@ -1,0 +1,12 @@
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="6.62087" cy="17.4031" r="1.41964" fill="currentColor" />
+  <circle cx="2.42196" cy="12.1344" r="1.41964" fill="currentColor" />
+  <circle cx="3.92159" cy="5.53615" r="1.41964" fill="currentColor" />
+  <circle cx="10" cy="2.59688" r="1.41964" fill="currentColor" />
+  <circle cx="13.3892" cy="17.3931" r="1.41964" fill="currentColor" />
+  <circle cx="17.578" cy="12.1244" r="1.41964" fill="currentColor" />
+  <circle cx="16.0885" cy="5.5461" r="1.41964" fill="currentColor" />
+  <path fill-rule="evenodd" clip-rule="evenodd"
+    d="M7.84562 14.8787L5.15631 11.5046L6.11607 7.29567L10.0051 5.43115L13.8841 7.30567L14.8388 11.4946L12.1495 14.8787H7.84562ZM8.61296 13.3141L6.86082 11.1147L7.48612 8.37107L10.0199 7.15568L12.5472 8.37759L13.1692 11.1082L11.4171 13.3141H8.61296Z"
+    fill="currentColor" />
+</svg>

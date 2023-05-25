@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::ops::Mul;
@@ -11,11 +11,9 @@ use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use fedimint_core::cancellable::Cancelled;
-use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN,
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Encodable;
+use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use serde::de::DeserializeOwned;
@@ -24,7 +22,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tbs::{serde_impl, Scalar};
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
-use threshold_crypto::{G1Projective, G2Projective, Signature};
+use threshold_crypto::{G1Projective, G2Projective};
 use url::Url;
 
 use crate::encoding::Decodable;
@@ -129,7 +127,7 @@ pub struct ClientConfigResponse {
     /// The client config
     pub client_config: ClientConfig,
     /// Auth key signature over the `client_config`
-    pub signature: Option<Signature>,
+    pub signature: SerdeSignature,
 }
 
 /// The federation id is a copy of the authentication threshold public key of
@@ -250,33 +248,51 @@ impl<M> Default for ModuleGenRegistry<M> {
     }
 }
 
-/// Module **generation** (so passed to dkg, not to the module itself) config
-/// parameters
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub struct ConfigGenModuleParams(serde_json::Value);
+/// Type erased `ModuleGenParams` used to generate the `ServerModuleConfig`
+/// during config gen
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ConfigGenModuleParams {
+    pub local: Option<serde_json::Value>,
+    pub consensus: Option<serde_json::Value>,
+}
 
 pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
 
 impl ConfigGenModuleParams {
-    /// Null value, used as a config gen parameters for module gens that don't
-    /// need any parameters
-    pub fn null() -> Self {
-        Self(jsonrpsee_core::JsonValue::Null)
+    pub fn new(local: Option<serde_json::Value>, consensus: Option<serde_json::Value>) -> Self {
+        Self { local, consensus }
     }
 
+    /// Converts the JSON into typed version, errors unless both `local` and
+    /// `consensus` values are defined
     pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
-        serde_json::from_value(self.0.clone())
+        Ok(P::from_parts(
+            Self::parse("local", self.local.clone())?,
+            Self::parse("consensus", self.consensus.clone())?,
+        ))
+    }
+
+    fn parse<P: DeserializeOwned>(
+        name: &str,
+        json: Option<serde_json::Value>,
+    ) -> anyhow::Result<P> {
+        let json = json.ok_or(format_err!("{name} config gen params missing"))?;
+        serde_json::from_value(json)
             .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
     }
 
     pub fn from_typed<P: ModuleGenParams>(p: P) -> anyhow::Result<Self> {
-        Ok(Self(serde_json::to_value(p)?))
+        let (local, consensus) = p.to_parts();
+        Ok(Self {
+            local: Some(serde_json::to_value(local)?),
+            consensus: Some(serde_json::to_value(consensus)?),
+        })
     }
 }
 
 pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
 
-/// Configs for each module's DKG
+/// Registry that contains the config gen params for all modules
 pub type ServerModuleGenParamsRegistry = ModuleRegistry<ConfigGenModuleParams>;
 
 impl Eq for ServerModuleGenParamsRegistry {}
@@ -293,7 +309,7 @@ impl Serialize for ServerModuleGenParamsRegistry {
         let mut serializer = serializer.serialize_map(Some(modules.len()))?;
         for (id, kind, params) in modules.into_iter() {
             serializer.serialize_key(&id)?;
-            serializer.serialize_value(&(kind.clone(), params.0.clone()))?;
+            serializer.serialize_value(&(kind.clone(), params.clone()))?;
         }
         serializer.end()
     }
@@ -304,12 +320,12 @@ impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
     where
         D: Deserializer<'de>,
     {
-        let json: BTreeMap<ModuleInstanceId, (ModuleKind, serde_json::Value)> =
+        let json: BTreeMap<ModuleInstanceId, (ModuleKind, ConfigGenModuleParams)> =
             Deserialize::deserialize(deserializer)?;
         let mut params = BTreeMap::new();
 
-        for (id, (kind, value)) in json {
-            params.insert(id, (kind, ConfigGenModuleParams(value)));
+        for (id, (kind, module)) in json {
+            params.insert(id, (kind, module));
         }
         Ok(ModuleRegistry::from(params))
     }
@@ -354,28 +370,12 @@ impl<M> ModuleGenRegistry<M> {
         }
     }
 
-    pub fn get(&self, k: &ModuleKind) -> Option<&M> {
-        self.0.get(k)
+    pub fn kinds(&self) -> BTreeSet<ModuleKind> {
+        self.0.keys().cloned().collect()
     }
 
-    /// Return legacy initialization order. See [`LegacyInitOrderIter`].
-    pub fn legacy_init_order_iter(&self) -> LegacyInitOrderIter<M>
-    where
-        M: Clone,
-    {
-        for hardcoded_module in ["mint", "ln", "wallet"] {
-            if !self
-                .0
-                .contains_key(&ModuleKind::from_static_str(hardcoded_module))
-            {
-                panic!("Missing {hardcoded_module} module");
-            }
-        }
-
-        LegacyInitOrderIter {
-            next_id: 0,
-            rest: self.0.clone(),
-        }
+    pub fn get(&self, k: &ModuleKind) -> Option<&M> {
+        self.0.get(k)
     }
 }
 
@@ -426,64 +426,21 @@ where
     }
 }
 
-/// Iterate over module generators in a legacy, hardcoded order: ln, mint,
-/// wallet, rest... Returning each `kind` exactly once, so that
-/// `LEGACY_HARDCODED_` constants correspond to correct module kind.
-///
-/// We would like to get rid of it eventually, but old client and test code
-/// assumes it in multiple places, and it will take work to fix it, while we
-/// want new code to not assume this 1:1 relationship.
-pub struct LegacyInitOrderIter<M> {
-    /// Counter of what module id will this returned value get assigned
-    next_id: ModuleInstanceId,
-    rest: BTreeMap<ModuleKind, M>,
-}
-
-impl<M> Iterator for LegacyInitOrderIter<M> {
-    type Item = (ModuleKind, M);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let ret = match self.next_id {
-            LEGACY_HARDCODED_INSTANCE_ID_LN => {
-                let kind = ModuleKind::from_static_str("ln");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_MINT => {
-                let kind = ModuleKind::from_static_str("mint");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
-                let kind = ModuleKind::from_static_str("wallet");
-                Some((
-                    kind.clone(),
-                    self.rest.remove(&kind).expect("checked in constructor"),
-                ))
-            }
-            _ => self.rest.pop_first(),
-        };
-
-        if ret.is_some() {
-            self.next_id += 1;
-        }
-        ret
-    }
-}
+/// Empty struct for if there are no params
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct EmptyGenParams {}
 
 pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
-    fn from_json<P: ModuleGenParams>(value: serde_json::Value) -> anyhow::Result<Self> {
-        serde_json::from_value(value)
-            .map_err(|e| anyhow::Error::new(e).context("Invalid module gen params"))
-    }
+    /// Locally configurable parameters for config generation
+    type Local: DeserializeOwned + Serialize;
+    /// Consensus parameters for config generation
+    type Consensus: DeserializeOwned + Serialize;
 
-    fn to_json(p: Self) -> anyhow::Result<serde_json::Value> {
-        Ok(serde_json::to_value(p)?)
-    }
+    /// Assemble from the distinct parts
+    fn from_parts(local: Self::Local, consensus: Self::Consensus) -> Self;
+
+    /// Split the config into its distinct parts
+    fn to_parts(self) -> (Self::Local, Self::Consensus);
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
@@ -659,7 +616,7 @@ pub trait TypedClientModuleConfig:
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DkgPeerMsg {
     PublicKey(secp256k1::PublicKey),
-    DistributedGen((String, SupportedDkgMessage)),
+    DistributedGen(SupportedDkgMessage),
     // Dkg completed on our side
     Done,
 }
@@ -676,6 +633,10 @@ pub enum DkgError {
     /// Error running DKG
     #[error("Running DKG failed due to {0}")]
     Failed(#[from] anyhow::Error),
+    #[error("The module was not found {0}")]
+    ModuleNotFound(ModuleKind),
+    #[error("Params for modules were not found {0:?}")]
+    ParamsNotFound(BTreeSet<ModuleKind>),
 }
 
 /// Supported (by Fedimint's code) `DkgMessage<T>` types

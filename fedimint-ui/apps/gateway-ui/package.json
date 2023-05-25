@@ -1,0 +1,59 @@
+{
+  "name": "@fedimint/gateway-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "yarn isNix && react-scripts start",
+    "dev": "yarn isNix && react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "clean": "rm -rf build",
+    "isNix": "if [[ -z \"${IN_NIX_SHELL:-}\" ]]; then echo 'It is recommended to run this command from a Nix dev shell. Use 'nix develop .#fedimint-ui' first'; sleep 3; fi;"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.4.5",
+    "@emotion/react": "^11",
+    "@emotion/styled": "^11",
+    "@fedimint/ui": "*",
+    "framer-motion": "^6",
+    "jsonrpc-client-websocket": "^1.5.2",
+    "node": "^20.1.0",
+    "qrcode.react": "^3.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^4.7.1",
+    "react-scripts": "5.0.1",
+    "react-use-websocket": "3.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^5.16.1",
+    "@testing-library/react": "^13.0.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.0.3",
+    "@types/node": "^16.11.14",
+    "@types/qrcode.react": "^1.0.2",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@typescript-eslint/eslint-plugin": "^5.48.1",
+    "@typescript-eslint/parser": "^5.48.2",
+    "@fedimint/eslint-config": "*",
+    "@fedimint/tsconfig": "*",
+    "eslint": "^8.4.1",
+    "prettier": "^2.8.3",
+    "typescript": "^4.5.4"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

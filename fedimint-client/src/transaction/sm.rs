@@ -8,7 +8,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::TransactionId;
+use fedimint_core::{task, TransactionId};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tracing::warn;
 
 use crate::sm::{Context, DynContext, OperationId, OperationState, State, StateTransition};
@@ -78,9 +80,16 @@ pub enum TxSubmissionStates {
     /// **This state is final**
     Rejected {
         txid: TransactionId,
-        // TODO: enable again after awaiting DB prefix writes becomes available
-        //error: String
+        error: TxSubmissionError,
     },
+}
+
+#[derive(Debug, Error, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+pub enum TxSubmissionError {
+    #[error("Tx submission rejected: {0}")]
+    SubmitRejected(String),
+    #[error("Tx rejected by consensus: {0}")]
+    ConsensusRejected(String),
 }
 
 impl State for TxSubmissionStates {
@@ -117,12 +126,15 @@ impl State for TxSubmissionStates {
                                 };
 
                                 match res {
-                                    Ok(()) => TxSubmissionStates::Created {
+                                    Ok(txid) => TxSubmissionStates::Created {
                                         txid,
                                         tx,
                                         next_submission: next_submission + RESUBMISSION_INTERVAL,
                                     },
-                                    Err(_e) => TxSubmissionStates::Rejected { txid },
+                                    Err(error) => TxSubmissionStates::Rejected {
+                                        txid,
+                                        error: TxSubmissionError::SubmitRejected(error),
+                                    },
                                 }
                             })
                         },
@@ -133,7 +145,10 @@ impl State for TxSubmissionStates {
                             Box::pin(async move {
                                 match res {
                                     Ok(_epoch) => TxSubmissionStates::Accepted { txid },
-                                    Err(_error) => TxSubmissionStates::Rejected { txid },
+                                    Err(error) => TxSubmissionStates::Rejected {
+                                        txid,
+                                        error: TxSubmissionError::ConsensusRejected(error),
+                                    },
                                 }
                             })
                         },
@@ -166,8 +181,8 @@ async fn trigger_created_submit(
     tx: Transaction,
     next_submission: SystemTime,
     context: DynGlobalClientContext,
-) -> Result<(), String> {
-    tokio::time::sleep(
+) -> Result<TransactionId, String> {
+    fedimint_core::task::sleep(
         next_submission
             .duration_since(now())
             .unwrap_or(Duration::ZERO),
@@ -178,7 +193,6 @@ async fn trigger_created_submit(
         .api()
         .submit_transaction(tx)
         .await
-        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -198,7 +212,7 @@ async fn trigger_created_accepted(
                 }
             }
         }
-        tokio::time::sleep(FETCH_INTERVAL).await;
+        task::sleep(FETCH_INTERVAL).await;
     }
 }
 
@@ -216,20 +230,23 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use async_trait::async_trait;
-    use fedimint_core::api::{DynFederationApi, IFederationApi, JsonRpcResult};
+    use fedimint_core::api::{
+        DynGlobalApi, DynModuleApi, IFederationApi, IGlobalFederationApi, JsonRpcResult,
+    };
+    use fedimint_core::config::ClientConfig;
     use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiRequestErased;
-    use fedimint_core::task::TaskGroup;
+    use fedimint_core::task::{sleep, TaskGroup};
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
-    use fedimint_core::{PeerId, TransactionId};
+    use fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
     use rand::thread_rng;
     use serde_json::Value;
     use tokio::sync::Mutex;
-    use tokio::time::{sleep, timeout};
+    use tokio::time::timeout;
 
     use crate::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationId, OperationState};
     use crate::transaction::{
@@ -237,24 +254,26 @@ mod tests {
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
     };
     use crate::{
-        DynGlobalClientContext, IGlobalClientContext, InstancelessDynClientInput,
+        DynGlobalClientContext, IGlobalClientContext, IState, InstancelessDynClientInput,
         InstancelessDynClientOutput,
     };
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct FakeApiClient {
-        txns: Mutex<Vec<TransactionId>>,
+        txns: Arc<Mutex<Vec<TransactionId>>>,
         fake_peers: BTreeSet<PeerId>,
     }
 
     impl Default for FakeApiClient {
         fn default() -> Self {
             FakeApiClient {
-                txns: Mutex::new(vec![]),
+                txns: Arc::new(Mutex::new(vec![])),
                 fake_peers: vec![PeerId::from(0)].into_iter().collect(),
             }
         }
     }
+
+    impl IGlobalFederationApi for FakeApiClient {}
 
     #[async_trait]
     impl IFederationApi for FakeApiClient {
@@ -262,7 +281,7 @@ mod tests {
             &self.fake_peers
         }
 
-        fn with_module(&self, _id: ModuleInstanceId) -> DynFederationApi {
+        fn with_module(&self, _id: ModuleInstanceId) -> DynModuleApi {
             unimplemented!()
         }
 
@@ -312,6 +331,8 @@ mod tests {
 
     struct FakeGlobalContext {
         api: FakeApiClient,
+        /// Clone of API wrapped as dyn API (avoids a lot of casting)
+        dyn_api: DynGlobalApi,
         executor: Executor<DynGlobalClientContext>,
     }
 
@@ -352,15 +373,27 @@ mod tests {
 
     #[async_trait]
     impl IGlobalClientContext for FakeGlobalContext {
-        fn api(&self) -> &(dyn IFederationApi + 'static) {
-            &self.api
+        fn api(&self) -> &DynGlobalApi {
+            &self.dyn_api
+        }
+
+        fn client_config(&self) -> &ClientConfig {
+            unimplemented!()
+        }
+
+        fn decoders(&self) -> &ModuleDecoderRegistry {
+            unimplemented!()
+        }
+
+        fn module_api(&self) -> DynModuleApi {
+            unimplemented!()
         }
 
         async fn claim_input_dyn(
             &self,
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             _input: InstancelessDynClientInput,
-        ) -> TransactionId {
+        ) -> (TransactionId, Option<OutPoint>) {
             unimplemented!()
         }
 
@@ -368,7 +401,15 @@ mod tests {
             &self,
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             _output: InstancelessDynClientOutput,
-        ) -> anyhow::Result<TransactionId> {
+        ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
+            unimplemented!()
+        }
+
+        async fn add_state_machine_dyn(
+            &self,
+            _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+            _sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
+        ) -> anyhow::Result<()> {
             unimplemented!()
         }
 
@@ -406,8 +447,10 @@ mod tests {
             .build(db.clone(), Notifier::new(db.clone()))
             .await;
 
+        let fake_api = FakeApiClient::default();
         let context = Arc::new(FakeGlobalContext {
-            api: Default::default(),
+            api: fake_api.clone(),
+            dyn_api: DynGlobalApi::from(fake_api),
             executor: executor.clone(),
         });
         let dyn_context = DynGlobalClientContext::from(context.clone());
@@ -416,7 +459,7 @@ mod tests {
             .start_executor(&mut tg, Arc::new(move |_, _| dyn_context_gen_clone.clone()))
             .await;
 
-        let operation_id = [0x42; 32];
+        let operation_id = OperationId([0x42; 32]);
 
         let tx_builder = TransactionBuilder::new();
 

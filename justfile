@@ -44,7 +44,7 @@ test-count:
 lint:
   env NO_STASH=true misc/git-hooks/pre-commit
   just clippy
-  env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --profile dev --no-deps --document-private-items
+  env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings' cargo doc --profile dev --no-deps --document-private-items
 
 # fix some lint failures
 lint-fix:
@@ -96,3 +96,7 @@ tmuxinator:
 # exit tmuxinator session
 exit-tmuxinator:
   tmux kill-session -t fedimint-dev
+
+# starts a 2 guardian federation with setup UI
+run-ui:
+  mprocs -c misc/mprocs-ui.yaml

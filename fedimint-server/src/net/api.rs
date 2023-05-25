@@ -1,19 +1,21 @@
 //! Implements the client API through which users interact with the federation
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::api::{
-    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, WsClientConnectInfo,
+    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
+    WsClientConnectInfo,
 };
-use fedimint_core::config::ClientConfigResponse;
+use fedimint_core::backup::ClientBackupKey;
+use fedimint_core::config::{ClientConfig, ClientConfigResponse};
+use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{SerdeEpochHistory, SerdeSignature, SignedEpochOutcome};
+use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -25,15 +27,16 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use jsonrpsee::RpcModule;
+use secp256k1_zkp::SECP256K1;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
-use crate::config::api::ApiResult;
+use crate::backup::ClientBackupSnapshot;
+use crate::config::api::{get_verification_hashes, ApiResult};
 use crate::config::ServerConfig;
-use crate::consensus::interconnect::FedimintInterconnect;
 use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::{
     AcceptedTransaction, ApiEvent, FundingVerifier, TransactionSubmissionError,
@@ -42,6 +45,7 @@ use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigSignatureKey, EpochHistoryKey,
     LastEpochKey, RejectedTransactionKey,
 };
+use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
 use crate::HasApiContext;
 
@@ -73,8 +77,8 @@ pub struct ConsensusApi {
     pub db: Database,
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
-    /// Cached client config response
-    pub client_cfg: ClientConfigResponse,
+    /// Cached client config
+    pub client_cfg: ClientConfig,
     /// For sending API events to consensus such as transactions
     pub api_sender: Sender<ApiEvent>,
     pub peer_status_channels: PeerStatusChannels,
@@ -117,7 +121,6 @@ impl ConsensusApi {
             let cache = module.build_verification_cache(&[input.clone()]);
             let meta = module
                 .validate_input(
-                    &FedimintInterconnect { fedimint: self },
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
                     &cache,
                     input,
@@ -229,11 +232,11 @@ impl ConsensusApi {
         }
     }
 
-    pub async fn download_config_with_token(
+    pub async fn download_client_config(
         &self,
         info: WsClientConnectInfo,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ApiResult<ClientConfigResponse> {
+    ) -> ApiResult<ClientConfig> {
         let token = self.cfg.local.download_token.clone();
 
         if info.download_token != token {
@@ -245,9 +248,10 @@ impl ConsensusApi {
         let times_used = dbtx
             .get_value(&ClientConfigDownloadKey(token.clone()))
             .await
-            .unwrap_or_default();
+            .unwrap_or_default()
+            + 1;
 
-        dbtx.insert_entry(&ClientConfigDownloadKey(token), &(times_used + 1))
+        dbtx.insert_entry(&ClientConfigDownloadKey(token), &times_used)
             .await;
 
         if let Some(limit) = self.cfg.local.download_token_limit {
@@ -258,7 +262,7 @@ impl ConsensusApi {
             }
         }
 
-        Ok(self.get_config_with_sig(dbtx).await)
+        Ok(self.client_cfg.clone())
     }
 
     pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
@@ -277,18 +281,6 @@ impl ConsensusApi {
             .await
             .map(|ep_hist_key| ep_hist_key.0 + 1)
             .unwrap_or(0)
-    }
-
-    pub async fn get_config_with_sig(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ClientConfigResponse {
-        let mut client = self.client_cfg.clone();
-        let maybe_sig = dbtx.get_value(&ClientConfigSignatureKey).await;
-        if let Some(SerdeSignature(sig)) = maybe_sig {
-            client.signature = Some(sig);
-        }
-        client
     }
 
     /// Sends an upgrade signal to the fedimint server thread
@@ -323,6 +315,44 @@ impl ConsensusApi {
             peers_connection_status,
             MAX_DURATION_FOR_RECENT_CONTRIBUTION,
         ))
+    }
+
+    async fn handle_backup_request(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        request: SignedBackupRequest,
+    ) -> Result<(), ApiError> {
+        let request = request
+            .verify_valid(SECP256K1)
+            .map_err(|_| ApiError::bad_request("invalid request".into()))?;
+
+        debug!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Received client backup request");
+        if let Some(prev) = dbtx.get_value(&ClientBackupKey(request.id)).await {
+            if request.timestamp <= prev.timestamp {
+                debug!(id = %request.id, len = request.payload.len(), "Received client backup request with old timestamp - ignoring");
+                return Err(ApiError::bad_request("timestamp too small".into()));
+            }
+        }
+
+        info!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Storing new client backup");
+        dbtx.insert_entry(
+            &ClientBackupKey(request.id),
+            &ClientBackupSnapshot {
+                timestamp: request.timestamp,
+                data: request.payload.to_vec(),
+            },
+        )
+        .await;
+
+        Ok(())
+    }
+
+    async fn handle_recover_request(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        id: secp256k1_zkp::XOnlyPublicKey,
+    ) -> Option<ClientBackupSnapshot> {
+        dbtx.get_value(&ClientBackupKey(id)).await
     }
 }
 
@@ -497,15 +527,29 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            "connection_code",
+            async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
+                Ok(fedimint.cfg.get_connect_info().to_string())
+            }
+        },
+        api_endpoint! {
             "config",
-            async |fedimint: &ConsensusApi, context, info: WsClientConnectInfo| -> ClientConfigResponse {
-                fedimint.download_config_with_token(info, &mut context.dbtx()).await
+            async |fedimint: &ConsensusApi, context, connection_code: String| -> ClientConfigResponse {
+                let info = connection_code.parse()
+                    .map_err(|_| ApiError::bad_request("Could not parse connection code".to_string()))?;
+                let future = context.wait_key_exists(ClientConfigSignatureKey);
+                let signature = future.await;
+                let client_config = fedimint.download_client_config(info, &mut context.dbtx()).await?;
+                Ok(ClientConfigResponse{
+                    client_config,
+                    signature
+                })
             }
         },
         api_endpoint! {
             "config_hash",
-            async |fedimint: &ConsensusApi, context, _v: ()| -> sha256::Hash {
-                Ok(fedimint.get_config_with_sig(&mut context.dbtx()).await.client_config.consensus_hash())
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
+                Ok(fedimint.cfg.consensus.consensus_hash())
             }
         },
         api_endpoint! {
@@ -532,21 +576,42 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "consensus_status",
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> ConsensusStatus {
-                fedimint.consensus_status_cache.get(|| async {
-                    fedimint.get_consensus_status().await
-                }).await
+            "status",
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
+                let consensus_status = fedimint
+                    .consensus_status_cache
+                    .get(|| fedimint.get_consensus_status())
+                    .await?;
+                Ok(StatusResponse {
+                    server: ServerStatus::ConsensusRunning,
+                    consensus: Some(consensus_status)
+                })
             }
         },
         api_endpoint! {
-            "status",
-            async |_fedimint: &ConsensusApi, context, _v: ()| -> ServerStatus {
+            "get_verify_config_hash",
+            async |fedimint: &ConsensusApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 if context.has_auth() {
-                    Ok(ServerStatus::ConsensusRunning)
+                    Ok(get_verification_hashes(&fedimint.cfg))
                 } else {
                     Err(ApiError::unauthorized())
                 }
+            }
+        },
+        api_endpoint! {
+            "backup",
+            async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
+                fedimint
+                    .handle_backup_request(&mut context.dbtx(), request).await?;
+                Ok(())
+
+            }
+        },
+        api_endpoint! {
+            "recover",
+            async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
+                Ok(fedimint
+                    .handle_recover_request(&mut context.dbtx(), id).await)
             }
         },
     ]
@@ -588,6 +653,7 @@ impl<T: Clone> ExpiringCache<T> {
 mod tests {
 
     use fedimint_core::api::ConsensusContribution;
+    use fedimint_core::task;
     use fedimint_core::time::now;
 
     use super::*;
@@ -723,7 +789,7 @@ mod tests {
             })
             .await;
         assert_eq!(result, 1);
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        task::sleep(Duration::from_secs(2)).await;
         let result = cache
             .get(|| async {
                 counter += 1;

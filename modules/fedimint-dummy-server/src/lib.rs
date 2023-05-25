@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ffi::OsString;
 use std::string::ToString;
 
 use anyhow::bail;
@@ -9,9 +8,8 @@ use fedimint_core::config::{
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
+use fedimint_core::epoch::{combine_sigs, SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::interconnect::ModuleInterconect;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
@@ -21,7 +19,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 use fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigGenParams, DummyConfigPrivate,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
+    DummyGenParams,
 };
 use fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
@@ -32,7 +31,7 @@ use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::{PublicKeySet, SecretKeySet, SignatureShare};
+use threshold_crypto::{PublicKeySet, SecretKeySet};
 use tokio::sync::Notify;
 
 use crate::db::{
@@ -54,6 +53,7 @@ impl ExtendsCommonModuleGen for DummyGen {
 /// Implementation of server module non-consensus functions
 #[async_trait]
 impl ServerModuleGen for DummyGen {
+    type Params = DummyGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     /// Returns the version of this module
@@ -66,7 +66,6 @@ impl ServerModuleGen for DummyGen {
         &self,
         cfg: ServerModuleConfig,
         _db: Database,
-        _env: &BTreeMap<OsString, OsString>,
         _task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
         Ok(Dummy::new(cfg.to_typed()?).into())
@@ -85,8 +84,7 @@ impl ServerModuleGen for DummyGen {
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        // Coerce config gen params into type
-        let params = params.to_typed::<DummyConfigGenParams>().unwrap();
+        let params = self.parse_params(params).unwrap();
         // Create trusted set of threshold keys
         let sks = SecretKeySet::random(peers.degree(), &mut OsRng);
         let pks: PublicKeySet = sks.public_keys();
@@ -96,10 +94,13 @@ impl ServerModuleGen for DummyGen {
             .map(|&peer| {
                 let private_key_share = SerdeSecret(sks.secret_key_share(peer.to_usize()));
                 let config = DummyConfig {
+                    local: DummyConfigLocal {
+                        example: params.local.0.clone(),
+                    },
                     private: DummyConfigPrivate { private_key_share },
                     consensus: DummyConfigConsensus {
                         public_key_set: pks.clone(),
-                        tx_fee: params.tx_fee,
+                        tx_fee: params.consensus.tx_fee,
                     },
                 };
                 (peer, config.to_erased())
@@ -113,20 +114,22 @@ impl ServerModuleGen for DummyGen {
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
-        // Coerce config gen params into type
-        let params = params.to_typed::<DummyConfigGenParams>().unwrap();
+        let params = self.parse_params(params).unwrap();
         // Runs distributed key generation
         // Could create multiple keys, here we use '()' to create one
         let g1 = peers.run_dkg_g1(()).await?;
         let keys = g1[&()].threshold_crypto();
 
         Ok(DummyConfig {
+            local: DummyConfigLocal {
+                example: params.local.0.clone(),
+            },
             private: DummyConfigPrivate {
                 private_key_share: keys.secret_key_share,
             },
             consensus: DummyConfigConsensus {
                 public_key_set: keys.public_key_set,
-                tx_fee: params.tx_fee,
+                tx_fee: params.consensus.tx_fee,
             },
         }
         .to_erased())
@@ -245,14 +248,20 @@ impl ServerModule for Dummy {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<DummyConsensusItem> {
         // Sign and send the print requests to consensus
-        let items =
-            dbtx.find_by_prefix(&DummySignV1Prefix)
-                .await
-                .map(|(DummySignKeyV1(message), _)| {
-                    let sig = self.cfg.private.private_key_share.sign(&message);
-                    DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
-                });
-        ConsensusProposal::new_auto_trigger(items.collect().await)
+        let sign_requests: Vec<_> = dbtx
+            .find_by_prefix(&DummySignV1Prefix)
+            .await
+            .collect()
+            .await;
+
+        let consensus_items = sign_requests
+            .into_iter()
+            .filter(|(_, sig)| sig.is_none())
+            .map(|(DummySignKeyV1(message), _)| {
+                let sig = self.cfg.private.private_key_share.sign(&message);
+                DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
+            });
+        ConsensusProposal::new_auto_trigger(consensus_items.collect())
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
@@ -262,26 +271,18 @@ impl ServerModule for Dummy {
         _consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
         // Collect all signatures consensus items by message
-        let mut sigs = HashMap::<String, Vec<(usize, &SignatureShare)>>::new();
+        let mut sigs = HashMap::<String, BTreeMap<PeerId, SerdeSignatureShare>>::new();
         for (peer, DummyConsensusItem::Sign(request, share)) in &consensus_items {
             let entry = sigs.entry(request.clone()).or_default();
-            entry.push((peer.to_usize(), &share.0));
+            entry.insert(*peer, share.clone());
         }
 
         let pks = self.cfg.consensus.public_key_set.clone();
         for (message, shares) in sigs {
             let key = DummySignKeyV1(message.to_string());
-
             // If a threshold of us signed, we can combine signatures
-            // TODO: We could make combining + verifying peer sigs easier
-            match pks.combine_signatures(shares) {
-                Ok(sig) if pks.public_key().verify(&sig, &message) => {
-                    dbtx.insert_entry(&key, &Some(SerdeSignature(sig))).await;
-                }
-                _ => {
-                    dbtx.insert_entry(&key, &None).await;
-                }
-            }
+            dbtx.insert_entry(&key, &combine_sigs(&pks, &shares, &message).ok())
+                .await;
         }
         vec![]
     }
@@ -295,7 +296,6 @@ impl ServerModule for Dummy {
 
     async fn validate_input<'a, 'b>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         _verification_cache: &Self::VerificationCache,
         input: &'a DummyInput,
@@ -320,15 +320,12 @@ impl ServerModule for Dummy {
 
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
-        interconnect: &'a dyn ModuleInterconect,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DummyInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         // TODO: Boiler-plate code
-        let meta = self
-            .validate_input(interconnect, dbtx, cache, input)
-            .await?;
+        let meta = self.validate_input(dbtx, cache, input).await?;
 
         let current_funds = dbtx.get_value(&DummyFundsKeyV1(input.account)).await;
         // Subtract funds from normal user, or print funds for the fed
