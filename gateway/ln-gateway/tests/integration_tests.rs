@@ -59,6 +59,13 @@ async fn gatewayd_shows_info_about_all_connected_federations() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn gatewayd_shows_detailed_info_about_filtered_federation() -> anyhow::Result<()> {
+    // todo: implement test case
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_shows_balance_for_any_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
