@@ -12,7 +12,6 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.66"
-assert_matches = "1.5.0"
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }

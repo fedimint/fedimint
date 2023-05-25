@@ -35,6 +35,5 @@ fedimint-server = { path = "../../fedimint-server" }
 
 [dev-dependencies]
 fedimint-testing = { path = "../../fedimint-testing" }
-test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 tokio = { version = "1.26.0", features = ["full"] }
