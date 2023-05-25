@@ -10,7 +10,7 @@
     "eject": "react-scripts eject",
     "lint": "eslint \"src/**/*.ts*\"",
     "clean": "rm -rf build",
-    "isNix": "if [[ -z \"${IN_NIX_SHELL:-}\" ]]; then echo 'It is recommended to run this command from a Nix dev shell. Use 'nix develop .#fedimint-ui' first'; sleep 3; fi;"
+    "isNix": "if [[ -z \"${IN_NIX_SHELL:-}\" ]]; then echo 'It is recommended to run this command from a Nix dev shell. Use 'nix develop' first'; sleep 3; fi;"
   },
   "dependencies": {
     "@chakra-ui/react": "^2.4.5",

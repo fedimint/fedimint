@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-if [[ -z "${FEDIMINT_UI_SHELL:-}" ]]; then
-  echo 'It is recommended to run this script from the fedimint-ui Nix dev shell. Use "nix develop .#fedimint-ui" first.'
+if [[ -z "${IN_NIX_SHELL:-}" ]]; then
+  echo 'It is recommended to run this script from the Nix dev shell. Use "nix develop" first.'
   exit 1
 fi
 

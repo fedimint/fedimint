@@ -8,7 +8,7 @@ Web app experience for setting up and administering fedimints. This is used by t
 
 From root repo directory:
 
-1. Start nix shell for developing UIs: `nix develop .#fedimint-ui`
+1. Start nix shell: `nix develop`
 1. Navigate to this directory: `cd /fedimint-ui/apps/guardian-ui`
 1. Install dependencies if necessary: `yarn install`
 
