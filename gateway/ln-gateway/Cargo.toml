@@ -73,7 +73,6 @@ fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-testing = { path = "../../fedimint-testing" }
-portpicker = "0.1.1"
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 
 [build-dependencies]
