@@ -1016,11 +1016,11 @@
     }
 
     <span class="kw">pub async fn </span>sleep(duration: Duration) {
-        gloo_timers::future::sleep(duration).<span class="kw">await
+        gloo_timers::future::sleep(duration.min(Duration::from_millis(i32::MAX <span class="kw">as _</span>))).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>sleep_until(deadline: Instant) {
-        gloo_timers::future::sleep(deadline.saturating_duration_since(Instant::now())).<span class="kw">await
+        sleep(deadline.saturating_duration_since(Instant::now())).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>timeout&lt;T&gt;(duration: Duration, future: T) -&gt; <span class="prelude-ty">Result</span>&lt;T::Output, Elapsed&gt;
