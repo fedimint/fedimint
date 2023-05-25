@@ -774,6 +774,17 @@
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
 <a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::{<span class="self">self</span>, max};
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::ops::Range;
@@ -798,6 +809,14 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::{NextECashNoteIndexKey, NoteKey};
 <span class="kw">use </span><span class="kw">crate</span>::output::{MintOutputCommon, MintOutputStatesCreated, NoteIssuanceRequest};
 <span class="kw">use </span><span class="kw">crate</span>::MintClientContext;
+
+<span class="doccomment">/// Restore will progress in chunks of a fixed epoch count,
+/// after each the current state is persisted in the database.
+/// Larger chunks introduce less &quot;pausing&quot; processing and snapshoting
+/// storage and overhead  but risk loosing more progress each time the
+/// client app is closed. Some time based, or even &quot;save on close&quot;
+/// scheme would be better, but currently not implemented.
+</span><span class="kw">const </span>PROGRESS_SNAPSHOT_EPOCHS: u64 = <span class="number">500</span>;
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>EcashRecoveryFinalState {
@@ -997,8 +1016,11 @@
         secret: DerivableSecret,
     ) -&gt; <span class="self">Self </span>{
         <span class="macro">assert_eq!</span>(secret.level(), <span class="number">2</span>);
-        <span class="kw">let </span>epoch_range =
-            <span class="self">self</span>.next_epoch..cmp::min(<span class="self">self</span>.next_epoch.wrapping_add(<span class="number">100</span>), <span class="self">self</span>.end_epoch);
+        <span class="kw">let </span>epoch_range = <span class="self">self</span>.next_epoch
+            ..cmp::min(
+                <span class="self">self</span>.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_EPOCHS),
+                <span class="self">self</span>.end_epoch,
+            );
         <span class="kw">let </span><span class="kw-2">mut </span>epoch_stream = <span class="self">Self</span>::fetch_epochs_stream(api, epoch_pk, decoders, epoch_range);
         <span class="kw">while let </span><span class="prelude-val">Some</span>((epoch, epoch_history)) = epoch_stream.next().<span class="kw">await </span>{
             <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
