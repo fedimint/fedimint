@@ -331,6 +331,14 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
@@ -344,7 +352,7 @@
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::encoding::Decodable;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
@@ -477,7 +485,9 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation:?}&quot;</span>);
 
-            <span class="prelude-val">Ok</span>(serde_json::to_value(notes).unwrap())
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
+                <span class="string">&quot;notes&quot;</span>: serialize_ecash(<span class="kw-2">&amp;</span>notes),
+            }))
         }
         ClientNg::LnInvoice {
             amount,
@@ -663,6 +673,12 @@
 </span><span class="kw">struct </span>PayInvoiceResponse {
     operation_id: OperationId,
     preimage: String,
+}
+
+<span class="kw">pub fn </span>serialize_ecash(c: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;) -&gt; String {
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+    Encodable::consensus_encode(c, <span class="kw-2">&amp;mut </span>bytes).expect(<span class="string">&quot;encodes correctly&quot;</span>);
+    base64::encode(<span class="kw-2">&amp;</span>bytes)
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_cli" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
