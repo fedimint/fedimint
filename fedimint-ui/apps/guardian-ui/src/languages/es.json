@@ -1,0 +1,122 @@
+{
+	"common": {
+		"next": "Siguiente",
+		"back": "Atrás"
+	},
+	"app": {
+		"error": "Algo salió mal."
+	},
+		"connect_guardians": {
+		"invite_guardians": "Invitar seguidores",
+		"invite_guardians_help": "Comparte este enlace con los demás Guardianes",
+		"approve": "Aprobar",
+		"approved": "Aprobado",
+		"pending": "Pendiente",
+		"not_joined": "No unido"
+	},
+	"federation_dashboard": {
+		"card_header": "Información de la federación",
+		"your_status": "Tu estado",
+		"epoch_count": "Recuento de épocas",
+		"api_version": "Versión de la API",
+		"consensus_version": "Versión de consenso",
+		"peer_info": "Información del par",
+		"name": "Nombre",
+		"status": "Estado",
+		"peer": "Par"
+	},
+	"login": {
+		"password": "Contraseña",
+		"submit": "Enviar"
+	},
+	"role_selector": {
+		"leader": {
+		"label": "Líder",
+		"description": "Elige uno de tus Guardianes como Líder. El Líder ingresará información sobre la Federación."
+	},
+	"follower": {
+		"label": "Seguidor",
+		"description": "Los seguidores del Guardián (todos los demás Guardianes) confirmarán la información que ingrese el Líder."
+	}
+	},
+	"run_dkg": {
+		"error_config": "Error al ejecutar la generación distribuida de claves. La configuración de la Federación debe reiniciarse.",
+		"error_default": "No listo para DKG, tu estado actual es",
+		"error_header": "Algo salió mal.",
+		"waiting_header": "Esperando a los pares...",
+		"generating_header": "Generando códigos..."
+	},
+	"set_config": {
+		"guardian_name": "Nombre del Guardián",
+		"guardian_name_help": "Este nombre se mostrará a otros Guardianes",
+		"admin_password": "Contraseña de administrador",
+		"admin_password_help": "Necesitarás esto cada vez que visites esta página.",
+		"join_federation": "Enlace de unión a la Federación",
+		"join_federation_help": "Pide el enlace a la persona que creó la Federación y pégalo aquí.",
+		"federation_settings": "Configuración de la Federación",
+		"federation_name": "Nombre de la Federación",
+		"guardian_number": "Número de Guardianes",
+		"guardian_number_help": "Esto no se puede cambiar más tarde.",
+		"block_confirmations": "Confirmaciones de bloque",
+		"block_confirmations_help": "¿Cuántas confirmaciones de bloque se necesitan antes de confirmar?",
+		"bitcoin_network": "Red de Bitcoin",
+		"select_network": "Selecciona una red",
+		"set_rpc_help": "Dirección RPC de Bitcoin configurada localmente",
+		"bitcoin_rpc": "RPC de Bitcoin",
+		"error_valid_number": "Por favor, ingresa un número mayor o igual a 1."
+	},
+	"setup": {
+		"auth": {
+			"title": "¡Bienvenido de nuevo!",
+			"subtitle": "Por favor, ingresa tu contraseña."
+		},
+		"progress": {
+			"start": {
+				"title": "¡Bienvenido a Fedimint!",
+				"subtitle": "¿Estás creando una Federación o uniéndote a una?"
+			},
+			"set_config": {
+				"title": "Configuración de tu federación",
+				"subtitle_leader": "Los seguidores de tu Federación confirmarán esta información en su lado.",
+				"subtitle_follower": "El líder de tu Federación configurará los detalles principales de la Federación. Pronto los confirmarás."
+			},
+			"connect_guradians": {
+				"title_leader": "Invita a tus Guardianes",
+				"title_follower": "Confirma la información de tu Federación",
+				"subtitle_leader": "Comparte el enlace con los demás Guardianes para que todos estén en la misma página. Una vez que todos los Guardianes se unan, pasarás automáticamente al siguiente paso.",
+				"subtitle_follower": "Asegúrate de que la información aquí sea correcta y que los Guardianes de la Federación sean los correctos. Haz clic en el botón Aprobar cuando estés seguro de que todo se ve bien."
+			},
+			"run_dkg": {
+				"title": "¡Boom! Compartiendo información entre los Guardianes",
+				"subtitle": "Todos los Guardianes han validado los detalles de la configuración de la Federación. Realizando algunos cálculos..."
+			},
+			"verify_guardians": {
+				"title": "Verifica tus Guardianes",
+				"subtitle": "Pide a cada Guardián su código de verificación y pégalo a continuación para comprobar su validez. ¡Casi hemos terminado!"
+			},
+			"error": {
+				"title": "Paso desconocido",
+				"subtitle": "¿Cómo llegaste aquí?!"
+			}
+		}
+	},
+	"setup_complete": {
+		"header": "🎉 🎉 🎉",
+		"congratulations": "Felicidades",
+		"sentence_one": "Se han verificado los códigos de verificación de todos los Guardianes.",
+		"continue": "Continuar"
+	},
+	"verify_guardians": {
+		"verified": "Verificado",
+		"verified_placeholder": "Ingresa el código aquí",
+		"error": "Algo salió mal.",
+		"error_peer_id": "No se pudo determinar qué par eres. Por favor, actualiza y vuelve a intentarlo.",
+		"verification_code": "tu código de verificación",
+		"verification_code_help": "Comparte este código con otros Guardianes",
+		"table_title": "Códigos de verificación de los Guardianes",
+		"table_description": "Ingresa los códigos de verificación de cada Guardián a continuación.",
+		"table_column_name": "Nombre",
+		"table_column_status": "Estado",
+		"table_column_hash_input": "Pegar código de verificación"
+	}
+}

@@ -17,9 +17,11 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { ApiContext, Button, TabHeader } from '.';
 import { TransactionStatus } from '../api';
+import { useTranslation } from '@fedimint/translation';
 
 export const DepositTabHeader = (): JSX.Element => {
-  return <TabHeader>Deposit</TabHeader>;
+  const { t } = useTranslation('gateway');
+  return <TabHeader>{t('deposit_tab.tab_header')}</TabHeader>;
 };
 
 const truncateStringFormat = (arg: string): string => {
@@ -213,6 +215,7 @@ interface ShowDepositAddressProps {
 const ShowDepositAddress = ({
   address,
 }: ShowDepositAddressProps): JSX.Element => {
+  const { t } = useTranslation('gateway');
   return (
     <>
       <Heading
@@ -220,12 +223,11 @@ const ShowDepositAddress = ({
         fontSize={{ base: '22', md: '24' }}
         color='#1A202C'
       >
-        Bitcoin Deposit to Federation
+        {t('deposit_tab.header')}
       </Heading>
 
       <Text maxW='sm' py='3'>
-        Please pay to the address address shown to deposit funds into this
-        federation You can scan the QR code to pay.
+        {t('deposit_tab.sentence_one')}
       </Text>
       <Text py='1'></Text>
       <Flex
@@ -234,7 +236,7 @@ const ShowDepositAddress = ({
         mb={4}
       >
         <Text fontSize='lg' fontWeight='500' color='#1A202C' mr={2}>
-          Address:
+          {t('common.address')}
         </Text>
         <Text fontSize='lg'>{truncateStringFormat(address)}</Text>
       </Flex>
@@ -255,6 +257,7 @@ const WatchTransaction = ({
   confirmationsRequired,
   federationId,
 }: WatchTransactionProps) => {
+  const { t } = useTranslation();
   const { mintgate, explorer } = React.useContext(ApiContext);
 
   const [status, setStatus] = useState(txStatus);
@@ -308,11 +311,11 @@ const WatchTransaction = ({
         fontSize={{ base: '22', md: '24' }}
         color='#1A202C'
       >
-        Bitcoin Deposit
+        {t('deposit_tab.bitcoin_deposit')}
       </Heading>
       <Flex align='center' mt={3}>
         <Text fontSize='lg' mr={2}>
-          Amount:
+          {t('common.amount')}:
         </Text>
         <Text fontSize='lg' fontWeight='bold'>
           {status.amount_btc} BTC
@@ -325,10 +328,11 @@ const WatchTransaction = ({
           mt={4}
         >
           <Text fontSize='lg' fontWeight='500' color='#1A202C' mr={2}>
-            Confirmations:
+            {t('deposit_tab.confirmations')}
           </Text>
           <Text>
-            {status.confirmations} / {confirmationsRequired} required
+            {status.confirmations} / {confirmationsRequired}{' '}
+            {t('deposti_tab.required')}
           </Text>
         </Flex>
         <Spacer />
@@ -353,7 +357,7 @@ const WatchTransaction = ({
         mb={4}
       >
         <Text fontSize='lg' fontWeight='500' color='#1A202C' mr={2}>
-          Receiving Addr:
+          {t('deposit_tab.receiving_address')}
         </Text>
         <Text> {truncateStringFormat(address)}</Text>
       </Flex>
@@ -363,7 +367,7 @@ const WatchTransaction = ({
         mb={4}
       >
         <Text fontSize='lg' fontWeight='500' color='#1A202C' mr={2}>
-          Transaction ID:
+          {t('deposit_tab.transaction_id')}
         </Text>
         <Text> {truncateStringFormat(status.transactionId)}</Text>
       </Flex>

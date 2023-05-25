@@ -1,0 +1,65 @@
+{	
+	"common": {
+		"amount": "Amount",
+		"address": "Address",
+		"bitcoin": "Bitcoin",
+		"sats": "sats",
+		"confirm": "Confirm"
+	},
+	"connect_federation": {
+		"connect": "Connect 🚀",
+		"label": "Connect String:",
+		"connection_string_placeholder": "Enter federation connection string"
+	},
+	"deposit_tab": {
+		"tab_header": "Deposit",
+		"header": "Bitcoin Deposit to Federation",
+		"sentence_one": "Please pay to the address address shown to deposit funds into this federation You can scan the QR code to pay.",
+		"bitcoin_deposit": "Bitcoin Deposit",
+		"confirmations": "Confirmations:",
+		"required": "required",
+		"receiving_address": "Receiving Addr:",
+		"transaction_id": "Transaction ID:"
+	},
+	"federation_card": {
+		"button": "Details"
+	},
+	"header": {
+		"connect": "Connect Federation",
+		"sort": "Sort",
+		"ascending": "Ascending",
+		"descending": "Descending",
+		"date_created": "Date Created",
+		"filter": "Filter",
+		"active": "Active",
+		"archived": "Archived",
+		"all": "All"
+
+	},
+	"info_tab": {
+		"tab_header": "Info",
+		"description": "Federation Description:",
+		"date_connected": "Date Connected:"
+	},
+	"withdraw_tab": {
+		"tab_header": "Withdraw",
+		"error": "Error:",
+		"error_amount": "Amount cannot be empty or equal to zero",
+		"error_address": "Amount or address cannot be empty",
+		"error_request": "Failed to request withdrawal",
+		"withdraw": "Withdraw",
+		"withdrawal_history": "Withdrawal History",
+		"confirm_withdraw": "Confirm Withdraw",
+		"to": "to",
+		"amount_label": "Amount (sats):",
+		"amount_placeholder": "Enter amount in sats",
+		"address_label": "Your address:",
+		"address_placeholder": "Enter your btc address",
+		"requested_withdrawal": "Requested Withdrawal",
+		"request_from": "Requested Withdrawal from",
+		"view": "View",
+		"close": "Close",
+		"withdrawal_created": "Withdrawal created.",
+		"withdrawal_created_description": "Please check your transaction history"
+	}
+}

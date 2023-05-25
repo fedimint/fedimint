@@ -19,6 +19,7 @@ import { GuardianRole, Peer } from '../types';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
 import { ReactComponent as CopyIcon } from '../assets/svgs/copy.svg';
 import { formatApiErrorMessage, getMyPeerId } from '../utils/api';
+import { useTranslation } from '@fedimint/utils';
 
 interface PeerWithHash {
   id: string;
@@ -36,6 +37,7 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
     state: { role, numPeers },
   } = useGuardianContext();
   const theme = useTheme();
+  const { t } = useTranslation();
   const isHost = role === GuardianRole.Host;
   const [myHash, setMyHash] = useState('');
   const [peersWithHash, setPeersWithHash] = useState<PeerWithHash[]>();
@@ -62,9 +64,7 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
 
         const myPeerId = getMyPeerId(peers);
         if (!myPeerId) {
-          throw new Error(
-            'Unable to determine which peer you are. Please refresh and try again.'
-          );
+          throw new Error(`${t('verify_guardians.error_peer_id')}`);
         }
 
         setMyHash(hashes[myPeerId]);
@@ -104,9 +104,20 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
 
   const tableColumns = useMemo(
     () => [
-      { key: 'name', heading: 'Name', width: '200px' },
-      { key: 'status', heading: 'Status', width: '160px' },
-      { key: 'hashInput', heading: 'Paste verification code' },
+      {
+        key: 'name',
+        heading: t('verify_guardians.table_column_name'),
+        width: '200px',
+      },
+      {
+        key: 'status',
+        heading: t('verify_guardians.table_column_status'),
+        width: '160px',
+      },
+      {
+        key: 'hashInput',
+        heading: t('verify_guardians.table_column_hash_input'),
+      },
     ],
     []
   );
@@ -132,13 +143,17 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
             {peer.name}
           </Text>
         ),
-        status: isValid ? <Tag colorScheme='green'>Verified</Tag> : '',
+        status: isValid ? (
+          <Tag colorScheme='green'>{t('verify_guardians.verified')}</Tag>
+        ) : (
+          ''
+        ),
         hashInput: (
           <FormControl isInvalid={isError}>
             <Input
               variant='filled'
               value={value}
-              placeholder='Input code here'
+              placeholder={`${t('verify_guardians.verified_placeholder')}`}
               onChange={(ev) => handleChangeHash(ev.currentTarget.value, idx)}
               readOnly={isValid}
             />
@@ -151,7 +166,7 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
   if (error) {
     return (
       <VStack gap={4}>
-        <Heading size='sm'>Something went wrong.</Heading>
+        <Heading size='sm'>{t('verify_guardians.error')}</Heading>
         <Text color={theme.colors.red[500]}>{error}</Text>
       </VStack>
     );
@@ -162,16 +177,16 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
       <VStack gap={8} justify='start' align='start'>
         <FormGroup>
           <FormControl>
-            <FormLabel>Your verification code</FormLabel>
+            <FormLabel>{t('verify_guardians.verification_code')}</FormLabel>
             <CopyInput value={myHash} buttonLeftIcon={<Icon as={CopyIcon} />} />
             <FormHelperText>
-              Share this code with other guardians
+              {t('verify_guardians.verification_code_help')}
             </FormHelperText>
           </FormControl>
         </FormGroup>
         <Table
-          title='Guardian verification codes'
-          description='Enter each Guardian’s verification codes below.'
+          title={t('verify_guardians.code_table_title')}
+          description={t('verify_guardians.code_table_description')}
           columns={tableColumns}
           rows={tableRows}
         />
@@ -183,7 +198,7 @@ export const VerifyGuardians: React.FC<Props> = ({ next }) => {
             leftIcon={<Icon as={ArrowRightIcon} />}
             mt={4}
           >
-            Next
+            {t('common.next')}
           </Button>
         </div>
       </VStack>

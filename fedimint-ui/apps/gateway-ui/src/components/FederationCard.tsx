@@ -21,6 +21,7 @@ import {
   DepositTabHeader,
 } from '.';
 import { WithdrawTab, WithdrawTabHeader } from './WithdrawTab';
+import { useTranslation } from '@fedimint/translation';
 
 interface FederationCardProps {
   federation: Federation;
@@ -35,6 +36,7 @@ enum OpenTab {
 }
 
 export const FederationCard = (props: FederationCardProps): JSX.Element => {
+  const { t } = useTranslation('gateway');
   const { federation_id, mint_pubkey, details } = props.federation;
 
   const [showDetails, setShowDetails] = useState<boolean>(false);
@@ -93,7 +95,7 @@ export const FederationCard = (props: FederationCardProps): JSX.Element => {
             fontSize={{ base: '12px', md: '15px', lg: '16px' }}
             onClick={detailsControl}
           >
-            Details
+            {t('federation_card.button')}
           </Button>
         </Flex>
         <Tabs index={tab.open} onChange={tabControl} pt={3} variant='unstyled'>

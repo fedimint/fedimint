@@ -8,6 +8,6 @@ import { ChakraProvider, ChakraProviderProps } from '@chakra-ui/react';
 export const SharedChakraProvider: React.FC<ChakraProviderProps> = ({
   theme,
   children,
-}: ChakraProviderProps) => {
+}: ChakraProviderProps | any) => {
   return <ChakraProvider theme={theme}>{children}</ChakraProvider>;
 };

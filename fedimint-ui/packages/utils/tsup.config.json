@@ -1,0 +1,11 @@
+{
+  "entry": ["src/index.tsx"],
+  "format": ["cjs"],
+  "dts": true,
+  "external": [
+    "i18next",
+    "i18next-browser-detector",
+    "react-i18next"
+  ],
+  "sourcemap": true
+}

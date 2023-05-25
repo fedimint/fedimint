@@ -18,9 +18,11 @@ import {
 } from '@chakra-ui/react';
 import { TabHeader, Button, Input, ApiContext } from '.';
 import { TransactionStatus } from '../api';
+import { useTranslation } from '@fedimint/translation';
 
 export const WithdrawTabHeader = () => {
-  return <TabHeader>Withdraw</TabHeader>;
+  const { t } = useTranslation('gateway');
+  return <TabHeader>{t('withdraw_tab.tab_header')}</TabHeader>;
 };
 
 interface WithdrawObject {
@@ -42,6 +44,7 @@ const truncateStringFormat = (arg: string): string => {
 export const WithdrawTab = React.memo(function WithdrawTab({
   federationId,
 }: WithdrawTabProps): JSX.Element {
+  const { t } = useTranslation('gateway');
   const { mintgate } = React.useContext(ApiContext);
   const [withdrawObject, setWithdrawObject] = useState<WithdrawObject>({
     amount: 0,
@@ -66,11 +69,11 @@ export const WithdrawTab = React.memo(function WithdrawTab({
 
   const createWithdrawal = () => {
     if (!amount && amount === 0 && typeof amount === 'number') {
-      setError('Amount cannot be empty or equal to zero');
+      setError(`${t('withdraw_tab.error_amount')}`);
       return;
     }
     if (!address) {
-      setError('Amount or address cannot be empty');
+      setError(`${t('withdraw_tab.error_address')}`);
       return;
     }
     // TODO: address validation
@@ -100,7 +103,7 @@ export const WithdrawTab = React.memo(function WithdrawTab({
       setModalState(false);
     } catch (err) {
       console.log(err);
-      setError('Failed to request withdrawal');
+      setError(`${t('withdraw_tab.error_request')}`);
     }
   };
 
@@ -108,15 +111,15 @@ export const WithdrawTab = React.memo(function WithdrawTab({
     <TabPanel ml='1px' mr='1px' p={{ base: '4px', md: '16px', lg: '16px' }}>
       <Stack spacing='4' maxWidth={{ base: '100%', md: 'md', lg: 'md' }}>
         <Input
-          labelName=' Amount (sats):'
-          placeHolder='Enter amount in sats'
+          labelName={t('withdraw_tab.amount_label')}
+          placeHolder={t('withdraw_tab.amount_placeholder')}
           value={withdrawObject.amount}
           onChange={(e) => handleInputChange(e)}
           name='amount'
         />
         <Input
-          labelName='Your address:'
-          placeHolder='Enter your btc address '
+          labelName={t('withdraw_tab.address_label')}
+          placeHolder={t('withdraw_tab.address_placeholder')}
           value={withdrawObject.address}
           onChange={(e) => handleInputChange(e)}
           name='address'
@@ -125,13 +128,13 @@ export const WithdrawTab = React.memo(function WithdrawTab({
         {error && (
           <Box>
             <Text textAlign='center' color='red' fontSize='14'>
-              Error: {error}
+              {t('withdraw_tab.withdraw')} {error}
             </Text>
           </Box>
         )}
 
         <Button borderRadius='4' onClick={createWithdrawal}>
-          Withdraw
+          {t('withdraw_tab.withdraw')}
         </Button>
       </Stack>
 
@@ -141,7 +144,7 @@ export const WithdrawTab = React.memo(function WithdrawTab({
             {transactionList.length !== 0 && (
               <>
                 <Text color='#2d2d2d' fontSize='18px' fontWeight='600'>
-                  Withdrawal History
+                  {t('withdraw_tab.withdrawal_history')}
                 </Text>
                 <Box>
                   {transactionList?.map((transaction) => {
@@ -189,6 +192,7 @@ export interface ConfirmWithdrawModalProps {
 const ConfirmWithdrawModal = (
   props: ConfirmWithdrawModalProps
 ): JSX.Element => {
+  const { t } = useTranslation('gateway');
   const { open, txRequest, onModalClickCallback, startWithdrawalCallback } =
     props;
   const toast = useToast();
@@ -199,17 +203,19 @@ const ConfirmWithdrawModal = (
         <Modal onClose={onModalClickCallback} isOpen={open} isCentered>
           <ModalOverlay />
           <ModalContent>
-            <ModalHeader>Confirm Withdrawal</ModalHeader>
+            <ModalHeader>{t('withdraw_tab.confirm_withdraw')}</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
               <VStack alignItems='flex-start' justifyContent='space-between'>
                 <Box>
-                  <Text>Amount:</Text>
-                  <Text>{txRequest.amount} sats</Text>
+                  <Text>{t('common.amount')}:</Text>
+                  <Text>
+                    {txRequest.amount} {t('common.sats')}
+                  </Text>
                 </Box>
-                <Text>to</Text>
+                <Text>{t('withdraw_tab.to')}</Text>
                 <Box>
-                  <Text>Address:</Text>
+                  <Text>{t('common.address')}:</Text>
                   <Text>{truncateStringFormat(txRequest.address)}</Text>
                 </Box>
               </VStack>
@@ -220,8 +226,10 @@ const ConfirmWithdrawModal = (
                   if (startWithdrawalCallback) {
                     startWithdrawalCallback();
                     toast({
-                      title: 'Withdrawal created.',
-                      description: 'Please check your transaction history',
+                      title: `${t('withdraw_tab.withdrawal_created')}`,
+                      description: `${t(
+                        'withdraw_tab.withdrawal_created_description'
+                      )}`,
                       status: 'success',
                       duration: 5000,
                       isClosable: true,
@@ -232,7 +240,7 @@ const ConfirmWithdrawModal = (
                 fontSize={{ base: '12px', md: '13px', lg: '16px' }}
                 p={{ base: '10px', md: '13px', lg: '16px' }}
               >
-                Confirm
+                {t('common.confirm')}
               </Button>
             </ModalFooter>
           </ModalContent>
@@ -251,6 +259,7 @@ export interface TransactionViewProps {
 }
 
 const TransactionView = (props: TransactionViewProps): JSX.Element => {
+  const { t } = useTranslation('gateway');
   const { explorer } = React.useContext(ApiContext);
   const { confirmationsRequired, amount, address, txId, federationId } = props;
 
@@ -293,8 +302,12 @@ const TransactionView = (props: TransactionViewProps): JSX.Element => {
         {!showDetails && (
           <>
             <HStack justifyContent='space-between'>
-              <Text fontWeight='600'>Requested withdrawal</Text>
-              <Text fontWeight='600'>{amount} sats</Text>
+              <Text fontWeight='600'>
+                {t('withdraw_tab.requested_withdrawal')}
+              </Text>
+              <Text fontWeight='600'>
+                {amount} {t('common.sats')}
+              </Text>
             </HStack>
             <HStack mt='2' alignItems='baseline' justifyContent='space-between'>
               <Text fontSize='15px'>{new Date().toDateString()}</Text>
@@ -319,9 +332,12 @@ const TransactionView = (props: TransactionViewProps): JSX.Element => {
         <>
           <Box textAlign='center'>
             <Text mt='8' mb='8' fontWeight='600'>
-              Requested withdrawal from {federationId}
+              {t('withdraw_tab.request_from')} {federationId}
             </Text>
-            <TransactionDetail title='Amount' detail={`${amount} sats`} />
+            <TransactionDetail
+              title='Amount'
+              detail={`${amount} ${t('common.sats')}`}
+            />
             <TransactionDetail
               title='Address'
               detail={truncateStringFormat(address)}
@@ -352,7 +368,7 @@ const TransactionView = (props: TransactionViewProps): JSX.Element => {
                 }}
                 width={{ base: '100%' }}
               >
-                View
+                {t('withdraw_tab.view')}
               </Button>
               <Button
                 onClick={() => {
@@ -360,7 +376,7 @@ const TransactionView = (props: TransactionViewProps): JSX.Element => {
                 }}
                 width={{ base: '100%' }}
               >
-                Close
+                {t('withdraw_tab.close')}
               </Button>
             </HStack>
           </Box>

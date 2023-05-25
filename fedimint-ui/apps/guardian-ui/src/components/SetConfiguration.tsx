@@ -24,6 +24,7 @@ import { ReactComponent as FedimintLogo } from '../assets/svgs/fedimint.svg';
 import { ReactComponent as BitcoinLogo } from '../assets/svgs/bitcoin.svg';
 import { ReactComponent as ArrowRightIcon } from '../assets/svgs/arrow-right.svg';
 import { formatApiErrorMessage, getModuleParamsFromConfig } from '../utils/api';
+import { useTranslation } from '@fedimint/utils';
 
 interface Props {
   next: () => void;
@@ -42,6 +43,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
     submitConfiguration,
   } = useGuardianContext();
   const theme = useTheme();
+  const { t } = useTranslation();
   const isHost = role === GuardianRole.Host;
   const [myName, setMyName] = useState(stateMyName);
   const [password, setPassword] = useState(statePassword);
@@ -91,17 +93,14 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
       initStateFromParams(configGenParams);
     }
   }, [configGenParams]);
-
   // Update password when updated from state
   useEffect(() => {
     setPassword(statePassword);
   }, [statePassword]);
-
   const isValidNumber = (value: string) => {
     const int = parseInt(value, 10);
     return int && !Number.isNaN(int);
   };
-
   const isValid: boolean = isHost
     ? Boolean(
         myName &&
@@ -112,7 +111,6 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
           network
       )
     : Boolean(myName && password && hostServerUrl);
-
   const handleNext = async () => {
     setError(undefined);
     try {
@@ -187,38 +185,33 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
     <VStack gap={8} justify='start' align='start'>
       <FormGroup>
         <FormControl>
-          <FormLabel>Guardian name</FormLabel>
+          <FormLabel>{t('set_config.guardian_name')}</FormLabel>
           <Input
             value={myName}
             onChange={(ev) => setMyName(ev.currentTarget.value)}
           />
-          <FormHelperText>
-            This name will be shown to other Guardians
-          </FormHelperText>
+          <FormHelperText>{t('set_config.guardian_name_help')}</FormHelperText>
         </FormControl>
         <FormControl>
-          <FormLabel>Admin password</FormLabel>
+          <FormLabel>{t('set_config.admin_password')}</FormLabel>
           <Input
             type='password'
             value={password}
             onChange={(ev) => setPassword(ev.currentTarget.value)}
             isDisabled={!!statePassword}
           />
-          <FormHelperText>
-            {"You'll need this every time you visit this page."}
-          </FormHelperText>
+          <FormHelperText>{t('set_config.admin_password_help')}</FormHelperText>
         </FormControl>
         {!isHost && (
           <FormControl>
-            <FormLabel>Join Federation link</FormLabel>
+            <FormLabel>{t('set_config.join_federation')}</FormLabel>
             <Input
               value={hostServerUrl}
               onChange={(ev) => setHostServerUrl(ev.currentTarget.value)}
               placeholder='ws://...'
             />
             <FormHelperText>
-              Ask the person who created the Federation for a link, and paste it
-              here.
+              {t('set_config.join_federation_help')}
             </FormHelperText>
           </FormControl>
         )}
@@ -226,33 +219,25 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
       <>
         {isHost && (
           <FormGroup>
-            <FormGroupHeading icon={FedimintLogo} title='Federation settings' />
+            <FormGroupHeading icon={FedimintLogo} title={`${t('set_config.federation_settings')}`} />
             <FormControl>
-              <FormLabel>Federation name</FormLabel>
+              <FormLabel>{t('set_config.federation_name')}</FormLabel>
               <Input
                 value={federationName}
                 onChange={(ev) => setFederationName(ev.currentTarget.value)}
               />
             </FormControl>
-            <FormControl isInvalid={!isValidNumber(numPeers)}>
-              <FormLabel>Number of guardians</FormLabel>
-              <NumberInput
+            <FormControl>
+              <FormLabel>{t('set_config.guardian_number')}</FormLabel>
+              <Input
+                type='number'
                 min={1}
                 value={numPeers}
-                onChange={(value) => {
-                  setNumPeers(value);
-                }}
-              >
-                <NumberInputField />
-                <NumberInputStepper>
-                  <NumberIncrementStepper />
-                  <NumberDecrementStepper />
-                </NumberInputStepper>
-              </NumberInput>
-              <FormErrorMessage>
-                Please input a number of 1 or more.
-              </FormErrorMessage>
-              <FormHelperText>This cannot be changed later.</FormHelperText>
+                onChange={(ev) => setNumPeers(ev.currentTarget.value)}
+              />
+              <FormHelperText>
+                {t('set_config.guardian_number_help')}
+              </FormHelperText>
             </FormControl>
           </FormGroup>
         )}
@@ -261,7 +246,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
           {isHost && (
             <>
               <FormControl isInvalid={!isValidNumber(blockConfirmations)}>
-                <FormLabel>Block confirmations</FormLabel>
+                <FormLabel>{t('set_config.block_confirmations')}</FormLabel>
                 <NumberInput
                   min={1}
                   max={200}
@@ -277,16 +262,16 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
                   </NumberInputStepper>
                 </NumberInput>
                 <FormErrorMessage>
-                  Please input a number of 1 or more.
+                  {t('set_config.error_valid_number')}
                 </FormErrorMessage>
                 <FormHelperText>
-                  How many block confirmations needed before confirming?
+                  {t('set_config.block_confirmations_help')}
                 </FormHelperText>
               </FormControl>
               <FormControl>
-                <FormLabel>Bitcoin network</FormLabel>
+                <FormLabel>{t('set_config.bitcoin_network')}</FormLabel>
                 <Select
-                  placeholder='Select a network'
+                  placeholder={`${t('set_config.select_network')}`}
                   value={network !== null ? network : ''}
                   onChange={(ev) => {
                     const value = ev.currentTarget.value;
@@ -303,16 +288,14 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
             </>
           )}
           <FormControl>
-            <FormLabel>Bitcoin RPC</FormLabel>
+            <FormLabel>{t('set_config.bitcoin_rpc')}</FormLabel>
             <Input
               value={bitcoinRpc.url}
               onChange={(ev) => {
                 setBitcoinRpc({ ...bitcoinRpc, url: ev.currentTarget.value });
               }}
             />
-            <FormHelperText>
-              Locally configured Bitcoin RPC address
-            </FormHelperText>
+            <FormHelperText>{t('set_config.set_rpc_help')}</FormHelperText>
           </FormControl>
         </FormGroup>
       </>
@@ -328,7 +311,7 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
           leftIcon={<Icon as={ArrowRightIcon} />}
           mt={4}
         >
-          Next
+          {t('common.next')}
         </Button>
       </div>
     </VStack>

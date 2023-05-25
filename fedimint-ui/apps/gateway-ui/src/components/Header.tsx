@@ -14,6 +14,7 @@ import {
 import { Button as ChakraButton } from '@chakra-ui/react';
 import { FiChevronDown } from 'react-icons/fi';
 import { HiMenuAlt3 } from 'react-icons/hi';
+import { useTranslation } from '@fedimint/translation';
 import { Federation, Filter, Sort } from '../federation.types';
 import { Button } from '.';
 import '../index.css';
@@ -28,6 +29,7 @@ export type HeaderProps = {
 export const Header = React.memo(function Header(
   props: HeaderProps
 ): JSX.Element {
+  const { t } = useTranslation('gateway');
   return (
     <Flex>
       <Flex alignItems='center' gap={2}>
@@ -36,7 +38,7 @@ export const Header = React.memo(function Header(
           fontSize={{ base: '12px', md: '13px', lg: '16px' }}
           p={{ base: '10px', md: '13px', lg: '16px' }}
         >
-          Connect Federation
+          {t('header.connect')}
         </Button>
       </Flex>
       <Spacer />
@@ -49,17 +51,17 @@ export const Header = React.memo(function Header(
               as={ChakraButton}
               rightIcon={<FiChevronDown />}
             >
-              Sort
+              {t('header.sort')}
             </MenuButton>
             <MenuList>
               <MenuItem onClick={() => props.sortCallback(Sort.Ascending)}>
-                Ascending
+                {t('header.ascending')}
               </MenuItem>
               <MenuItem onClick={() => props.sortCallback(Sort.Descending)}>
-                Descending
+                {t('header.descending')}
               </MenuItem>
               <MenuItem onClick={() => props.sortCallback(Sort.Date)}>
-                Date Created
+                {t('header.date_created')}
               </MenuItem>
             </MenuList>
           </Menu>
@@ -70,17 +72,17 @@ export const Header = React.memo(function Header(
               as={ChakraButton}
               rightIcon={<FiChevronDown />}
             >
-              Filter
+              {t('header.filter')}
             </MenuButton>
             <MenuList>
               <MenuItem onClick={() => props.filterCallback(true)}>
-                Active
+                {t('header.active')}
               </MenuItem>
               <MenuItem onClick={() => props.filterCallback(false)}>
-                Archived
+                {t('header.archived')}
               </MenuItem>
               <MenuItem onClick={() => props.filterCallback(undefined)}>
-                All
+                {t('header.all')}
               </MenuItem>
             </MenuList>
           </Menu>
@@ -102,19 +104,19 @@ export const Header = React.memo(function Header(
                   fontSize={[14, 15, 16]}
                   onClick={() => props.sortCallback(Sort.Ascending)}
                 >
-                  Ascending
+                  {t('header.ascending')}
                 </MenuItem>
                 <MenuItem
                   fontSize={[14, 15, 16]}
                   onClick={() => props.sortCallback(Sort.Descending)}
                 >
-                  Descending
+                  {t('header.descending')}
                 </MenuItem>
                 <MenuItem
                   fontSize={[14, 15, 16]}
                   onClick={() => props.sortCallback(Sort.Date)}
                 >
-                  Date Created
+                  {t('header.date_created')}
                 </MenuItem>
               </MenuGroup>
               <MenuDivider />
@@ -123,19 +125,19 @@ export const Header = React.memo(function Header(
                   fontSize={[14, 15, 16]}
                   onClick={() => props.filterCallback(true)}
                 >
-                  Active
+                  {t('header.active')}
                 </MenuItem>
                 <MenuItem
                   fontSize={[14, 15, 16]}
                   onClick={() => props.filterCallback(false)}
                 >
-                  Archived
+                  {t('header.archived')}
                 </MenuItem>
                 <MenuItem
                   fontSize={[14, 15, 16]}
                   onClick={() => props.filterCallback(undefined)}
                 >
-                  All
+                  {t('header.all')}
                 </MenuItem>
               </MenuGroup>
             </MenuList>

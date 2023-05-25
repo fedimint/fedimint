@@ -4,6 +4,7 @@ import { Federation } from '../federation.types';
 import { ApiContext } from './ApiProvider';
 import { Button } from './Button';
 import { Input } from './Input';
+import { useTranslation } from '@fedimint/translation';
 
 export type ConnectFederationProps = {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface FedConnectInfo {
 }
 
 export const ConnectFederation = (connect: ConnectFederationProps) => {
+  const { t } = useTranslation('gateway');
   const { mintgate } = React.useContext(ApiContext);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [connectInfo, setConnectInfo] = useState<FedConnectInfo>({
@@ -54,8 +56,8 @@ export const ConnectFederation = (connect: ConnectFederationProps) => {
           alignItems='flex-end'
         >
           <Input
-            labelName='Connect String:'
-            placeHolder='Enter federation connection string'
+            labelName={t('connect_federation.label')}
+            placeHolder={t('connect_federation.connection_string_placeholder')}
             value={connectInfo.value}
             onChange={(event) => handleInputString(event)}
           />
@@ -65,7 +67,7 @@ export const ConnectFederation = (connect: ConnectFederationProps) => {
             height='48px'
             disabled={!connectInfo.isValid}
           >
-            Connect 🚀
+            {t('connect_federation.connect')}
           </Button>
           <Box color='red.500'>{errorMsg}</Box>
         </HStack>

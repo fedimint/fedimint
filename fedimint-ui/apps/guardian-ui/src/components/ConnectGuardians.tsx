@@ -18,6 +18,7 @@ import { CopyInput, Table, TableRow } from '@fedimint/ui';
 import { useConsensusPolling, useGuardianContext } from '../hooks';
 import { GuardianRole, ServerStatus } from '../types';
 import { getModuleParamsFromConfig } from '../utils/api';
+import { useTranslation } from '@fedimint/utils';
 import { ReactComponent as CopyIcon } from '../assets/svgs/copy.svg';
 
 interface Props {
@@ -29,6 +30,7 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
     state: { role, peers, numPeers, configGenParams },
     api,
   } = useGuardianContext();
+  const { t } = useTranslation();
 
   // Poll for peers and configGenParams while on this page.
   useConsensusPolling();
@@ -56,14 +58,14 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
   } else if (role === GuardianRole.Host) {
     content = (
       <FormControl maxWidth={400}>
-        <FormLabel>Invite Followers</FormLabel>
+        <FormLabel>{t('connect_guardians.invite_guardians')}</FormLabel>
         <CopyInput
           value={process.env.REACT_APP_FM_CONFIG_API || ''}
           size='lg'
           buttonLeftIcon={<Icon as={CopyIcon} />}
         />
         <FormHelperText>
-          Share this link with the other Guardians
+          {t('connect_guardians.connect_guardians_help')}
         </FormHelperText>
       </FormControl>
     );
@@ -101,7 +103,9 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
           </ChakraTable>
         </TableContainer>
         <div>
-          <Button onClick={handleApprove}>Approve</Button>
+          <Button onClick={handleApprove}>
+            {t('connect_guardians.approve')}
+          </Button>
         </div>
       </VStack>
     );
@@ -131,15 +135,17 @@ export const ConnectGuardians: React.FC<Props> = ({ next }) => {
             name: peers[i].name,
             status:
               peers[i].status === ServerStatus.ReadyForConfigGen ? (
-                <Tag colorScheme='green'>Approved</Tag>
+                <Tag colorScheme='green'>{t('connect_guardians.approved')}</Tag>
               ) : (
-                <Tag colorScheme='orange'>Pending</Tag>
+                <Tag colorScheme='orange'>{t('connect_guardians.pedning')}</Tag>
               ),
           }
         : {
             key: i,
             name: `Guardian ${i + 1}`,
-            status: <Tag colorScheme='gray'>Not joined</Tag>,
+            status: (
+              <Tag colorScheme='gray'>{t('connect_guardians.not_joined')}</Tag>
+            ),
           };
       rows = [...rows, row];
     }

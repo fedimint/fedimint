@@ -1,0 +1,123 @@
+{	
+	"common": {
+		"next": "Next",
+		"back": "Back"
+	},
+	"app": {
+		"error": "Something went wrong."
+	},
+	"connect_guardians": {
+		"invite_guardians": "Invite Followers",
+		"invite_guardians_help": "Share this link with the other Guardians",
+		"approve": "Approve",
+		"approved": "Approved",
+		"pending": "Pending",
+		"not_joined": "Not joined"
+	},
+	"federation_dashboard": {
+		"card_header": "Federation info",
+		"your_status": "Your status",
+		"epoch_count": "Epoch count",
+		"api_version": "API Version",
+		"consensus_version": "Consensus version",
+		"peer_info": "Peer info",
+		"name": "Name",
+		"status": "Status",
+		"peer": "Peer"
+	},
+	"login": {
+		"password": "Password",
+		"submit": "Submit"
+	},
+	"role_selector": {
+		"leader": {
+			"label": "Leader",
+			"description": "Choose one of your Guardians as a Leader. The Leader will input information about the Federation."
+		},
+		"follower": {
+			"label": "Follower",
+			"description": "Guardian Followers (all other Guardians) will confirm information that the Leader inputs."
+		}
+	},
+	"run_dkg": {
+		"error_config": "Failed to run distributed key generation. Federation setup must be restarted.",
+		"error_default": "Not ready for DKG, your current status is",
+		"error_header": "Something went wrong.",
+		"waiting_header": "Waiting for peers...",
+		"generating_header": "Generating codes..."
+	},
+	"set_config": {
+		"guardian_name": "Guardian name",
+		"guardian_name_help": "This name will be shown to other Guardians",
+		"admin_password": "Admin password",
+		"admin_password_help": "You'll need this every time you visit this page.",
+		"join_federation": "Join Federation link",
+		"join_federation_help": "Ask the person who created the Federation for a link, and paste it here.",
+		"federation_settings": "Federation settings",
+		"federation_name": "Federation name",
+		"guardian_number": "Number of guardians",
+		"guardian_number_help": "This cannot be changed later.",
+		"block_confirmations": "Block confirmations",
+		"block_confirmations_help": "How many block confirmations needed before confirming?",
+		"bitcoin_network": "Bitcoin Network",
+		"select_network": "Select a network",
+		"set_rpc_help": "Locally configured Bitcoin RPC address",
+		"bitcoin_rpc": "Bitcoin RPC",
+		"set_rpc_help": "Locally configured Bitcoin RPC address",
+		"error_valid_number": "Please input a number of 1 or more."
+	},
+	"setup": {
+		"auth": {
+			"title": "Welcome back!",
+			"subtitle": "Please enter your password."
+		},
+		"progress": {
+			"start": {
+				"title": "Welcome to Fedimint!",
+				"subtitle": "Are you creating a Federation, or joining one?"
+			},
+			"set_config": {
+				"title": "Let's set up your federation",
+				"subtitle_leader": "Your Federation Followers will confirm this information on their end.",
+				"subtitle_follower": "Your Federation Leader will be setting up main Federation details. You’ll confirm them soon."
+			},
+			"connect_guradians": {
+				"title_leader": "Invite your Guardians",
+				"title_follower": "Confirm your Federation Information",
+				"subtitle_leader": "Share the link with the other Guardians to get everyone on the same page. Once all the Guardians join, you’ll automatically move on to the next step.",
+				"subtitle_follower": "Make sure that the information here looks right, and that the Federation Guardians are correct. Click the Approve button when you’re sure it looks good."
+			},
+			"run_dkg": {
+				"title": "Boom! Sharing info between Guardians",
+				"subtitle": "All Guardians have validated federation setup details. Running some numbers..."
+			},
+			"verify_guardians": {
+				"title": "Verify your Guardians",
+				"subtitle": "Ask each Guardian for their verification code, and paste them below to check validity. We’re almost done!"
+			},
+			"error": {
+				"title": "Unknown step",
+				"subtitle": "How did you get here?!"
+			}
+		}
+	},
+	"setup_complete": {
+		"header": "🎉 🎉 🎉",
+		"congratulations": "Congratulations",
+		"sentence_one": "All Guardians’ verification codes have been verified.",
+		"continue": "Continue"
+	},
+	"verify_guardians": {
+		"verified": "Verified",
+		"verified_placeholder": "Input code here",
+		"error": "Something went wrong.",
+		"error_peer_id": "Unable to determine which peer you are. Please refresh and try again.",
+		"verification_code": "our verification code",
+		"verification_code_help": "Share this code with other guardians",
+		"table_title": "Guardian verification codes",
+		"table_description": "Enter each Guardian’s verification codes below.",
+		"table_column_name": "Name",
+		"table_column_status": "Status",
+		"table_column_hash_input": "Paste verification code"
+	}
+}

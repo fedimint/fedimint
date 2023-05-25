@@ -7,6 +7,7 @@ import { ReactComponent as CheckIcon } from '../assets/svgs/check.svg';
 import { ReactComponent as StarsIcon } from '../assets/svgs/stars.svg';
 import { ReactComponent as IntersectSquareIcon } from '../assets/svgs/intersect-square.svg';
 import { useGuardianContext } from '../hooks';
+import { useTranslation } from '@fedimint/utils';
 
 interface Props {
   next: () => void;
@@ -16,21 +17,20 @@ export const RoleSelector = React.memo<Props>(function RoleSelector({
   next,
 }: Props) {
   const { dispatch } = useGuardianContext();
+  const { t } = useTranslation();
   const [role, setRole] = useState<GuardianRole>();
   const options: RadioButtonOption<GuardianRole>[] = useMemo(
     () => [
       {
         value: GuardianRole.Host,
-        label: 'Leader',
-        description:
-          'Choose one of your Guardians as a Leader. The Leader will input information about the Federation.',
+        label: t('role_selector.leader.label'),
+        description: t('role_selector.leader.description'),
         icon: StarsIcon,
       },
       {
         value: GuardianRole.Follower,
-        label: 'Follower',
-        description:
-          'Guardian Followers (all other Guardians) will confirm information that the Leader inputs.',
+        label: t('role_selector.follower.label'),
+        description: t('role_selector.follower.description'),
         icon: IntersectSquareIcon,
       },
     ],
@@ -59,7 +59,7 @@ export const RoleSelector = React.memo<Props>(function RoleSelector({
           isDisabled={!role}
           onClick={handleNext}
         >
-          Next
+          {t('common.next')}
         </Button>
       </div>
     </VStack>

@@ -10,9 +10,11 @@ import {
 import { useGuardianContext } from '../hooks';
 import { SETUP_ACTION_TYPE } from '../types';
 import { formatApiErrorMessage } from '../utils/api';
+import { useTranslation } from '@fedimint/utils';
 
 export const Login: React.FC = () => {
   const { api, dispatch } = useGuardianContext();
+  const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string>();
 
@@ -38,7 +40,7 @@ export const Login: React.FC = () => {
     <form onSubmit={handleSubmit}>
       <VStack gap={2} align='start' justify='start'>
         <FormControl isInvalid={!!error}>
-          <FormLabel>Password</FormLabel>
+          <FormLabel>{t('login.password')}</FormLabel>
           <Input
             type='password'
             value={password}
@@ -46,7 +48,7 @@ export const Login: React.FC = () => {
           />
           {error && <FormErrorMessage>{error}</FormErrorMessage>}
         </FormControl>
-        <Button type='submit'>Submit</Button>
+        <Button type='submit'>{t('login.submit')}</Button>
       </VStack>
     </form>
   );

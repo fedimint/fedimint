@@ -12,6 +12,7 @@ This project includes the following apps / packages:
 ### Packages
 
 - `ui`: Shared React UI component library for building Fedimint UI experiences
+- `translation`: Shared i18next translation configurations for both `gateway-ui` and `guardian-ui`
 - `eslint-config`: Shared `eslint` configurations (includes `eslint-plugin-react` and `eslint-config-prettier`)
 - `tsconfig`: Shared `tsconfig.json`s used throughout Fedimint UI apps
 
@@ -30,3 +31,7 @@ From root repo directory:
 > - `yarn format` - Fixes formatting in all apps and packages in the project
 
 Alternatively, you can navigate to a specific app or package within `fedimint-ui/` directory and run it's respective development commands
+
+## Translating
+
+Head over to our translation [README.md](https://github.com/fedimint/fedimint/blob/master/fedimint-ui/packages/translation/README.md) to see a comprehensive guide on translating and adding new copy to the `fedimint-ui`
