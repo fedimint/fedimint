@@ -41,6 +41,7 @@ members = [
     "fedimint-build",
     "recoverytool"
 ]
+exclude = ["fedimint-wasm-tests"]
 resolver = "2"
 
 [workspace.metadata]

@@ -427,7 +427,13 @@
 
               # Like `cross` but only with wasm
               crossWasm = pkgs.mkShell (shellCommonCross // {
-                nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [ toolchain.fenixToolchainCrossWasm ];
+                nativeBuildInputs = shellCommonCross.nativeBuildInputs ++ [
+                  toolchain.fenixToolchainCrossWasm
+                  pkgs.wasm-pack
+                  pkgs.wasm-bindgen-cli
+                  pkgs.firefox
+                  pkgs.geckodriver
+                ];
 
                 shellHook = shellCommonCross.shellHook + toolchain.wasm32CrossEnvVars;
               });

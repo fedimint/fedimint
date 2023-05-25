@@ -29,7 +29,7 @@ cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p fedimint-tes
 
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/reconnect-test.sh" 2>&1 | ts -s
@@ -39,7 +39,7 @@ export -f cli_test_reconnect
 
 function cli_test_lightning_reconnect() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/lightning-reconnect-test.sh" 2>&1 | ts -s
@@ -49,7 +49,7 @@ export -f cli_test_lightning_reconnect
 
 function cli_test_latency() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/latency-test.sh" 2>&1 | ts -s
@@ -59,7 +59,7 @@ export -f cli_test_latency
 
 function cli_test_cli() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/cli-test.sh" 2>&1 | ts -s
@@ -69,7 +69,7 @@ export -f cli_test_cli
 
 function cli_test_rust_tests_bitcoind() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=bitcoind ./scripts/rust-tests.sh" 2>&1 | ts -s
@@ -79,7 +79,7 @@ export -f cli_test_rust_tests_bitcoind
 
 function cli_test_rust_tests_electrs() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=electrs ./scripts/rust-tests.sh" 2>&1 | ts -s
@@ -89,17 +89,27 @@ export -f cli_test_rust_tests_electrs
 
 function cli_test_rust_tests_esplora() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=esplora ./scripts/rust-tests.sh" 2>&1 | ts -s
   echo "## COMPLETE: ${FUNCNAME[0]}"
 }
+
+function cli_test_wasm() {
+  set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
+
+  echo "## START: ${FUNCNAME[0]}"
+  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=esplora ./scripts/wasm-tests.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
+}
+
 export -f cli_test_rust_tests_esplora
 
 function cli_test_always_success() {
   set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR 
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
 
   echo "## START: ${FUNCNAME[0]}"
   # this must fail, so we know nix build is actually running tests
@@ -143,4 +153,3 @@ else
   >&2 echo "Search for '## FAILED' to find the end of the failing test"
   exit 1
 fi
-
