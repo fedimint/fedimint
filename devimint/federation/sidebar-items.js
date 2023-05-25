@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["run_dkg",""]],"struct":[["Federation",""],["Fedimintd",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["BASE_PORT","Base port for devimint"]],"fn":[["run_config_gen",""]],"struct":[["Federation",""],["Fedimintd",""]]};

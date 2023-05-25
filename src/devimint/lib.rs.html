@@ -244,7 +244,7 @@
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::RpcApi;
-<span class="kw">use </span>federation::{run_dkg, Federation};
+<span class="kw">use </span>federation::{run_config_gen, Federation};
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 <span class="kw">use </span>fedimint_client_legacy::modules::mint::MintClientGen;
 <span class="kw">use </span>fedimint_client_legacy::{module_decode_stubs, UserClient, UserClientConfig};
@@ -442,10 +442,10 @@
         Esplora::new(process_mgr, bitcoind.clone()),
         <span class="kw">async </span>{
             <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
-            run_dkg(process_mgr, fed_size).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;dkg done&quot;</span>);
+            <span class="kw">let </span>members = run_config_gen(process_mgr, fed_size, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;config gen done&quot;</span>);
             <span class="macro">tokio::try_join!</span>(
-                Federation::new(process_mgr, bitcoind.clone(), <span class="number">0</span>..fed_size),
+                Federation::new(process_mgr, bitcoind.clone(), members),
                 Faucet::new(process_mgr)
             )
         },

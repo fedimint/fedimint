@@ -1,7 +1,6 @@
 var sourcesIndex = JSON.parse('{\
 "dbtool":["",[],["dump.rs","main.rs"]],\
 "devimint":["",[],["external.rs","federation.rs","lib.rs","util.rs","vars.rs"]],\
-"distributedgen":["",[],["distributedgen.rs"]],\
 "faucet":["",[],["faucet.rs"]],\
 "fedimint_aead":["",[],["lib.rs"]],\
 "fedimint_bip39":["",[],["lib.rs"]],\
@@ -30,7 +29,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_wallet_client":["",[],["api.rs","deposit.rs","lib.rs"]],\
 "fedimint_wallet_common":["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
 "fedimint_wallet_server":["",[],["lib.rs"]],\
-"fedimintd":["",[],["distributed_gen.rs","fedimintd.rs","lib.rs"]],\
+"fedimintd":["",[],["fedimintd.rs","lib.rs"]],\
 "gateway_cli":["",[],["main.rs"]],\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
 "gatewayd":["",[],["gatewayd.rs"]],\

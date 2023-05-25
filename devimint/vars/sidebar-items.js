@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["BASE_PORT",""]],"fn":[["mkdir",""],["utf8",""]],"macro":[["declare_vars",""]],"struct":[["Fedimintd",""],["Global",""]],"trait":[["ToEnvVar",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["mkdir",""],["utf8",""]],"macro":[["declare_vars",""]],"struct":[["Fedimintd",""],["Global",""]],"trait":[["ToEnvVar",""]]};

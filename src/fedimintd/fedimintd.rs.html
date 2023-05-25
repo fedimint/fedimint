@@ -259,7 +259,6 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -363,9 +362,8 @@
 /// }
 /// ```
 </span><span class="kw">pub struct </span>Fedimintd {
-    module_gens: ServerModuleGenRegistry,
-    module_gens_params: ServerModuleGenParamsRegistry,
-    opts: ServerOpts,
+    <span class="kw">pub </span>server_gens: ServerModuleGenRegistry,
+    <span class="kw">pub </span>server_gen_params: ServerModuleGenParamsRegistry,
 }
 
 <span class="kw">impl </span>Fedimintd {
@@ -380,16 +378,9 @@
 
         <span class="macro">info!</span>(<span class="string">&quot;Starting fedimintd (version: {CODE_VERSION})&quot;</span>);
 
-        <span class="kw">let </span>opts: ServerOpts = ServerOpts::parse();
-        TracingSetup::default()
-            .tokio_console_bind(opts.tokio_console_bind)
-            .with_jaeger(opts.with_telemetry)
-            .init()<span class="question-mark">?</span>;
-
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            module_gens: ServerModuleGenRegistry::new(),
-            module_gens_params: ServerModuleGenParamsRegistry::default(),
-            opts,
+            server_gens: ServerModuleGenRegistry::new(),
+            server_gen_params: ServerModuleGenParamsRegistry::default(),
         })
     }
 
@@ -397,7 +388,7 @@
     </span><span class="kw">where
         </span>T: ServerModuleGen + <span class="lifetime">&#39;static </span>+ Send + Sync,
     {
-        <span class="self">self</span>.module_gens.attach(gen);
+        <span class="self">self</span>.server_gens.attach(gen);
         <span class="self">self
     </span>}
 
@@ -408,6 +399,13 @@
     }
 
     <span class="kw">pub async fn </span>run(<span class="self">self</span>) -&gt; ! {
+        <span class="kw">let </span>opts: ServerOpts = ServerOpts::parse();
+        TracingSetup::default()
+            .tokio_console_bind(opts.tokio_console_bind)
+            .with_jaeger(opts.with_telemetry)
+            .init()
+            .unwrap();
+
         <span class="kw">let </span><span class="kw-2">mut </span>root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -421,10 +419,10 @@
         root_task_group
             .spawn_local(<span class="string">&quot;main&quot;</span>, <span class="kw">move </span>|_task_handle| <span class="kw">async move </span>{
                 <span class="kw">match </span>run(
-                    <span class="self">self</span>.opts,
+                    opts,
                     task_group.clone(),
-                    <span class="self">self</span>.module_gens,
-                    <span class="self">self</span>.module_gens_params,
+                    <span class="self">self</span>.server_gens,
+                    <span class="self">self</span>.server_gen_params,
                 )
                 .<span class="kw">await
                 </span>{

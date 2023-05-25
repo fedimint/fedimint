@@ -318,7 +318,7 @@
 <span class="doccomment">/// Creates the config gen params for each peer
 ///
 /// Uses peers * 2 ports offset from `base_port`
-</span><span class="kw">fn </span>local_config_gen_params(
+</span><span class="kw">pub fn </span>local_config_gen_params(
     peers: <span class="kw-2">&amp;</span>[PeerId],
     base_port: u16,
     server_config_gen: ServerModuleGenParamsRegistry,
@@ -339,7 +339,7 @@
         .iter()
         .map(|peer| {
             <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">2</span>;
-            <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{peer_port}&quot;</span>);
+            <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;fedimint://127.0.0.1:{peer_port}&quot;</span>);
             <span class="kw">let </span>api_url = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, peer_port + <span class="number">1</span>);
 
             <span class="kw">let </span>params: PeerServerParams = PeerServerParams {
@@ -363,7 +363,7 @@
                 local: ConfigGenParamsLocal {
                     our_id: <span class="kw-2">*</span>peer,
                     our_private_key: tls_keys[peer].<span class="number">1</span>.clone(),
-                    api_auth: ApiAuth(<span class="string">&quot;unused&quot;</span>.to_string()),
+                    api_auth: ApiAuth(<span class="macro">format!</span>(<span class="string">&quot;pass{}&quot;</span>, peer.to_usize())),
                     p2p_bind: p2p_bind.parse().expect(<span class="string">&quot;Valid address&quot;</span>),
                     api_bind: api_bind.parse().expect(<span class="string">&quot;Valid address&quot;</span>),
                     download_token_limit: <span class="prelude-val">None</span>,
