@@ -23,6 +23,14 @@ use crate::db::{NextECashNoteIndexKey, NoteKey};
 use crate::output::{MintOutputCommon, MintOutputStatesCreated, NoteIssuanceRequest};
 use crate::MintClientContext;
 
+/// Restore will progress in chunks of a fixed epoch count,
+/// after each the current state is persisted in the database.
+/// Larger chunks introduce less "pausing" processing and snapshoting
+/// storage and overhead  but risk loosing more progress each time the
+/// client app is closed. Some time based, or even "save on close"
+/// scheme would be better, but currently not implemented.
+const PROGRESS_SNAPSHOT_EPOCHS: u64 = 500;
+
 #[derive(Debug)]
 pub struct EcashRecoveryFinalState {
     /// Nonces that we track that are currently spendable.
@@ -221,8 +229,11 @@ impl MintRestoreInProgressState {
         secret: DerivableSecret,
     ) -> Self {
         assert_eq!(secret.level(), 2);
-        let epoch_range =
-            self.next_epoch..cmp::min(self.next_epoch.wrapping_add(100), self.end_epoch);
+        let epoch_range = self.next_epoch
+            ..cmp::min(
+                self.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_EPOCHS),
+                self.end_epoch,
+            );
         let mut epoch_stream = Self::fetch_epochs_stream(api, epoch_pk, decoders, epoch_range);
         while let Some((epoch, epoch_history)) = epoch_stream.next().await {
             assert_eq!(epoch_history.outcome.epoch, epoch);
