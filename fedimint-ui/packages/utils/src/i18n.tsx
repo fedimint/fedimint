@@ -5,11 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 export const i18nProvider = (namespace: Array<any>) => {
   const resources = namespace.reduce((acc, lng) => {
-  return {
-    ...acc,
-    [lng['key']]: { translation: lng['translation'] },
-  }
-}, {})
+    return {
+      ...acc,
+      [lng['key']]: { translation: lng['translation'] },
+    };
+  }, {});
 
   i18n.use(LanguageDetector).use(initReactI18next).init({
     debug: true,

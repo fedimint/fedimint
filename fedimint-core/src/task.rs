@@ -443,11 +443,11 @@ mod imp {
     }
 
     pub async fn sleep(duration: Duration) {
-        gloo_timers::future::sleep(duration).await
+        gloo_timers::future::sleep(duration.min(Duration::from_millis(i32::MAX as _))).await
     }
 
     pub async fn sleep_until(deadline: Instant) {
-        gloo_timers::future::sleep(deadline.saturating_duration_since(Instant::now())).await
+        sleep(deadline.saturating_duration_since(Instant::now())).await
     }
 
     pub async fn timeout<T>(duration: Duration, future: T) -> Result<T::Output, Elapsed>

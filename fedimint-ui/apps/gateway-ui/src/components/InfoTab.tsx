@@ -1,10 +1,10 @@
 import React from 'react';
 import { Box, Stack, TabPanel, Text } from '@chakra-ui/react';
 import { TabHeader } from '.';
-import { useTranslation } from '@fedimint/translation';
+import { useTranslation } from '@fedimint/utils';
 
 export const InfoTabHeader = (): JSX.Element => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   return <TabHeader>{t('info_tab.tab_header')}</TabHeader>;
 };
 
@@ -16,7 +16,7 @@ interface InfoTabProps {
 export const InfoTab = React.memo(function InfoTab(
   props: InfoTabProps
 ): JSX.Element {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   const { description, date_created } = props;
   return (
     <TabPanel>

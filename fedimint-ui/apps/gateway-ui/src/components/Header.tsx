@@ -14,7 +14,7 @@ import {
 import { Button as ChakraButton } from '@chakra-ui/react';
 import { FiChevronDown } from 'react-icons/fi';
 import { HiMenuAlt3 } from 'react-icons/hi';
-import { useTranslation } from '@fedimint/translation';
+import { useTranslation } from '@fedimint/utils';
 import { Federation, Filter, Sort } from '../federation.types';
 import { Button } from '.';
 import '../index.css';
@@ -29,7 +29,7 @@ export type HeaderProps = {
 export const Header = React.memo(function Header(
   props: HeaderProps
 ): JSX.Element {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   return (
     <Flex>
       <Flex alignItems='center' gap={2}>

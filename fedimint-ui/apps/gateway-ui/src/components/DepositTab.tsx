@@ -17,10 +17,10 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { ApiContext, Button, TabHeader } from '.';
 import { TransactionStatus } from '../api';
-import { useTranslation } from '@fedimint/translation';
+import { useTranslation } from '@fedimint/utils';
 
 export const DepositTabHeader = (): JSX.Element => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   return <TabHeader>{t('deposit_tab.tab_header')}</TabHeader>;
 };
 
@@ -215,7 +215,7 @@ interface ShowDepositAddressProps {
 const ShowDepositAddress = ({
   address,
 }: ShowDepositAddressProps): JSX.Element => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   return (
     <>
       <Heading

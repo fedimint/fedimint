@@ -1068,8 +1068,9 @@ dependencies = [
 
 [[package]]
 name = "esplora-client"
-version = "0.4.0"
-source = "git+https://github.com/bitcoindevkit/rust-esplora-client.git?rev=54de8118c40c6a2cf80591d8991cf578bdfb51c4#54de8118c40c6a2cf80591d8991cf578bdfb51c4"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3e11244e7fd8b0beee0a3c62137c4bd9f756fe2c492ccf93171f81467b59200"
 dependencies = [
  "bitcoin",
  "log",

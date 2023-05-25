@@ -5,10 +5,7 @@ import { GuardianApi } from './GuardianApi';
 import { GuardianProvider } from './GuardianContext';
 import { Setup } from './components/Setup';
 import { formatApiErrorMessage } from './utils/api';
-import { useTranslation, i18nProvider } from '@fedimint/utils';
-import { languages } from './languages';
-
-i18nProvider(languages);
+import { useTranslation } from '@fedimint/utils';
 
 export const App = React.memo(function App() {
   const api = useMemo(() => new GuardianApi(), []);

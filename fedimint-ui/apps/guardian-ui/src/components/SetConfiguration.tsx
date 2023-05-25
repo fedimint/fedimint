@@ -219,7 +219,10 @@ export const SetConfiguration: React.FC<Props> = ({ next }: Props) => {
       <>
         {isHost && (
           <FormGroup>
-            <FormGroupHeading icon={FedimintLogo} title={`${t('set_config.federation_settings')}`} />
+            <FormGroupHeading
+              icon={FedimintLogo}
+              title={`${t('set_config.federation_settings')}`}
+            />
             <FormControl>
               <FormLabel>{t('set_config.federation_name')}</FormLabel>
               <Input

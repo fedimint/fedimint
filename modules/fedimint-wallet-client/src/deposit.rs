@@ -271,7 +271,7 @@ async fn get_tx_block_height(esplora_server: &str, txid: Txid) -> anyhow::Result
     let confirmation_height = esplora_client
         .get_tx_status(&txid)
         .await?
-        .and_then(|status| status.block_height)
+        .block_height
         .map(|height| height as u64);
 
     Ok(confirmation_height)

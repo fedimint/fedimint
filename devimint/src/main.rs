@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::env;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -582,21 +581,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // # Spend from client ng
     info!("Testing spending from client ng");
-    let reissue_notes_denominations = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
+    let _notes = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
         .out_json()
         .await?
         .as_object()
         .unwrap()
-        .keys()
-        .map(|s| s.to_owned())
-        .collect::<BTreeSet<_>>();
-
-    let expected_denominations = vec!["2", "8", "32"]
-        .into_iter()
-        .map(|s| s.to_owned())
-        .collect::<BTreeSet<_>>();
-
-    assert_eq!(reissue_notes_denominations, expected_denominations);
+        .get("notes")
+        .expect("Output didn't containe e-cash notes");
 
     info!("{}", cmd!(fed, "info").out_string().await?);
     let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]

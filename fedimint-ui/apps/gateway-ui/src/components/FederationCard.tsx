@@ -21,7 +21,7 @@ import {
   DepositTabHeader,
 } from '.';
 import { WithdrawTab, WithdrawTabHeader } from './WithdrawTab';
-import { useTranslation } from '@fedimint/translation';
+import { useTranslation } from '@fedimint/utils';
 
 interface FederationCardProps {
   federation: Federation;
@@ -36,7 +36,7 @@ enum OpenTab {
 }
 
 export const FederationCard = (props: FederationCardProps): JSX.Element => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   const { federation_id, mint_pubkey, details } = props.federation;
 
   const [showDetails, setShowDetails] = useState<boolean>(false);

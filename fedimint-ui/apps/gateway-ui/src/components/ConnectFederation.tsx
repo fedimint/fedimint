@@ -4,7 +4,7 @@ import { Federation } from '../federation.types';
 import { ApiContext } from './ApiProvider';
 import { Button } from './Button';
 import { Input } from './Input';
-import { useTranslation } from '@fedimint/translation';
+import { useTranslation } from '@fedimint/utils';
 
 export type ConnectFederationProps = {
   isOpen: boolean;
@@ -17,7 +17,7 @@ interface FedConnectInfo {
 }
 
 export const ConnectFederation = (connect: ConnectFederationProps) => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   const { mintgate } = React.useContext(ApiContext);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [connectInfo, setConnectInfo] = useState<FedConnectInfo>({

@@ -18,10 +18,10 @@ import {
 } from '@chakra-ui/react';
 import { TabHeader, Button, Input, ApiContext } from '.';
 import { TransactionStatus } from '../api';
-import { useTranslation } from '@fedimint/translation';
+import { useTranslation } from '@fedimint/utils';
 
 export const WithdrawTabHeader = () => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   return <TabHeader>{t('withdraw_tab.tab_header')}</TabHeader>;
 };
 
@@ -44,7 +44,7 @@ const truncateStringFormat = (arg: string): string => {
 export const WithdrawTab = React.memo(function WithdrawTab({
   federationId,
 }: WithdrawTabProps): JSX.Element {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   const { mintgate } = React.useContext(ApiContext);
   const [withdrawObject, setWithdrawObject] = useState<WithdrawObject>({
     amount: 0,
@@ -192,7 +192,7 @@ export interface ConfirmWithdrawModalProps {
 const ConfirmWithdrawModal = (
   props: ConfirmWithdrawModalProps
 ): JSX.Element => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   const { open, txRequest, onModalClickCallback, startWithdrawalCallback } =
     props;
   const toast = useToast();
@@ -259,7 +259,7 @@ export interface TransactionViewProps {
 }
 
 const TransactionView = (props: TransactionViewProps): JSX.Element => {
-  const { t } = useTranslation('gateway');
+  const { t } = useTranslation();
   const { explorer } = React.useContext(ApiContext);
   const { confirmationsRequired, amount, address, txId, federationId } = props;
 

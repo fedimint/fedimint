@@ -1,0 +1,64 @@
+{
+	"common": {
+		"amount": "Monto",
+		"address": "Dirección",
+		"bitcoin": "Bitcoin",
+		"sats": "sats",
+		"confirm": "Confirmar"
+	},
+	"connect_federation": {
+		"connect": "Conectar 🚀",
+		"label": "Cadena de Conexión:",
+		"connection_string_placeholder": "Ingrese la cadena de conexión de la federación"
+	},
+	"deposit_tab": {
+		"tab_header": "Depósito",
+		"header": "Depósito de Bitcoin en la Federación",
+		"sentence_one": "Por favor, pague a la dirección mostrada para depositar fondos en esta federación. Puede escanear el código QR para pagar.",
+		"bitcoin_deposit": "Depósito de Bitcoin",
+		"confirmations": "Confirmaciones:",
+		"required": "requerido",
+		"receiving_address": "Dirección de Recepción:",
+		"transaction_id": "ID de Transacción:"
+	},
+	"federation_card": {
+		"button": "Detalles"
+	},
+	"header": {
+		"connect": "Conectar Federación",
+		"sort": "Ordenar",
+		"ascending": "Ascendente",
+		"descending": "Descendente",
+		"date_created": "Fecha de Creación",
+		"filter": "Filtrar",
+		"active": "Activa",
+		"archived": "Archivada",
+		"all": "Todo"
+	},
+	"info_tab": {
+		"tab_header": "Información",
+		"description": "Descripción de la Federación:",
+		"date_connected": "Fecha de Conexión:"
+	},
+	"withdraw_tab": {
+		"tab_header": "Retirar",
+		"error": "Error:",
+		"error_amount": "El monto no puede estar vacío o ser igual a cero",
+		"error_address": "El monto o la dirección no pueden estar vacíos",
+		"error_request": "Error al solicitar el retiro",
+		"withdraw": "Retirar",
+		"withdrawal_history": "Historial de Retiros",
+		"confirm_withdraw": "Confirmar Retiro",
+		"to": "a",
+		"amount_label": "Monto (sats):",
+		"amount_placeholder": "Ingrese el monto en sats",
+		"address_label": "Tu dirección:",
+		"address_placeholder": "Ingrese tu dirección de BTC",
+		"requested_withdrawal": "Retiro Solicitado",
+		"request_from": "Retiro Solicitado de",
+		"view": "Ver",
+		"close": "Cerrar",
+		"withdrawal_created": "Retiro creado.",
+		"withdrawal_created_description": "Por favor, revise su historial de transacciones"
+	}
+}
