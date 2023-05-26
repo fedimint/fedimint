@@ -1,0 +1,37 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["build/**", "dist/**"],
+      "dependsOn": ["^build"]
+    },
+    "guardian-ui#build": {
+      "outputs": ["build/**", "dist/**"],
+      "dependsOn": ["^build"],
+      "env": ["REACT_APP_FM_CONFIG_API"]
+    },
+    "gateway-ui#build": {
+      "outputs": ["build/**", "dist/**"],
+      "dependsOn": ["^build"],
+      "env": ["REACT_APP_FM_GATEWAY_API"]
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "dependsOn": []
+    },
+    "lint": {},
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "guardian-ui#dev": {
+      "dependsOn": ["ui#dev"]
+    },
+    "gateway-ui#dev": {
+      "dependsOn": ["ui#dev"]
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}
