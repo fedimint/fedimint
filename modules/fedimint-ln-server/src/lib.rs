@@ -605,6 +605,12 @@ impl ServerModule for Lightning {
 
                 dbtx.insert_entry(&ContractKey(*contract), &updated_contract_account)
                     .await;
+
+                dbtx.insert_new_entry(
+                    &ContractUpdateKey(out_point),
+                    &LightningOutputOutcome::CancelOutgoingContract { id: *contract },
+                )
+                .await;
             }
         }
 
