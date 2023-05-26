@@ -24,11 +24,14 @@
       "cache": false,
       "persistent": true
     },
-    "guardian-ui#dev": {
-      "dependsOn": ["ui#dev"]
+    "@fedimint/ui#dev": {
+      "dependsOn": ["^build"]
     },
-    "gateway-ui#dev": {
-      "dependsOn": ["ui#dev"]
+    "@fedimint/guardian-ui#dev": {
+      "dependsOn": ["@fedimint/ui#build"]
+    },
+    "@fedimint/gateway-ui#dev": {
+      "dependsOn": ["@fedimint/ui#build"]
     },
     "clean": {
       "cache": false
