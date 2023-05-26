@@ -3,7 +3,7 @@ import { GatewayInfo, Federation } from './types';
 // GatewayApi is an API to interact with the Gateway server
 interface ApiInterface {
   fetchInfo: () => Promise<GatewayInfo>;
-  fetchAddress: () => Promise<string>;
+  fetchAddress: (federationId: string) => Promise<string>;
   connectFederation: (connectInfo: string) => Promise<Federation>;
   /**
    * Complete a deposit to a federation served by the Gateway
@@ -59,8 +59,28 @@ export class GatewayApi implements ApiInterface {
     }
   };
 
-  fetchAddress = (): Promise<string> => {
-    throw new Error('Not implemented');
+  fetchAddress = async (federationId: string): Promise<string> => {
+    try {
+      const res: Response = await fetch(`${this.baseUrl}/address`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.password}`,
+        },
+        body: JSON.stringify({
+          federation_id: federationId,
+        }),
+      });
+
+      if (res.ok) {
+        const address: string = await res.text();
+        return Promise.resolve(address);
+      }
+
+      throw responseToError('fetching federation address', res);
+    } catch (err) {
+      return Promise.reject(err);
+    }
   };
 
   connectFederation = async (_connectInfo: string): Promise<Federation> => {

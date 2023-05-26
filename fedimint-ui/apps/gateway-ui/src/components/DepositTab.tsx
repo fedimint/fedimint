@@ -22,27 +22,36 @@ export const DepositTabHeader = (): JSX.Element => {
   return <TabHeader>Deposit</TabHeader>;
 };
 
-const truncateStringFormat = (arg: string): string => {
+const truncateStringFormat = (arg = ''): string => {
   return `${arg.substring(0, 15)}......${arg.substring(
     arg.length,
     arg.length - 15
   )}`;
 };
 
-export const DepositTab = React.memo(function DepositTab(): JSX.Element {
+export interface DepositTabProps {
+  federationId: string;
+  active: boolean;
+}
+
+export const DepositTab = React.memo(function DepositTab({
+  federationId,
+  active,
+}: DepositTabProps): JSX.Element {
   const { gateway, explorer } = React.useContext(ApiContext);
 
   const [address, setAddress] = useState<string>('');
   const [txStatus, setTxStatus] = useState<TransactionStatus | null>(null);
 
   useEffect(() => {
-    gateway.fetchAddress().then((newAddress) => {
-      setAddress(newAddress);
-    });
-  }, [gateway]);
+    !address &&
+      gateway.fetchAddress(federationId).then((newAddress) => {
+        setAddress(newAddress);
+      });
+  }, []);
 
   useEffect(() => {
-    if (!address) return;
+    if (!address || !active) return;
 
     const observeMempool = async (timer?: NodeJS.Timer) => {
       try {
@@ -72,7 +81,7 @@ export const DepositTab = React.memo(function DepositTab(): JSX.Element {
     // observeMempool(timer);
 
     return () => clearInterval(timer);
-  }, [explorer, address]);
+  }, [explorer, address, active]);
 
   const getDepositCardProps = (): DepositCardProps => {
     if (txStatus) {

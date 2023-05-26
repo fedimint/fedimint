@@ -34,7 +34,6 @@ export const App = React.memo(function Admin(): JSX.Element {
 
   useEffect(() => {
     gateway.fetchInfo().then((gatewayInfo: GatewayInfo) => {
-      console.log(gatewayInfo);
       setGatewayInfo(gatewayInfo);
       setFedlist(gatewayInfo.federations);
     });
