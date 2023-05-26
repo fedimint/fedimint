@@ -7,9 +7,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "yarn run tsup",
+    "build": "tsup",
     "clean": "rm -rf dist",
-    "dev": "yanr run tsup --watch",
+    "dev": "tsup --watch",
     "lint": "eslint \"src/**/*.ts*\""
   },
   "devDependencies": {
