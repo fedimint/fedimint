@@ -15,7 +15,7 @@ From root repo directory:
 ### Run Federations and UI
 
 1. Confirm you are in `gateway-ui/` directory
-1. Run `REACT_APP_FM_GATEWAY_API="http://127.0.0.1:8175" yarn dev`
+1. Run `REACT_APP_FM_GATEWAY_API="http://127.0.0.1:8175" REACT_APP_FM_GATEWAY_PASSWORD="theresnosecondbest" yarn dev`
 
 This will show you a running gateway UI with mock data
 

@@ -65,7 +65,7 @@ pub struct ConnectFedPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct InfoPayload;
+pub struct InfoPayload {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupPayload {

@@ -13,7 +13,7 @@
     "gateway-ui#build": {
       "outputs": ["build/**", "dist/**"],
       "dependsOn": ["^build"],
-      "env": ["REACT_APP_FM_GATEWAY_API"]
+      "env": ["REACT_APP_FM_GATEWAY_API", "REACT_APP_FM_GATEWAY_PASSWORD"]
     },
     "test": {
       "outputs": ["coverage/**"],

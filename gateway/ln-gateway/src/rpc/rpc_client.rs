@@ -11,7 +11,7 @@ use url::Url;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    LightningReconnectPayload, RestorePayload, WithdrawPayload,
+    InfoPayload, LightningReconnectPayload, RestorePayload, WithdrawPayload,
 };
 use crate::rpc::{FederationInfo, GatewayInfo};
 
@@ -39,7 +39,8 @@ impl GatewayRpcClient {
 
     pub async fn get_info(&self) -> GatewayRpcResult<GatewayInfo> {
         let url = self.base_url.join("/info").expect("invalid base url");
-        self.call(url, ()).await
+        #[allow(clippy::unit_arg)]
+        self.call(url, InfoPayload {}).await
     }
 
     pub async fn get_balance(&self, payload: BalancePayload) -> GatewayRpcResult<Amount> {

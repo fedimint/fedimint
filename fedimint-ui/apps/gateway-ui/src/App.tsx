@@ -6,9 +6,9 @@ import {
   ConnectFederation,
   ApiProvider,
 } from './components';
-import { Federation, Filter, Sort } from './federation.types';
-import { GatewayApi, GatewayInfo } from './GatewayApi';
+import { GatewayApi } from './GatewayApi';
 import { ExplorerApi } from './ExplorerApi';
+import { GatewayInfo, Federation } from './types';
 
 export const App = React.memo(function Admin(): JSX.Element {
   const gateway = useMemo(() => new GatewayApi(), []);
@@ -18,8 +18,14 @@ export const App = React.memo(function Admin(): JSX.Element {
   );
 
   const [gatewayInfo, setGatewayInfo] = useState<GatewayInfo>({
-    version_hash: '',
     federations: [],
+    fees: {
+      base_msat: 0,
+      proportional_millionths: 0,
+    },
+    lightning_alias: '',
+    lightning_pub_key: '',
+    version_hash: '',
   });
 
   const [fedlist, setFedlist] = useState<Federation[]>([]);
@@ -28,67 +34,11 @@ export const App = React.memo(function Admin(): JSX.Element {
 
   useEffect(() => {
     gateway.fetchInfo().then((gatewayInfo: GatewayInfo) => {
+      console.log(gatewayInfo);
       setGatewayInfo(gatewayInfo);
       setFedlist(gatewayInfo.federations);
     });
   }, [gateway]);
-
-  const filterFederations = (filter: Filter) => {
-    const federations =
-      filter === undefined
-        ? gatewayInfo.federations
-        : gatewayInfo.federations.filter(
-            (federation: Federation) => federation.details.active === filter
-            // eslint-disable-next-line no-mixed-spaces-and-tabs
-          );
-    setFedlist(federations);
-  };
-
-  const sortFederations = (sort: Sort) => {
-    const fedListCopy = [...fedlist];
-
-    switch (sort) {
-      case Sort.Ascending: {
-        const result = fedListCopy.sort((a, b) =>
-          a.details.name < b.details.name
-            ? -1
-            : a.details.name > b.details.name
-            ? 1
-            : 0
-        );
-
-        return setFedlist(result);
-      }
-
-      case Sort.Descending: {
-        const result = fedListCopy.sort((a, b) =>
-          a.details.name < b.details.name
-            ? 1
-            : a.details.name > b.details.name
-            ? -1
-            : 0
-        );
-
-        return setFedlist(result);
-      }
-
-      case Sort.Date: {
-        const result = fedListCopy.sort((a, b) =>
-          a.details.date_created < b.details.date_created
-            ? 1
-            : a.details.date_created > b.details.date_created
-            ? -1
-            : 0
-        );
-
-        return setFedlist(result);
-      }
-
-      default: {
-        return setFedlist(gatewayInfo.federations);
-      }
-    }
-  };
 
   const renderConnectedFedCallback = (federation: Federation) => {
     setFedlist([federation, ...fedlist]);
@@ -106,10 +56,8 @@ export const App = React.memo(function Admin(): JSX.Element {
           ml={[2, 4, 6, 10]}
         >
           <Header
-            data={gatewayInfo.federations}
+            gatewayInfo={gatewayInfo}
             toggleShowConnectFed={() => toggleShowConnectFed(!showConnectFed)}
-            filterCallback={filterFederations}
-            sortCallback={sortFederations}
           />
           <ConnectFederation
             isOpen={showConnectFed}
@@ -121,7 +69,6 @@ export const App = React.memo(function Admin(): JSX.Element {
                 <FederationCard
                   key={federation.mint_pubkey}
                   federation={federation}
-                  onClick={() => console.log('clicked')}
                 />
               );
             })}

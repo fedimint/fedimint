@@ -1,4 +1,4 @@
-import { Federation } from './federation.types';
+import { GatewayInfo, Federation } from './types';
 
 // GatewayApi is an API to interact with the Gateway server
 interface ApiInterface {
@@ -32,21 +32,31 @@ interface ApiInterface {
   ) => Promise<string>;
 }
 
-// GatewayInfo is the information returned by the Gateway server
-export interface GatewayInfo {
-  version_hash: string;
-  federations: Federation[];
-}
-
-/** TransactionId of a fedimint federation */
-export type TransactionId = string;
-
 // GatewayApi is an implementation of the ApiInterface
 export class GatewayApi implements ApiInterface {
-  private gatewayUrl: string | undefined = process.env.REACT_APP_FM_GATEWAY_API;
+  private baseUrl: string | undefined = process.env.REACT_APP_FM_GATEWAY_API;
+  private password = process.env.REACT_APP_FM_GATEWAY_PASSWORD || '';
 
   fetchInfo = async (): Promise<GatewayInfo> => {
-    throw new Error('Not implemented');
+    try {
+      const res: Response = await fetch(`${this.baseUrl}/info`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.password}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (res.ok) {
+        const info: GatewayInfo = await res.json();
+        return Promise.resolve(info);
+      }
+
+      throw responseToError('Fetching gateway info', res);
+    } catch (err) {
+      return Promise.reject(err);
+    }
   };
 
   fetchAddress = (): Promise<string> => {
@@ -73,3 +83,9 @@ export class GatewayApi implements ApiInterface {
     throw new Error('Not implemented');
   };
 }
+
+const responseToError = (scenario: string, res: Response): Error => {
+  return new Error(
+    `${scenario} \nStatus : ${res.status} \nReason : ${res.statusText}\n`
+  );
+};

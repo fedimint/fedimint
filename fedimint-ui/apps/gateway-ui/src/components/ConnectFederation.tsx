@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Box, Collapse, HStack } from '@chakra-ui/react';
-import { Federation } from '../federation.types';
 import { ApiContext } from '../ApiProvider';
 import { Button } from './Button';
 import { Input } from './Input';
+import { Federation } from '../types';
 
 export type ConnectFederationProps = {
   isOpen: boolean;
