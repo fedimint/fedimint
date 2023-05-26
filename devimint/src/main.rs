@@ -574,16 +574,17 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSUE_AMOUNT);
 
+    let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(initial_clientng_balance, CLIENT_NG_REISSUE_AMOUNT);
+
+    info!("Testing backup&restore");
     // TODO: make sure there are no in-progress operations involved
     // This test can't tolerate "spend", but not "reissue"d coins currently,
     // and there's a no clean way to do `ng reissue` on `ng spend` output ATM
     // so just putting it here for time being.
     cli_tests_backup_and_restore(&fed).await?;
-
-    let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
-    assert_eq!(initial_clientng_balance, CLIENT_NG_REISSUE_AMOUNT);
 
     // # Spend from client ng
     info!("Testing spending from client ng");
