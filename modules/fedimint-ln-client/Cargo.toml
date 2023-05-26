@@ -8,6 +8,10 @@ license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[package.metadata.cargo-udeps.ignore]
+# cargo udeps can't detect that one
+normal = ["aquamarine"]
+
 [lib]
 name = "fedimint_ln_client"
 path = "src/lib.rs"
@@ -44,5 +48,3 @@ url = { version = "2.3.1", features = ["serde"] }
 [dev-dependencies]
 tokio = {version = "1.26.0", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
-test-log = { version = "0.2", features = [ "trace" ], default-features = false }
-fedimint-testing = { path = "../../fedimint-testing" }
