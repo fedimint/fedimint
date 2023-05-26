@@ -1,6 +1,9 @@
 {
   "private": true,
   "scripts": {
+    "dev": "turbo run dev",
+    "dev:gateway-ui": "turbo run dev --filter=gateway-ui...",
+    "dev:guardian-ui": "turbo run dev --filter=guardian-ui...",
     "build": "turbo run build",
     "clean": "turbo run clean",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
