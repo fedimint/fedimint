@@ -13,10 +13,11 @@ import {
   Progress,
   Badge,
   Box,
+  Button,
 } from '@chakra-ui/react';
 import { QRCodeSVG } from 'qrcode.react';
 import { TransactionStatus } from '../ExplorerApi';
-import { ApiContext, Button, TabHeader } from '.';
+import { ApiContext, TabHeader } from '.';
 
 export const DepositTabHeader = (): JSX.Element => {
   return <TabHeader>Deposit</TabHeader>;

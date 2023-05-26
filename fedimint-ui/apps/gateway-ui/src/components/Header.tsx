@@ -1,6 +1,5 @@
 import React from 'react';
-import { Flex, Spacer } from '@chakra-ui/react';
-import { Button } from './Button';
+import { Flex, Spacer, Button } from '@chakra-ui/react';
 import { GatewayInfo } from '../types';
 
 export type HeaderProps = {

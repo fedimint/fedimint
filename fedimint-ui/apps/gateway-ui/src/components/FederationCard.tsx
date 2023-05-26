@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Button,
   Tabs,
   TabList,
   TabPanels,
@@ -14,7 +15,6 @@ import {
 } from '@chakra-ui/react';
 import { Federation } from '../types';
 import {
-  Button,
   InfoTabHeader,
   InfoTab,
   DepositTab,

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Box,
+  Button,
   Flex,
   HStack,
   Modal,
@@ -16,7 +17,7 @@ import {
   useToast,
   VStack,
 } from '@chakra-ui/react';
-import { TabHeader, Button, Input, ApiContext } from '.';
+import { TabHeader, Input, ApiContext } from '.';
 import { TransactionStatus } from '../ExplorerApi';
 
 export const WithdrawTabHeader = () => {
