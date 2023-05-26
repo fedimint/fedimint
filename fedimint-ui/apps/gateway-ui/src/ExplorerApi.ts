@@ -1,6 +1,6 @@
-import { Transaction, Vout } from '../bitcoin.types';
+import { Transaction, Vout } from './bitcoin.types';
 
-export interface Explorer {
+interface ApiInterface {
   // Try get transaction status for a tx with given address
   watchAddressForTransaction: (
     address: string
@@ -47,7 +47,7 @@ interface ChaintipCache {
   fetched: number;
 }
 
-export class BlockstreamExplorer implements Explorer {
+export class ExplorerApi implements ApiInterface {
   // Base url for the blockstream explorer
   public baseUrl: string;
   chaintip: ChaintipCache | undefined;

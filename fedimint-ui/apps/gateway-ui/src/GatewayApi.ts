@@ -1,7 +1,7 @@
-import { Federation } from '../federation.types';
+import { Federation } from './federation.types';
 
-// Mintgate is an API to interact with the Gateway server
-export interface Mintgate {
+// GatewayApi is an API to interact with the Gateway server
+interface ApiInterface {
   fetchInfo: () => Promise<GatewayInfo>;
   fetchAddress: () => Promise<string>;
   connectFederation: (connectInfo: string) => Promise<Federation>;
@@ -41,8 +41,35 @@ export interface GatewayInfo {
 /** TransactionId of a fedimint federation */
 export type TransactionId = string;
 
-// NullGatewayInfo is a placeholder for when the GatewayInfo is not yet loaded
-export const NullGatewayInfo: GatewayInfo = {
-  version_hash: '',
-  federations: [],
-};
+// GatewayApi is an implementation of the ApiInterface
+export class GatewayApi implements ApiInterface {
+  private gatewayUrl: string | undefined = process.env.REACT_APP_FM_GATEWAY_API;
+
+  fetchInfo = async (): Promise<GatewayInfo> => {
+    throw new Error('Not implemented');
+  };
+
+  fetchAddress = (): Promise<string> => {
+    throw new Error('Not implemented');
+  };
+
+  connectFederation = async (_connectInfo: string): Promise<Federation> => {
+    throw new Error('Not implemented');
+  };
+
+  completeDeposit = async (
+    _federationId: string,
+    _txOutProof: string,
+    _tx: string
+  ): Promise<string> => {
+    throw new Error('Not implemented');
+  };
+
+  requestWithdrawal = async (
+    _federationId: string,
+    _amountSat: number,
+    _address: string
+  ): Promise<string> => {
+    throw new Error('Not implemented');
+  };
+}

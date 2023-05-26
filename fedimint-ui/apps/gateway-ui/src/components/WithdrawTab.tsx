@@ -17,7 +17,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { TabHeader, Button, Input, ApiContext } from '.';
-import { TransactionStatus } from '../api';
+import { TransactionStatus } from '../ExplorerApi';
 
 export const WithdrawTabHeader = () => {
   return <TabHeader>Withdraw</TabHeader>;
@@ -42,7 +42,7 @@ const truncateStringFormat = (arg: string): string => {
 export const WithdrawTab = React.memo(function WithdrawTab({
   federationId,
 }: WithdrawTabProps): JSX.Element {
-  const { mintgate } = React.useContext(ApiContext);
+  const { gateway } = React.useContext(ApiContext);
   const [withdrawObject, setWithdrawObject] = useState<WithdrawObject>({
     amount: 0,
     address: '',
@@ -80,7 +80,7 @@ export const WithdrawTab = React.memo(function WithdrawTab({
 
   const startWithdrawal = async () => {
     try {
-      const txId = await mintgate.requestWithdrawal(
+      const txId = await gateway.requestWithdrawal(
         federationId,
         amount,
         address

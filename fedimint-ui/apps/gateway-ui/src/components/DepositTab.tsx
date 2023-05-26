@@ -15,8 +15,8 @@ import {
   Box,
 } from '@chakra-ui/react';
 import { QRCodeSVG } from 'qrcode.react';
+import { TransactionStatus } from '../ExplorerApi';
 import { ApiContext, Button, TabHeader } from '.';
-import { TransactionStatus } from '../api';
 
 export const DepositTabHeader = (): JSX.Element => {
   return <TabHeader>Deposit</TabHeader>;
@@ -30,16 +30,16 @@ const truncateStringFormat = (arg: string): string => {
 };
 
 export const DepositTab = React.memo(function DepositTab(): JSX.Element {
-  const { mintgate, explorer } = React.useContext(ApiContext);
+  const { gateway, explorer } = React.useContext(ApiContext);
 
   const [address, setAddress] = useState<string>('');
   const [txStatus, setTxStatus] = useState<TransactionStatus | null>(null);
 
   useEffect(() => {
-    mintgate.fetchAddress().then((newAddress) => {
+    gateway.fetchAddress().then((newAddress) => {
       setAddress(newAddress);
     });
-  }, [mintgate]);
+  }, [gateway]);
 
   useEffect(() => {
     if (!address) return;
@@ -255,7 +255,7 @@ const WatchTransaction = ({
   confirmationsRequired,
   federationId,
 }: WatchTransactionProps) => {
-  const { mintgate, explorer } = React.useContext(ApiContext);
+  const { gateway, explorer } = React.useContext(ApiContext);
 
   const [status, setStatus] = useState(txStatus);
 
@@ -275,7 +275,7 @@ const WatchTransaction = ({
           // Automatically complete the deposit to federation
           // TODO: Call to completeDeposit should be automated.
           // once all the required data is available, complete the deposit without requiring user interaction.
-          const fmTxId = await mintgate.completeDeposit(
+          const fmTxId = await gateway.completeDeposit(
             federationId,
             proof.transactionOutProof,
             proof.transactionHash

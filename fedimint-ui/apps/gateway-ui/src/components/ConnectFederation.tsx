@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Collapse, HStack } from '@chakra-ui/react';
 import { Federation } from '../federation.types';
-import { ApiContext } from './ApiProvider';
+import { ApiContext } from '../ApiProvider';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -16,7 +16,7 @@ interface FedConnectInfo {
 }
 
 export const ConnectFederation = (connect: ConnectFederationProps) => {
-  const { mintgate } = React.useContext(ApiContext);
+  const { gateway } = React.useContext(ApiContext);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [connectInfo, setConnectInfo] = useState<FedConnectInfo>({
     value: '',
@@ -32,7 +32,7 @@ export const ConnectFederation = (connect: ConnectFederationProps) => {
   const handleConnectFederation = async () => {
     if (!connectInfo.isValid) return;
     try {
-      const federation = await mintgate.connectFederation(connectInfo.value);
+      const federation = await gateway.connectFederation(connectInfo.value);
       connect.renderConnectedFedCallback(federation);
       // TODO: Show success UI
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

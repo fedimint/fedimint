@@ -1,29 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Center, Stack } from '@chakra-ui/react';
 import {
   Header,
   FederationCard,
   ConnectFederation,
-  ApiContext,
+  ApiProvider,
 } from './components';
-import { GatewayInfo, NullGatewayInfo } from './api';
 import { Federation, Filter, Sort } from './federation.types';
+import { GatewayApi, GatewayInfo } from './GatewayApi';
+import { ExplorerApi } from './ExplorerApi';
 
-export const Admin = React.memo(function Admin(): JSX.Element {
-  const { mintgate } = React.useContext(ApiContext);
+export const App = React.memo(function Admin(): JSX.Element {
+  const gateway = useMemo(() => new GatewayApi(), []);
+  const explorer = useMemo(
+    () => new ExplorerApi('https://blockstream.info/api/'),
+    []
+  );
 
-  const [gatewayInfo, setGatewayInfo] = useState<GatewayInfo>(NullGatewayInfo);
+  const [gatewayInfo, setGatewayInfo] = useState<GatewayInfo>({
+    version_hash: '',
+    federations: [],
+  });
 
   const [fedlist, setFedlist] = useState<Federation[]>([]);
 
   const [showConnectFed, toggleShowConnectFed] = useState<boolean>(false);
 
   useEffect(() => {
-    mintgate.fetchInfo().then((gatewayInfo) => {
+    gateway.fetchInfo().then((gatewayInfo: GatewayInfo) => {
       setGatewayInfo(gatewayInfo);
       setFedlist(gatewayInfo.federations);
     });
-  }, [mintgate]);
+  }, [gateway]);
 
   const filterFederations = (filter: Filter) => {
     const federations =
@@ -87,37 +95,39 @@ export const Admin = React.memo(function Admin(): JSX.Element {
   };
 
   return (
-    <Center>
-      <Box
-        maxW='1000px'
-        width='100%'
-        mt={10}
-        mb={10}
-        mr={[2, 4, 6, 10]}
-        ml={[2, 4, 6, 10]}
-      >
-        <Header
-          data={gatewayInfo.federations}
-          toggleShowConnectFed={() => toggleShowConnectFed(!showConnectFed)}
-          filterCallback={filterFederations}
-          sortCallback={sortFederations}
-        />
-        <ConnectFederation
-          isOpen={showConnectFed}
-          renderConnectedFedCallback={renderConnectedFedCallback}
-        />
-        <Stack spacing={6} pt={6}>
-          {fedlist.map((federation: Federation) => {
-            return (
-              <FederationCard
-                key={federation.mint_pubkey}
-                federation={federation}
-                onClick={() => console.log('clicked')}
-              />
-            );
-          })}
-        </Stack>
-      </Box>
-    </Center>
+    <ApiProvider props={{ gateway, explorer }}>
+      <Center>
+        <Box
+          maxW='1000px'
+          width='100%'
+          mt={10}
+          mb={10}
+          mr={[2, 4, 6, 10]}
+          ml={[2, 4, 6, 10]}
+        >
+          <Header
+            data={gatewayInfo.federations}
+            toggleShowConnectFed={() => toggleShowConnectFed(!showConnectFed)}
+            filterCallback={filterFederations}
+            sortCallback={sortFederations}
+          />
+          <ConnectFederation
+            isOpen={showConnectFed}
+            renderConnectedFedCallback={renderConnectedFedCallback}
+          />
+          <Stack spacing={6} pt={6}>
+            {fedlist.map((federation: Federation) => {
+              return (
+                <FederationCard
+                  key={federation.mint_pubkey}
+                  federation={federation}
+                  onClick={() => console.log('clicked')}
+                />
+              );
+            })}
+          </Stack>
+        </Box>
+      </Center>
+    </ApiProvider>
   );
 });
