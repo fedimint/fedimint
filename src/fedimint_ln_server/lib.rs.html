@@ -1219,6 +1219,12 @@
 <a href="#1219" id="1219">1219</a>
 <a href="#1220" id="1220">1220</a>
 <a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
+<a href="#1225" id="1225">1225</a>
+<a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::time::Duration;
@@ -1826,6 +1832,12 @@
 
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>ContractKey(<span class="kw-2">*</span>contract), <span class="kw-2">&amp;</span>updated_contract_account)
                     .<span class="kw">await</span>;
+
+                dbtx.insert_new_entry(
+                    <span class="kw-2">&amp;</span>ContractUpdateKey(out_point),
+                    <span class="kw-2">&amp;</span>LightningOutputOutcome::CancelOutgoingContract { id: <span class="kw-2">*</span>contract },
+                )
+                .<span class="kw">await</span>;
             }
         }
 

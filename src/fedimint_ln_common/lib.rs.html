@@ -341,6 +341,13 @@
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -473,6 +480,9 @@
     Offer {
         id: OfferId,
     },
+    CancelOutgoingContract {
+        id: ContractId,
+    },
 }
 
 <span class="kw">impl </span>LightningOutputOutcome {
@@ -480,6 +490,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             LightningOutputOutcome::Contract { id: <span class="kw">_</span>, outcome } =&gt; outcome.is_permanent(),
             LightningOutputOutcome::Offer { .. } =&gt; <span class="bool-val">true</span>,
+            LightningOutputOutcome::CancelOutgoingContract { .. } =&gt; <span class="bool-val">true</span>,
         }
     }
 }
@@ -492,6 +503,9 @@
             }
             LightningOutputOutcome::Offer { id } =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;LN Offer {id}&quot;</span>)
+            }
+            LightningOutputOutcome::CancelOutgoingContract { id: contract_id } =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">&quot;LN Outgoing Contract Cancellation {contract_id}&quot;</span>)
             }
         }
     }

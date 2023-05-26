@@ -366,6 +366,7 @@
 <a href="#366" id="366">366</a>
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::client::ClientModule;
@@ -581,6 +582,7 @@
                 ContractOutcome::Incoming(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
                 ContractOutcome::Outgoing(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             },
+            OutputOutcome::LN(LightningOutputOutcome::CancelOutgoingContract { .. }) =&gt; <span class="bool-val">true</span>,
         }
     }
 }
