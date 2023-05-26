@@ -90,7 +90,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _executor: Executor<DynGlobalClientContext>,
         _api: DynGlobalApi,
         _snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<OperationId>> {
         anyhow::bail!("Backup not supported");
     }
 
@@ -141,7 +141,7 @@ pub trait IClientModule: Debug {
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<Vec<OperationId>>;
 
     async fn wipe(
         &self,
@@ -218,7 +218,7 @@ where
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<OperationId>> {
         <T as ClientModule>::restore(self, dbtx, module_instance_id, executor, api, snapshot).await
     }
 

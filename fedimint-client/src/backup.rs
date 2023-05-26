@@ -17,6 +17,7 @@ use tracing::{debug, info, warn};
 use super::Client;
 use crate::get_client_root_secret_encoding;
 use crate::secret::{DeriveableSecretClientExt, RootSecretStrategy};
+use crate::sm::OperationId;
 
 /// Backup metadata
 ///
@@ -283,7 +284,7 @@ impl Client {
     ///
     /// This will restore (or initialize restoration process) in all sub-modules
     /// that support it.
-    pub(crate) async fn restore_from_backup(&self) -> Result<Metadata> {
+    pub(crate) async fn restore_from_backup(&self) -> Result<(Metadata, Vec<OperationId>)> {
         info!(target: LOG_CLIENT_RECOVERY, "Restoring from backup");
         let backup = if let Some(backup) = self.download_backup_from_federation().await? {
             info!(
@@ -306,6 +307,7 @@ impl Client {
             .map(|b| b.metadata.clone())
             .unwrap_or_else(Metadata::empty);
 
+        let mut op_ids = vec![];
         let mut dbtx = self.db().begin_transaction().await;
         for (id, kind, module) in self.inner.modules.iter_modules() {
             if !module.supports_backup() {
@@ -319,15 +321,17 @@ impl Client {
                 module_id = id,
                 "Starting recovery from backup for module"
             );
-            module
-                .restore(
-                    &mut dbtx,
-                    id,
-                    self.inner.executor.clone(),
-                    self.inner.api.clone(),
-                    module_backup.map(Vec::as_slice),
-                )
-                .await?;
+            op_ids.append(
+                &mut module
+                    .restore(
+                        &mut dbtx,
+                        id,
+                        self.inner.executor.clone(),
+                        self.inner.api.clone(),
+                        module_backup.map(Vec::as_slice),
+                    )
+                    .await?,
+            );
         }
 
         {
@@ -356,7 +360,7 @@ impl Client {
             }
         }
         dbtx.commit_tx().await;
-        Ok(metadata)
+        Ok((metadata, op_ids))
     }
 
     /// Download most recent valid backup found from the Federation

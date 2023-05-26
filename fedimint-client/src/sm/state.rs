@@ -49,6 +49,11 @@ pub trait IState<GC>: Debug + DynEncodable + MaybeSend + MaybeSync {
         global_context: &GC,
     ) -> Vec<StateTransition<DynState<GC>>>;
 
+    /// Is this a final state (no possible state transitions)
+    fn is_final(&self, context: &DynContext, global_context: &GC) -> bool {
+        self.transitions(context, global_context).is_empty()
+    }
+
     /// Operation this state machine belongs to. See [`OperationId`] for
     /// details.
     fn operation_id(&self) -> OperationId;

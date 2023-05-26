@@ -1085,7 +1085,7 @@ impl FedimintCli {
             }
             Command::Ng(ClientNg::Restore { secret }) => {
                 let mut tg = TaskGroup::new();
-                let (client, metadata) = cli
+                let (client, metadata, operation_ids) = cli
                     .build_client_ng_builder(&self.module_gens)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
@@ -1098,7 +1098,7 @@ impl FedimintCli {
 
                 info!("Waiting for restore to complete");
                 client
-                    .await_restore_finished()
+                    .await_operations_finished(&operation_ids)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 debug!("Restore complete");

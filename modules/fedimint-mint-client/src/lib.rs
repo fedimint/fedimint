@@ -72,8 +72,6 @@ use crate::output::{
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
 
-const MINT_BACKUP_RESTORE_OPERATION_ID: OperationId = OperationId([0x01; 32]);
-
 pub const LOG_TARGET: &str = "client::module::mint";
 
 #[apply(async_trait_maybe_send!)]
@@ -126,7 +124,10 @@ pub trait MintClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, SpendOOBState>>;
 
     /// Awaits the backup restoration to complete
-    async fn await_restore_finished(&self) -> anyhow::Result<()>;
+    async fn await_operations_finished(
+        &self,
+        operation_id: &'_ [OperationId],
+    ) -> anyhow::Result<()>;
 }
 
 /// The high-level state of a reissue operation started with
@@ -366,9 +367,21 @@ impl MintClientExt for Client {
     }
 
     /// Waits for the mint backup restoration to finish
-    async fn await_restore_finished(&self) -> anyhow::Result<()> {
-        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
-        mint.await_restore_finished().await
+    async fn await_operations_finished(
+        &self,
+        operation_ids: &'_ [OperationId],
+    ) -> anyhow::Result<()> {
+        for op_id in operation_ids {
+            debug!("Awaiting for {op_id} to finish");
+            let mut notification_stream = self.notifier().subscribe(op_id).await;
+            while let Some(notification) = notification_stream.next().await {
+                if notification.is_final() {
+                    debug!("{op_id} finish");
+                    break;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -579,7 +592,7 @@ impl ClientModule for MintClientModule {
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         snapshot: Option<&[u8]>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<OperationId>> {
         if !Self::get_all_spendable_notes(&mut dbtx.with_module_prefix(module_instance_id))
             .await
             .is_empty()
@@ -621,20 +634,22 @@ impl ClientModule for MintClientModule {
 
         debug!(target: LOG_TARGET, "Creating MintRestoreStateMachine");
 
+        let operation_id = OperationId::new_random();
+
         executor
             .add_state_machines_dbtx(
                 dbtx,
                 vec![DynState::from_typed(
                     module_instance_id,
                     MintClientStateMachines::Restore(MintRestoreStateMachine {
-                        operation_id: MINT_BACKUP_RESTORE_OPERATION_ID,
+                        operation_id,
                         state: MintRestoreStates::InProgress(state),
                     }),
                 )],
             )
             .await?;
 
-        Ok(())
+        Ok(vec![operation_id])
     }
 
     async fn wipe(
@@ -943,32 +958,6 @@ impl MintClientModule {
         )
         .next_or_pending()
         .await
-    }
-
-    async fn await_restore_finished(&self) -> anyhow::Result<()> {
-        let mut restore_stream = self
-            .notifier
-            .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
-            .await;
-        while let Some(restore_step) = restore_stream.next().await {
-            match restore_step {
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Success,
-                    ..
-                }) => {
-                    return Ok(());
-                }
-                MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Failed(error),
-                    ..
-                }) => {
-                    return Err(anyhow!("Restore failed: {}", error.reason));
-                }
-                _ => {}
-            }
-        }
-
-        Err(anyhow!("Restore stream closed without success or failure"))
     }
 
     /// Select notes with total amount of *at least* `amount`. If more than

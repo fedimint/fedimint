@@ -142,8 +142,13 @@ impl Command {
             .run_inner()
             .await
             .with_context(|| format!("command: {}", self.command_debug()))?;
-        let output = String::from_utf8(output.stdout)?;
-        Ok(output.trim().to_owned())
+        let stdout = String::from_utf8(output.stdout)?;
+        debug!(
+            target: LOG_DEVIMINT,
+            "> {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Ok(stdout.trim().to_owned())
     }
 
     pub async fn run_inner(&mut self) -> Result<std::process::Output> {

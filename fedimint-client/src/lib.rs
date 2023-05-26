@@ -483,6 +483,10 @@ impl Client {
         self.inner.api.as_ref()
     }
 
+    pub fn notifier(&self) -> &Notifier<DynGlobalClientContext> {
+        self.inner.executor.notifier()
+    }
+
     pub fn federation_id(&self) -> FederationId {
         self.inner.federation_id
     }
@@ -1149,7 +1153,7 @@ impl ClientBuilder {
         self,
         tg: &mut TaskGroup,
         secret: ClientSecret<S>,
-    ) -> anyhow::Result<(Client, Metadata)>
+    ) -> anyhow::Result<(Client, Metadata, Vec<OperationId>)>
     where
         S: RootSecretStrategy,
     {
@@ -1183,9 +1187,9 @@ impl ClientBuilder {
         dbtx.commit_tx().await;
 
         let client = self.build::<S>(tg).await?;
-        let metadata = client.restore_from_backup().await?;
+        let (metadata, operation_ids) = client.restore_from_backup().await?;
 
-        Ok((client, metadata))
+        Ok((client, metadata, operation_ids))
     }
 
     /// Build a [`Client`] and start its executor
