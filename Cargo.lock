@@ -1352,6 +1352,7 @@ name = "fedimint-ln-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aquamarine",
  "async-stream",
  "async-trait",
  "bincode",
