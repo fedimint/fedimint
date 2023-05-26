@@ -130,6 +130,9 @@ pub enum LightningOutputOutcome {
     Offer {
         id: OfferId,
     },
+    CancelOutgoingContract {
+        id: ContractId,
+    },
 }
 
 impl LightningOutputOutcome {
@@ -137,6 +140,7 @@ impl LightningOutputOutcome {
         match self {
             LightningOutputOutcome::Contract { id: _, outcome } => outcome.is_permanent(),
             LightningOutputOutcome::Offer { .. } => true,
+            LightningOutputOutcome::CancelOutgoingContract { .. } => true,
         }
     }
 }
@@ -149,6 +153,9 @@ impl std::fmt::Display for LightningOutputOutcome {
             }
             LightningOutputOutcome::Offer { id } => {
                 write!(f, "LN Offer {id}")
+            }
+            LightningOutputOutcome::CancelOutgoingContract { id: contract_id } => {
+                write!(f, "LN Outgoing Contract Cancellation {contract_id}")
             }
         }
     }

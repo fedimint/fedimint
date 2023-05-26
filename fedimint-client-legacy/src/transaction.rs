@@ -213,6 +213,7 @@ impl Final for OutputOutcome {
                 ContractOutcome::Incoming(_) => false,
                 ContractOutcome::Outgoing(_) => true,
             },
+            OutputOutcome::LN(LightningOutputOutcome::CancelOutgoingContract { .. }) => true,
         }
     }
 }
