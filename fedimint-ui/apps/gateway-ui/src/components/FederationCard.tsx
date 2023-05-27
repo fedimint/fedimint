@@ -14,12 +14,7 @@ import {
   Stack,
 } from '@chakra-ui/react';
 import { Federation } from '../types';
-import {
-  InfoTabHeader,
-  InfoTab,
-  DepositTab,
-  DepositTabHeader,
-} from '.';
+import { InfoTabHeader, InfoTab, DepositTab, DepositTabHeader } from '.';
 import { WithdrawTab, WithdrawTabHeader } from './WithdrawTab';
 
 interface FederationCardProps {
@@ -99,7 +94,10 @@ export const FederationCard = (props: FederationCardProps): JSX.Element => {
             <Divider />
             <TabPanels>
               <InfoTab date_created='' description={placeholder_desc} />
-              <DepositTab federationId={federation_id} active={tab.open === OpenTab.DepositTab} />
+              <DepositTab
+                federationId={federation_id}
+                active={tab.open === OpenTab.DepositTab}
+              />
               <WithdrawTab federationId={federation_id} />
             </TabPanels>
           </Collapse>

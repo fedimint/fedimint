@@ -9,34 +9,23 @@ export type ConnectFederationProps = {
   renderConnectedFedCallback: (federation: Federation) => void;
 };
 
-interface FedConnectInfo {
-  value: string;
-  isValid: boolean;
-}
-
 export const ConnectFederation = (connect: ConnectFederationProps) => {
   const { gateway } = React.useContext(ApiContext);
   const [errorMsg, setErrorMsg] = useState<string>('');
-  const [connectInfo, setConnectInfo] = useState<FedConnectInfo>({
-    value: '',
-    isValid: false,
-  });
+  const [connectInfo, setConnectInfo] = useState<string>('');
 
   const handleInputString = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault();
-    const { value } = event.target;
-    setConnectInfo({ value, isValid: true });
+    setConnectInfo(event.target.value);
   };
 
   const handleConnectFederation = async () => {
-    if (!connectInfo.isValid) return;
     try {
-      const federation = await gateway.connectFederation(connectInfo.value);
+      const federation = await gateway.connectFederation(connectInfo);
       connect.renderConnectedFedCallback(federation);
-      // TODO: Show success UI
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setErrorMsg('Failed to connect to federation' + e.message);
+      setConnectInfo('');
+    } catch (e) {
+      setErrorMsg(`Failed to connect to federation ${e}`);
     }
   };
 
@@ -53,18 +42,17 @@ export const ConnectFederation = (connect: ConnectFederationProps) => {
           alignItems='flex-end'
         >
           <Input
-            labelName='Connect String:'
+            labelName='Connection String:'
             placeHolder='Enter federation connection string'
-            value={connectInfo.value}
+            value={connectInfo}
             onChange={(event) => handleInputString(event)}
           />
           <Button
             borderRadius='4'
             onClick={() => handleConnectFederation()}
             height='48px'
-            disabled={!connectInfo.isValid}
           >
-            Connect 🚀
+            Connect
           </Button>
           <Box color='red.500'>{errorMsg}</Box>
         </HStack>

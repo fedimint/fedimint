@@ -83,8 +83,28 @@ export class GatewayApi implements ApiInterface {
     }
   };
 
-  connectFederation = async (_connectInfo: string): Promise<Federation> => {
-    throw new Error('Not implemented');
+  connectFederation = async (connectInfo: string): Promise<Federation> => {
+    try {
+      const res: Response = await fetch(`${this.baseUrl}/connect-fed`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.password}`,
+        },
+        body: JSON.stringify({
+          connect: connectInfo,
+        }),
+      });
+
+      if (res.ok) {
+        const federation: Federation = await res.json();
+        return Promise.resolve(federation);
+      }
+
+      throw responseToError('Connecting federation', res);
+    } catch (err) {
+      return Promise.reject(err);
+    }
   };
 
   completeDeposit = async (
