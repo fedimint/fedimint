@@ -12,12 +12,11 @@ use bitcoin::{Address, Network};
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
+use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{
-    sm_enum_variant_translation, Client, DynGlobalClientContext, UpdateStreamOrOutcome,
-};
+use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
@@ -119,16 +118,17 @@ impl WalletClientExt for Client {
 
                         self.add_state_machines(dbtx, vec![DynState::from_typed(instance.id, sm)])
                             .await?;
-                        self.add_operation_log_entry(
-                            dbtx,
-                            operation_id,
-                            WalletCommonGen::KIND.as_str(),
-                            WalletOperationMeta::Deposit {
-                                address: address.clone(),
-                                expires_at: valid_until,
-                            },
-                        )
-                        .await;
+                        self.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                WalletCommonGen::KIND.as_str(),
+                                WalletOperationMeta::Deposit {
+                                    address: address.clone(),
+                                    expires_at: valid_until,
+                                },
+                            )
+                            .await;
 
                         Ok((operation_id, address))
                     })
@@ -155,6 +155,7 @@ impl WalletClientExt for Client {
             self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
 
         let operation_log_entry = self
+            .operation_log()
             .get_operation(operation_id)
             .await
             .ok_or(anyhow!("Operation not found"))?;
@@ -276,6 +277,7 @@ impl WalletClientExt for Client {
             self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
 
         let operation = self
+            .operation_log()
             .get_operation(operation_id)
             .await
             .ok_or(anyhow!("Operation not found"))?;
