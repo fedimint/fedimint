@@ -71,7 +71,8 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::OperationLog
 );
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
+/// Key used to lookup operation log entries in chronological order
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct ChronologicalOperationLogKey {
     pub creation_time: std::time::SystemTime,
     pub operation_id: OperationId,

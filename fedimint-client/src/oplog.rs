@@ -56,17 +56,35 @@ impl OperationLog {
         .await;
     }
 
-    // TODO: allow fetching pages
-    /// Returns the last `limit` operations.
-    pub async fn get_operations(
+    /// Returns the last `limit` operations. To fetch the next page, pass the
+    /// last operation's [`ChronologicalOperationLogKey`] as `start_after`.
+    pub async fn list_operations(
         &self,
         limit: usize,
+        start_after: Option<ChronologicalOperationLogKey>,
     ) -> Vec<(ChronologicalOperationLogKey, OperationLogEntry)> {
         let mut dbtx = self.db.begin_transaction().await;
         let operations: Vec<ChronologicalOperationLogKey> = dbtx
             .find_by_prefix_sorted_descending(&ChronologicalOperationLogKeyPrefix)
             .await
             .map(|(key, _)| key)
+            // FIXME: this is a schlemil-the-painter algorithm that will take longer the further
+            // back in history one goes. To avoid that I see two options:
+            //   1. Add a reference to the previous operation to each operation log entry,
+            //      essentially creating a linked list, which seem a little bit inelegant.
+            //   2. Add an option to prefix queries that allows to specify a start key
+            //
+            // The current implementation may also skip operations due to `SystemTime` not being
+            // guaranteed to be monotonous. The linked list approach would also fix that.
+            .skip_while(move |key| {
+                let skip = if let Some(start_after) = start_after {
+                    key.creation_time >= start_after.creation_time
+                } else {
+                    false
+                };
+
+                std::future::ready(skip)
+            })
             .take(limit)
             .collect::<Vec<_>>()
             .await;
@@ -286,6 +304,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::UpdateStreamOrOutcome;
+    use crate::db::ChronologicalOperationLogKey;
     use crate::oplog::{OperationLog, OperationLogEntry};
     use crate::sm::OperationId;
 
@@ -358,5 +377,48 @@ mod tests {
             .collect::<Vec<_>>()
             .await;
         assert_eq!(updates, vec!["baz"]);
+    }
+
+    #[tokio::test]
+    async fn test_pagination() {
+        let db = Database::new(MemDatabase::new(), Default::default());
+        let op_log = OperationLog::new(db.clone());
+
+        for operation_idx in 0u8..98 {
+            let mut dbtx = db.begin_transaction().await;
+            op_log
+                .add_operation_log_entry(
+                    &mut dbtx,
+                    OperationId([operation_idx; 32]),
+                    "foo",
+                    operation_idx,
+                )
+                .await;
+            dbtx.commit_tx().await;
+        }
+
+        fn assert_page_entries(
+            page: Vec<(ChronologicalOperationLogKey, OperationLogEntry)>,
+            page_idx: u8,
+        ) {
+            for (entry_idx, (_key, entry)) in page.into_iter().enumerate() {
+                let actual_meta = entry.meta::<u8>();
+                let expected_meta = 97 - (page_idx * 10 + entry_idx as u8);
+
+                assert_eq!(actual_meta, expected_meta);
+            }
+        }
+
+        let mut previous_last_element = None;
+        for page_idx in 0u8..9 {
+            let page = op_log.list_operations(10, previous_last_element).await;
+            assert_eq!(page.len(), 10);
+            previous_last_element = Some(page[9].0);
+            assert_page_entries(page, page_idx);
+        }
+
+        let page = op_log.list_operations(10, previous_last_element).await;
+        assert_eq!(page.len(), 8);
+        assert_page_entries(page, 9);
     }
 }
