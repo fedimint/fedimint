@@ -16,8 +16,9 @@ pub mod db;
 use std::time::SystemTime;
 
 use anyhow::bail;
+use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::OperationId;
-use fedimint_client::{Client, OperationLogEntry};
+use fedimint_client::Client;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
@@ -357,6 +358,7 @@ pub async fn ln_operation(
     operation_id: OperationId,
 ) -> anyhow::Result<OperationLogEntry> {
     let operation = client
+        .operation_log()
         .get_operation(operation_id)
         .await
         .ok_or(anyhow::anyhow!("Operation not found"))?;

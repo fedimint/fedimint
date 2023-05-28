@@ -7,9 +7,10 @@ use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::oplog::OperationLogEntry;
 use crate::secret::RootSecretStrategy;
 use crate::sm::OperationId;
-use crate::{ClientSecret, OperationLogEntry};
+use crate::ClientSecret;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
