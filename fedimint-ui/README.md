@@ -24,9 +24,11 @@ From root repo directory:
 1. `yarn install` (First time only)
 1. You can run any of the following commands from `fedimint-ui/` directory
 
-> - `yarn test` - Tests all apps and packages in the project
-> - `yarn build` - Build all apps and packages in the project
-> - `yarn clean` - Cleans previous build outputs from all apps and packages in the project
-> - `yarn format` - Fixes formatting in all apps and packages in the project
-
-Alternatively, you can navigate to a specific app or package within `fedimint-ui/` directory and run it's respective development commands
+- `yarn dev` - Starts development servers and file watchers for all apps and packages
+  - Due to port conflicts, there are dev commands for each app to run individually
+    - `yarn dev:gateway-ui`
+    - `yarn dev:guardian-ui`
+- `yarn test` - Tests all apps and packages in the project
+- `yarn build` - Build all apps and packages in the project
+- `yarn clean` - Cleans previous build outputs from all apps and packages in the project
+- `yarn format` - Fixes formatting in all apps and packages in the project
