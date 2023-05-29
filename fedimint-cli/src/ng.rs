@@ -16,6 +16,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
 use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 use fedimint_wallet_client::{WalletClientExt, WithdrawState};
@@ -195,7 +196,7 @@ pub async fn handle_ng_command(
         ClientNg::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
 
-            let operation_id = client.pay_bolt11_invoice(bolt11).await?;
+            let (operation_id, contract_id) = client.pay_bolt11_invoice(bolt11).await?;
 
             let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
 
@@ -204,6 +205,7 @@ pub async fn handle_ng_command(
                     LnPayState::Success { preimage } => {
                         return Ok(serde_json::to_value(PayInvoiceResponse {
                             operation_id,
+                            contract_id,
                             preimage,
                         })
                         .unwrap());
@@ -373,6 +375,7 @@ pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PayInvoiceResponse {
     operation_id: OperationId,
+    contract_id: ContractId,
     preimage: String,
 }
 

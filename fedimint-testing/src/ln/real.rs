@@ -81,6 +81,14 @@ impl LightningTest for ClnLightningTest {
         Ok(Invoice::from_str(&invoice_resp.bolt11).unwrap())
     }
 
+    async fn invalid_invoice(
+        &self,
+        _amount: Amount,
+        _expiry_time: Option<u64>,
+    ) -> ln_gateway::Result<Invoice> {
+        unimplemented!()
+    }
+
     async fn amount_sent(&self) -> Amount {
         let current_balance = Self::channel_balance(self.rpc_cln.clone()).await;
         self.initial_balance.sub(current_balance)

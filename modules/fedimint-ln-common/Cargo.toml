@@ -23,6 +23,7 @@ futures = "0.3.24"
 itertools = "0.10.5"
 lightning = "0.0.113"
 lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
+fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 secp256k1 = { version="0.24.2", default-features=false }
 serde = {version = "1.0.149", features = [ "derive" ] }

@@ -46,13 +46,28 @@ impl FederationTest {
             .to_client_config(&self.server_gen)
             .unwrap();
 
-        self.new_client_with_config(client_config).await
+        self.new_client_with_config(client_config, self.client_gen.clone())
+            .await
+    }
+
+    /// Create a new client containing the lightning gateway client module
+    pub async fn new_gateway_client(&self, registry: ClientModuleGenRegistry) -> Client {
+        let client_config = self.configs[&PeerId::from(0)]
+            .consensus
+            .to_client_config(&self.server_gen)
+            .unwrap();
+
+        self.new_client_with_config(client_config, registry).await
     }
 
     /// Create a client with a custom config
-    pub async fn new_client_with_config(&self, client_config: ClientConfig) -> Client {
+    pub async fn new_client_with_config(
+        &self,
+        client_config: ClientConfig,
+        registry: ClientModuleGenRegistry,
+    ) -> Client {
         let mut client_builder = ClientBuilder::default();
-        client_builder.with_module_gens(self.client_gen.clone());
+        client_builder.with_module_gens(registry);
         client_builder.with_primary_module(self.primary_client);
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
