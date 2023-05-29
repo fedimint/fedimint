@@ -1,3 +1,4 @@
+use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ModuleConsensusVersion;
@@ -51,5 +52,6 @@ async fn client_ignores_unknown_module() {
     cfg.modules.insert(2142, extra_mod);
 
     // Test that building the client worked
-    let _client = fed.new_client_with_config(cfg).await;
+    let registry = ClientModuleGenRegistry::new(); // FIXME
+    let _client = fed.new_client_with_config(cfg, registry).await;
 }

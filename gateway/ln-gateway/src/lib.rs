@@ -2,6 +2,7 @@ pub mod actor;
 pub mod client;
 pub mod lnd;
 pub mod lnrpc_client;
+pub mod ng;
 pub mod rpc;
 pub mod types;
 pub mod utils;
@@ -12,6 +13,7 @@ pub mod gatewaylnrpc {
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

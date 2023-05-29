@@ -15,6 +15,13 @@ pub trait LightningTest {
         expiry_time: Option<u64>,
     ) -> ln_gateway::Result<Invoice>;
 
+    /// Creates invoice from a non-gateway LN node
+    async fn invalid_invoice(
+        &self,
+        amount: Amount,
+        expiry_time: Option<u64>,
+    ) -> ln_gateway::Result<Invoice>;
+
     /// Returns the amount that the gateway LN node has sent
     async fn amount_sent(&self) -> Amount;
 

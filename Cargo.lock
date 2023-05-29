@@ -1398,6 +1398,7 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "erased-serde",
+ "fedimint-client",
  "fedimint-core",
  "futures",
  "itertools",
@@ -2911,6 +2912,8 @@ name = "ln-gateway"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
+ "async-stream",
  "async-trait",
  "axum",
  "axum-macros",
@@ -2931,6 +2934,8 @@ dependencies = [
  "fedimint-ln-server",
  "fedimint-logging",
  "fedimint-mint-client",
+ "fedimint-mint-common",
+ "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-wallet-client",
@@ -2941,6 +2946,7 @@ dependencies = [
  "rand",
  "reqwest",
  "secp256k1",
+ "secp256k1-zkp",
  "serde",
  "serde_json",
  "thiserror",

@@ -93,6 +93,14 @@ impl LightningTest for RealLightningTest {
         }
     }
 
+    async fn invalid_invoice(
+        &self,
+        _amount: Amount,
+        _expiry_time: Option<u64>,
+    ) -> ln_gateway::Result<Invoice> {
+        unimplemented!()
+    }
+
     async fn amount_sent(&self) -> Amount {
         let current_balance = match self.gateway_node {
             GatewayNode::Cln => Self::channel_balance_cln(self.rpc_cln.clone()).await,
