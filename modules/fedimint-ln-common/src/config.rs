@@ -1,8 +1,11 @@
+use std::str::FromStr;
+
 use bitcoin::Network;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::plugin_types_trait_impl_config;
+use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 
@@ -103,5 +106,33 @@ impl Default for FeeConsensus {
             contract_input: fedimint_core::Amount::ZERO,
             contract_output: fedimint_core::Amount::ZERO,
         }
+    }
+}
+
+/// Gateway routing fees
+#[derive(Debug, Clone)]
+pub struct GatewayFee(pub RoutingFees);
+
+impl FromStr for GatewayFee {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(',');
+        let base_msat = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing base fee in millisatoshis"))?
+            .parse()?;
+        let proportional_millionths = parts
+            .next()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "missing liquidity based fee as proportional millionths of routed amount"
+                )
+            })?
+            .parse()?;
+        Ok(GatewayFee(RoutingFees {
+            base_msat,
+            proportional_millionths,
+        }))
     }
 }
