@@ -17,8 +17,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::format_err;
 use bitcoin_hashes::hex::{FromHex, ToHex};
-use bitcoin_hashes::sha256::HashEngine;
-use bitcoin_hashes::{sha256, Hash};
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use thiserror::Error;
 use url::Url;
@@ -81,15 +79,20 @@ pub trait Encodable {
         Ok(bytes.to_hex())
     }
 
-    /// Generate a SHA256 hash of the consensus encoding
+    /// Generate a SHA256 hash of the consensus encoding using the default hash
+    /// engine for `H`.
     ///
     /// Can be used to validate all federation members agree on state without
     /// revealing the object
-    fn consensus_hash(&self) -> sha256::Hash {
-        let mut engine = HashEngine::default();
+    fn consensus_hash<H>(&self) -> H
+    where
+        H: bitcoin_hashes::Hash,
+        H::Engine: std::io::Write,
+    {
+        let mut engine = H::engine();
         self.consensus_encode(&mut engine)
             .expect("writing to HashEngine cannot fail");
-        sha256::Hash::from_engine(engine)
+        H::from_engine(engine)
     }
 }
 
