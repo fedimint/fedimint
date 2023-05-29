@@ -2,12 +2,13 @@ use async_trait::async_trait;
 use clap::ValueEnum;
 use fedimint_core::Amount;
 use lightning_invoice::Invoice;
+use ln_gateway::lnrpc_client::ILnRpcClient;
 
 pub mod mock;
 pub mod real;
 
 #[async_trait]
-pub trait LightningTest {
+pub trait LightningTest: ILnRpcClient {
     /// Creates invoice from a non-gateway LN node
     async fn invoice(
         &self,
@@ -23,16 +24,16 @@ pub trait LightningTest {
 }
 
 #[derive(ValueEnum, Clone, Debug)]
-pub enum GatewayNode {
+pub enum LightningNodeType {
     Cln,
     Lnd,
 }
 
-impl ToString for GatewayNode {
+impl ToString for LightningNodeType {
     fn to_string(&self) -> String {
         match self {
-            GatewayNode::Cln => "cln".to_string(),
-            GatewayNode::Lnd => "lnd".to_string(),
+            LightningNodeType::Cln => "cln".to_string(),
+            LightningNodeType::Lnd => "lnd".to_string(),
         }
     }
 }
