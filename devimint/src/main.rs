@@ -581,15 +581,15 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // # Spend from client ng
     info!("Testing spending from client ng");
-    let _notes = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
+    let notes = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
         .out_json()
         .await?
-        .as_object()
-        .unwrap()
         .get("notes")
-        .expect("Output didn't containe e-cash notes");
+        .expect("Output didn't containe e-cash notes")
+        .as_str()
+        .unwrap()
+        .to_owned();
 
-    info!("{}", cmd!(fed, "info").out_string().await?);
     let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
         .unwrap();
@@ -598,10 +598,28 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         CLIENT_NG_REISSUE_AMOUNT - CLIENT_NG_SPEND_AMOUNT
     );
 
+    // Test we can reissue our own notes
+    cmd!(fed, "ng", "reissue", notes).out_json().await?;
+
+    let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(clientng_post_spend_balance, CLIENT_NG_REISSUE_AMOUNT);
+
     let reissue_amount: u64 = 4096;
 
     // Ensure that client ng can reissue after spending
     info!("Testing reissuing e-cash after spending");
+    let _notes = cmd!(fed, "ng", "spend", CLIENT_NG_SPEND_AMOUNT)
+        .out_json()
+        .await?
+        .as_object()
+        .unwrap()
+        .get("notes")
+        .expect("Output didn't containe e-cash notes")
+        .as_str()
+        .unwrap();
+
     let reissue_notes = cmd!(fed, "spend", reissue_amount).out_json().await?["note"]
         .as_str()
         .map(|s| s.to_owned())

@@ -18,7 +18,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail};
 use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{
     ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
@@ -179,7 +179,11 @@ impl MintClientExt for Client {
     ) -> anyhow::Result<OperationId> {
         let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
 
-        let operation_id = OperationId(notes.consensus_hash::<sha256::Hash>().into_inner());
+        let operation_id = OperationId(
+            notes
+                .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
+                .into_inner(),
+        );
         if self.get_operation(operation_id).await.is_some() {
             bail!("We already reissued these notes");
         }
@@ -901,7 +905,7 @@ impl MintClientModule {
 
         let operation_id = OperationId(
             spendable_selected_notes
-                .consensus_hash::<sha256::Hash>()
+                .consensus_hash::<sha256t::Hash<OOBSpendTag>>()
                 .into_inner(),
         );
 
@@ -1384,4 +1388,24 @@ pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
         &mut std::io::Cursor::new(bytes),
         &ModuleDecoderRegistry::default(),
     )?)
+}
+
+struct OOBSpendTag;
+
+impl sha256t::Tag for OOBSpendTag {
+    fn engine() -> sha256::HashEngine {
+        let mut engine = sha256::HashEngine::default();
+        engine.input(b"oob-spend");
+        engine
+    }
+}
+
+struct OOBReissueTag;
+
+impl sha256t::Tag for OOBReissueTag {
+    fn engine() -> sha256::HashEngine {
+        let mut engine = sha256::HashEngine::default();
+        engine.input(b"oob-reissue");
+        engine
+    }
 }
