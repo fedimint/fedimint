@@ -46,7 +46,7 @@ impl FederationTest {
             .to_client_config(&self.server_gen)
             .unwrap();
 
-        self.new_client_with_config(client_config, self.client_gen.clone())
+        self.new_client_with_config_and_registry(client_config, self.client_gen.clone())
             .await
     }
 
@@ -57,11 +57,12 @@ impl FederationTest {
             .to_client_config(&self.server_gen)
             .unwrap();
 
-        self.new_client_with_config(client_config, registry).await
+        self.new_client_with_config_and_registry(client_config, registry)
+            .await
     }
 
     /// Create a client with a custom config
-    pub async fn new_client_with_config(
+    pub async fn new_client_with_config_and_registry(
         &self,
         client_config: ClientConfig,
         registry: ClientModuleGenRegistry,

@@ -1,10 +1,8 @@
 pub mod pay;
 
-use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context as AnyhowContext};
 use async_stream::stream;
 use bitcoin_hashes::Hash;
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
@@ -15,6 +13,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State}
 use fedimint_client::{
     sm_enum_variant_translation, Client, DynGlobalClientContext, UpdateStreamOrOutcome,
 };
+use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -22,7 +21,7 @@ use fedimint_core::module::{ExtendsCommonModuleGen, TransactionItemAmount};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::contracts::ContractId;
-use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
+use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     ln_operation, LightningCommonGen, LightningGateway, LightningModuleTypes, LightningOutput, KIND,
@@ -71,7 +70,7 @@ pub trait GatewayClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtPayStates>>;
 
     /// Register gateway with federation
-    async fn register_with_federation(&self) -> anyhow::Result<()>;
+    async fn register_with_federation(&self, api: Url) -> anyhow::Result<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -120,7 +119,7 @@ impl GatewayClientExt for Client {
             .map_err(|e| match e {
                 AutocommitError::ClosureError { error, .. } => error,
                 AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow!("Commit to DB failed: {last_error}")
+                    anyhow::anyhow!("Commit to DB failed: {last_error}")
                 }
             })
     }
@@ -166,10 +165,10 @@ impl GatewayClientExt for Client {
     }
 
     /// Register this gateway with the federation
-    async fn register_with_federation(&self) -> anyhow::Result<()> {
+    async fn register_with_federation(&self, api: Url) -> anyhow::Result<()> {
         let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
         let route_hints = vec![];
-        let config = gateway.to_gateway_registration_info(route_hints, GW_ANNOUNCEMENT_TTL);
+        let config = gateway.to_gateway_registration_info(route_hints, GW_ANNOUNCEMENT_TTL, api);
         instance.api.register_gateway(&config).await?;
         Ok(())
     }
@@ -178,6 +177,9 @@ impl GatewayClientExt for Client {
 #[derive(Debug, Clone)]
 pub struct GatewayClientGen {
     pub lightning_client: Arc<dyn ILnRpcClient>,
+    pub timelock_delta: u64,
+    pub mint_channel_id: u64,
+    pub fees: RoutingFees,
 }
 
 impl ExtendsCommonModuleGen for GatewayClientGen {
@@ -195,16 +197,12 @@ impl ClientModuleGen for GatewayClientGen {
         _db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
         let GetNodeInfoResponse { pub_key, alias: _ } = self.lightning_client.info().await?;
-        let node_pub_key =
-            PublicKey::from_slice(&pub_key).map_err(|e| anyhow!("Invalid node pubkey {}", e))?;
-        let api: Url = env::var("FM_GATEWAY_API_ADDR")
-            .context("FM_GATEWAY_API_ADDR not found")?
-            .parse()?;
-        let fees: GatewayFee = env::var("FM_GATEWAY_FEES")
-            .context("FM_GATEWAY_FEES not found")?
-            .parse()?;
+        let node_pub_key = PublicKey::from_slice(&pub_key)
+            .map_err(|e| anyhow::anyhow!("Invalid node pubkey {}", e))?;
         Ok(GatewayClientModule {
             cfg,
             notifier,
@@ -213,10 +211,9 @@ impl ClientModuleGen for GatewayClientGen {
                 .to_secp_key(&Secp256k1::new()),
             node_pub_key,
             lightning_client: self.lightning_client.clone(),
-            timelock_delta: 10, // FIXME: don't hardcode
-            api,
-            mint_channel_id: 1, // FIXME: don't hardcode
-            fees: fees.0,
+            timelock_delta: self.timelock_delta,
+            mint_channel_id: self.mint_channel_id,
+            fees: self.fees,
         })
     }
 }
@@ -245,10 +242,7 @@ pub struct GatewayClientModule {
     pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
     redeem_key: KeyPair,
     node_pub_key: PublicKey,
-    timelock_delta: u64, // FIXME: don't hard-code
-    // FIXME: this is used for gateway registration
-    // Should this happen inside or outside the client?
-    api: Url,
+    timelock_delta: u64,
     mint_channel_id: u64,
     fees: RoutingFees,
     lightning_client: Arc<dyn ILnRpcClient>,
@@ -302,12 +296,13 @@ impl GatewayClientModule {
         &self,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
+        api: Url,
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
             mint_pub_key: self.redeem_key.x_only_public_key().0,
             node_pub_key: self.node_pub_key,
-            api: self.api.clone(),
+            api,
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
             fees: self.fees,
@@ -320,16 +315,15 @@ impl GatewayClientModule {
     ) -> Result<OutPoint, GatewayError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
-            match stream.next().await {
-                Some(GatewayClientStateMachines::Pay(state)) => match state.state {
+            if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
+                match state.state {
                     GatewayPayStates::Preimage(outpoint) => return Ok(outpoint),
-                    GatewayPayStates::Canceled(cancel_outpoint) => {
+                    GatewayPayStates::Canceled(cancel_outpoint, _) => {
                         return Err(GatewayError::Canceled(cancel_outpoint))
                     }
                     GatewayPayStates::Failed => return Err(GatewayError::Failed),
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
     }
