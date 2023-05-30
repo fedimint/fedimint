@@ -19,7 +19,7 @@ use crate::core::ModuleInstanceId;
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::{MaybeSend, MaybeSync};
-use crate::{async_trait_maybe_send, maybe_add_send};
+use crate::{async_trait_maybe_send, maybe_add_send, timing};
 
 pub mod mem_impl;
 pub mod notifications;
@@ -235,22 +235,30 @@ impl Database {
             let mut dbtx = self.begin_transaction().await;
 
             match tx_fn(&mut dbtx).await {
-                Ok(val) => match dbtx.commit_tx_result().await {
-                    Ok(()) => {
-                        return Ok(val);
-                    }
-                    Err(err) => {
-                        if max_attempts
-                            .map(|max_att| max_att <= curr_attempts)
-                            .unwrap_or(false)
-                        {
-                            return Err(AutocommitError::CommitFailed {
-                                attempts: curr_attempts,
-                                last_error: err,
-                            });
+                Ok(val) => {
+                    let _timing /* logs on drop */ = timing::TimeReporter::new("autocmmit - commit_tx");
+
+                    match dbtx.commit_tx_result().await {
+                        Ok(()) => {
+                            return Ok(val);
+                        }
+                        Err(err) => {
+                            warn!(
+                                target: LOG_DB,
+                                curr_attempts, "Database commit failed in an autocommit block"
+                            );
+                            if max_attempts
+                                .map(|max_att| max_att <= curr_attempts)
+                                .unwrap_or(false)
+                            {
+                                return Err(AutocommitError::CommitFailed {
+                                    attempts: curr_attempts,
+                                    last_error: err,
+                                });
+                            }
                         }
                     }
-                },
+                }
                 Err(err) => {
                     return Err(AutocommitError::ClosureError {
                         attempts: curr_attempts,
