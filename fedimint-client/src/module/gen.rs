@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::bail;
+use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientModuleConfig};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
@@ -28,6 +29,8 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
         db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        api: DynGlobalApi,
+        module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module>;
 
     /// Initialize a [`crate::module::PrimaryClientModule`] instance from its
@@ -54,6 +57,8 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
         _db: Database,
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -> anyhow::Result<DynPrimaryClientModule> {
         bail!("Not a primary module")
     }
@@ -75,6 +80,7 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
         instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
         notifier: Notifier<DynGlobalClientContext>,
+        api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule>;
 
     async fn init_primary(
@@ -85,6 +91,7 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
         notifier: Notifier<DynGlobalClientContext>,
+        api: DynGlobalApi,
     ) -> anyhow::Result<DynPrimaryClientModule>;
 }
 
@@ -113,6 +120,7 @@ where
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
         notifier: Notifier<DynGlobalClientContext>,
+        api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg = cfg.cast::<T::Config>()?;
         Ok(self
@@ -121,6 +129,8 @@ where
                 db,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
+                api.clone(),
+                api.with_module(instance_id),
             )
             .await?
             .into())
@@ -133,6 +143,7 @@ where
         instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
         notifier: Notifier<DynGlobalClientContext>,
+        api: DynGlobalApi,
     ) -> anyhow::Result<DynPrimaryClientModule> {
         let typed_cfg = cfg.cast::<T::Config>()?;
         Ok(self
@@ -141,6 +152,8 @@ where
                 db,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
+                api.clone(),
+                api.with_module(instance_id),
             )
             .await?)
     }

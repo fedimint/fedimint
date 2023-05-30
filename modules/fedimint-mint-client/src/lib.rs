@@ -32,7 +32,7 @@ use fedimint_client::{
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
+use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
@@ -423,6 +423,8 @@ impl ClientModuleGen for MintClientGen {
         _db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
         let (cancel_oob_payment_bc, _) = tokio::sync::broadcast::channel(16);
         Ok(MintClientModule {
@@ -440,9 +442,11 @@ impl ClientModuleGen for MintClientGen {
         db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        api: DynGlobalApi,
+        module_api: DynModuleApi,
     ) -> anyhow::Result<DynPrimaryClientModule> {
         Ok(self
-            .init(cfg, db, module_root_secret, notifier)
+            .init(cfg, db, module_root_secret, notifier, api, module_api)
             .await?
             .into())
     }

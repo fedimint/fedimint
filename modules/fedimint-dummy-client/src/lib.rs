@@ -10,7 +10,7 @@ use fedimint_client::module::{
 use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 use fedimint_core::core::{IntoDynInstance, KeyPair};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
@@ -315,9 +315,11 @@ impl ClientModuleGen for DummyClientGen {
         db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        api: DynGlobalApi,
+        module_api: DynModuleApi,
     ) -> anyhow::Result<DynPrimaryClientModule> {
         Ok(self
-            .init(cfg, db, module_root_secret, notifier)
+            .init(cfg, db, module_root_secret, notifier, api, module_api)
             .await?
             .into())
     }
@@ -328,6 +330,8 @@ impl ClientModuleGen for DummyClientGen {
         _db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
         Ok(DummyClientModule {
             cfg,
