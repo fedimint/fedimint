@@ -10,6 +10,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
+use crate::timing;
 use crate::transaction::Transaction;
 
 /// All the items that may be produced during a consensus epoch
@@ -120,6 +121,7 @@ impl SignedEpochOutcome {
         pks: &PublicKeySet,
         mut prev_epoch: SignedEpochOutcome,
     ) -> Result<SignedEpochOutcome, EpochVerifyError> {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("add sig to prev");
         let sigs: BTreeMap<_, _> = self
             .outcome
             .items
@@ -137,6 +139,7 @@ impl SignedEpochOutcome {
 
     pub fn verify_sig(&self, pk: &PublicKey) -> Result<(), EpochVerifyError> {
         if let Some(sig) = &self.signature {
+            let _timing /* logs on drop */ = timing::TimeReporter::new("verify epoch outcome signature");
             if !pk.verify(&sig.0, self.hash) {
                 return Err(EpochVerifyError::InvalidSignature);
             }
@@ -151,6 +154,7 @@ impl SignedEpochOutcome {
         &self,
         prev_epoch: &Option<SignedEpochOutcome>,
     ) -> Result<(), EpochVerifyError> {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("verify epoch outcome hash");
         if self.outcome.epoch > 0 {
             match prev_epoch {
                 None => return Err(EpochVerifyError::MissingPreviousEpoch),

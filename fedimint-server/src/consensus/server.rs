@@ -380,6 +380,10 @@ impl ConsensusServer {
                         .await
                         .expect("fetches history");
 
+                    info!(
+                        target: LOG_CONSENSUS,
+                        "Verifing missing epoch {}", epoch_num
+                    );
                     epoch.verify_hash(&prev_epoch)?;
                     prev_epoch = Some(epoch.clone());
 
@@ -398,6 +402,10 @@ impl ConsensusServer {
 
             if at_know_trusted_checkpoint {
                 for (items, epoch, _prev_epoch_hash, rejected_txs) in epochs.drain(..) {
+                    info!(
+                        target: LOG_CONSENSUS,
+                        "Processing items from missing epoch {}", epoch
+                    );
                     let epoch = self
                         .consensus
                         .process_consensus_outcome(
