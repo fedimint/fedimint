@@ -36,16 +36,18 @@
 <a href="#36" id="36">36</a>
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>clap::ValueEnum;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>ln_gateway::lnrpc_client::ILnRpcClient;
 
 <span class="kw">pub mod </span>mock;
 <span class="kw">pub mod </span>real;
 
 <span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>LightningTest {
+</span><span class="kw">pub trait </span>LightningTest: ILnRpcClient {
     <span class="doccomment">/// Creates invoice from a non-gateway LN node
     </span><span class="kw">async fn </span>invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -61,16 +63,16 @@
 }
 
 <span class="attr">#[derive(ValueEnum, Clone, Debug)]
-</span><span class="kw">pub enum </span>GatewayNode {
+</span><span class="kw">pub enum </span>LightningNodeType {
     Cln,
     Lnd,
 }
 
-<span class="kw">impl </span>ToString <span class="kw">for </span>GatewayNode {
+<span class="kw">impl </span>ToString <span class="kw">for </span>LightningNodeType {
     <span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="kw">match </span><span class="self">self </span>{
-            GatewayNode::Cln =&gt; <span class="string">&quot;cln&quot;</span>.to_string(),
-            GatewayNode::Lnd =&gt; <span class="string">&quot;lnd&quot;</span>.to_string(),
+            LightningNodeType::Cln =&gt; <span class="string">&quot;cln&quot;</span>.to_string(),
+            LightningNodeType::Lnd =&gt; <span class="string">&quot;lnd&quot;</span>.to_string(),
         }
     }
 }

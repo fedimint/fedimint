@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["GatewayNode",""]],"mod":[["mock",""],["real",""]],"trait":[["LightningTest",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["LightningNodeType",""]],"mod":[["mock",""],["real",""]],"trait":[["LightningTest",""]]};

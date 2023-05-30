@@ -226,106 +226,192 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::env;
-<span class="kw">use </span>std::ops::Sub;
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::{env, fmt};
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>cln_rpc::{model, ClnRpc, Request, Response};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>lightning_invoice::Invoice;
-<span class="kw">use </span>tokio::sync::Mutex;
+<span class="kw">use </span>ln_gateway::gatewaylnrpc::{
+    GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
+    RouteHtlcRequest,
+};
+<span class="kw">use </span>ln_gateway::lnd::GatewayLndClient;
+<span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
+<span class="kw">use </span>ln_gateway::GatewayError;
+<span class="kw">use </span>tokio::sync::{Mutex, RwLock};
+<span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic_lnd::lnrpc::{GetInfoRequest, Invoice <span class="kw">as </span>LndInvoice, ListChannelsRequest};
 <span class="kw">use </span>tonic_lnd::{connect, LndClient};
 <span class="kw">use </span>tracing::info;
+<span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::ln::{GatewayNode, LightningTest};
+<span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
 <span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>RealLightningTest {
+</span><span class="kw">pub struct </span>ClnLightningTest {
     rpc_cln: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
-    rpc_lnd: Arc&lt;Mutex&lt;LndClient&gt;&gt;,
     initial_balance: Amount,
-    <span class="comment">// Which lightning node to use as the gateway?
-    </span>gateway_node: GatewayNode,
-    <span class="kw">pub </span>gateway_node_pub_key: secp256k1::PublicKey,
+    <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
+    lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
+}
+
+<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>ClnLightningTest {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+        f.debug_struct(<span class="string">&quot;ClnLightningTest&quot;</span>)
+            .field(<span class="string">&quot;initial_balance&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.initial_balance)
+            .field(<span class="string">&quot;node_pub_key&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.node_pub_key)
+            .finish()
+    }
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>LightningTest <span class="kw">for </span>RealLightningTest {
+</span><span class="kw">impl </span>LightningTest <span class="kw">for </span>ClnLightningTest {
     <span class="kw">async fn </span>invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; ln_gateway::Result&lt;Invoice&gt; {
-        <span class="kw">match </span><span class="self">self</span>.gateway_node {
-            <span class="comment">// If we&#39;re using CLN as the gateway, use LND to fetch an invoice
-            </span>GatewayNode::Cln =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;fetching invoice from lnd&quot;</span>);
-                <span class="kw">let </span><span class="kw-2">mut </span>lnd_rpc = <span class="self">self</span>.rpc_lnd.lock().<span class="kw">await</span>;
-                <span class="kw">let </span>tonic_invoice = <span class="kw">match </span>expiry_time {
-                    <span class="prelude-val">Some</span>(expiry) =&gt; LndInvoice {
-                        value_msat: amount.msats <span class="kw">as </span>i64,
-                        expiry: expiry <span class="kw">as </span>i64,
-                        ..Default::default()
-                    },
-                    <span class="prelude-val">None </span>=&gt; LndInvoice {
-                        value_msat: amount.msats <span class="kw">as </span>i64,
-                        ..Default::default()
-                    },
-                };
-                <span class="kw">let </span>invoice_resp = lnd_rpc
-                    .lightning()
-                    .add_invoice(tonic_invoice)
-                    .<span class="kw">await
-                    </span>.unwrap()
-                    .into_inner();
+        <span class="macro">info!</span>(<span class="string">&quot;fetching invoice from cln&quot;</span>);
+        <span class="kw">let </span>random: u64 = rand::random();
+        <span class="kw">let </span>invoice_req = model::InvoiceRequest {
+            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
+            description: <span class="string">&quot;&quot;</span>.to_string(),
+            label: random.to_string(),
+            expiry: expiry_time,
+            fallbacks: <span class="prelude-val">None</span>,
+            preimage: <span class="prelude-val">None</span>,
+            exposeprivatechannels: <span class="prelude-val">None</span>,
+            cltv: <span class="prelude-val">None</span>,
+            deschashonly: <span class="prelude-val">None</span>,
+        };
 
-                <span class="prelude-val">Ok</span>(Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.payment_request).unwrap())
-            }
-            <span class="comment">// If we&#39;re using LND as the gateway, use CLN to fetch an invoice
-            </span>GatewayNode::Lnd =&gt; {
-                <span class="macro">info!</span>(<span class="string">&quot;fetching invoice from cln&quot;</span>);
-                <span class="kw">let </span>random: u64 = rand::random();
-                <span class="kw">let </span>invoice_req = model::InvoiceRequest {
-                    amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
-                    description: <span class="string">&quot;&quot;</span>.to_string(),
-                    label: random.to_string(),
-                    expiry: expiry_time,
-                    fallbacks: <span class="prelude-val">None</span>,
-                    preimage: <span class="prelude-val">None</span>,
-                    exposeprivatechannels: <span class="prelude-val">None</span>,
-                    cltv: <span class="prelude-val">None</span>,
-                    deschashonly: <span class="prelude-val">None</span>,
-                };
+        <span class="kw">let </span>invoice_resp = <span class="kw">if let </span>Response::Invoice(data) = <span class="self">self
+            </span>.rpc_cln
+            .lock()
+            .<span class="kw">await
+            </span>.call(Request::Invoice(invoice_req))
+            .<span class="kw">await
+            </span>.unwrap()
+        {
+            data
+        } <span class="kw">else </span>{
+            <span class="macro">panic!</span>(<span class="string">&quot;cln-rpc response did not match expected InvoiceResponse&quot;</span>)
+        };
 
-                <span class="kw">let </span>invoice_resp = <span class="kw">if let </span>Response::Invoice(data) = <span class="self">self
-                    </span>.rpc_cln
-                    .lock()
-                    .<span class="kw">await
-                    </span>.call(Request::Invoice(invoice_req))
-                    .<span class="kw">await
-                    </span>.unwrap()
-                {
-                    data
-                } <span class="kw">else </span>{
-                    <span class="macro">panic!</span>(<span class="string">&quot;cln-rpc response did not match expected InvoiceResponse&quot;</span>)
-                };
-
-                <span class="prelude-val">Ok</span>(Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.bolt11).unwrap())
-            }
-        }
+        <span class="prelude-val">Ok</span>(Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.bolt11).unwrap())
     }
 
     <span class="kw">async fn </span>amount_sent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        <span class="kw">let </span>current_balance = <span class="kw">match </span><span class="self">self</span>.gateway_node {
-            GatewayNode::Cln =&gt; <span class="self">Self</span>::channel_balance_cln(<span class="self">self</span>.rpc_cln.clone()).<span class="kw">await</span>,
-            GatewayNode::Lnd =&gt; <span class="self">Self</span>::channel_balance_lnd(<span class="self">self</span>.rpc_lnd.clone()).<span class="kw">await</span>,
-        };
+        <span class="kw">let </span>current_balance = <span class="self">Self</span>::channel_balance(<span class="self">self</span>.rpc_cln.clone()).<span class="kw">await</span>;
         <span class="self">self</span>.initial_balance.sub(current_balance)
     }
 
@@ -334,54 +420,53 @@
     </span>}
 }
 
-<span class="kw">impl </span>RealLightningTest {
-    <span class="kw">pub async fn </span>new(dir: <span class="kw-2">&amp;</span>str, gateway_node: <span class="kw-2">&amp;</span>GatewayNode) -&gt; RealLightningTest {
-        <span class="comment">// lightning - we create one LND RPC client, and one CLN RPC client. one will be
-        // used as the gateway&#39;s lightning node, and the other is an external node
-        // outside the federation that can be used to test lightnining
-        // payments through the gateway
-        </span><span class="kw">let </span>socket_cln = PathBuf::from(dir).join(<span class="string">&quot;cln/regtest/lightning-rpc&quot;</span>);
-        <span class="kw">let </span>rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).<span class="kw">await</span>.unwrap()));
-        <span class="kw">let </span>lnd_rpc_addr = env::var(<span class="string">&quot;FM_LND_RPC_ADDR&quot;</span>).unwrap();
-        <span class="kw">let </span>lnd_macaroon = env::var(<span class="string">&quot;FM_LND_MACAROON&quot;</span>).unwrap();
-        <span class="kw">let </span>lnd_tls_cert = env::var(<span class="string">&quot;FM_LND_TLS_CERT&quot;</span>).unwrap();
-        <span class="kw">let </span>lnd_client = connect(
-            lnd_rpc_addr.clone(),
-            lnd_tls_cert.clone(),
-            lnd_macaroon.clone(),
-        )
-        .<span class="kw">await
-        </span>.unwrap();
-        <span class="kw">let </span>rpc_lnd = Arc::new(Mutex::new(lnd_client.clone()));
-        RealLightningTest::from_clients(rpc_cln, rpc_lnd, gateway_node.clone()).<span class="kw">await
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>ClnLightningTest {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.info().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>from_clients(
-        rpc_cln: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
-        rpc_lnd: Arc&lt;Mutex&lt;LndClient&gt;&gt;,
-        gateway_node: GatewayNode,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>(initial_balance, gateway_node_pub_key) = <span class="kw">match </span>gateway_node {
-            GatewayNode::Cln =&gt; (
-                <span class="self">Self</span>::channel_balance_cln(rpc_cln.clone()).<span class="kw">await</span>,
-                <span class="self">Self</span>::pubkey_cln(rpc_cln.clone()).<span class="kw">await</span>,
-            ),
-            GatewayNode::Lnd =&gt; (
-                <span class="self">Self</span>::channel_balance_lnd(rpc_lnd.clone()).<span class="kw">await</span>,
-                <span class="self">Self</span>::pubkey_lnd(rpc_lnd.clone()).<span class="kw">await</span>,
-            ),
-        };
+    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.routehints().<span class="kw">await
+    </span>}
 
-        RealLightningTest {
+    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.pay(invoice).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        events: ReceiverStream&lt;RouteHtlcRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.write().<span class="kw">await</span>.route_htlcs(events).<span class="kw">await
+    </span>}
+}
+
+<span class="kw">impl </span>ClnLightningTest {
+    <span class="kw">pub async fn </span>new(dir: <span class="kw-2">&amp;</span>str) -&gt; ClnLightningTest {
+        <span class="kw">let </span>socket_cln = PathBuf::from(dir).join(<span class="string">&quot;cln/regtest/lightning-rpc&quot;</span>);
+        <span class="kw">let </span>rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).<span class="kw">await</span>.unwrap()));
+
+        <span class="kw">let </span>initial_balance = <span class="self">Self</span>::channel_balance(rpc_cln.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>node_pub_key = <span class="self">Self</span>::pubkey(rpc_cln.clone()).<span class="kw">await</span>;
+
+        <span class="kw">let </span>lnrpc_addr = env::var(<span class="string">&quot;FM_GATEWAY_LIGHTNING_ADDR&quot;</span>)
+            .expect(<span class="string">&quot;FM_GATEWAY_LIGHTNING_ADDR not set&quot;</span>)
+            .parse::&lt;Url&gt;()
+            .expect(<span class="string">&quot;Invalid FM_GATEWAY_LIGHTNING_ADDR&quot;</span>);
+        <span class="kw">let </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt; = Arc::new(RwLock::new(
+            NetworkLnRpcClient::new(lnrpc_addr).<span class="kw">await</span>.unwrap(),
+        ));
+
+        ClnLightningTest {
             rpc_cln,
-            rpc_lnd,
             initial_balance,
-            gateway_node,
-            gateway_node_pub_key,
+            node_pub_key,
+            lnrpc,
         }
     }
 
-    <span class="kw">async fn </span>pubkey_cln(rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;) -&gt; secp256k1::PublicKey {
+    <span class="kw">async fn </span>pubkey(rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;) -&gt; secp256k1::PublicKey {
         <span class="macro">info!</span>(<span class="string">&quot;fetching pubkey from cln&quot;</span>);
         <span class="kw">if let </span>Response::Getinfo(get_info) = rpc
             .lock()
@@ -395,21 +480,8 @@
             <span class="macro">panic!</span>(<span class="string">&quot;cln-rpc response did not match expected GetinfoResponse&quot;</span>)
         }
     }
-    <span class="kw">async fn </span>pubkey_lnd(rpc: Arc&lt;Mutex&lt;LndClient&gt;&gt;) -&gt; secp256k1::PublicKey {
-        <span class="macro">info!</span>(<span class="string">&quot;fetching pubkey from lnd&quot;</span>);
-        <span class="kw">let </span>info = rpc
-            .lock()
-            .<span class="kw">await
-            </span>.lightning()
-            .get_info(GetInfoRequest {})
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;failed to get info&quot;</span>)
-            .into_inner();
-        <span class="kw">let </span>pub_key: secp256k1::PublicKey = info.identity_pubkey.parse().expect(<span class="string">&quot;invalid pubkey&quot;</span>);
-        pub_key
-    }
 
-    <span class="kw">async fn </span>channel_balance_cln(rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;) -&gt; Amount {
+    <span class="kw">async fn </span>channel_balance(rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;) -&gt; Amount {
         <span class="macro">info!</span>(<span class="string">&quot;fetching balance from cln&quot;</span>);
         <span class="kw">let </span>listfunds_req = model::ListfundsRequest { spent: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) };
         <span class="kw">let </span>listfunds_resp = <span class="kw">if let </span>Response::ListFunds(data) = rpc
@@ -432,7 +504,137 @@
             .sum();
         Amount::from_msats(funds)
     }
-    <span class="kw">async fn </span>channel_balance_lnd(rpc: Arc&lt;Mutex&lt;LndClient&gt;&gt;) -&gt; Amount {
+}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>LndLightningTest {
+    rpc_lnd: Arc&lt;Mutex&lt;LndClient&gt;&gt;,
+    initial_balance: Amount,
+    <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
+    lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>LightningTest <span class="kw">for </span>LndLightningTest {
+    <span class="kw">async fn </span>invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    ) -&gt; ln_gateway::Result&lt;Invoice&gt; {
+        <span class="macro">info!</span>(<span class="string">&quot;fetching invoice from lnd&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>lnd_rpc = <span class="self">self</span>.rpc_lnd.lock().<span class="kw">await</span>;
+        <span class="kw">let </span>tonic_invoice = <span class="kw">match </span>expiry_time {
+            <span class="prelude-val">Some</span>(expiry) =&gt; LndInvoice {
+                value_msat: amount.msats <span class="kw">as </span>i64,
+                expiry: expiry <span class="kw">as </span>i64,
+                ..Default::default()
+            },
+            <span class="prelude-val">None </span>=&gt; LndInvoice {
+                value_msat: amount.msats <span class="kw">as </span>i64,
+                ..Default::default()
+            },
+        };
+        <span class="kw">let </span>invoice_resp = lnd_rpc
+            .lightning()
+            .add_invoice(tonic_invoice)
+            .<span class="kw">await
+            </span>.unwrap()
+            .into_inner();
+
+        <span class="prelude-val">Ok</span>(Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.payment_request).unwrap())
+    }
+
+    <span class="kw">async fn </span>amount_sent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+        <span class="kw">let </span>current_balance = <span class="self">Self</span>::channel_balance(<span class="self">self</span>.rpc_lnd.clone()).<span class="kw">await</span>;
+        <span class="self">self</span>.initial_balance.sub(current_balance)
+    }
+
+    <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="bool-val">true
+    </span>}
+}
+
+<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>LndLightningTest {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+        f.debug_struct(<span class="string">&quot;LndLightningTest&quot;</span>)
+            .field(<span class="string">&quot;initial_balance&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.initial_balance)
+            .field(<span class="string">&quot;node_pub_key&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.node_pub_key)
+            .finish()
+    }
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>LndLightningTest {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.info().<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.routehints().<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.pay(invoice).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        events: ReceiverStream&lt;RouteHtlcRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.write().<span class="kw">await</span>.route_htlcs(events).<span class="kw">await
+    </span>}
+}
+
+<span class="kw">impl </span>LndLightningTest {
+    <span class="kw">pub async fn </span>new() -&gt; LndLightningTest {
+        <span class="kw">let </span>lnd_rpc_addr = env::var(<span class="string">&quot;FM_LND_RPC_ADDR&quot;</span>).unwrap();
+        <span class="kw">let </span>lnd_macaroon = env::var(<span class="string">&quot;FM_LND_MACAROON&quot;</span>).unwrap();
+        <span class="kw">let </span>lnd_tls_cert = env::var(<span class="string">&quot;FM_LND_TLS_CERT&quot;</span>).unwrap();
+        <span class="kw">let </span>lnd_client = connect(
+            lnd_rpc_addr.clone(),
+            lnd_tls_cert.clone(),
+            lnd_macaroon.clone(),
+        )
+        .<span class="kw">await
+        </span>.unwrap();
+        <span class="kw">let </span>rpc_lnd = Arc::new(Mutex::new(lnd_client.clone()));
+
+        <span class="kw">let </span>initial_balance = <span class="self">Self</span>::channel_balance(rpc_lnd.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>node_pub_key = <span class="self">Self</span>::pubkey(rpc_lnd.clone()).<span class="kw">await</span>;
+
+        <span class="kw">let </span>gateway_lnd_client = GatewayLndClient::new(
+            lnd_rpc_addr,
+            lnd_tls_cert,
+            lnd_macaroon,
+            <span class="comment">// TODO: Remove this once we dont need a TaskGroup to create a client
+            </span>TaskGroup::new(),
+        )
+        .<span class="kw">await
+        </span>.unwrap();
+        <span class="kw">let </span>lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
+        LndLightningTest {
+            rpc_lnd,
+            initial_balance,
+            node_pub_key,
+            lnrpc,
+        }
+    }
+
+    <span class="kw">async fn </span>pubkey(rpc: Arc&lt;Mutex&lt;LndClient&gt;&gt;) -&gt; secp256k1::PublicKey {
+        <span class="macro">info!</span>(<span class="string">&quot;fetching pubkey from lnd&quot;</span>);
+        <span class="kw">let </span>info = rpc
+            .lock()
+            .<span class="kw">await
+            </span>.lightning()
+            .get_info(GetInfoRequest {})
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;failed to get info&quot;</span>)
+            .into_inner();
+        <span class="kw">let </span>pub_key: secp256k1::PublicKey = info.identity_pubkey.parse().expect(<span class="string">&quot;invalid pubkey&quot;</span>);
+        pub_key
+    }
+
+    <span class="kw">async fn </span>channel_balance(rpc: Arc&lt;Mutex&lt;LndClient&gt;&gt;) -&gt; Amount {
         <span class="macro">info!</span>(<span class="string">&quot;fetching balance from lnd&quot;</span>);
         <span class="kw">let </span>list_channels = rpc
             .lock()
