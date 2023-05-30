@@ -340,6 +340,7 @@ where
         if let WalletClientStates::Deposit(ds) = stream.next().await? {
             return Some(ds.state);
         }
+        tokio::task::yield_now().await;
     }
 }
 
@@ -351,6 +352,7 @@ where
         if let WalletClientStates::Withdraw(ds) = stream.next().await? {
             return Some(ds.state);
         }
+        tokio::task::yield_now().await;
     }
 }
 
