@@ -451,6 +451,11 @@
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::path::Path;
@@ -558,6 +563,11 @@
         <span class="kw">let </span>tx = <span class="self">self</span>.client().get_raw_transaction(txid, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>bytes = tx.consensus_encode_to_vec()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(bytes.to_hex())
+    }
+
+    <span class="kw">pub async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="kw">let </span>addr = <span class="self">self</span>.client().get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(addr.to_string())
     }
 }
 

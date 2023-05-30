@@ -336,6 +336,10 @@
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -348,7 +352,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{Client, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, KeyPair};
 <span class="kw">use </span>fedimint_core::db::{Database, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::{
@@ -653,9 +657,11 @@
         db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        api: DynGlobalApi,
+        module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;DynPrimaryClientModule&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.init(cfg, db, module_root_secret, notifier)
+            </span>.init(cfg, db, module_root_secret, notifier, api, module_api)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into())
     }
@@ -666,6 +672,8 @@
         _db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="prelude-val">Ok</span>(DummyClientModule {
             cfg,

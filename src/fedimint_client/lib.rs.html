@@ -1688,6 +1688,8 @@
 <a href="#1688" id="1688">1688</a>
 <a href="#1689" id="1689">1689</a>
 <a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2946,6 +2948,7 @@
                             module_instance,
                             root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
+                            api.clone(),
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>not_replaced = primary_module.replace((kind, module)).is_none();
@@ -2970,6 +2973,7 @@
                             // the same kind we have to use the instance id instead.
                             </span>root_secret.derive_module_secret(module_instance),
                             notifier.clone(),
+                            api.clone(),
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
                     modules.register_module(module_instance, kind, module);

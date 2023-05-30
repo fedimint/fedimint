@@ -828,6 +828,8 @@
 <a href="#828" id="828">828</a>
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -851,7 +853,7 @@
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-<span class="kw">use </span>fedimint_core::api::DynModuleApi;
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -1246,6 +1248,8 @@
         _db: Database,
         _module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="prelude-val">Ok</span>(LightningClientModule {
             cfg,

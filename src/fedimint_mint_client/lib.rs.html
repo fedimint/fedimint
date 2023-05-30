@@ -1409,6 +1409,10 @@
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
 <a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
 </pre><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1443,7 +1447,7 @@
     sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
     UpdateStreamOrOutcome,
 };
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
@@ -1834,6 +1838,8 @@
         _db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="kw">let </span>(cancel_oob_payment_bc, <span class="kw">_</span>) = tokio::sync::broadcast::channel(<span class="number">16</span>);
         <span class="prelude-val">Ok</span>(MintClientModule {
@@ -1851,9 +1857,11 @@
         db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        api: DynGlobalApi,
+        module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;DynPrimaryClientModule&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.init(cfg, db, module_root_secret, notifier)
+            </span>.init(cfg, db, module_root_secret, notifier, api, module_api)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into())
     }

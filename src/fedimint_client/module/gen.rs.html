@@ -162,10 +162,24 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientModuleConfig};
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -192,6 +206,8 @@
         db: Database,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        api: DynGlobalApi,
+        module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt;;
 
     <span class="doccomment">/// Initialize a [`crate::module::PrimaryClientModule`] instance from its
@@ -218,6 +234,8 @@
         _db: Database,
         _module_root_secret: DerivableSecret,
         _notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        _api: DynGlobalApi,
+        _module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;DynPrimaryClientModule&gt; {
         <span class="macro">bail!</span>(<span class="string">&quot;Not a primary module&quot;</span>)
     }
@@ -239,6 +257,7 @@
         </span>instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
         notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        api: DynGlobalApi,
     ) -&gt; anyhow::Result&lt;DynClientModule&gt;;
 
     <span class="kw">async fn </span>init_primary(
@@ -249,6 +268,7 @@
         module_root_secret: DerivableSecret,
         <span class="comment">// TODO: make dyn type for notifier
         </span>notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        api: DynGlobalApi,
     ) -&gt; anyhow::Result&lt;DynPrimaryClientModule&gt;;
 }
 
@@ -277,6 +297,7 @@
         module_root_secret: DerivableSecret,
         <span class="comment">// TODO: make dyn type for notifier
         </span>notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        api: DynGlobalApi,
     ) -&gt; anyhow::Result&lt;DynClientModule&gt; {
         <span class="kw">let </span>typed_cfg = cfg.cast::&lt;T::Config&gt;()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self
@@ -285,6 +306,8 @@
                 db,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
+                api.clone(),
+                api.with_module(instance_id),
             )
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into())
@@ -297,6 +320,7 @@
         instance_id: ModuleInstanceId,
         module_root_secret: DerivableSecret,
         notifier: Notifier&lt;DynGlobalClientContext&gt;,
+        api: DynGlobalApi,
     ) -&gt; anyhow::Result&lt;DynPrimaryClientModule&gt; {
         <span class="kw">let </span>typed_cfg = cfg.cast::&lt;T::Config&gt;()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self
@@ -305,6 +329,8 @@
                 db,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
+                api.clone(),
+                api.with_module(instance_id),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
