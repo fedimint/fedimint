@@ -1290,6 +1290,8 @@ dependencies = [
  "futures",
  "rand",
  "secp256k1",
+ "serde",
+ "thiserror",
  "threshold_crypto",
  "tracing",
 ]
@@ -2934,15 +2936,12 @@ dependencies = [
  "fedimint-ln-server",
  "fedimint-logging",
  "fedimint-mint-client",
- "fedimint-mint-common",
- "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-wallet-client",
  "futures",
  "lightning",
  "lightning-invoice",
- "portpicker",
  "prost 0.11.9",
  "rand",
  "reqwest",
@@ -3500,15 +3499,6 @@ name = "pkg-config"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
-
-[[package]]
-name = "portpicker"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
-dependencies = [
- "rand",
-]
 
 [[package]]
 name = "ppv-lite86"

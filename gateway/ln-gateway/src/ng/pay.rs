@@ -13,7 +13,6 @@ use fedimint_ln_common::{LightningInput, LightningOutput};
 use futures::future;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::info;
 
 use super::{GatewayClientContext, GatewayClientStateMachines};
 use crate::gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse};
@@ -33,12 +32,13 @@ use crate::gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 ///    ClaimOutgoingContract -- claim tx submission --> Preimage
 ///    CancelContract -- cancel tx submission successful --> Canceled
 ///    CancelContract -- cancel tx submission unsuccessful --> Failed
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
     CancelContract(GatewayPayCancelContract),
     Preimage(OutPoint),
-    Canceled(Option<TransactionId>),
+    Canceled(Option<TransactionId>, ContractId),
     ClaimOutgoingContract(GatewayPayClaimOutgoingContract),
     Failed,
 }
@@ -137,9 +137,8 @@ impl GatewayPayInvoice {
         common: GatewayPayCommon,
     ) -> Vec<StateTransition<GatewayPayStateMachine>> {
         vec![StateTransition::new(
-            Self::await_buy_preimage(global_context.clone(), self.contract_id, context.clone()),
+            Self::await_buy_preimage(global_context, self.contract_id, context),
             move |_dbtx, result, _old_state| {
-                info!("await_buy_preimage done: {result:?}");
                 Box::pin(Self::transition_bought_preimage(result, common.clone()))
             },
         )]
@@ -150,7 +149,6 @@ impl GatewayPayInvoice {
         contract_id: ContractId,
         context: GatewayClientContext,
     ) -> Result<(OutgoingContractAccount, Preimage), OutgoingPaymentError> {
-        info!("await_buy_preimage id={contract_id:?}");
         let account = global_context
             .module_api()
             .fetch_contract(contract_id)
@@ -223,10 +221,8 @@ impl GatewayPayInvoice {
                 let slice: [u8; 32] = preimage.try_into().expect("Failed to parse preimage");
                 Ok(Preimage(slice))
             }
-            Err(e) => {
-                info!("error paying lightning invoice {e:?}");
-                Err(OutgoingPaymentError::LightningPayError { contract })
-            }
+            // TODO: Get status code from failed RPC request
+            Err(_) => Err(OutgoingPaymentError::LightningPayError { contract }),
         }
     }
 
@@ -242,29 +238,30 @@ impl GatewayPayInvoice {
                     preimage,
                 }),
             },
-            Err(OutgoingPaymentError::InvalidOutgoingContract {
-                error: _error,
-                contract,
-            }) => {
-                // TODO: include the underlying error while canceling the contract
-                return GatewayPayStateMachine {
+            Err(e) => match e.clone() {
+                OutgoingPaymentError::InvalidOutgoingContract { error: _, contract } => {
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(GatewayPayCancelContract {
+                            contract,
+                            error: e,
+                        }),
+                    }
+                }
+                OutgoingPaymentError::LightningPayError { contract } => GatewayPayStateMachine {
                     common,
-                    state: GatewayPayStates::CancelContract(GatewayPayCancelContract { contract }),
-                };
-            }
-            Err(OutgoingPaymentError::LightningPayError { contract }) => {
-                info!("transition to CancelContract");
-                return GatewayPayStateMachine {
-                    common,
-                    state: GatewayPayStates::CancelContract(GatewayPayCancelContract { contract }),
-                };
-            }
-            Err(_) => {
-                return GatewayPayStateMachine {
-                    common,
-                    state: GatewayPayStates::Canceled(None),
-                };
-            }
+                    state: GatewayPayStates::CancelContract(GatewayPayCancelContract {
+                        contract,
+                        error: e,
+                    }),
+                },
+                OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id } => {
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::Canceled(None, contract_id),
+                    }
+                }
+            },
         }
     }
 
@@ -385,6 +382,7 @@ impl GatewayPayClaimOutgoingContract {
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct GatewayPayCancelContract {
     contract: OutgoingContractAccount,
+    error: OutgoingPaymentError,
 }
 
 impl GatewayPayCancelContract {
@@ -432,7 +430,7 @@ impl GatewayPayCancelContract {
         match global_context.fund_output(dbtx, client_output).await {
             Ok((txid, _)) => GatewayPayStateMachine {
                 common,
-                state: GatewayPayStates::Canceled(Some(txid)),
+                state: GatewayPayStates::Canceled(Some(txid), contract.contract.contract_id()),
             },
             Err(_) => GatewayPayStateMachine {
                 common,

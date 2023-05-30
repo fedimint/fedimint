@@ -11,7 +11,7 @@ use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
-use fedimint_core::core::{IntoDynInstance, KeyPair};
+use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
@@ -169,7 +169,9 @@ pub struct DummyClientModule {
 
 /// Data needed by the state machine
 #[derive(Debug, Clone)]
-pub struct DummyClientContext;
+pub struct DummyClientContext {
+    pub dummy_decoder: Decoder,
+}
 
 // TODO: Boiler-plate
 impl Context for DummyClientContext {}
@@ -180,7 +182,9 @@ impl ClientModule for DummyClientModule {
     type States = DummyStateMachine;
 
     fn context(&self) -> Self::ModuleStateMachineContext {
-        DummyClientContext
+        DummyClientContext {
+            dummy_decoder: self.decoder(),
+        }
     }
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
@@ -259,7 +263,7 @@ impl PrimaryClientModule for DummyClientModule {
             .subscribe(operation_id)
             .await
             .filter_map(|state| async move {
-                let DummyStateMachine::Done(amount) = state else { return None };
+                let DummyStateMachine::Done(amount, _) = state else { return None };
                 Some(Ok(amount))
             });
 
@@ -280,7 +284,7 @@ impl PrimaryClientModule for DummyClientModule {
                 .filter_map(|state| async move {
                     match state {
                         // Since Done also happens for inputs we will fire too often, but that's ok
-                        DummyStateMachine::Done(_) => Some(()),
+                        DummyStateMachine::Done(_, _) => Some(()),
                         DummyStateMachine::Input { .. } => Some(()),
                         _ => None,
                     }

@@ -25,7 +25,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::LightningTest;
 
-const INVALID_INVOICE_DESCRIPTION: &str = "INVALID";
+pub const INVALID_INVOICE_DESCRIPTION: &str = "INVALID";
 
 #[derive(Clone, Debug)]
 pub struct FakeLightningTest {
@@ -81,29 +81,6 @@ impl LightningTest for FakeLightningTest {
             .unwrap())
     }
 
-    async fn invalid_invoice(
-        &self,
-        amount: Amount,
-        expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Invoice> {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
-
-        Ok(InvoiceBuilder::new(Currency::Regtest)
-            // In tests we use the description to indicate whether or not we should be able to pay
-            // this invoice.
-            .description(INVALID_INVOICE_DESCRIPTION.into())
-            .payment_hash(sha256::Hash::hash(&self.preimage.0))
-            .current_timestamp()
-            .min_final_cltv_expiry(0)
-            .payment_secret(PaymentSecret([0; 32]))
-            .amount_milli_satoshis(amount.msats)
-            .expiry_time(Duration::from_secs(
-                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
-            ))
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
-            .unwrap())
-    }
-
     async fn amount_sent(&self) -> Amount {
         Amount::from_msats(*self.amount_sent.lock().unwrap())
     }
@@ -131,18 +108,20 @@ impl ILnRpcClient for FakeLightningTest {
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
         let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
         let invoice = Invoice::from_signed(signed).unwrap();
-        *self.amount_sent.lock().unwrap() += invoice.clone().amount_milli_satoshis().unwrap();
+        *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         if invoice.description()
             == InvoiceDescription::Direct(
                 &Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
             )
         {
-            return Err(GatewayError::Other(anyhow!("Failed to pay invoice")));
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Failed to pay invoice"
+            )));
         }
 
         Ok(PayInvoiceResponse {
-            preimage: invoice.payment_secret().0.to_vec(),
+            preimage: [0; 32].to_vec(),
         })
     }
 

@@ -53,6 +53,6 @@ async fn client_ignores_unknown_module() {
 
     // Test that building the client worked
     let _client = fed
-        .new_client_with_config(cfg, ClientModuleGenRegistry::new())
+        .new_client_with_config_and_registry(cfg, ClientModuleGenRegistry::new())
         .await;
 }
