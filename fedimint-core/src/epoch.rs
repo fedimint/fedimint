@@ -227,6 +227,7 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     use bitcoin::hashes::Hash;
+    use bitcoin_hashes::sha256;
     use fedimint_core::encoding::Encodable;
     use fedimint_core::epoch::combine_sigs;
     use fedimint_core::PeerId;
@@ -244,7 +245,7 @@ mod tests {
         sk: &SecretKey,
     ) -> SignedEpochOutcome {
         let missing_sig = history(epoch, prev_epoch, None);
-        let signature = sk.sign(missing_sig.outcome.consensus_hash());
+        let signature = sk.sign(missing_sig.outcome.consensus_hash::<sha256::Hash>());
         history(epoch, prev_epoch, Some(SerdeSignature(signature)))
     }
 
