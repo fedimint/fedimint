@@ -424,6 +424,7 @@
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
@@ -653,6 +654,7 @@
     <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
+    <span class="kw">use </span>bitcoin_hashes::sha256;
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
     <span class="kw">use </span>fedimint_core::epoch::combine_sigs;
     <span class="kw">use </span>fedimint_core::PeerId;
@@ -670,7 +672,7 @@
         sk: <span class="kw-2">&amp;</span>SecretKey,
     ) -&gt; SignedEpochOutcome {
         <span class="kw">let </span>missing_sig = history(epoch, prev_epoch, <span class="prelude-val">None</span>);
-        <span class="kw">let </span>signature = sk.sign(missing_sig.outcome.consensus_hash());
+        <span class="kw">let </span>signature = sk.sign(missing_sig.outcome.consensus_hash::&lt;sha256::Hash&gt;());
         history(epoch, prev_epoch, <span class="prelude-val">Some</span>(SerdeSignature(signature)))
     }
 

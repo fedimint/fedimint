@@ -821,6 +821,9 @@
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -840,8 +843,6 @@
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
-<span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
@@ -904,15 +905,20 @@
         <span class="prelude-val">Ok</span>(bytes.to_hex())
     }
 
-    <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding
+    <span class="doccomment">/// Generate a SHA256 hash of the consensus encoding using the default hash
+    /// engine for `H`.
     ///
     /// Can be used to validate all federation members agree on state without
     /// revealing the object
-    </span><span class="kw">fn </span>consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; sha256::Hash {
-        <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
+    </span><span class="kw">fn </span>consensus_hash&lt;H&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H
+    <span class="kw">where
+        </span>H: bitcoin_hashes::Hash,
+        H::Engine: std::io::Write,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>engine = H::engine();
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>engine)
             .expect(<span class="string">&quot;writing to HashEngine cannot fail&quot;</span>);
-        sha256::Hash::from_engine(engine)
+        H::from_engine(engine)
     }
 }
 
