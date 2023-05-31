@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -572,11 +572,12 @@ impl ConsensusServer {
 
                 Ok(self.handle_step(step).await?)
             }
-            (_, EpochMessage::RejoinRequest(epoch)) => {
-                self.run_empty_epochs += min(NUM_EPOCHS_REJOIN_AHEAD, epoch);
+            (_, EpochMessage::RejoinRequest(epochs)) => {
+                let capped_empty_epochs = min(NUM_EPOCHS_REJOIN_AHEAD, epochs);
+                self.run_empty_epochs = max(self.run_empty_epochs, capped_empty_epochs);
                 info!(
                     target: LOG_CONSENSUS,
-                    "Requested to run {} epochs, running {} epochs", epoch, self.run_empty_epochs
+                    "Requested to run {} epochs, running {} epochs", epochs, self.run_empty_epochs
                 );
                 Ok(vec![])
             }
