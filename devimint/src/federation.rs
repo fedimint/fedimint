@@ -107,6 +107,22 @@ impl Federation {
         Ok(())
     }
 
+    pub async fn pegin_ng(&self, amt: u64) -> Result<()> {
+        let deposit = cmd!(self, "ng", "deposit-address").out_json().await?;
+        let deposit_address = deposit["address"].as_str().unwrap();
+        let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
+
+        self.bitcoind
+            .send_to(deposit_address.to_owned(), amt)
+            .await?;
+        self.bitcoind.mine_blocks(100).await?;
+
+        cmd!(self, "ng", "await-deposit", deposit_operation_id)
+            .run()
+            .await?;
+        Ok(())
+    }
+
     pub async fn pegin_gateway(&self, amt: u64, gw_cln: &Gatewayd) -> Result<()> {
         let fed_id = self.federation_id().await;
         let pegin_addr = cmd!(gw_cln, "address", "--federation-id={fed_id}")
