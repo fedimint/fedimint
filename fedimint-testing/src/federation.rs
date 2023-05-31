@@ -50,6 +50,11 @@ impl FederationTest {
             .await
     }
 
+    pub async fn new_client_with_config(&self, client_config: ClientConfig) -> Client {
+        self.new_client_with_config_and_registry(client_config, self.client_gen.clone())
+            .await
+    }
+
     /// Create a new client containing the lightning gateway client module
     pub async fn new_gateway_client(&self, registry: ClientModuleGenRegistry) -> Client {
         let client_config = self.configs[&PeerId::from(0)]
