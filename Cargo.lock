@@ -2914,6 +2914,7 @@ name = "ln-gateway"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",

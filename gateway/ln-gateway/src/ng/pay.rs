@@ -32,14 +32,14 @@ use crate::gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 ///    ClaimOutgoingContract -- claim tx submission --> Preimage
 ///    CancelContract -- cancel tx submission successful --> Canceled
 ///    CancelContract -- cancel tx submission unsuccessful --> Failed
-#[allow(clippy::large_enum_variant)]
+/// ```
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
-    CancelContract(GatewayPayCancelContract),
+    CancelContract(Box<GatewayPayCancelContract>),
     Preimage(OutPoint),
     Canceled(Option<TransactionId>, ContractId),
-    ClaimOutgoingContract(GatewayPayClaimOutgoingContract),
+    ClaimOutgoingContract(Box<GatewayPayClaimOutgoingContract>),
     Failed,
 }
 
@@ -233,27 +233,25 @@ impl GatewayPayInvoice {
         match result {
             Ok((contract, preimage)) => GatewayPayStateMachine {
                 common,
-                state: GatewayPayStates::ClaimOutgoingContract(GatewayPayClaimOutgoingContract {
-                    contract,
-                    preimage,
-                }),
+                state: GatewayPayStates::ClaimOutgoingContract(Box::new(
+                    GatewayPayClaimOutgoingContract { contract, preimage },
+                )),
             },
             Err(e) => match e.clone() {
                 OutgoingPaymentError::InvalidOutgoingContract { error: _, contract } => {
                     GatewayPayStateMachine {
                         common,
-                        state: GatewayPayStates::CancelContract(GatewayPayCancelContract {
-                            contract,
-                            error: e,
-                        }),
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract { contract, error: e },
+                        )),
                     }
                 }
                 OutgoingPaymentError::LightningPayError { contract } => GatewayPayStateMachine {
                     common,
-                    state: GatewayPayStates::CancelContract(GatewayPayCancelContract {
+                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
                         contract,
                         error: e,
-                    }),
+                    })),
                 },
                 OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id } => {
                     GatewayPayStateMachine {

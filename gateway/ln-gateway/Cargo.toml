@@ -38,6 +38,7 @@ async-stream = "0.3.5"
 async-trait = "0.1.64"
 axum = "0.6.4"
 axum-macros = "0.3.1"
+aquamarine = "0.3.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }

@@ -40,7 +40,7 @@ use crate::lnrpc_client::ILnRpcClient;
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
 /// The high-level state of a reissue operation started with
-/// [`LightningClientExt::pay_bolt11_invoice`].
+/// [`GatewayClientExt::gateway_pay_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum GatewayExtPayStates {
     Created,
