@@ -44,9 +44,10 @@ where
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
-        self.request_current_consensus("account".to_string(), ApiRequestErased::new(contract))
+        self.request_current_consensus("wait_account".to_string(), ApiRequestErased::new(contract))
             .await
     }
+
     async fn fetch_offer(
         &self,
         payment_hash: Sha256Hash,
