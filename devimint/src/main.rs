@@ -884,18 +884,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
 
-    let deposit = cmd!(fed, "ng", "deposit-address").out_json().await?;
-    let deposit_address = deposit["address"].as_str().unwrap();
-    let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
-
-    bitcoind
-        .send_to(deposit_address.to_owned(), 100_000) // deposit in sats
-        .await?;
-    bitcoind.mine_blocks(100).await?;
-
-    cmd!(fed, "ng", "await-deposit", deposit_operation_id)
-        .run()
-        .await?;
+    fed.pegin_ng(100_000).await?; // deposit in sats
 
     let post_deposit_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
         .as_u64()
@@ -1176,8 +1165,9 @@ async fn main() -> Result<()> {
         }
         Cmd::DevFed => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let _daemons =
-                write_ready_file(&process_mgr.globals, dev_fed(&process_mgr).await).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            dev_fed.fed.pegin_ng(10_000).await?;
+            let _daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::RunUi => {
