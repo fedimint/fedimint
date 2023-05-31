@@ -110,18 +110,8 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                 .await?
                 .into_stream();
             assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
-            match gw_pay_sub.ok().await? {
-                GatewayExtPayStates::Preimage { preimage: _ } => {}
-                _ => {
-                    panic!("Unexpected state occurred, expected Preimage");
-                }
-            }
-            match gw_pay_sub.ok().await? {
-                GatewayExtPayStates::Success { preimage: _ } => {}
-                _ => {
-                    panic!("Unexpected state occurred, expected Success");
-                }
-            }
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
 
             Ok(())
         },
