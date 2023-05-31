@@ -22,6 +22,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Transaction
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_common::config::LightningClientConfig;
+use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     ln_operation, LightningCommonGen, LightningGateway, LightningModuleTypes, LightningOutput, KIND,
@@ -44,10 +45,11 @@ const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum GatewayExtPayStates {
     Created,
-    Preimage,
-    Success,
+    Preimage { preimage: Preimage },
+    Success { preimage: Preimage },
     Canceled,
     Fail,
+    OfferDoesNotExist { contract_id: ContractId },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,28 +138,33 @@ impl GatewayClientExt for Client {
                 yield GatewayExtPayStates::Created;
 
                 match gateway.await_paid_invoice(operation_id).await {
-                    Ok(outpoint) => {
-                        yield GatewayExtPayStates::Preimage;
+                    Ok((outpoint, preimage)) => {
+                        yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
                         if self.await_primary_module_output(operation_id, outpoint).await.is_ok() {
-                            yield GatewayExtPayStates::Success;
+                            yield GatewayExtPayStates::Success{ preimage: preimage.clone() };
                             return;
                         }
 
                         yield GatewayExtPayStates::Fail;
                     }
-                    Err(e) => {
-                        if let GatewayError::Canceled(cancel_tx) = e {
-                            if let Some(txid) = cancel_tx {
-                                if self.transaction_updates(operation_id).await.await_tx_accepted(txid).await.is_ok() {
+                    Err(error) => {
+                        match error {
+                            GatewayError::Canceled(cancel_txid) => {
+                                if self.transaction_updates(operation_id).await.await_tx_accepted(cancel_txid).await.is_ok() {
                                     yield GatewayExtPayStates::Canceled;
+                                    return;
                                 }
-                            } else {
-                                yield GatewayExtPayStates::Canceled;
+
+                                yield GatewayExtPayStates::Fail;
+                            }
+                            GatewayError::OfferDoesNotExist(contract_id) => {
+                                yield GatewayExtPayStates::OfferDoesNotExist { contract_id };
+                            }
+                            _ => {
+                                yield GatewayExtPayStates::Fail;
                             }
                         }
-
-                        yield GatewayExtPayStates::Fail;
                     }
                 }
             }
@@ -231,7 +238,9 @@ impl Context for GatewayClientContext {}
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum GatewayError {
     #[error("Gateway canceled the contract")]
-    Canceled(Option<TransactionId>),
+    Canceled(TransactionId),
+    #[error("Offer does not exist")]
+    OfferDoesNotExist(ContractId),
     #[error("Unrecoverable error occurred in the gateway")]
     Failed,
 }
@@ -312,14 +321,19 @@ impl GatewayClientModule {
     async fn await_paid_invoice(
         &self,
         operation_id: OperationId,
-    ) -> Result<OutPoint, GatewayError> {
+    ) -> Result<(OutPoint, Preimage), GatewayError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
             if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
                 match state.state {
-                    GatewayPayStates::Preimage(outpoint) => return Ok(outpoint),
+                    GatewayPayStates::Preimage(outpoint, preimage) => {
+                        return Ok((outpoint, preimage))
+                    }
                     GatewayPayStates::Canceled(cancel_outpoint, _) => {
                         return Err(GatewayError::Canceled(cancel_outpoint))
+                    }
+                    GatewayPayStates::OfferDoesNotExist(contract_id) => {
+                        return Err(GatewayError::OfferDoesNotExist(contract_id))
                     }
                     GatewayPayStates::Failed => return Err(GatewayError::Failed),
                     _ => {}
