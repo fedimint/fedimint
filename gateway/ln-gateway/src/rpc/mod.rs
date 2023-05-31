@@ -120,6 +120,8 @@ pub struct FederationInfo {
     pub federation_id: FederationId,
     /// Information we registered with the fed
     pub registration: LightningGateway,
+    /// Federation balance in msat
+    pub total_msat: Amount,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

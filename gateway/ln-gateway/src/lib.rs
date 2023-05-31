@@ -338,7 +338,7 @@ impl Gateway {
 
         if let Ok(actor) = self.select_actor(connect.id).await {
             info!("Federation {} already connected", connect.id);
-            return actor.get_info();
+            return actor.get_info().await;
         }
 
         let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.read().await.info().await?;
@@ -386,7 +386,7 @@ impl Gateway {
             );
         }
 
-        let federation_info = actor.get_info()?;
+        let federation_info = actor.get_info().await?;
 
         Ok(federation_info)
     }
@@ -395,7 +395,7 @@ impl Gateway {
         let actors = self.actors.read().await;
         let mut federations: Vec<FederationInfo> = Vec::new();
         for actor in actors.values() {
-            federations.push(actor.get_info()?);
+            federations.push(actor.get_info().await?);
         }
 
         let ln_info = self.lnrpc.read().await.info().await?;

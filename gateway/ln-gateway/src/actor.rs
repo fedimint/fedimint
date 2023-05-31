@@ -655,11 +655,13 @@ impl GatewayActor {
         Ok(self.client.summary().await.total_amount())
     }
 
-    pub fn get_info(&self) -> Result<FederationInfo> {
+    pub async fn get_info(&self) -> Result<FederationInfo> {
         let cfg = self.client.config();
+        let registration = self.registration.lock().expect("poisoned").clone();
         Ok(FederationInfo {
             federation_id: cfg.client_config.federation_id,
-            registration: self.registration.lock().expect("poisoned").clone(),
+            registration,
+            total_msat: self.get_balance().await?,
         })
     }
 }
