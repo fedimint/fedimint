@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use bitcoin::Network;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
@@ -71,11 +73,41 @@ pub struct LightningConfigPrivate {
     pub threshold_sec_key: SerdeSecret<threshold_crypto::SecretKeyShare>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
     pub network: Network,
+}
+
+impl Decodable for LightningClientConfig {
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
+        modules: &fedimint_core::module::registry::ModuleDecoderRegistry,
+    ) -> Result<Self, fedimint_core::encoding::DecodeError> {
+        let threshold_pub_key = threshold_crypto::PublicKey::consensus_decode(r, modules)?;
+        let fee_consensus = FeeConsensus::consensus_decode(r, modules)?;
+        // This is to make the config backwards compatible with old federations. It may
+        // be removed in future
+        let network = match bitcoin::Network::consensus_decode(r, modules) {
+            Ok(network) => network,
+            Err(_) => bitcoin::Network::from_str(&std::env::var("FM_NETWORK").map_err(|e| {
+                fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
+                    "error reading FM_NETWORK from environment: {e:?}"
+                ))
+            })?)
+            .map_err(|e| {
+                fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
+                    "error parsing FM_NETWORK from environment: {e:?}"
+                ))
+            })?,
+        };
+        Ok(Self {
+            threshold_pub_key,
+            fee_consensus,
+            network,
+        })
+    }
 }
 
 // Wire together the configs for this module

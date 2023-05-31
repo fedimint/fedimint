@@ -97,7 +97,7 @@ use secp256k1_zkp::Secp256k1;
 use secret::DeriveableSecretClientExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::backup::Metadata;
 use crate::db::{
@@ -1242,6 +1242,7 @@ impl ClientBuilder {
             let mut modules = ClientModuleRegistry::default();
             let mut primary_module = None;
             for (module_instance, module_config) in config.modules.clone() {
+                debug!("Initializing module {module_instance} config {module_config:?}");
                 let kind = module_config.kind().clone();
                 if module_instance == primary_module_instance {
                     let module = self

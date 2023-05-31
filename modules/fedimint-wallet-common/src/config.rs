@@ -82,7 +82,7 @@ pub struct WalletConfigConsensus {
     pub default_esplora_server: Url,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
 pub struct WalletClientConfig {
     /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
@@ -93,6 +93,41 @@ pub struct WalletClientConfig {
     pub fee_consensus: FeeConsensus,
     /// Default electrs server for clients to connect to
     pub default_esplora_server: Url,
+}
+
+impl Decodable for WalletClientConfig {
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
+        modules: &fedimint_core::module::registry::ModuleDecoderRegistry,
+    ) -> Result<Self, fedimint_core::encoding::DecodeError> {
+        let peg_in_descriptor = PegInDescriptor::consensus_decode(r, modules)?;
+
+        let network = Network::consensus_decode(r, modules)?;
+        let finality_delay = u32::consensus_decode(r, modules)?;
+        let fee_consensus = FeeConsensus::consensus_decode(r, modules)?;
+        // This is to make the config backwards compatible with old federations. It may
+        // be removed in future
+        let default_esplora_server = match Url::consensus_decode(r, modules) {
+            Ok(url) => url,
+            Err(_) => Url::parse(&std::env::var("FM_ESPLORA_SERVER").map_err(|e| {
+                fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
+                    "error reading FM_ESPLORA_SERVER from environment: {e:?}"
+                ))
+            })?)
+            .map_err(|e| {
+                fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
+                    "error parsing FM_ESPLORA_SERVER from environment: {e:?}"
+                ))
+            })?,
+        };
+        Ok(Self {
+            peg_in_descriptor,
+            network,
+            finality_delay,
+            fee_consensus,
+            default_esplora_server,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
