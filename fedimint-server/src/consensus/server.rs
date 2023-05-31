@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -96,8 +96,9 @@ pub struct ConsensusServer {
     /// Under the HBBFT consensus algorithm, this will track the latest epoch
     /// message received by each peer and when it was received
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
-    /// How many empty epochs peers requested we run
-    pub run_empty_epochs: u64,
+    /// Number of pending forced epochs (requested by peers to help join
+    /// consensus faster)
+    pub pending_forced_epochs: u64,
     /// Tracks the last epoch outcome from consensus
     pub last_processed_epoch: Option<SignedEpochOutcome>,
     /// Used for decoding module specific-values
@@ -245,7 +246,7 @@ impl ConsensusServer {
             other_peers,
             rejoin_at_epoch: Default::default(),
             latest_contribution_by_peer,
-            run_empty_epochs: 0,
+            pending_forced_epochs: 0,
             last_processed_epoch: None,
             decoders: modules.decoder_registry(),
         })
@@ -537,8 +538,8 @@ impl ConsensusServer {
     }
 
     async fn await_next_epoch(&mut self) -> anyhow::Result<EpochTriggerEvent> {
-        if self.run_empty_epochs > 0 {
-            self.run_empty_epochs = self.run_empty_epochs.saturating_sub(1);
+        if self.pending_forced_epochs > 0 {
+            self.pending_forced_epochs = self.pending_forced_epochs.saturating_sub(1);
             return Ok(EpochTriggerEvent::RunEpochRequest);
         }
 
@@ -572,11 +573,16 @@ impl ConsensusServer {
 
                 Ok(self.handle_step(step).await?)
             }
-            (_, EpochMessage::RejoinRequest(epoch)) => {
-                self.run_empty_epochs += min(NUM_EPOCHS_REJOIN_AHEAD, epoch);
+            (_, EpochMessage::RejoinRequest(epochs)) => {
+                let requested_forced_epochs_capped = min(NUM_EPOCHS_REJOIN_AHEAD, epochs);
+                self.pending_forced_epochs =
+                    max(self.pending_forced_epochs, requested_forced_epochs_capped);
                 info!(
                     target: LOG_CONSENSUS,
-                    "Requested to run {} epochs, running {} epochs", epoch, self.run_empty_epochs
+                    "Peer {} requested to run {} epochs. Set pending forced epochs to {}",
+                    msg.0,
+                    epochs,
+                    self.pending_forced_epochs
                 );
                 Ok(vec![])
             }
