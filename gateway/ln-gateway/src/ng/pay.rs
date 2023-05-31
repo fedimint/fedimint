@@ -37,8 +37,9 @@ use crate::gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 pub enum GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
     CancelContract(Box<GatewayPayCancelContract>),
-    Preimage(OutPoint),
-    Canceled(Option<TransactionId>, ContractId),
+    Preimage(OutPoint, Preimage),
+    OfferDoesNotExist(ContractId),
+    Canceled(TransactionId, ContractId),
     ClaimOutgoingContract(Box<GatewayPayClaimOutgoingContract>),
     Failed,
 }
@@ -256,7 +257,7 @@ impl GatewayPayInvoice {
                 OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id } => {
                     GatewayPayStateMachine {
                         common,
-                        state: GatewayPayStates::Canceled(None, contract_id),
+                        state: GatewayPayStates::OfferDoesNotExist(contract_id),
                     }
                 }
             },
@@ -362,7 +363,7 @@ impl GatewayPayClaimOutgoingContract {
         contract: OutgoingContractAccount,
         preimage: Preimage,
     ) -> GatewayPayStateMachine {
-        let claim_input = contract.claim(preimage);
+        let claim_input = contract.claim(preimage.clone());
         let client_input = ClientInput::<LightningInput, GatewayClientStateMachines> {
             input: claim_input,
             state_machines: Arc::new(|_, _| vec![]),
@@ -372,7 +373,7 @@ impl GatewayPayClaimOutgoingContract {
         let (txid, _) = global_context.claim_input(dbtx, client_input).await;
         GatewayPayStateMachine {
             common,
-            state: GatewayPayStates::Preimage(OutPoint { txid, out_idx: 0 }),
+            state: GatewayPayStates::Preimage(OutPoint { txid, out_idx: 0 }, preimage),
         }
     }
 }
@@ -428,7 +429,7 @@ impl GatewayPayCancelContract {
         match global_context.fund_output(dbtx, client_output).await {
             Ok((txid, _)) => GatewayPayStateMachine {
                 common,
-                state: GatewayPayStates::Canceled(Some(txid), contract.contract.contract_id()),
+                state: GatewayPayStates::Canceled(txid, contract.contract.contract_id()),
             },
             Err(_) => GatewayPayStateMachine {
                 common,
