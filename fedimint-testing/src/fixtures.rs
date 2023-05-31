@@ -43,7 +43,7 @@ pub struct Fixtures {
     bitcoin: Arc<dyn BitcoinTest>,
 }
 
-pub struct GatewayFixtures {
+pub struct LightningFixtures {
     pub other_lightning_client: Arc<dyn LightningTest>,
     pub gateway_lightning_client: Arc<dyn ILnRpcClient>,
 }
@@ -183,15 +183,15 @@ pub fn test_dir(pathname: &str) -> (PathBuf, Option<TempDir>) {
     (fullpath, maybe_tmp_dir_guard)
 }
 
-impl GatewayFixtures {
-    pub async fn new(gateway_node: &LightningNodeType) -> GatewayFixtures {
+impl LightningFixtures {
+    pub async fn new(gateway_node: &LightningNodeType) -> LightningFixtures {
         let real_testing = Fixtures::is_real_test();
         let (gateway_lightning_client, other_lightning_client) = match real_testing {
-            true => GatewayFixtures::real_lightning_clients(gateway_node).await,
-            false => GatewayFixtures::fake_lightning_clients(),
+            true => LightningFixtures::real_lightning_clients(gateway_node).await,
+            false => LightningFixtures::fake_lightning_clients(),
         };
 
-        GatewayFixtures {
+        LightningFixtures {
             gateway_lightning_client,
             other_lightning_client,
         }
