@@ -425,6 +425,10 @@
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
 <a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
@@ -437,6 +441,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
+<span class="kw">use </span><span class="kw">crate</span>::timing;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 
 <span class="doccomment">/// All the items that may be produced during a consensus epoch
@@ -547,6 +552,7 @@
         pks: <span class="kw-2">&amp;</span>PublicKeySet,
         <span class="kw-2">mut </span>prev_epoch: SignedEpochOutcome,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;SignedEpochOutcome, EpochVerifyError&gt; {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;add sig to prev&quot;</span>);
         <span class="kw">let </span>sigs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = <span class="self">self
             </span>.outcome
             .items
@@ -564,6 +570,7 @@
 
     <span class="kw">pub fn </span>verify_sig(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: <span class="kw-2">&amp;</span>PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(sig) = <span class="kw-2">&amp;</span><span class="self">self</span>.signature {
+            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;verify epoch outcome signature&quot;</span>);
             <span class="kw">if </span>!pk.verify(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, <span class="self">self</span>.hash) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::InvalidSignature);
             }
@@ -578,6 +585,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         prev_epoch: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;verify epoch outcome hash&quot;</span>);
         <span class="kw">if </span><span class="self">self</span>.outcome.epoch &gt; <span class="number">0 </span>{
             <span class="kw">match </span>prev_epoch {
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::MissingPreviousEpoch),

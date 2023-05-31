@@ -2492,6 +2492,14 @@
 <a href="#2492" id="2492">2492</a>
 <a href="#2493" id="2493">2493</a>
 <a href="#2494" id="2494">2494</a>
+<a href="#2495" id="2495">2495</a>
+<a href="#2496" id="2496">2496</a>
+<a href="#2497" id="2497">2497</a>
+<a href="#2498" id="2498">2498</a>
+<a href="#2499" id="2499">2499</a>
+<a href="#2500" id="2500">2500</a>
+<a href="#2501" id="2501">2501</a>
+<a href="#2502" id="2502">2502</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2513,7 +2521,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::fmt_utils::AbbreviateHexBytes;
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, MaybeSync};
-<span class="kw">use crate</span>::{async_trait_maybe_send, maybe_add_send};
+<span class="kw">use crate</span>::{async_trait_maybe_send, maybe_add_send, timing};
 
 <span class="kw">pub mod </span>mem_impl;
 <span class="kw">pub mod </span>notifications;
@@ -2729,22 +2737,30 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.begin_transaction().<span class="kw">await</span>;
 
             <span class="kw">match </span>tx_fn(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(val) =&gt; <span class="kw">match </span>dbtx.commit_tx_result().<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(()) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
-                    }
-                    <span class="prelude-val">Err</span>(err) =&gt; {
-                        <span class="kw">if </span>max_attempts
-                            .map(|max_att| max_att &lt;= curr_attempts)
-                            .unwrap_or(<span class="bool-val">false</span>)
-                        {
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
-                                attempts: curr_attempts,
-                                last_error: err,
-                            });
+                <span class="prelude-val">Ok</span>(val) =&gt; {
+                    <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;autocmmit - commit_tx&quot;</span>);
+
+                    <span class="kw">match </span>dbtx.commit_tx_result().<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(()) =&gt; {
+                            <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
+                        }
+                        <span class="prelude-val">Err</span>(err) =&gt; {
+                            <span class="macro">warn!</span>(
+                                target: LOG_DB,
+                                curr_attempts, <span class="string">&quot;Database commit failed in an autocommit block&quot;
+                            </span>);
+                            <span class="kw">if </span>max_attempts
+                                .map(|max_att| max_att &lt;= curr_attempts)
+                                .unwrap_or(<span class="bool-val">false</span>)
+                            {
+                                <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
+                                    attempts: curr_attempts,
+                                    last_error: err,
+                                });
+                            }
                         }
                     }
-                },
+                }
                 <span class="prelude-val">Err</span>(err) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::ClosureError {
                         attempts: curr_attempts,

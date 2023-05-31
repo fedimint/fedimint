@@ -672,6 +672,19 @@
 <a href="#672" id="672">672</a>
 <a href="#673" id="673">673</a>
 <a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -689,7 +702,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{ModuleError, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::server::DynVerificationCache;
-<span class="kw">use </span>fedimint_core::{Amount, NumPeers, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::{timing, Amount, NumPeers, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_CONSENSUS;
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>futures::StreamExt;
@@ -809,6 +822,7 @@
         consensus_outcome: HbbftConsensusOutcome,
         reference_rejected_txs: <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;TransactionId&gt;&gt;,
     ) -&gt; SignedEpochOutcome {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_consensus_outcome&quot;</span>);
         <span class="kw">let </span>epoch_history = <span class="self">self
             </span>.db
             .autocommit(
@@ -878,6 +892,7 @@
         module_cis: <span class="kw-2">&amp;</span>[(PeerId, fedimint_core::core::DynModuleConsensusItem)],
         consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_module_consensus_items&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = <span class="macro">vec!</span>[];
         <span class="kw">let </span>per_module_cis: HashMap&lt;
             ModuleInstanceId,
@@ -911,6 +926,7 @@
         epoch: u64,
         transactions: <span class="kw-2">&amp;</span>[(PeerId, Transaction)],
     ) -&gt; BTreeSet&lt;TransactionId&gt; {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_transactions&quot;</span>);
         <span class="comment">// Process transactions
         </span><span class="kw">let </span><span class="kw-2">mut </span>rejected_txs: BTreeSet&lt;TransactionId&gt; = BTreeSet::new();
 
@@ -974,6 +990,7 @@
         rejected_txs: BTreeSet&lt;TransactionId&gt;,
         consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) -&gt; SignedEpochOutcome {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;finalize_process_epoch&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
         <span class="self">self</span>.save_client_config_sig(dbtx, <span class="kw-2">&amp;</span>outcome, <span class="kw-2">&amp;mut </span>drop_peers)
@@ -1011,6 +1028,7 @@
             .<span class="kw">await</span>;
 
         <span class="kw">if </span>sig.is_none() {
+            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;combine and verify client config sigs&quot;</span>);
             <span class="kw">let </span>client_hash = <span class="self">self</span>.api.client_cfg.consensus_hash();
             <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = outcome.contributions.keys().cloned().collect();
             <span class="kw">let </span>pks = <span class="self">self</span>.cfg.consensus.auth_pk_set.clone();
@@ -1053,6 +1071,7 @@
         upgrade_signals: <span class="kw-2">&amp;</span>[(PeerId, ConsensusUpgrade)],
     ) {
         <span class="kw">if </span>!upgrade_signals.is_empty() {
+            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_upgrade_items&quot;</span>);
             <span class="kw">let </span>maybe_exists = dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>peers = maybe_exists.unwrap_or_default();
             peers.extend(upgrade_signals.iter().map(|(peer, <span class="kw">_</span>)| peer));
@@ -1184,7 +1203,10 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = dbtx.get_value(<span class="kw-2">&amp;</span>LastEpochKey).<span class="kw">await </span>{
             <span class="kw">let </span>last_epoch = dbtx.get_value(<span class="kw-2">&amp;</span>epoch).<span class="kw">await</span>.unwrap();
+
+            <span class="kw">let </span>timing = timing::TimeReporter::new(<span class="string">&quot;sign last epoch key&quot;</span>);
             <span class="kw">let </span>sig = <span class="self">self</span>.cfg.private.epoch_sks.<span class="number">0</span>.sign(last_epoch.hash);
+            drop(timing);
             <span class="kw">let </span>item = ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig));
             items.push(item);
         };
@@ -1197,7 +1219,9 @@
             .<span class="kw">await</span>;
         <span class="kw">if </span>sig.is_none() {
             <span class="kw">let </span>hash = <span class="self">self</span>.api.client_cfg.consensus_hash();
+            <span class="kw">let </span>timing = timing::TimeReporter::new(<span class="string">&quot;sign client config&quot;</span>);
             <span class="kw">let </span>share = <span class="self">self</span>.cfg.private.auth_sks.<span class="number">0</span>.sign(hash);
+            drop(timing);
             <span class="kw">let </span>item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
             items.push(item);
         }
@@ -1271,6 +1295,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         transactions: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Transaction&gt; + Send,
     ) -&gt; VerificationCaches {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;build_verification_caches&quot;</span>);
         <span class="kw">let </span>module_inputs = transactions
             .flat_map(|tx| tx.inputs.iter())
             .cloned()
@@ -1290,6 +1315,7 @@
     }
 
     <span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;audit&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
         <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {

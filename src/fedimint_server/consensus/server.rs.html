@@ -673,6 +673,14 @@
 <a href="#673" id="673">673</a>
 <a href="#674" id="674">674</a>
 <a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::{max, min};
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
@@ -1056,6 +1064,10 @@
                         .<span class="kw">await
                         </span>.expect(<span class="string">&quot;fetches history&quot;</span>);
 
+                    <span class="macro">info!</span>(
+                        target: LOG_CONSENSUS,
+                        <span class="string">&quot;Verifing missing epoch {}&quot;</span>, epoch_num
+                    );
                     epoch.verify_hash(<span class="kw-2">&amp;</span>prev_epoch)<span class="question-mark">?</span>;
                     prev_epoch = <span class="prelude-val">Some</span>(epoch.clone());
 
@@ -1074,6 +1086,10 @@
 
             <span class="kw">if </span>at_know_trusted_checkpoint {
                 <span class="kw">for </span>(items, epoch, _prev_epoch_hash, rejected_txs) <span class="kw">in </span>epochs.drain(..) {
+                    <span class="macro">info!</span>(
+                        target: LOG_CONSENSUS,
+                        <span class="string">&quot;Processing items from missing epoch {}&quot;</span>, epoch
+                    );
                     <span class="kw">let </span>epoch = <span class="self">self
                         </span>.consensus
                         .process_consensus_outcome(
