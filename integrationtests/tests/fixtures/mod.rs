@@ -1011,7 +1011,7 @@ impl FederationTest {
     /// Runs consensus epochs even if the epochs are empty
     pub async fn run_empty_epochs(&self, epochs: usize) {
         for server in &self.servers {
-            server.lock().await.fedimint.run_empty_epochs = epochs as u64;
+            server.lock().await.fedimint.pending_forced_epochs = epochs as u64;
         }
 
         self.run_consensus_epochs_wait(epochs).await.unwrap();
