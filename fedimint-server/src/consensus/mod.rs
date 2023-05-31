@@ -15,7 +15,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::{ModuleError, TransactionItemAmount};
 use fedimint_core::server::DynVerificationCache;
-use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_core::{timing, Amount, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_CONSENSUS;
 use futures::future::select_all;
 use futures::StreamExt;
@@ -135,6 +135,7 @@ impl FedimintConsensus {
         consensus_outcome: HbbftConsensusOutcome,
         reference_rejected_txs: Option<BTreeSet<TransactionId>>,
     ) -> SignedEpochOutcome {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_outcome");
         let epoch_history = self
             .db
             .autocommit(
@@ -204,6 +205,7 @@ impl FedimintConsensus {
         module_cis: &[(PeerId, fedimint_core::core::DynModuleConsensusItem)],
         consensus_peers: &BTreeSet<PeerId>,
     ) {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("process_module_consensus_items");
         let mut drop_peers = vec![];
         let per_module_cis: HashMap<
             ModuleInstanceId,
@@ -237,6 +239,7 @@ impl FedimintConsensus {
         epoch: u64,
         transactions: &[(PeerId, Transaction)],
     ) -> BTreeSet<TransactionId> {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("process_transactions");
         // Process transactions
         let mut rejected_txs: BTreeSet<TransactionId> = BTreeSet::new();
 
@@ -300,6 +303,7 @@ impl FedimintConsensus {
         rejected_txs: BTreeSet<TransactionId>,
         consensus_peers: &BTreeSet<PeerId>,
     ) -> SignedEpochOutcome {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("finalize_process_epoch");
         let mut drop_peers = Vec::<PeerId>::new();
 
         self.save_client_config_sig(dbtx, &outcome, &mut drop_peers)
@@ -337,6 +341,7 @@ impl FedimintConsensus {
             .await;
 
         if sig.is_none() {
+            let _timing /* logs on drop */ = timing::TimeReporter::new("combine and verify client config sigs");
             let client_hash = self.api.client_cfg.consensus_hash();
             let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
             let pks = self.cfg.consensus.auth_pk_set.clone();
@@ -379,6 +384,7 @@ impl FedimintConsensus {
         upgrade_signals: &[(PeerId, ConsensusUpgrade)],
     ) {
         if !upgrade_signals.is_empty() {
+            let _timing /* logs on drop */ = timing::TimeReporter::new("process_upgrade_items");
             let maybe_exists = dbtx.get_value(&ConsensusUpgradeKey).await;
             let mut peers = maybe_exists.unwrap_or_default();
             peers.extend(upgrade_signals.iter().map(|(peer, _)| peer));
@@ -510,7 +516,10 @@ impl FedimintConsensus {
 
         if let Some(epoch) = dbtx.get_value(&LastEpochKey).await {
             let last_epoch = dbtx.get_value(&epoch).await.unwrap();
+
+            let timing = timing::TimeReporter::new("sign last epoch key");
             let sig = self.cfg.private.epoch_sks.0.sign(last_epoch.hash);
+            drop(timing);
             let item = ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig));
             items.push(item);
         };
@@ -523,7 +532,9 @@ impl FedimintConsensus {
             .await;
         if sig.is_none() {
             let hash = self.api.client_cfg.consensus_hash();
+            let timing = timing::TimeReporter::new("sign client config");
             let share = self.cfg.private.auth_sks.0.sign(hash);
+            drop(timing);
             let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
             items.push(item);
         }
@@ -597,6 +608,7 @@ impl FedimintConsensus {
         &self,
         transactions: impl Iterator<Item = &'a Transaction> + Send,
     ) -> VerificationCaches {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("build_verification_caches");
         let module_inputs = transactions
             .flat_map(|tx| tx.inputs.iter())
             .cloned()
@@ -616,6 +628,7 @@ impl FedimintConsensus {
     }
 
     pub async fn audit(&self) -> Audit {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("audit");
         let mut dbtx = self.db.begin_transaction().await;
         let mut audit = Audit::default();
         for (module_instance_id, _, module) in self.modules.iter_modules() {
