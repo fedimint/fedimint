@@ -84,6 +84,17 @@ impl DummyClientExt for Client {
             .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .await?;
 
+        // Wait for the output of the primary module
+        if self
+            .await_primary_module_output(op_id, OutPoint { txid, out_idx: 0 })
+            .await
+            .is_err()
+        {
+            return Err(anyhow::anyhow!(
+                "Error waiting for the output of print_money"
+            ));
+        }
+
         Ok((op_id, OutPoint { txid, out_idx: 0 }))
     }
 
@@ -127,7 +138,7 @@ impl DummyClientExt for Client {
     async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()> {
         let (dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
         let mut dbtx = instance.db.begin_transaction().await;
-        let DummyOutputOutcome(amount, account) = self
+        let DummyOutputOutcome(new_balance, account) = self
             .api()
             .await_output_outcome(outpoint, Duration::from_secs(10), &dummy.decoder())
             .await?;
@@ -136,8 +147,8 @@ impl DummyClientExt for Client {
             return Err(format_err!("Wrong account id"));
         }
 
-        let funds = self.get_balance().await + amount;
-        dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
+        dbtx.insert_entry(&DummyClientFundsKeyV0, &new_balance)
+            .await;
         dbtx.commit_tx().await;
         Ok(())
     }
@@ -263,8 +274,13 @@ impl PrimaryClientModule for DummyClientModule {
             .subscribe(operation_id)
             .await
             .filter_map(|state| async move {
-                let DummyStateMachine::Done(amount, _) = state else { return None };
-                Some(Ok(amount))
+                match state {
+                    DummyStateMachine::OutputDone(amount, _) => Some(Ok(amount)),
+                    DummyStateMachine::Refund(_) => Some(Err(anyhow::anyhow!(
+                        "Error occurred processing the dummy transaction"
+                    ))),
+                    _ => None,
+                }
             });
 
         pin_mut!(stream);
@@ -284,7 +300,7 @@ impl PrimaryClientModule for DummyClientModule {
                 .filter_map(|state| async move {
                     match state {
                         // Since Done also happens for inputs we will fire too often, but that's ok
-                        DummyStateMachine::Done(_, _) => Some(()),
+                        DummyStateMachine::OutputDone(_, _) => Some(()),
                         DummyStateMachine::Input { .. } => Some(()),
                         _ => None,
                     }

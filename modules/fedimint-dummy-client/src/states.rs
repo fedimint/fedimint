@@ -20,7 +20,9 @@ use crate::{get_funds, DummyClientContext};
 pub enum DummyStateMachine {
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),
-    Done(Amount, OperationId),
+    InputDone(OperationId),
+    OutputDone(Amount, OperationId),
+    Refund(OperationId),
 }
 
 impl State for DummyStateMachine {
@@ -37,9 +39,12 @@ impl State for DummyStateMachine {
                 await_tx_accepted(global_context.clone(), id, txid),
                 move |dbtx, res, _state: Self| match res {
                     // accepted, we are done
-                    Ok(_) => Box::pin(async move { DummyStateMachine::Done(amount, id) }),
+                    Ok(_) => Box::pin(async move { DummyStateMachine::InputDone(id) }),
                     // tx rejected, we refund ourselves
-                    Err(_) => Box::pin(add_funds(amount, dbtx.module_tx(), id)),
+                    Err(_) => Box::pin(async move {
+                        add_funds(amount, dbtx.module_tx()).await;
+                        DummyStateMachine::Refund(id)
+                    }),
                 },
             )],
             DummyStateMachine::Output(amount, txid, id) => vec![StateTransition::new(
@@ -49,11 +54,16 @@ impl State for DummyStateMachine {
                     context.dummy_decoder.clone(),
                 ),
                 move |dbtx, res, _state: Self| match res {
-                    Ok(_) => Box::pin(async move { DummyStateMachine::Done(amount, id) }),
-                    Err(_) => Box::pin(add_funds(amount, dbtx.module_tx(), id)),
+                    Ok(_) => Box::pin(async move { DummyStateMachine::OutputDone(amount, id) }),
+                    Err(_) => Box::pin(async move {
+                        add_funds(amount, dbtx.module_tx()).await;
+                        DummyStateMachine::Refund(id)
+                    }),
                 },
             )],
-            DummyStateMachine::Done(_, _) => vec![],
+            DummyStateMachine::InputDone(_) => vec![],
+            DummyStateMachine::OutputDone(_, _) => vec![],
+            DummyStateMachine::Refund(_) => vec![],
         }
     }
 
@@ -61,19 +71,16 @@ impl State for DummyStateMachine {
         match self {
             DummyStateMachine::Input(_, _, id) => *id,
             DummyStateMachine::Output(_, _, id) => *id,
-            DummyStateMachine::Done(_, id) => *id,
+            DummyStateMachine::InputDone(id) => *id,
+            DummyStateMachine::OutputDone(_, id) => *id,
+            DummyStateMachine::Refund(id) => *id,
         }
     }
 }
 
-async fn add_funds(
-    amount: Amount,
-    mut dbtx: ModuleDatabaseTransaction<'_>,
-    id: OperationId,
-) -> DummyStateMachine {
+async fn add_funds(amount: Amount, mut dbtx: ModuleDatabaseTransaction<'_>) {
     let funds = get_funds(&mut dbtx).await + amount;
     dbtx.insert_entry(&DummyClientFundsKeyV0, &funds).await;
-    DummyStateMachine::Done(amount, id)
 }
 
 // TODO: Boiler-plate, should return OutputOutcome
