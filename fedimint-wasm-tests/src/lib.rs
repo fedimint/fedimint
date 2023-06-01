@@ -16,7 +16,7 @@ async fn client(connect_info: &WsClientConnectInfo) -> Result<fedimint_client::C
     builder.with_primary_module(1);
     builder.with_config(cfg);
     builder.with_database(MemDatabase::default());
-    Ok(builder.build_stopped::<PlainRootSecretStrategy>().await?)
+    builder.build_stopped::<PlainRootSecretStrategy>().await
 }
 
 mod faucet {
@@ -56,7 +56,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 mod tests {
     use fedimint_core::task::TaskGroup;
     use fedimint_core::Amount;
-    use fedimint_ln_client::{LightningClientExt, LnReceiveState, LnPayState};
+    use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState, PayType};
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -64,7 +64,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn build_client() -> Result<()> {
-        let client = client(&faucet::connect_string().await?.parse()?).await?;
+        let _client = client(&faucet::connect_string().await?.parse()?).await?;
         Ok(())
     }
 
@@ -85,10 +85,7 @@ mod tests {
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
-        let mut updates = client
-            .subscribe_to_ln_receive_updates(opid)
-            .await?
-            .into_stream();
+        let mut updates = client.subscribe_ln_receive(opid).await?.into_stream();
         while let Some(update) = updates.next().await {
             match update {
                 LnReceiveState::Claimed => return Ok(()),
@@ -118,14 +115,11 @@ mod tests {
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
-        let mut updates = client
-            .subscribe_to_ln_receive_updates(opid)
-            .await?
-            .into_stream();
+        let mut updates = client.subscribe_ln_receive(opid).await?.into_stream();
 
         loop {
             match updates.next().await {
-                Some(LnReceiveState::Claimed) => break, 
+                Some(LnReceiveState::Claimed) => break,
                 Some(LnReceiveState::Canceled { reason }) => {
                     return Err(reason.into());
                 }
@@ -135,18 +129,14 @@ mod tests {
         }
 
         let bolt11 = faucet::generate_invoice(11).await?;
-        let operation_id = client
-            .pay_bolt11_invoice(client.get_config().await.federation_id, bolt11.parse()?)
-            .await?;
+        let (pay_types, _contract_id) = client.pay_bolt11_invoice(bolt11.parse()?).await?;
+        let PayType::Lightning(operation_id) = pay_types else { unreachable!("paying invoice over lightning"); };
 
-        let mut updates = client
-            .subscribe_ln_pay_updates(operation_id)
-            .await?
-            .into_stream();
+        let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
 
         loop {
             match updates.next().await {
-                Some(LnPayState::Success { preimage }) => {
+                Some(LnPayState::Success { preimage: _ }) => {
                     break;
                 }
                 Some(LnPayState::Refunded { gateway_error }) => {
