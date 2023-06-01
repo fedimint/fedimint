@@ -1,5 +1,6 @@
 use std::cmp::{self, max};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::fmt;
 use std::ops::Range;
 
 use fedimint_client::sm::{OperationId, State, StateTransition};
@@ -71,7 +72,7 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 /// The caller is responsible for creating it, and then feeding it in order all
 /// valid consensus items from the epoch history between time taken (or even
 /// somewhat before it) and present time.
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub(crate) struct MintRestoreInProgressState {
     start_epoch: u64,
     next_epoch: u64,
@@ -133,6 +134,20 @@ pub(crate) struct MintRestoreInProgressState {
     /// The number of nonces we look-ahead when looking for mints (per each
     /// amount).
     gap_limit: u64,
+}
+
+impl fmt::Debug for MintRestoreInProgressState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "MintRestoreInProgressState(start: {}, next: {}, end: {}, spendable_notes_by_nonce: {}, pending_outputs: {}, pending_nonces: {})",
+            self.start_epoch,
+            self.next_epoch,
+            self.end_epoch,
+            self.spendable_note_by_nonce.len(),
+            self.pending_outputs.len(),
+            self.pending_nonces.len()
+        ))
+    }
 }
 
 impl MintRestoreInProgressState {
