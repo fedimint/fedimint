@@ -826,6 +826,15 @@
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -834,7 +843,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
-<span class="kw">use </span>anyhow::{bail, format_err};
+<span class="kw">use </span>anyhow::{bail, ensure, format_err};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -1323,6 +1332,15 @@
         ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
         ContractId,
     )&gt; {
+        <span class="kw">let </span>federation_currency = network_to_currency(<span class="self">self</span>.cfg.network);
+        <span class="kw">let </span>invoice_currency = invoice.currency();
+        <span class="macro">ensure!</span>(
+            federation_currency == invoice_currency,
+            <span class="string">&quot;Invalid invoice currency: expected={:?}, got={:?}&quot;</span>,
+            federation_currency,
+            invoice_currency
+        );
+
         <span class="kw">let </span>consensus_height = api
             .fetch_consensus_block_height()
             .<span class="kw">await</span><span class="question-mark">?
