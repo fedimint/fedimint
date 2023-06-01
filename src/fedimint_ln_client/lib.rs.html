@@ -827,9 +827,6 @@
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
 <a href="#829" id="829">829</a>
-<a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -850,8 +847,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{
-    sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
-    UpdateStreamOrOutcome,
+    sm_enum_variant_translation, Client, DynGlobalClientContext, UpdateStreamOrOutcome,
 };
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -868,7 +864,9 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::{
     OutgoingContract, OutgoingContractAccount, OutgoingContractData,
 };
-<span class="kw">use </span>fedimint_ln_common::contracts::{Contract, EncryptedPreimage, IdentifiableContract, Preimage};
+<span class="kw">use </span>fedimint_ln_common::contracts::{
+    Contract, ContractId, EncryptedPreimage, IdentifiableContract, Preimage,
+};
 <span class="kw">pub use </span>fedimint_ln_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
@@ -903,7 +901,10 @@
     </span><span class="kw">async fn </span>fetch_registered_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;LightningGateway&gt;&gt;;
 
     <span class="doccomment">/// Pays a LN invoice with our available funds
-    </span><span class="kw">async fn </span>pay_bolt11_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: Invoice) -&gt; anyhow::Result&lt;OperationId&gt;;
+    </span><span class="kw">async fn </span>pay_bolt11_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: Invoice,
+    ) -&gt; anyhow::Result&lt;(OperationId, ContractId)&gt;;
 
     <span class="kw">async fn </span>subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1000,12 +1001,15 @@
         <span class="prelude-val">Ok</span>(instance.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="kw">async fn </span>pay_bolt11_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: Invoice) -&gt; anyhow::Result&lt;OperationId&gt; {
+    <span class="kw">async fn </span>pay_bolt11_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: Invoice,
+    ) -&gt; anyhow::Result&lt;(OperationId, ContractId)&gt; {
         <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>operation_id = OperationId(invoice.payment_hash().into_inner());
         <span class="kw">let </span>active_gateway = <span class="self">self</span>.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>output = lightning
+        <span class="kw">let </span>(output, contract_id) = lightning
             .create_outgoing_output(
                 operation_id,
                 instance.api,
@@ -1031,7 +1035,7 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(operation_id)
+        <span class="prelude-val">Ok</span>((operation_id, contract_id))
     }
 
     <span class="kw">async fn </span>create_bolt11_invoice(
@@ -1201,22 +1205,6 @@
     }
 }
 
-<span class="kw">async fn </span>ln_operation(
-    client: <span class="kw-2">&amp;</span>Client,
-    operation_id: OperationId,
-) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
-    <span class="kw">let </span>operation = client
-        .get_operation(operation_id)
-        .<span class="kw">await
-        </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;
-
-    <span class="kw">if </span>operation.operation_type() != LightningCommonGen::KIND.as_str() {
-        <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning operation&quot;</span>);
-    }
-
-    <span class="prelude-val">Ok</span>(operation)
-}
-
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">enum </span>LightningMeta {
     Pay {
@@ -1333,7 +1321,10 @@
         gateway: LightningGateway,
         fed_id: FederationId,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
-    ) -&gt; anyhow::Result&lt;ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;(
+        ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
+        ContractId,
+    )&gt; {
         <span class="kw">let </span>consensus_height = api
             .fetch_consensus_block_height()
             .<span class="kw">await</span><span class="question-mark">?
@@ -1401,10 +1392,13 @@
             contract: Contract::Outgoing(contract),
         });
 
-        <span class="prelude-val">Ok</span>(ClientOutput {
-            output: ln_output,
-            state_machines: sm_gen,
-        })
+        <span class="prelude-val">Ok</span>((
+            ClientOutput {
+                output: ln_output,
+                state_machines: sm_gen,
+            },
+            contract_id,
+        ))
     }
 
     <span class="kw">async fn </span>await_receive_success(

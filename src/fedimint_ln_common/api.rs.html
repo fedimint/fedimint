@@ -114,6 +114,7 @@
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -163,6 +164,7 @@
         <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_account&quot;</span>.to_string(), ApiRequestErased::new(contract))
             .<span class="kw">await
     </span>}
+
     <span class="kw">async fn </span>fetch_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Sha256Hash,

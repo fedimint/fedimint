@@ -381,6 +381,9 @@
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
@@ -399,6 +402,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_ln_client::contracts::ContractId;
 <span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState};
 <span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WithdrawState};
@@ -578,7 +582,7 @@
         ClientNg::LnPay { bolt11 } =&gt; {
             client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>operation_id = client.pay_bolt11_invoice(bolt11).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>(operation_id, contract_id) = client.pay_bolt11_invoice(bolt11).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_pay(operation_id).<span class="kw">await</span><span class="question-mark">?</span>.into_stream();
 
@@ -587,6 +591,7 @@
                     LnPayState::Success { preimage } =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(PayInvoiceResponse {
                             operation_id,
+                            contract_id,
                             preimage,
                         })
                         .unwrap());
@@ -756,6 +761,7 @@
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">struct </span>PayInvoiceResponse {
     operation_id: OperationId,
+    contract_id: ContractId,
     preimage: String,
 }
 

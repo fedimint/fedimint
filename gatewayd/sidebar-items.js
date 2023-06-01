@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["SHUTDOWN_TIMEOUT",""]],"fn":[["main","Fedimint Gateway Binary"]],"struct":[["GatewayFee","Gateway routing fees"],["GatewayOpts",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["SHUTDOWN_TIMEOUT",""]],"fn":[["main","Fedimint Gateway Binary"]],"struct":[["GatewayOpts",""]]};

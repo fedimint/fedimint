@@ -130,6 +130,20 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -142,7 +156,10 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>futures::stream;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
-<span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
+<span class="kw">use </span>lightning_invoice::{
+    Currency, Description, Invoice, InvoiceBuilder, InvoiceDescription, SignedRawInvoice,
+    DEFAULT_EXPIRY_TIME,
+};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
     <span class="self">self</span>, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
     RouteHtlcRequest,
@@ -153,6 +170,8 @@
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 
 <span class="kw">use </span><span class="kw">super</span>::LightningTest;
+
+<span class="kw">pub const </span>INVALID_INVOICE_DESCRIPTION: <span class="kw-2">&amp;</span>str = <span class="string">&quot;INVALID&quot;</span>;
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>FakeLightningTest {
@@ -234,12 +253,21 @@
 
     <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; ln_gateway::Result&lt;PayInvoiceResponse&gt; {
         <span class="kw">let </span>signed = invoice.invoice.parse::&lt;SignedRawInvoice&gt;().unwrap();
-        <span class="kw">let </span>invoice = Invoice::from_signed(signed);
-        <span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap() +=
-            invoice.clone().unwrap().amount_milli_satoshis().unwrap();
+        <span class="kw">let </span>invoice = Invoice::from_signed(signed).unwrap();
+        <span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
+
+        <span class="kw">if </span>invoice.description()
+            == InvoiceDescription::Direct(
+                <span class="kw-2">&amp;</span>Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
+            )
+        {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;Failed to pay invoice&quot;
+            </span>)));
+        }
 
         <span class="prelude-val">Ok</span>(PayInvoiceResponse {
-            preimage: invoice.unwrap().payment_secret().<span class="number">0</span>.to_vec(),
+            preimage: [<span class="number">0</span>; <span class="number">32</span>].to_vec(),
         })
     }
 
