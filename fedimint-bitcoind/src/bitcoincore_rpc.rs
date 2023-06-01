@@ -44,7 +44,7 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
             )
         }),
         if url.username().is_empty() {
-            Auth::None
+            read_cookie_file()
         } else {
             Auth::UserPass(
                 url.username().to_owned(),
@@ -54,6 +54,16 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
             )
         },
     ))
+}
+
+fn read_cookie_file() -> Result<String, std::io::Error> {
+    let cookie_file_path = env::var("FM_BITCOIND_COOKIE_FILE")
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::NotFound, "FM_BITCOIND_COOKIE_FILE environment variable not set"))?;
+
+    let cookie = fs::read_to_string(&cookie_file_path)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to read cookie file: {}", e)))?;
+
+    Ok(cookie)
 }
 
 #[derive(Debug)]
