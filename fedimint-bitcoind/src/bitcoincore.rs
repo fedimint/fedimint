@@ -1,9 +1,12 @@
+use std::env;
 use std::io::Cursor;
+use std::path::PathBuf;
 
-use anyhow::anyhow as format_err;
+use anyhow::{anyhow as format_err, bail};
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
+use fedimint_core::bitcoinrpc::FM_BITCOIND_COOKIE_FILE_VAR_NAME;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, TaskHandle};
@@ -124,15 +127,21 @@ pub fn from_url_to_url_auth(url: &Url) -> anyhow::Result<(String, Auth)> {
                 url.host_str().unwrap_or("127.0.0.1")
             )
         }),
-        if url.username().is_empty() {
-            Auth::None
-        } else {
-            Auth::UserPass(
+        match (
+            !url.username().is_empty(),
+            env::var(FM_BITCOIND_COOKIE_FILE_VAR_NAME),
+        ) {
+            (true, Ok(_)) => bail!(
+                "When {FM_BITCOIND_COOKIE_FILE_VAR_NAME} is set, the url auth part must be empty."
+            ),
+            (true, Err(_)) => Auth::UserPass(
                 url.username().to_owned(),
                 url.password()
                     .ok_or_else(|| format_err!("Password missing for {}", url.username()))?
                     .to_owned(),
-            )
+            ),
+            (false, Ok(path)) => Auth::CookieFile(PathBuf::from(path)),
+            (false, Err(_)) => Auth::None,
         },
     ))
 }
