@@ -7,9 +7,10 @@ use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::oplog::OperationLogEntry;
 use crate::secret::RootSecretStrategy;
 use crate::sm::OperationId;
-use crate::{ClientSecret, OperationLogEntry};
+use crate::ClientSecret;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -70,7 +71,8 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::OperationLog
 );
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
+/// Key used to lookup operation log entries in chronological order
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct ChronologicalOperationLogKey {
     pub creation_time: std::time::SystemTime,
     pub operation_id: OperationId,

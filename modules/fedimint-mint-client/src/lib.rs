@@ -23,15 +23,13 @@ use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{
     ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
 };
+use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{
     Context, DynState, Executor, ModuleNotifier, OperationId, State, StateTransition,
 };
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::{
-    sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
-    UpdateStreamOrOutcome,
-};
+use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{
@@ -184,7 +182,12 @@ impl MintClientExt for Client {
                 .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
                 .into_inner(),
         );
-        if self.get_operation(operation_id).await.is_some() {
+        if self
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .is_some()
+        {
             bail!("We already reissued these notes");
         }
 
@@ -288,19 +291,20 @@ impl MintClientExt for Client {
                             .collect();
 
                         self.add_state_machines(dbtx, dyn_states).await?;
-                        self.add_operation_log_entry(
-                            dbtx,
-                            operation_id,
-                            MintCommonGen::KIND.as_str(),
-                            MintMeta {
-                                variant: MintMetaVariants::SpendOOB {
-                                    requested_amount: min_amount,
+                        self.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                MintCommonGen::KIND.as_str(),
+                                MintMeta {
+                                    variant: MintMetaVariants::SpendOOB {
+                                        requested_amount: min_amount,
+                                    },
+                                    amount: notes.total_amount(),
+                                    extra_meta,
                                 },
-                                amount: notes.total_amount(),
-                                extra_meta,
-                            },
-                        )
-                        .await;
+                            )
+                            .await;
 
                         Ok((operation_id, notes))
                     })
@@ -381,6 +385,7 @@ async fn mint_operation(
     operation_id: OperationId,
 ) -> anyhow::Result<OperationLogEntry> {
     let operation = client
+        .operation_log()
         .get_operation(operation_id)
         .await
         .ok_or(anyhow!("Operation not found"))?;

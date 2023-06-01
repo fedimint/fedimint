@@ -8,11 +8,10 @@ use bitcoin_hashes::Hash;
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::ClientModule;
+use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State};
-use fedimint_client::{
-    sm_enum_variant_translation, Client, DynGlobalClientContext, UpdateStreamOrOutcome,
-};
+use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
@@ -104,13 +103,14 @@ impl GatewayClientExt for Client {
                             .collect();
 
                         self.add_state_machines(dbtx, dyn_states).await?;
-                        self.add_operation_log_entry(
-                            dbtx,
-                            operation_id,
-                            KIND.as_str(),
-                            GatewayMeta::Pay,
-                        )
-                        .await;
+                        self.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                KIND.as_str(),
+                                GatewayMeta::Pay,
+                            )
+                            .await;
 
                         Ok(operation_id)
                     })
