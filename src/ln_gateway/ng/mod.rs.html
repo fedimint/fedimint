@@ -391,11 +391,10 @@
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
 <span class="kw">use </span>fedimint_client::module::ClientModule;
+<span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State};
-<span class="kw">use </span>fedimint_client::{
-    sm_enum_variant_translation, Client, DynGlobalClientContext, UpdateStreamOrOutcome,
-};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database};
@@ -487,13 +486,14 @@
                             .collect();
 
                         <span class="self">self</span>.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="self">self</span>.add_operation_log_entry(
-                            dbtx,
-                            operation_id,
-                            KIND.as_str(),
-                            GatewayMeta::Pay,
-                        )
-                        .<span class="kw">await</span>;
+                        <span class="self">self</span>.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                KIND.as_str(),
+                                GatewayMeta::Pay,
+                            )
+                            .<span class="kw">await</span>;
 
                         <span class="prelude-val">Ok</span>(operation_id)
                     })

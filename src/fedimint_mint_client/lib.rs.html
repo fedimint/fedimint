@@ -1413,6 +1413,11 @@
 <a href="#1413" id="1413">1413</a>
 <a href="#1414" id="1414">1414</a>
 <a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
 </pre><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1438,15 +1443,13 @@
 <span class="kw">use </span>fedimint_client::module::{
     ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
 };
+<span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{
     Context, DynState, Executor, ModuleNotifier, OperationId, State, StateTransition,
 };
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{
-    sm_enum_variant_translation, Client, DynGlobalClientContext, OperationLogEntry,
-    UpdateStreamOrOutcome,
-};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -1599,7 +1602,12 @@
                 .consensus_hash::&lt;sha256t::Hash&lt;OOBReissueTag&gt;&gt;()
                 .into_inner(),
         );
-        <span class="kw">if </span><span class="self">self</span>.get_operation(operation_id).<span class="kw">await</span>.is_some() {
+        <span class="kw">if </span><span class="self">self
+            </span>.operation_log()
+            .get_operation(operation_id)
+            .<span class="kw">await
+            </span>.is_some()
+        {
             <span class="macro">bail!</span>(<span class="string">&quot;We already reissued these notes&quot;</span>);
         }
 
@@ -1703,19 +1711,20 @@
                             .collect();
 
                         <span class="self">self</span>.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="self">self</span>.add_operation_log_entry(
-                            dbtx,
-                            operation_id,
-                            MintCommonGen::KIND.as_str(),
-                            MintMeta {
-                                variant: MintMetaVariants::SpendOOB {
-                                    requested_amount: min_amount,
+                        <span class="self">self</span>.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                MintCommonGen::KIND.as_str(),
+                                MintMeta {
+                                    variant: MintMetaVariants::SpendOOB {
+                                        requested_amount: min_amount,
+                                    },
+                                    amount: notes.total_amount(),
+                                    extra_meta,
                                 },
-                                amount: notes.total_amount(),
-                                extra_meta,
-                            },
-                        )
-                        .<span class="kw">await</span>;
+                            )
+                            .<span class="kw">await</span>;
 
                         <span class="prelude-val">Ok</span>((operation_id, notes))
                     })
@@ -1796,6 +1805,7 @@
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
     <span class="kw">let </span>operation = client
+        .operation_log()
         .get_operation(operation_id)
         .<span class="kw">await
         </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;

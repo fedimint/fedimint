@@ -581,6 +581,8 @@
 <a href="#581" id="581">581</a>
 <a href="#582" id="582">582</a>
 <a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>deposit;
@@ -595,12 +597,11 @@
 <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{
-    sm_enum_variant_translation, Client, DynGlobalClientContext, UpdateStreamOrOutcome,
-};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database};
@@ -702,16 +703,17 @@
 
                         <span class="self">self</span>.add_state_machines(dbtx, <span class="macro">vec!</span>[DynState::from_typed(instance.id, sm)])
                             .<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="self">self</span>.add_operation_log_entry(
-                            dbtx,
-                            operation_id,
-                            WalletCommonGen::KIND.as_str(),
-                            WalletOperationMeta::Deposit {
-                                address: address.clone(),
-                                expires_at: valid_until,
-                            },
-                        )
-                        .<span class="kw">await</span>;
+                        <span class="self">self</span>.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                WalletCommonGen::KIND.as_str(),
+                                WalletOperationMeta::Deposit {
+                                    address: address.clone(),
+                                    expires_at: valid_until,
+                                },
+                            )
+                            .<span class="kw">await</span>;
 
                         <span class="prelude-val">Ok</span>((operation_id, address))
                     })
@@ -738,7 +740,8 @@
             <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>WalletCommonGen::KIND);
 
         <span class="kw">let </span>operation_log_entry = <span class="self">self
-            </span>.get_operation(operation_id)
+            </span>.operation_log()
+            .get_operation(operation_id)
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;
 
@@ -859,7 +862,8 @@
             <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>WalletCommonGen::KIND);
 
         <span class="kw">let </span>operation = <span class="self">self
-            </span>.get_operation(operation_id)
+            </span>.operation_log()
+            .get_operation(operation_id)
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;
 

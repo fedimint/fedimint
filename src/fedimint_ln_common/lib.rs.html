@@ -367,6 +367,8 @@
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -385,8 +387,9 @@
 <span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
 <span class="kw">use </span>fedimint_client::sm::OperationId;
-<span class="kw">use </span>fedimint_client::{Client, OperationLogEntry};
+<span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
@@ -726,6 +729,7 @@
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
     <span class="kw">let </span>operation = client
+        .operation_log()
         .get_operation(operation_id)
         .<span class="kw">await
         </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;

@@ -89,6 +89,8 @@
 <a href="#89" id="89">89</a>
 <a href="#90" id="90">90</a>
 <a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::marker::PhantomData;
 
@@ -98,9 +100,10 @@
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
+<span class="kw">use </span><span class="kw">crate</span>::oplog::OperationLogEntry;
 <span class="kw">use </span><span class="kw">crate</span>::secret::RootSecretStrategy;
 <span class="kw">use </span><span class="kw">crate</span>::sm::OperationId;
-<span class="kw">use crate</span>::{ClientSecret, OperationLogEntry};
+<span class="kw">use </span><span class="kw">crate</span>::ClientSecret;
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -161,7 +164,8 @@
     db_prefix = DbKeyPrefix::OperationLog
 );
 
-<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+<span class="doccomment">/// Key used to lookup operation log entries in chronological order
+</span><span class="attr">#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ChronologicalOperationLogKey {
     <span class="kw">pub </span>creation_time: std::time::SystemTime,
     <span class="kw">pub </span>operation_id: OperationId,
