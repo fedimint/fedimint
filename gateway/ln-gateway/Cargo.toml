@@ -28,11 +28,17 @@ path = "tests/authentication_tests.rs"
 name = "gatewayd-integration-tests"
 path = "tests/integration_tests.rs"
 
+[[test]]
+name = "gateway-client-tests"
+path = "src/ng/tests.rs"
+
 [dependencies]
 anyhow = "1.0.66"
+async-stream = "0.3.5"
 async-trait = "0.1.64"
 axum = "0.6.4"
 axum-macros = "0.3.1"
+aquamarine = "0.3.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
@@ -54,6 +60,7 @@ prost = "0.11"
 rand = "0.8"
 reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }
 secp256k1 = "0.24.2"
+secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.91"
 thiserror = "1.0.39"
@@ -74,6 +81,7 @@ fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-testing = { path = "../../fedimint-testing" }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+assert_matches = "1.5.0"
 
 [build-dependencies]
 fedimint-build = { path = "../../fedimint-build" }

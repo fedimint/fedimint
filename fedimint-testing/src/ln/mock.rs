@@ -10,7 +10,10 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use futures::stream;
 use lightning::ln::PaymentSecret;
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder, SignedRawInvoice, DEFAULT_EXPIRY_TIME};
+use lightning_invoice::{
+    Currency, Description, Invoice, InvoiceBuilder, InvoiceDescription, SignedRawInvoice,
+    DEFAULT_EXPIRY_TIME,
+};
 use ln_gateway::gatewaylnrpc::{
     self, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
     RouteHtlcRequest,
@@ -21,6 +24,8 @@ use rand::rngs::OsRng;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::LightningTest;
+
+pub const INVALID_INVOICE_DESCRIPTION: &str = "INVALID";
 
 #[derive(Clone, Debug)]
 pub struct FakeLightningTest {
@@ -102,12 +107,21 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
         let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
-        let invoice = Invoice::from_signed(signed);
-        *self.amount_sent.lock().unwrap() +=
-            invoice.clone().unwrap().amount_milli_satoshis().unwrap();
+        let invoice = Invoice::from_signed(signed).unwrap();
+        *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
+
+        if invoice.description()
+            == InvoiceDescription::Direct(
+                &Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
+            )
+        {
+            return Err(GatewayError::Other(anyhow::anyhow!(
+                "Failed to pay invoice"
+            )));
+        }
 
         Ok(PayInvoiceResponse {
-            preimage: invoice.unwrap().payment_secret().0.to_vec(),
+            preimage: [0; 32].to_vec(),
         })
     }
 

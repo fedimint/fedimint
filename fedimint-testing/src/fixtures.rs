@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
 
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{
@@ -11,14 +12,18 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
-use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use ln_gateway::lnrpc_client::ILnRpcClient;
 use tempfile::TempDir;
 
 use crate::btc::mock::FakeBitcoinFactory;
+use crate::btc::real::RealBitcoinTest;
 use crate::btc::BitcoinTest;
 use crate::federation::FederationTest;
 use crate::gateway::GatewayTest;
 use crate::ln::mock::FakeLightningTest;
+use crate::ln::real::{ClnLightningTest, LndLightningTest};
+use crate::ln::{LightningNodeType, LightningTest};
 
 /// A default timeout for things happening in tests
 pub const TIMEOUT: Duration = Duration::from_secs(10);
@@ -38,6 +43,11 @@ pub struct Fixtures {
     bitcoin: Arc<dyn BitcoinTest>,
 }
 
+pub struct LightningFixtures {
+    pub other_lightning_client: Arc<dyn LightningTest>,
+    pub gateway_lightning_client: Arc<dyn ILnRpcClient>,
+}
+
 impl Fixtures {
     pub fn new_primary(
         id: ModuleInstanceId,
@@ -45,12 +55,24 @@ impl Fixtures {
         server: impl IServerModuleGen + MaybeSend + MaybeSync + 'static,
         params: impl ModuleGenParams,
     ) -> Self {
-        let real_testing = env::var("FM_TEST_USE_REAL_DAEMONS") == Ok("1".to_string());
+        let real_testing = Fixtures::is_real_test();
         let num_peers = match real_testing {
             true => 2,
             false => 1,
         };
-        let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
+        let task_group = TaskGroup::new();
+        let (bitcoin, config): (Arc<dyn BitcoinTest>, BitcoinRpcConfig) = match real_testing {
+            true => {
+                let rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
+                let bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
+                let bitcoin = RealBitcoinTest::new(&rpc_config.url, bitcoin_rpc);
+                (Arc::new(bitcoin), rpc_config)
+            }
+            false => {
+                let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
+                (Arc::new(bitcoin), config)
+            }
+        };
 
         Self {
             num_peers,
@@ -60,9 +82,13 @@ impl Fixtures {
             params: Default::default(),
             primary_client: id,
             bitcoin_rpc: config,
-            bitcoin: Arc::new(bitcoin),
+            bitcoin,
         }
         .with_module(id, client, server, params)
+    }
+
+    pub fn is_real_test() -> bool {
+        env::var("FM_TEST_USE_REAL_DAEMONS") == Ok("1".to_string())
     }
 
     // TODO: Auto-assign instance ids after removing legacy id order
@@ -155,4 +181,46 @@ pub fn test_dir(pathname: &str) -> (PathBuf, Option<TempDir>) {
     let fullpath = PathBuf::from(parent).join(pathname);
     fs::create_dir_all(fullpath.clone()).expect("Can make dirs");
     (fullpath, maybe_tmp_dir_guard)
+}
+
+impl LightningFixtures {
+    pub async fn new(gateway_node: &LightningNodeType) -> LightningFixtures {
+        let real_testing = Fixtures::is_real_test();
+        let (gateway_lightning_client, other_lightning_client) = match real_testing {
+            true => LightningFixtures::real_lightning_clients(gateway_node).await,
+            false => LightningFixtures::fake_lightning_clients(),
+        };
+
+        LightningFixtures {
+            gateway_lightning_client,
+            other_lightning_client,
+        }
+    }
+
+    pub fn fake_lightning_clients() -> (Arc<dyn ILnRpcClient>, Arc<dyn LightningTest>) {
+        (
+            Arc::new(FakeLightningTest::new()),
+            Arc::new(FakeLightningTest::new()),
+        )
+    }
+
+    pub async fn real_lightning_clients(
+        gateway_node: &LightningNodeType,
+    ) -> (Arc<dyn ILnRpcClient>, Arc<dyn LightningTest>) {
+        // Create the gateway's lightning connection and the "other" node's lightning
+        // connection.
+        let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
+        match &gateway_node {
+            LightningNodeType::Cln => {
+                let gw_ln: Arc<dyn ILnRpcClient> = Arc::new(ClnLightningTest::new(&dir).await);
+                let other_ln: Arc<dyn LightningTest> = Arc::new(LndLightningTest::new().await);
+                (gw_ln, other_ln)
+            }
+            LightningNodeType::Lnd => {
+                let gw_ln: Arc<dyn ILnRpcClient> = Arc::new(LndLightningTest::new().await);
+                let other_ln: Arc<dyn LightningTest> = Arc::new(ClnLightningTest::new(&dir).await);
+                (gw_ln, other_ln)
+            }
+        }
+    }
 }

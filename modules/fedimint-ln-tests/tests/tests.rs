@@ -77,7 +77,7 @@ async fn makes_internal_payments_within_gateway() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let op = client2.pay_bolt11_invoice(invoice).await?;
+    let (op, _) = client2.pay_bolt11_invoice(invoice).await?;
     let mut sub2 = client2.subscribe_ln_pay(op).await?.into_stream();
     assert_eq!(sub2.ok().await?, LnPayState::Created);
     // TODO: Finish after gw moves from legacy client

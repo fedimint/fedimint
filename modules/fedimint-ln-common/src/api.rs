@@ -47,6 +47,7 @@ where
         self.request_current_consensus("wait_account".to_string(), ApiRequestErased::new(contract))
             .await
     }
+
     async fn fetch_offer(
         &self,
         payment_hash: Sha256Hash,
