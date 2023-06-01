@@ -19,6 +19,7 @@ members = [
     "fedimint-load-test-tool",
     "fedimint-logging",
     "fedimint-testing",
+    "fedimint-wasm-tests",
     "fedimint-server",
     "fedimint-sqlite",
     "fedimint-cli",
@@ -43,7 +44,6 @@ members = [
     "fedimint-build",
     "recoverytool"
 ]
-exclude = ["fedimint-wasm-tests"]
 resolver = "2"
 
 [workspace.metadata]
@@ -89,3 +89,4 @@ debug = 1
 
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
+ring = { git = "https://github.com/Maan2003/ring", rev = "52a1294a8fc066cc0656911ec22b8358fb763ef1" }
