@@ -6,7 +6,7 @@ use std::iter::once;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, ensure, format_err};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::Hash;
@@ -495,6 +495,15 @@ impl LightningClientModule {
         ClientOutput<LightningOutput, LightningClientStateMachines>,
         ContractId,
     )> {
+        let federation_currency = network_to_currency(self.cfg.network);
+        let invoice_currency = invoice.currency();
+        ensure!(
+            federation_currency == invoice_currency,
+            "Invalid invoice currency: expected={:?}, got={:?}",
+            federation_currency,
+            invoice_currency
+        );
+
         let consensus_height = api
             .fetch_consensus_block_height()
             .await?

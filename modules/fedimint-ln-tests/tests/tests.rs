@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use assert_matches::assert_matches;
 use fedimint_client::Client;
 use fedimint_core::sats;
@@ -14,6 +16,7 @@ use fedimint_mint_server::MintGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::GatewayTest;
+use lightning_invoice::Invoice;
 
 fn fixtures() -> Fixtures {
     // TODO: Remove dependency on mint (legacy gw client)
@@ -84,6 +87,35 @@ async fn makes_internal_payments_within_gateway() -> anyhow::Result<()> {
     // assert_eq!(next(sub2).await, LnPayState::Funded);
     // assert_matches!(next(sub2).await, LnPayState::Success{..});
     // assert_eq!(next(sub1).await, LnReceiveState::Funded);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let client1 = fed.new_client().await;
+    let _gateway = gateway(&fixtures, &fed, &client1).await;
+
+    // Signet invoice should fail on regtest
+    let signet_invoice = Invoice::from_str(
+        "lntbs1u1pj8308gsp5xhxz908q5usddjjm6mfq6nwc2nu62twwm6za69d32kyx8h49a4hqpp5j5egfqw9kf5e96nk\
+        6htr76a8kggl0xyz3pzgemv887pya4flguzsdp5235xzmntwvsxvmmjypex2en4dejxjmn8yp6xsefqvesh2cm9wsss\
+        cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
+        yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
+        2we42dvjggjkf44egqheymyw",
+    )
+    .unwrap();
+
+    let error = client1
+        .pay_bolt11_invoice(signet_invoice)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Invalid invoice currency: expected=Regtest, got=Signet"
+    );
 
     Ok(())
 }
