@@ -36,7 +36,7 @@ impl IncomingContractOffer {
 ///
 /// A user generates a private/public keypair that can later be used to claim
 /// the incoming funds. The public key is the defined as the preimage of a
-/// payment has and threshold-encrypted to the federation's public key. They
+/// payment hash and threshold-encrypted to the federation's public key. They
 /// then put up the encrypted preimage for sale by creating an
 /// [`IncomingContractOffer`].
 ///

@@ -1,11 +1,10 @@
 pub mod pay;
-pub mod receive;
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_stream::stream;
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -19,17 +18,18 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ExtendsCommonModuleGen, TransactionItemAmount};
-use fedimint_core::task::timeout;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_common::config::LightningClientConfig;
-use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
-use fedimint_ln_common::contracts::{Contract, DecryptedPreimage, Preimage};
+use fedimint_ln_common::contracts::Preimage;
+use fedimint_ln_common::incoming::{
+    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingStateMachine, IncomingStates,
+};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    ln_operation, ContractOutput, LightningCommonGen, LightningGateway, LightningModuleTypes,
-    LightningOutput, KIND,
+    create_incoming_contract_output, ln_operation, LightningClientContext, LightningCommonGen,
+    LightningGateway, LightningModuleTypes, LightningOutput, KIND,
 };
 use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
@@ -39,11 +39,7 @@ use thiserror::Error;
 use url::Url;
 
 use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
-use self::receive::{
-    FundingOfferState, GatewayReceiveCommon, GatewayReceiveStateMachine, GatewayReceiveStates,
-    Htlc, ReceiveError,
-};
-use crate::gatewaylnrpc::GetNodeInfoResponse;
+use crate::gatewaylnrpc::{GetNodeInfoResponse, SubscribeInterceptHtlcsResponse};
 use crate::lnrpc_client::ILnRpcClient;
 
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -237,15 +233,15 @@ impl GatewayClientExt for Client {
                 let state = loop {
                     if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
-                            GatewayReceiveStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
-                            GatewayReceiveStates::RefundSubmitted(txid) => {
+                            IncomingStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
+                            IncomingStates::RefundSubmitted(txid) => {
                                 let out_point = OutPoint { txid, out_idx: 0};
                                 match self.await_primary_module_output(operation_id, out_point).await {
                                     Ok(_) => break GatewayExtReceiveStates::RefundSuccess(out_point),
                                     Err(e) => break GatewayExtReceiveStates::RefundError(e.to_string()),
                                 }
                             },
-                            GatewayReceiveStates::FundingFailed(e) => break GatewayExtReceiveStates::FundingFailed(e),
+                            IncomingStates::FundingFailed(e) => break GatewayExtReceiveStates::FundingFailed(e),
                             _ => {}
                         }
                     }
@@ -311,6 +307,15 @@ pub struct GatewayClientContext {
 }
 
 impl Context for GatewayClientContext {}
+
+impl From<&GatewayClientContext> for LightningClientContext {
+    fn from(ctx: &GatewayClientContext) -> Self {
+        LightningClientContext {
+            ln_decoder: ctx.ln_decoder.clone(),
+            redeem_key: ctx.redeem_key,
+        }
+    }
+}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum GatewayError {
@@ -421,27 +426,6 @@ impl GatewayClientModule {
         }
     }
 
-    async fn fetch_and_validate_incoming_contract(
-        &self,
-        htlc: Htlc,
-    ) -> anyhow::Result<IncomingContractOffer, ReceiveError> {
-        let offer = timeout(
-            Duration::from_secs(5),
-            self.module_api.fetch_offer(htlc.payment_hash),
-        )
-        .await
-        .map_err(|_| ReceiveError::Timeout)?
-        .map_err(|_| ReceiveError::FetchContractError)?;
-
-        if offer.amount > htlc.outgoing_amount_msat {
-            return Err(ReceiveError::ViolatedFeePolicy);
-        }
-        if offer.hash != htlc.payment_hash {
-            return Err(ReceiveError::InvalidOffer);
-        }
-        Ok(offer)
-    }
-
     async fn create_funding_incoming_contract_output(
         &self,
         htlc: Htlc,
@@ -450,35 +434,27 @@ impl GatewayClientModule {
             OperationId,
             ClientOutput<LightningOutput, GatewayClientStateMachines>,
         ),
-        ReceiveError,
+        IncomingSmError,
     > {
         let operation_id = OperationId(htlc.payment_hash.into_inner());
-        let offer = self
-            .fetch_and_validate_incoming_contract(htlc.clone())
-            .await?;
-        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.redeem_key).0;
-        let contract = Contract::Incoming(IncomingContract {
-            hash: offer.hash,
-            encrypted_preimage: offer.encrypted_preimage.clone(),
-            decrypted_preimage: DecryptedPreimage::Pending,
-            gateway_key: our_pub_key,
-        });
-        let incoming_output = LightningOutput::Contract(ContractOutput {
-            amount: offer.amount,
-            contract,
-        });
+        let (incoming_output, contract_id) = create_incoming_contract_output(
+            &self.module_api,
+            htlc.payment_hash,
+            htlc.outgoing_amount_msat,
+            self.redeem_key,
+        )
+        .await?;
+
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
             output: incoming_output,
             state_machines: Arc::new(move |txid, _| {
-                vec![GatewayClientStateMachines::Receive(
-                    GatewayReceiveStateMachine {
-                        common: GatewayReceiveCommon {
-                            operation_id,
-                            htlc: htlc.clone(),
-                        },
-                        state: GatewayReceiveStates::FundingOffer(FundingOfferState { txid }),
+                vec![GatewayClientStateMachines::Receive(IncomingStateMachine {
+                    common: IncomingSmCommon {
+                        operation_id,
+                        contract_id,
                     },
-                )]
+                    state: IncomingStates::FundingOffer(FundingOfferState { txid }),
+                })]
             }),
         };
         Ok((operation_id, client_output))
@@ -488,7 +464,7 @@ impl GatewayClientModule {
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
-    Receive(GatewayReceiveStateMachine),
+    Receive(IncomingStateMachine),
 }
 
 impl IntoDynInstance for GatewayClientStateMachines {
@@ -517,7 +493,7 @@ impl State for GatewayClientStateMachines {
             }
             GatewayClientStateMachines::Receive(receive_state) => {
                 sm_enum_variant_translation!(
-                    receive_state.transitions(context, global_context),
+                    receive_state.transitions(&context.into(), global_context),
                     GatewayClientStateMachines::Receive
                 )
             }
@@ -529,5 +505,44 @@ impl State for GatewayClientStateMachines {
             GatewayClientStateMachines::Pay(pay_state) => pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
         }
+    }
+}
+
+#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+pub enum ReceiveError {
+    #[error("Route htlc error")]
+    RouteHtlcError,
+}
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+pub struct Htlc {
+    /// The HTLC payment hash.
+    pub payment_hash: sha256::Hash,
+    /// The incoming HTLC amount in millisatoshi.
+    pub incoming_amount_msat: Amount,
+    /// The outgoing HTLC amount in millisatoshi
+    pub outgoing_amount_msat: Amount,
+    /// The incoming HTLC expiry
+    pub incoming_expiry: u32,
+    /// The short channel id of the HTLC.
+    pub short_channel_id: u64,
+    /// The id of the incoming channel
+    pub incoming_chan_id: u64,
+    /// The index of the incoming htlc in the incoming channel
+    pub htlc_id: u64,
+}
+
+impl TryFrom<SubscribeInterceptHtlcsResponse> for Htlc {
+    type Error = anyhow::Error;
+
+    fn try_from(s: SubscribeInterceptHtlcsResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            payment_hash: sha256::Hash::from_slice(&s.payment_hash)?,
+            incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),
+            outgoing_amount_msat: Amount::from_msats(s.outgoing_amount_msat),
+            incoming_expiry: s.incoming_expiry,
+            short_channel_id: s.short_channel_id,
+            incoming_chan_id: s.incoming_chan_id,
+            htlc_id: s.htlc_id,
+        })
     }
 }

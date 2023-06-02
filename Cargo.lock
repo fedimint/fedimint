@@ -1395,6 +1395,7 @@ name = "fedimint-ln-common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aquamarine",
  "async-trait",
  "bincode",
  "bitcoin",

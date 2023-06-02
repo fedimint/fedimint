@@ -28,9 +28,8 @@ use fedimint_testing::ln::{LightningNodeType, LightningTest};
 use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::lnrpc_client::ILnRpcClient;
-use ln_gateway::ng::receive::Htlc;
 use ln_gateway::ng::{
-    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates,
+    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates, Htlc,
 };
 use tracing::debug;
 use url::Url;

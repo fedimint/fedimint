@@ -11,17 +11,17 @@ use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::Hash;
 use db::LightningGatewayKey;
-use fedimint_client::derivable_secret::DerivableSecret;
+use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
+use fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -405,30 +405,30 @@ impl ClientModuleGen for LightningClientGen {
         &self,
         cfg: Self::Config,
         _db: Database,
-        _module_root_secret: DerivableSecret,
+        module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         _api: DynGlobalApi,
-        _module_api: DynModuleApi,
+        module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
         Ok(LightningClientModule {
             cfg,
             notifier,
+            redeem_key: module_root_secret
+                .child_key(ChildId(0))
+                .to_secp_key(&Secp256k1::new()),
             secp: secp256k1_zkp::Secp256k1::new(),
+            module_api,
         })
     }
 }
-#[derive(Debug, Clone)]
-pub struct LightningClientContext {
-    pub ln_decoder: Decoder,
-}
-
-impl Context for LightningClientContext {}
 
 #[derive(Debug)]
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<DynGlobalClientContext, LightningClientStateMachines>,
+    redeem_key: KeyPair,
     secp: Secp256k1<All>,
+    module_api: DynModuleApi,
 }
 
 impl ClientModule for LightningClientModule {
@@ -439,6 +439,7 @@ impl ClientModule for LightningClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
             ln_decoder: self.decoder(),
+            redeem_key: self.redeem_key,
         }
     }
 
