@@ -42,7 +42,7 @@ use crate::{LightningClientContext, LightningInput, LightningOutputOutcome};
 ///    DecryptingPreimage -- error decrypting preimage --> Failure
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-pub enum IncomingStates {
+pub enum IncomingSmStates {
     FundingOffer(FundingOfferState),
     DecryptingPreimage(DecryptingPreimageState),
     Preimage(Preimage),
@@ -60,7 +60,7 @@ pub struct IncomingSmCommon {
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct IncomingStateMachine {
     pub common: IncomingSmCommon,
-    pub state: IncomingStates,
+    pub state: IncomingSmStates,
 }
 
 impl State for IncomingStateMachine {
@@ -73,8 +73,8 @@ impl State for IncomingStateMachine {
         global_context: &Self::GlobalContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
-            IncomingStates::FundingOffer(state) => state.transitions(global_context, context),
-            IncomingStates::DecryptingPreimage(state) => {
+            IncomingSmStates::FundingOffer(state) => state.transitions(global_context, context),
+            IncomingSmStates::DecryptingPreimage(state) => {
                 state.transitions(&self.common, global_context, context)
             }
             _ => {
@@ -156,18 +156,18 @@ impl FundingOfferState {
         old_state: IncomingStateMachine,
     ) -> IncomingStateMachine {
         let txid = match old_state.state {
-            IncomingStates::FundingOffer(refund) => refund.txid,
+            IncomingSmStates::FundingOffer(refund) => refund.txid,
             _ => panic!("Invalid state transition"),
         };
 
         match result {
             Ok(_) => IncomingStateMachine {
                 common: old_state.common,
-                state: IncomingStates::DecryptingPreimage(DecryptingPreimageState { txid }),
+                state: IncomingSmStates::DecryptingPreimage(DecryptingPreimageState { txid }),
             },
             Err(e) => IncomingStateMachine {
                 common: old_state.common,
-                state: IncomingStates::FundingFailed(e.to_string()),
+                state: IncomingSmStates::FundingFailed(e.to_string()),
             },
         }
     }
@@ -243,13 +243,13 @@ impl DecryptingPreimageState {
     ) -> IncomingStateMachine {
         assert!(matches!(
             old_state.state,
-            IncomingStates::DecryptingPreimage(_)
+            IncomingSmStates::DecryptingPreimage(_)
         ));
 
         match result {
             Ok(preimage) => IncomingStateMachine {
                 common: old_state.common,
-                state: IncomingStates::Preimage(preimage),
+                state: IncomingSmStates::Preimage(preimage),
             },
             Err(IncomingSmError::InvalidPreimage(contract)) => {
                 Self::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
@@ -257,7 +257,7 @@ impl DecryptingPreimageState {
             }
             Err(e) => IncomingStateMachine {
                 common: old_state.common,
-                state: IncomingStates::Failure(format!(
+                state: IncomingSmStates::Failure(format!(
                     "Unexpected internal error occured while decrypting the preimage: {e:?}"
                 )),
             },
@@ -282,7 +282,7 @@ impl DecryptingPreimageState {
 
         IncomingStateMachine {
             common: old_state.common,
-            state: IncomingStates::RefundSubmitted(refund_txid),
+            state: IncomingSmStates::RefundSubmitted(refund_txid),
         }
     }
 }
