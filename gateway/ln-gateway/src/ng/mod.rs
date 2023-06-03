@@ -24,7 +24,7 @@ use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::incoming::{
-    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingStateMachine, IncomingStates,
+    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
@@ -233,15 +233,15 @@ impl GatewayClientExt for Client {
                 let state = loop {
                     if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
-                            IncomingStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
-                            IncomingStates::RefundSubmitted(txid) => {
+                            IncomingSmStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
+                            IncomingSmStates::RefundSubmitted(txid) => {
                                 let out_point = OutPoint { txid, out_idx: 0};
                                 match self.await_primary_module_output(operation_id, out_point).await {
                                     Ok(_) => break GatewayExtReceiveStates::RefundSuccess(out_point),
                                     Err(e) => break GatewayExtReceiveStates::RefundError(e.to_string()),
                                 }
                             },
-                            IncomingStates::FundingFailed(e) => break GatewayExtReceiveStates::FundingFailed(e),
+                            IncomingSmStates::FundingFailed(e) => break GatewayExtReceiveStates::FundingFailed(e),
                             _ => {}
                         }
                     }
@@ -453,7 +453,7 @@ impl GatewayClientModule {
                         operation_id,
                         contract_id,
                     },
-                    state: IncomingStates::FundingOffer(FundingOfferState { txid }),
+                    state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                 })]
             }),
         };

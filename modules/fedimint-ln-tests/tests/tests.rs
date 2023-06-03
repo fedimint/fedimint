@@ -7,7 +7,9 @@ use fedimint_core::util::NextOrPending;
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
-use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState, LnReceiveState};
+use fedimint_ln_client::{
+    InternalPayState, LightningClientExt, LightningClientGen, LnReceiveState, PayType,
+};
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_server::LightningGen;
 use fedimint_mint_client::MintClientGen;
@@ -63,7 +65,7 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn makes_internal_payments_within_gateway() -> anyhow::Result<()> {
+async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
@@ -80,13 +82,16 @@ async fn makes_internal_payments_within_gateway() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let (op, _) = client2.pay_bolt11_invoice(invoice).await?;
-    let mut sub2 = client2.subscribe_ln_pay(op).await?.into_stream();
-    assert_eq!(sub2.ok().await?, LnPayState::Created);
-    // TODO: Finish after gw moves from legacy client
-    // assert_eq!(next(sub2).await, LnPayState::Funded);
-    // assert_matches!(next(sub2).await, LnPayState::Success{..});
-    // assert_eq!(next(sub1).await, LnReceiveState::Funded);
+    let (pay_type, _) = client2.pay_bolt11_invoice(invoice).await?;
+    match pay_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
 
     Ok(())
 }

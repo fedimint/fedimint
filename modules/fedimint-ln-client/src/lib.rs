@@ -37,23 +37,30 @@ use fedimint_ln_common::contracts::outgoing::{
 use fedimint_ln_common::contracts::{
     Contract, ContractId, EncryptedPreimage, IdentifiableContract, Preimage,
 };
+use fedimint_ln_common::incoming::{
+    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
+};
 pub use fedimint_ln_common::*;
 use futures::StreamExt;
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use pay::{GatewayPayError, LightningPayStateMachine};
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
-use receive::{LightningReceiveError, LightningReceiveStateMachine};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::pay::{LightningPayCommon, LightningPayCreatedOutgoingLnContract, LightningPayStates};
-use crate::receive::{LightningReceiveStates, LightningReceiveSubmittedOffer};
+use crate::pay::{
+    GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
+    LightningPayStateMachine, LightningPayStates,
+};
+use crate::receive::{
+    LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
+    LightningReceiveSubmittedOffer,
+};
 
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
@@ -71,10 +78,12 @@ pub trait LightningClientExt {
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
 
     /// Pays a LN invoice with our available funds
-    async fn pay_bolt11_invoice(
+    async fn pay_bolt11_invoice(&self, invoice: Invoice) -> anyhow::Result<(PayType, ContractId)>;
+
+    async fn subscribe_internal_pay(
         &self,
-        invoice: Invoice,
-    ) -> anyhow::Result<(OperationId, ContractId)>;
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, InternalPayState>>;
 
     async fn subscribe_ln_pay(
         &self,
@@ -95,8 +104,28 @@ pub trait LightningClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnReceiveState>>;
 }
 
-/// The high-level state of a reissue operation started with
-/// [`LightningClientExt::pay_bolt11_invoice`].
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum PayType {
+    // Payment from this client to another user within the federation
+    Internal(OperationId),
+    // Payment from this client to another user, facilitated by a gateway
+    Lightning(OperationId),
+}
+
+/// The high-level state of an pay operation internal to the federation,
+/// started with [`LightningClientExt::pay_bolt11_invoice`].
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum InternalPayState {
+    Funding,
+    Preimage(Preimage),
+    RefundSuccess(OutPoint),
+    RefundError(String),
+    FundingFailed(String),
+    Error(String),
+}
+
+/// The high-level state of a pay operation over lightning,
+/// started with [`LightningClientExt::pay_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LnPayState {
     Created,
@@ -126,6 +155,19 @@ pub enum LnReceiveState {
     Funded,
     AwaitingFunds,
     Claimed,
+}
+
+async fn is_internal_payment(invoice: &Invoice, gateways: Vec<LightningGateway>) -> bool {
+    // Asserts that the first hop of the invoice route hints
+    // leads through a registered gateway into the current federation
+    gateways.into_iter().any(|gateway| {
+        invoice
+            .route_hints()
+            .first()
+            .and_then(|rh| rh.0.last())
+            .map(|hop| (hop.src_node_id, hop.short_channel_id))
+            == Some((gateway.node_pub_key, gateway.mint_channel_id))
+    })
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -172,24 +214,31 @@ impl LightningClientExt for Client {
         Ok(instance.api.fetch_gateways().await?)
     }
 
-    async fn pay_bolt11_invoice(
-        &self,
-        invoice: Invoice,
-    ) -> anyhow::Result<(OperationId, ContractId)> {
+    async fn pay_bolt11_invoice(&self, invoice: Invoice) -> anyhow::Result<(PayType, ContractId)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
-        let operation_id = OperationId(invoice.payment_hash().into_inner());
-        let active_gateway = self.select_active_gateway().await?;
+        let payment_hash = invoice.payment_hash();
+        let operation_id = OperationId(payment_hash.into_inner());
 
-        let (output, contract_id) = lightning
-            .create_outgoing_output(
-                operation_id,
-                instance.api,
-                invoice.clone(),
-                active_gateway,
-                self.get_config().await.federation_id,
-                rand::rngs::OsRng,
-            )
-            .await?;
+        let gateways = self.fetch_registered_gateways().await?;
+        let (pay_type, output, contract_id) = if is_internal_payment(&invoice, gateways).await {
+            let (output, contract_id) = lightning
+                .create_incoming_output(operation_id, invoice.clone())
+                .await?;
+            (PayType::Internal(operation_id), output, contract_id)
+        } else {
+            let active_gateway = self.select_active_gateway().await?;
+            let (output, contract_id) = lightning
+                .create_outgoing_output(
+                    operation_id,
+                    instance.api,
+                    invoice.clone(),
+                    active_gateway,
+                    self.get_config().await.federation_id,
+                    rand::rngs::OsRng,
+                )
+                .await?;
+            (PayType::Lightning(operation_id), output, contract_id)
+        };
 
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |txid, change_outpoint| LightningMeta::Pay {
@@ -206,7 +255,7 @@ impl LightningClientExt for Client {
         )
         .await?;
 
-        Ok((operation_id, contract_id))
+        Ok((pay_type, contract_id))
     }
 
     async fn create_bolt11_invoice(
@@ -326,7 +375,7 @@ impl LightningClientExt for Client {
             .transaction_updates(operation_id)
             .await
             .await_tx_accepted(out_point.txid);
-        let payment_success = lightning.await_payment_success(operation_id);
+        let payment_success = lightning.await_lightning_payment_success(operation_id);
 
         let refund_success = lightning.await_refund(operation_id);
 
@@ -356,7 +405,7 @@ impl LightningClientExt for Client {
                         yield LnPayState::Success {preimage};
                         return;
                     }
-                    Err(LightningPayError::Refundable(block_height, error)) => {
+                    Err(PayError::Refundable(block_height, error)) => {
                         yield LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
 
                         if let Ok(refund_txid) = refund_success.await {
@@ -371,6 +420,41 @@ impl LightningClientExt for Client {
                 }
 
                 yield LnPayState::Failed;
+            }
+        }))
+    }
+
+    async fn subscribe_internal_pay(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, InternalPayState>> {
+        let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
+
+        let operation = ln_operation(self, operation_id).await?;
+        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
+            stream! {
+                yield InternalPayState::Funding;
+
+                let mut stream = lightning.notifier.subscribe(operation_id).await;
+                let state = loop {
+                    if let Some(LightningClientStateMachines::InternalPay(state)) = stream.next().await {
+                        match state.state {
+                            IncomingSmStates::Preimage(preimage) => break InternalPayState::Preimage(preimage),
+                            IncomingSmStates::RefundSubmitted(txid) => {
+                                let out_point = OutPoint { txid, out_idx: 0};
+                                match self.await_primary_module_output(operation_id, out_point).await {
+                                    Ok(_) => break InternalPayState::RefundSuccess(out_point),
+                                    Err(e) => break InternalPayState::RefundError(e.to_string()),
+                                }
+                            },
+                            IncomingSmStates::FundingFailed(e) => break InternalPayState::FundingFailed(e),
+                            _ => {}
+                        }
+                    } else {
+                        break InternalPayState::Error("Unexpected State! Expected an InternalPay state".to_string())
+                    }
+                };
+                yield state;
             }
         }))
     }
@@ -410,13 +494,12 @@ impl ClientModuleGen for LightningClientGen {
         _api: DynGlobalApi,
         module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
+        let secp = Secp256k1::new();
         Ok(LightningClientModule {
             cfg,
             notifier,
-            redeem_key: module_root_secret
-                .child_key(ChildId(0))
-                .to_secp_key(&Secp256k1::new()),
-            secp: secp256k1_zkp::Secp256k1::new(),
+            redeem_key: module_root_secret.child_key(ChildId(0)).to_secp_key(&secp),
+            secp,
             module_api,
         })
     }
@@ -470,7 +553,7 @@ impl ClientModule for LightningClientModule {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum LightningPayError {
+pub enum PayError {
     #[error("Lightning payment was canceled")]
     Canceled,
     #[error("Lightning payment was refunded")]
@@ -482,7 +565,7 @@ pub enum LightningPayError {
 }
 
 impl LightningClientModule {
-    /// Create an output that incentivizes a Lighning gateway to pay an invoice
+    /// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
     pub async fn create_outgoing_output<'a, 'b>(
@@ -550,7 +633,7 @@ impl LightningClientModule {
 
         let contract_id = contract.contract_id();
         let sm_gen = Arc::new(move |funding_txid: TransactionId, _input_idx: u64| {
-            vec![LightningClientStateMachines::Pay(
+            vec![LightningClientStateMachines::LightningPay(
                 LightningPayStateMachine {
                     common: LightningPayCommon {
                         operation_id,
@@ -580,6 +663,50 @@ impl LightningClientModule {
             },
             contract_id,
         ))
+    }
+
+    /// Create an output that funds an incoming contract within the federation
+    /// This directly completes a transaction between users, without involving a
+    /// gateway
+    pub async fn create_incoming_output(
+        &self,
+        operation_id: OperationId,
+        invoice: Invoice,
+    ) -> anyhow::Result<(
+        ClientOutput<LightningOutput, LightningClientStateMachines>,
+        ContractId,
+    )> {
+        let payment_hash = invoice.payment_hash();
+        let invoice_amount = Amount {
+            msats: invoice
+                .amount_milli_satoshis()
+                .ok_or(IncomingSmError::AmountError)?,
+        };
+
+        let (incoming_output, contract_id) = create_incoming_contract_output(
+            &self.module_api,
+            *payment_hash,
+            invoice_amount,
+            self.redeem_key,
+        )
+        .await?;
+
+        let client_output = ClientOutput::<LightningOutput, LightningClientStateMachines> {
+            output: incoming_output,
+            state_machines: Arc::new(move |txid, _| {
+                vec![LightningClientStateMachines::InternalPay(
+                    IncomingStateMachine {
+                        common: IncomingSmCommon {
+                            operation_id,
+                            contract_id,
+                        },
+                        state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                    },
+                )]
+            }),
+        };
+
+        Ok((client_output, contract_id))
     }
 
     async fn await_receive_success(
@@ -623,19 +750,19 @@ impl LightningClientModule {
     }
 
     // Wait for the Lightning invoice to be paid successfully or waiting for refund
-    async fn await_payment_success(
+    async fn await_lightning_payment_success(
         &self,
         operation_id: OperationId,
-    ) -> Result<String, LightningPayError> {
+    ) -> Result<String, PayError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
             match stream.next().await {
-                Some(LightningClientStateMachines::Pay(state)) => match state.state {
+                Some(LightningClientStateMachines::LightningPay(state)) => match state.state {
                     LightningPayStates::Success(preimage) => {
                         return Ok(preimage);
                     }
                     LightningPayStates::Refundable(refundable) => {
-                        return Err(LightningPayError::Refundable(
+                        return Err(PayError::Refundable(
                             refundable.block_timelock,
                             refundable.error,
                         ));
@@ -648,20 +775,15 @@ impl LightningClientModule {
         }
     }
 
-    async fn await_refund(
-        &self,
-        operation_id: OperationId,
-    ) -> Result<TransactionId, LightningPayError> {
+    async fn await_refund(&self, operation_id: OperationId) -> Result<TransactionId, PayError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
             match stream.next().await {
-                Some(LightningClientStateMachines::Pay(state)) => match state.state {
+                Some(LightningClientStateMachines::LightningPay(state)) => match state.state {
                     LightningPayStates::Refunded(refund_txid) => {
                         return Ok(refund_txid);
                     }
-                    LightningPayStates::Failure(reason) => {
-                        return Err(LightningPayError::Failed(reason))
-                    }
+                    LightningPayStates::Failure(reason) => return Err(PayError::Failed(reason)),
                     _ => {}
                 },
                 Some(_) => {}
@@ -784,7 +906,8 @@ impl LightningClientModule {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum LightningClientStateMachines {
-    Pay(LightningPayStateMachine),
+    InternalPay(IncomingStateMachine),
+    LightningPay(LightningPayStateMachine),
     Receive(LightningReceiveStateMachine),
 }
 
@@ -806,10 +929,16 @@ impl State for LightningClientStateMachines {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self {
-            LightningClientStateMachines::Pay(pay_state) => {
+            LightningClientStateMachines::InternalPay(internal_pay_state) => {
                 sm_enum_variant_translation!(
-                    pay_state.transitions(context, global_context),
-                    LightningClientStateMachines::Pay
+                    internal_pay_state.transitions(context, global_context),
+                    LightningClientStateMachines::InternalPay
+                )
+            }
+            LightningClientStateMachines::LightningPay(lightning_pay_state) => {
+                sm_enum_variant_translation!(
+                    lightning_pay_state.transitions(context, global_context),
+                    LightningClientStateMachines::LightningPay
                 )
             }
             LightningClientStateMachines::Receive(receive_state) => {
@@ -823,7 +952,12 @@ impl State for LightningClientStateMachines {
 
     fn operation_id(&self) -> OperationId {
         match self {
-            LightningClientStateMachines::Pay(pay_state) => pay_state.operation_id(),
+            LightningClientStateMachines::InternalPay(internal_pay_state) => {
+                internal_pay_state.operation_id()
+            }
+            LightningClientStateMachines::LightningPay(lightning_pay_state) => {
+                lightning_pay_state.operation_id()
+            }
             LightningClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
         }
     }
