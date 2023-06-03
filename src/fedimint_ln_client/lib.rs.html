@@ -1213,7 +1213,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">enum </span>LightningMeta {
+</span><span class="kw">pub enum </span>LightningMeta {
     Pay {
         out_point: OutPoint,
         invoice: Invoice,
@@ -1262,7 +1262,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LightningClientModule {
-    cfg: LightningClientConfig,
+    <span class="kw">pub </span>cfg: LightningClientConfig,
     notifier: ModuleNotifier&lt;DynGlobalClientContext, LightningClientStateMachines&gt;,
     secp: Secp256k1&lt;All&gt;,
 }
