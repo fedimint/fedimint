@@ -835,6 +835,7 @@
 <a href="#835" id="835">835</a>
 <a href="#836" id="836">836</a>
 <a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -876,12 +877,12 @@
 };
 <span class="kw">pub use </span>fedimint_ln_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
 <span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 <span class="kw">use </span>pay::{GatewayPayError, LightningPayStateMachine};
+<span class="kw">use </span>rand::seq::IteratorRandom;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>receive::{LightningReceiveError, LightningReceiveStateMachine};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
@@ -976,7 +977,8 @@
                 </span>.fetch_registered_gateways()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_iter()
-                .find_or_first(|gw| gw.valid_until &lt;= fedimint_core::time::now())
+                .filter(|gw| gw.valid_until &gt; fedimint_core::time::now())
+                .choose(<span class="kw-2">&amp;mut </span>rand::thread_rng())
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Could not find any gateways&quot;</span>)),
         }
     }
