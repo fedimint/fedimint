@@ -39,12 +39,12 @@ use fedimint_ln_common::contracts::{
 };
 pub use fedimint_ln_common::*;
 use futures::StreamExt;
-use itertools::Itertools;
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use pay::{GatewayPayError, LightningPayStateMachine};
+use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
 use receive::{LightningReceiveError, LightningReceiveStateMachine};
 use secp256k1_zkp::{All, Secp256k1};
@@ -139,7 +139,8 @@ impl LightningClientExt for Client {
                 .fetch_registered_gateways()
                 .await?
                 .into_iter()
-                .find_or_first(|gw| gw.valid_until <= fedimint_core::time::now())
+                .filter(|gw| gw.valid_until > fedimint_core::time::now())
+                .choose(&mut rand::thread_rng())
                 .ok_or(anyhow::anyhow!("Could not find any gateways")),
         }
     }
