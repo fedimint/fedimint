@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt;
+use std::{fmt, fs, env};
 
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
@@ -12,8 +12,6 @@ use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
 use tracing::{instrument, warn};
 use url::Url;
-use std::env;
-use std::fs;
 
 use super::*;
 
