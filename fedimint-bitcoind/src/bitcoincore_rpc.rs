@@ -44,7 +44,11 @@ pub fn from_url_to_url_auth(url: &Url) -> Result<(String, Auth)> {
             )
         }),
         if url.username().is_empty() {
-            read_cookie_file()
+            let auth = match read_cookie_file() {
+                Ok(cookie) => Some(Auth::UserPass(url.username().to_owned(), cookie)),
+                Err(_) => None,
+            };
+            auth.unwrap_or(Auth::None)
         } else {
             Auth::UserPass(
                 url.username().to_owned(),
