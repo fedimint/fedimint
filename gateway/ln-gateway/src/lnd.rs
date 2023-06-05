@@ -221,7 +221,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
         let mut client = self.client.clone();
-        let channels = client
+        let mut channels = client
             .lightning()
             .list_channels(ListChannelsRequest {
                 active_only: true,
@@ -237,10 +237,15 @@ impl ILnRpcClient for GatewayLndClient {
                     format!("LND error: {e:?}"),
                 ))
             })?
-            .into_inner();
+            .into_inner()
+            .channels;
+
+        // Take the 2 channels with largest incoming capacity
+        channels.sort_by(|a, b| b.remote_balance.cmp(&a.remote_balance));
+        channels.truncate(2);
 
         let mut route_hints: Vec<RouteHint> = vec![];
-        for chan in channels.channels {
+        for chan in channels.iter() {
             let info = client
                 .lightning()
                 .get_chan_info(ChanInfoRequest {
