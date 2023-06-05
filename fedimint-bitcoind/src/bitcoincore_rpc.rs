@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{fmt, fs, env};
+use std::{env, fmt, fs};
 
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
