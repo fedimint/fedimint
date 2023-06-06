@@ -12,8 +12,8 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 use ln_gateway::gatewaylnrpc::{
-    GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
-    RouteHtlcRequest,
+    CompleteHtlcResponse, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
@@ -107,9 +107,25 @@ impl ILnRpcClient for ClnLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<RouteHtlcRequest>,
+        events: ReceiverStream<CompleteHtlcResponse>,
+        task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.lnrpc.write().await.route_htlcs(events).await
+        self.lnrpc
+            .write()
+            .await
+            .route_htlcs(events, task_group)
+            .await
+    }
+
+    async fn subscribe_mint_htlcs(
+        &self,
+        subscribe_request: SubscribeInterceptHtlcsRequest,
+    ) -> Result<EmptyResponse, GatewayError> {
+        self.lnrpc
+            .read()
+            .await
+            .subscribe_mint_htlcs(subscribe_request)
+            .await
     }
 }
 
@@ -250,9 +266,25 @@ impl ILnRpcClient for LndLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<RouteHtlcRequest>,
+        events: ReceiverStream<CompleteHtlcResponse>,
+        task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.lnrpc.write().await.route_htlcs(events).await
+        self.lnrpc
+            .write()
+            .await
+            .route_htlcs(events, task_group)
+            .await
+    }
+
+    async fn subscribe_mint_htlcs(
+        &self,
+        subscribe_request: SubscribeInterceptHtlcsRequest,
+    ) -> Result<EmptyResponse, GatewayError> {
+        self.lnrpc
+            .read()
+            .await
+            .subscribe_mint_htlcs(subscribe_request)
+            .await
     }
 }
 
@@ -273,15 +305,9 @@ impl LndLightningTest {
         let initial_balance = Self::channel_balance(rpc_lnd.clone()).await;
         let node_pub_key = Self::pubkey(rpc_lnd.clone()).await;
 
-        let gateway_lnd_client = GatewayLndClient::new(
-            lnd_rpc_addr,
-            lnd_tls_cert,
-            lnd_macaroon,
-            // TODO: Remove this once we dont need a TaskGroup to create a client
-            TaskGroup::new(),
-        )
-        .await
-        .unwrap();
+        let gateway_lnd_client = GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
+            .await
+            .unwrap();
         let lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
         LndLightningTest {
             rpc_lnd,

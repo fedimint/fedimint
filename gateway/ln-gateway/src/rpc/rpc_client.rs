@@ -11,7 +11,7 @@ use url::Url;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    LightningReconnectPayload, RestorePayload, WithdrawPayload,
+    RestorePayload, WithdrawPayload,
 };
 use crate::rpc::{FederationInfo, GatewayInfo};
 
@@ -83,11 +83,6 @@ impl GatewayRpcClient {
 
     pub async fn restore(&self, payload: RestorePayload) -> GatewayRpcResult<()> {
         let url = self.base_url.join("/restore").expect("invalid base url");
-        self.call(url, payload).await
-    }
-
-    pub async fn reconnect(&self, payload: LightningReconnectPayload) -> GatewayRpcResult<()> {
-        let url = self.base_url.join("/connect-ln").expect("invalid base url");
         self.call(url, payload).await
     }
 

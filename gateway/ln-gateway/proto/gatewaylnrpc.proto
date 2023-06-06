@@ -24,10 +24,14 @@ service GatewayLightning {
    * GatewayLightning implementations should respond with a channel stream
    * over which intercepted HTLCs are continually sent to the client.
    */
-  rpc RouteHtlcs(stream RouteHtlcRequest) returns (stream RouteHtlcResponse) {}
+  rpc RouteHtlcs(stream CompleteHtlcResponse) returns (stream InterceptHtlcRequest) {}
+
+  rpc SubscribeMintHtlcs(SubscribeInterceptHtlcsRequest) returns (EmptyResponse) {}
 }
 
 message EmptyRequest {}
+
+message EmptyResponse {}
 
 message GetNodeInfoResponse {
   // The public key of the associated lightning node
@@ -50,22 +54,6 @@ message PayInvoiceResponse {
   bytes preimage = 1;
 }
 
-// Request to begin intercepting HTLCs or to complete
-// a specific HTLC.
-message RouteHtlcRequest {
-  oneof action {
-    SubscribeInterceptHtlcsRequest subscribe_request = 1;
-    CompleteHtlcsRequest complete_request = 2;
-  }
-}
-
-message RouteHtlcResponse {
-  oneof action {
-    SubscribeInterceptHtlcsResponse subscribe_response = 1;
-    CompleteHtlcsResponse complete_response = 2;
-  }
-}
-
 // Request to subscribe to HTLCs with a specific short channel id
 //
 // Send this request when the gateway just assigned a new channel id to a
@@ -76,7 +64,7 @@ message SubscribeInterceptHtlcsRequest {
   uint64 short_channel_id = 1;
 }
 
-message SubscribeInterceptHtlcsResponse {
+message InterceptHtlcRequest {
   // The HTLC payment hash.
   // Value is not guaranteed to be unique per intercepted HTLC
   bytes payment_hash = 1;
@@ -110,7 +98,7 @@ message SubscribeInterceptHtlcsResponse {
   uint64 htlc_id = 13;
 }
 
-message CompleteHtlcsRequest {
+message CompleteHtlcResponse {
   message Settle {
     // The preimage for settling an intercepted HTLC
     bytes preimage = 1;
@@ -120,6 +108,8 @@ message CompleteHtlcsRequest {
     // The reason for the cancellation of an intercepted HTLC
     string reason = 1;
   }
+
+  message Forward {}
 
   oneof action {
     // Request to complete an intercepted HTLC with success result after
@@ -137,6 +127,9 @@ message CompleteHtlcsRequest {
     // intercepted HTLC. GatewayLightning will fail/cancel the intercepted HTLC
     // with reason provided.
     Cancel cancel = 2;
+
+    // Request to just forward the HTLC without failing or settling it.
+    Forward forward = 3;
   }
 
   // The id of the incoming channel
@@ -145,8 +138,6 @@ message CompleteHtlcsRequest {
   // The index of the incoming htlc in the incoming channel
   uint64 htlc_id = 5;
 }
-
-message CompleteHtlcsResponse {}
 
 message GetRouteHintsResponse {
   message RouteHintHop {

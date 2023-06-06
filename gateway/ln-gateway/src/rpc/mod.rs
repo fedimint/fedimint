@@ -19,7 +19,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
-use crate::{Gateway, GatewayError, LightningMode, Result};
+use crate::{Gateway, GatewayError, Result};
 
 #[derive(Debug, Clone)]
 pub struct GatewayRpcSender {
@@ -75,13 +75,6 @@ pub struct BackupPayload {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RestorePayload {
     pub federation_id: FederationId,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LightningReconnectPayload {
-    // Sending `None` for node_type will be interpreted as just reconnecting using the existing
-    // settings
-    pub node_type: Option<LightningMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -143,7 +136,6 @@ pub enum GatewayRequest {
     Withdraw(GatewayRequestInner<WithdrawPayload>),
     Backup(GatewayRequestInner<BackupPayload>),
     Restore(GatewayRequestInner<RestorePayload>),
-    LightningReconnect(GatewayRequestInner<LightningReconnectPayload>),
     Shutdown,
 }
 
@@ -190,11 +182,6 @@ impl_gateway_request_trait!(DepositPayload, TransactionId, GatewayRequest::Depos
 impl_gateway_request_trait!(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
 impl_gateway_request_trait!(BackupPayload, (), GatewayRequest::Backup);
 impl_gateway_request_trait!(RestorePayload, (), GatewayRequest::Restore);
-impl_gateway_request_trait!(
-    LightningReconnectPayload,
-    (),
-    GatewayRequest::LightningReconnect
-);
 
 impl<T> GatewayRequestInner<T>
 where
