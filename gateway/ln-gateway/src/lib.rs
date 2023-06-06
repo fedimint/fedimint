@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod client;
+pub mod db;
 pub mod lnd;
 pub mod lnrpc_client;
 pub mod ng;
@@ -32,6 +33,7 @@ use fedimint_client_legacy::modules::ln::route_hints::RouteHint;
 use fedimint_client_legacy::{ClientError, GatewayClient};
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
+use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{self, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, TransactionId};
@@ -107,6 +109,8 @@ pub enum GatewayError {
     Other(#[from] anyhow::Error),
     #[error("Failed to fetch route hints")]
     FailedToFetchRouteHints,
+    #[error("Failed to open the database")]
+    DatabaseError,
 }
 
 impl GatewayError {
@@ -135,6 +139,7 @@ pub struct Gateway {
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
     fees: RoutingFees,
+    gatewayd_db: Database,
 }
 
 impl Gateway {
@@ -146,6 +151,7 @@ impl Gateway {
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
         fees: RoutingFees,
+        gatewayd_db: Database,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -166,6 +172,7 @@ impl Gateway {
             module_gens: module_gens.clone(),
             lightning_mode: Some(lightning_mode),
             fees,
+            gatewayd_db,
         };
 
         gw.load_actors(decoders, module_gens).await?;
@@ -181,6 +188,7 @@ impl Gateway {
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
         fees: RoutingFees,
+        gatewayd_db: Database,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -197,6 +205,7 @@ impl Gateway {
             module_gens: module_gens.clone(),
             lightning_mode: None,
             fees,
+            gatewayd_db,
         };
 
         gw.load_actors(decoders, module_gens).await?;
@@ -244,19 +253,21 @@ impl Gateway {
     ) -> Result<()> {
         // Fetch route hints form the LN node
         let mut num_retries = 0;
-        let route_hints = loop {
-            let route_hints: Vec<RouteHint> = self
-                .lnrpc
-                .read()
-                .await
+        let (route_hints, node_pub_key) = loop {
+            let lightning = self.lnrpc.read().await;
+            let route_hints: Vec<RouteHint> = lightning
                 .routehints()
                 .await
                 .expect("Could not fetch route hints")
                 .try_into()
                 .expect("Could not parse route hints");
 
+            let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.read().await.info().await?;
+            let node_pub_key = PublicKey::from_slice(&pub_key)
+                .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
+
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
-                break route_hints;
+                break (route_hints, node_pub_key);
             }
 
             info!(
@@ -267,7 +278,9 @@ impl Gateway {
             num_retries += 1;
             task::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
-        if let Ok(configs) = self.client_builder.load_configs() {
+
+        let dbtx = self.gatewayd_db.begin_transaction().await;
+        if let Ok(configs) = self.client_builder.load_configs(dbtx, node_pub_key).await {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
 
             for config in configs {
@@ -352,13 +365,7 @@ impl Gateway {
 
         let gw_client_cfg = self
             .client_builder
-            .create_config(
-                connect,
-                channel_id,
-                node_pub_key,
-                self.module_gens.clone(),
-                fees,
-            )
+            .create_config(connect, channel_id, node_pub_key, fees)
             .await?;
 
         let client = Arc::new(
@@ -379,7 +386,12 @@ impl Gateway {
                 GatewayError::Other(anyhow::anyhow!("Failed to connect federation {}", e))
             })?;
 
-        if let Err(e) = self.client_builder.save_config(client.config()) {
+        let dbtx = self.gatewayd_db.begin_transaction().await;
+        if let Err(e) = self
+            .client_builder
+            .save_config(client.config(), payload.connect, dbtx)
+            .await
+        {
             warn!(
                 "Failed to save default federation client configuration: {}",
                 e
