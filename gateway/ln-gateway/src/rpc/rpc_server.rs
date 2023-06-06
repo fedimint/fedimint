@@ -15,7 +15,7 @@ use tracing::{error, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, LightningReconnectPayload, RestorePayload, WithdrawPayload,
+    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
 };
 use crate::GatewayError;
 
@@ -23,7 +23,7 @@ pub async fn run_webserver(
     authkey: String,
     bind_addr: SocketAddr,
     sender: GatewayRpcSender,
-    mut tg: TaskGroup,
+    tg: &mut TaskGroup,
 ) -> axum::response::Result<oneshot::Sender<()>> {
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
@@ -38,7 +38,6 @@ pub async fn run_webserver(
         .route("/connect-fed", post(connect_fed))
         .route("/backup", post(backup))
         .route("/restore", post(restore))
-        .route("/connect-ln", post(connect_ln))
         .layer(RequireAuthorizationLayer::bearer(&authkey));
 
     let app = Router::new()
@@ -152,16 +151,6 @@ async fn backup(
 async fn restore(
     Extension(rpc): Extension<GatewayRpcSender>,
     Json(payload): Json<RestorePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
-    rpc.send(payload).await?;
-    Ok(())
-}
-
-// Reconnect to the lightning node
-#[instrument(skip_all, err)]
-async fn connect_ln(
-    Extension(rpc): Extension<GatewayRpcSender>,
-    Json(payload): Json<LightningReconnectPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     rpc.send(payload).await?;
     Ok(())

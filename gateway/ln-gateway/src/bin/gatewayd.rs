@@ -95,7 +95,7 @@ async fn main() -> Result<(), anyhow::Error> {
         StandardGatewayClientBuilder::new(data_dir.clone(), RocksDbFactory.into(), api_addr).into();
 
     // Create task group for controlled shutdown of the gateway
-    let task_group = TaskGroup::new();
+    let mut task_group = TaskGroup::new();
 
     // Create module decoder registry
     let decoders = ModuleDecoderRegistry::from_iter([
@@ -135,7 +135,7 @@ async fn main() -> Result<(), anyhow::Error> {
         client_builder,
         decoders,
         module_gens,
-        task_group.make_subgroup().await,
+        &mut task_group,
         fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
         gatewayd_db,
     )
@@ -145,7 +145,9 @@ async fn main() -> Result<(), anyhow::Error> {
         exit(1)
     });
 
-    gateway.spawn_webserver(listen, password).await;
+    gateway
+        .spawn_webserver(listen, password, &mut task_group)
+        .await;
     if let Err(e) = gateway.run(task_group.make_handle()).await {
         task_group.shutdown_join_all(Some(SHUTDOWN_TIMEOUT)).await?;
 

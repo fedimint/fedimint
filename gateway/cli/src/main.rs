@@ -7,9 +7,8 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    LightningReconnectPayload, RestorePayload, WithdrawPayload,
+    RestorePayload, WithdrawPayload,
 };
-use ln_gateway::LightningMode;
 use serde::Serialize;
 use url::Url;
 
@@ -78,11 +77,6 @@ pub enum Commands {
     Restore {
         #[clap(long)]
         federation_id: FederationId,
-    },
-    // Reconnect to the Lightning Node
-    ReconnectLightning {
-        #[clap(subcommand)]
-        lightning_mode: LightningMode,
     },
 }
 
@@ -156,25 +150,6 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Restore { federation_id } => {
             client.restore(RestorePayload { federation_id }).await?;
-        }
-        Commands::ReconnectLightning { lightning_mode } => {
-            let payload = match lightning_mode {
-                LightningMode::Cln { cln_extension_addr } => LightningReconnectPayload {
-                    node_type: Some(LightningMode::Cln { cln_extension_addr }),
-                },
-                LightningMode::Lnd {
-                    lnd_rpc_addr,
-                    lnd_tls_cert,
-                    lnd_macaroon,
-                } => LightningReconnectPayload {
-                    node_type: Some(LightningMode::Lnd {
-                        lnd_rpc_addr,
-                        lnd_tls_cert,
-                        lnd_macaroon,
-                    }),
-                },
-            };
-            client.reconnect(payload).await?;
         }
     }
 

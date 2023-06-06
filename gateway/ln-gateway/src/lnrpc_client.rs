@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fedimint_core::task::sleep;
+use fedimint_core::task::{sleep, TaskGroup};
 use futures::stream::BoxStream;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
@@ -13,12 +13,13 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest,
-    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse,
+    CompleteHtlcResponse, EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcRequest, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use crate::{GatewayError, Result};
 
-pub type RouteHtlcStream<'a> = BoxStream<'a, std::result::Result<RouteHtlcResponse, tonic::Status>>;
+pub type RouteHtlcStream<'a> =
+    BoxStream<'a, std::result::Result<InterceptHtlcRequest, tonic::Status>>;
 
 #[async_trait]
 pub trait ILnRpcClient: Debug + Send + Sync {
@@ -33,8 +34,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<RouteHtlcRequest>,
+        events: ReceiverStream<CompleteHtlcResponse>,
+        task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>>;
+
+    async fn subscribe_mint_htlcs(
+        &self,
+        subscribe_request: SubscribeInterceptHtlcsRequest,
+    ) -> Result<EmptyResponse>;
 }
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -80,29 +87,39 @@ impl ILnRpcClient for NetworkLnRpcClient {
         let req = Request::new(EmptyRequest {});
         let mut client = self.client.clone();
         let res = client.get_node_info(req).await?;
-        return Ok(res.into_inner());
+        Ok(res.into_inner())
     }
 
     async fn routehints(&self) -> Result<GetRouteHintsResponse> {
         let req = Request::new(EmptyRequest {});
         let mut client = self.client.clone();
         let res = client.get_route_hints(req).await?;
-        return Ok(res.into_inner());
+        Ok(res.into_inner())
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse> {
         let req = Request::new(invoice);
         let mut client = self.client.clone();
         let res = client.pay_invoice(req).await?;
-        return Ok(res.into_inner());
+        Ok(res.into_inner())
     }
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<RouteHtlcRequest>,
+        events: ReceiverStream<CompleteHtlcResponse>,
+        _task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>> {
         let mut client = self.client.clone();
         let res = client.route_htlcs(events).await?;
-        return Ok(Box::pin(res.into_inner()));
+        Ok(Box::pin(res.into_inner()))
+    }
+
+    async fn subscribe_mint_htlcs(
+        &self,
+        subscribe_request: SubscribeInterceptHtlcsRequest,
+    ) -> Result<EmptyResponse> {
+        let mut client = self.client.clone();
+        let res = client.subscribe_mint_htlcs(subscribe_request).await?;
+        Ok(res.into_inner())
     }
 }
