@@ -1,0 +1,19 @@
+[package]
+name = "fedimint-atomic-broadcast"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aleph-bft = { version = "0.20.5", default-features = false }
+anyhow = "1.0.71"
+async-channel = "1.8.0"
+async-trait = "0.1.68"
+bitcoin = "0.30.0"
+bitcoin_hashes = "0.12.0"
+fedimint-core = { path = "../fedimint-core" }
+futures = "0.3.28"
+parity-scale-codec = "3.5.0"
+secp256k1 = {version = "0.27.0", features=["rand-std","bitcoin-hashes"]}
+tokio = "1.28.1"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
