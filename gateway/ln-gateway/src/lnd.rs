@@ -15,11 +15,11 @@ use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse, ResolveHold
 use tonic_lnd::{connect, LndClient};
 use tracing::{error, info, trace};
 
-use crate::gatewaylnrpc::complete_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gatewaylnrpc::{
-    CompleteHtlcResponse, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use crate::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use crate::GatewayError;
@@ -314,7 +314,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<CompleteHtlcResponse>,
+        events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
         const CHANNEL_SIZE: usize = 100;
@@ -331,7 +331,7 @@ impl ILnRpcClient for GatewayLndClient {
         let mut stream = events.into_inner();
         task_group.spawn("LND Route HTLCs", |_handle| async move {
             while let Some(request) = stream.recv().await {
-                let CompleteHtlcResponse {
+                let InterceptHtlcResponse {
                     action,
                     incoming_chan_id,
                     htlc_id,

@@ -12,7 +12,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcResponse, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnd::GatewayLndClient;
@@ -107,7 +107,7 @@ impl ILnRpcClient for ClnLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<CompleteHtlcResponse>,
+        events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
         self.lnrpc
@@ -266,7 +266,7 @@ impl ILnRpcClient for LndLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<CompleteHtlcResponse>,
+        events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
         self.lnrpc

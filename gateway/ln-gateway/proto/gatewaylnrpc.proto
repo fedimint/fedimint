@@ -24,7 +24,7 @@ service GatewayLightning {
    * GatewayLightning implementations should respond with a channel stream
    * over which intercepted HTLCs are continually sent to the client.
    */
-  rpc RouteHtlcs(stream CompleteHtlcResponse) returns (stream InterceptHtlcRequest) {}
+  rpc RouteHtlcs(stream InterceptHtlcResponse) returns (stream InterceptHtlcRequest) {}
 
   rpc SubscribeMintHtlcs(SubscribeInterceptHtlcsRequest) returns (EmptyResponse) {}
 }
@@ -98,7 +98,7 @@ message InterceptHtlcRequest {
   uint64 htlc_id = 13;
 }
 
-message CompleteHtlcResponse {
+message InterceptHtlcResponse {
   message Settle {
     // The preimage for settling an intercepted HTLC
     bytes preimage = 1;
