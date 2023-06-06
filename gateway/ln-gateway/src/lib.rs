@@ -39,8 +39,8 @@ use fedimint_core::task::{self, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_client::contracts::Preimage;
 use futures::stream::StreamExt;
-use gatewaylnrpc::complete_htlc_response::Action;
-use gatewaylnrpc::{CompleteHtlcResponse, GetNodeInfoResponse};
+use gatewaylnrpc::intercept_htlc_response::Action;
+use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use rpc::FederationInfo;
@@ -53,7 +53,7 @@ use url::Url;
 
 use crate::actor::GatewayActor;
 use crate::client::DynGatewayClientBuilder;
-use crate::gatewaylnrpc::complete_htlc_response::Forward;
+use crate::gatewaylnrpc::intercept_htlc_response::Forward;
 use crate::lnd::GatewayLndClient;
 use crate::lnrpc_client::NetworkLnRpcClient;
 use crate::rpc::rpc_server::run_webserver;
@@ -241,7 +241,7 @@ impl Gateway {
 
     pub async fn route_htlcs(&mut self, task_group: &mut TaskGroup) -> Result<()> {
         // Create a stream used to communicate with the Lightning implementation
-        let (sender, ln_receiver) = mpsc::channel::<CompleteHtlcResponse>(100);
+        let (sender, ln_receiver) = mpsc::channel::<InterceptHtlcResponse>(100);
 
         let mut lnrpc: Box<dyn ILnRpcClient> = match &self.lightning_mode {
             Some(LightningMode::Cln { cln_extension_addr }) => {
@@ -294,14 +294,14 @@ impl Gateway {
                                 if let Some(actor) = actor {
                                     actor.handle_intercepted_htlc(htlc).await
                                 } else {
-                                    CompleteHtlcResponse {
+                                    InterceptHtlcResponse {
                                         action: Some(Action::Forward(Forward {})),
                                         incoming_chan_id: htlc.incoming_chan_id,
                                         htlc_id: htlc.htlc_id,
                                     }
                                 }
                             } else {
-                                CompleteHtlcResponse {
+                                InterceptHtlcResponse {
                                     action: Some(Action::Forward(Forward {})),
                                     incoming_chan_id: htlc.incoming_chan_id,
                                     htlc_id: htlc.htlc_id,

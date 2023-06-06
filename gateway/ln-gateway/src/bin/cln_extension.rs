@@ -15,14 +15,14 @@ use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use futures::stream::StreamExt;
-use ln_gateway::gatewaylnrpc::complete_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
 use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+use ln_gateway::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gatewaylnrpc::{
-    CompleteHtlcResponse, EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -238,10 +238,10 @@ impl ClnRpcService {
     }
 
     async fn complete_htlc(
-        complete_request: CompleteHtlcResponse,
+        complete_request: InterceptHtlcResponse,
         interceptors: Arc<ClnHtlcInterceptor>,
     ) -> Result<(), Status> {
-        let CompleteHtlcResponse {
+        let InterceptHtlcResponse {
             action,
             incoming_chan_id,
             htlc_id,
@@ -476,7 +476,7 @@ impl GatewayLightning for ClnRpcService {
 
     async fn route_htlcs(
         &self,
-        request: tonic::Request<tonic::Streaming<CompleteHtlcResponse>>,
+        request: tonic::Request<tonic::Streaming<InterceptHtlcResponse>>,
     ) -> Result<tonic::Response<Self::RouteHtlcsStream>, Status> {
         let mut stream = request.into_inner();
 

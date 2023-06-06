@@ -15,7 +15,7 @@ use lightning_invoice::{
     DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gatewaylnrpc::{
-    self, CompleteHtlcResponse, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    self, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
 };
 use ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
@@ -132,7 +132,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<CompleteHtlcResponse>,
+        events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
         task_group

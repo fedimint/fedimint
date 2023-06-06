@@ -15,9 +15,9 @@ use rand::{CryptoRng, RngCore};
 use tokio::sync::Notify;
 use tracing::{debug, info, instrument, warn};
 
-use crate::gatewaylnrpc::complete_htlc_response::{Action, Cancel, Settle};
+use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::{
-    CompleteHtlcResponse, InterceptHtlcRequest, PayInvoiceRequest, PayInvoiceResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
     SubscribeInterceptHtlcsRequest,
 };
 use crate::lnrpc_client::ILnRpcClient;
@@ -115,7 +115,7 @@ impl GatewayActor {
     pub async fn handle_intercepted_htlc(
         &self,
         htlc: InterceptHtlcRequest,
-    ) -> CompleteHtlcResponse {
+    ) -> InterceptHtlcResponse {
         let InterceptHtlcRequest {
             payment_hash,
             outgoing_amount_msat,
@@ -134,7 +134,7 @@ impl GatewayActor {
         let hash = match sha256::Hash::from_slice(&payment_hash) {
             Ok(hash) => hash,
             Err(_) => {
-                return CompleteHtlcResponse {
+                return InterceptHtlcResponse {
                     action: Some(Action::Cancel(Cancel {
                         reason: "Failed to parse payment hash".to_string(),
                     })),
@@ -150,7 +150,7 @@ impl GatewayActor {
             match self.buy_preimage_from_federation(&hash, &amount_msat).await {
                 Ok((outpoint, contract_id)) => (outpoint, contract_id),
                 Err(_) => {
-                    return CompleteHtlcResponse {
+                    return InterceptHtlcResponse {
                         action: Some(Action::Cancel(Cancel {
                             reason: "Failed to buy preimage".to_string(),
                         })),
@@ -164,14 +164,14 @@ impl GatewayActor {
             .pay_invoice_buy_preimage_finalize(BuyPreimage::Internal((outpoint, contract_id)))
             .await
         {
-            Ok(preimage) => CompleteHtlcResponse {
+            Ok(preimage) => InterceptHtlcResponse {
                 action: Some(Action::Settle(Settle {
                     preimage: preimage.0.to_vec(),
                 })),
                 incoming_chan_id,
                 htlc_id,
             },
-            Err(_) => CompleteHtlcResponse {
+            Err(_) => InterceptHtlcResponse {
                 action: Some(Action::Cancel(Cancel {
                     reason: "Failed to process intercepted HTLC".to_string(),
                 })),
