@@ -380,6 +380,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_operation_log_update_from_stream() {
+        let op_id = OperationId([0x32; 32]);
+
+        let db = Database::new(MemDatabase::new(), Default::default());
+        let op_log = OperationLog::new(db.clone());
+
+        let mut dbtx = db.begin_transaction().await;
+        op_log
+            .add_operation_log_entry(&mut dbtx, op_id, "foo", "bar")
+            .await;
+        dbtx.commit_tx().await;
+
+        let op = op_log.get_operation(op_id).await.expect("op exists");
+
+        let updates = vec!["bar".to_owned(), "bob".to_owned(), "baz".to_owned()];
+        let update_stream = op
+            .outcome_or_updates::<String, _>(&db, op_id, || futures::stream::iter(updates.clone()));
+
+        let received_updates = update_stream.into_stream().collect::<Vec<_>>().await;
+        assert_eq!(received_updates, updates);
+
+        let op_updated = op_log.get_operation(op_id).await.expect("op exists");
+        assert_eq!(op_updated.outcome::<String>(), Some("baz".to_string()));
+    }
+
+    #[tokio::test]
     async fn test_pagination() {
         let db = Database::new(MemDatabase::new(), Default::default());
         let op_log = OperationLog::new(db.clone());
