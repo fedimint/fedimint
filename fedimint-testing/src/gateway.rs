@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client_legacy::modules::ln::LightningGateway;
+use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
@@ -62,8 +64,10 @@ impl GatewayTest {
 
         // Create federation client builder for the gateway
         let client_builder: DynGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(path, MemDbFactory.into(), address.clone()).into();
+            StandardGatewayClientBuilder::new(path.clone(), MemDbFactory.into(), address.clone())
+                .into();
 
+        let gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
         let gateway = Gateway::new_with_lightning_connection(
             Arc::new(RwLock::new(lightning)),
             client_builder.clone(),
@@ -71,6 +75,7 @@ impl GatewayTest {
             module_gens.clone(),
             task.make_subgroup().await,
             DEFAULT_FEES,
+            gatewayd_db,
         )
         .await
         .unwrap();

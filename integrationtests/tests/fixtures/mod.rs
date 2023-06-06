@@ -300,7 +300,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
             let handles = fed.run_consensus_apis().await;
 
             // user
-            let user_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
+            let user_db = if env::var("FM_CLIENT_SQLITE") == Ok(s.clone()) {
                 let db_name = format!("client-{}", rng().next_u64());
                 Database::new(sqlite(dir.clone(), db_name).await, decoders.clone())
             } else {
@@ -318,6 +318,13 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
             let pubkey = gateway_ln.read().await.info().await?.pub_key;
             let node_pub_key = secp256k1::PublicKey::from_slice(&pubkey)?;
 
+            let gatewayd_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
+                let db_name = format!("gatewayd-{}", rng().next_u64());
+                Database::new(sqlite(dir.clone(), db_name).await, decoders.clone())
+            } else {
+                Database::new(rocks(dir.clone()), decoders.clone())
+            };
+
             let gateway = GatewayTest::new(
                 gateway_ln,
                 client_config.clone(),
@@ -327,6 +334,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 base_port + (2 * num_peers) + 1,
                 gateway_node,
                 DEFAULT_FEES,
+                gatewayd_db,
             )
             .await;
 
@@ -394,6 +402,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
             ));
             user.client.await_consensus_block_height(0).await?;
 
+            let gatewayd_db = Database::new(MemDatabase::new(), module_decode_stubs());
             let gateway = GatewayTest::new(
                 ln_arc,
                 client_config.clone(),
@@ -403,6 +412,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 base_port + (2 * num_peers) + 1,
                 gateway_node.clone(),
                 DEFAULT_FEES,
+                gatewayd_db,
             )
             .await;
 
@@ -571,6 +581,7 @@ impl GatewayTest {
         bind_port: u16,
         node: LightningNodeType,
         fees: RoutingFees,
+        database: Database,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -618,6 +629,7 @@ impl GatewayTest {
             module_gens.clone(),
             TaskGroup::new(),
             fees,
+            database,
         )
         .await
         .unwrap();
