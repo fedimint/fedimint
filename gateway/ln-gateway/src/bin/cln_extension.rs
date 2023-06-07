@@ -1,5 +1,5 @@
 use std::array::TryFromSliceError;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -21,8 +21,8 @@ use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
 use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gatewaylnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -503,19 +503,6 @@ impl GatewayLightning for ClnRpcService {
 
         Ok(tonic::Response::new(ReceiverStream::new(gatewayd_receiver)))
     }
-
-    async fn subscribe_mint_htlcs(
-        &self,
-        request: tonic::Request<SubscribeInterceptHtlcsRequest>,
-    ) -> Result<tonic::Response<EmptyResponse>, tonic::Status> {
-        let SubscribeInterceptHtlcsRequest { short_channel_id } = request.into_inner();
-        self.interceptor
-            .subscriptions
-            .lock()
-            .await
-            .insert(short_channel_id);
-        Ok(tonic::Response::new(EmptyResponse {}))
-    }
 }
 
 #[derive(Debug, Error)]
@@ -548,23 +535,21 @@ fn htlc_processing_failure() -> serde_json::Value {
     })
 }
 
-type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
+type HtlcInterceptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
 type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 
 /// Functional structure to filter intercepted HTLCs into subscription streams.
 /// Used as a CLN plugin
 #[derive(Clone)]
 pub struct ClnHtlcInterceptor {
-    subscriptions: Arc<Mutex<BTreeSet<u64>>>,
     pub outcomes: Arc<Mutex<BTreeMap<(u64, u64), HtlcOutcomeSender>>>,
-    sender: Arc<Mutex<Option<HtlcSubscriptionSender>>>,
+    sender: Arc<Mutex<Option<HtlcInterceptionSender>>>,
 }
 
 impl ClnHtlcInterceptor {
     fn new() -> Self {
         Self {
             outcomes: Arc::new(Mutex::new(BTreeMap::new())),
-            subscriptions: Arc::new(Mutex::new(BTreeSet::new())),
             sender: Arc::new(Mutex::new(None)),
         }
     }
@@ -599,58 +584,56 @@ impl ClnHtlcInterceptor {
         info!(?short_channel_id, "Intercepted htlc with SCID");
 
         if let Some(sender) = &*self.sender.lock().await {
-            if self.subscriptions.lock().await.contains(&short_channel_id) {
-                let payment_hash = payload.htlc.payment_hash.to_vec();
+            let payment_hash = payload.htlc.payment_hash.to_vec();
 
-                let incoming_chan_id =
-                    match Self::convert_short_channel_id(payload.htlc.short_channel_id.as_str()) {
-                        Ok(scid) => scid,
-                        // Failed to parse incoming_chan_id, just forward the HTLC
-                        Err(_) => return serde_json::json!({ "result": "continue" }),
-                    };
-
-                let htlc_ret = match sender
-                    .send(Ok(InterceptHtlcRequest {
-                        payment_hash: payment_hash.clone(),
-                        incoming_amount_msat: payload.htlc.amount_msat.msats,
-                        outgoing_amount_msat: payload.onion.forward_msat.msats,
-                        incoming_expiry: htlc_expiry,
-                        short_channel_id,
-                        incoming_chan_id,
-                        htlc_id: payload.htlc.id,
-                    }))
-                    .await
-                {
-                    Ok(_) => {
-                        // Open a channel to receive the outcome of the HTLC processing
-                        let (sender, receiver) = oneshot::channel::<serde_json::Value>();
-                        self.outcomes
-                            .lock()
-                            .await
-                            .insert((incoming_chan_id, payload.htlc.id), sender);
-
-                        // If the gateway does not respond within the HTLC expiry,
-                        // Automatically respond with a failure message.
-                        tokio::time::timeout(Duration::from_secs(30), async {
-                            receiver.await.unwrap_or_else(|e| {
-                                error!("Failed to receive outcome of intercepted htlc: {:?}", e);
-                                htlc_processing_failure()
-                            })
-                        })
-                        .await
-                        .unwrap_or_else(|e| {
-                            error!("await_htlc_processing error {:?}", e);
-                            htlc_processing_failure()
-                        })
-                    }
-                    Err(e) => {
-                        error!("Failed to send htlc to subscription: {:?}", e);
-                        htlc_processing_failure()
-                    }
+            let incoming_chan_id =
+                match Self::convert_short_channel_id(payload.htlc.short_channel_id.as_str()) {
+                    Ok(scid) => scid,
+                    // Failed to parse incoming_chan_id, just forward the HTLC
+                    Err(_) => return serde_json::json!({ "result": "continue" }),
                 };
 
-                return htlc_ret;
-            }
+            let htlc_ret = match sender
+                .send(Ok(InterceptHtlcRequest {
+                    payment_hash: payment_hash.clone(),
+                    incoming_amount_msat: payload.htlc.amount_msat.msats,
+                    outgoing_amount_msat: payload.onion.forward_msat.msats,
+                    incoming_expiry: htlc_expiry,
+                    short_channel_id,
+                    incoming_chan_id,
+                    htlc_id: payload.htlc.id,
+                }))
+                .await
+            {
+                Ok(_) => {
+                    // Open a channel to receive the outcome of the HTLC processing
+                    let (sender, receiver) = oneshot::channel::<serde_json::Value>();
+                    self.outcomes
+                        .lock()
+                        .await
+                        .insert((incoming_chan_id, payload.htlc.id), sender);
+
+                    // If the gateway does not respond within the HTLC expiry,
+                    // Automatically respond with a failure message.
+                    tokio::time::timeout(Duration::from_secs(30), async {
+                        receiver.await.unwrap_or_else(|e| {
+                            error!("Failed to receive outcome of intercepted htlc: {:?}", e);
+                            htlc_processing_failure()
+                        })
+                    })
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("await_htlc_processing error {:?}", e);
+                        htlc_processing_failure()
+                    })
+                }
+                Err(e) => {
+                    error!("Failed to send htlc to subscription: {:?}", e);
+                    htlc_processing_failure()
+                }
+            };
+
+            return htlc_ret;
         }
 
         // We have no subscription for this HTLC.

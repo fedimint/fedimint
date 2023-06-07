@@ -39,7 +39,7 @@ use thiserror::Error;
 use url::Url;
 
 use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
-use crate::gatewaylnrpc::{GetNodeInfoResponse, SubscribeInterceptHtlcsResponse};
+use crate::gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcRequest};
 use crate::lnrpc_client::ILnRpcClient;
 
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -531,10 +531,10 @@ pub struct Htlc {
     pub htlc_id: u64,
 }
 
-impl TryFrom<SubscribeInterceptHtlcsResponse> for Htlc {
+impl TryFrom<InterceptHtlcRequest> for Htlc {
     type Error = anyhow::Error;
 
-    fn try_from(s: SubscribeInterceptHtlcsResponse) -> Result<Self, Self::Error> {
+    fn try_from(s: InterceptHtlcRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             payment_hash: sha256::Hash::from_slice(&s.payment_hash)?,
             incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),

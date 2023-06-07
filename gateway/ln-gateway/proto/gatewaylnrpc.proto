@@ -2,8 +2,10 @@ syntax = "proto3";
 
 package gatewaylnrpc;
 
-/* GatewayLightning is a service that provides limited access and functionality
- * from a lightning node to Fedimint gateways */
+/* 
+ * GatewayLightning is a service that provides limited access and functionality
+ * from a lightning node to Fedimint gateways
+ */
 service GatewayLightning {
   /* GetNodeInfo returns the public key and alias of the associated lightning node */
   rpc GetNodeInfo(EmptyRequest) returns (GetNodeInfoResponse) {}
@@ -11,27 +13,22 @@ service GatewayLightning {
   /* GetRouteHints returns the route hints to the associated lightning node */
   rpc GetRouteHints(EmptyRequest) returns (GetRouteHintsResponse) {}
 
-  /* PayInvoice attempts to pay an invoice using the associated lightning node
+  /* 
+   * PayInvoice attempts to pay an invoice using the associated lightning node
    */
   rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse) {}
 
-  /* RouteHtlcs opens a stream for a client to receive specific
-   * HTLCs that have a specific short channel id and receives a stream as input. 
-   * For every HTLC intercepted and processed, the client can send a CompleteHtlcsRequest
-   * over the input stream to complete the HTLC.
-   *
-   * Recommendation:
-   * GatewayLightning implementations should respond with a channel stream
-   * over which intercepted HTLCs are continually sent to the client.
+  /* 
+   * RouteHtlcs opens a bi-directional stream for the client to receive intercepted
+   * HTLCs. `InterceptHtlcRequest` is sent from the server to alert the client that
+   * an HTLC has been intercepted and needs to be processed. The client is expected
+   * to response with `InterceptHtlcResponse` after the HTLC has been processed with
+   * the appropriate action (Settle, Forward, Cancel).
    */
   rpc RouteHtlcs(stream InterceptHtlcResponse) returns (stream InterceptHtlcRequest) {}
-
-  rpc SubscribeMintHtlcs(SubscribeInterceptHtlcsRequest) returns (EmptyResponse) {}
 }
 
 message EmptyRequest {}
-
-message EmptyResponse {}
 
 message GetNodeInfoResponse {
   // The public key of the associated lightning node
@@ -52,16 +49,6 @@ message PayInvoiceRequest {
 message PayInvoiceResponse {
   // The preimage of the invoice
   bytes preimage = 1;
-}
-
-// Request to subscribe to HTLCs with a specific short channel id
-//
-// Send this request when the gateway just assigned a new channel id to a
-// newly connected federation. GatewayLightning should respond with a
-// stream over which intercepted HTLCs are continually sent to the client.
-message SubscribeInterceptHtlcsRequest {
-  // The short channel id of HTLCs to intercept
-  uint64 short_channel_id = 1;
 }
 
 message InterceptHtlcRequest {

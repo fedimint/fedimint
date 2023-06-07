@@ -18,7 +18,6 @@ use tracing::{debug, info, instrument, warn};
 use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Settle};
 use crate::gatewaylnrpc::{
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
-    SubscribeInterceptHtlcsRequest,
 };
 use crate::lnrpc_client::ILnRpcClient;
 use crate::rpc::FederationInfo;
@@ -96,12 +95,6 @@ impl GatewayActor {
             .await;
         // Block until we have registered to return
         notify.notified().await;
-
-        lnrpc
-            .subscribe_mint_htlcs(SubscribeInterceptHtlcsRequest {
-                short_channel_id: client.config().mint_channel_id,
-            })
-            .await?;
 
         let actor = Self {
             client,

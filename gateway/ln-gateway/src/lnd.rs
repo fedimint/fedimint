@@ -18,8 +18,8 @@ use tracing::{error, info, trace};
 use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gatewaylnrpc::{
-    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use crate::GatewayError;
@@ -367,12 +367,5 @@ impl ILnRpcClient for GatewayLndClient {
         .await;
 
         Ok(Box::pin(ReceiverStream::new(actor_receiver)))
-    }
-
-    async fn subscribe_mint_htlcs(
-        &self,
-        _subscribe_request: SubscribeInterceptHtlcsRequest,
-    ) -> Result<EmptyResponse, GatewayError> {
-        Ok(EmptyResponse {})
     }
 }

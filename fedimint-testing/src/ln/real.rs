@@ -12,8 +12,8 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 use ln_gateway::gatewaylnrpc::{
-    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
@@ -114,17 +114,6 @@ impl ILnRpcClient for ClnLightningTest {
             .write()
             .await
             .route_htlcs(events, task_group)
-            .await
-    }
-
-    async fn subscribe_mint_htlcs(
-        &self,
-        subscribe_request: SubscribeInterceptHtlcsRequest,
-    ) -> Result<EmptyResponse, GatewayError> {
-        self.lnrpc
-            .read()
-            .await
-            .subscribe_mint_htlcs(subscribe_request)
             .await
     }
 }
@@ -273,17 +262,6 @@ impl ILnRpcClient for LndLightningTest {
             .write()
             .await
             .route_htlcs(events, task_group)
-            .await
-    }
-
-    async fn subscribe_mint_htlcs(
-        &self,
-        subscribe_request: SubscribeInterceptHtlcsRequest,
-    ) -> Result<EmptyResponse, GatewayError> {
-        self.lnrpc
-            .read()
-            .await
-            .subscribe_mint_htlcs(subscribe_request)
             .await
     }
 }

@@ -190,6 +190,7 @@ impl Gateway {
         module_gens: ClientModuleGenRegistry,
         fees: RoutingFees,
         gatewayd_db: Database,
+        task_group: &mut TaskGroup,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -210,6 +211,7 @@ impl Gateway {
         };
 
         gw.load_actors(decoders, module_gens).await?;
+        gw.route_htlcs(task_group).await?;
 
         Ok(gw)
     }
@@ -263,7 +265,7 @@ impl Gateway {
                 )
                 .await?,
             ),
-            _ => panic!("Invalid Lightning mode for routing HTLCs"),
+            _ => return Ok(()),
         };
 
         let mut stream: RouteHtlcStream = lnrpc.route_htlcs(ln_receiver.into(), task_group).await?;
@@ -327,7 +329,8 @@ impl Gateway {
         // Fetch route hints form the LN node
         let mut num_retries = 0;
         let (route_hints, node_pub_key) = loop {
-            let route_hints: Vec<RouteHint> = self.lnrpc
+            let route_hints: Vec<RouteHint> = self
+                .lnrpc
                 .routehints()
                 .await
                 .expect("Could not fetch route hints")

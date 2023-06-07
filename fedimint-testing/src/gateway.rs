@@ -74,6 +74,7 @@ impl GatewayTest {
             module_gens.clone(),
             DEFAULT_FEES,
             gatewayd_db,
+            &mut task,
         )
         .await
         .unwrap();

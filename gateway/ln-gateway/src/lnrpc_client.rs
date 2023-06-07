@@ -13,8 +13,8 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse, SubscribeInterceptHtlcsRequest,
+    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::{GatewayError, Result};
 
@@ -37,11 +37,6 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>>;
-
-    async fn subscribe_mint_htlcs(
-        &self,
-        subscribe_request: SubscribeInterceptHtlcsRequest,
-    ) -> Result<EmptyResponse>;
 }
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -112,14 +107,5 @@ impl ILnRpcClient for NetworkLnRpcClient {
         let mut client = self.client.clone();
         let res = client.route_htlcs(events).await?;
         Ok(Box::pin(res.into_inner()))
-    }
-
-    async fn subscribe_mint_htlcs(
-        &self,
-        subscribe_request: SubscribeInterceptHtlcsRequest,
-    ) -> Result<EmptyResponse> {
-        let mut client = self.client.clone();
-        let res = client.subscribe_mint_htlcs(subscribe_request).await?;
-        Ok(res.into_inner())
     }
 }
