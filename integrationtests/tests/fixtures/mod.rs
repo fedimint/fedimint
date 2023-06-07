@@ -267,7 +267,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
 
             // Create the gateway's lightning connection and the "other" node's lightning
             // connection.
-            // TODO: Helper function
             let (gateway_ln, other_ln) = match &gateway_node {
                 LightningNodeType::Cln => {
                     let gw_ln: Arc<dyn ILnRpcClient> = Arc::new(ClnLightningTest::new(&dir).await);
@@ -334,6 +333,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 gateway_node,
                 DEFAULT_FEES,
                 gatewayd_db,
+                &mut task_group,
             )
             .await;
 
@@ -385,7 +385,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 &bitcoin_rpc,
                 &connect_gen,
                 server_module_inits.clone(),
-                &mut task_group.clone(),
+                &mut task_group,
             )
             .await;
             let handles = fed.run_consensus_apis().await;
@@ -412,6 +412,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 gateway_node.clone(),
                 DEFAULT_FEES,
                 gatewayd_db,
+                &mut task_group,
             )
             .await;
 
@@ -581,6 +582,7 @@ impl GatewayTest {
         node: LightningNodeType,
         fees: RoutingFees,
         database: Database,
+        task_group: &mut TaskGroup,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -628,6 +630,7 @@ impl GatewayTest {
             module_gens.clone(),
             fees,
             database,
+            task_group,
         )
         .await
         .unwrap();
