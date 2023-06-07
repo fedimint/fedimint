@@ -91,11 +91,18 @@
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::LightningGateway;
+<span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
+<span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
@@ -155,8 +162,10 @@
 
         <span class="comment">// Create federation client builder for the gateway
         </span><span class="kw">let </span>client_builder: DynGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(path, MemDbFactory.into(), address.clone()).into();
+            StandardGatewayClientBuilder::new(path.clone(), MemDbFactory.into(), address.clone())
+                .into();
 
+        <span class="kw">let </span>gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
         <span class="kw">let </span>gateway = Gateway::new_with_lightning_connection(
             Arc::new(RwLock::new(lightning)),
             client_builder.clone(),
@@ -164,6 +173,7 @@
             module_gens.clone(),
             task.make_subgroup().<span class="kw">await</span>,
             DEFAULT_FEES,
+            gatewayd_db,
         )
         .<span class="kw">await
         </span>.unwrap();

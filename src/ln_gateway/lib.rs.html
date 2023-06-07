@@ -649,8 +649,21 @@
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
 <a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
+<span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
 <span class="kw">pub mod </span>lnrpc_client;
 <span class="kw">pub mod </span>ng;
@@ -683,6 +696,7 @@
 <span class="kw">use </span>fedimint_client_legacy::{ClientError, GatewayClient};
 <span class="kw">use </span>fedimint_core::api::{FederationError, WsClientConnectInfo};
 <span class="kw">use </span>fedimint_core::config::FederationId;
+<span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, RwLock, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -758,6 +772,8 @@
     </span>Other(<span class="attr">#[from] </span>anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Failed to fetch route hints&quot;</span>)]
     </span>FailedToFetchRouteHints,
+    <span class="attr">#[error(<span class="string">&quot;Failed to open the database&quot;</span>)]
+    </span>DatabaseError,
 }
 
 <span class="kw">impl </span>GatewayError {
@@ -786,6 +802,7 @@
     task_group: TaskGroup,
     channel_id_generator: AtomicU64,
     fees: RoutingFees,
+    gatewayd_db: Database,
 }
 
 <span class="kw">impl </span>Gateway {
@@ -797,6 +814,7 @@
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
         fees: RoutingFees,
+        gatewayd_db: Database,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="comment">// Create message channels for the webserver
         </span><span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;GatewayRequest&gt;(<span class="number">100</span>);
@@ -817,6 +835,7 @@
             module_gens: module_gens.clone(),
             lightning_mode: <span class="prelude-val">Some</span>(lightning_mode),
             fees,
+            gatewayd_db,
         };
 
         gw.load_actors(decoders, module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -832,6 +851,7 @@
         module_gens: ClientModuleGenRegistry,
         task_group: TaskGroup,
         fees: RoutingFees,
+        gatewayd_db: Database,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="comment">// Create message channels for the webserver
         </span><span class="kw">let </span>(sender, receiver) = mpsc::channel::&lt;GatewayRequest&gt;(<span class="number">100</span>);
@@ -848,6 +868,7 @@
             module_gens: module_gens.clone(),
             lightning_mode: <span class="prelude-val">None</span>,
             fees,
+            gatewayd_db,
         };
 
         gw.load_actors(decoders, module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -895,19 +916,21 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// Fetch route hints form the LN node
         </span><span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
-        <span class="kw">let </span>route_hints = <span class="kw">loop </span>{
-            <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = <span class="self">self
-                </span>.lnrpc
-                .read()
-                .<span class="kw">await
-                </span>.routehints()
+        <span class="kw">let </span>(route_hints, node_pub_key) = <span class="kw">loop </span>{
+            <span class="kw">let </span>lightning = <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>;
+            <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = lightning
+                .routehints()
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Could not fetch route hints&quot;</span>)
                 .try_into()
                 .expect(<span class="string">&quot;Could not parse route hints&quot;</span>);
 
+            <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias: <span class="kw">_ </span>} = <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.info().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
+                .map_err(|e| GatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid node pubkey {}&quot;</span>, e)))<span class="question-mark">?</span>;
+
             <span class="kw">if </span>!route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
-                <span class="kw">break </span>route_hints;
+                <span class="kw">break </span>(route_hints, node_pub_key);
             }
 
             <span class="macro">info!</span>(
@@ -918,7 +941,9 @@
             num_retries += <span class="number">1</span>;
             task::sleep(ROUTE_HINT_RETRY_SLEEP).<span class="kw">await</span>;
         };
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(configs) = <span class="self">self</span>.client_builder.load_configs() {
+
+        <span class="kw">let </span>dbtx = <span class="self">self</span>.gatewayd_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(configs) = <span class="self">self</span>.client_builder.load_configs(dbtx, node_pub_key).<span class="kw">await </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = <span class="self">self</span>.channel_id_generator.load(Ordering::SeqCst);
 
             <span class="kw">for </span>config <span class="kw">in </span>configs {
@@ -1003,13 +1028,7 @@
 
         <span class="kw">let </span>gw_client_cfg = <span class="self">self
             </span>.client_builder
-            .create_config(
-                connect,
-                channel_id,
-                node_pub_key,
-                <span class="self">self</span>.module_gens.clone(),
-                fees,
-            )
+            .create_config(connect, channel_id, node_pub_key, fees)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>client = Arc::new(
@@ -1030,7 +1049,12 @@
                 GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to connect federation {}&quot;</span>, e))
             })<span class="question-mark">?</span>;
 
-        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.client_builder.save_config(client.config()) {
+        <span class="kw">let </span>dbtx = <span class="self">self</span>.gatewayd_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self
+            </span>.client_builder
+            .save_config(client.config(), payload.connect, dbtx)
+            .<span class="kw">await
+        </span>{
             <span class="macro">warn!</span>(
                 <span class="string">&quot;Failed to save default federation client configuration: {}&quot;</span>,
                 e

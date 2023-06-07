@@ -146,6 +146,15 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
@@ -162,6 +171,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
+<span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -170,11 +180,12 @@
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_client::MintCommonGen;
 <span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-<span class="kw">use </span>ln_gateway::{Gateway, LightningMode, DEFAULT_FEES};
+<span class="kw">use </span>ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
 <span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>url::Url;
 
 <span class="kw">const </span>SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
+<span class="kw">const </span>DB_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;gatewayd.db&quot;</span>;
 
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">pub struct </span>GatewayOpts {
@@ -269,6 +280,12 @@
         DynClientModuleGen::from(LightningClientGen),
     ]);
 
+    <span class="kw">let </span>gatewayd_db = Database::new(
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))
+            .map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)<span class="question-mark">?</span>,
+        decoders.clone(),
+    );
+
     <span class="comment">// Create gateway instance
     </span><span class="kw">let </span>gateway = Gateway::new(
         mode,
@@ -277,6 +294,7 @@
         module_gens,
         task_group.make_subgroup().<span class="kw">await</span>,
         fees.unwrap_or(GatewayFee(DEFAULT_FEES)).<span class="number">0</span>,
+        gatewayd_db,
     )
     .<span class="kw">await
     </span>.unwrap_or_else(|e| {

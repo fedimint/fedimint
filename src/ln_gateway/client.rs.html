@@ -219,31 +219,26 @@
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
-<span class="kw">use </span>std::fs::File;
-<span class="kw">use </span>std::path::{Path, PathBuf};
+<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
-<span class="kw">use </span>fedimint_core::config::{load_from_file, FederationId};
+<span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::dyn_newtype_define;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>secp256k1::{KeyPair, PublicKey};
-<span class="kw">use </span>tracing::{debug, warn};
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
 
 <span class="kw">pub trait </span>IDbFactory: Debug {
@@ -310,15 +305,23 @@
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        module_gens: ClientModuleGenRegistry,
         fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt;;
 
     <span class="doccomment">/// Save and persist the configuration of the gateway federation client
-    </span><span class="kw">fn </span>save_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+    </span><span class="kw">async fn </span>save_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        config: GatewayClientConfig,
+        connection_string: String,
+        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
     <span class="doccomment">/// Load all gateway client configs from the work directory
-    </span><span class="kw">fn </span>load_configs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt;;
+    </span><span class="kw">async fn </span>load_configs(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        node_pub_key: PublicKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -369,8 +372,6 @@
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        <span class="comment">// TODO: delme
-        </span>_module_gens: ClientModuleGenRegistry,
         fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
         <span class="kw">let </span>api: DynGlobalApi = WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect.clone()]).into();
@@ -392,64 +393,51 @@
         })
     }
 
-    <span class="kw">fn </span>save_config(<span class="kw-2">&amp;</span><span class="self">self</span>, config: GatewayClientConfig) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>id = config.client_config.federation_id.to_string();
-        <span class="kw">let </span>path: PathBuf = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{id}.json&quot;</span>));
-
-        <span class="kw">if </span>Path::new(<span class="kw-2">&amp;</span>path).is_file() {
-            <span class="kw">if </span>config
-                == load_from_file::&lt;GatewayClientConfig&gt;(<span class="kw-2">&amp;</span>path)
-                    .expect(<span class="string">&quot;Could not load existing gateway client config&quot;</span>)
-            {
-                <span class="macro">debug!</span>(<span class="string">&quot;Existing gateway client config has not changed&quot;</span>);
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-            }
-
-            <span class="macro">panic!</span>(<span class="string">&quot;Attempted to overwrite existing gateway client config&quot;</span>)
-            <span class="comment">// TODO: Issue 1057: Safe persistence and migration of gateway
-            // federation config
-        </span>}
-
-        <span class="macro">debug!</span>(<span class="string">&quot;Saving gateway cfg in {}&quot;</span>, path.display());
-        <span class="kw">let </span>file = File::options()
-            .create_new(<span class="bool-val">true</span>)
-            .write(<span class="bool-val">true</span>)
-            .open(path)
-            .map_err(anyhow::Error::from)<span class="question-mark">?</span>;
-        serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>config).map_err(anyhow::Error::from)<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(())
+    <span class="kw">async fn </span>save_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        config: GatewayClientConfig,
+        connection_string: String,
+        <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>id = config.client_config.federation_id;
+        <span class="kw">let </span>federation_config = FederationConfig {
+            mint_channel_id: config.mint_channel_id,
+            redeem_key: config.redeem_key,
+            timelock_delta: config.timelock_delta,
+            connection_string,
+            fees: config.fees,
+        };
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, <span class="kw-2">&amp;</span>federation_config)
+            .<span class="kw">await</span>;
+        dbtx.commit_tx_result()
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)
     }
 
-    <span class="kw">fn </span>load_configs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt; {
-        <span class="prelude-val">Ok</span>(std::fs::read_dir(<span class="kw-2">&amp;</span><span class="self">self</span>.work_dir)
-            .map_err(|e| GatewayError::Other(anyhow::Error::new(e)))<span class="question-mark">?
-            </span>.filter_map(|file_res| {
-                <span class="kw">let </span>file = file_res.ok()<span class="question-mark">?</span>;
-                <span class="kw">if </span>!file.file_type().ok()<span class="question-mark">?</span>.is_file() {
-                    <span class="kw">return </span><span class="prelude-val">None</span>;
-                }
+    <span class="kw">async fn </span>load_configs(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        node_pub_key: PublicKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt; {
+        <span class="kw">let </span>federations = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
+            .<span class="kw">await
+            </span>.collect::&lt;Vec&lt;(FederationIdKey, FederationConfig)&gt;&gt;()
+            .<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>configs = Vec::new();
+        <span class="kw">for </span>(_id, config) <span class="kw">in </span>federations {
+            <span class="kw">let </span>connect =
+                WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>config.connection_string).map_err(|e| {
+                    GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid federation member string {}&quot;</span>, e))
+                })<span class="question-mark">?</span>;
 
-                <span class="kw">if </span>file
-                    .path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| ext == <span class="string">&quot;json&quot;</span>)
-                    .unwrap_or(<span class="bool-val">false</span>)
-                {
-                    <span class="prelude-val">Some</span>(file)
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">None
-                </span>}
-            })
-            .filter_map(|file| {
-                <span class="comment">// FIXME: handle parsing errors
-                </span><span class="macro">debug!</span>(<span class="string">&quot;Trying to load config file {:?}&quot;</span>, file.path());
-                load_from_file(<span class="kw-2">&amp;</span>file.path())
-                    .map_err(|e| <span class="macro">warn!</span>(<span class="string">&quot;Could not parse config: {}&quot;</span>, e))
-                    .ok()
-            })
-            .collect())
+            <span class="kw">let </span>gateway_config = <span class="self">self
+                </span>.create_config(connect, config.mint_channel_id, node_pub_key, config.fees)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            configs.push(gateway_config);
+        }
+
+        <span class="prelude-val">Ok</span>(configs)
     }
 }
 </code></pre></div>
