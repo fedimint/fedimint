@@ -531,14 +531,28 @@
 <a href="#531" id="531">531</a>
 <a href="#532" id="532">532</a>
 <a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>pay;
-<span class="kw">pub mod </span>receive;
 
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_stream::stream;
-<span class="kw">use </span>bitcoin_hashes::Hash;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
@@ -552,17 +566,18 @@
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{ExtendsCommonModuleGen, TransactionItemAmount};
-<span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::contracts::ContractId;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
-<span class="kw">use </span>fedimint_ln_common::contracts::{Contract, DecryptedPreimage, Preimage};
+<span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
+<span class="kw">use </span>fedimint_ln_common::incoming::{
+    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
+};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::{
-    ln_operation, ContractOutput, LightningCommonGen, LightningGateway, LightningModuleTypes,
-    LightningOutput, KIND,
+    create_incoming_contract_output, ln_operation, LightningClientContext, LightningCommonGen,
+    LightningGateway, LightningModuleTypes, LightningOutput, KIND,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
@@ -572,11 +587,7 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="self">self</span>::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
-<span class="kw">use </span><span class="self">self</span>::receive::{
-    FundingOfferState, GatewayReceiveCommon, GatewayReceiveStateMachine, GatewayReceiveStates,
-    Htlc, ReceiveError,
-};
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::GetNodeInfoResponse;
+<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{GetNodeInfoResponse, SubscribeInterceptHtlcsResponse};
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
 
 <span class="kw">const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);
@@ -770,15 +781,15 @@
                 <span class="kw">let </span>state = <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
-                            GatewayReceiveStates::Preimage(preimage) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage),
-                            GatewayReceiveStates::RefundSubmitted(txid) =&gt; {
+                            IncomingSmStates::Preimage(preimage) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage),
+                            IncomingSmStates::RefundSubmitted(txid) =&gt; {
                                 <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0</span>};
                                 <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess(out_point),
                                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundError(e.to_string()),
                                 }
                             },
-                            GatewayReceiveStates::FundingFailed(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed(e),
+                            IncomingSmStates::FundingFailed(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed(e),
                             <span class="kw">_ </span>=&gt; {}
                         }
                     }
@@ -844,6 +855,15 @@
 }
 
 <span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContext {}
+
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>GatewayClientContext&gt; <span class="kw">for </span>LightningClientContext {
+    <span class="kw">fn </span>from(ctx: <span class="kw-2">&amp;</span>GatewayClientContext) -&gt; <span class="self">Self </span>{
+        LightningClientContext {
+            ln_decoder: ctx.ln_decoder.clone(),
+            redeem_key: ctx.redeem_key,
+        }
+    }
+}
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>GatewayError {
@@ -954,27 +974,6 @@
         }
     }
 
-    <span class="kw">async fn </span>fetch_and_validate_incoming_contract(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        htlc: Htlc,
-    ) -&gt; anyhow::Result&lt;IncomingContractOffer, ReceiveError&gt; {
-        <span class="kw">let </span>offer = timeout(
-            Duration::from_secs(<span class="number">5</span>),
-            <span class="self">self</span>.module_api.fetch_offer(htlc.payment_hash),
-        )
-        .<span class="kw">await
-        </span>.map_err(|<span class="kw">_</span>| ReceiveError::Timeout)<span class="question-mark">?
-        </span>.map_err(|<span class="kw">_</span>| ReceiveError::FetchContractError)<span class="question-mark">?</span>;
-
-        <span class="kw">if </span>offer.amount &gt; htlc.outgoing_amount_msat {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::ViolatedFeePolicy);
-        }
-        <span class="kw">if </span>offer.hash != htlc.payment_hash {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidOffer);
-        }
-        <span class="prelude-val">Ok</span>(offer)
-    }
-
     <span class="kw">async fn </span>create_funding_incoming_contract_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         htlc: Htlc,
@@ -983,35 +982,27 @@
             OperationId,
             ClientOutput&lt;LightningOutput, GatewayClientStateMachines&gt;,
         ),
-        ReceiveError,
+        IncomingSmError,
     &gt; {
         <span class="kw">let </span>operation_id = OperationId(htlc.payment_hash.into_inner());
-        <span class="kw">let </span>offer = <span class="self">self
-            </span>.fetch_and_validate_incoming_contract(htlc.clone())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.redeem_key).<span class="number">0</span>;
-        <span class="kw">let </span>contract = Contract::Incoming(IncomingContract {
-            hash: offer.hash,
-            encrypted_preimage: offer.encrypted_preimage.clone(),
-            decrypted_preimage: DecryptedPreimage::Pending,
-            gateway_key: our_pub_key,
-        });
-        <span class="kw">let </span>incoming_output = LightningOutput::Contract(ContractOutput {
-            amount: offer.amount,
-            contract,
-        });
+        <span class="kw">let </span>(incoming_output, contract_id) = create_incoming_contract_output(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
+            htlc.payment_hash,
+            htlc.outgoing_amount_msat,
+            <span class="self">self</span>.redeem_key,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachines&gt; {
             output: incoming_output,
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
-                <span class="macro">vec!</span>[GatewayClientStateMachines::Receive(
-                    GatewayReceiveStateMachine {
-                        common: GatewayReceiveCommon {
-                            operation_id,
-                            htlc: htlc.clone(),
-                        },
-                        state: GatewayReceiveStates::FundingOffer(FundingOfferState { txid }),
+                <span class="macro">vec!</span>[GatewayClientStateMachines::Receive(IncomingStateMachine {
+                    common: IncomingSmCommon {
+                        operation_id,
+                        contract_id,
                     },
-                )]
+                    state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                })]
             }),
         };
         <span class="prelude-val">Ok</span>((operation_id, client_output))
@@ -1021,7 +1012,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
-    Receive(GatewayReceiveStateMachine),
+    Receive(IncomingStateMachine),
 }
 
 <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>GatewayClientStateMachines {
@@ -1050,7 +1041,7 @@
             }
             GatewayClientStateMachines::Receive(receive_state) =&gt; {
                 <span class="macro">sm_enum_variant_translation!</span>(
-                    receive_state.transitions(context, global_context),
+                    receive_state.transitions(<span class="kw-2">&amp;</span>context.into(), global_context),
                     GatewayClientStateMachines::Receive
                 )
             }
@@ -1062,6 +1053,45 @@
             GatewayClientStateMachines::Pay(pay_state) =&gt; pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) =&gt; receive_state.operation_id(),
         }
+    }
+}
+
+<span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>ReceiveError {
+    <span class="attr">#[error(<span class="string">&quot;Route htlc error&quot;</span>)]
+    </span>RouteHtlcError,
+}
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>Htlc {
+    <span class="doccomment">/// The HTLC payment hash.
+    </span><span class="kw">pub </span>payment_hash: sha256::Hash,
+    <span class="doccomment">/// The incoming HTLC amount in millisatoshi.
+    </span><span class="kw">pub </span>incoming_amount_msat: Amount,
+    <span class="doccomment">/// The outgoing HTLC amount in millisatoshi
+    </span><span class="kw">pub </span>outgoing_amount_msat: Amount,
+    <span class="doccomment">/// The incoming HTLC expiry
+    </span><span class="kw">pub </span>incoming_expiry: u32,
+    <span class="doccomment">/// The short channel id of the HTLC.
+    </span><span class="kw">pub </span>short_channel_id: u64,
+    <span class="doccomment">/// The id of the incoming channel
+    </span><span class="kw">pub </span>incoming_chan_id: u64,
+    <span class="doccomment">/// The index of the incoming htlc in the incoming channel
+    </span><span class="kw">pub </span>htlc_id: u64,
+}
+
+<span class="kw">impl </span>TryFrom&lt;SubscribeInterceptHtlcsResponse&gt; <span class="kw">for </span>Htlc {
+    <span class="kw">type </span>Error = anyhow::Error;
+
+    <span class="kw">fn </span>try_from(s: SubscribeInterceptHtlcsResponse) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            payment_hash: sha256::Hash::from_slice(<span class="kw-2">&amp;</span>s.payment_hash)<span class="question-mark">?</span>,
+            incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),
+            outgoing_amount_msat: Amount::from_msats(s.outgoing_amount_msat),
+            incoming_expiry: s.incoming_expiry,
+            short_channel_id: s.short_channel_id,
+            incoming_chan_id: s.incoming_chan_id,
+            htlc_id: s.htlc_id,
+        })
     }
 }
 </code></pre></div>

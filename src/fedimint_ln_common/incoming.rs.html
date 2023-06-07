@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/ng/receive.rs`."><title>receive.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../ln_gateway/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln-common/src/incoming.rs`."><title>incoming.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../source-files.js"></script><script defer src="../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_ln_common/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -301,58 +301,98 @@
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+</pre><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
+//!
+//! This shared state machine is used by clients
+//! that want to pay other clients within the federation
+//!
+//! It&#39;s applied in two places:
+//!   - `fedimint-ln-client` for internal payments without involving the gateway
+//!   - `gateway` for receiving payments into the federation
+
+</span><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
-<span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-<span class="kw">use </span>fedimint_ln_common::contracts::{DecryptedPreimage, Preimage};
-<span class="kw">use </span>fedimint_ln_common::{LightningInput, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
-<span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines};
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::SubscribeInterceptHtlcsResponse;
+<span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
+<span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::IncomingContractAccount;
+<span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, DecryptedPreimage, Preimage};
+<span class="kw">use crate</span>::{LightningClientContext, LightningInput, LightningOutputOutcome};
+
+<span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
+</span><span class="doccomment">/// State machine that executes a transaction between two users
+/// within a federation. This creates and funds an incoming contract
+/// based on an existing offer within the federation.
+///
+/// ```mermaid
+/// graph LR
+/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+///
+///    FundingOffer -- funded incoming contract --&gt; DecryptingPreimage
+///    FundingOffer -- funding incoming contract failed --&gt; FundingFailed
+///    DecryptingPreimage -- successfully decrypted preimage --&gt; Preimage
+///    DecryptingPreimage -- invalid preimage --&gt; RefundSubmitted
+///    DecryptingPreimage -- error decrypting preimage --&gt; Failure
+/// ```
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="kw">pub enum </span>IncomingSmStates {
+    FundingOffer(FundingOfferState),
+    DecryptingPreimage(DecryptingPreimageState),
+    Preimage(Preimage),
+    RefundSubmitted(TransactionId),
+    FundingFailed(String),
+    Failure(String),
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>IncomingSmCommon {
+    <span class="kw">pub </span>operation_id: OperationId,
+    <span class="kw">pub </span>contract_id: ContractId,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="kw">pub struct </span>IncomingStateMachine {
+    <span class="kw">pub </span>common: IncomingSmCommon,
+    <span class="kw">pub </span>state: IncomingSmStates,
+}
+
+<span class="kw">impl </span>State <span class="kw">for </span>IncomingStateMachine {
+    <span class="kw">type </span>ModuleContext = LightningClientContext;
+    <span class="kw">type </span>GlobalContext = DynGlobalClientContext;
+
+    <span class="kw">fn </span>transitions(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
+        global_context: <span class="kw-2">&amp;</span><span class="self">Self</span>::GlobalContext,
+    ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
+            IncomingSmStates::FundingOffer(state) =&gt; state.transitions(global_context, context),
+            IncomingSmStates::DecryptingPreimage(state) =&gt; {
+                state.transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context, context)
+            }
+            <span class="kw">_ </span>=&gt; {
+                <span class="macro">vec!</span>[]
+            }
+        }
+    }
+
+    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_client::sm::OperationId {
+        <span class="self">self</span>.common.operation_id
+    }
+}
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>ReceiveError {
+</span><span class="kw">pub enum </span>IncomingSmError {
     <span class="attr">#[error(<span class="string">&quot;Violated fee policy&quot;</span>)]
     </span>ViolatedFeePolicy,
     <span class="attr">#[error(<span class="string">&quot;Invalid offer&quot;</span>)]
@@ -367,106 +407,10 @@
     </span>InvalidPreimage(Box&lt;IncomingContractAccount&gt;),
     <span class="attr">#[error(<span class="string">&quot;Output outcome error&quot;</span>)]
     </span>OutputOutcomeError,
-    <span class="attr">#[error(<span class="string">&quot;Route htlc error&quot;</span>)]
-    </span>RouteHtlcError,
     <span class="attr">#[error(<span class="string">&quot;Incoming contract not found&quot;</span>)]
     </span>IncomingContractNotFound,
-}
-
-<span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
-</span><span class="doccomment">/// State machine that executes the Lightning payment on behalf of
-/// the fedimint user that requested an invoice to be paid.
-///
-/// ```mermaid
-/// graph LR
-/// classDef virtual fill:#fff,stroke-dasharray: 5 5
-///
-///    FundingOffer -- funded incoming contract --&gt; DecryptingPreimage
-///    FundingOffer -- funding incoming contract failed --&gt; FundingFailed
-///    DecryptingPreimage -- successfully decrypted preimage --&gt; Preimage
-///    DecryptingPreimage -- invalid preimage --&gt; RefundSubmitted
-///    DecryptingPreimage -- error decrypting preimage --&gt; Failure
-/// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-</span><span class="kw">pub enum </span>GatewayReceiveStates {
-    FundingOffer(FundingOfferState),
-    DecryptingPreimage(DecryptingPreimageState),
-    Preimage(Preimage),
-    RefundSubmitted(TransactionId),
-    FundingFailed(String),
-    Failure(String),
-}
-
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>GatewayReceiveCommon {
-    <span class="kw">pub </span>operation_id: OperationId,
-    <span class="kw">pub </span>htlc: Htlc,
-}
-
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>GatewayReceiveStateMachine {
-    <span class="kw">pub </span>common: GatewayReceiveCommon,
-    <span class="kw">pub </span>state: GatewayReceiveStates,
-}
-
-<span class="kw">impl </span>State <span class="kw">for </span>GatewayReceiveStateMachine {
-    <span class="kw">type </span>ModuleContext = GatewayClientContext;
-
-    <span class="kw">type </span>GlobalContext = DynGlobalClientContext;
-
-    <span class="kw">fn </span>transitions(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-        global_context: <span class="kw-2">&amp;</span><span class="self">Self</span>::GlobalContext,
-    ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
-        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
-            GatewayReceiveStates::FundingOffer(state) =&gt; state.transitions(global_context, context),
-            GatewayReceiveStates::DecryptingPreimage(state) =&gt; {
-                state.transitions(global_context, context, <span class="kw-2">&amp;</span><span class="self">self</span>.common)
-            }
-            <span class="kw">_ </span>=&gt; {
-                <span class="macro">vec!</span>[]
-            }
-        }
-    }
-
-    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_client::sm::OperationId {
-        <span class="self">self</span>.common.operation_id
-    }
-}
-
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>Htlc {
-    <span class="doccomment">/// The HTLC payment hash.
-    </span><span class="kw">pub </span>payment_hash: sha256::Hash,
-    <span class="doccomment">/// The incoming HTLC amount in millisatoshi.
-    </span><span class="kw">pub </span>incoming_amount_msat: Amount,
-    <span class="doccomment">/// The outgoing HTLC amount in millisatoshi
-    </span><span class="kw">pub </span>outgoing_amount_msat: Amount,
-    <span class="doccomment">/// The incoming HTLC expiry
-    </span><span class="kw">pub </span>incoming_expiry: u32,
-    <span class="doccomment">/// The short channel id of the HTLC.
-    </span><span class="kw">pub </span>short_channel_id: u64,
-    <span class="doccomment">/// The id of the incoming channel
-    </span><span class="kw">pub </span>incoming_chan_id: u64,
-    <span class="doccomment">/// The index of the incoming htlc in the incoming channel
-    </span><span class="kw">pub </span>htlc_id: u64,
-}
-
-<span class="kw">impl </span>TryFrom&lt;SubscribeInterceptHtlcsResponse&gt; <span class="kw">for </span>Htlc {
-    <span class="kw">type </span>Error = anyhow::Error;
-
-    <span class="kw">fn </span>try_from(s: SubscribeInterceptHtlcsResponse) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            payment_hash: sha256::Hash::from_slice(<span class="kw-2">&amp;</span>s.payment_hash)<span class="question-mark">?</span>,
-            incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),
-            outgoing_amount_msat: Amount::from_msats(s.outgoing_amount_msat),
-            incoming_expiry: s.incoming_expiry,
-            short_channel_id: s.short_channel_id,
-            incoming_chan_id: s.incoming_chan_id,
-            htlc_id: s.htlc_id,
-        })
-    }
+    <span class="attr">#[error(<span class="string">&quot;Amount error&quot;</span>)]
+    </span>AmountError,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -478,8 +422,8 @@
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-        context: <span class="kw-2">&amp;</span>GatewayClientContext,
-    ) -&gt; Vec&lt;StateTransition&lt;GatewayReceiveStateMachine&gt;&gt; {
+        context: <span class="kw-2">&amp;</span>LightningClientContext,
+    ) -&gt; Vec&lt;StateTransition&lt;IncomingStateMachine&gt;&gt; {
         <span class="kw">let </span>txid = <span class="self">self</span>.txid;
         <span class="macro">vec!</span>[StateTransition::new(
             <span class="self">Self</span>::await_funding_success(
@@ -496,8 +440,8 @@
     <span class="kw">async fn </span>await_funding_success(
         global_context: DynGlobalClientContext,
         out_point: OutPoint,
-        context: GatewayClientContext,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ReceiveError&gt; {
+        context: LightningClientContext,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), IncomingSmError&gt; {
         global_context
             .api()
             .await_output_outcome::&lt;LightningOutputOutcome&gt;(
@@ -506,27 +450,27 @@
                 <span class="kw-2">&amp;</span>context.ln_decoder,
             )
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ReceiveError::OutputOutcomeError)<span class="question-mark">?</span>;
+            </span>.map_err(|<span class="kw">_</span>| IncomingSmError::OutputOutcomeError)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>transition_funding_success(
-        result: <span class="prelude-ty">Result</span>&lt;(), ReceiveError&gt;,
-        old_state: GatewayReceiveStateMachine,
-    ) -&gt; GatewayReceiveStateMachine {
+        result: <span class="prelude-ty">Result</span>&lt;(), IncomingSmError&gt;,
+        old_state: IncomingStateMachine,
+    ) -&gt; IncomingStateMachine {
         <span class="kw">let </span>txid = <span class="kw">match </span>old_state.state {
-            GatewayReceiveStates::FundingOffer(refund) =&gt; refund.txid,
+            IncomingSmStates::FundingOffer(refund) =&gt; refund.txid,
             <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Invalid state transition&quot;</span>),
         };
 
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; GatewayReceiveStateMachine {
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; IncomingStateMachine {
                 common: old_state.common,
-                state: GatewayReceiveStates::DecryptingPreimage(DecryptingPreimageState { txid }),
+                state: IncomingSmStates::DecryptingPreimage(DecryptingPreimageState { txid }),
             },
-            <span class="prelude-val">Err</span>(e) =&gt; GatewayReceiveStateMachine {
+            <span class="prelude-val">Err</span>(e) =&gt; IncomingStateMachine {
                 common: old_state.common,
-                state: GatewayReceiveStates::FundingFailed(e.to_string()),
+                state: IncomingSmStates::FundingFailed(e.to_string()),
             },
         }
     }
@@ -540,14 +484,15 @@
 <span class="kw">impl </span>DecryptingPreimageState {
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        common: <span class="kw-2">&amp;</span>IncomingSmCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-        context: <span class="kw-2">&amp;</span>GatewayClientContext,
-        common: <span class="kw-2">&amp;</span>GatewayReceiveCommon,
-    ) -&gt; Vec&lt;StateTransition&lt;GatewayReceiveStateMachine&gt;&gt; {
+        context: <span class="kw-2">&amp;</span>LightningClientContext,
+    ) -&gt; Vec&lt;StateTransition&lt;IncomingStateMachine&gt;&gt; {
         <span class="kw">let </span>success_context = global_context.clone();
         <span class="kw">let </span>gateway_context = context.clone();
+
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_preimage_decryption(success_context.clone(), common.clone()),
+            <span class="self">Self</span>::await_preimage_decryption(success_context.clone(), common.contract_id),
             <span class="kw">move </span>|dbtx, result, old_state| {
                 <span class="kw">let </span>gateway_context = gateway_context.clone();
                 <span class="kw">let </span>success_context = success_context.clone();
@@ -564,11 +509,10 @@
 
     <span class="kw">async fn </span>await_preimage_decryption(
         global_context: DynGlobalClientContext,
-        common: GatewayReceiveCommon,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, ReceiveError&gt; {
+        contract_id: ContractId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, IncomingSmError&gt; {
         <span class="comment">// TODO: Get rid of polling
         </span><span class="kw">let </span>preimage = <span class="kw">loop </span>{
-            <span class="kw">let </span>contract_id = common.htlc.payment_hash.into();
             <span class="kw">let </span>contract = global_context
                 .module_api()
                 .get_incoming_contract(contract_id)
@@ -579,7 +523,7 @@
                     DecryptedPreimage::Pending =&gt; {}
                     DecryptedPreimage::Some(preimage) =&gt; <span class="kw">break </span>preimage,
                     DecryptedPreimage::Invalid =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidPreimage(Box::new(contract)));
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage(Box::new(contract)));
                     }
                 },
                 <span class="prelude-val">Err</span>(e) =&gt; {
@@ -594,29 +538,29 @@
     }
 
     <span class="kw">async fn </span>transition_incoming_contract_funded(
-        result: <span class="prelude-ty">Result</span>&lt;Preimage, ReceiveError&gt;,
-        old_state: GatewayReceiveStateMachine,
+        result: <span class="prelude-ty">Result</span>&lt;Preimage, IncomingSmError&gt;,
+        old_state: IncomingStateMachine,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         global_context: DynGlobalClientContext,
-        context: GatewayClientContext,
-    ) -&gt; GatewayReceiveStateMachine {
+        context: LightningClientContext,
+    ) -&gt; IncomingStateMachine {
         <span class="macro">assert!</span>(<span class="macro">matches!</span>(
             old_state.state,
-            GatewayReceiveStates::DecryptingPreimage(<span class="kw">_</span>)
+            IncomingSmStates::DecryptingPreimage(<span class="kw">_</span>)
         ));
 
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(preimage) =&gt; GatewayReceiveStateMachine {
+            <span class="prelude-val">Ok</span>(preimage) =&gt; IncomingStateMachine {
                 common: old_state.common,
-                state: GatewayReceiveStates::Preimage(preimage),
+                state: IncomingSmStates::Preimage(preimage),
             },
-            <span class="prelude-val">Err</span>(ReceiveError::InvalidPreimage(contract)) =&gt; {
+            <span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage(contract)) =&gt; {
                 <span class="self">Self</span>::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
                     .<span class="kw">await
             </span>}
-            <span class="prelude-val">Err</span>(e) =&gt; GatewayReceiveStateMachine {
+            <span class="prelude-val">Err</span>(e) =&gt; IncomingStateMachine {
                 common: old_state.common,
-                state: GatewayReceiveStates::Failure(<span class="macro">format!</span>(
+                state: IncomingSmStates::Failure(<span class="macro">format!</span>(
                     <span class="string">&quot;Unexpected internal error occured while decrypting the preimage: {e:?}&quot;
                 </span>)),
             },
@@ -626,12 +570,12 @@
     <span class="kw">async fn </span>refund_incoming_contract(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         global_context: DynGlobalClientContext,
-        context: GatewayClientContext,
-        old_state: GatewayReceiveStateMachine,
+        context: LightningClientContext,
+        old_state: IncomingStateMachine,
         contract: Box&lt;IncomingContractAccount&gt;,
-    ) -&gt; GatewayReceiveStateMachine {
+    ) -&gt; IncomingStateMachine {
         <span class="kw">let </span>claim_input = contract.claim();
-        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, GatewayClientStateMachines&gt; {
+        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, IncomingStateMachine&gt; {
             input: claim_input,
             state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
             keys: <span class="macro">vec!</span>[context.redeem_key],
@@ -639,9 +583,9 @@
 
         <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context.claim_input(dbtx, client_input).<span class="kw">await</span>;
 
-        GatewayReceiveStateMachine {
+        IncomingStateMachine {
             common: old_state.common,
-            state: GatewayReceiveStates::RefundSubmitted(refund_txid),
+            state: IncomingSmStates::RefundSubmitted(refund_txid),
         }
     }
 }
@@ -661,4 +605,4 @@
     refund_txid: TransactionId,
 }
 </code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

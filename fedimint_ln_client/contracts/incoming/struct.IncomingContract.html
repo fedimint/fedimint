@@ -6,7 +6,7 @@
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Specialized smart contract for incoming payments</p>
 <p>A user generates a private/public keypair that can later be used to claim
 the incoming funds. The public key is the defined as the preimage of a
-payment has and threshold-encrypted to the federation’s public key. They
+payment hash and threshold-encrypted to the federation’s public key. They
 then put up the encrypted preimage for sale by creating an
 <a href="struct.IncomingContractOffer.html" title="IncomingContractOffer"><code>IncomingContractOffer</code></a>.</p>
 <p>A lightning gateway wanting to claim an incoming HTLC can now use the offer

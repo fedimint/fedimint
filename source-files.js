@@ -16,7 +16,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_dummy_common":["",[],["config.rs","lib.rs"]],\
 "fedimint_dummy_server":["",[],["db.rs","lib.rs"]],\
 "fedimint_ln_client":["",[],["db.rs","lib.rs","pay.rs","receive.rs"]],\
-"fedimint_ln_common":["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["api.rs","config.rs","db.rs","lib.rs"]],\
+"fedimint_ln_common":["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["api.rs","config.rs","db.rs","incoming.rs","lib.rs"]],\
 "fedimint_ln_server":["",[],["lib.rs"]],\
 "fedimint_logging":["",[],["lib.rs"]],\
 "fedimint_mint_client":["",[["backup",[],["recovery.rs"]]],["backup.rs","db.rs","input.rs","lib.rs","oob.rs","output.rs"]],\
@@ -34,7 +34,7 @@ var sourcesIndex = JSON.parse('{\
 "gateway_cln_extension":["",[],["cln_extension.rs"]],\
 "gatewayd":["",[],["gatewayd.rs"]],\
 "hkdf":["",[],["lib.rs"]],\
-"ln_gateway":["",[["ng",[],["mod.rs","pay.rs","receive.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","db.rs","lib.rs","lnd.rs","lnrpc_client.rs","types.rs","utils.rs"]],\
+"ln_gateway":["",[["ng",[],["mod.rs","pay.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]]],["actor.rs","client.rs","db.rs","lib.rs","lnd.rs","lnrpc_client.rs","types.rs","utils.rs"]],\
 "recoverytool":["",[],["main.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
 }');
