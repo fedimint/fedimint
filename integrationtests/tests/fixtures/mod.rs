@@ -32,7 +32,7 @@ use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, DynServerModuleGen, ModuleCommon, SerdeModuleEncoding};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::task::{timeout, RwLock, TaskGroup};
+use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{
     core, msats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
 };
@@ -269,14 +269,12 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
             // connection.
             let (gateway_ln, other_ln) = match &gateway_node {
                 LightningNodeType::Cln => {
-                    let gw_ln: Arc<RwLock<dyn ILnRpcClient>> =
-                        Arc::new(RwLock::new(ClnLightningTest::new(&dir).await));
+                    let gw_ln: Arc<dyn ILnRpcClient> = Arc::new(ClnLightningTest::new(&dir).await);
                     let other_ln: Box<dyn LightningTest> = Box::new(LndLightningTest::new().await);
                     (gw_ln, other_ln)
                 }
                 LightningNodeType::Lnd => {
-                    let gw_ln: Arc<RwLock<dyn ILnRpcClient>> =
-                        Arc::new(RwLock::new(LndLightningTest::new().await));
+                    let gw_ln: Arc<dyn ILnRpcClient> = Arc::new(LndLightningTest::new().await);
                     let other_ln: Box<dyn LightningTest> =
                         Box::new(ClnLightningTest::new(&dir).await);
                     (gw_ln, other_ln)
@@ -315,7 +313,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 user_db,
             ));
             user.client.await_consensus_block_height(0).await?;
-            let pubkey = gateway_ln.read().await.info().await?.pub_key;
+            let pubkey = gateway_ln.info().await?.pub_key;
             let node_pub_key = secp256k1::PublicKey::from_slice(&pubkey)?;
 
             let gatewayd_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
@@ -335,6 +333,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 gateway_node,
                 DEFAULT_FEES,
                 gatewayd_db,
+                &mut task_group,
             )
             .await;
 
@@ -369,7 +368,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 .unwrap();
 
             let lightning = FakeLightningTest::new();
-            let ln_arc = Arc::new(RwLock::new(lightning.clone()));
+            let ln_arc = Arc::new(lightning.clone());
 
             let net = MockNetwork::new();
             let net_ref = &net;
@@ -386,7 +385,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 &bitcoin_rpc,
                 &connect_gen,
                 server_module_inits.clone(),
-                &mut task_group.clone(),
+                &mut task_group,
             )
             .await;
             let handles = fed.run_consensus_apis().await;
@@ -413,6 +412,7 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 gateway_node.clone(),
                 DEFAULT_FEES,
                 gatewayd_db,
+                &mut task_group,
             )
             .await;
 
@@ -562,7 +562,7 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
 
 pub struct GatewayTest {
     pub actor: GatewayActor,
-    pub lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
+    pub lnrpc: Arc<dyn ILnRpcClient>,
     pub keys: LightningGateway,
     pub user: Box<dyn ILegacyTestClient>,
     pub client: Box<dyn IGatewayClient>,
@@ -573,7 +573,7 @@ pub struct GatewayTest {
 impl GatewayTest {
     #[allow(clippy::too_many_arguments)]
     async fn new(
-        lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
+        lnrpc: Arc<dyn ILnRpcClient>,
         client_config: ClientConfig,
         decoders: ModuleDecoderRegistry,
         module_gens: ClientModuleGenRegistry,
@@ -582,6 +582,7 @@ impl GatewayTest {
         node: LightningNodeType,
         fees: RoutingFees,
         database: Database,
+        task_group: &mut TaskGroup,
     ) -> Self {
         let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -627,9 +628,9 @@ impl GatewayTest {
             client_builder.clone(),
             decoders.clone(),
             module_gens.clone(),
-            TaskGroup::new(),
             fees,
             database,
+            task_group,
         )
         .await
         .unwrap();
@@ -642,7 +643,7 @@ impl GatewayTest {
         );
 
         let actor = gateway
-            .load_actor(client.clone(), vec![])
+            .load_actor(client.clone(), vec![], mint_channel_id)
             .await
             .expect("Could not connect federation");
         // Note: We don't run the gateway in test scenarios

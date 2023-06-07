@@ -15,8 +15,8 @@ use lightning_invoice::{
     DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gatewaylnrpc::{
-    self, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
-    RouteHtlcRequest,
+    self, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 use ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use ln_gateway::GatewayError;
@@ -33,7 +33,6 @@ pub struct FakeLightningTest {
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: Arc<Mutex<u64>>,
-    task_group: TaskGroup,
 }
 
 impl FakeLightningTest {
@@ -47,7 +46,6 @@ impl FakeLightningTest {
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
-            task_group: TaskGroup::new(),
         }
     }
 }
@@ -127,9 +125,10 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<RouteHtlcRequest>,
+        events: ReceiverStream<InterceptHtlcResponse>,
+        task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.task_group
+        task_group
             .spawn("FakeRoutingThread", |handle| async move {
                 let mut stream = events.into_inner();
                 while let Some(route_htlc) = stream.recv().await {

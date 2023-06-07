@@ -1,5 +1,5 @@
 use std::array::TryFromSliceError;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -15,15 +15,14 @@ use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use futures::stream::StreamExt;
-use ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
 use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+use ln_gateway::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gatewaylnrpc::{
-    route_htlc_request, route_htlc_response, CompleteHtlcsRequest, CompleteHtlcsResponse,
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest,
-    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse, SubscribeInterceptHtlcsResponse,
+    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -239,11 +238,10 @@ impl ClnRpcService {
     }
 
     async fn complete_htlc(
-        complete_request: CompleteHtlcsRequest,
+        complete_request: InterceptHtlcResponse,
         interceptors: Arc<ClnHtlcInterceptor>,
-        sender: mpsc::Sender<Result<RouteHtlcResponse, Status>>,
     ) -> Result<(), Status> {
-        let CompleteHtlcsRequest {
+        let InterceptHtlcResponse {
             action,
             incoming_chan_id,
             htlc_id,
@@ -272,6 +270,9 @@ impl ClnRpcService {
                     // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
                     htlc_processing_failure()
                 }
+                Some(Action::Forward(Forward {})) => {
+                    serde_json::json!({ "result": "continue" })
+                }
                 None => {
                     error!(
                         ?incoming_chan_id,
@@ -287,18 +288,7 @@ impl ClnRpcService {
             // Send translated response to the HTLC interceptor for submission
             // to the cln rpc
             match outcome.send(htlca_res) {
-                Ok(_) => {
-                    let _ = sender
-                        .send(Ok(RouteHtlcResponse {
-                            action: Some(route_htlc_response::Action::CompleteResponse(
-                                CompleteHtlcsResponse {},
-                            )),
-                        }))
-                        .await
-                        .map_err(|e| {
-                            error!("Failed to send CompleteResponse to gatewayd: {:?}", e);
-                        });
-                }
+                Ok(_) => {}
                 Err(e) => {
                     error!(
                         "Failed to send htlc_accepted response to interceptor: {:?}",
@@ -482,45 +472,31 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(outcome))
     }
 
-    type RouteHtlcsStream = ReceiverStream<Result<RouteHtlcResponse, Status>>;
+    type RouteHtlcsStream = ReceiverStream<Result<InterceptHtlcRequest, Status>>;
 
     async fn route_htlcs(
         &self,
-        request: tonic::Request<tonic::Streaming<RouteHtlcRequest>>,
+        request: tonic::Request<tonic::Streaming<InterceptHtlcResponse>>,
     ) -> Result<tonic::Response<Self::RouteHtlcsStream>, Status> {
         let mut stream = request.into_inner();
 
         // First create new channel that we will use to send responses back to gatewayd
         let (gatewayd_sender, gatewayd_receiver) =
-            mpsc::channel::<Result<RouteHtlcResponse, Status>>(100);
+            mpsc::channel::<Result<InterceptHtlcRequest, Status>>(100);
+
+        let mut sender = self.interceptor.sender.lock().await;
+        *sender = Some(gatewayd_sender.clone());
 
         // Spawn new thread that listens for events from the input stream
         let interceptors = self.interceptor.clone();
         tokio::spawn(async move {
             while let Some(res) = stream.next().await {
-                if let Ok(route_request) = res {
-                    match route_request.action {
-                        Some(route_htlc_request::Action::SubscribeRequest(subscribe_request)) => {
-                            interceptors.subscriptions.lock().await.insert(
-                                subscribe_request.short_channel_id,
-                                gatewayd_sender.clone(),
-                            );
-                        }
-                        Some(route_htlc_request::Action::CompleteRequest(complete_request)) => {
-                            let _ = Self::complete_htlc(
-                                complete_request,
-                                interceptors.clone(),
-                                gatewayd_sender.clone(),
-                            )
-                            .await
-                            .map_err(|e| {
-                                error!("CLN extension failed to complete HTLC: {:?}", e);
-                            });
-                        }
-                        None => {
-                            error!("No action was sent as part of RouteHtlcRequest");
-                        }
-                    }
+                if let Ok(complete_request) = res {
+                    let _ = Self::complete_htlc(complete_request, interceptors.clone())
+                        .await
+                        .map_err(|e| {
+                            error!("CLN extension failed to complete HTLC: {:?}", e);
+                        });
                 }
             }
         });
@@ -559,22 +535,22 @@ fn htlc_processing_failure() -> serde_json::Value {
     })
 }
 
-type HtlcSubscriptionSender = mpsc::Sender<Result<RouteHtlcResponse, Status>>;
+type HtlcInterceptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
 type HtlcOutcomeSender = oneshot::Sender<serde_json::Value>;
 
 /// Functional structure to filter intercepted HTLCs into subscription streams.
 /// Used as a CLN plugin
 #[derive(Clone)]
 pub struct ClnHtlcInterceptor {
-    subscriptions: Arc<Mutex<HashMap<u64, HtlcSubscriptionSender>>>,
     pub outcomes: Arc<Mutex<BTreeMap<(u64, u64), HtlcOutcomeSender>>>,
+    sender: Arc<Mutex<Option<HtlcInterceptionSender>>>,
 }
 
 impl ClnHtlcInterceptor {
     fn new() -> Self {
         Self {
-            subscriptions: Arc::new(Mutex::new(HashMap::new())),
             outcomes: Arc::new(Mutex::new(BTreeMap::new())),
+            sender: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -607,7 +583,7 @@ impl ClnHtlcInterceptor {
 
         info!(?short_channel_id, "Intercepted htlc with SCID");
 
-        if let Some(subscription) = self.subscriptions.lock().await.get(&short_channel_id) {
+        if let Some(sender) = &*self.sender.lock().await {
             let payment_hash = payload.htlc.payment_hash.to_vec();
 
             let incoming_chan_id =
@@ -617,19 +593,15 @@ impl ClnHtlcInterceptor {
                     Err(_) => return serde_json::json!({ "result": "continue" }),
                 };
 
-            let htlc_ret = match subscription
-                .send(Ok(RouteHtlcResponse {
-                    action: Some(route_htlc_response::Action::SubscribeResponse(
-                        SubscribeInterceptHtlcsResponse {
-                            payment_hash: payment_hash.clone(),
-                            incoming_amount_msat: payload.htlc.amount_msat.msats,
-                            outgoing_amount_msat: payload.onion.forward_msat.msats,
-                            incoming_expiry: htlc_expiry,
-                            short_channel_id,
-                            incoming_chan_id,
-                            htlc_id: payload.htlc.id,
-                        },
-                    )),
+            let htlc_ret = match sender
+                .send(Ok(InterceptHtlcRequest {
+                    payment_hash: payment_hash.clone(),
+                    incoming_amount_msat: payload.htlc.amount_msat.msats,
+                    outgoing_amount_msat: payload.onion.forward_msat.msats,
+                    incoming_expiry: htlc_expiry,
+                    short_channel_id,
+                    incoming_chan_id,
+                    htlc_id: payload.htlc.id,
                 }))
                 .await
             {

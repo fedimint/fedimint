@@ -13,7 +13,6 @@ use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::{Gateway, DEFAULT_FEES};
 use tempfile::TempDir;
-use tokio::sync::RwLock;
 use tracing::log::warn;
 use url::Url;
 
@@ -69,18 +68,20 @@ impl GatewayTest {
 
         let gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
         let gateway = Gateway::new_with_lightning_connection(
-            Arc::new(RwLock::new(lightning)),
+            Arc::new(lightning),
             client_builder.clone(),
             decoders.clone(),
             module_gens.clone(),
-            task.make_subgroup().await,
             DEFAULT_FEES,
             gatewayd_db,
+            &mut task,
         )
         .await
         .unwrap();
 
-        gateway.spawn_webserver(listen, password.clone()).await;
+        gateway
+            .spawn_webserver(listen, password.clone(), &mut task)
+            .await;
         task.spawn("gatewayd", move |handle| async {
             if let Err(err) = gateway.run(handle).await {
                 warn!("Gateway stopped with error {:?}", err);

@@ -2,8 +2,10 @@ syntax = "proto3";
 
 package gatewaylnrpc;
 
-/* GatewayLightning is a service that provides limited access and functionality
- * from a lightning node to Fedimint gateways */
+/* 
+ * GatewayLightning is a service that provides limited access and functionality
+ * from a lightning node to Fedimint gateways
+ */
 service GatewayLightning {
   /* GetNodeInfo returns the public key and alias of the associated lightning node */
   rpc GetNodeInfo(EmptyRequest) returns (GetNodeInfoResponse) {}
@@ -11,20 +13,19 @@ service GatewayLightning {
   /* GetRouteHints returns the route hints to the associated lightning node */
   rpc GetRouteHints(EmptyRequest) returns (GetRouteHintsResponse) {}
 
-  /* PayInvoice attempts to pay an invoice using the associated lightning node
+  /* 
+   * PayInvoice attempts to pay an invoice using the associated lightning node
    */
   rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse) {}
 
-  /* RouteHtlcs opens a stream for a client to receive specific
-   * HTLCs that have a specific short channel id and receives a stream as input. 
-   * For every HTLC intercepted and processed, the client can send a CompleteHtlcsRequest
-   * over the input stream to complete the HTLC.
-   *
-   * Recommendation:
-   * GatewayLightning implementations should respond with a channel stream
-   * over which intercepted HTLCs are continually sent to the client.
+  /* 
+   * RouteHtlcs opens a bi-directional stream for the client to receive intercepted
+   * HTLCs. `InterceptHtlcRequest` is sent from the server to alert the client that
+   * an HTLC has been intercepted and needs to be processed. The client is expected
+   * to response with `InterceptHtlcResponse` after the HTLC has been processed with
+   * the appropriate action (Settle, Forward, Cancel).
    */
-  rpc RouteHtlcs(stream RouteHtlcRequest) returns (stream RouteHtlcResponse) {}
+  rpc RouteHtlcs(stream InterceptHtlcResponse) returns (stream InterceptHtlcRequest) {}
 }
 
 message EmptyRequest {}
@@ -50,33 +51,7 @@ message PayInvoiceResponse {
   bytes preimage = 1;
 }
 
-// Request to begin intercepting HTLCs or to complete
-// a specific HTLC.
-message RouteHtlcRequest {
-  oneof action {
-    SubscribeInterceptHtlcsRequest subscribe_request = 1;
-    CompleteHtlcsRequest complete_request = 2;
-  }
-}
-
-message RouteHtlcResponse {
-  oneof action {
-    SubscribeInterceptHtlcsResponse subscribe_response = 1;
-    CompleteHtlcsResponse complete_response = 2;
-  }
-}
-
-// Request to subscribe to HTLCs with a specific short channel id
-//
-// Send this request when the gateway just assigned a new channel id to a
-// newly connected federation. GatewayLightning should respond with a
-// stream over which intercepted HTLCs are continually sent to the client.
-message SubscribeInterceptHtlcsRequest {
-  // The short channel id of HTLCs to intercept
-  uint64 short_channel_id = 1;
-}
-
-message SubscribeInterceptHtlcsResponse {
+message InterceptHtlcRequest {
   // The HTLC payment hash.
   // Value is not guaranteed to be unique per intercepted HTLC
   bytes payment_hash = 1;
@@ -110,7 +85,7 @@ message SubscribeInterceptHtlcsResponse {
   uint64 htlc_id = 13;
 }
 
-message CompleteHtlcsRequest {
+message InterceptHtlcResponse {
   message Settle {
     // The preimage for settling an intercepted HTLC
     bytes preimage = 1;
@@ -120,6 +95,8 @@ message CompleteHtlcsRequest {
     // The reason for the cancellation of an intercepted HTLC
     string reason = 1;
   }
+
+  message Forward {}
 
   oneof action {
     // Request to complete an intercepted HTLC with success result after
@@ -137,6 +114,9 @@ message CompleteHtlcsRequest {
     // intercepted HTLC. GatewayLightning will fail/cancel the intercepted HTLC
     // with reason provided.
     Cancel cancel = 2;
+
+    // Request to just forward the HTLC without failing or settling it.
+    Forward forward = 3;
   }
 
   // The id of the incoming channel
@@ -145,8 +125,6 @@ message CompleteHtlcsRequest {
   // The index of the incoming htlc in the incoming channel
   uint64 htlc_id = 5;
 }
-
-message CompleteHtlcsResponse {}
 
 message GetRouteHintsResponse {
   message RouteHintHop {
