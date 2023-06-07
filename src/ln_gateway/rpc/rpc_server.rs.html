@@ -155,17 +155,6 @@
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -183,7 +172,7 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, LightningReconnectPayload, RestorePayload, WithdrawPayload,
+    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::GatewayError;
 
@@ -191,7 +180,7 @@
     authkey: String,
     bind_addr: SocketAddr,
     sender: GatewayRpcSender,
-    <span class="kw-2">mut </span>tg: TaskGroup,
+    tg: <span class="kw-2">&amp;mut </span>TaskGroup,
 ) -&gt; axum::response::Result&lt;oneshot::Sender&lt;()&gt;&gt; {
     <span class="comment">// Public routes on gateway webserver
     </span><span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice));
@@ -206,7 +195,6 @@
         .route(<span class="string">&quot;/connect-fed&quot;</span>, post(connect_fed))
         .route(<span class="string">&quot;/backup&quot;</span>, post(backup))
         .route(<span class="string">&quot;/restore&quot;</span>, post(restore))
-        .route(<span class="string">&quot;/connect-ln&quot;</span>, post(connect_ln))
         .layer(RequireAuthorizationLayer::bearer(<span class="kw-2">&amp;</span>authkey));
 
     <span class="kw">let </span>app = Router::new()
@@ -320,16 +308,6 @@
 </span><span class="kw">async fn </span>restore(
     Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
     Json(payload): Json&lt;RestorePayload&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(())
-}
-
-<span class="comment">// Reconnect to the lightning node
-</span><span class="attr">#[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>connect_ln(
-    Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
-    Json(payload): Json&lt;LightningReconnectPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())

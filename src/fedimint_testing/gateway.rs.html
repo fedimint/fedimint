@@ -96,6 +96,7 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -111,7 +112,6 @@
 <span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
 <span class="kw">use </span>ln_gateway::{Gateway, DEFAULT_FEES};
 <span class="kw">use </span>tempfile::TempDir;
-<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::log::warn;
 <span class="kw">use </span>url::Url;
 
@@ -167,18 +167,20 @@
 
         <span class="kw">let </span>gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
         <span class="kw">let </span>gateway = Gateway::new_with_lightning_connection(
-            Arc::new(RwLock::new(lightning)),
+            Arc::new(lightning),
             client_builder.clone(),
             decoders.clone(),
             module_gens.clone(),
-            task.make_subgroup().<span class="kw">await</span>,
             DEFAULT_FEES,
             gatewayd_db,
+            <span class="kw-2">&amp;mut </span>task,
         )
         .<span class="kw">await
         </span>.unwrap();
 
-        gateway.spawn_webserver(listen, password.clone()).<span class="kw">await</span>;
+        gateway
+            .spawn_webserver(listen, password.clone(), <span class="kw-2">&amp;mut </span>task)
+            .<span class="kw">await</span>;
         task.spawn(<span class="string">&quot;gatewayd&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async </span>{
             <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = gateway.run(handle).<span class="kw">await </span>{
                 <span class="macro">warn!</span>(<span class="string">&quot;Gateway stopped with error {:?}&quot;</span>, err);

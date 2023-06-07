@@ -327,6 +327,10 @@
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -341,8 +345,8 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse,
-    RouteHtlcRequest,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lnd::GatewayLndClient;
 <span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
@@ -436,9 +440,14 @@
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;RouteHtlcRequest&gt;,
+        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.write().<span class="kw">await</span>.route_htlcs(events).<span class="kw">await
+        <span class="self">self</span>.lnrpc
+            .write()
+            .<span class="kw">await
+            </span>.route_htlcs(events, task_group)
+            .<span class="kw">await
     </span>}
 }
 
@@ -579,9 +588,14 @@
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;RouteHtlcRequest&gt;,
+        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.write().<span class="kw">await</span>.route_htlcs(events).<span class="kw">await
+        <span class="self">self</span>.lnrpc
+            .write()
+            .<span class="kw">await
+            </span>.route_htlcs(events, task_group)
+            .<span class="kw">await
     </span>}
 }
 
@@ -602,15 +616,9 @@
         <span class="kw">let </span>initial_balance = <span class="self">Self</span>::channel_balance(rpc_lnd.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>node_pub_key = <span class="self">Self</span>::pubkey(rpc_lnd.clone()).<span class="kw">await</span>;
 
-        <span class="kw">let </span>gateway_lnd_client = GatewayLndClient::new(
-            lnd_rpc_addr,
-            lnd_tls_cert,
-            lnd_macaroon,
-            <span class="comment">// TODO: Remove this once we dont need a TaskGroup to create a client
-            </span>TaskGroup::new(),
-        )
-        .<span class="kw">await
-        </span>.unwrap();
+        <span class="kw">let </span>gateway_lnd_client = GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
+            .<span class="kw">await
+            </span>.unwrap();
         <span class="kw">let </span>lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
         LndLightningTest {
             rpc_lnd,

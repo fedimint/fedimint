@@ -369,66 +369,15 @@
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-<span class="kw">use </span>std::fmt;
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>secp256k1::PublicKey;
-<span class="kw">use </span>tokio::sync::{mpsc, Mutex};
+<span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tonic_lnd::lnrpc::failure::FailureCode;
@@ -437,50 +386,28 @@
 <span class="kw">use </span>tonic_lnd::{connect, LndClient};
 <span class="kw">use </span>tracing::{error, info, trace};
 
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{
-    route_htlc_request, route_htlc_response, CompleteHtlcsRequest, GetNodeInfoResponse,
-    GetRouteHintsResponse, PayInvoiceRequest, PayInvoiceResponse, RouteHtlcRequest,
-    RouteHtlcResponse, SubscribeInterceptHtlcsResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 <span class="kw">use </span><span class="kw">crate</span>::GatewayError;
 
-<span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;RouteHtlcResponse, Status&gt;&gt;;
+<span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
 
 <span class="kw">pub struct </span>GatewayLndClient {
     <span class="doccomment">/// LND client
     </span>client: LndClient,
-    <span class="doccomment">/// Used to spawn a task handling HTLC subscriptions
-    </span>task_group: TaskGroup,
-    <span class="doccomment">/// Map of short channel id to the actor that is subscribed to HTLC updates
-    </span>subscriptions: Arc&lt;Mutex&lt;HashMap&lt;u64, HtlcSubscriptionSender&gt;&gt;&gt;,
-    <span class="doccomment">/// Sender that is used to send HTLC updates to LND (Resume, Reject, Settle)
-    </span>lnd_tx: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
 }
 
 <span class="kw">impl </span>GatewayLndClient {
-    <span class="kw">pub async fn </span>new(
-        address: String,
-        tls_cert: String,
-        macaroon: String,
-        task_group: TaskGroup,
-    ) -&gt; <span class="kw">crate</span>::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">const </span>CHANNEL_SIZE: usize = <span class="number">100</span>;
-        <span class="kw">let </span>(lnd_tx, lnd_rx) = mpsc::channel::&lt;ForwardHtlcInterceptResponse&gt;(CHANNEL_SIZE);
-
+    <span class="kw">pub async fn </span>new(address: String, tls_cert: String, macaroon: String) -&gt; <span class="kw">crate</span>::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>client = <span class="self">Self</span>::connect(address, tls_cert, macaroon).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>subscriptions = Arc::new(Mutex::new(HashMap::new()));
 
-        <span class="kw">let </span><span class="kw-2">mut </span>gw_rpc = GatewayLndClient {
-            client,
-            task_group,
-            subscriptions,
-            lnd_tx,
-        };
+        <span class="kw">let </span>gw_rpc = GatewayLndClient { client };
 
-        gw_rpc.spawn_interceptor(lnd_rx).<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(gw_rpc)
     }
 
@@ -502,11 +429,15 @@
         <span class="prelude-val">Ok</span>(client)
     }
 
-    <span class="kw">async fn </span>spawn_interceptor(<span class="kw-2">&amp;mut </span><span class="self">self</span>, lnd_rx: mpsc::Receiver&lt;ForwardHtlcInterceptResponse&gt;) {
-        <span class="kw">let </span>lnd_sender = <span class="self">self</span>.lnd_tx.clone();
+    <span class="kw">async fn </span>spawn_interceptor(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
+        lnd_rx: mpsc::Receiver&lt;ForwardHtlcInterceptResponse&gt;,
+        actor_sender: HtlcSubscriptionSender,
+    ) {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
-        <span class="kw">let </span>subs = <span class="self">self</span>.subscriptions.clone();
-        <span class="self">self</span>.task_group
+        task_group
             .spawn(<span class="string">&quot;LND HTLC Subscription&quot;</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>htlc_stream = <span class="kw">match </span>client
                     .router()
@@ -539,55 +470,31 @@
 
                     <span class="kw">let </span>incoming_circuit_key = htlc.incoming_circuit_key.unwrap();
 
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(actor_sender) =
-                        <span class="self">Self</span>::can_route_htlc(htlc.outgoing_requested_chan_id, subs.clone()).<span class="kw">await
-                    </span>{
-                        <span class="kw">let </span>intercept = SubscribeInterceptHtlcsResponse {
-                            payment_hash: htlc.payment_hash,
-                            incoming_amount_msat: htlc.incoming_amount_msat,
-                            outgoing_amount_msat: htlc.outgoing_amount_msat,
-                            incoming_expiry: htlc.incoming_expiry,
-                            short_channel_id: htlc.outgoing_requested_chan_id,
-                            incoming_chan_id: incoming_circuit_key.chan_id,
-                            htlc_id: incoming_circuit_key.htlc_id,
-                        };
+                    <span class="comment">// Forward all HTLCs to gatewayd, gatewayd will filter them based on scid
+                    </span><span class="kw">let </span>intercept = InterceptHtlcRequest {
+                        payment_hash: htlc.payment_hash,
+                        incoming_amount_msat: htlc.incoming_amount_msat,
+                        outgoing_amount_msat: htlc.outgoing_amount_msat,
+                        incoming_expiry: htlc.incoming_expiry,
+                        short_channel_id: htlc.outgoing_requested_chan_id,
+                        incoming_chan_id: incoming_circuit_key.chan_id,
+                        htlc_id: incoming_circuit_key.htlc_id,
+                    };
 
-                        <span class="kw">match </span>actor_sender
-                            .send(<span class="prelude-val">Ok</span>(RouteHtlcResponse {
-                                action: <span class="prelude-val">Some</span>(route_htlc_response::Action::SubscribeResponse(
-                                    intercept,
-                                )),
-                            }))
-                            .<span class="kw">await
-                        </span>{
-                            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
-                            <span class="prelude-val">Err</span>(e) =&gt; {
-                                <span class="macro">error!</span>(<span class="string">&quot;Failed to send HTLC to gatewayd for processing: {:?}&quot;</span>, e);
-                                <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(incoming_circuit_key, lnd_sender.clone())
-                                    .<span class="kw">await
-                                    </span>.map_err(|e| {
-                                        <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
-                                    });
-                            }
+                    <span class="kw">match </span>actor_sender.send(<span class="prelude-val">Ok</span>(intercept)).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="macro">error!</span>(<span class="string">&quot;Failed to send HTLC to gatewayd for processing: {:?}&quot;</span>, e);
+                            <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(incoming_circuit_key, lnd_sender.clone())
+                                .<span class="kw">await
+                                </span>.map_err(|e| {
+                                    <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
+                                });
                         }
-                    } <span class="kw">else </span>{
-                        <span class="comment">// Actor is not subscribed to this HTLC, simply forward it on.
-                        </span><span class="kw">let _ </span>= <span class="self">Self</span>::forward_htlc(incoming_circuit_key, lnd_sender.clone())
-                            .<span class="kw">await
-                            </span>.map_err(|e| {
-                                <span class="macro">error!</span>(<span class="string">&quot;Failed to forward HTLC: {:?}&quot;</span>, e);
-                            });
                     }
                 }
             })
             .<span class="kw">await</span>;
-    }
-
-    <span class="kw">async fn </span>can_route_htlc(
-        short_channel_id: u64,
-        subs: Arc&lt;Mutex&lt;HashMap&lt;u64, HtlcSubscriptionSender&gt;&gt;&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;RouteHtlcResponse, Status&gt;&gt;&gt; {
-        subs.lock().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>short_channel_id).cloned()
     }
 
     <span class="kw">async fn </span>forward_htlc(
@@ -778,59 +685,54 @@
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;RouteHtlcRequest&gt;,
+        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
         <span class="kw">const </span>CHANNEL_SIZE: usize = <span class="number">100</span>;
 
         <span class="comment">// Channel to send intercepted htlc to actor for processing
         // actor_sender needs to be saved when the scid is received
         </span><span class="kw">let </span>(actor_sender, actor_receiver) =
-            mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;RouteHtlcResponse, tonic::Status&gt;&gt;(CHANNEL_SIZE);
+            mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, tonic::Status&gt;&gt;(CHANNEL_SIZE);
+
+        <span class="kw">let </span>(lnd_sender, lnd_rx) = mpsc::channel::&lt;ForwardHtlcInterceptResponse&gt;(CHANNEL_SIZE);
+        <span class="self">self</span>.spawn_interceptor(task_group, lnd_sender.clone(), lnd_rx, actor_sender.clone())
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>stream = events.into_inner();
-        <span class="kw">let </span>subs = <span class="self">self</span>.subscriptions.clone();
-        <span class="kw">let </span>lnd_sender = <span class="self">self</span>.lnd_tx.clone();
-        <span class="self">self</span>.task_group.spawn(<span class="string">&quot;LND Route HTLCs&quot;</span>, |_handle| <span class="kw">async move </span>{
+        task_group.spawn(<span class="string">&quot;LND Route HTLCs&quot;</span>, |_handle| <span class="kw">async move </span>{
             <span class="kw">while let </span><span class="prelude-val">Some</span>(request) = stream.recv().<span class="kw">await </span>{
-                <span class="kw">match </span>request.action {
-                    <span class="prelude-val">Some</span>(route_htlc_request::Action::SubscribeRequest(subscribe_request)) =&gt; {
-                        <span class="comment">// Save the channel to the actor so that the interceptor thread can send
-                        // HTLCs to it
-                        </span>subs
-                            .lock()
-                            .<span class="kw">await
-                            </span>.insert(subscribe_request.short_channel_id, actor_sender.clone());
-                    }
-                    <span class="prelude-val">Some</span>(route_htlc_request::Action::CompleteRequest(complete_request)) =&gt; {
-                        <span class="kw">let </span>CompleteHtlcsRequest {
-                            action,
-                            incoming_chan_id,
-                            htlc_id,
-                        } = complete_request;
+                <span class="kw">let </span>InterceptHtlcResponse {
+                    action,
+                    incoming_chan_id,
+                    htlc_id,
+                } = request;
 
-                        <span class="kw">match </span>action {
-                            <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
-                                <span class="kw">let _ </span>= <span class="self">Self</span>::settle_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, preimage, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
-                                    <span class="macro">error!</span>(<span class="string">&quot;Failed to settle HTLC: {:?}&quot;</span>, e);
-                                });
-                            },
-                            <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
-                                <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
-                                    <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
-                                });
-                            },
-                            <span class="prelude-val">None </span>=&gt; {
-                                <span class="macro">error!</span>(<span class="string">&quot;No action specified for intercepted htlc. This should not happen. ChanId: {} HTLC ID: {}&quot;</span>, incoming_chan_id, htlc_id);
-                                <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
-                                    <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
-                                });
-                            }
-                        };
+                <span class="kw">match </span>action {
+                    <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
+                        <span class="kw">let _ </span>= <span class="self">Self</span>::settle_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, preimage, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
+                            <span class="macro">error!</span>(<span class="string">&quot;Failed to settle HTLC: {:?}&quot;</span>, e);
+                        });
+                    },
+                    <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
+                        <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
+                            <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
+                        });
+                    },
+                    <span class="prelude-val">Some</span>(Action::Forward(Forward { })) =&gt; {
+                        <span class="kw">let _ </span>= <span class="self">Self</span>::forward_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone())
+                            .<span class="kw">await
+                            </span>.map_err(|e| {
+                                <span class="macro">error!</span>(<span class="string">&quot;Failed to forward HTLC: {:?}&quot;</span>, e);
+                            });
                     }
                     <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;No action was sent as part of RouteHtlcRequest&quot;</span>);
+                        <span class="macro">error!</span>(<span class="string">&quot;No action specified for intercepted htlc. This should not happen. ChanId: {} HTLC ID: {}&quot;</span>, incoming_chan_id, htlc_id);
+                        <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
+                            <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
+                        });
                     }
-                }
+                };
             }
         })
         .<span class="kw">await</span>;

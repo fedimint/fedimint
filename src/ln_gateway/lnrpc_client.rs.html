@@ -106,12 +106,15 @@
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>futures::stream::BoxStream;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic::transport::{Channel, Endpoint};
@@ -121,12 +124,13 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest,
-    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse,
+    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
 
-<span class="kw">pub type </span>RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt; = BoxStream&lt;<span class="lifetime">&#39;a</span>, std::result::Result&lt;RouteHtlcResponse, tonic::Status&gt;&gt;;
+<span class="kw">pub type </span>RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt; =
+    BoxStream&lt;<span class="lifetime">&#39;a</span>, std::result::Result&lt;InterceptHtlcRequest, tonic::Status&gt;&gt;;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ILnRpcClient: Debug + Send + Sync {
@@ -141,7 +145,8 @@
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;RouteHtlcRequest&gt;,
+        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;&gt;;
 }
 
@@ -188,30 +193,31 @@
         <span class="kw">let </span>req = Request::new(EmptyRequest {});
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
         <span class="kw">let </span>res = client.get_node_info(req).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(res.into_inner());
+        <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
     <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse&gt; {
         <span class="kw">let </span>req = Request::new(EmptyRequest {});
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
         <span class="kw">let </span>res = client.get_route_hints(req).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(res.into_inner());
+        <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
     <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse&gt; {
         <span class="kw">let </span>req = Request::new(invoice);
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
         <span class="kw">let </span>res = client.pay_invoice(req).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(res.into_inner());
+        <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;RouteHtlcRequest&gt;,
+        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
         <span class="kw">let </span>res = client.route_htlcs(events).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(Box::pin(res.into_inner()));
+        <span class="prelude-val">Ok</span>(Box::pin(res.into_inner()))
     }
 }
 </code></pre></div>

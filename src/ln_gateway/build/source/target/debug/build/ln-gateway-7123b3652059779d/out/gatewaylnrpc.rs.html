@@ -624,49 +624,6 @@
 <a href="#624" id="624">624</a>
 <a href="#625" id="625">625</a>
 <a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
-<a href="#654" id="654">654</a>
-<a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a>
-<a href="#657" id="657">657</a>
-<a href="#658" id="658">658</a>
-<a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
-<a href="#662" id="662">662</a>
-<a href="#663" id="663">663</a>
-<a href="#664" id="664">664</a>
-<a href="#665" id="665">665</a>
-<a href="#666" id="666">666</a>
-<a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a>
-<a href="#669" id="669">669</a>
 </pre><pre class="rust"><code><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyRequest {}
@@ -697,57 +654,9 @@
     </span><span class="attr">#[prost(bytes = <span class="string">&quot;vec&quot;</span>, tag = <span class="string">&quot;1&quot;</span>)]
     </span><span class="kw">pub </span>preimage: ::prost::alloc::vec::Vec&lt;u8&gt;,
 }
-<span class="doccomment">/// Request to begin intercepting HTLCs or to complete
-/// a specific HTLC.
-</span><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>RouteHtlcRequest {
-    <span class="attr">#[prost(oneof = <span class="string">&quot;route_htlc_request::Action&quot;</span>, tags = <span class="string">&quot;1, 2&quot;</span>)]
-    </span><span class="kw">pub </span>action: ::core::option::Option&lt;route_htlc_request::Action&gt;,
-}
-<span class="doccomment">/// Nested message and enum types in `RouteHtlcRequest`.
-</span><span class="kw">pub mod </span>route_htlc_request {
-    <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    </span><span class="kw">pub enum </span>Action {
-        <span class="attr">#[prost(message, tag = <span class="string">&quot;1&quot;</span>)]
-        </span>SubscribeRequest(<span class="kw">super</span>::SubscribeInterceptHtlcsRequest),
-        <span class="attr">#[prost(message, tag = <span class="string">&quot;2&quot;</span>)]
-        </span>CompleteRequest(<span class="kw">super</span>::CompleteHtlcsRequest),
-    }
-}
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>RouteHtlcResponse {
-    <span class="attr">#[prost(oneof = <span class="string">&quot;route_htlc_response::Action&quot;</span>, tags = <span class="string">&quot;1, 2&quot;</span>)]
-    </span><span class="kw">pub </span>action: ::core::option::Option&lt;route_htlc_response::Action&gt;,
-}
-<span class="doccomment">/// Nested message and enum types in `RouteHtlcResponse`.
-</span><span class="kw">pub mod </span>route_htlc_response {
-    <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    </span><span class="kw">pub enum </span>Action {
-        <span class="attr">#[prost(message, tag = <span class="string">&quot;1&quot;</span>)]
-        </span>SubscribeResponse(<span class="kw">super</span>::SubscribeInterceptHtlcsResponse),
-        <span class="attr">#[prost(message, tag = <span class="string">&quot;2&quot;</span>)]
-        </span>CompleteResponse(<span class="kw">super</span>::CompleteHtlcsResponse),
-    }
-}
-<span class="doccomment">/// Request to subscribe to HTLCs with a specific short channel id
-///
-/// Send this request when the gateway just assigned a new channel id to a
-/// newly connected federation. GatewayLightning should respond with a
-/// stream over which intercepted HTLCs are continually sent to the client.
-</span><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>SubscribeInterceptHtlcsRequest {
-    <span class="doccomment">/// The short channel id of HTLCs to intercept
-    </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;1&quot;</span>)]
-    </span><span class="kw">pub </span>short_channel_id: u64,
-}
-<span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>SubscribeInterceptHtlcsResponse {
+</span><span class="kw">pub struct </span>InterceptHtlcRequest {
     <span class="doccomment">/// The HTLC payment hash.
     /// Value is not guaranteed to be unique per intercepted HTLC
     </span><span class="attr">#[prost(bytes = <span class="string">&quot;vec&quot;</span>, tag = <span class="string">&quot;1&quot;</span>)]
@@ -780,18 +689,18 @@
 }
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>CompleteHtlcsRequest {
+</span><span class="kw">pub struct </span>InterceptHtlcResponse {
     <span class="doccomment">/// The id of the incoming channel
     </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;4&quot;</span>)]
     </span><span class="kw">pub </span>incoming_chan_id: u64,
     <span class="doccomment">/// The index of the incoming htlc in the incoming channel
     </span><span class="attr">#[prost(uint64, tag = <span class="string">&quot;5&quot;</span>)]
     </span><span class="kw">pub </span>htlc_id: u64,
-    <span class="attr">#[prost(oneof = <span class="string">&quot;complete_htlcs_request::Action&quot;</span>, tags = <span class="string">&quot;1, 2&quot;</span>)]
-    </span><span class="kw">pub </span>action: ::core::option::Option&lt;complete_htlcs_request::Action&gt;,
+    <span class="attr">#[prost(oneof = <span class="string">&quot;intercept_htlc_response::Action&quot;</span>, tags = <span class="string">&quot;1, 2, 3&quot;</span>)]
+    </span><span class="kw">pub </span>action: ::core::option::Option&lt;intercept_htlc_response::Action&gt;,
 }
-<span class="doccomment">/// Nested message and enum types in `CompleteHtlcsRequest`.
-</span><span class="kw">pub mod </span>complete_htlcs_request {
+<span class="doccomment">/// Nested message and enum types in `InterceptHtlcResponse`.
+</span><span class="kw">pub mod </span>intercept_htlc_response {
     <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     </span><span class="kw">pub struct </span>Settle {
@@ -806,6 +715,9 @@
         </span><span class="attr">#[prost(string, tag = <span class="string">&quot;1&quot;</span>)]
         </span><span class="kw">pub </span>reason: ::prost::alloc::string::String,
     }
+    <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    </span><span class="kw">pub struct </span>Forward {}
     <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     </span><span class="kw">pub enum </span>Action {
@@ -825,11 +737,11 @@
         /// with reason provided.
         </span><span class="attr">#[prost(message, tag = <span class="string">&quot;2&quot;</span>)]
         </span>Cancel(Cancel),
+        <span class="doccomment">/// Request to just forward the HTLC without failing or settling it.
+        </span><span class="attr">#[prost(message, tag = <span class="string">&quot;3&quot;</span>)]
+        </span>Forward(Forward),
     }
 }
-<span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>CompleteHtlcsResponse {}
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>GetRouteHintsResponse {
@@ -878,7 +790,8 @@
     <span class="attr">#![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     </span><span class="kw">use </span>tonic::codegen::<span class="kw-2">*</span>;
     <span class="kw">use </span>tonic::codegen::http::Uri;
-    <span class="doccomment">/// GatewayLightning is a service that provides limited access and functionality
+    <span class="doccomment">///
+    /// GatewayLightning is a service that provides limited access and functionality
     /// from a lightning node to Fedimint gateways
     </span><span class="attr">#[derive(Debug, Clone)]
     </span><span class="kw">pub struct </span>GatewayLightningClient&lt;T&gt; {
@@ -984,7 +897,8 @@
             );
             <span class="self">self</span>.inner.unary(request.into_request(), path, codec).<span class="kw">await
         </span>}
-        <span class="doccomment">/// PayInvoice attempts to pay an invoice using the associated lightning node
+        <span class="doccomment">///
+        /// PayInvoice attempts to pay an invoice using the associated lightning node
         </span><span class="kw">pub async fn </span>pay_invoice(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
             request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::PayInvoiceRequest&gt;,
@@ -1004,19 +918,19 @@
             );
             <span class="self">self</span>.inner.unary(request.into_request(), path, codec).<span class="kw">await
         </span>}
-        <span class="doccomment">/// RouteHtlcs opens a stream for a client to receive specific
-        /// HTLCs that have a specific short channel id and receives a stream as input.
-        /// For every HTLC intercepted and processed, the client can send a CompleteHtlcsRequest
-        /// over the input stream to complete the HTLC.
-        ///
-        /// Recommendation:
-        /// GatewayLightning implementations should respond with a channel stream
-        /// over which intercepted HTLCs are continually sent to the client.
+        <span class="doccomment">///
+        /// RouteHtlcs opens a bi-directional stream for the client to receive intercepted
+        /// HTLCs. `InterceptHtlcRequest` is sent from the server to alert the client that
+        /// an HTLC has been intercepted and needs to be processed. The client is expected
+        /// to response with `InterceptHtlcResponse` after the HTLC has been processed with
+        /// the appropriate action (Settle, Forward, Cancel).
         </span><span class="kw">pub async fn </span>route_htlcs(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-            request: <span class="kw">impl </span>tonic::IntoStreamingRequest&lt;Message = <span class="kw">super</span>::RouteHtlcRequest&gt;,
+            request: <span class="kw">impl </span>tonic::IntoStreamingRequest&lt;
+                Message = <span class="kw">super</span>::InterceptHtlcResponse,
+            &gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;
-            tonic::Response&lt;tonic::codec::Streaming&lt;<span class="kw">super</span>::RouteHtlcResponse&gt;&gt;,
+            tonic::Response&lt;tonic::codec::Streaming&lt;<span class="kw">super</span>::InterceptHtlcRequest&gt;&gt;,
             tonic::Status,
         &gt; {
             <span class="self">self</span>.inner
@@ -1053,31 +967,31 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             request: tonic::Request&lt;<span class="kw">super</span>::EmptyRequest&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::GetRouteHintsResponse&gt;, tonic::Status&gt;;
-        <span class="doccomment">/// PayInvoice attempts to pay an invoice using the associated lightning node
+        <span class="doccomment">///
+        /// PayInvoice attempts to pay an invoice using the associated lightning node
         </span><span class="kw">async fn </span>pay_invoice(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             request: tonic::Request&lt;<span class="kw">super</span>::PayInvoiceRequest&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="kw">super</span>::PayInvoiceResponse&gt;, tonic::Status&gt;;
         <span class="doccomment">/// Server streaming response type for the RouteHtlcs method.
         </span><span class="kw">type </span>RouteHtlcsStream: futures_core::Stream&lt;
-                Item = <span class="prelude-ty">Result</span>&lt;<span class="kw">super</span>::RouteHtlcResponse, tonic::Status&gt;,
+                Item = <span class="prelude-ty">Result</span>&lt;<span class="kw">super</span>::InterceptHtlcRequest, tonic::Status&gt;,
             &gt;
             + Send
             + <span class="lifetime">&#39;static</span>;
-        <span class="doccomment">/// RouteHtlcs opens a stream for a client to receive specific
-        /// HTLCs that have a specific short channel id and receives a stream as input.
-        /// For every HTLC intercepted and processed, the client can send a CompleteHtlcsRequest
-        /// over the input stream to complete the HTLC.
-        ///
-        /// Recommendation:
-        /// GatewayLightning implementations should respond with a channel stream
-        /// over which intercepted HTLCs are continually sent to the client.
+        <span class="doccomment">///
+        /// RouteHtlcs opens a bi-directional stream for the client to receive intercepted
+        /// HTLCs. `InterceptHtlcRequest` is sent from the server to alert the client that
+        /// an HTLC has been intercepted and needs to be processed. The client is expected
+        /// to response with `InterceptHtlcResponse` after the HTLC has been processed with
+        /// the appropriate action (Settle, Forward, Cancel).
         </span><span class="kw">async fn </span>route_htlcs(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            request: tonic::Request&lt;tonic::Streaming&lt;<span class="kw">super</span>::RouteHtlcRequest&gt;&gt;,
+            request: tonic::Request&lt;tonic::Streaming&lt;<span class="kw">super</span>::InterceptHtlcResponse&gt;&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::RouteHtlcsStream&gt;, tonic::Status&gt;;
     }
-    <span class="doccomment">/// GatewayLightning is a service that provides limited access and functionality
+    <span class="doccomment">///
+    /// GatewayLightning is a service that provides limited access and functionality
     /// from a lightning node to Fedimint gateways
     </span><span class="attr">#[derive(Debug)]
     </span><span class="kw">pub struct </span>GatewayLightningServer&lt;T: GatewayLightning&gt; {
@@ -1261,9 +1175,9 @@
                     </span><span class="kw">struct </span>RouteHtlcsSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
                     <span class="kw">impl</span>&lt;
                         T: GatewayLightning,
-                    &gt; tonic::server::StreamingService&lt;<span class="kw">super</span>::RouteHtlcRequest&gt;
+                    &gt; tonic::server::StreamingService&lt;<span class="kw">super</span>::InterceptHtlcResponse&gt;
                     <span class="kw">for </span>RouteHtlcsSvc&lt;T&gt; {
-                        <span class="kw">type </span>Response = <span class="kw">super</span>::RouteHtlcResponse;
+                        <span class="kw">type </span>Response = <span class="kw">super</span>::InterceptHtlcRequest;
                         <span class="kw">type </span>ResponseStream = T::RouteHtlcsStream;
                         <span class="kw">type </span>Future = BoxFuture&lt;
                             tonic::Response&lt;<span class="self">Self</span>::ResponseStream&gt;,
@@ -1272,7 +1186,7 @@
                         <span class="kw">fn </span>call(
                             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
                             request: tonic::Request&lt;
-                                tonic::Streaming&lt;<span class="kw">super</span>::RouteHtlcRequest&gt;,
+                                tonic::Streaming&lt;<span class="kw">super</span>::InterceptHtlcResponse&gt;,
                             &gt;,
                         ) -&gt; <span class="self">Self</span>::Future {
                             <span class="kw">let </span>inner = <span class="self">self</span>.<span class="number">0</span>.clone();

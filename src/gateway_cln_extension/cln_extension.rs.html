@@ -643,36 +643,8 @@
 <a href="#643" id="643">643</a>
 <a href="#644" id="644">644</a>
 <a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
-<a href="#654" id="654">654</a>
-<a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a>
-<a href="#657" id="657">657</a>
-<a href="#658" id="658">658</a>
-<a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
-<a href="#662" id="662">662</a>
-<a href="#663" id="663">663</a>
-<a href="#664" id="664">664</a>
-<a href="#665" id="665">665</a>
-<a href="#666" id="666">666</a>
-<a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a>
-<a href="#669" id="669">669</a>
-<a href="#670" id="670">670</a>
-<a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
-<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -688,15 +660,14 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>futures::stream::StreamExt;
-<span class="kw">use </span>ln_gateway::gatewaylnrpc::complete_htlcs_request::{Action, Cancel, Settle};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+<span class="kw">use </span>ln_gateway::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    route_htlc_request, route_htlc_response, CompleteHtlcsRequest, CompleteHtlcsResponse,
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, PayInvoiceRequest,
-    PayInvoiceResponse, RouteHtlcRequest, RouteHtlcResponse, SubscribeInterceptHtlcsResponse,
+    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
@@ -912,11 +883,10 @@
     </span>}
 
     <span class="kw">async fn </span>complete_htlc(
-        complete_request: CompleteHtlcsRequest,
+        complete_request: InterceptHtlcResponse,
         interceptors: Arc&lt;ClnHtlcInterceptor&gt;,
-        sender: mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;RouteHtlcResponse, Status&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Status&gt; {
-        <span class="kw">let </span>CompleteHtlcsRequest {
+        <span class="kw">let </span>InterceptHtlcResponse {
             action,
             incoming_chan_id,
             htlc_id,
@@ -945,6 +915,9 @@
                     // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
                     </span>htlc_processing_failure()
                 }
+                <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; {
+                    <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>})
+                }
                 <span class="prelude-val">None </span>=&gt; {
                     <span class="macro">error!</span>(
                         <span class="question-mark">?</span>incoming_chan_id,
@@ -960,18 +933,7 @@
             <span class="comment">// Send translated response to the HTLC interceptor for submission
             // to the cln rpc
             </span><span class="kw">match </span>outcome.send(htlca_res) {
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">let _ </span>= sender
-                        .send(<span class="prelude-val">Ok</span>(RouteHtlcResponse {
-                            action: <span class="prelude-val">Some</span>(route_htlc_response::Action::CompleteResponse(
-                                CompleteHtlcsResponse {},
-                            )),
-                        }))
-                        .<span class="kw">await
-                        </span>.map_err(|e| {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to send CompleteResponse to gatewayd: {:?}&quot;</span>, e);
-                        });
-                }
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(
                         <span class="string">&quot;Failed to send htlc_accepted response to interceptor: {:?}&quot;</span>,
@@ -1155,45 +1117,31 @@
         <span class="prelude-val">Ok</span>(tonic::Response::new(outcome))
     }
 
-    <span class="kw">type </span>RouteHtlcsStream = ReceiverStream&lt;<span class="prelude-ty">Result</span>&lt;RouteHtlcResponse, Status&gt;&gt;;
+    <span class="kw">type </span>RouteHtlcsStream = ReceiverStream&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
 
     <span class="kw">async fn </span>route_htlcs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: tonic::Request&lt;tonic::Streaming&lt;RouteHtlcRequest&gt;&gt;,
+        request: tonic::Request&lt;tonic::Streaming&lt;InterceptHtlcResponse&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::RouteHtlcsStream&gt;, Status&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = request.into_inner();
 
         <span class="comment">// First create new channel that we will use to send responses back to gatewayd
         </span><span class="kw">let </span>(gatewayd_sender, gatewayd_receiver) =
-            mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;RouteHtlcResponse, Status&gt;&gt;(<span class="number">100</span>);
+            mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;(<span class="number">100</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>sender = <span class="self">self</span>.interceptor.sender.lock().<span class="kw">await</span>;
+        <span class="kw-2">*</span>sender = <span class="prelude-val">Some</span>(gatewayd_sender.clone());
 
         <span class="comment">// Spawn new thread that listens for events from the input stream
         </span><span class="kw">let </span>interceptors = <span class="self">self</span>.interceptor.clone();
         tokio::spawn(<span class="kw">async move </span>{
             <span class="kw">while let </span><span class="prelude-val">Some</span>(res) = stream.next().<span class="kw">await </span>{
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(route_request) = res {
-                    <span class="kw">match </span>route_request.action {
-                        <span class="prelude-val">Some</span>(route_htlc_request::Action::SubscribeRequest(subscribe_request)) =&gt; {
-                            interceptors.subscriptions.lock().<span class="kw">await</span>.insert(
-                                subscribe_request.short_channel_id,
-                                gatewayd_sender.clone(),
-                            );
-                        }
-                        <span class="prelude-val">Some</span>(route_htlc_request::Action::CompleteRequest(complete_request)) =&gt; {
-                            <span class="kw">let _ </span>= <span class="self">Self</span>::complete_htlc(
-                                complete_request,
-                                interceptors.clone(),
-                                gatewayd_sender.clone(),
-                            )
-                            .<span class="kw">await
-                            </span>.map_err(|e| {
-                                <span class="macro">error!</span>(<span class="string">&quot;CLN extension failed to complete HTLC: {:?}&quot;</span>, e);
-                            });
-                        }
-                        <span class="prelude-val">None </span>=&gt; {
-                            <span class="macro">error!</span>(<span class="string">&quot;No action was sent as part of RouteHtlcRequest&quot;</span>);
-                        }
-                    }
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(complete_request) = res {
+                    <span class="kw">let _ </span>= <span class="self">Self</span>::complete_htlc(complete_request, interceptors.clone())
+                        .<span class="kw">await
+                        </span>.map_err(|e| {
+                            <span class="macro">error!</span>(<span class="string">&quot;CLN extension failed to complete HTLC: {:?}&quot;</span>, e);
+                        });
                 }
             }
         });
@@ -1232,22 +1180,22 @@
     </span>})
 }
 
-<span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;RouteHtlcResponse, Status&gt;&gt;;
+<span class="kw">type </span>HtlcInterceptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
 <span class="kw">type </span>HtlcOutcomeSender = oneshot::Sender&lt;serde_json::Value&gt;;
 
 <span class="doccomment">/// Functional structure to filter intercepted HTLCs into subscription streams.
 /// Used as a CLN plugin
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ClnHtlcInterceptor {
-    subscriptions: Arc&lt;Mutex&lt;HashMap&lt;u64, HtlcSubscriptionSender&gt;&gt;&gt;,
     <span class="kw">pub </span>outcomes: Arc&lt;Mutex&lt;BTreeMap&lt;(u64, u64), HtlcOutcomeSender&gt;&gt;&gt;,
+    sender: Arc&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;HtlcInterceptionSender&gt;&gt;&gt;,
 }
 
 <span class="kw">impl </span>ClnHtlcInterceptor {
     <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            subscriptions: Arc::new(Mutex::new(HashMap::new())),
             outcomes: Arc::new(Mutex::new(BTreeMap::new())),
+            sender: Arc::new(Mutex::new(<span class="prelude-val">None</span>)),
         }
     }
 
@@ -1280,7 +1228,7 @@
 
         <span class="macro">info!</span>(<span class="question-mark">?</span>short_channel_id, <span class="string">&quot;Intercepted htlc with SCID&quot;</span>);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(subscription) = <span class="self">self</span>.subscriptions.lock().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>short_channel_id) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(sender) = <span class="kw-2">&amp;*</span><span class="self">self</span>.sender.lock().<span class="kw">await </span>{
             <span class="kw">let </span>payment_hash = payload.htlc.payment_hash.to_vec();
 
             <span class="kw">let </span>incoming_chan_id =
@@ -1290,19 +1238,15 @@
                     </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>}),
                 };
 
-            <span class="kw">let </span>htlc_ret = <span class="kw">match </span>subscription
-                .send(<span class="prelude-val">Ok</span>(RouteHtlcResponse {
-                    action: <span class="prelude-val">Some</span>(route_htlc_response::Action::SubscribeResponse(
-                        SubscribeInterceptHtlcsResponse {
-                            payment_hash: payment_hash.clone(),
-                            incoming_amount_msat: payload.htlc.amount_msat.msats,
-                            outgoing_amount_msat: payload.onion.forward_msat.msats,
-                            incoming_expiry: htlc_expiry,
-                            short_channel_id,
-                            incoming_chan_id,
-                            htlc_id: payload.htlc.id,
-                        },
-                    )),
+            <span class="kw">let </span>htlc_ret = <span class="kw">match </span>sender
+                .send(<span class="prelude-val">Ok</span>(InterceptHtlcRequest {
+                    payment_hash: payment_hash.clone(),
+                    incoming_amount_msat: payload.htlc.amount_msat.msats,
+                    outgoing_amount_msat: payload.onion.forward_msat.msats,
+                    incoming_expiry: htlc_expiry,
+                    short_channel_id,
+                    incoming_chan_id,
+                    htlc_id: payload.htlc.id,
                 }))
                 .<span class="kw">await
             </span>{
