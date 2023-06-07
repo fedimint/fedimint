@@ -14,6 +14,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
+use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleGen, ModuleCommon};
 use fedimint_core::task::TaskGroup;
@@ -22,11 +23,12 @@ use fedimint_ln_common::config::GatewayFee;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintCommonGen;
 use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::{Gateway, LightningMode, DEFAULT_FEES};
+use ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
 use tracing::{error, info};
 use url::Url;
 
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+const DB_FILE: &str = "gatewayd.db";
 
 #[derive(Parser)]
 pub struct GatewayOpts {
@@ -121,6 +123,12 @@ async fn main() -> Result<(), anyhow::Error> {
         DynClientModuleGen::from(LightningClientGen),
     ]);
 
+    let gatewayd_db = Database::new(
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))
+            .map_err(|_| GatewayError::DatabaseError)?,
+        decoders.clone(),
+    );
+
     // Create gateway instance
     let gateway = Gateway::new(
         mode,
@@ -129,6 +137,7 @@ async fn main() -> Result<(), anyhow::Error> {
         module_gens,
         task_group.make_subgroup().await,
         fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
+        gatewayd_db,
     )
     .await
     .unwrap_or_else(|e| {

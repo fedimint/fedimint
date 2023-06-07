@@ -1,22 +1,23 @@
 use std::fmt::Debug;
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
-use fedimint_core::config::{load_from_file, FederationId};
+use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::dyn_newtype_define;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
 use secp256k1::{KeyPair, PublicKey};
-use tracing::{debug, warn};
 use url::Url;
 
+use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::{GatewayError, Result};
 
 pub trait IDbFactory: Debug {
@@ -83,15 +84,23 @@ pub trait IGatewayClientBuilder: Debug {
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        module_gens: ClientModuleGenRegistry,
         fees: RoutingFees,
     ) -> Result<GatewayClientConfig>;
 
     /// Save and persist the configuration of the gateway federation client
-    fn save_config(&self, config: GatewayClientConfig) -> Result<()>;
+    async fn save_config(
+        &self,
+        config: GatewayClientConfig,
+        connection_string: String,
+        dbtx: DatabaseTransaction<'_>,
+    ) -> Result<()>;
 
     /// Load all gateway client configs from the work directory
-    fn load_configs(&self) -> Result<Vec<GatewayClientConfig>>;
+    async fn load_configs(
+        &self,
+        dbtx: DatabaseTransaction<'_>,
+        node_pub_key: PublicKey,
+    ) -> Result<Vec<GatewayClientConfig>>;
 }
 
 dyn_newtype_define! {
@@ -142,8 +151,6 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
         node_pubkey: PublicKey,
-        // TODO: delme
-        _module_gens: ClientModuleGenRegistry,
         fees: RoutingFees,
     ) -> Result<GatewayClientConfig> {
         let api: DynGlobalApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
@@ -165,63 +172,50 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         })
     }
 
-    fn save_config(&self, config: GatewayClientConfig) -> Result<()> {
-        let id = config.client_config.federation_id.to_string();
-        let path: PathBuf = self.work_dir.join(format!("{id}.json"));
-
-        if Path::new(&path).is_file() {
-            if config
-                == load_from_file::<GatewayClientConfig>(&path)
-                    .expect("Could not load existing gateway client config")
-            {
-                debug!("Existing gateway client config has not changed");
-                return Ok(());
-            }
-
-            panic!("Attempted to overwrite existing gateway client config")
-            // TODO: Issue 1057: Safe persistence and migration of gateway
-            // federation config
-        }
-
-        debug!("Saving gateway cfg in {}", path.display());
-        let file = File::options()
-            .create_new(true)
-            .write(true)
-            .open(path)
-            .map_err(anyhow::Error::from)?;
-        serde_json::to_writer_pretty(file, &config).map_err(anyhow::Error::from)?;
-
-        Ok(())
+    async fn save_config(
+        &self,
+        config: GatewayClientConfig,
+        connection_string: String,
+        mut dbtx: DatabaseTransaction<'_>,
+    ) -> Result<()> {
+        let id = config.client_config.federation_id;
+        let federation_config = FederationConfig {
+            mint_channel_id: config.mint_channel_id,
+            redeem_key: config.redeem_key,
+            timelock_delta: config.timelock_delta,
+            connection_string,
+            fees: config.fees,
+        };
+        dbtx.insert_new_entry(&FederationIdKey { id }, &federation_config)
+            .await;
+        dbtx.commit_tx_result()
+            .await
+            .map_err(|_| GatewayError::DatabaseError)
     }
 
-    fn load_configs(&self) -> Result<Vec<GatewayClientConfig>> {
-        Ok(std::fs::read_dir(&self.work_dir)
-            .map_err(|e| GatewayError::Other(anyhow::Error::new(e)))?
-            .filter_map(|file_res| {
-                let file = file_res.ok()?;
-                if !file.file_type().ok()?.is_file() {
-                    return None;
-                }
+    async fn load_configs(
+        &self,
+        mut dbtx: DatabaseTransaction<'_>,
+        node_pub_key: PublicKey,
+    ) -> Result<Vec<GatewayClientConfig>> {
+        let federations = dbtx
+            .find_by_prefix(&FederationIdKeyPrefix)
+            .await
+            .collect::<Vec<(FederationIdKey, FederationConfig)>>()
+            .await;
+        let mut configs = Vec::new();
+        for (_id, config) in federations {
+            let connect =
+                WsClientConnectInfo::from_str(&config.connection_string).map_err(|e| {
+                    GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
+                })?;
 
-                if file
-                    .path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| ext == "json")
-                    .unwrap_or(false)
-                {
-                    Some(file)
-                } else {
-                    None
-                }
-            })
-            .filter_map(|file| {
-                // FIXME: handle parsing errors
-                debug!("Trying to load config file {:?}", file.path());
-                load_from_file(&file.path())
-                    .map_err(|e| warn!("Could not parse config: {}", e))
-                    .ok()
-            })
-            .collect())
+            let gateway_config = self
+                .create_config(connect, config.mint_channel_id, node_pub_key, config.fees)
+                .await?;
+            configs.push(gateway_config);
+        }
+
+        Ok(configs)
     }
 }
