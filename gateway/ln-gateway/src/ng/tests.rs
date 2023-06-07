@@ -15,7 +15,7 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{
     LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
-    LightningMeta, LnPayState,
+    LightningMeta, LnPayState, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -28,9 +28,8 @@ use fedimint_testing::ln::{LightningNodeType, LightningTest};
 use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::lnrpc_client::ILnRpcClient;
-use ln_gateway::ng::receive::Htlc;
 use ln_gateway::ng::{
-    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates,
+    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates, Htlc,
 };
 use tracing::debug;
 use url::Url;
@@ -115,20 +114,25 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             let invoice = other_lightning_client.invoice(sats(250), None).await?;
 
             // User client pays test invoice
-            let (pay_op, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
-            let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
-            assert_eq!(pay_sub.ok().await?, LnPayState::Created);
-            let funded = pay_sub.ok().await?;
-            assert_matches!(funded, LnPayState::Funded);
+            let (pay_type, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+            match pay_type {
+                PayType::Lightning(pay_op) => {
+                    let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
+                    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+                    let funded = pay_sub.ok().await?;
+                    assert_matches!(funded, LnPayState::Funded);
 
-            let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
-            let mut gw_pay_sub = gateway
-                .gateway_subscribe_ln_pay(gw_pay_op)
-                .await?
-                .into_stream();
-            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
-            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
-            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
+                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
+                    let mut gw_pay_sub = gateway
+                        .gateway_subscribe_ln_pay(gw_pay_op)
+                        .await?
+                        .into_stream();
+                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+                    assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
+                    assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
+                }
+                _ => panic!("Expected Lightning payment!"),
+            }
 
             Ok(())
         },
@@ -151,19 +155,24 @@ async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
                 .unwrap();
 
             // User client pays test invoice
-            let (pay_op, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
-            let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
-            assert_eq!(pay_sub.ok().await?, LnPayState::Created);
-            let funded = pay_sub.ok().await?;
-            assert_matches!(funded, LnPayState::Funded);
+            let (pay_type, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+            match pay_type {
+                PayType::Lightning(pay_op) => {
+                    let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
+                    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+                    let funded = pay_sub.ok().await?;
+                    assert_matches!(funded, LnPayState::Funded);
 
-            let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
-            let mut gw_pay_sub = gateway
-                .gateway_subscribe_ln_pay(gw_pay_op)
-                .await?
-                .into_stream();
-            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
-            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled);
+                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
+                    let mut gw_pay_sub = gateway
+                        .gateway_subscribe_ln_pay(gw_pay_op)
+                        .await?
+                        .into_stream();
+                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled);
+                }
+                _ => panic!("Expected Lightning payment!"),
+            }
 
             Ok(())
         },
