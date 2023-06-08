@@ -29,7 +29,8 @@ use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::ng::{
-    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates, Htlc,
+    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates,
+    GatewayExtRegisterStates, Htlc,
 };
 use tracing::debug;
 use url::Url;
@@ -58,8 +59,23 @@ async fn new_gateway_client(
         mint_channel_id: 1,
     });
     let gateway = fed.new_gateway_client(registry).await;
-    let fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
-    gateway.register_with_federation(fake_api).await?;
+    {
+        let fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
+        let fake_route_hints = Vec::new();
+        let register_op = gateway
+            .register_with_federation(fake_api, fake_route_hints)
+            .await?;
+        let mut register_sub = gateway
+            .gateway_subscribe_register(register_op)
+            .await?
+            .into_stream();
+        assert_matches!(
+            register_sub.ok().await?,
+            GatewayExtRegisterStates::Registering
+        );
+        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
+    }
+
     Ok(gateway)
 }
 

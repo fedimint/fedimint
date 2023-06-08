@@ -1,4 +1,5 @@
 pub mod pay;
+pub mod register;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +20,6 @@ use fedimint_core::db::{AutocommitError, Database};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ExtendsCommonModuleGen, TransactionItemAmount};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
-use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::Preimage;
@@ -39,8 +39,10 @@ use thiserror::Error;
 use url::Url;
 
 use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
+use self::register::GatewayRegisterStateMachine;
 use crate::gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcRequest};
 use crate::lnrpc_client::ILnRpcClient;
+use crate::ng::register::{GatewayRegisterCommon, GatewayRegisterStates, RegisterGateway};
 
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
@@ -56,6 +58,7 @@ pub enum GatewayExtPayStates {
     OfferDoesNotExist { contract_id: ContractId },
 }
 
+/// The high-level state of an intercepted HTLC operation started with
 /// [`GatewayClientExt::gateway_handle_intercepted_htlc`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum GatewayExtReceiveStates {
@@ -66,10 +69,19 @@ pub enum GatewayExtReceiveStates {
     FundingFailed(String),
 }
 
+/// The high-level state of a registration operation started with
+/// [`GatewayClientExt::register_with_federation`].
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum GatewayExtRegisterStates {
+    Registering,
+    Success,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GatewayMeta {
     Pay,
     Receive,
+    Register,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -87,7 +99,11 @@ pub trait GatewayClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtPayStates>>;
 
     /// Register gateway with federation
-    async fn register_with_federation(&self, api: Url) -> anyhow::Result<()>;
+    async fn register_with_federation(
+        &self,
+        gateway_api: Url,
+        route_hints: Vec<RouteHint>,
+    ) -> anyhow::Result<OperationId>;
 
     /// Attempt fulfill HTLC by buying preimage from the federation
     async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId>;
@@ -97,6 +113,12 @@ pub trait GatewayClientExt {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtReceiveStates>>;
+
+    /// Subscribe to updates when the gateway is registering with the federation
+    async fn gateway_subscribe_register(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtRegisterStates>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -197,12 +219,60 @@ impl GatewayClientExt for Client {
     }
 
     /// Register this gateway with the federation
-    async fn register_with_federation(&self, api: Url) -> anyhow::Result<()> {
+    async fn register_with_federation(
+        &self,
+        gateway_api: Url,
+        route_hints: Vec<RouteHint>,
+    ) -> anyhow::Result<OperationId> {
         let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
-        let route_hints = vec![];
-        let config = gateway.to_gateway_registration_info(route_hints, GW_ANNOUNCEMENT_TTL, api);
-        instance.api.register_gateway(&config).await?;
-        Ok(())
+        let registration_info =
+            gateway.to_gateway_registration_info(route_hints, GW_ANNOUNCEMENT_TTL, gateway_api);
+
+        self.db()
+            .autocommit(
+                |dbtx| {
+                    Box::pin(async {
+                        let registration = registration_info.clone();
+                        let operation_id = OperationId(registration.mint_pub_key.serialize());
+
+                        let state_machines = vec![GatewayClientStateMachines::Register(
+                            GatewayRegisterStateMachine {
+                                common: GatewayRegisterCommon {
+                                    operation_id,
+                                    time_to_live: GW_ANNOUNCEMENT_TTL,
+                                    registration_info: registration,
+                                },
+                                state: GatewayRegisterStates::Register(RegisterGateway {}),
+                            },
+                        )];
+
+                        let dyn_states = state_machines
+                            .into_iter()
+                            .map(|s| s.into_dyn(instance.id))
+                            .collect();
+
+                        self.add_state_machines(dbtx, dyn_states).await?;
+                        self.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                KIND.as_str(),
+                                GatewayMeta::Register,
+                            )
+                            .await;
+
+                        Ok(operation_id)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow::anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
     }
 
     /// Handles an intercepted HTLC by buying a preimage from the federation
@@ -247,6 +317,29 @@ impl GatewayClientExt for Client {
                     }
                 };
                 yield state;
+            }
+        }))
+    }
+
+    async fn gateway_subscribe_register(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtRegisterStates>> {
+        let (gateway, _instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let operation = ln_operation(self, operation_id).await?;
+
+        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
+            stream! {
+                let mut stream = gateway.notifier.subscribe(operation_id).await;
+                loop {
+                    if let Some(GatewayClientStateMachines::Register(state)) = stream.next().await {
+                        match state.state {
+                            GatewayRegisterStates::Register(_) => yield GatewayExtRegisterStates::Registering,
+                            // If we're waiting for the time to live to expire, that means we've successfully registered before
+                            GatewayRegisterStates::WaitForTTL(_) => yield GatewayExtRegisterStates::Success,
+                        }
+                    }
+                }
             }
         }))
     }
@@ -461,10 +554,12 @@ impl GatewayClientModule {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
     Receive(IncomingStateMachine),
+    Register(GatewayRegisterStateMachine),
 }
 
 impl IntoDynInstance for GatewayClientStateMachines {
@@ -497,6 +592,12 @@ impl State for GatewayClientStateMachines {
                     GatewayClientStateMachines::Receive
                 )
             }
+            GatewayClientStateMachines::Register(register_state) => {
+                sm_enum_variant_translation!(
+                    register_state.transitions(context, global_context),
+                    GatewayClientStateMachines::Register
+                )
+            }
         }
     }
 
@@ -504,6 +605,7 @@ impl State for GatewayClientStateMachines {
         match self {
             GatewayClientStateMachines::Pay(pay_state) => pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
+            GatewayClientStateMachines::Register(register_state) => register_state.operation_id(),
         }
     }
 }

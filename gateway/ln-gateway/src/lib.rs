@@ -176,7 +176,9 @@ impl Gateway {
             gatewayd_db,
         };
 
-        gw.load_actors(decoders, module_gens).await?;
+        let (route_hints, node_pub_key) = gw.fetch_route_hints_and_node_pub_key().await?;
+        gw.load_actors(decoders, module_gens, route_hints, node_pub_key)
+            .await?;
         gw.route_htlcs(task_group).await?;
 
         Ok(gw)
@@ -210,7 +212,9 @@ impl Gateway {
             gatewayd_db,
         };
 
-        gw.load_actors(decoders, module_gens).await?;
+        let (route_hints, node_pub_key) = gw.fetch_route_hints_and_node_pub_key().await?;
+        gw.load_actors(decoders, module_gens, route_hints, node_pub_key)
+            .await?;
         gw.route_htlcs(task_group).await?;
 
         Ok(gw)
@@ -321,12 +325,7 @@ impl Gateway {
         Ok(())
     }
 
-    async fn load_actors(
-        &mut self,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-    ) -> Result<()> {
-        // Fetch route hints form the LN node
+    async fn fetch_route_hints_and_node_pub_key(&self) -> Result<(Vec<RouteHint>, PublicKey)> {
         let mut num_retries = 0;
         let (route_hints, node_pub_key) = loop {
             let route_hints: Vec<RouteHint> = self
@@ -354,6 +353,16 @@ impl Gateway {
             task::sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
 
+        Ok((route_hints, node_pub_key))
+    }
+
+    async fn load_actors(
+        &mut self,
+        decoders: ModuleDecoderRegistry,
+        module_gens: ClientModuleGenRegistry,
+        route_hints: Vec<RouteHint>,
+        node_pub_key: PublicKey,
+    ) -> Result<()> {
         let dbtx = self.gatewayd_db.begin_transaction().await;
         if let Ok(configs) = self.client_builder.load_configs(dbtx, node_pub_key).await {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
