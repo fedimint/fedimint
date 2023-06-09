@@ -1,4 +1,5 @@
 use aleph_bft::Keychain as KeychainTrait;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
 use tokio::sync::watch;
 
@@ -73,9 +74,13 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
             }
         }
 
-        // this enables us to verify which peer has submitted a certain item to the
-        // broadcast
-        let signature = self.keychain.sign(&items.consensus_hash()).await;
+        // enables us to verify which peer has submitted a item
+        let mut engine = sha256::HashEngine::default();
+        items
+            .consensus_encode(&mut engine)
+            .expect("Writing to HashEngine cannot fail");
+        let hash = sha256::Hash::from_engine(engine);
+        let signature = self.keychain.sign(hash.as_byte_array()).await;
 
         Some(UnitData::Batch(
             items,

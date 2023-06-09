@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use aleph_bft::Keychain as KeychainTrait;
 use async_channel::{Receiver, Sender};
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::Encodable;
 use tokio::sync::{oneshot, watch};
 
@@ -116,7 +117,12 @@ pub async fn run(
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
                 if let UnitData::Batch(batch_items, signature, node_index) = unit_data? {
-                    if keychain.verify(&batch_items.consensus_hash(), &signature, node_index){
+                    let mut engine = sha256::HashEngine::default();
+                    batch_items
+                        .consensus_encode(&mut engine)
+                        .expect("Writing to HashEngine cannot fail");
+                    let hash = sha256::Hash::from_engine(engine);
+                    if keychain.verify(hash.as_byte_array(), &signature, node_index){
                         // since the signature is valid the node index can be converted to a peer id
                         let peer_id = to_peer_id(node_index);
 
