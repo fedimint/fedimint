@@ -1,10 +1,8 @@
 use std::io::Cursor;
 
-use fedimint_core::{
-    db::Database,
-    encoding::{Decodable, Encodable},
-    impl_db_record,
-};
+use fedimint_core::db::Database;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::impl_db_record;
 
 use crate::SignedBlock;
 
@@ -52,11 +50,13 @@ pub async fn open_session(db: Database, index: u64) -> (Cursor<Vec<u8>>, UnitSav
 
     tracing::info!("Loaded aleph buffer with {} bytes", buffer.len());
 
-    // the cursor enables aleph bft to read all previously flushed bytes via std::io::Read
+    // the cursor enables aleph bft to read all previously flushed bytes via
+    // std::io::Read
     let loader = Cursor::new(buffer);
 
-    // aleph bft expects bytes written via the saver to be appended to the bytes previously read
-    // via the loader - hence we pass the first free buffer index to the UnitSaver as an offset
+    // aleph bft expects bytes written via the saver to be appended to the bytes
+    // previously read via the loader - hence we pass the first free buffer
+    // index to the UnitSaver as an offset
     let saver = UnitSaver::new(db, index, buffer_index);
 
     (loader, saver)

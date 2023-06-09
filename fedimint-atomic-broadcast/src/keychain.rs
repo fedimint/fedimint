@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use aleph_bft::Keychain as KeychainTrait;
 use fedimint_core::PeerId;
-use secp256k1::{hashes::sha256, schnorr, Message};
+use secp256k1::hashes::sha256;
+use secp256k1::{schnorr, Message};
 
 use crate::conversion;
 

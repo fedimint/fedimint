@@ -1,10 +1,13 @@
-use fedimint_core::{db::Database, PeerId};
 use std::time::Duration;
+
+use fedimint_core::db::Database;
+use fedimint_core::PeerId;
 use tokio::sync::{mpsc, oneshot, watch};
 
-use crate::{db, keychain::Keychain, session};
-
-use crate::{AcceptedItem, Decision, Message, OrderedItem, Recipient, Shutdown, SignedBlock};
+use crate::keychain::Keychain;
+use crate::{
+    db, session, AcceptedItem, Decision, Message, OrderedItem, Recipient, Shutdown, SignedBlock,
+};
 
 async fn relay_messages(
     db: Database,

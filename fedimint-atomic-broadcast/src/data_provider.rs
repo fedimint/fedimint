@@ -39,7 +39,8 @@ impl DataProvider {
 #[async_trait::async_trait]
 impl aleph_bft::DataProvider<UnitData> for DataProvider {
     async fn get_data(&mut self) -> Option<UnitData> {
-        // This function constructs UnitData such that it is accepted by the Network implementation
+        // This function constructs UnitData such that it is accepted by the Network
+        // implementation
         const ITEM_LIMIT: usize = 100;
         const BYTE_LIMIT: usize = 10_000;
 
@@ -72,7 +73,8 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
             }
         }
 
-        // this enables us to verify which peer has submitted a certain item to the broadcast
+        // this enables us to verify which peer has submitted a certain item to the
+        // broadcast
         let signature = self.keychain.sign(&items.consensus_hash()).await;
 
         Some(UnitData::Batch(

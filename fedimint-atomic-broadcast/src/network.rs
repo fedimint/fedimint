@@ -1,10 +1,8 @@
 use std::io::Write;
 
 use async_channel;
-use bitcoin_hashes::sha256;
-use bitcoin_hashes::Hash;
-use parity_scale_codec::Encode;
-use parity_scale_codec::{Decode, IoReader};
+use bitcoin_hashes::{sha256, Hash};
+use parity_scale_codec::{Decode, Encode, IoReader};
 
 use crate::conversion::to_peer_id;
 use crate::data_provider::UnitData;
@@ -60,8 +58,9 @@ impl aleph_bft::Network<NetworkData> for Network {
             aleph_bft::Recipient::Everyone => Recipient::Everyone,
         };
 
-        // since NetworkData does not implement Encodable we use parity_scale_codec::Encode
-        // to serialize it such that Message can implement Encodable
+        // since NetworkData does not implement Encodable we use
+        // parity_scale_codec::Encode to serialize it such that Message can
+        // implement Encodable
         self.outgoing_message_sender
             .try_send((Message::NetworkData(network_data.encode()), recipient))
             .ok();
@@ -80,7 +79,8 @@ impl aleph_bft::Network<NetworkData> for Network {
                     match unit_data {
                         UnitData::Signature(..) => true,
                         UnitData::Batch(items, ..) => {
-                            // the lazy evaluation prevents overflow when summing over the item sizes
+                            // the lazy evaluation prevents overflow when summing over the item
+                            // sizes
                             items.len() <= ITEM_LIMIT
                                 && items.iter().all(|item| item.len() <= BYTE_LIMIT)
                                 && items.iter().map(Vec::len).sum::<usize>() <= BYTE_LIMIT

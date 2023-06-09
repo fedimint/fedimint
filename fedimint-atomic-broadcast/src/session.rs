@@ -6,22 +6,19 @@ use async_channel::{Receiver, Sender};
 use fedimint_core::encoding::Encodable;
 use tokio::sync::{oneshot, watch};
 
-use crate::{
-    conversion::{to_node_index, to_peer_id},
-    data_provider::{DataProvider, UnitData},
-    db,
-    finalization_handler::FinalizationHandler,
-    keychain::Keychain,
-    network::Network,
-    spawner::Spawner,
-    AcceptedItem, Block, Decision, Message, OrderedItem, Recipient, SignedBlock,
-};
+use crate::conversion::{to_node_index, to_peer_id};
+use crate::data_provider::{DataProvider, UnitData};
+use crate::finalization_handler::FinalizationHandler;
+use crate::keychain::Keychain;
+use crate::network::Network;
+use crate::spawner::Spawner;
+use crate::{db, AcceptedItem, Block, Decision, Message, OrderedItem, Recipient, SignedBlock};
 
 // this function completes a session with the following steps:
 // - set up the aleph bft session
 // - periodically request the corresponding signed block from peers
-// - combine the accepted items into a block until we reach a preset
-//   number of ordered batches or a signed block arrives
+// - combine the accepted items into a block until we reach a preset number of
+//   ordered batches or a signed block arrives
 // - collect signatures until we reach the threshold or a signed block arrives
 pub async fn run(
     index: u64,
@@ -46,13 +43,15 @@ pub async fn run(
         index.into(),
     );
 
-    // In order to bound a sessions RAM consumption we need to bound its number of units
-    // and therefore its number of rounds. Since we use a session to create a threshold
-    // signature for the corresponding block we have to guarantee that an attacker cannot
-    // exhaust our memory by preventing the creation of a threshold signature, thereby
-    // keeping the session open indefinitely. Hence we increase the delay between rounds
-    // exponentially such that MAX_ROUND would only be reached after roughly 350 years.
-    // In case of such an attack the broadcast stops ordering any items until the attack subsides.
+    // In order to bound a sessions RAM consumption we need to bound its number of
+    // units and therefore its number of rounds. Since we use a session to
+    // create a threshold signature for the corresponding block we have to
+    // guarantee that an attacker cannot exhaust our memory by preventing the
+    // creation of a threshold signature, thereby keeping the session open
+    // indefinitely. Hence we increase the delay between rounds exponentially
+    // such that MAX_ROUND would only be reached after roughly 350 years.
+    // In case of such an attack the broadcast stops ordering any items until the
+    // attack subsides.
     config.max_round = MAX_ROUND;
     config.delay_config.unit_creation_delay = std::sync::Arc::new(|round_index| {
         let delay = if round_index == 0 {
@@ -104,8 +103,9 @@ pub async fn run(
         }
     });
 
-    // this is the minimum number of unit data that will be ordered before we reach the
-    // EXPONETIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit data
+    // this is the minimum number of unit data that will be ordered before we reach
+    // the EXPONETIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
+    // data
     let n_batches_per_block = EXPONETIAL_SLOWDOWN_OFFSET * keychain.peer_count / 3;
     let mut items = vec![];
     let mut n_batches = 0;
@@ -189,8 +189,8 @@ pub async fn run(
 
     let mut signature = BTreeMap::new();
 
-    // we collect the ordered signatures until we either obtain a threshold signature
-    // or a signed block arrives from our peers
+    // we collect the ordered signatures until we either obtain a threshold
+    // signature or a signed block arrives from our peers
     while signature.len() < keychain.threshold {
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
