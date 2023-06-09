@@ -39,12 +39,15 @@ use thiserror::Error;
 use url::Url;
 
 use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
-use self::register::GatewayRegisterStateMachine;
+use self::register::RegisterWithFederationStateMachine;
 use crate::gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcRequest};
 use crate::lnrpc_client::ILnRpcClient;
-use crate::ng::register::{GatewayRegisterCommon, GatewayRegisterStates, RegisterGateway};
+use crate::ng::register::{
+    RegisterWithFederation, RegisterWithFederationCommon, RegisterWithFederationStates,
+};
 
-const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
+pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
+pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
 
 /// The high-level state of a reissue operation started with
 /// [`GatewayClientExt::gateway_pay_bolt11_invoice`].
@@ -75,6 +78,7 @@ pub enum GatewayExtReceiveStates {
 pub enum GatewayExtRegisterStates {
     Registering,
     Success,
+    Done,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,6 +107,7 @@ pub trait GatewayClientExt {
         &self,
         gateway_api: Url,
         route_hints: Vec<RouteHint>,
+        time_to_live: Duration,
     ) -> anyhow::Result<OperationId>;
 
     /// Attempt fulfill HTLC by buying preimage from the federation
@@ -223,26 +228,32 @@ impl GatewayClientExt for Client {
         &self,
         gateway_api: Url,
         route_hints: Vec<RouteHint>,
+        time_to_live: Duration,
     ) -> anyhow::Result<OperationId> {
         let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
         let registration_info =
-            gateway.to_gateway_registration_info(route_hints, GW_ANNOUNCEMENT_TTL, gateway_api);
+            gateway.to_gateway_registration_info(route_hints, time_to_live, gateway_api);
 
         self.db()
             .autocommit(
                 |dbtx| {
                     Box::pin(async {
                         let registration = registration_info.clone();
-                        let operation_id = OperationId(registration.mint_pub_key.serialize());
+                        let operation_id = OperationId(rand::random());
 
                         let state_machines = vec![GatewayClientStateMachines::Register(
-                            GatewayRegisterStateMachine {
-                                common: GatewayRegisterCommon {
+                            RegisterWithFederationStateMachine {
+                                common: RegisterWithFederationCommon {
                                     operation_id,
-                                    time_to_live: GW_ANNOUNCEMENT_TTL,
+                                    time_to_live,
                                     registration_info: registration,
+                                    federation_id: self.get_config().await.federation_id,
                                 },
-                                state: GatewayRegisterStates::Register(RegisterGateway {}),
+                                state: RegisterWithFederationStates::Register(
+                                    RegisterWithFederation {
+                                        backoff_duration: INITIAL_REGISTER_BACKOFF_DURATION,
+                                    },
+                                ),
                             },
                         )];
 
@@ -331,15 +342,19 @@ impl GatewayClientExt for Client {
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                 let mut stream = gateway.notifier.subscribe(operation_id).await;
-                loop {
+                let state = loop {
                     if let Some(GatewayClientStateMachines::Register(state)) = stream.next().await {
                         match state.state {
-                            GatewayRegisterStates::Register(_) => yield GatewayExtRegisterStates::Registering,
+                            RegisterWithFederationStates::Register(_) => yield GatewayExtRegisterStates::Registering,
                             // If we're waiting for the time to live to expire, that means we've successfully registered before
-                            GatewayRegisterStates::WaitForTTL(_) => yield GatewayExtRegisterStates::Success,
+                            RegisterWithFederationStates::WaitForTTL(_) => yield GatewayExtRegisterStates::Success,
+                            RegisterWithFederationStates::Done => break GatewayExtRegisterStates::Done,
+                            _ => {}
                         }
                     }
-                }
+                };
+
+                yield state;
             }
         }))
     }
@@ -559,7 +574,7 @@ impl GatewayClientModule {
 pub enum GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
     Receive(IncomingStateMachine),
-    Register(GatewayRegisterStateMachine),
+    Register(RegisterWithFederationStateMachine),
 }
 
 impl IntoDynInstance for GatewayClientStateMachines {
