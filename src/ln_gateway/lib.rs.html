@@ -691,6 +691,15 @@
 <a href="#691" id="691">691</a>
 <a href="#692" id="692">692</a>
 <a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>actor;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
@@ -869,7 +878,9 @@
             gatewayd_db,
         };
 
-        gw.load_actors(decoders, module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(route_hints, node_pub_key) = gw.fetch_route_hints_and_node_pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
+        gw.load_actors(decoders, module_gens, route_hints, node_pub_key)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         gw.route_htlcs(task_group).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(gw)
@@ -903,7 +914,9 @@
             gatewayd_db,
         };
 
-        gw.load_actors(decoders, module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(route_hints, node_pub_key) = gw.fetch_route_hints_and_node_pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
+        gw.load_actors(decoders, module_gens, route_hints, node_pub_key)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         gw.route_htlcs(task_group).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(gw)
@@ -1014,13 +1027,8 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>load_actors(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="comment">// Fetch route hints form the LN node
-        </span><span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
+    <span class="kw">async fn </span>fetch_route_hints_and_node_pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;RouteHint&gt;, PublicKey)&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
         <span class="kw">let </span>(route_hints, node_pub_key) = <span class="kw">loop </span>{
             <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = <span class="self">self
                 </span>.lnrpc
@@ -1047,6 +1055,16 @@
             task::sleep(ROUTE_HINT_RETRY_SLEEP).<span class="kw">await</span>;
         };
 
+        <span class="prelude-val">Ok</span>((route_hints, node_pub_key))
+    }
+
+    <span class="kw">async fn </span>load_actors(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        decoders: ModuleDecoderRegistry,
+        module_gens: ClientModuleGenRegistry,
+        route_hints: Vec&lt;RouteHint&gt;,
+        node_pub_key: PublicKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>dbtx = <span class="self">self</span>.gatewayd_db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(configs) = <span class="self">self</span>.client_builder.load_configs(dbtx, node_pub_key).<span class="kw">await </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = <span class="self">self</span>.channel_id_generator.load(Ordering::SeqCst);

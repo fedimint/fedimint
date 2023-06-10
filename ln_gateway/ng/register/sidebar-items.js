@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["RegisterWithFederationError",""],["RegisterWithFederationStates","State machine that registers the lightning gateway with the federation."]],"struct":[["FailureBackoff",""],["RegisterWithFederation",""],["RegisterWithFederationCommon",""],["RegisterWithFederationStateMachine",""],["WaitForTimeToLive",""]]};
