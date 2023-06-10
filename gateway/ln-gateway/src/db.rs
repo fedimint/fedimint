@@ -1,6 +1,7 @@
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_ln_common::LightningGateway;
 use lightning::routing::gossip::RoutingFees;
 use secp256k1::KeyPair;
 
@@ -8,6 +9,7 @@ use secp256k1::KeyPair;
 #[derive(Clone, Debug)]
 pub enum DbKeyPrefix {
     FederationConfig = 0x04,
+    FederationRegistration = 0x05,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
@@ -34,3 +36,14 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = FederationIdKey, query_prefix = FederationIdKeyPrefix);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct FederationRegistrationKey {
+    pub id: FederationId,
+}
+
+impl_db_record!(
+    key = FederationRegistrationKey,
+    value = LightningGateway,
+    db_prefix = DbKeyPrefix::FederationRegistration,
+);

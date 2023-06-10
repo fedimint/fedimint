@@ -1,5 +1,6 @@
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
@@ -29,7 +30,8 @@ use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::ng::{
-    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates, Htlc,
+    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates,
+    GatewayExtRegisterStates, Htlc, GW_ANNOUNCEMENT_TTL,
 };
 use tracing::debug;
 use url::Url;
@@ -58,8 +60,23 @@ async fn new_gateway_client(
         mint_channel_id: 1,
     });
     let gateway = fed.new_gateway_client(registry).await;
-    let fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
-    gateway.register_with_federation(fake_api).await?;
+    {
+        let fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
+        let fake_route_hints = Vec::new();
+        let register_op = gateway
+            .register_with_federation(fake_api, fake_route_hints, GW_ANNOUNCEMENT_TTL)
+            .await?;
+        let mut register_sub = gateway
+            .gateway_subscribe_register(register_op)
+            .await?
+            .into_stream();
+        assert_matches!(
+            register_sub.ok().await?,
+            GatewayExtRegisterStates::Registering
+        );
+        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
+    }
+
     Ok(gateway)
 }
 
@@ -376,4 +393,72 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
         },
     )
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
+    let (fixtures, lightning_fixtures) = fixtures(&LightningNodeType::Cln).await;
+    let fed = fixtures.new_fed().await;
+
+    let mut registry = ClientModuleGenRegistry::new();
+    registry.attach(DummyClientGen);
+    registry.attach(GatewayClientGen {
+        lightning_client: lightning_fixtures.gateway_lightning_client.clone(),
+        fees: RoutingFees {
+            base_msat: 0,
+            proportional_millionths: 0,
+        },
+        timelock_delta: 10,
+        mint_channel_id: 1,
+    });
+    let gateway = fed.new_gateway_client(registry).await;
+    {
+        let mut fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
+        let fake_route_hints = Vec::new();
+        // Register with the federation with a low TTL to verify it will re-register
+        let register_op = gateway
+            .register_with_federation(fake_api, fake_route_hints.clone(), Duration::from_secs(10))
+            .await?;
+        let mut register_sub = gateway
+            .gateway_subscribe_register(register_op)
+            .await?
+            .into_stream();
+        assert_matches!(
+            register_sub.ok().await?,
+            GatewayExtRegisterStates::Registering
+        );
+        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
+        // Verify that the gateway client will re-register after the TTL
+        assert_matches!(
+            register_sub.ok().await?,
+            GatewayExtRegisterStates::Registering
+        );
+        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
+
+        // Update the URI for the gateway then re-register
+        fake_api = Url::from_str("http://127.0.0.1:8176").unwrap();
+
+        let reregister_op = gateway
+            .register_with_federation(fake_api, fake_route_hints, GW_ANNOUNCEMENT_TTL)
+            .await?;
+
+        let mut reregister_sub = gateway
+            .gateway_subscribe_register(reregister_op)
+            .await?
+            .into_stream();
+        // Verify that the re-register was successful
+        assert_matches!(
+            reregister_sub.ok().await?,
+            GatewayExtRegisterStates::Registering
+        );
+        assert_matches!(
+            reregister_sub.ok().await?,
+            GatewayExtRegisterStates::Success
+        );
+
+        // Verify that the previous register state machine expired and moved to `Done`
+        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Done);
+    }
+
+    Ok(())
 }
