@@ -422,6 +422,32 @@
 <a href="#422" id="422">422</a>
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future;
 <span class="kw">use </span>std::io::{Read, Write};
@@ -801,6 +827,32 @@
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(updates, <span class="macro">vec!</span>[<span class="string">&quot;baz&quot;</span>]);
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>test_operation_log_update_from_stream() {
+        <span class="kw">let </span>op_id = OperationId([<span class="number">0x32</span>; <span class="number">32</span>]);
+
+        <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        <span class="kw">let </span>op_log = OperationLog::new(db.clone());
+
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        op_log
+            .add_operation_log_entry(<span class="kw-2">&amp;mut </span>dbtx, op_id, <span class="string">&quot;foo&quot;</span>, <span class="string">&quot;bar&quot;</span>)
+            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+
+        <span class="kw">let </span>op = op_log.get_operation(op_id).<span class="kw">await</span>.expect(<span class="string">&quot;op exists&quot;</span>);
+
+        <span class="kw">let </span>updates = <span class="macro">vec!</span>[<span class="string">&quot;bar&quot;</span>.to_owned(), <span class="string">&quot;bob&quot;</span>.to_owned(), <span class="string">&quot;baz&quot;</span>.to_owned()];
+        <span class="kw">let </span>update_stream = op
+            .outcome_or_updates::&lt;String, <span class="kw">_</span>&gt;(<span class="kw-2">&amp;</span>db, op_id, || futures::stream::iter(updates.clone()));
+
+        <span class="kw">let </span>received_updates = update_stream.into_stream().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await</span>;
+        <span class="macro">assert_eq!</span>(received_updates, updates);
+
+        <span class="kw">let </span>op_updated = op_log.get_operation(op_id).<span class="kw">await</span>.expect(<span class="string">&quot;op exists&quot;</span>);
+        <span class="macro">assert_eq!</span>(op_updated.outcome::&lt;String&gt;(), <span class="prelude-val">Some</span>(<span class="string">&quot;baz&quot;</span>.to_string()));
     }
 
     <span class="attr">#[tokio::test]
