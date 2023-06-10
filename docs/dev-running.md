@@ -143,7 +143,7 @@ $ lncli lookupinvoice 1072fe19b3a53b3d778f6d5b0b...
 
 To receive a lightning payment inside use `fedimint-cli` to create an invoice:
 ```shell
-$ fedimint-cli ln-invoice 1000 "description"
+$ fedimint-cli ln-invoice --amount 1000 --description "description"
 
 {
   "invoice": "lnbcrt10n1pjq2zwxdqjv..."
