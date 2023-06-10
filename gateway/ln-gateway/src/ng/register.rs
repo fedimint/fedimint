@@ -6,6 +6,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
+use fedimint_core::time::now;
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::LightningGateway;
 use serde::{Deserialize, Serialize};
@@ -213,14 +214,27 @@ impl WaitForTimeToLive {
         &self,
         common: RegisterWithFederationCommon,
     ) -> Vec<StateTransition<RegisterWithFederationStateMachine>> {
-        let ttl = common.time_to_live;
-        vec![StateTransition::new(sleep(ttl), move |dbtx, _, _| {
-            Box::pin(Self::transition_wait_for_ttl(common.clone(), dbtx))
-        })]
+        vec![StateTransition::new(
+            Self::await_ttl(common.clone()),
+            move |dbtx, _, _| Box::pin(Self::transition_wait_for_ttl(common.clone(), dbtx)),
+        )]
+    }
+
+    async fn await_ttl(common: RegisterWithFederationCommon) {
+        // Allow a 15% buffer of re-registering before the previous registration is
+        // invalid
+        let buffer = common.time_to_live.mul_f32(0.15);
+        let registration_time = common.registration_info.valid_until - buffer;
+        let now = now();
+
+        // Only sleep if the registration time is in the future
+        if let Ok(duration) = registration_time.duration_since(now) {
+            sleep(duration).await
+        }
     }
 
     async fn transition_wait_for_ttl(
-        common: RegisterWithFederationCommon,
+        mut common: RegisterWithFederationCommon,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     ) -> RegisterWithFederationStateMachine {
         let mut dbtx = dbtx.module_tx();
@@ -240,6 +254,16 @@ impl WaitForTimeToLive {
                     state: RegisterWithFederationStates::Done,
                 };
             }
+
+            // Update the TTL on the current registration
+            common.registration_info.valid_until = now() + common.time_to_live;
+            dbtx.insert_entry(
+                &FederationRegistrationKey {
+                    id: common.federation_id,
+                },
+                &common.registration_info,
+            )
+            .await;
 
             // Re-register since the TTL has expired
             return RegisterWithFederationStateMachine {
