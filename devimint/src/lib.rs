@@ -186,20 +186,21 @@ impl Faucet {
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, (fed, faucet)) = tokio::try_join!(
+    let ((cln, lnd, gw_cln, gw_lnd, faucet), electrs, esplora, fed) = tokio::try_join!(
         async {
             let (cln, lnd) = tokio::try_join!(
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )?;
             info!(LOG_DEVIMINT, "lightning started");
-            let (gw_cln, gw_lnd, _) = tokio::try_join!(
+            let (gw_cln, gw_lnd, _, faucet) = tokio::try_join!(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
                 open_channel(&bitcoind, &cln, &lnd),
+                Faucet::new(process_mgr)
             )?;
             info!(LOG_DEVIMINT, "gateways started");
-            Ok((cln, lnd, gw_cln, gw_lnd))
+            Ok((cln, lnd, gw_cln, gw_lnd, faucet))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
@@ -207,10 +208,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
             let fed_size = process_mgr.globals.FM_FED_SIZE;
             let members = run_config_gen(process_mgr, fed_size, true).await?;
             info!(LOG_DEVIMINT, "config gen done");
-            tokio::try_join!(
-                Federation::new(process_mgr, bitcoind.clone(), members),
-                Faucet::new(process_mgr)
-            )
+            Federation::new(process_mgr, bitcoind.clone(), members).await
         },
     )?;
     info!(LOG_DEVIMINT, "federation and gateways started");
