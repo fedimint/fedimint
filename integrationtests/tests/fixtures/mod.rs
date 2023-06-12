@@ -14,7 +14,7 @@ use bitcoin::{secp256k1, KeyPair};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
-use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
+use fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig, UserClientConfig};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
@@ -71,7 +71,7 @@ use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::actor::GatewayActor;
-use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
+use ln_gateway::client::{DynGatewayClientBuilder, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::{Gateway, DEFAULT_FEES};
 use rand::rngs::OsRng;
@@ -616,13 +616,17 @@ impl GatewayTest {
         };
 
         // Create federation client builder for the gateway
-        let client_builder: DynGatewayClientBuilder = StandardGatewayClientBuilder::new(
-            PathBuf::new(),
-            MemDbFactory.into(),
-            announce_addr.clone(),
-        )
-        .into();
+        //let client_builder: DynGatewayClientBuilder =
+        // StandardGatewayClientBuilder::new(    PathBuf::new(),
+        //    MemDbFactory.into(),
+        //    announce_addr.clone(),
+        //)
+        //.into();
+        //let mem_db = Database::new(MemDatabase::new(), decoders);
+        //let client = Arc::new(Client::new(gw_client_cfg, decoders, module_gens,
+        // mem_db, ctx).await);
 
+        /*
         let mut gateway = Gateway::new_with_lightning_connection(
             lnrpc.clone(),
             client_builder.clone(),
@@ -634,13 +638,6 @@ impl GatewayTest {
         )
         .await
         .unwrap();
-
-        let client = Arc::new(
-            client_builder
-                .build(gw_client_cfg.clone(), decoders.clone(), module_gens.clone())
-                .await
-                .expect("Could not build gateway client"),
-        );
 
         let actor = gateway
             .load_actor(client.clone(), vec![], mint_channel_id)
@@ -668,6 +665,8 @@ impl GatewayTest {
             node,
             fees,
         }
+        */
+        todo!()
     }
 }
 

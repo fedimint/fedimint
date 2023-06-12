@@ -79,6 +79,8 @@ fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
 fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
+fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-testing = { path = "../../fedimint-testing" }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 assert_matches = "1.5.0"

@@ -10,8 +10,8 @@ use thiserror::Error;
 use url::Url;
 
 use super::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    RestorePayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
+    WithdrawPayload,
 };
 use crate::rpc::{FederationInfo, GatewayInfo};
 
@@ -52,11 +52,6 @@ impl GatewayRpcClient {
         payload: DepositAddressPayload,
     ) -> GatewayRpcResult<Address> {
         let url = self.base_url.join("/address").expect("invalid base url");
-        self.call(url, payload).await
-    }
-
-    pub async fn deposit(&self, payload: DepositPayload) -> GatewayRpcResult<TransactionId> {
-        let url = self.base_url.join("/deposit").expect("invalid base url");
         self.call(url, payload).await
     }
 

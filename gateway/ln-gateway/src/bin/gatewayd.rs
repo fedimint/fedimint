@@ -4,12 +4,9 @@ use std::process::exit;
 use std::time::Duration;
 
 use clap::Parser;
-use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
-use fedimint_client_legacy::modules::ln::{LightningClientGen, LightningModuleTypes};
-use fedimint_client_legacy::modules::mint::{MintClientGen, MintModuleTypes};
-use fedimint_client_legacy::modules::wallet::{
-    WalletClientGen, WalletCommonGen, WalletModuleTypes,
-};
+use fedimint_client_legacy::modules::ln::LightningModuleTypes;
+use fedimint_client_legacy::modules::mint::MintModuleTypes;
+use fedimint_client_legacy::modules::wallet::{WalletCommonGen, WalletModuleTypes};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -22,7 +19,7 @@ use fedimint_ln_client::LightningCommonGen;
 use fedimint_ln_common::config::GatewayFee;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintCommonGen;
-use ln_gateway::client::{DynGatewayClientBuilder, RocksDbFactory, StandardGatewayClientBuilder};
+use ln_gateway::client::{DynGatewayClientBuilder, StandardGatewayClientBuilder};
 use ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
 use tracing::{error, info};
 use url::Url;
@@ -92,7 +89,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Create federation client builder
     let client_builder: DynGatewayClientBuilder =
-        StandardGatewayClientBuilder::new(data_dir.clone(), RocksDbFactory.into(), api_addr).into();
+        StandardGatewayClientBuilder::new(data_dir.clone()).into();
 
     // Create task group for controlled shutdown of the gateway
     let mut task_group = TaskGroup::new();
@@ -116,13 +113,6 @@ async fn main() -> Result<(), anyhow::Error> {
         ),
     ]);
 
-    // Create module generator registry
-    let module_gens = ClientModuleGenRegistry::from(vec![
-        DynClientModuleGen::from(WalletClientGen),
-        DynClientModuleGen::from(MintClientGen),
-        DynClientModuleGen::from(LightningClientGen),
-    ]);
-
     let gatewayd_db = Database::new(
         fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))
             .map_err(|_| GatewayError::DatabaseError)?,
@@ -133,11 +123,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let gateway = Gateway::new(
         mode,
         client_builder,
-        decoders,
-        module_gens,
         &mut task_group,
         fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
         gatewayd_db,
+        api_addr,
     )
     .await
     .unwrap_or_else(|e| {
@@ -148,7 +137,7 @@ async fn main() -> Result<(), anyhow::Error> {
     gateway
         .spawn_webserver(listen, password, &mut task_group)
         .await;
-    if let Err(e) = gateway.run(task_group.make_handle()).await {
+    if let Err(e) = gateway.run(&mut task_group).await {
         task_group.shutdown_join_all(Some(SHUTDOWN_TIMEOUT)).await?;
 
         error!("Gateway stopped with error: {}", e);

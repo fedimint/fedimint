@@ -22,10 +22,7 @@ use crate::gatewaylnrpc::{
 use crate::lnrpc_client::ILnRpcClient;
 use crate::rpc::FederationInfo;
 use crate::utils::retry;
-use crate::{GatewayError, Result};
-
-/// How long a gateway announcement stays valid
-const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
+use crate::{GatewayError, Result, GW_ANNOUNCEMENT_TTL};
 
 #[derive(Clone)]
 pub struct GatewayActor {
