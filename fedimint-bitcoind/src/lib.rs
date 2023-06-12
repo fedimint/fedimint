@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::format_err;
 pub use anyhow::Result;
 use async_trait::async_trait;
-use bitcoin::{BlockHash, Network, Transaction};
+use bitcoin::{BlockHash, Network, Transaction, Txid};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::{dyn_newtype_define, Feerate};
@@ -100,12 +100,8 @@ pub trait IBitcoindRpc: Debug + Send + Sync {
     /// when it makes sense.
     async fn submit_transaction(&self, transaction: Transaction);
 
-    /// Check if a transaction was included in a given (only electrum)
-    async fn was_transaction_confirmed_in(
-        &self,
-        transaction: &Transaction,
-        height: u64,
-    ) -> Result<bool>;
+    /// Check if a transaction is included in a block
+    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>>;
 }
 
 dyn_newtype_define! {
@@ -185,16 +181,8 @@ where
         self.inner.submit_transaction(transaction.clone()).await;
     }
 
-    async fn was_transaction_confirmed_in(
-        &self,
-        transaction: &Transaction,
-        height: u64,
-    ) -> Result<bool> {
-        self.retry_call(|| async {
-            self.inner
-                .was_transaction_confirmed_in(transaction, height)
-                .await
-        })
-        .await
+    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
+        self.retry_call(|| async { self.inner.get_tx_block_height(txid).await })
+            .await
     }
 }

@@ -4,7 +4,7 @@ use std::fmt;
 use ::bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use ::bitcoincore_rpc::jsonrpc::error::RpcError;
 use ::bitcoincore_rpc::{jsonrpc, Auth, RpcApi};
-use anyhow::{bail, format_err};
+use anyhow::format_err;
 use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
 use fedimint_core::module::__reexports::serde_json::Value;
@@ -216,19 +216,13 @@ where
         })
     }
 
-    async fn was_transaction_confirmed_in(
-        &self,
-        transaction: &Transaction,
-        height: u64,
-    ) -> Result<bool> {
-        let block_hash = self.get_block_hash(height).await?;
-        let block = fedimint_core::task::block_in_place(|| {
-            self.0.get_block(&block_hash).map_err(anyhow::Error::from)
-        })?;
-        Ok(block
-            .txdata
-            .iter()
-            .any(|tx| tx.txid() == transaction.txid()))
+    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
+        let info = self.0.get_raw_transaction_info(txid, None).ok();
+        let height = match info.and_then(|info| info.blockhash) {
+            None => None,
+            Some(hash) => Some(self.0.get_block_header_info(&hash)?.height as u64),
+        };
+        Ok(height)
     }
 }
 
@@ -305,33 +299,21 @@ impl IBitcoindRpc for ElectrumClient {
         });
     }
 
-    async fn was_transaction_confirmed_in(
-        &self,
-        transaction: &Transaction,
-        height: u64,
-    ) -> Result<bool> {
-        if self.get_block_height().await? <= height {
-            bail!("Electrum backend does not contain the block at {height}H yet");
+    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
+        match self.0.transaction_get(txid).ok() {
+            None => Ok(None),
+            Some(tx) => {
+                let output = tx
+                    .output
+                    .first()
+                    .ok_or(format_err!("Transaction must contain at least one output"))?;
+                Ok(self
+                    .0
+                    .script_get_history(&output.script_pubkey)?
+                    .first()
+                    .map(|history| history.height as u64))
+            }
         }
-
-        fedimint_core::task::block_in_place(|| {
-            let txid = transaction.txid();
-
-            let output = transaction
-                .output
-                .first()
-                .ok_or(format_err!("Transaction must contain at least one output"))?;
-
-            // if transaction is confirmed, we're going to find the confirmation event in
-            // the history of ifs first output
-            Ok(self
-                .0
-                .script_get_history(&output.script_pubkey)?
-                .iter()
-                .any(|history_item| {
-                    (history_item.height as u64) == height && history_item.tx_hash == txid
-                }))
-        })
     }
 }
 
@@ -407,16 +389,12 @@ impl IBitcoindRpc for EsploraClient {
         });
     }
 
-    async fn was_transaction_confirmed_in(
-        &self,
-        transaction: &Transaction,
-        height: u64,
-    ) -> Result<bool> {
-        let status = self
+    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
+        Ok(self
             .0
-            .get_tx_status(&transaction.txid())
-            .await
-            .map_err(anyhow::Error::from)?;
-        Ok(status.block_height == Some(height as u32))
+            .get_tx_status(txid)
+            .await?
+            .block_height
+            .map(|height| height as u64))
     }
 }
