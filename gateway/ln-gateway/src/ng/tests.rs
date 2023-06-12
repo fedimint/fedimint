@@ -8,7 +8,6 @@ use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::Client;
-use fedimint_client_legacy::api::LnFederationApi;
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount, OutPoint, TransactionId};
@@ -19,6 +18,7 @@ use fedimint_ln_client::{
     LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
     LightningMeta, LnPayState, PayType,
 };
+use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
