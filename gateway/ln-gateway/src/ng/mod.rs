@@ -54,11 +54,18 @@ pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum GatewayExtPayStates {
     Created,
-    Preimage { preimage: Preimage },
-    Success { preimage: Preimage },
+    Preimage {
+        preimage: Preimage,
+    },
+    Success {
+        preimage: Preimage,
+        outpoint: OutPoint,
+    },
     Canceled,
     Fail,
-    OfferDoesNotExist { contract_id: ContractId },
+    OfferDoesNotExist {
+        contract_id: ContractId,
+    },
 }
 
 /// The high-level state of an intercepted HTLC operation started with
@@ -194,7 +201,7 @@ impl GatewayClientExt for Client {
                         yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
                         if self.await_primary_module_output(operation_id, outpoint).await.is_ok() {
-                            yield GatewayExtPayStates::Success{ preimage: preimage.clone() };
+                            yield GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
                             return;
                         }
 
@@ -439,7 +446,7 @@ pub enum GatewayError {
 pub struct GatewayClientModule {
     cfg: LightningClientConfig,
     pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
-    redeem_key: KeyPair,
+    pub redeem_key: KeyPair,
     node_pub_key: PublicKey,
     timelock_delta: u64,
     mint_channel_id: u64,

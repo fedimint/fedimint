@@ -123,10 +123,10 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         let kp_fed = KeyPair::new(&ctx, &mut rng);
 
         Ok(FederationConfig {
-            mint_channel_id: mint_channel_id,
+            mint_channel_id,
             redeem_key: kp_fed,
             timelock_delta: 10,
-            fees: fees,
+            fees,
             config: client_config,
         })
     }
