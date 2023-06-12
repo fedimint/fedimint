@@ -70,7 +70,6 @@ use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
 use lightning::routing::gossip::RoutingFees;
-use ln_gateway::actor::GatewayActor;
 use ln_gateway::client::{DynGatewayClientBuilder, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::{Gateway, DEFAULT_FEES};
@@ -561,7 +560,6 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
 }
 
 pub struct GatewayTest {
-    pub actor: GatewayActor,
     pub lnrpc: Arc<dyn ILnRpcClient>,
     pub keys: LightningGateway,
     pub user: Box<dyn ILegacyTestClient>,

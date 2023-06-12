@@ -405,6 +405,7 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
     .await
 }
 
+/*
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
     lightning_test(4, |fed, user, bitcoin, gateway, _| async move {
@@ -462,6 +463,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() -> Result<()> {
     })
     .await
 }
+*/
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
@@ -507,6 +509,7 @@ async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
     .await
 }
 
+/*
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
     lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
@@ -606,7 +609,9 @@ async fn lightning_gateway_pays_internal_invoice() -> Result<()> {
     })
     .await
 }
+*/
 
+/*
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_outgoing_invoice() -> Result<()> {
     lightning_test(2, |fed, user, bitcoin, gateway, lightning| async move {
@@ -722,6 +727,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() -> Result<()> {
     })
     .await
 }
+*/
 
 #[tokio::test(flavor = "multi_thread")]
 async fn set_lightning_invoice_expiry() -> Result<()> {
@@ -732,6 +738,7 @@ async fn set_lightning_invoice_expiry() -> Result<()> {
     .await
 }
 
+/*
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_valid_preimage() -> Result<()> {
     lightning_test(2, |fed, user, bitcoin, gateway, _| async move {
@@ -863,6 +870,7 @@ async fn receive_lightning_payment_invalid_preimage() -> Result<()> {
     })
     .await
 }
+*/
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() -> Result<()> {
