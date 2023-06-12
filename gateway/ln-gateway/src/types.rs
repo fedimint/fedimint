@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use secp256k1::PublicKey;
 
 impl TryFrom<crate::gatewaylnrpc::get_route_hints_response::RouteHintHop>
-    for fedimint_client_legacy::modules::ln::route_hints::RouteHintHop
+    for fedimint_ln_common::route_hints::RouteHintHop
 {
     type Error = anyhow::Error;
 
@@ -30,13 +30,12 @@ impl TryFrom<crate::gatewaylnrpc::get_route_hints_response::RouteHintHop>
 }
 
 impl TryFrom<crate::gatewaylnrpc::GetRouteHintsResponse>
-    for Vec<fedimint_client_legacy::modules::ln::route_hints::RouteHint>
+    for Vec<fedimint_ln_common::route_hints::RouteHint>
 {
     type Error = anyhow::Error;
 
     fn try_from(res: crate::gatewaylnrpc::GetRouteHintsResponse) -> Result<Self, Self::Error> {
-        let mut route_hints =
-            Vec::<fedimint_client_legacy::modules::ln::route_hints::RouteHint>::new();
+        let mut route_hints = Vec::<fedimint_ln_common::route_hints::RouteHint>::new();
 
         for route_hint in res.route_hints {
             let mut hops = Vec::new();
@@ -45,9 +44,7 @@ impl TryFrom<crate::gatewaylnrpc::GetRouteHintsResponse>
                 hops.push(hop.try_into()?);
             }
 
-            route_hints.push(fedimint_client_legacy::modules::ln::route_hints::RouteHint(
-                hops,
-            ));
+            route_hints.push(fedimint_ln_common::route_hints::RouteHint(hops));
         }
 
         Ok(route_hints)

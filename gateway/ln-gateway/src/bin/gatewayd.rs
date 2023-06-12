@@ -4,9 +4,6 @@ use std::process::exit;
 use std::time::Duration;
 
 use clap::Parser;
-use fedimint_client_legacy::modules::ln::LightningModuleTypes;
-use fedimint_client_legacy::modules::mint::MintModuleTypes;
-use fedimint_client_legacy::modules::wallet::{WalletCommonGen, WalletModuleTypes};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -17,8 +14,10 @@ use fedimint_core::module::{CommonModuleGen, ModuleCommon};
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningCommonGen;
 use fedimint_ln_common::config::GatewayFee;
+use fedimint_ln_common::LightningModuleTypes;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_client::MintCommonGen;
+use fedimint_mint_client::{MintCommonGen, MintModuleTypes};
+use fedimint_wallet_client::{WalletCommonGen, WalletModuleTypes};
 use ln_gateway::client::{DynGatewayClientBuilder, StandardGatewayClientBuilder};
 use ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
 use tracing::{error, info};

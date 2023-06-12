@@ -26,7 +26,6 @@ use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
-use fedimint_client_legacy::ClientError;
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
@@ -108,8 +107,6 @@ pub enum LightningMode {
 
 #[derive(Debug, Error)]
 pub enum GatewayError {
-    #[error("Federation client operation error: {0:?}")]
-    ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
     LnRpcError(#[from] tonic::Status),
     #[error("Federation error: {0:?}")]

@@ -2928,7 +2928,6 @@ dependencies = [
  "cln-rpc",
  "fedimint-build",
  "fedimint-client",
- "fedimint-client-legacy",
  "fedimint-core",
  "fedimint-dummy-client",
  "fedimint-dummy-common",
