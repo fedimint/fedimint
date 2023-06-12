@@ -1,4 +1,3 @@
-pub mod actor;
 pub mod client;
 pub mod db;
 pub mod lnd;
@@ -505,7 +504,7 @@ impl Gateway {
         let channel_id = self.channel_id_generator.fetch_add(1, Ordering::SeqCst);
 
         // Downloading the config can fail if another user tries to download at the same
-        // time Just retry after a small delay
+        // time. Just retry after a small delay
         let gw_client_cfg = loop {
             match self
                 .client_builder
