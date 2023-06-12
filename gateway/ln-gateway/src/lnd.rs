@@ -211,7 +211,6 @@ impl ILnRpcClient for GatewayLndClient {
                 format!("LND error: {e:?}"),
             ))
         })?;
-        info!("LND pubkey {:?} Alias: {}", pub_key, info.alias);
 
         return Ok(GetNodeInfoResponse {
             pub_key: pub_key.serialize().to_vec(),

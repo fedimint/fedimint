@@ -1,19 +1,18 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client_legacy::modules::ln::LightningGateway;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
+use ln_gateway::client::{DynGatewayClientBuilder, StandardGatewayClientBuilder};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::{Gateway, DEFAULT_FEES};
 use tempfile::TempDir;
-use tracing::log::warn;
+use tracing::warn;
 use url::Url;
 
 use crate::federation::FederationTest;
@@ -54,7 +53,6 @@ impl GatewayTest {
         password: String,
         lightning: impl ILnRpcClient + 'static,
         decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: Url = format!("http://{listen}").parse().unwrap();
@@ -63,18 +61,16 @@ impl GatewayTest {
 
         // Create federation client builder for the gateway
         let client_builder: DynGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(path.clone(), MemDbFactory.into(), address.clone())
-                .into();
+            StandardGatewayClientBuilder::new(path.clone()).into();
 
         let gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
         let gateway = Gateway::new_with_lightning_connection(
             Arc::new(lightning),
             client_builder.clone(),
-            decoders.clone(),
-            module_gens.clone(),
             DEFAULT_FEES,
             gatewayd_db,
             &mut task,
+            address.clone(),
         )
         .await
         .unwrap();
@@ -82,8 +78,9 @@ impl GatewayTest {
         gateway
             .spawn_webserver(listen, password.clone(), &mut task)
             .await;
-        task.spawn("gatewayd", move |handle| async {
-            if let Err(err) = gateway.run(handle).await {
+        let mut subgroup = task.make_subgroup().await;
+        task.spawn("gatewayd", |_| async move {
+            if let Err(err) = gateway.run(&mut subgroup).await {
                 warn!("Gateway stopped with error {:?}", err);
             }
         })

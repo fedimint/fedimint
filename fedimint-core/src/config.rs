@@ -95,7 +95,7 @@ impl JsonWithKind {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PeerUrl {
     /// The peer's public URL (e.g. `wss://fedimint-server-1:5000`)
     pub url: Url,
@@ -106,7 +106,7 @@ pub struct PeerUrl {
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ClientConfig {
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
@@ -114,11 +114,11 @@ pub struct ClientConfig {
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
-    /// Configs from other client modules
-    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+    /// Configs from other client modules
+    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
 /// The API response for client config requests, signed by the Federation

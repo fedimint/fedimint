@@ -14,9 +14,7 @@ mod fixtures;
 use std::future::Future;
 
 use ln_gateway::rpc::rpc_client::{GatewayRpcError, GatewayRpcResult};
-use ln_gateway::rpc::{
-    BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
-};
+use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, DepositAddressPayload, WithdrawPayload};
 use reqwest::StatusCode;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -52,21 +50,6 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
     let payload = DepositAddressPayload { federation_id };
     auth_success(|| client1.get_deposit_address(payload.clone())).await;
     auth_fails(|| client2.get_deposit_address(payload.clone())).await;
-
-    // Test gateway authentication on `deposit` function
-    let (proof, tx) = bitcoin
-        .send_and_mine_block(
-            &bitcoin.get_new_address().await,
-            bitcoin::Amount::from_btc(1.0).unwrap(),
-        )
-        .await;
-    let payload = DepositPayload {
-        federation_id,
-        txout_proof: proof,
-        transaction: tx,
-    };
-    auth_success(|| client1.deposit(payload.clone())).await;
-    auth_fails(|| client2.deposit(payload.clone())).await;
 
     // Test gateway authentication on `withdraw` function
     let payload = WithdrawPayload {
