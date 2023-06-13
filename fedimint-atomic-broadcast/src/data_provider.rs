@@ -60,6 +60,8 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
                 n_items += 1;
                 batch_size += bytes.len();
                 items.push(bytes);
+            } else {
+                tracing::error!("Consensus item length is over BYTE_LIMIT");
             }
         }
 
