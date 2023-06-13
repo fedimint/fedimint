@@ -133,6 +133,10 @@ pub async fn run(
             if index == shutdown_index {
                 tracing::info!("Initiate clean shutdown after index {}", index);
 
+                // prevents the relay loop from hanging if  the channels to become full
+                network_data_receiver.close();
+                signed_block_receiver.close();
+
                 // we delay the shutdown to allow lagging nodes to complete the session as well
                 tokio::time::sleep(shutdown_delay).await;
 
