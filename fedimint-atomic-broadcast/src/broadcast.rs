@@ -75,10 +75,10 @@ pub async fn run(
 
     let relay_handle = tokio::spawn(relay_messages(
         db.clone(),
-        incoming_message_receiver.clone(),
+        incoming_message_receiver,
         outgoing_message_sender.clone(),
-        network_data_sender.clone(),
-        signed_block_sender.clone(),
+        network_data_sender,
+        signed_block_sender,
     ));
 
     loop {
