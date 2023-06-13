@@ -49,7 +49,10 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
         .await
         .last_registered()
         .await;
-    assert_eq!(client.select_active_gateway().await?, gateway1);
+    assert_eq!(
+        client.select_active_gateway().await?.node_pub_key,
+        gateway1.node_pub_key
+    );
 
     let gateway2 = fixtures
         .new_connected_gateway(&fed)
@@ -60,7 +63,10 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
     assert_eq!(gateways.len(), 2);
 
     client.set_active_gateway(&gateway2.node_pub_key).await?;
-    assert_eq!(client.select_active_gateway().await?, gateway2);
+    assert_eq!(
+        client.select_active_gateway().await?.node_pub_key,
+        gateway2.node_pub_key
+    );
     Ok(())
 }
 

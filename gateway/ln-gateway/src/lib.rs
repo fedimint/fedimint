@@ -36,13 +36,14 @@ use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::route_hints::RouteHint;
+use fedimint_ln_common::KIND;
 use fedimint_wallet_client::{WalletClientExt, WithdrawState};
 use futures::stream::StreamExt;
 use gatewaylnrpc::intercept_htlc_response::{Action, Cancel};
 use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
-use ng::{GatewayClientExt, GatewayExtRegisterStates};
+use ng::{GatewayClientExt, GatewayClientModule, GatewayExtRegisterStates};
 use rand::Rng;
 use rpc::FederationInfo;
 use secp256k1::PublicKey;
@@ -138,7 +139,7 @@ impl IntoResponse for GatewayError {
 pub struct Gateway {
     lnrpc: Arc<dyn ILnRpcClient>,
     lightning_mode: Option<LightningMode>,
-    clients: Arc<RwLock<BTreeMap<FederationId, fedimint_client::Client>>>,
+    clients: Arc<RwLock<BTreeMap<FederationId, Arc<fedimint_client::Client>>>>,
     scid_to_federation: Arc<RwLock<BTreeMap<u64, FederationId>>>,
     client_builder: DynGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
@@ -412,10 +413,11 @@ impl Gateway {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
 
             for config in configs {
-                let client = self
-                    .client_builder
-                    .build(config.clone(), self.lnrpc.clone(), task_group)
-                    .await?;
+                let client = Arc::new(
+                    self.client_builder
+                        .build(config.clone(), self.lnrpc.clone(), task_group)
+                        .await?,
+                );
 
                 // Registering each client happens in the background, since we're loading the
                 // clients for the first time, just add them to the in-memory
@@ -464,7 +466,10 @@ impl Gateway {
             }
         }
 
-        self.clients.write().await.insert(federation_id, client);
+        self.clients
+            .write()
+            .await
+            .insert(federation_id, Arc::new(client));
         self.scid_to_federation
             .write()
             .await
@@ -472,12 +477,14 @@ impl Gateway {
         Ok(())
     }
 
-    async fn select_client(&self, federation_id: FederationId) -> Result<fedimint_client::Client> {
+    async fn select_client(
+        &self,
+        federation_id: FederationId,
+    ) -> Result<Arc<fedimint_client::Client>> {
         self.clients
             .read()
             .await
             .get(&federation_id)
-            // TODO: Do we need to clone here?
             .cloned()
             .ok_or(GatewayError::Other(anyhow::anyhow!(
                 "No federation with id {}",
@@ -520,13 +527,22 @@ impl Gateway {
         };
 
         let federation_id = gw_client_cfg.config.federation_id;
-        let (route_hints, node_pub_key, _) = self.fetch_lightning_route_info().await?;
+        let (route_hints, _, _) = self.fetch_lightning_route_info().await?;
 
         let client = self
             .client_builder
             .build(gw_client_cfg.clone(), self.lnrpc.clone(), task_group)
             .await?;
-        self.register_client(client, federation_id, channel_id, route_hints.clone())
+
+        let (gateway, _) = client.get_first_module::<GatewayClientModule>(&KIND);
+
+        let registration = gateway.to_gateway_registration_info(
+            route_hints.clone(),
+            GW_ANNOUNCEMENT_TTL,
+            self.api.clone(),
+        );
+
+        self.register_client(client, federation_id, channel_id, route_hints)
             .await?;
 
         let dbtx = self.gatewayd_db.begin_transaction().await;
@@ -534,12 +550,6 @@ impl Gateway {
             .save_config(gw_client_cfg.clone(), dbtx)
             .await?;
 
-        let registration = gw_client_cfg.to_gateway_registration_info(
-            route_hints,
-            GW_ANNOUNCEMENT_TTL,
-            node_pub_key,
-            self.api.clone(),
-        );
         Ok(FederationInfo {
             federation_id,
             registration,
@@ -547,23 +557,24 @@ impl Gateway {
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        let dbtx = self.gatewayd_db.begin_transaction().await;
-        let configs = self.client_builder.load_configs(dbtx).await?;
-        let mut federations: Vec<FederationInfo> = Vec::new();
+        let mut federations = Vec::new();
+        let federation_clients = self.clients.read().await.clone().into_iter();
         let (route_hints, node_pub_key, alias) = self.fetch_lightning_route_info().await?;
-        for config in configs {
-            let federation_id = config.config.federation_id;
-            let registration = config.to_gateway_registration_info(
+        for (federation_id, client) in federation_clients {
+            // TODO: We're reconstructing these registrations, which could have changed in
+            // the meantime, which might break some tests if they're expecting
+            // the same values as the previous registration
+            let (gateway, _) = client.get_first_module::<GatewayClientModule>(&KIND);
+            let registration = gateway.to_gateway_registration_info(
                 route_hints.clone(),
                 GW_ANNOUNCEMENT_TTL,
-                node_pub_key,
                 self.api.clone(),
             );
-            let info = FederationInfo {
+
+            federations.push(FederationInfo {
                 federation_id,
                 registration,
-            };
-            federations.push(info);
+            });
         }
 
         Ok(GatewayInfo {
