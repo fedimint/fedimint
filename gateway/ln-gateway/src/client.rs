@@ -15,7 +15,6 @@ use fedimint_mint_client::MintClientGen;
 use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
-use secp256k1::KeyPair;
 
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::lnrpc_client::ILnRpcClient;
@@ -115,16 +114,9 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         fees: RoutingFees,
     ) -> Result<FederationConfig> {
         let api: DynGlobalApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
-
         let client_config = api.download_client_config(&connect).await?;
-
-        let mut rng = rand::rngs::OsRng;
-        let ctx = secp256k1::Secp256k1::new();
-        let kp_fed = KeyPair::new(&ctx, &mut rng);
-
         Ok(FederationConfig {
             mint_channel_id,
-            redeem_key: kp_fed,
             timelock_delta: 10,
             fees,
             config: client_config,
