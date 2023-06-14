@@ -1,13 +1,11 @@
-use bitcoin::{Address, Amount, Transaction};
+use bitcoin::{Address, Amount};
 use clap::{Parser, Subcommand};
-use fedimint_client_legacy::utils::from_hex;
 use fedimint_core::config::FederationId;
-use fedimint_core::txoproof::TxOutProof;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    RestorePayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
+    WithdrawPayload,
 };
 use serde::Serialize;
 use url::Url;
@@ -40,17 +38,6 @@ pub enum Commands {
     Address {
         #[clap(long)]
         federation_id: FederationId,
-    },
-    /// Deposit funds into a gateway federation
-    Deposit {
-        #[clap(long)]
-        federation_id: FederationId,
-        /// The TxOutProof which was created from sending BTC to the
-        /// pegin-address
-        #[clap(long, value_parser = from_hex::<TxOutProof>)]
-        txout_proof: TxOutProof,
-        #[clap(long, value_parser = from_hex::<Transaction>)]
-        transaction: Transaction,
     },
     /// Claim funds from a gateway federation
     Withdraw {
@@ -104,21 +91,6 @@ async fn main() -> anyhow::Result<()> {
         Commands::Address { federation_id } => {
             let response = client
                 .get_deposit_address(DepositAddressPayload { federation_id })
-                .await?;
-
-            print_response(response).await;
-        }
-        Commands::Deposit {
-            federation_id,
-            txout_proof,
-            transaction,
-        } => {
-            let response = client
-                .deposit(DepositPayload {
-                    federation_id,
-                    txout_proof,
-                    transaction,
-                })
                 .await?;
 
             print_response(response).await;

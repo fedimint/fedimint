@@ -1,4 +1,3 @@
-pub mod actor;
 pub mod client;
 pub mod db;
 pub mod lnd;
@@ -24,48 +23,55 @@ use std::time::Duration;
 use anyhow::anyhow;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use bitcoin::Address;
+use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
-use fedimint_client::module::gen::ClientModuleGenRegistry;
-use fedimint_client_legacy::ln::PayInvoicePayload;
-use fedimint_client_legacy::modules::ln::route_hints::RouteHint;
-use fedimint_client_legacy::{ClientError, GatewayClient};
+use client::StandardGatewayClientBuilder;
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{self, RwLock, TaskGroup, TaskHandle};
-use fedimint_core::{Amount, TransactionId};
+use fedimint_core::task::{sleep, RwLock, TaskGroup};
+use fedimint_core::time::now;
+use fedimint_core::util::NextOrPending;
+use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
+use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_common::route_hints::RouteHint;
+use fedimint_ln_common::KIND;
+use fedimint_wallet_client::{WalletClientExt, WithdrawState};
 use futures::stream::StreamExt;
-use gatewaylnrpc::intercept_htlc_response::Action;
+use gatewaylnrpc::intercept_htlc_response::{Action, Cancel};
 use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
+use ng::{GatewayClientExt, GatewayClientModule, GatewayExtRegisterStates};
+use rand::Rng;
 use rpc::FederationInfo;
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use url::Url;
 
-use crate::actor::GatewayActor;
-use crate::client::DynGatewayClientBuilder;
-use crate::gatewaylnrpc::intercept_htlc_response::Forward;
+use crate::gatewaylnrpc::intercept_htlc_response::{Forward, Settle};
 use crate::lnd::GatewayLndClient;
 use crate::lnrpc_client::NetworkLnRpcClient;
+use crate::ng::{GatewayExtPayStates, GatewayExtReceiveStates, Htlc};
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayInfo, GatewayRequest, GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
+    GatewayRequest, GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
 };
+
+/// LND HTLC interceptor can't handle SCID of 0, so start from 1
+const INITIAL_SCID: u64 = 1;
+
+/// How long a gateway announcement stays valid
+pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
 const ROUTE_HINT_RETRIES: usize = 10;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
-/// LND HTLC interceptor can't handle SCID of 0, so start from 1
-const INITIAL_SCID: u64 = 1;
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
     /// Base routing fee. Default is 0 msat
@@ -102,8 +108,6 @@ pub enum LightningMode {
 
 #[derive(Debug, Error)]
 pub enum GatewayError {
-    #[error("Federation client operation error: {0:?}")]
-    ClientError(#[from] ClientError),
     #[error("Lightning rpc operation error: {0:?}")]
     LnRpcError(#[from] tonic::Status),
     #[error("Federation error: {0:?}")]
@@ -114,6 +118,8 @@ pub enum GatewayError {
     FailedToFetchRouteHints,
     #[error("Failed to open the database")]
     DatabaseError,
+    #[error("Federation client error")]
+    ClientNgError,
 }
 
 impl GatewayError {
@@ -131,30 +137,28 @@ impl IntoResponse for GatewayError {
     }
 }
 pub struct Gateway {
-    decoders: ModuleDecoderRegistry,
-    module_gens: ClientModuleGenRegistry,
     lnrpc: Arc<dyn ILnRpcClient>,
     lightning_mode: Option<LightningMode>,
-    actors: Arc<RwLock<BTreeMap<FederationId, GatewayActor>>>,
+    clients: Arc<RwLock<BTreeMap<FederationId, Arc<fedimint_client::Client>>>>,
     scid_to_federation: Arc<RwLock<BTreeMap<u64, FederationId>>>,
-    client_builder: DynGatewayClientBuilder,
+    client_builder: StandardGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
     channel_id_generator: AtomicU64,
     fees: RoutingFees,
     gatewayd_db: Database,
+    api: Url,
 }
 
 impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         lightning_mode: LightningMode,
-        client_builder: DynGatewayClientBuilder,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
+        client_builder: StandardGatewayClientBuilder,
         task_group: &mut TaskGroup,
         fees: RoutingFees,
         gatewayd_db: Database,
+        api: Url,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
@@ -163,22 +167,19 @@ impl Gateway {
 
         let mut gw = Self {
             lnrpc,
-            actors: Arc::new(RwLock::new(BTreeMap::new())),
+            clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             sender,
             receiver,
             client_builder,
             channel_id_generator: AtomicU64::new(INITIAL_SCID),
-            decoders: decoders.clone(),
-            module_gens: module_gens.clone(),
             lightning_mode: Some(lightning_mode),
             fees,
             gatewayd_db,
+            api,
         };
 
-        let (route_hints, node_pub_key) = gw.fetch_route_hints_and_node_pub_key().await?;
-        gw.load_actors(decoders, module_gens, route_hints, node_pub_key)
-            .await?;
+        gw.load_clients(task_group).await?;
         gw.route_htlcs(task_group).await?;
 
         Ok(gw)
@@ -187,34 +188,30 @@ impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new_with_lightning_connection(
         lnrpc: Arc<dyn ILnRpcClient>,
-        client_builder: DynGatewayClientBuilder,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
+        client_builder: StandardGatewayClientBuilder,
         fees: RoutingFees,
         gatewayd_db: Database,
         task_group: &mut TaskGroup,
+        api: Url,
     ) -> Result<Self> {
         // Create message channels for the webserver
         let (sender, receiver) = mpsc::channel::<GatewayRequest>(100);
 
         let mut gw = Self {
             lnrpc,
-            actors: Arc::new(RwLock::new(BTreeMap::new())),
+            clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             sender,
             receiver,
             client_builder,
             channel_id_generator: AtomicU64::new(INITIAL_SCID),
-            decoders: decoders.clone(),
-            module_gens: module_gens.clone(),
             lightning_mode: None,
             fees,
             gatewayd_db,
+            api,
         };
 
-        let (route_hints, node_pub_key) = gw.fetch_route_hints_and_node_pub_key().await?;
-        gw.load_actors(decoders, module_gens, route_hints, node_pub_key)
-            .await?;
+        gw.load_clients(task_group).await?;
         gw.route_htlcs(task_group).await?;
 
         Ok(gw)
@@ -245,7 +242,7 @@ impl Gateway {
         Ok(lnrpc)
     }
 
-    pub async fn route_htlcs(&mut self, task_group: &mut TaskGroup) -> Result<()> {
+    pub async fn route_htlcs(&self, task_group: &mut TaskGroup) -> Result<()> {
         // Create a stream used to communicate with the Lightning implementation
         let (sender, ln_receiver) = mpsc::channel::<InterceptHtlcResponse>(100);
 
@@ -275,44 +272,98 @@ impl Gateway {
         let mut stream: RouteHtlcStream = lnrpc.route_htlcs(ln_receiver.into(), task_group).await?;
 
         let scid_to_federation = self.scid_to_federation.clone();
-        let actors = self.actors.clone();
+        let clients = self.clients.clone();
         task_group
             .spawn(
                 "Subscribe to intercepted HTLCs in stream",
                 move |handle| async move {
                     // TODO: Need to recreate the lightning connection if it breaks while processing
                     // HTLCs
-                    while let Some(Ok(htlc)) = stream.next().await {
+                    while let Some(Ok(htlc_request)) = stream.next().await {
                         if handle.is_shutting_down() {
                             break;
                         }
 
                         let scid_to_feds = scid_to_federation.read().await;
-                        let federation_id = scid_to_feds.get(&htlc.short_channel_id);
-                        let outcome = {
-                            // Just forward the HTLC if we do not have a federation that
-                            // corresponds to the short channel id
-                            if let Some(federation_id) = federation_id {
-                                let actors = actors.read().await;
-                                let actor = actors.get(federation_id);
-                                // Just forward the HTLC if we do not have an actor that
-                                // corresponds to the federation id
-                                if let Some(actor) = actor {
-                                    actor.handle_intercepted_htlc(htlc).await
-                                } else {
-                                    InterceptHtlcResponse {
-                                        action: Some(Action::Forward(Forward {})),
-                                        incoming_chan_id: htlc.incoming_chan_id,
-                                        htlc_id: htlc.htlc_id,
+                        let federation_id = scid_to_feds.get(&htlc_request.short_channel_id);
+                        // Just forward the HTLC if we do not have a federation that
+                        // corresponds to the short channel id
+                        if let Some(federation_id) = federation_id {
+                            let clients = clients.read().await;
+                            let client = clients.get(federation_id);
+                            // Just forward the HTLC if we do not have a client that
+                            // corresponds to the federation id
+                            if let Some(client) = client {
+                                let htlc: Result<Htlc> = htlc_request.clone().try_into().map_err(|_| GatewayError::ClientNgError);
+                                if let Ok(htlc) = htlc {
+                                    let intercept_op = client.gateway_handle_intercepted_htlc(htlc).await;
+                                    // TODO: Refactor this into the state machine so we don't need to wait here
+                                    if let Ok(intercept_op) = intercept_op {
+
+                                        let intercept_sub = client
+                                            .gateway_subscribe_ln_receive(intercept_op)
+                                            .await;
+                                        if let Ok(intercept_sub) = intercept_sub {
+                                            let mut intercept_sub = intercept_sub.into_stream();
+
+                                            let outcome = loop {
+                                                if let Ok(state) = intercept_sub.ok().await {
+                                                    match state {
+                                                        GatewayExtReceiveStates::Preimage(preimage) => {
+                                                            break InterceptHtlcResponse {
+                                                                action: Some(Action::Settle(Settle {
+                                                                    preimage: preimage.0.to_vec(),
+                                                                })),
+                                                                incoming_chan_id: htlc_request.incoming_chan_id,
+                                                                htlc_id: htlc_request.htlc_id,
+                                                            };
+                                                        }
+                                                        GatewayExtReceiveStates::FundingFailed(failed) => {
+                                                            break InterceptHtlcResponse {
+                                                                action: Some(Action::Cancel(Cancel {
+                                                                    reason: failed,
+                                                                })),
+                                                                incoming_chan_id: htlc_request.incoming_chan_id,
+                                                                htlc_id: htlc_request.htlc_id,
+                                                            }
+                                                        }
+                                                        GatewayExtReceiveStates::RefundSuccess(_) => {
+                                                            break InterceptHtlcResponse {
+                                                                action: Some(Action::Cancel(Cancel {
+                                                                    reason: "Gateway is being refunded".to_string(),
+                                                                })),
+                                                                incoming_chan_id: htlc_request.incoming_chan_id,
+                                                                htlc_id: htlc_request.htlc_id,
+                                                            }
+                                                        }
+                                                        GatewayExtReceiveStates::RefundError(failed) => {
+                                                            break InterceptHtlcResponse {
+                                                                action: Some(Action::Cancel(Cancel {
+                                                                    reason: failed,
+                                                                })),
+                                                                incoming_chan_id: htlc_request.incoming_chan_id,
+                                                                htlc_id: htlc_request.htlc_id,
+                                                            }
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                            };
+
+                                            if let Err(error) = sender.send(outcome).await {
+                                                error!("Error sending HTLC response to lightning node: {error:?}");
+                                            }
+                                            continue;
+                                        }
                                     }
                                 }
-                            } else {
-                                InterceptHtlcResponse {
-                                    action: Some(Action::Forward(Forward {})),
-                                    incoming_chan_id: htlc.incoming_chan_id,
-                                    htlc_id: htlc.htlc_id,
-                                }
                             }
+                        }
+
+                        let outcome = InterceptHtlcResponse {
+                            action: Some(Action::Forward(Forward {})),
+                            incoming_chan_id: htlc_request.incoming_chan_id,
+                            htlc_id: htlc_request.htlc_id,
                         };
 
                         if let Err(error) = sender.send(outcome).await {
@@ -325,9 +376,9 @@ impl Gateway {
         Ok(())
     }
 
-    async fn fetch_route_hints_and_node_pub_key(&self) -> Result<(Vec<RouteHint>, PublicKey)> {
+    async fn fetch_lightning_route_info(&self) -> Result<(Vec<RouteHint>, PublicKey, String)> {
         let mut num_retries = 0;
-        let (route_hints, node_pub_key) = loop {
+        let (route_hints, node_pub_key, alias) = loop {
             let route_hints: Vec<RouteHint> = self
                 .lnrpc
                 .routehints()
@@ -336,12 +387,12 @@ impl Gateway {
                 .try_into()
                 .expect("Could not parse route hints");
 
-            let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.info().await?;
+            let GetNodeInfoResponse { pub_key, alias } = self.lnrpc.info().await?;
             let node_pub_key = PublicKey::from_slice(&pub_key)
                 .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
-                break (route_hints, node_pub_key);
+                break (route_hints, node_pub_key, alias);
             }
 
             info!(
@@ -350,40 +401,34 @@ impl Gateway {
                 ROUTE_HINT_RETRY_SLEEP.as_secs()
             );
             num_retries += 1;
-            task::sleep(ROUTE_HINT_RETRY_SLEEP).await;
+            sleep(ROUTE_HINT_RETRY_SLEEP).await;
         };
 
-        Ok((route_hints, node_pub_key))
+        Ok((route_hints, node_pub_key, alias))
     }
 
-    async fn load_actors(
-        &mut self,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-        route_hints: Vec<RouteHint>,
-        node_pub_key: PublicKey,
-    ) -> Result<()> {
+    async fn load_clients(&mut self, task_group: &mut TaskGroup) -> Result<()> {
         let dbtx = self.gatewayd_db.begin_transaction().await;
-        if let Ok(configs) = self.client_builder.load_configs(dbtx, node_pub_key).await {
+        if let Ok(configs) = self.client_builder.load_configs(dbtx).await {
             let mut next_channel_id = self.channel_id_generator.load(Ordering::SeqCst);
 
             for config in configs {
-                let client = self
-                    .client_builder
-                    .build(config.clone(), decoders.clone(), module_gens.clone())
-                    .await
-                    .expect("Could not build federation client");
+                let client = Arc::new(
+                    self.client_builder
+                        .build(config.clone(), self.lnrpc.clone(), task_group)
+                        .await?,
+                );
 
-                if let Err(e) = self
-                    .load_actor(
-                        Arc::new(client),
-                        route_hints.clone(),
-                        config.mint_channel_id,
-                    )
+                // Registering each client happens in the background, since we're loading the
+                // clients for the first time, just add them to the in-memory
+                // maps
+                let federation_id = config.config.federation_id;
+                let scid = config.mint_channel_id;
+                self.clients.write().await.insert(federation_id, client);
+                self.scid_to_federation
+                    .write()
                     .await
-                {
-                    error!("Failed to connect federation: {}", e);
-                }
+                    .insert(scid, federation_id);
 
                 if config.mint_channel_id > next_channel_id {
                     next_channel_id = config.mint_channel_id + 1;
@@ -391,40 +436,52 @@ impl Gateway {
             }
             self.channel_id_generator
                 .store(next_channel_id, Ordering::SeqCst);
-        } else {
-            warn!("Could not load any previous federation configs");
         }
         Ok(())
     }
 
-    pub async fn load_actor(
+    pub async fn register_client(
         &mut self,
-        client: Arc<GatewayClient>,
-        route_hints: Vec<RouteHint>,
+        client: fedimint_client::Client,
+        federation_id: FederationId,
         scid: u64,
-    ) -> Result<GatewayActor> {
-        let actor = GatewayActor::new(
-            client.clone(),
-            self.lnrpc.clone(),
-            route_hints,
-            // TODO: This task group will go away with the new client
-            &mut TaskGroup::new(),
-        )
-        .await?;
+        route_hints: Vec<RouteHint>,
+    ) -> Result<()> {
+        let register_op = client
+            .register_with_federation(self.api.clone(), route_hints, GW_ANNOUNCEMENT_TTL)
+            .await?;
+        // TODO: Move this inside of the state machine
+        {
+            let mut register_sub = client
+                .gateway_subscribe_register(register_op)
+                .await?
+                .into_stream();
+            loop {
+                let state = register_sub.ok().await?;
+                match state {
+                    GatewayExtRegisterStates::Success => break,
+                    GatewayExtRegisterStates::Done => break,
+                    _ => {}
+                }
+            }
+        }
 
-        self.actors
+        self.clients
             .write()
             .await
-            .insert(client.config().client_config.federation_id, actor.clone());
+            .insert(federation_id, Arc::new(client));
         self.scid_to_federation
             .write()
             .await
-            .insert(scid, client.config().client_config.federation_id);
-        Ok(actor)
+            .insert(scid, federation_id);
+        Ok(())
     }
 
-    async fn select_actor(&self, federation_id: FederationId) -> Result<GatewayActor> {
-        self.actors
+    async fn select_client(
+        &self,
+        federation_id: FederationId,
+    ) -> Result<Arc<fedimint_client::Client>> {
+        self.clients
             .read()
             .await
             .get(&federation_id)
@@ -438,81 +495,93 @@ impl Gateway {
     async fn handle_connect_federation(
         &mut self,
         payload: ConnectFedPayload,
-        route_hints: Vec<RouteHint>,
         fees: RoutingFees,
+        task_group: &mut TaskGroup,
     ) -> Result<FederationInfo> {
         let connect = WsClientConnectInfo::from_str(&payload.connect).map_err(|e| {
             GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
         })?;
-
-        if let Ok(actor) = self.select_actor(connect.id).await {
-            info!("Federation {} already connected", connect.id);
-            return actor.get_info();
-        }
-
-        let GetNodeInfoResponse { pub_key, alias: _ } = self.lnrpc.info().await?;
-        let node_pub_key = PublicKey::from_slice(&pub_key)
-            .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
         // The gateway deterministically assigns a channel id (u64) to each federation
         // connected. TODO: explicitly handle the case where the channel id
         // overflows
         let channel_id = self.channel_id_generator.fetch_add(1, Ordering::SeqCst);
 
-        let gw_client_cfg = self
+        // Downloading the config can fail if another user tries to download at the same
+        // time. Just retry after a small delay
+        let gw_client_cfg = loop {
+            match self
+                .client_builder
+                .create_config(connect.clone(), channel_id, fees)
+                .await
+            {
+                Ok(gw_client_cfg) => break gw_client_cfg,
+                Err(_) => {
+                    let random_delay: f64 = rand::thread_rng().gen();
+                    tracing::warn!(
+                        "Error downloading client config, trying again in {random_delay}"
+                    );
+                    sleep(Duration::from_secs_f64(random_delay)).await;
+                }
+            }
+        };
+
+        let federation_id = gw_client_cfg.config.federation_id;
+        let (route_hints, _, _) = self.fetch_lightning_route_info().await?;
+
+        let client = self
             .client_builder
-            .create_config(connect, channel_id, node_pub_key, fees)
+            .build(gw_client_cfg.clone(), self.lnrpc.clone(), task_group)
             .await?;
 
-        let client = Arc::new(
-            self.client_builder
-                .build(
-                    gw_client_cfg.clone(),
-                    self.decoders.clone(),
-                    self.module_gens.clone(),
-                )
-                .await
-                .expect("Failed to build gateway client"),
+        let (gateway, _) = client.get_first_module::<GatewayClientModule>(&KIND);
+
+        let registration = gateway.to_gateway_registration_info(
+            route_hints.clone(),
+            GW_ANNOUNCEMENT_TTL,
+            self.api.clone(),
         );
 
-        let actor = self
-            .load_actor(client.clone(), route_hints, channel_id)
-            .await
-            .map_err(|e| {
-                GatewayError::Other(anyhow::anyhow!("Failed to connect federation {}", e))
-            })?;
+        self.register_client(client, federation_id, channel_id, route_hints)
+            .await?;
 
         let dbtx = self.gatewayd_db.begin_transaction().await;
-        if let Err(e) = self
-            .client_builder
-            .save_config(client.config(), payload.connect, dbtx)
-            .await
-        {
-            warn!(
-                "Failed to save default federation client configuration: {}",
-                e
-            );
-        }
+        self.client_builder
+            .save_config(gw_client_cfg.clone(), dbtx)
+            .await?;
 
-        let federation_info = actor.get_info()?;
-
-        Ok(federation_info)
+        Ok(FederationInfo {
+            federation_id,
+            registration,
+        })
     }
 
     async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
-        let actors = self.actors.read().await;
-        let mut federations: Vec<FederationInfo> = Vec::new();
-        for actor in actors.values() {
-            federations.push(actor.get_info()?);
-        }
+        let mut federations = Vec::new();
+        let federation_clients = self.clients.read().await.clone().into_iter();
+        let (route_hints, node_pub_key, alias) = self.fetch_lightning_route_info().await?;
+        for (federation_id, client) in federation_clients {
+            // TODO: We're reconstructing these registrations, which could have changed in
+            // the meantime, which might break some tests if they're expecting
+            // the same values as the previous registration
+            let (gateway, _) = client.get_first_module::<GatewayClientModule>(&KIND);
+            let registration = gateway.to_gateway_registration_info(
+                route_hints.clone(),
+                GW_ANNOUNCEMENT_TTL,
+                self.api.clone(),
+            );
 
-        let ln_info = self.lnrpc.info().await?;
+            federations.push(FederationInfo {
+                federation_id,
+                registration,
+            });
+        }
 
         Ok(GatewayInfo {
             federations,
             version_hash: env!("CODE_VERSION").to_string(),
-            lightning_pub_key: ln_info.pub_key.to_hex(),
-            lightning_alias: ln_info.alias,
+            lightning_pub_key: node_pub_key.to_hex(),
+            lightning_alias: alias,
             fees: self.fees,
         })
     }
@@ -523,66 +592,103 @@ impl Gateway {
             contract_id,
         } = payload;
 
-        let actor = self.select_actor(federation_id).await?;
-        let (outpoint, preimage) = actor.pay_invoice(contract_id).await?;
-        actor
-            .await_outgoing_contract_claimed(contract_id, outpoint)
-            .await?;
-        Ok(preimage)
+        let client = self.select_client(federation_id).await?;
+        let operation_id = client.gateway_pay_bolt11_invoice(contract_id).await?;
+        let mut updates = client
+            .gateway_subscribe_ln_pay(operation_id)
+            .await?
+            .into_stream();
+
+        while let Some(update) = updates.next().await {
+            match update {
+                GatewayExtPayStates::Success {
+                    preimage,
+                    outpoint: _,
+                } => return Ok(preimage),
+                GatewayExtPayStates::Fail => {
+                    return Err(GatewayError::Other(anyhow!("Payment failed")))
+                }
+                GatewayExtPayStates::Canceled => {
+                    return Err(GatewayError::Other(anyhow!("Outgoing contract canceled")))
+                }
+                _ => {}
+            };
+        }
+
+        return Err(GatewayError::Other(anyhow!(
+            "Unexpected error occurred while paying the invoice"
+        )));
     }
 
     async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
-        self.select_actor(payload.federation_id)
+        Ok(self
+            .select_client(payload.federation_id)
             .await?
             .get_balance()
-            .await
+            .await)
     }
 
     async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
-        self.select_actor(payload.federation_id)
+        let (_, address) = self
+            .select_client(payload.federation_id)
             .await?
-            .get_deposit_address()
-            .await
+            .get_deposit_address(now() + Duration::from_secs(86400 * 365))
+            .await?;
+        Ok(address)
     }
 
-    async fn handle_deposit_msg(&self, payload: DepositPayload) -> Result<TransactionId> {
-        let DepositPayload {
-            txout_proof,
-            transaction,
-            federation_id,
-        } = payload;
-
-        self.select_actor(federation_id)
-            .await?
-            .deposit(txout_proof, transaction)
-            .await
-    }
-
-    async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> Result<TransactionId> {
+    async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> Result<Txid> {
         let WithdrawPayload {
             amount,
             address,
             federation_id,
         } = payload;
 
-        self.select_actor(federation_id)
+        let client = self.select_client(federation_id).await?;
+        // TODO: This should probably be passed in as a parameter
+        let fees = client.get_withdraw_fee(address.clone(), amount).await?;
+
+        let operation_id = self
+            .select_client(federation_id)
             .await?
-            .withdraw(amount, address)
-            .await
+            .withdraw(address, amount, fees)
+            .await?;
+        let mut updates = client
+            .subscribe_withdraw_updates(operation_id)
+            .await?
+            .into_stream();
+
+        while let Some(update) = updates.next().await {
+            info!("Update: {update:?}");
+
+            match update {
+                WithdrawState::Succeeded(txid) => {
+                    return Ok(txid);
+                }
+                WithdrawState::Failed(e) => {
+                    return Err(GatewayError::Other(anyhow!(e)));
+                }
+                _ => {}
+            }
+        }
+
+        return Err(GatewayError::Other(anyhow!(
+            "Unexpected error occurred while withdrawing"
+        )));
     }
 
     async fn handle_backup_msg(
         &self,
-        BackupPayload { federation_id }: BackupPayload,
+        BackupPayload { federation_id: _ }: BackupPayload,
     ) -> Result<()> {
-        self.select_actor(federation_id).await?.backup().await
+        unimplemented!("Backup is not currently supported");
     }
 
     async fn handle_restore_msg(
         &self,
-        RestorePayload { federation_id }: RestorePayload,
+        RestorePayload { federation_id: _ }: RestorePayload,
     ) -> Result<()> {
-        self.select_actor(federation_id).await?.restore().await
+        unimplemented!("Restore is not currently supported");
     }
 
     pub async fn spawn_webserver(
@@ -613,7 +719,8 @@ impl Gateway {
             .await;
     }
 
-    pub async fn run(mut self, loop_ctrl: TaskHandle) -> Result<()> {
+    pub async fn run(mut self, task_group: &mut TaskGroup) -> Result<()> {
+        let loop_ctrl = task_group.make_handle();
         // Handle messages from webserver and plugin
         while let Some(msg) = self.receiver.recv().await {
             tracing::trace!("Gateway received message {:?}", msg);
@@ -626,66 +733,58 @@ impl Gateway {
             match msg {
                 GatewayRequest::Info(inner) => {
                     inner
-                        .handle(&mut self, |gateway, payload| {
+                        .handle(&mut self, task_group, |gateway, _, payload| {
                             gateway.handle_get_info(payload)
                         })
                         .await;
                 }
                 GatewayRequest::ConnectFederation(inner) => {
-                    let route_hints: Vec<RouteHint> = self.lnrpc.routehints().await?.try_into()?;
                     let fees = self.fees;
 
                     inner
-                        .handle(&mut self, |gateway, payload| {
-                            gateway.handle_connect_federation(payload, route_hints.clone(), fees)
+                        .handle(&mut self, task_group, |gateway, tg, payload| {
+                            gateway.handle_connect_federation(payload, fees, tg)
                         })
                         .await;
                 }
                 GatewayRequest::PayInvoice(inner) => {
                     inner
-                        .handle(&mut self, |gateway, payload| {
+                        .handle(&mut self, task_group, |gateway, _, payload| {
                             gateway.handle_pay_invoice_msg(payload)
                         })
                         .await;
                 }
                 GatewayRequest::Balance(inner) => {
                     inner
-                        .handle(&mut self, |gateway, payload| {
+                        .handle(&mut self, task_group, |gateway, _, payload| {
                             gateway.handle_balance_msg(payload)
                         })
                         .await;
                 }
                 GatewayRequest::DepositAddress(inner) => {
                     inner
-                        .handle(&mut self, |gateway, payload| {
+                        .handle(&mut self, task_group, |gateway, _, payload| {
                             gateway.handle_address_msg(payload)
-                        })
-                        .await;
-                }
-                GatewayRequest::Deposit(inner) => {
-                    inner
-                        .handle(&mut self, |gateway, payload| {
-                            gateway.handle_deposit_msg(payload)
                         })
                         .await;
                 }
                 GatewayRequest::Withdraw(inner) => {
                     inner
-                        .handle(&mut self, |gateway, payload| {
+                        .handle(&mut self, task_group, |gateway, _, payload| {
                             gateway.handle_withdraw_msg(payload)
                         })
                         .await;
                 }
                 GatewayRequest::Backup(inner) => {
                     inner
-                        .handle(&mut self, |gateway, payload| {
+                        .handle(&mut self, task_group, |gateway, _, payload| {
                             gateway.handle_backup_msg(payload)
                         })
                         .await;
                 }
                 GatewayRequest::Restore(inner) => {
                     inner
-                        .handle(&mut self, |gateway, payload| {
+                        .handle(&mut self, task_group, |gateway, _, payload| {
                             gateway.handle_restore_msg(payload)
                         })
                         .await;

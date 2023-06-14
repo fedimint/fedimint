@@ -131,23 +131,18 @@ impl Federation {
             .as_str()
             .context("address must be a string")?
             .to_owned();
-        let txid = self.bitcoind.send_to(pegin_addr, amt).await?;
-        self.bitcoind.mine_blocks(11).await?;
-        self.await_block_sync().await?;
-        let (txout_proof, raw_tx) = tokio::try_join!(
-            self.bitcoind.get_txout_proof(&txid),
-            self.bitcoind.get_raw_transaction(&txid),
-        )?;
-        cmd!(
-            gw_cln,
-            "deposit",
-            "--federation-id={fed_id}",
-            "--txout-proof={txout_proof}",
-            "--transaction={raw_tx}"
-        )
-        .run()
+        self.bitcoind.send_to(pegin_addr, amt).await?;
+        self.bitcoind.mine_blocks(21).await?;
+        poll("gateway pegin", || async {
+            let gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+                .out_json()
+                .await?
+                .as_u64()
+                .unwrap();
+
+            Ok(gateway_balance == (amt * 1000))
+        })
         .await?;
-        cmd!(self, "fetch").run().await?;
         Ok(())
     }
 

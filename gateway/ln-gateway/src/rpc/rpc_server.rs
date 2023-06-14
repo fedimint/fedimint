@@ -5,8 +5,8 @@ use axum::routing::post;
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
 use bitcoin_hashes::hex::ToHex;
-use fedimint_client_legacy::ln::PayInvoicePayload;
 use fedimint_core::task::TaskGroup;
+use fedimint_ln_client::pay::PayInvoicePayload;
 use serde_json::json;
 use tokio::sync::oneshot;
 use tower_http::auth::RequireAuthorizationLayer;
@@ -14,8 +14,8 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, instrument};
 
 use super::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayRpcSender,
+    InfoPayload, RestorePayload, WithdrawPayload,
 };
 use crate::GatewayError;
 
@@ -33,7 +33,6 @@ pub async fn run_webserver(
         .route("/info", post(info))
         .route("/balance", post(balance))
         .route("/address", post(address))
-        .route("/deposit", post(deposit))
         .route("/withdraw", post(withdraw))
         .route("/connect-fed", post(connect_fed))
         .route("/backup", post(backup))
@@ -93,17 +92,6 @@ async fn address(
 ) -> Result<impl IntoResponse, GatewayError> {
     let address = rpc.send(payload).await?;
     Ok(Json(json!(address)))
-}
-
-/// Deposit into a gateway federation.
-#[debug_handler]
-#[instrument(skip_all, err)]
-async fn deposit(
-    Extension(rpc): Extension<GatewayRpcSender>,
-    Json(payload): Json<DepositPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
-    let txid = rpc.send(payload).await?;
-    Ok(Json(json!(txid)))
 }
 
 /// Withdraw from a gateway federation.

@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::future::Future;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicI64, AtomicU16, Ordering};
@@ -9,12 +8,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use bitcoin::hashes::{sha256, Hash};
-use bitcoin::{secp256k1, KeyPair};
+use bitcoin::hashes::Hash;
+use bitcoin::secp256k1;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
-use fedimint_client_legacy::{module_decode_stubs, GatewayClientConfig, UserClientConfig};
+use fedimint_client_legacy::{module_decode_stubs, UserClientConfig};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::WsClientConnectInfo;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
@@ -36,7 +35,7 @@ use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{
     core, msats, Amount, OutPoint, PeerId, ServerModule, TieredMulti, TransactionId,
 };
-use fedimint_ln_client::{LightningClientGen, LightningGateway};
+use fedimint_ln_client::LightningClientGen;
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::MintClientGen;
@@ -56,9 +55,6 @@ use fedimint_server::{consensus, FedimintApiHandler, FedimintServer};
 use fedimint_testing::btc::mock::FakeBitcoinFactory;
 use fedimint_testing::btc::real::RealBitcoinTest;
 use fedimint_testing::btc::BitcoinTest;
-use fedimint_testing::ln::mock::FakeLightningTest;
-use fedimint_testing::ln::real::{ClnLightningTest, LndLightningTest};
-use fedimint_testing::ln::{LightningNodeType, LightningTest};
 use fedimint_wallet_client::{WalletClientGen, WalletConsensusItem};
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::UTXOKey;
@@ -69,19 +65,13 @@ use futures::future::{join_all, select_all};
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
-use lightning::routing::gossip::RoutingFees;
-use ln_gateway::actor::GatewayActor;
-use ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
-use ln_gateway::lnrpc_client::ILnRpcClient;
-use ln_gateway::{Gateway, DEFAULT_FEES};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
-use tracing::{debug, info};
-use url::Url;
+use tracing::info;
 
-use crate::fixtures::user::{IGatewayClient, ILegacyTestClient};
+use crate::fixtures::user::ILegacyTestClient;
 use crate::ConsensusItem;
 
 mod legacy;
@@ -98,10 +88,6 @@ pub fn rng() -> OsRng {
     OsRng
 }
 
-pub fn sha256(data: &[u8]) -> sha256::Hash {
-    bitcoin::hashes::sha256::Hash::hash(data)
-}
-
 pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
     bitcoin::secp256k1::Secp256k1::new()
 }
@@ -111,8 +97,6 @@ pub struct Fixtures {
     pub fed: FederationTest,
     pub user: Box<dyn ILegacyTestClient>,
     pub bitcoin: Box<dyn BitcoinTest>,
-    pub gateway: GatewayTest,
-    pub lightning: Box<dyn LightningTest>,
     pub task_group: TaskGroup,
     pub handles: Vec<FedimintApiHandler>,
 }
@@ -121,88 +105,32 @@ pub struct Fixtures {
 /// down the task thread when the test is complete.
 ///
 /// Used by `lightning_test` and `non_lightning_test`
-async fn test<B>(
-    num_peers: u16,
-    gateway_nodes: Vec<LightningNodeType>,
-    f: impl FnOnce(
-            FederationTest,
-            Box<dyn ILegacyTestClient>,
-            Box<dyn BitcoinTest>,
-            GatewayTest,
-            Box<dyn LightningTest>,
-        ) -> B
-        + Copy,
-) -> anyhow::Result<()>
-where
-    B: Future<Output = ()>,
-{
-    for gateway_node in gateway_nodes {
-        debug!("Running tests with {:?}", gateway_node);
-        let fixtures = fixtures(num_peers, gateway_node).await?;
-        f(
-            fixtures.fed,
-            fixtures.user,
-            fixtures.bitcoin,
-            fixtures.gateway,
-            fixtures.lightning,
-        )
-        .await;
-
-        for handle in fixtures.handles {
-            handle.stop().await;
-        }
-
-        fixtures
-            .task_group
-            // it's a test; you have 1 second to wrap up, or you
-            // get killed
-            .shutdown_join_all(Some(Duration::from_secs(1)))
-            .await?;
-    }
-    Ok(())
-}
-
-/// Helper for running tests that don't involve lightning payments
-pub async fn non_lightning_test<B>(
+pub async fn test<B>(
     num_peers: u16,
     f: impl FnOnce(FederationTest, Box<dyn ILegacyTestClient>, Box<dyn BitcoinTest>) -> B + Copy,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = ()>,
 {
-    // default to using LND
-    let gateway_nodes = vec![LightningNodeType::Lnd];
-    test(num_peers, gateway_nodes, |fed, client, btc, _, _| {
-        f(fed, client, btc)
-    })
-    .await
-}
+    let fixtures = fixtures(num_peers).await?;
+    f(fixtures.fed, fixtures.user, fixtures.bitcoin).await;
 
-/// Helper for running tests that involve lightning payments. Test callback will
-/// be run twice - once using LND as the gateway, once using CLN as the gateway.
-pub async fn lightning_test<B>(
-    num_peers: u16,
-    f: impl FnOnce(
-            FederationTest,
-            Box<dyn ILegacyTestClient>,
-            Box<dyn BitcoinTest>,
-            GatewayTest,
-            Box<dyn LightningTest>,
-        ) -> B
-        + Copy,
-) -> anyhow::Result<()>
-where
-    B: Future<Output = ()>,
-{
-    let gateway_nodes = vec![LightningNodeType::Cln, LightningNodeType::Lnd];
-    test(num_peers, gateway_nodes, f).await
+    for handle in fixtures.handles {
+        handle.stop().await;
+    }
+
+    fixtures
+        .task_group
+        // it's a test; you have 1 second to wrap up, or you
+        // get killed
+        .shutdown_join_all(Some(Duration::from_secs(1)))
+        .await?;
+    Ok(())
 }
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT
 /// consensus threads for federation nodes starting at port DEFAULT_P2P_PORT.
-///
-/// * `gateway_node` - whether to use CLN or LND as the gateway node
-pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow::Result<Fixtures> {
+pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
@@ -265,22 +193,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
             let bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle())?;
             let bitcoin = RealBitcoinTest::new(&url, bitcoin_rpc.clone());
 
-            // Create the gateway's lightning connection and the "other" node's lightning
-            // connection.
-            let (gateway_ln, other_ln) = match &gateway_node {
-                LightningNodeType::Cln => {
-                    let gw_ln: Arc<dyn ILnRpcClient> = Arc::new(ClnLightningTest::new(&dir).await);
-                    let other_ln: Box<dyn LightningTest> = Box::new(LndLightningTest::new().await);
-                    (gw_ln, other_ln)
-                }
-                LightningNodeType::Lnd => {
-                    let gw_ln: Arc<dyn ILnRpcClient> = Arc::new(LndLightningTest::new().await);
-                    let other_ln: Box<dyn LightningTest> =
-                        Box::new(ClnLightningTest::new(&dir).await);
-                    (gw_ln, other_ln)
-                }
-            };
-
             // federation
             let connect_gen = |cfg: &ServerConfig| {
                 TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn()
@@ -313,36 +225,11 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 user_db,
             ));
             user.client.await_consensus_block_height(0).await?;
-            let pubkey = gateway_ln.info().await?.pub_key;
-            let node_pub_key = secp256k1::PublicKey::from_slice(&pubkey)?;
-
-            let gatewayd_db = if env::var("FM_CLIENT_SQLITE") == Ok(s) {
-                let db_name = format!("gatewayd-{}", rng().next_u64());
-                Database::new(sqlite(dir.clone(), db_name).await, decoders.clone())
-            } else {
-                Database::new(rocks(dir.clone()), decoders.clone())
-            };
-
-            let gateway = GatewayTest::new(
-                gateway_ln,
-                client_config.clone(),
-                decoders,
-                client_module_inits.clone(),
-                node_pub_key,
-                base_port + (2 * num_peers) + 1,
-                gateway_node,
-                DEFAULT_FEES,
-                gatewayd_db,
-                &mut task_group,
-            )
-            .await;
 
             Fixtures {
                 fed,
                 user,
                 bitcoin: Box::new(bitcoin),
-                gateway,
-                lightning: other_ln,
                 task_group,
                 handles,
             }
@@ -366,9 +253,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 .consensus
                 .to_client_config(&server_module_inits)
                 .unwrap();
-
-            let lightning = FakeLightningTest::new();
-            let ln_arc = Arc::new(lightning.clone());
 
             let net = MockNetwork::new();
             let net_ref = &net;
@@ -401,21 +285,6 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
             ));
             user.client.await_consensus_block_height(0).await?;
 
-            let gatewayd_db = Database::new(MemDatabase::new(), module_decode_stubs());
-            let gateway = GatewayTest::new(
-                ln_arc,
-                client_config.clone(),
-                decoders,
-                client_module_inits,
-                lightning.gateway_node_pub_key,
-                base_port + (2 * num_peers) + 1,
-                gateway_node.clone(),
-                DEFAULT_FEES,
-                gatewayd_db,
-                &mut task_group,
-            )
-            .await;
-
             // Always be prepared to fund bitcoin wallet
             factory.bitcoin.prepare_funding_wallet().await;
 
@@ -423,21 +292,11 @@ pub async fn fixtures(num_peers: u16, gateway_node: LightningNodeType) -> anyhow
                 fed,
                 user,
                 bitcoin: Box::new(factory.bitcoin),
-                gateway,
-                // Use the same fake lightning implementation for the "other" node as the gateway
-                // uses
-                lightning: Box::new(lightning),
                 task_group,
                 handles,
             }
         }
     };
-
-    // Wait till the gateway has registered itself
-    while fixtures.user.fetch_active_gateway().await.is_err() {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        info!("Waiting for gateway to register");
-    }
 
     Ok(fixtures)
 }
@@ -558,117 +417,6 @@ async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
     fedimint_sqlite::SqliteDb::open(connection_string.as_str())
         .await
         .unwrap()
-}
-
-pub struct GatewayTest {
-    pub actor: GatewayActor,
-    pub lnrpc: Arc<dyn ILnRpcClient>,
-    pub keys: LightningGateway,
-    pub user: Box<dyn ILegacyTestClient>,
-    pub client: Box<dyn IGatewayClient>,
-    pub node: LightningNodeType,
-    pub fees: RoutingFees,
-}
-
-impl GatewayTest {
-    #[allow(clippy::too_many_arguments)]
-    async fn new(
-        lnrpc: Arc<dyn ILnRpcClient>,
-        client_config: ClientConfig,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-        node_pub_key: secp256k1::PublicKey,
-        bind_port: u16,
-        node: LightningNodeType,
-        fees: RoutingFees,
-        database: Database,
-        task_group: &mut TaskGroup,
-    ) -> Self {
-        let mut rng = OsRng;
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let kp = KeyPair::new(&ctx, &mut rng);
-
-        let mint_channel_id: u64 = 0;
-
-        let keys = LightningGateway {
-            mint_channel_id,
-            mint_pub_key: kp.x_only_public_key().0,
-            node_pub_key,
-            api: Url::parse("http://example.com")
-                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
-            route_hints: vec![],
-            valid_until: fedimint_core::time::now(),
-            fees,
-        };
-
-        let bind_addr: SocketAddr = format!("127.0.0.1:{bind_port}").parse().unwrap();
-        let announce_addr = Url::parse(format!("http://{bind_addr}").as_str())
-            .expect("Could not parse URL to generate GatewayClientConfig API endpoint");
-
-        let gw_client_cfg = GatewayClientConfig {
-            mint_channel_id,
-            client_config: client_config.clone(),
-            redeem_key: kp,
-            timelock_delta: 10,
-            api: announce_addr.clone(),
-            node_pub_key,
-            fees,
-        };
-
-        // Create federation client builder for the gateway
-        let client_builder: DynGatewayClientBuilder = StandardGatewayClientBuilder::new(
-            PathBuf::new(),
-            MemDbFactory.into(),
-            announce_addr.clone(),
-        )
-        .into();
-
-        let mut gateway = Gateway::new_with_lightning_connection(
-            lnrpc.clone(),
-            client_builder.clone(),
-            decoders.clone(),
-            module_gens.clone(),
-            fees,
-            database,
-            task_group,
-        )
-        .await
-        .unwrap();
-
-        let client = Arc::new(
-            client_builder
-                .build(gw_client_cfg.clone(), decoders.clone(), module_gens.clone())
-                .await
-                .expect("Could not build gateway client"),
-        );
-
-        let actor = gateway
-            .load_actor(client.clone(), vec![], mint_channel_id)
-            .await
-            .expect("Could not connect federation");
-        // Note: We don't run the gateway in test scenarios
-
-        // Create a user test from gateway federation client
-        let config = client.config();
-        let user = Box::new(LegacyTestUser::new(
-            UserClientConfig(config.client_config.clone()),
-            decoders.clone(),
-            module_gens.clone(),
-            config.client_config.api_endpoints.keys().cloned().collect(),
-            client.context().db.clone(),
-        ));
-        let client = Box::new(LegacyTestUser { client, config });
-
-        GatewayTest {
-            actor,
-            lnrpc: lnrpc.clone(),
-            keys,
-            user,
-            client,
-            node,
-            fees,
-        }
-    }
 }
 
 pub struct FederationTest {

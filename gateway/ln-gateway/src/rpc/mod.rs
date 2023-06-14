@@ -5,13 +5,13 @@ use std::borrow::Cow;
 use std::io::Cursor;
 
 use anyhow::{anyhow, Error};
-use bitcoin::{Address, Transaction};
+use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
-use fedimint_client_legacy::ln::PayInvoicePayload;
 use fedimint_core::config::FederationId;
-use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::{Amount, TransactionId};
+use fedimint_core::task::TaskGroup;
+use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
+use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::{serde_routing_fees, LightningGateway};
 use futures::Future;
 use lightning::routing::gossip::RoutingFees;
@@ -88,17 +88,6 @@ pub struct DepositAddressPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DepositPayload {
-    pub federation_id: FederationId,
-    pub txout_proof: TxOutProof,
-    #[serde(
-        deserialize_with = "serde_hex_deserialize",
-        serialize_with = "serde_hex_serialize"
-    )]
-    pub transaction: Transaction,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WithdrawPayload {
     pub federation_id: FederationId,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
@@ -132,7 +121,6 @@ pub enum GatewayRequest {
     PayInvoice(GatewayRequestInner<PayInvoicePayload>),
     Balance(GatewayRequestInner<BalancePayload>),
     DepositAddress(GatewayRequestInner<DepositAddressPayload>),
-    Deposit(GatewayRequestInner<DepositPayload>),
     Withdraw(GatewayRequestInner<WithdrawPayload>),
     Backup(GatewayRequestInner<BackupPayload>),
     Restore(GatewayRequestInner<RestorePayload>),
@@ -178,8 +166,7 @@ impl_gateway_request_trait!(
     Address,
     GatewayRequest::DepositAddress
 );
-impl_gateway_request_trait!(DepositPayload, TransactionId, GatewayRequest::Deposit);
-impl_gateway_request_trait!(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
+impl_gateway_request_trait!(WithdrawPayload, Txid, GatewayRequest::Withdraw);
 impl_gateway_request_trait!(BackupPayload, (), GatewayRequest::Backup);
 impl_gateway_request_trait!(RestorePayload, (), GatewayRequest::Restore);
 
@@ -190,14 +177,15 @@ where
 {
     pub async fn handle<
         'gateway,
-        F: Fn(&'gateway mut Gateway, T) -> FF,
+        F: Fn(&'gateway mut Gateway, &'gateway mut TaskGroup, T) -> FF,
         FF: Future<Output = Result<T::Response>> + Send + 'gateway,
     >(
         self,
         gateway: &'gateway mut Gateway,
+        tg: &'gateway mut TaskGroup,
         handler: F,
     ) {
-        let result = handler(gateway, self.request).await;
+        let result = handler(gateway, tg, self.request).await;
         if self.sender.send(result).is_err() {
             // TODO: figure out how to log the result
             tracing::error!("Plugin hung up");

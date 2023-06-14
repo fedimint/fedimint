@@ -1,9 +1,8 @@
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::LightningGateway;
 use lightning::routing::gossip::RoutingFees;
-use secp256k1::KeyPair;
 
 #[repr(u8)]
 #[derive(Clone, Debug)]
@@ -12,7 +11,7 @@ pub enum DbKeyPrefix {
     FederationRegistration = 0x05,
 }
 
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct FederationIdKey {
     pub id: FederationId,
 }
@@ -20,13 +19,12 @@ pub struct FederationIdKey {
 #[derive(Debug, Encodable, Decodable)]
 pub struct FederationIdKeyPrefix;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 pub struct FederationConfig {
     pub mint_channel_id: u64,
-    pub redeem_key: KeyPair,
     pub timelock_delta: u64,
-    pub connection_string: String,
     pub fees: RoutingFees,
+    pub config: ClientConfig,
 }
 
 impl_db_record!(

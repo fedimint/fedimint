@@ -141,7 +141,6 @@ impl Fixtures {
             password,
             FakeLightningTest::new(),
             decoders,
-            ClientModuleGenRegistry::from(self.clients.clone()),
         )
         .await
     }

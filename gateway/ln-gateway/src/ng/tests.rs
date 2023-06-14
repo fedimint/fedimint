@@ -6,7 +6,7 @@ use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::sm::OperationId;
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::Client;
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::util::NextOrPending;
@@ -18,10 +18,12 @@ use fedimint_ln_client::{
     LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
     LightningMeta, LnPayState, PayType,
 };
+use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
-use fedimint_ln_common::contracts::{EncryptedPreimage, Preimage};
-use fedimint_ln_common::LightningOutput;
+use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
+use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage};
+use fedimint_ln_common::{LightningInput, LightningOutput};
 use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::{Fixtures, LightningFixtures};
@@ -30,8 +32,9 @@ use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::ng::{
-    GatewayClientExt, GatewayClientGen, GatewayExtPayStates, GatewayExtReceiveStates,
-    GatewayExtRegisterStates, Htlc, GW_ANNOUNCEMENT_TTL,
+    GatewayClientExt, GatewayClientGen, GatewayClientModule, GatewayClientStateMachines,
+    GatewayExtPayStates, GatewayExtReceiveStates, GatewayExtRegisterStates, GatewayMeta, Htlc,
+    GW_ANNOUNCEMENT_TTL,
 };
 use tracing::debug;
 use url::Url;
@@ -146,11 +149,83 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                         .into_stream();
                     assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
                     assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
-                    assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
+                    if let GatewayExtPayStates::Success {
+                        preimage: _,
+                        outpoint: gw_outpoint,
+                    } = gw_pay_sub.ok().await?
+                    {
+                        gateway.receive_money(gw_outpoint).await?;
+                    } else {
+                        panic!("Gateway pay state machine was not successful");
+                    }
                 }
                 _ => panic!("Expected Lightning payment!"),
             }
 
+            assert_eq!(user_client.get_balance().await, sats(1000 - 250));
+            assert_eq!(gateway.get_balance().await, sats(250));
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
+    gateway_test(
+        |_, other_lightning_client, _, user_client, gateway| async move {
+            // Print money for user_client
+            let (_, outpoint) = user_client.print_money(sats(1000)).await?;
+            user_client.receive_money(outpoint).await?;
+            assert_eq!(user_client.get_balance().await, sats(1000));
+
+            // Fund outgoing contract that the user client expects the gateway to pay
+            let invoice = other_lightning_client.invoice(sats(250), None).await?;
+            let (_, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+
+            // Try to directly claim the outgoing contract with an invalid preimage
+            let (gateway_module, instance) =
+                gateway.get_first_module::<GatewayClientModule>(&fedimint_ln_client::KIND);
+
+            let account = instance.api.fetch_contract(contract_id).await?;
+            let outgoing_contract = match account.contract {
+                FundedContract::Outgoing(contract) => OutgoingContractAccount {
+                    amount: account.amount,
+                    contract,
+                },
+                _ => {
+                    panic!("Expected OutgoingContract");
+                }
+            };
+
+            // Bogus preimage
+            let preimage = Preimage(rand::random());
+            let claim_input = outgoing_contract.claim(preimage);
+            let client_input = ClientInput::<LightningInput, GatewayClientStateMachines> {
+                input: claim_input,
+                state_machines: Arc::new(|_, _| vec![]),
+                keys: vec![gateway_module.redeem_key],
+            };
+
+            let tx = TransactionBuilder::new().with_input(client_input.into_dyn(instance.id));
+            let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Pay {};
+            let operation_id = OperationId(invoice.payment_hash().into_inner());
+            let txid = gateway
+                .finalize_and_submit_transaction(
+                    operation_id,
+                    fedimint_ln_client::KIND.as_str(),
+                    operation_meta_gen,
+                    tx,
+                )
+                .await?;
+
+            // Assert that we did not get paid for claiming a contract with a bogus preimage
+            assert!(gateway
+                .receive_money(OutPoint { txid, out_idx: 0 })
+                .await
+                .is_err());
+            assert_eq!(gateway.get_balance().await, sats(0));
             Ok(())
         },
     )
@@ -187,6 +262,10 @@ async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
                         .into_stream();
                     assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
                     assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled);
+
+                    // Assert that the user receives a refund
+                    assert_matches!(pay_sub.ok().await?, LnPayState::WaitingForRefund { .. });
+                    assert_matches!(pay_sub.ok().await?, LnPayState::Refunded { .. });
                 }
                 _ => panic!("Expected Lightning payment!"),
             }
@@ -317,7 +396,8 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             // Create test invoice
             let invoice = other_lightning_client.invalid_invoice(sats(250), None)?;
 
-            // Create offer with a preimage that doesn't correspond to the invoice
+            // Create offer with a preimage that doesn't correspond to the payment hash of
+            // the invoice
             let (lightning, instance) =
                 user_client.get_first_module::<LightningClientModule>(&fedimint_ln_client::KIND);
 
@@ -461,4 +541,17 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_set_lightning_invoice_expiry() -> anyhow::Result<()> {
+    gateway_test(|_, other_lightning_client, _, _, _| async move {
+        let invoice = other_lightning_client
+            .invoice(sats(1000), 600.into())
+            .await
+            .unwrap();
+        assert_eq!(invoice.expiry_time(), Duration::from_secs(600));
+        Ok(())
+    })
+    .await
 }
